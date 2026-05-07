@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Julia
+Manifest.toml
+*.cov
+*.jl.cov
+*.jl.mem
+*.log
+*_output.log
+deps/deps.jl
+deps/build.log
+docs/build/
+docs/site/
+LocalPreferences.toml
+/.julia/
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local agent / tool config
+.claude/
+.aider*
+.gemini/
+
+# Environment
+.env
+.envrc
+
+# Internal planning / migration artifacts (not for public repo)
+legacy/
+rough_changelog/
