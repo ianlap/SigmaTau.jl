@@ -1,6 +1,7 @@
 using Test
 using SigmaTauBase
 using SigmaTauStability
+using SigmaTauStability: NEFF_RELIABLE
 
 @testset "SigmaTauStability Math Core Parity" begin
     # Mock data equivalent to NIST SP1065 sample
@@ -62,8 +63,8 @@ using SigmaTauStability
     @testset "Typed API Wrappers & Stats (Lag1 and B1-ratio)" begin
         using Random
         Random.seed!(42)
-        # N=100. For m=1, N_eff = 100 >= 50 -> Lag1 ACF used.
-        # For m=4, N_eff = 25 < 50 -> B1-Ratio used.
+        # N=100. For m=1, N_eff = 100 >= NEFF_RELIABLE (30) -> Lag1 ACF used.
+        # For m=4, N_eff = 25 < NEFF_RELIABLE             -> B1-Ratio used.
         pd = PhaseData(x .+ randn(100), tau0)
         
         res_adev = adev(pd, m_values)
@@ -82,5 +83,68 @@ using SigmaTauStability
         
         res_ldev = ldev(pd, m_values)
         @test length(res_ldev.dev) == 3
+
+        # tdev wraps mdev with the τ/√3 scaling — point estimates and CI bounds
+        # must be consistent with that identity.
+        res_tdev = tdev(pd, m_values)
+        res_mdev_ref = mdev(pd, m_values)
+        factor = res_tdev.tau ./ sqrt(3.0)
+        @test length(res_tdev.dev) == 3
+        @test res_tdev.deviation_type == :tdev
+        @test res_tdev.dev ≈ res_mdev_ref.dev .* factor
+        @test res_tdev.ci_lower ≈ res_mdev_ref.ci_lower .* factor
+        @test res_tdev.ci_upper ≈ res_mdev_ref.ci_upper .* factor
+
+        # calc_ci=false path returns empty CI and EDF vectors.
+        res_tdev_nci = tdev(pd, m_values; calc_ci=false)
+        @test isempty(res_tdev_nci.ci_lower)
+        @test isempty(res_tdev_nci.ci_upper)
+        @test isempty(res_tdev_nci.edf)
+
+        # edf is populated when calc_ci=true.
+        @test length(res_adev.edf) == length(m_values)
+        @test all(isfinite, res_adev.edf)
+        @test all(>=(0.0), res_adev.edf)
+    end
+
+    @testset "FrequencyData ↔ PhaseData equivalence" begin
+        # adev(FrequencyData(y, τ₀)) must equal adev(PhaseData(cumsum(y)·τ₀, τ₀)).
+        # Spot-checked on adev (Allan family) and hdev (Hadamard family).
+        using Random
+        Random.seed!(7)
+
+        tau0 = 1.0
+        y = randn(200) .* 1e-9          # fractional frequency
+        fd = FrequencyData(y, tau0)
+        pd_equiv = PhaseData(cumsum(y) .* tau0, tau0)
+
+        m_values_eq = [1, 2, 4, 8]
+
+        @test adev(fd, m_values_eq; calc_ci=false).dev ≈
+              adev(pd_equiv, m_values_eq; calc_ci=false).dev
+
+        @test hdev(fd, m_values_eq; calc_ci=false).dev ≈
+              hdev(pd_equiv, m_values_eq; calc_ci=false).dev
+    end
+
+    @testset "NEFF_RELIABLE boundary" begin
+        # NEFF_RELIABLE = 30 per legacy GEMINI.md §2 mandate. The boundary
+        # determines whether identify_noise uses lag-1 ACF (N_eff ≥ threshold)
+        # or the B1-ratio fallback. Construct two cases that straddle the
+        # boundary and verify both produce a finite, classified noise type.
+        @test NEFF_RELIABLE == 30
+
+        using Random
+        Random.seed!(2026)
+
+        # m=1 with N=29 → N_eff=29 (one below) → B1-ratio path.
+        pd_below = PhaseData(cumsum(randn(29)), 1.0)
+        noises_below = identify_noise(pd_below.x, [1])
+        @test noises_below[1] != :unknown
+
+        # m=1 with N=31 → N_eff=31 (one above) → lag-1 ACF path.
+        pd_above = PhaseData(cumsum(randn(31)), 1.0)
+        noises_above = identify_noise(pd_above.x, [1])
+        @test noises_above[1] != :unknown
     end
 end

@@ -9,6 +9,16 @@ SigmaTauBase = "e7b0a8c4-1234-5678-9abc-def012345678"
 SigmaTauStability = "a6c8e1d2-0e9f-4318-bc1c-9a2c3a4f6e3c"
 SigmaTauEnsemble = "f4c9c4cc-a461-4fa3-9ce6-cb17a59e9a11"
 
+[weakdeps]
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+
+[extensions]
+SigmaTauRecipesBaseExt = "RecipesBase"
+
+[compat]
+RecipesBase = "1"
+julia = "1.9"
+
 [workspace]
 members = [
     "lib/SigmaTauBase",

@@ -6,6 +6,7 @@ using Reexport
 @reexport using SigmaTauStability
 @reexport using SigmaTauEnsemble
 
-include("PlotRecipes.jl")
+# Plot recipes for `StabilityResult` live in the `SigmaTauRecipesBaseExt`
+# package extension and load automatically when `RecipesBase` (or `Plots`) is.
 
 end # module
