@@ -3,6 +3,9 @@ using SigmaTauBase
 using SigmaTauStability
 using SigmaTauStability: NEFF_RELIABLE
 
+include("legacy_kernels.jl")
+const LK = LegacyKernels
+
 @testset "SigmaTauStability Math Core Parity" begin
     # Mock data equivalent to NIST SP1065 sample
     x = collect(1.0:100.0) .^ 2  # simple quadratic
@@ -107,6 +110,79 @@ using SigmaTauStability: NEFF_RELIABLE
         @test all(>=(0.0), res_adev.edf)
     end
 
+    @testset "Legacy parity (extracted SP1065 kernels)" begin
+        # Strict numerical parity against the legacy SigmaTau Julia reference
+        # kernels, inlined verbatim under test/legacy_kernels.jl. Uses a seeded
+        # power-law-flavoured fixture and a wide m-grid.
+        using Random
+        Random.seed!(20260507)
+
+        N    = 4096
+        tau0 = 1.0
+        # Mixed power-law phase fixture: WPM + RWFM components.
+        wpm  = randn(N) .* 1e-9
+        rwfm = cumsum(cumsum(randn(N) .* 1e-12))
+        x    = wpm .+ rwfm
+
+        # cumsum prefix used by modified kernels.
+        x_cs = pushfirst!(cumsum(x), 0.0)
+
+        # Octave-spaced m-grid with extra coverage near the small-m regime.
+        m_grid = [1, 2, 4, 8, 16, 32, 64, 128]
+
+        rt = 1e-12   # rtol for direct kernel-vs-kernel parity
+        at = 1e-25   # atol for near-zero comparisons
+
+        # ADEV: 8 m-values × 1 kernel = 8 assertions.
+        for m in m_grid
+            new_dev = sqrt(LK.adev_var(x, m, tau0))
+            @test SigmaTauStability._adev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+
+        # MDEV.
+        for m in m_grid
+            new_dev = sqrt(LK.mdev_var(x, m, tau0, x_cs))
+            @test SigmaTauStability._mdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+
+        # HDEV.
+        for m in m_grid
+            new_dev = sqrt(LK.hdev_var(x, m, tau0))
+            @test SigmaTauStability._hdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+
+        # MHDEV.
+        for m in m_grid
+            new_dev = sqrt(LK.mhdev_var(x, m, tau0, x_cs))
+            @test SigmaTauStability._mhdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+
+        # TOTDEV. (Smaller grid — kernel is O(N) per m but allocates an extended
+        # 3N-4 array each call.)
+        for m in [1, 2, 4, 8, 16, 32]
+            new_dev = sqrt(LK.totdev_var(x, m, tau0))
+            @test SigmaTauStability._totdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+
+        # MTOTDEV.
+        for m in [1, 2, 4, 8, 16]
+            new_dev = sqrt(LK.mtotdev_var(x, m, tau0))
+            @test SigmaTauStability._mtotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+
+        # HTOTDEV.
+        for m in [1, 2, 4, 8, 16]
+            new_dev = sqrt(LK.htotdev_var(x, m, tau0))
+            @test SigmaTauStability._htotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+
+        # MHTOTDEV.
+        for m in [1, 2, 4, 8]
+            new_dev = sqrt(LK.mhtotdev_var(x, m, tau0))
+            @test SigmaTauStability._mhtotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+        end
+    end
+
     @testset "FrequencyData ↔ PhaseData equivalence" begin
         # adev(FrequencyData(y, τ₀)) must equal adev(PhaseData(cumsum(y)·τ₀, τ₀)).
         # Spot-checked on adev (Allan family) and hdev (Hadamard family).
@@ -125,6 +201,70 @@ using SigmaTauStability: NEFF_RELIABLE
 
         @test hdev(fd, m_values_eq; calc_ci=false).dev ≈
               hdev(pd_equiv, m_values_eq; calc_ci=false).dev
+    end
+
+    @testset "MTOTDEV across noise regimes" begin
+        # Verify _mtotdev_core (and the :mtot bias correction) behaves on the
+        # three power-law noise types whose synthesis is FFT-free: WPM, WHFM,
+        # RWFM. (FLPM/FLFM need a 1/f filter and are exercised indirectly via
+        # the mixed-noise fixture in the legacy parity testset above.)
+        using Random
+        Random.seed!(20260507)
+        N    = 1024
+        tau0 = 1.0
+        ms   = [1, 2, 4, 8, 16]
+        rt   = 1e-12
+
+        noise_fixtures = (
+            WPM  = randn(N) .* 1e-9,
+            WHFM = cumsum(randn(N) .* 1e-9),
+            RWFM = cumsum(cumsum(randn(N) .* 1e-12)),
+        )
+
+        for (label, x) in pairs(noise_fixtures)
+            for m in ms
+                ref = sqrt(LK.mtotdev_var(x, m, tau0))
+                got = SigmaTauStability._mtotdev_core(x, [m], tau0)[1]
+                @test got ≈ ref atol=1e-25 rtol=rt
+            end
+
+            # End-to-end pipeline (bias correction + CI bounds) should produce
+            # finite, ordered outputs on all three noise types.
+            res = mtotdev(PhaseData(x, tau0), ms)
+            @test res.deviation_type == :mtotdev
+            @test all(isfinite, res.dev)
+            @test all(.>(0.0), res.dev)
+            @test all(.<=(0.0), res.ci_lower .- res.dev)   # lower ≤ dev
+            @test all(.>=(0.0), res.ci_upper .- res.dev)   # upper ≥ dev
+        end
+    end
+
+    @testset "TOTDEV/HTOTDEV EDF fallback for WPM/FLPM" begin
+        # _coeff_totvar returns (NaN, NaN) for α=2,1 (SP1065 Table 9 only
+        # covers α∈{0,-1,-2}). The fallback dispatches to the ADEV-style
+        # EDF formula so calculate_edf produces a finite EDF for every
+        # noise type.
+        m_values_eq = [1, 2, 4, 8, 16]
+        taus_eq     = Float64.(m_values_eq)
+        N_eq        = 4096
+        T_eq        = (N_eq - 1) * 1.0
+        # α=2 (WPM)
+        noises_wpm = fill(:WHPM, length(m_values_eq))
+        edfs = SigmaTauStability.calculate_edf(:totdev, ones(length(m_values_eq)),
+                                               noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
+        @test all(isfinite, edfs)
+        @test all(>(0.0), edfs)
+
+        # α=1 (FLPM)
+        noises_flpm = fill(:FLPM, length(m_values_eq))
+        edfs = SigmaTauStability.calculate_edf(:totdev, ones(length(m_values_eq)),
+                                               noises_flpm, m_values_eq, taus_eq, N_eq, T_eq)
+        @test all(isfinite, edfs)
+
+        # htotdev gets the HDEV-style fallback at α=2,1 too.
+        edfs_h = SigmaTauStability.calculate_edf(:htotdev, ones(length(m_values_eq)),
+                                                 noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
+        @test all(isfinite, edfs_h)
     end
 
     @testset "NEFF_RELIABLE boundary" begin

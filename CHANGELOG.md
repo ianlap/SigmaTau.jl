@@ -8,6 +8,26 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Strict numerical parity testset for the eight stability kernels
+  (`_adev_core`, `_mdev_core`, `_hdev_core`, `_mhdev_core`, `_totdev_core`,
+  `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core`) against the legacy
+  SigmaTau Julia reference. The legacy kernels are inlined verbatim under
+  `lib/SigmaTauStability/test/legacy_kernels.jl` so the tests run on CI
+  without depending on the gitignored `legacy/` tree. 52 new assertions
+  at `rtol=1e-12`.
+- MTOTDEV multi-noise validation: kernel + end-to-end pipeline checks
+  against WPM, WHFM, and RWFM synthetic fixtures.
+- TOTDEV/HTOTDEV WPM/FLPM EDF fallback: when `_coeff_totvar` /
+  `_coeff_htot` return `(NaN, NaN)` for `α∈{1,2}` (since SP1065 Table 9 /
+  FCS 2001 only cover `α∈{0,-1,-2}`), `calculate_edf` now falls back to
+  the ADEV-style (`d=2`) or HDEV-style (`d=3`) Greenhall–Riley formula,
+  yielding finite EDFs for every noise type instead of NaN.
+- GitHub Actions CI: matrix on Julia 1.11 × {ubuntu, macOS} × all three
+  subpackages, plus an umbrella `using SigmaTau` smoke job.
+- `examples/quickstart.jl`: end-to-end walkthrough exercising
+  `adev`/`mdev`/`tdev`/`hdev`/`totdev`, `FrequencyData` input, and a
+  `ThreeStateClock` Kalman filter. Verified to run.
+
 - `tdev(::PhaseData, m_values; …)` API wrapper. Wraps `mdev` and scales by
   `τ/√3`; CI bounds inherit MDEV's χ²/Gaussian limits scaled by the same
   factor. Now exported from `SigmaTauStability`.
