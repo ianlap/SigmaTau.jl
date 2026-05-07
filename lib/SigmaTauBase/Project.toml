@@ -1,0 +1,4 @@
+name = "SigmaTauBase"
+uuid = "e7b0a8c4-1234-5678-9abc-def012345678"
+authors = ["Ian Lapinski <ianlapinski01@gmail.com>"]
+version = "0.1.0"
