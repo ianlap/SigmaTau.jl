@@ -10,27 +10,6 @@ from this file to `CHANGELOG.md` once landed.
 
 ---
 
-## 🔴 Verify before next push
-
-These appear complete in the source tree but were not verified by a green test
-run before the prior session was interrupted. Re-run tests to confirm.
-
-- [ ] **Kalman filter parity (`SigmaTauEnsemble`)** — `legacy_compat` kwarg,
-  `safe_sqrt_sq`, and `clamp_covariance_diag` are wired into
-  [`filters.jl`](lib/SigmaTauEnsemble/src/estimators/filters.jl). The stale
-  [`test_output.log`](lib/SigmaTauEnsemble/test_output.log) (gitignored) shows
-  failures from before the clamp was hooked up — `mtime(filters.jl)` is ~1h
-  newer than `mtime(test_output.log)`. **Action**: run
-  `julia --project=lib/SigmaTauEnsemble -e 'using Pkg; Pkg.test()'` and confirm
-  4/4 parity tests pass. If they still fail, re-open as a debugging task.
-- [ ] **Workspace package resolution** — root [`Project.toml`](Project.toml)
-  has `[workspace]`, `[deps]`, and `[sources.*]` for all three subpackages;
-  each subpackage's `Project.toml` declares relative `[sources]` for its local
-  deps. **Action**: `julia --project=. -e 'using Pkg; Pkg.resolve()'` from the
-  repo root and `using SigmaTau` in a fresh REPL.
-
----
-
 ## 🔴 Critical (correctness)
 
 - [ ] **Numerical parity tests for stability deviations** _(was PROMPT 3)_.
