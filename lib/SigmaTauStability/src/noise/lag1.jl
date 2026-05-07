@@ -1,7 +1,7 @@
 # noise/lag1.jl — Lag-1 Autocorrelation for noise identification
 using Statistics
 
-const NEFF_RELIABLE = 50
+const NEFF_RELIABLE = 30
 
 """
     identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2) → Vector{Symbol}

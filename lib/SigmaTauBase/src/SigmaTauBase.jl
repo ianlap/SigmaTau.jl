@@ -22,6 +22,7 @@ struct StabilityResult
     noise_type::Vector{Symbol}
     ci_lower::Vector{Float64}
     ci_upper::Vector{Float64}
+    edf::Vector{Float64}    # Equivalent degrees of freedom; empty when calc_ci=false
 end
 
 end # module
