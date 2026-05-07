@@ -6,6 +6,14 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Project workflow**: every shipped change must remove its TODO entry and
+  add a CHANGELOG line under `## [Unreleased]` in the same commit. TODO.md
+  rewritten to drop the now-stale "Author README", "Maintain CHANGELOG"
+  bullets and re-prioritise remaining work into Critical / High / Medium /
+  Low / Documentation buckets.
+
 ### Added
 
 - Strict numerical parity testset for the eight stability kernels

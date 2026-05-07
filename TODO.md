@@ -1,61 +1,84 @@
 # SigmaTau.jl — Roadmap
 
 Working list of outstanding engineering work, sorted by priority. Items move
-from this file to `CHANGELOG.md` once landed.
+from this file to `CHANGELOG.md` as soon as they land — every shipped change
+should remove the matching entry here and add one under `## [Unreleased]` in
+the changelog in the same commit.
 
-> **Audit date**: 2026-05-07. Source-truth audit performed against the actual
-> code (not stale logs). Several items previously listed as "blocking" in the
-> superseded `next_step_prompts.md` were already implemented by a prior agent
-> session; those are noted under "✅ Recently completed (verify)".
-
----
-
-## 🟡 High (completeness)
+> **Audit date**: 2026-05-07 (after legacy-parity + EDF-fallback batch).
+> Last verified end-to-end: `132/132` Stability + `15/15` Ensemble tests
+> passing locally; `using SigmaTau` precompiles in ~6 s.
 
 ---
 
-## 🟡 Medium (correctness gaps)
+## 🔴 Critical
 
-- [ ] **FFT-based FLPM/FLFM noise synthesis** for the multi-noise validation
-  testset. Currently `MTOTDEV across noise regimes` exercises WPM, WHFM, and
-  RWFM (synthesizable without an FFT); FLPM and FLFM need a `1/f` filter
-  (see `legacy/julia/src/noise_gen.jl`).
-- [ ] **Published `_coeff_totvar` / `_coeff_htot` for α=2,1** if the
-  ADEV/HDEV-style fallback turns out to disagree with Stable32 at WPM/FLPM.
-  The fallback in [`stats/edf.jl`](lib/SigmaTauStability/src/stats/edf.jl)
-  is the pragmatic substitute used in absence of a published value; replace
-  with a real entry from a peer-reviewed source if/when one surfaces.
+_None._ The repository builds, all subpackages test green, and the legacy
+numerical reference is locked in.
+
+---
+
+## 🟡 High (correctness / completeness)
+
+- [ ] **Stable32 cross-validation** — confirm the ADEV/HDEV-style EDF
+  fallback for TOTDEV/HTOTDEV at α∈{1, 2} matches Stable32's CI bounds on
+  the validation fixtures under [`reference/validation/`](reference/validation).
+  If they disagree, replace the fallback with published values from a
+  peer-reviewed source.
+- [ ] **FFT-based FLPM/FLFM noise synthesis** — extend the multi-noise
+  validation testset (`MTOTDEV across noise regimes`) to cover the two
+  power-law types that need a `1/f` filter. Reference generator lives in
+  `legacy/julia/src/noise_gen.jl`.
+- [ ] **PID steering port** — legacy `kalman_filter` includes a PID
+  controller around the predict/update loop; the new `predict!`/`update!`
+  is steering-free. Needed before any clock-steering examples can land.
+
+---
+
+## 🟡 Medium (new estimators / models)
+
+- [ ] **`RelativisticClock`** — empty struct in
+  [`clocks.jl`](lib/SigmaTauEnsemble/src/models/clocks.jl). Lunar-PNT
+  future work; design the relativistic correction terms and `state_transition` /
+  `process_noise` overrides.
+- [ ] **`UDFactorizedFilter`** — empty struct in
+  [`filters.jl`](lib/SigmaTauEnsemble/src/estimators/filters.jl). U–D
+  Bierman/Thornton factorisation for low-observability lunar-distance
+  measurements (numerical stability when `S` is near-singular).
+- [ ] **`KuramotoOscillator`** — empty struct in same file. Nearest-neighbor
+  phase coupling estimator targeted at SWaP-constrained pLEO ensembles.
 
 ---
 
 ## 🟢 Low (polish)
 
-- [ ] **`RelativisticClock`** — empty struct in
-  [`clocks.jl`](lib/SigmaTauEnsemble/src/models/clocks.jl#L20). Lunar PNT
-  future work; no concrete need yet.
-- [ ] **`UDFactorizedFilter`, `KuramotoOscillator`** — empty structs in
-  [`filters.jl`](lib/SigmaTauEnsemble/src/estimators/filters.jl). Stubs
-  reserved for low-observability lunar-distance and SWaP-constrained
-  nearest-neighbor estimators respectively.
-- [ ] **PID steering port** — legacy `kalman_filter` includes a PID
-  controller; the new `predict!`/`update!` loop is steering-free. Required
-  before clock-steering examples can be ported.
-- [ ] **More `examples/`** — only `examples/quickstart.jl` exists; add a
-  Kalman-only example, a `FrequencyData`-vs-`PhaseData` walkthrough, and a
-  multi-clock ensemble scenario when the multi-clock model lands.
+- [ ] **`Documenter.jl` site** under `docs/` — auto-generate API reference
+  from docstrings, port the equation pages from the legacy
+  `legacy/docs/equations/` tree, publish to GitHub Pages.
+- [ ] **More `examples/`** — currently only `quickstart.jl`. Add:
+  - Kalman-only ensemble walkthrough (no stability-deviation overlap)
+  - `FrequencyData` ↔ `PhaseData` round-trip demo
+  - Multi-clock ensemble scenario (once a multi-clock model lands)
+- [ ] **Compat bounds** in subpackage `Project.toml`s — currently only
+  `Distributions = "0.25.125"` is pinned in `SigmaTauStability`. Add upper
+  bounds for `StaticArrays`, `Reexport`, `RecipesBase` to support
+  General-registry registration cleanly.
+- [ ] **`@reexport` of `tdev`, `FrequencyData`** — verified working but
+  not separately smoke-tested at the umbrella level. Add a short
+  `examples/`-driven smoke test or a top-level `using SigmaTau` test.
 
 ---
 
-## 🟢 Documentation
+## ✅ Recently completed
 
-- [ ] Author `README.md` (project intro, install, quickstart, link to docs).
-- [ ] Maintain `CHANGELOG.md` (Keep-a-Changelog format).
-- [ ] Author user-facing docs (Documenter.jl) in `docs/`.
+See [CHANGELOG.md](CHANGELOG.md) for the full list. Headlines from this
+session:
 
----
-
-## ✅ Recently completed (since 2026-05-07 session start)
-
-See [CHANGELOG.md](CHANGELOG.md) once authored. In-flight items are tracked in
-this file; once a checkbox here gets ticked and the change is committed, move
-the entry to the changelog and delete it from here.
+- Strict legacy-kernel parity (52 assertions, rtol=1e-12)
+- TOTDEV/HTOTDEV α=2,1 EDF fallback
+- MTOTDEV multi-noise validation (WPM/WHFM/RWFM)
+- `tdev` API wrapper, `FrequencyData` dispatches, `StabilityResult.edf`
+- `RecipesBase` package extension (replaces the `PlotRecipes.jl` stub)
+- `NEFF_RELIABLE` 50 → 30 + boundary test
+- GitHub Actions CI matrix
+- README, CHANGELOG, project_overview, this TODO
