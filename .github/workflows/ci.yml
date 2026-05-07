@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: Julia ${{ matrix.julia-version }} / ${{ matrix.os }} / ${{ matrix.package }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version: ['1.11']
+        os: [ubuntu-latest, macos-latest]
+        package:
+          - lib/SigmaTauBase
+          - lib/SigmaTauStability
+          - lib/SigmaTauEnsemble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v2
+      - name: Test ${{ matrix.package }}
+        run: |
+          julia --project=${{ matrix.package }} -e '
+            using Pkg
+            Pkg.develop(path="lib/SigmaTauBase")
+            Pkg.test()
+          '
+
+  umbrella-load:
+    name: Umbrella `using SigmaTau`
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - run: |
+          julia --project=. -e '
+            using Pkg
+            Pkg.resolve()
+            using SigmaTau
+            println("LOAD OK")
+          '

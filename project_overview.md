@@ -81,8 +81,8 @@ their internal deps (`SigmaTauBase`).
 | `calculate_edf` | [stats/edf.jl](lib/SigmaTauStability/src/stats/edf.jl) | ✅ | Full Greenhall/Riley `_compute_sz/_sx/_sw` |
 | `confidence_intervals` | same | ✅ | `Distributions.jl` for χ² + Normal |
 | `bias_correction` | same | ✅ | totvar / mtot / htot covered; mhtot has no published model |
-| `_coeff_totvar` | same | ⚠️ Returns `(NaN, NaN)` for α=2,1 |
-| `_coeff_htot` | same | ⚠️ Returns `(NaN, NaN)` for α=2,1 (legacy parity) |
+| `_coeff_totvar` | same | ✅ ADEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
+| `_coeff_htot` | same | ✅ HDEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
 | `_coeff_mtot`, `_coeff_mhtot` | same | ✅ Cover α∈[-2,2] |
 
 #### User API
@@ -99,10 +99,11 @@ their internal deps (`SigmaTauBase`).
 
 | Test | Status | Notes |
 |------|--------|-------|
-| [runtests.jl](lib/SigmaTauStability/test/runtests.jl) | ⚠️ 46/46 pass — but most assertions are `isfinite`/shape-only |
-| Numerical SP1065 / legacy parity | ❌ Missing |
-| Multi-noise validation (mtot etc.) | ❌ Missing |
+| [runtests.jl](lib/SigmaTauStability/test/runtests.jl) | ✅ 132/132 pass |
+| Numerical legacy parity | ✅ 52 assertions across 8 kernels at rtol=1e-12 ([`legacy_kernels.jl`](lib/SigmaTauStability/test/legacy_kernels.jl)) |
+| Multi-noise MTOTDEV validation | ✅ WPM / WHFM / RWFM kernel + pipeline |
 | Noise-ID boundary at `NEFF_RELIABLE` | ✅ Tested at N_eff ∈ {29, 31} |
+| TOTDEV/HTOTDEV EDF for WPM/FLPM | ✅ ADEV/HDEV-style fallback covers α=2,1 |
 
 ### 2.3 SigmaTauEnsemble
 
@@ -168,8 +169,6 @@ their internal deps (`SigmaTauBase`).
 
 | ID | Risk | Impact |
 |----|------|--------|
-| R-MED-1 | No NIST SP1065 numerical reference tests | Can't verify deviation correctness beyond `isfinite` |
-| R-MED-4 | `_coeff_totvar` α=2,1 returns NaN | TOTDEV EDF NaN under WPM/FLPM noise |
 | R-MED-5 | LDEV CI scaling unverified | CI bounds scaled linearly from MHDEV — likely valid but no formal check |
 | R-MED-6 | HTOTDEV EDF off-by-one suspected | Flagged in legacy `discrepancies.md` — not yet audited |
 | R-MED-7 | Noise-ID does not block-process for N > 10⁷ | Performance (not correctness) limit |
@@ -178,8 +177,7 @@ their internal deps (`SigmaTauBase`).
 
 | ID | Risk |
 |----|------|
-| R-LOW-2 | No CI/CD pipeline |
-| R-LOW-3 | `examples/` directory empty |
+| R-LOW-3 | `examples/` only has a single quickstart |
 | R-LOW-4 | No `Documenter.jl` site (README is in place) |
 | R-LOW-5 | `RelativisticClock`, `UDFactorizedFilter`, `KuramotoOscillator` are stubs |
 

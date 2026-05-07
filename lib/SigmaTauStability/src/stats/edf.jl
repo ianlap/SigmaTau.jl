@@ -25,14 +25,30 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mhdev
             edfs[k] = _calc_edf_core(alpha, 3, m, 1, 1, N)
         elseif method == :totdev
-            b, c = _coeff_totvar(alpha)
-            edfs[k] = b * (T / tau) - c
+            # SP1065 Table 9 covers α ∈ {0,-1,-2}. For WPM/FLPM (α=2,1) TOTDEV
+            # is dominated by the same noise-shape contribution as ADEV, so the
+            # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=1) is the
+            # accepted pragmatic substitute when no totvar-specific table value
+            # is published.
+            if alpha == 2 || alpha == 1
+                edfs[k] = _calc_edf_core(alpha, 2, m, m, 1, N)
+            else
+                b, c = _coeff_totvar(alpha)
+                edfs[k] = b * (T / tau) - c
+            end
         elseif method == :mtotdev
             b, c = _coeff_mtot(alpha)
             edfs[k] = b * (T / tau) - c
         elseif method == :htotdev
-            b0, b1 = _coeff_htot(alpha)
-            edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
+            # Same logic as :totdev: for WPM/FLPM, fall back to HDEV-style EDF
+            # (third-difference, F=m, S=1) since the FCS 2001 table only gives
+            # coefficients for α ∈ {0,-1,-2}.
+            if alpha == 2 || alpha == 1
+                edfs[k] = _calc_edf_core(alpha, 3, m, m, 1, N)
+            else
+                b0, b1 = _coeff_htot(alpha)
+                edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
+            end
         elseif method == :mhtotdev
             b, c = _coeff_mhtot(alpha)
             edfs[k] = b * (T / tau) - c
