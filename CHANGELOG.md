@@ -40,11 +40,18 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Fixed / Verified
 
-- Kalman filter parity scaffolding (legacy `safe_sqrt` clamping, opt-in
-  `legacy_compat=true` flag, `clamp_covariance_diag` helper) is in place.
-  Stale `test_output.log` from the prior session predates the fix and shows
-  failures that no longer reflect the source. **Pending**: re-run
-  `Pkg.test()` against the current tree to confirm 4/4 parity.
+- Kalman filter parity now confirmed end-to-end: `Pkg.test()` against
+  `SigmaTauEnsemble` reports **15/15 pass**, including the 4 `legacy_compat`
+  parity assertions (phase, frequency, drift, P-history). The stale
+  `test_output.log` from the prior session predated the
+  `clamp_covariance_diag` wiring and is no longer representative.
+- `Pkg.test()` against `SigmaTauStability` reports **46/46 pass**, covering
+  the new `tdev` wrapper, `FrequencyData ↔ PhaseData` equivalence, the
+  `edf` field, and the `NEFF_RELIABLE = 30` boundary at `N_eff ∈ {29, 31}`.
+- `Random` was missing from both subpackages' `[extras]`; added so
+  `Pkg.test()` resolves the standard-library dependency. Without this,
+  `Random.seed!` calls inside test files raised `Package Random not found`
+  before any assertion could run.
 
 ## [0.1.0] — 2026-05-07
 

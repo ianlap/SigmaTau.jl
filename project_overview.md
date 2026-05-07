@@ -99,10 +99,10 @@ their internal deps (`SigmaTauBase`).
 
 | Test | Status | Notes |
 |------|--------|-------|
-| [runtests.jl](lib/SigmaTauStability/test/runtests.jl) | ⚠️ Weak (passes 30/30, but mostly `isfinite` and shape) |
+| [runtests.jl](lib/SigmaTauStability/test/runtests.jl) | ⚠️ 46/46 pass — but most assertions are `isfinite`/shape-only |
 | Numerical SP1065 / legacy parity | ❌ Missing |
 | Multi-noise validation (mtot etc.) | ❌ Missing |
-| Noise-ID boundary at `NEFF_RELIABLE` | ❌ Missing |
+| Noise-ID boundary at `NEFF_RELIABLE` | ✅ Tested at N_eff ∈ {29, 31} |
 
 ### 2.3 SigmaTauEnsemble
 
@@ -122,7 +122,7 @@ their internal deps (`SigmaTauBase`).
 
 | Test | Status | Notes |
 |------|--------|-------|
-| [runtests.jl](lib/SigmaTauEnsemble/test/runtests.jl) | ❓ Needs re-run | Stale `test_output.log` shows 4/4 fail, but predates the `legacy_compat` clamping fix |
+| [runtests.jl](lib/SigmaTauEnsemble/test/runtests.jl) | ✅ 15/15 pass | Includes 4 Φ/Q parity, 4 legacy_compat parity, 4 AD-clean parity, 3 TwoStateClock smoke |
 
 ### 2.4 SigmaTau Umbrella
 
@@ -163,14 +163,6 @@ their internal deps (`SigmaTauBase`).
 ---
 
 ## 4. Known Risks & Technical Debt
-
-### 🔴 Verify before next push
-
-- **R-VERIFY-1** — Kalman filter parity tests not re-run since `legacy_compat`
-  was wired in. Stale `test_output.log` shows failures from before the fix.
-  See [TODO.md](TODO.md) "Verify before next push".
-- **R-VERIFY-2** — Workspace `Pkg.resolve()` not yet executed against the
-  fixed `Project.toml`s.
 
 ### 🟡 Medium
 
