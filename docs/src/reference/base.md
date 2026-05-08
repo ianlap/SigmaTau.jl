@@ -1,3 +1,12 @@
 # SigmaTauBase API
 
-Core data types. Stub — populated in Task 3.
+Core data types used by every other subpackage.
+
+## Types
+
+```@docs
+AbstractTimingData
+PhaseData
+FrequencyData
+StabilityResult
+```
