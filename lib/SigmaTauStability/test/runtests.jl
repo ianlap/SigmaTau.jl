@@ -85,8 +85,13 @@ const LK = LegacyKernels
         @test length(res_tot.dev) == 3
         @test all(isfinite, res_tot.ci_upper)
         
-        res_ldev = ldev(pd, m_values)
-        @test length(res_ldev.dev) == 3
+        res_htdev = htdev(pd, m_values)
+        @test length(res_htdev.dev) == 3
+        @test res_htdev.deviation_type == :htdev
+        # ldev is a deprecated alias and must give bit-identical output for now.
+        res_ldev_alias = ldev(pd, m_values)
+        @test res_ldev_alias.dev == res_htdev.dev
+        @test res_ldev_alias.deviation_type == :htdev
 
         # tdev wraps mdev with the τ/√3 scaling — point estimates and CI bounds
         # must be consistent with that identity.

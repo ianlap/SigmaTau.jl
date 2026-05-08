@@ -45,6 +45,3 @@ validation/plots/
 
 # Proprietary / large clock recordings used for off-repo validation
 reference/clock_data/
-
-# Stable32 PDF docs/datasets bundled by the Wine installer (55 MB)
-stable32docs/

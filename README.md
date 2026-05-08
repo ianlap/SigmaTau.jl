@@ -57,7 +57,7 @@ adev(FrequencyData(y, 1.0), [1, 2, 4])
 
 ```
 adev  mdev  tdev
-hdev  mhdev  ldev
+hdev  mhdev  htdev
 totdev  mtotdev  htotdev  mhtotdev
 ```
 
