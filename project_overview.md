@@ -96,7 +96,7 @@ their internal deps (`SigmaTauBase`).
 | Function | File | Status | Notes |
 |----------|------|--------|-------|
 | `adev`, `mdev` | [api/allan.jl](lib/SigmaTauStability/src/api/allan.jl) | ✅ | PhaseData → StabilityResult with CI |
-| `hdev`, `mhdev`, `ldev` | [api/hadamard.jl](lib/SigmaTauStability/src/api/hadamard.jl) | ✅ | `ldev` wraps `mhdev` and scales by `τ/√(10/3)` |
+| `hdev`, `mhdev`, `htdev` | [api/hadamard.jl](lib/SigmaTauStability/src/api/hadamard.jl) | ✅ | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; `ldev` retained as deprecated alias |
 | `totdev`, `mtotdev`, `htotdev`, `mhtotdev` | [api/total.jl](lib/SigmaTauStability/src/api/total.jl) | ✅ | Bias correction applied where defined |
 | `tdev` | [api/allan.jl](lib/SigmaTauStability/src/api/allan.jl) | ✅ | Wraps `mdev` and scales by `τ/√3` |
 | `FrequencyData` dispatches | [utils.jl](lib/SigmaTauStability/src/utils.jl) + each api file | ✅ | All 11 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
@@ -177,7 +177,7 @@ their internal deps (`SigmaTauBase`).
 
 | ID | Risk | Impact |
 |----|------|--------|
-| R-MED-5 | LDEV CI scaling unverified | CI bounds scaled linearly from MHDEV — likely valid but no formal check |
+| R-MED-5 | HTDEV CI scaling unverified | CI bounds scaled linearly from MHDEV — likely valid but no formal check |
 | R-MED-6 | HTOTDEV EDF off-by-one suspected | Flagged in legacy `discrepancies.md` — not yet audited |
 | R-MED-7 | Noise-ID does not block-process for N > 10⁷ | Performance (not correctness) limit |
 

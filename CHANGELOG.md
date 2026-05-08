@@ -44,6 +44,13 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- Public function `ldev` renamed to `htdev` (Hadamard time deviation).
+  The estimator and its formula are unchanged: `htdev` wraps `mhdev`
+  and applies the `τ / √(10/3)` scaling, exactly as the previous `ldev`
+  did. `StabilityResult.deviation_type` is now `:htdev`. The legacy
+  `ldev` is kept as a deprecated alias that forwards to `htdev` for one
+  release; downstream code should migrate. `htdev` is the documented
+  canonical name throughout the API reference and theory pages.
 - Total-family kernels (`_totdev_legacy`, `_totdev_howe`,
   `_mtotdev_greenhall`, `_mtotdev_linear`, `_htotdev_greenhall`,
   `_htotdev_linear`, `_mhtotdev_greenhall`, `_mhtotdev_linear`) now
@@ -95,7 +102,7 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   with `-t 1` the inner `@threads` is a no-op and behavior matches
   the sequential version exactly.
 - Default confidence factor for every public deviation API (`adev`,
-  `mdev`, `hdev`, `tdev`, `mhdev`, `ldev`, `totdev`, `mtotdev`,
+  `mdev`, `hdev`, `tdev`, `mhdev`, `htdev`, `totdev`, `mtotdev`,
   `htotdev`, `mhtotdev`) lowered from `0.95` to `0.683` (1-sigma).
   Now exposed as the exported constant
   `SigmaTauStability.DEFAULT_CONFIDENCE`. The new value matches the
@@ -116,6 +123,11 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Fixed
 
+- Theory page: removed the misattribution of the Hadamard time
+  deviation (HTDEV, the function previously named `ldev`) to
+  IEEE 1139-2022 Annex C. IEEE 1139-2022 does not define HTDEV; the
+  construction is original to this package. The Annex-C citation has
+  been replaced with a provenance note in `theory/allan_family.md`.
 - Lag-1 ACF `dmax` for the four Hadamard-family kernels (`hdev`,
   `mhdev`, `htotdev`, `mhtotdev`) bumped from `2` to `3`. Riley &
   Greenhall, *Power Law Noise Identification Using the Lag 1
@@ -125,7 +137,7 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   to resolve α ∈ {−3, −4} (FWFM / RRFM); capping the noise-ID
   iteration at `dmax = 2` prevents the algorithm from ever reporting
   those types and silently floors the identified α at `−2` (RWFM)
-  even when the data has lower power-law content. `:ldev` inherits
+  even when the data has lower power-law content. `:htdev` inherits
   the fix transitively via `:mhdev`. `:adev`, `:mdev`, `:totdev`,
   `:mtotdev` correctly stay at `dmax = 2`.
 - EDF stride factor `S` for the four overlapped variants
@@ -138,7 +150,7 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   EDFs under the non-overlapped convention and applying them to
   the overlapping deviation, producing artificially small EDFs
   (e.g. 127 instead of 8064 at `m = 64`, `N = 8192`) and the
-  correspondingly wider χ² confidence bounds. `:tdev` and `:ldev`
+  correspondingly wider χ² confidence bounds. `:tdev` and `:htdev`
   inherit the fix transitively via the `mdev` / `mhdev` factor
   scaling. The `:totdev` / `:htotdev` WPM/FLPM fallback paths in
   the same file still pass `S = 1`; left for a follow-up since
