@@ -1,5 +1,11 @@
 using Documenter
+using DocumenterCitations
 using SigmaTau, SigmaTauBase, SigmaTauStability, SigmaTauEnsemble
+
+bib = CitationBibliography(
+    joinpath(@__DIR__, "src", "refs.bib");
+    style = :authoryear,
+)
 
 DocMeta.setdocmeta!(SigmaTauBase,      :DocTestSetup, :(using SigmaTau); recursive=true)
 DocMeta.setdocmeta!(SigmaTauStability, :DocTestSetup, :(using SigmaTau); recursive=true)
@@ -13,6 +19,7 @@ makedocs(
         canonical  = "https://ianlap.github.io/SigmaTau.jl",
         mathengine = Documenter.KaTeX(),
     ),
+    plugins = [bib],
     pages = [
         "Home"            => "index.md",
         "Getting Started" => "getting_started.md",
@@ -39,6 +46,7 @@ makedocs(
             "validation/methodology.md",
             "validation/stable32.md",
         ],
+        "Bibliography"    => "bibliography.md",
     ],
     doctest  = true,
     warnonly = [:missing_docs, :cross_references, :docs_block],
