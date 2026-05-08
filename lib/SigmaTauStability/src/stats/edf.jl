@@ -29,13 +29,13 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         tau = taus[k]
         
         if method == :adev
-            edfs[k] = _calc_edf_core(alpha, 2, m, m, 1, N)
+            edfs[k] = _calc_edf_core(alpha, 2, m, m, m, N)
         elseif method == :mdev
-            edfs[k] = _calc_edf_core(alpha, 2, m, 1, 1, N)
+            edfs[k] = _calc_edf_core(alpha, 2, m, 1, m, N)
         elseif method == :hdev
-            edfs[k] = _calc_edf_core(alpha, 3, m, m, 1, N)
+            edfs[k] = _calc_edf_core(alpha, 3, m, m, m, N)
         elseif method == :mhdev
-            edfs[k] = _calc_edf_core(alpha, 3, m, 1, 1, N)
+            edfs[k] = _calc_edf_core(alpha, 3, m, 1, m, N)
         elseif method == :totdev
             # SP1065 Table 9 covers α ∈ {0,-1,-2}. For WPM/FLPM (α=2,1) TOTDEV
             # is dominated by the same noise-shape contribution as ADEV, so the

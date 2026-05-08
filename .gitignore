@@ -38,3 +38,13 @@ AGENTS.md
 legacy/
 legdocs/
 rough_changelog/
+
+# Throwaway diagnostic plot scripts + their generated PNGs.
+# `validation/bench/` is real perf-measurement infrastructure and stays tracked.
+validation/plots/
+
+# Proprietary / large clock recordings used for off-repo validation
+reference/clock_data/
+
+# Stable32 PDF docs/datasets bundled by the Wine installer (55 MB)
+stable32docs/

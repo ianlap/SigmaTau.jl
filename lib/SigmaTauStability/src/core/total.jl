@@ -59,7 +59,8 @@ function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
     end
 
     off = N - 2
-    for (k, m) in enumerate(m_values)
+    Threads.@threads :dynamic for k in eachindex(m_values)
+        m = m_values[k]
         D = 0.0
         count = 0
         @inbounds @simd for i in 1:N
@@ -109,7 +110,8 @@ function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
         x_star[2N-2+j] = 2.0*x[N] - x[N - j]
     end
 
-    for (k, m) in enumerate(m_values)
+    Threads.@threads :dynamic for k in eachindex(m_values)
+        m = m_values[k]
         D = 0.0
         count = 0
         @inbounds @simd for n in 2:N-1
@@ -152,12 +154,27 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    max_m = isempty(m_values) ? 0 : maximum(m_values)
-    max_seg = 3 * max_m
-    ext = Vector{Float64}(undef, 3 * max_seg)
-    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+    # Sequential m-loop, parallel over subsequences. The subsequence list
+    # (length nsubs ≈ N − 3m) is long and uniform; chunking it across
+    # threads gives near-perfect speedup per m. Per-m parallelism was
+    # tried and lost — uneven m-work + nested @threads overhead outweighed
+    # the gain. Reduction order changes vs sequential: a few-ULP drift is
+    # documented in CHANGELOG.
+    #
+    # ext-buffer pool: one buffer per chunk slot, sized once for the
+    # largest m. Reused across all m's; cheap m's only touch the first
+    # 3·seg_len entries. Eliminates per-m, per-chunk allocation churn
+    # (was ~600 MB of churn on the 3M-sample file, max_m=2^19).
+    nthreads = Threads.nthreads()
+    max_m = maximum(m_values; init=0)
+    if max_m < 1 || N - 3*max_m + 1 < 1
+        # All m's invalid or no subsequences possible: fall through and
+        # let the per-k NaN branch handle each.
+    end
+    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
 
-    for (k, m) in enumerate(m_values)
+    for k in eachindex(m_values)
+        m = m_values[k]
         nsubs = N - 3m + 1
         if nsubs < 1
             devs[k] = NaN
@@ -165,53 +182,77 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
         end
 
         seg_len = 3m
-        outer_sum = 0.0
+        nchunks = max(1, min(nthreads, nsubs))
+        chunk_size = cld(nsubs, nchunks)
+        chunk_sums = zeros(nchunks)
 
-        for n in 1:nsubs
-            half_n = seg_len / 2.0
-            if m == 1
-                slope = (x[n+2] - x[n]) / (2.0 * tau0)
-            else
-                hi = floor(Int, half_n)
-                s1 = 0.0
-                @inbounds @simd for i in 1:hi
-                    s1 += x[n-1+i]
+        Threads.@threads :dynamic for c in 1:nchunks
+            n_lo = (c - 1) * chunk_size + 1
+            n_hi = min(c * chunk_size, nsubs)
+            ext = ext_pool[c]
+            local_sum = 0.0
+            for n in n_lo:n_hi
+                half_n = seg_len / 2.0
+                if m == 1
+                    slope = (x[n+2] - x[n]) / (2.0 * tau0)
+                else
+                    hi = floor(Int, half_n)
+                    s1 = 0.0
+                    @inbounds @simd for i in 1:hi
+                        s1 += x[n-1+i]
+                    end
+                    s1 /= hi
+
+                    s2 = 0.0
+                    @inbounds @simd for i in hi+1:seg_len
+                        s2 += x[n-1+i]
+                    end
+                    s2 /= (seg_len - hi)
+                    slope = (s2 - s1) / (half_n * tau0)
                 end
-                s1 /= hi
 
-                s2 = 0.0
-                @inbounds @simd for i in hi+1:seg_len
-                    s2 += x[n-1+i]
+                @inbounds for j in 1:seg_len
+                    val = x[n-1+j] - slope * tau0 * (j - 1)
+                    rev_val = x[n-1 + seg_len - j + 1] - slope * tau0 * (seg_len - j)
+
+                    ext[j] = rev_val
+                    ext[seg_len + j] = val
+                    ext[2seg_len + j] = rev_val
                 end
-                s2 /= (seg_len - hi)
-                slope = (s2 - s1) / (half_n * tau0)
-            end
 
-            @inbounds for j in 1:seg_len
-                val = x[n-1+j] - slope * tau0 * (j - 1)
-                rev_val = x[n-1 + seg_len - j + 1] - slope * tau0 * (seg_len - j)
+                # Sliding-window inner reduction. a1, a2, a3 are running
+                # sums of m consecutive ext values, equivalent to
+                # cs[j+km+1] - cs[j+(k-1)m+1] from the cumulative-sum
+                # variant. Eliminating cs saves the build pass (9m memory
+                # ops per subseq) and one per-chunk allocation. The carry
+                # chain on a1/a2/a3 prevents @simd vectorisation of the
+                # slide loop, but the savings on cs traffic outweigh the
+                # lost SIMD.
+                a1 = 0.0
+                a2 = 0.0
+                a3 = 0.0
+                @inbounds @simd for i in 1:m
+                    a1 += ext[i]
+                    a2 += ext[i+m]
+                    a3 += ext[i+2m]
+                end
 
-                ext[j] = rev_val
-                ext[seg_len + j] = val
-                ext[2seg_len + j] = rev_val
-            end
-
-            cs[1] = 0.0
-            @inbounds for j in 1:3seg_len
-                cs[j+1] = cs[j] + ext[j]
-            end
-
-            block_sum = 0.0
-            @inbounds @simd for j in 0:(6m - 1)
-                a1 = (cs[j+m+1]  - cs[j+1])
-                a2 = (cs[j+2m+1] - cs[j+m+1])
-                a3 = (cs[j+3m+1] - cs[j+2m+1])
                 d2 = (a3 - 2.0*a2 + a1) / m
-                block_sum += d2^2
+                block_sum = d2^2
+
+                @inbounds for j in 1:(6m - 1)
+                    a1 += ext[j+m]  - ext[j]
+                    a2 += ext[j+2m] - ext[j+m]
+                    a3 += ext[j+3m] - ext[j+2m]
+                    d2 = (a3 - 2.0*a2 + a1) / m
+                    block_sum += d2^2
+                end
+                local_sum += block_sum / (6.0 * m)
             end
-            outer_sum += block_sum / (6.0 * m)
+            chunk_sums[c] = local_sum
         end
 
+        outer_sum = sum(chunk_sums)
         devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
     end
 
@@ -226,12 +267,14 @@ function _mtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float6
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    max_m = isempty(m_values) ? 0 : maximum(m_values)
-    max_seg = 3 * max_m
-    ext = Vector{Float64}(undef, 3 * max_seg)
-    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
+    # rationale, sliding-window inner reduction, and ext-buffer pool.
+    nthreads = Threads.nthreads()
+    max_m = maximum(m_values; init=0)
+    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
 
-    for (k, m) in enumerate(m_values)
+    for k in eachindex(m_values)
+        m = m_values[k]
         nsubs = N - 3m + 1
         if nsubs < 1
             devs[k] = NaN
@@ -244,45 +287,61 @@ function _mtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float6
         sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
         delta = L_float * sum_i2 - sum_i^2
 
-        outer_sum = 0.0
+        nchunks = max(1, min(nthreads, nsubs))
+        chunk_size = cld(nsubs, nchunks)
+        chunk_sums = zeros(nchunks)
 
-        for n in 1:nsubs
-            sum_x = 0.0
-            sum_ix = 0.0
-            @inbounds @simd for j in 1:seg_len
-                v = x[n-1+j]
-                sum_x += v
-                sum_ix += j * v
-            end
+        Threads.@threads :dynamic for c in 1:nchunks
+            n_lo = (c - 1) * chunk_size + 1
+            n_hi = min(c * chunk_size, nsubs)
+            ext = ext_pool[c]
+            local_sum = 0.0
+            for n in n_lo:n_hi
+                sum_x = 0.0
+                sum_ix = 0.0
+                @inbounds @simd for j in 1:seg_len
+                    v = x[n-1+j]
+                    sum_x += v
+                    sum_ix += j * v
+                end
 
-            a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
-            b = (L_float * sum_ix - sum_x * sum_i) / delta
+                a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
+                b = (L_float * sum_ix - sum_x * sum_i) / delta
 
-            @inbounds for j in 1:seg_len
-                val = x[n-1+j] - (a + b * j)
-                rev_val = x[n-1 + seg_len - j + 1] - (a + b * (seg_len - j + 1))
+                @inbounds for j in 1:seg_len
+                    val = x[n-1+j] - (a + b * j)
+                    rev_val = x[n-1 + seg_len - j + 1] - (a + b * (seg_len - j + 1))
 
-                ext[j] = rev_val
-                ext[seg_len + j] = val
-                ext[2seg_len + j] = rev_val
-            end
+                    ext[j] = rev_val
+                    ext[seg_len + j] = val
+                    ext[2seg_len + j] = rev_val
+                end
 
-            cs[1] = 0.0
-            @inbounds for j in 1:3seg_len
-                cs[j+1] = cs[j] + ext[j]
-            end
+                a1 = 0.0
+                a2 = 0.0
+                a3 = 0.0
+                @inbounds @simd for i in 1:m
+                    a1 += ext[i]
+                    a2 += ext[i+m]
+                    a3 += ext[i+2m]
+                end
 
-            block_sum = 0.0
-            @inbounds @simd for j in 0:(6m - 1)
-                a1 = (cs[j+m+1]  - cs[j+1])
-                a2 = (cs[j+2m+1] - cs[j+m+1])
-                a3 = (cs[j+3m+1] - cs[j+2m+1])
                 d2 = (a3 - 2.0*a2 + a1) / m
-                block_sum += d2^2
+                block_sum = d2^2
+
+                @inbounds for j in 1:(6m - 1)
+                    a1 += ext[j+m]  - ext[j]
+                    a2 += ext[j+2m] - ext[j+m]
+                    a3 += ext[j+3m] - ext[j+2m]
+                    d2 = (a3 - 2.0*a2 + a1) / m
+                    block_sum += d2^2
+                end
+                local_sum += block_sum / (6.0 * m)
             end
-            outer_sum += block_sum / (6.0 * m)
+            chunk_sums[c] = local_sum
         end
 
+        outer_sum = sum(chunk_sums)
         devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
     end
 
@@ -320,12 +379,14 @@ function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
     end
     Ny = length(y)
 
-    max_m = isempty(m_values) ? 0 : maximum(m_values)
-    max_seg = 3 * max_m
-    ext = Vector{Float64}(undef, 3 * max_seg)
-    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
+    # rationale, sliding-window inner reduction, and ext-buffer pool.
+    nthreads = Threads.nthreads()
+    max_m = maximum(m_values; init=0)
+    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
 
-    for (k, m) in enumerate(m_values)
+    for k in eachindex(m_values)
+        m = m_values[k]
         if m == 1
             L = N - 3
             if L <= 0
@@ -348,51 +409,68 @@ function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
         end
 
         seg_len = 3m
-        dev_sum = 0.0
+        nchunks = max(1, min(nthreads, n_iter))
+        chunk_size = cld(n_iter, nchunks)
+        chunk_sums = zeros(nchunks)
 
-        for i in 0:(n_iter - 1)
-            hi = floor(Int, seg_len / 2)
-            lo_start = ceil(Int, seg_len / 2) + 1
+        Threads.@threads :dynamic for c in 1:nchunks
+            i_lo = (c - 1) * chunk_size
+            i_hi = min(c * chunk_size, n_iter) - 1
+            ext = ext_pool[c]
+            local_sum = 0.0
+            for i in i_lo:i_hi
+                hi = floor(Int, seg_len / 2)
+                lo_start = ceil(Int, seg_len / 2) + 1
 
-            s1 = 0.0
-            @inbounds @simd for j in 1:hi
-                s1 += y[i+j]
+                s1 = 0.0
+                @inbounds @simd for j in 1:hi
+                    s1 += y[i+j]
+                end
+                m1 = s1 / hi
+
+                s2 = 0.0
+                @inbounds @simd for j in lo_start:seg_len
+                    s2 += y[i+j]
+                end
+                m2 = s2 / (seg_len - lo_start + 1)
+
+                slope = isodd(seg_len) ? (m2 - m1) / (0.5*(seg_len - 1) + 1.0) : (m2 - m1) / (0.5*seg_len)
+                mid = floor(seg_len / 2)
+
+                @inbounds for j in 1:seg_len
+                    val = y[i+j] - slope * (j - 1 - mid)
+                    rev_val = y[i + seg_len - j + 1] - slope * (seg_len - j - mid)
+
+                    ext[j] = rev_val
+                    ext[seg_len + j] = val
+                    ext[2seg_len + j] = rev_val
+                end
+
+                a1 = 0.0
+                a2 = 0.0
+                a3 = 0.0
+                @inbounds @simd for j in 1:m
+                    a1 += ext[j]
+                    a2 += ext[j+m]
+                    a3 += ext[j+2m]
+                end
+
+                d3 = (a3 - 2.0*a2 + a1) / m
+                sq = d3^2
+
+                @inbounds for j in 1:(6m - 1)
+                    a1 += ext[j+m]  - ext[j]
+                    a2 += ext[j+2m] - ext[j+m]
+                    a3 += ext[j+3m] - ext[j+2m]
+                    d3 = (a3 - 2.0*a2 + a1) / m
+                    sq += d3^2
+                end
+                local_sum += sq / (6.0 * m)
             end
-            m1 = s1 / hi
-
-            s2 = 0.0
-            @inbounds @simd for j in lo_start:seg_len
-                s2 += y[i+j]
-            end
-            m2 = s2 / (seg_len - lo_start + 1)
-
-            slope = isodd(seg_len) ? (m2 - m1) / (0.5*(seg_len - 1) + 1.0) : (m2 - m1) / (0.5*seg_len)
-            mid = floor(seg_len / 2)
-
-            @inbounds for j in 1:seg_len
-                val = y[i+j] - slope * (j - 1 - mid)
-                rev_val = y[i + seg_len - j + 1] - slope * (seg_len - j - mid)
-
-                ext[j] = rev_val
-                ext[seg_len + j] = val
-                ext[2seg_len + j] = rev_val
-            end
-
-            cs[1] = 0.0
-            @inbounds for j in 1:3seg_len
-                cs[j+1] = cs[j] + ext[j]
-            end
-
-            sq = 0.0
-            @inbounds @simd for j in 0:(6m - 1)
-                h1 = (cs[j+m+1]  - cs[j+1])
-                h2 = (cs[j+2m+1] - cs[j+m+1])
-                h3 = (cs[j+3m+1] - cs[j+2m+1])
-                sq += ((h3 - 2.0*h2 + h1) / m)^2
-            end
-            dev_sum += sq / (6.0 * m)
+            chunk_sums[c] = local_sum
         end
 
+        dev_sum = sum(chunk_sums)
         devs[k] = sqrt(dev_sum / (6.0 * n_iter))
     end
 
@@ -413,12 +491,14 @@ function _htotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float6
     end
     Ny = length(y)
 
-    max_m = isempty(m_values) ? 0 : maximum(m_values)
-    max_seg = 3 * max_m
-    ext = Vector{Float64}(undef, 3 * max_seg)
-    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
+    # rationale, sliding-window inner reduction, and ext-buffer pool.
+    nthreads = Threads.nthreads()
+    max_m = maximum(m_values; init=0)
+    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
 
-    for (k, m) in enumerate(m_values)
+    for k in eachindex(m_values)
+        m = m_values[k]
         if m == 1
             L = N - 3
             if L <= 0
@@ -446,44 +526,61 @@ function _htotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float6
         sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
         delta = L_float * sum_i2 - sum_i^2
 
-        dev_sum = 0.0
+        nchunks = max(1, min(nthreads, n_iter))
+        chunk_size = cld(n_iter, nchunks)
+        chunk_sums = zeros(nchunks)
 
-        for i in 0:(n_iter - 1)
-            sum_y = 0.0
-            sum_iy = 0.0
-            @inbounds @simd for j in 1:seg_len
-                v = y[i+j]
-                sum_y += v
-                sum_iy += j * v
+        Threads.@threads :dynamic for c in 1:nchunks
+            i_lo = (c - 1) * chunk_size
+            i_hi = min(c * chunk_size, n_iter) - 1
+            ext = ext_pool[c]
+            local_sum = 0.0
+            for i in i_lo:i_hi
+                sum_y = 0.0
+                sum_iy = 0.0
+                @inbounds @simd for j in 1:seg_len
+                    v = y[i+j]
+                    sum_y += v
+                    sum_iy += j * v
+                end
+
+                a = (sum_y * sum_i2 - sum_iy * sum_i) / delta
+                b = (L_float * sum_iy - sum_y * sum_i) / delta
+
+                @inbounds for j in 1:seg_len
+                    val = y[i+j] - (a + b * j)
+                    rev_val = y[i + seg_len - j + 1] - (a + b * (seg_len - j + 1))
+
+                    ext[j] = rev_val
+                    ext[seg_len + j] = val
+                    ext[2seg_len + j] = rev_val
+                end
+
+                a1 = 0.0
+                a2 = 0.0
+                a3 = 0.0
+                @inbounds @simd for j in 1:m
+                    a1 += ext[j]
+                    a2 += ext[j+m]
+                    a3 += ext[j+2m]
+                end
+
+                d3 = (a3 - 2.0*a2 + a1) / m
+                sq = d3^2
+
+                @inbounds for j in 1:(6m - 1)
+                    a1 += ext[j+m]  - ext[j]
+                    a2 += ext[j+2m] - ext[j+m]
+                    a3 += ext[j+3m] - ext[j+2m]
+                    d3 = (a3 - 2.0*a2 + a1) / m
+                    sq += d3^2
+                end
+                local_sum += sq / (6.0 * m)
             end
-
-            a = (sum_y * sum_i2 - sum_iy * sum_i) / delta
-            b = (L_float * sum_iy - sum_y * sum_i) / delta
-
-            @inbounds for j in 1:seg_len
-                val = y[i+j] - (a + b * j)
-                rev_val = y[i + seg_len - j + 1] - (a + b * (seg_len - j + 1))
-
-                ext[j] = rev_val
-                ext[seg_len + j] = val
-                ext[2seg_len + j] = rev_val
-            end
-
-            cs[1] = 0.0
-            @inbounds for j in 1:3seg_len
-                cs[j+1] = cs[j] + ext[j]
-            end
-
-            sq = 0.0
-            @inbounds @simd for j in 0:(6m - 1)
-                h1 = (cs[j+m+1]  - cs[j+1])
-                h2 = (cs[j+2m+1] - cs[j+m+1])
-                h3 = (cs[j+3m+1] - cs[j+2m+1])
-                sq += ((h3 - 2.0*h2 + h1) / m)^2
-            end
-            dev_sum += sq / (6.0 * m)
+            chunk_sums[c] = local_sum
         end
 
+        dev_sum = sum(chunk_sums)
         devs[k] = sqrt(dev_sum / (6.0 * n_iter))
     end
 
@@ -517,15 +614,17 @@ function _mhtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    max_m = isempty(m_values) ? 0 : maximum(m_values)
-    max_Lp = 3 * max_m + 1
-    ext_len = 3 * max_Lp
-    L3_max = ext_len - 3 * max_m
-    ext = Vector{Float64}(undef, ext_len)
-    d3_vec = Vector{Float64}(undef, L3_max)
-    S = Vector{Float64}(undef, L3_max + 1)
+    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
+    # rationale, sliding-window inner reduction, and buffer pool.
+    nthreads = Threads.nthreads()
+    max_m = maximum(m_values; init=0)
+    max_Lp = 3 * max(max_m, 1) + 1
+    max_L3 = 3 * max_Lp - 3 * max(max_m, 1)
+    ext_pool = [Vector{Float64}(undef, 3 * max_Lp) for _ in 1:nthreads]
+    d3_pool  = [Vector{Float64}(undef, max_L3)     for _ in 1:nthreads]
 
-    for (k, m) in enumerate(m_values)
+    for k in eachindex(m_values)
+        m = m_values[k]
         if m < 1
             devs[k] = NaN
             continue
@@ -538,57 +637,72 @@ function _mhtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float
 
         Lp = 3m + 1
         L3 = 3Lp - 3m
+        Lp_float = Float64(Lp)
+        sum_i = (Lp_float * (Lp_float + 1.0)) / 2.0
+        sum_i2 = (Lp_float * (Lp_float + 1.0) * (2.0*Lp_float + 1.0)) / 6.0
+        delta = Lp_float * sum_i2 - sum_i^2
 
-        total_sum = 0.0
-        for n in 1:nsubs
-            Lp_float = Float64(Lp)
-            sum_i = (Lp_float * (Lp_float + 1.0)) / 2.0
-            sum_i2 = (Lp_float * (Lp_float + 1.0) * (2.0*Lp_float + 1.0)) / 6.0
-            delta = Lp_float * sum_i2 - sum_i^2
+        nchunks = max(1, min(nthreads, nsubs))
+        chunk_size = cld(nsubs, nchunks)
+        chunk_sums = zeros(nchunks)
 
-            sum_x = 0.0
-            sum_ix = 0.0
-            @inbounds @simd for j in 1:Lp
-                val = x[n-1+j]
-                sum_x += val
-                sum_ix += j * val
-            end
-
-            a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
-            b = (Lp_float * sum_ix - sum_x * sum_i) / delta
-
-            @inbounds for j in 1:Lp
-                val = x[n-1+j] - (a + b * j)
-                rev_val = x[n-1 + Lp - j + 1] - (a + b * (Lp - j + 1))
-
-                ext[j] = rev_val
-                ext[Lp + j] = val
-                ext[2Lp + j] = rev_val
-            end
-
-            @inbounds for j in 1:L3
-                d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
-            end
-
-            S[1] = 0.0
-            @inbounds for j in 1:L3
-                S[j+1] = S[j] + d3_vec[j]
-            end
-
-            n_avg = L3 + 1 - m
-            if n_avg > 0
-                block_var = 0.0
-                @inbounds @simd for j in 1:n_avg
-                    block_var += (S[j+m] - S[j])^2
+        Threads.@threads :dynamic for c in 1:nchunks
+            n_lo = (c - 1) * chunk_size + 1
+            n_hi = min(c * chunk_size, nsubs)
+            ext = ext_pool[c]
+            d3_vec = d3_pool[c]
+            local_sum = 0.0
+            for n in n_lo:n_hi
+                sum_x = 0.0
+                sum_ix = 0.0
+                @inbounds @simd for j in 1:Lp
+                    val = x[n-1+j]
+                    sum_x += val
+                    sum_ix += j * val
                 end
-                block_var /= (n_avg * 6.0 * Float64(m)^2)
-            else
-                block_var = 0.0
-            end
 
-            total_sum += block_var
+                a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
+                b = (Lp_float * sum_ix - sum_x * sum_i) / delta
+
+                @inbounds for j in 1:Lp
+                    val = x[n-1+j] - (a + b * j)
+                    rev_val = x[n-1 + Lp - j + 1] - (a + b * (Lp - j + 1))
+
+                    ext[j] = rev_val
+                    ext[Lp + j] = val
+                    ext[2Lp + j] = rev_val
+                end
+
+                @inbounds for j in 1:L3
+                    d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
+                end
+
+                n_avg = L3 + 1 - m
+                if n_avg > 0
+                    # Sliding-window sum over m-windows of d3_vec, replacing
+                    # the cumulative-sum buffer S used previously. A_j is
+                    # the running m-window sum starting at index j.
+                    A = 0.0
+                    @inbounds @simd for j in 1:m
+                        A += d3_vec[j]
+                    end
+                    block_var = A^2
+
+                    @inbounds for j in 1:(n_avg - 1)
+                        A += d3_vec[j+m] - d3_vec[j]
+                        block_var += A^2
+                    end
+                    block_var /= (n_avg * 6.0 * Float64(m)^2)
+                else
+                    block_var = 0.0
+                end
+
+                local_sum += block_var
+            end
+            chunk_sums[c] = local_sum
         end
 
+        total_sum = sum(chunk_sums)
         devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
     end
 
@@ -603,15 +717,17 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    max_m = isempty(m_values) ? 0 : maximum(m_values)
-    max_Lp = 3 * max_m + 1
-    ext_len = 3 * max_Lp
-    L3_max = ext_len - 3 * max_m
-    ext = Vector{Float64}(undef, ext_len)
-    d3_vec = Vector{Float64}(undef, L3_max)
-    S = Vector{Float64}(undef, L3_max + 1)
+    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
+    # rationale, sliding-window inner reduction, and buffer pool.
+    nthreads = Threads.nthreads()
+    max_m = maximum(m_values; init=0)
+    max_Lp = 3 * max(max_m, 1) + 1
+    max_L3 = 3 * max_Lp - 3 * max(max_m, 1)
+    ext_pool = [Vector{Float64}(undef, 3 * max_Lp) for _ in 1:nthreads]
+    d3_pool  = [Vector{Float64}(undef, max_L3)     for _ in 1:nthreads]
 
-    for (k, m) in enumerate(m_values)
+    for k in eachindex(m_values)
+        m = m_values[k]
         if m < 1
             devs[k] = NaN
             continue
@@ -625,55 +741,68 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
         Lp = 3m + 1
         L3 = 3Lp - 3m
 
-        total_sum = 0.0
-        for n in 1:nsubs
-            half = floor(Int, Lp / 2)
-            s1 = 0.0
-            @inbounds @simd for j in 1:half
-                s1 += x[n-1+j]
-            end
-            s1 /= half
+        nchunks = max(1, min(nthreads, nsubs))
+        chunk_size = cld(nsubs, nchunks)
+        chunk_sums = zeros(nchunks)
 
-            s2 = 0.0
-            @inbounds @simd for j in (half+1):Lp
-                s2 += x[n-1+j]
-            end
-            s2 /= (Lp - half)
-
-            slope = (s2 - s1) / ((Lp / 2.0) * tau0)
-
-            @inbounds for j in 1:Lp
-                val = x[n-1+j] - slope * tau0 * (j - 1)
-                rev_val = x[n-1 + Lp - j + 1] - slope * tau0 * (Lp - j)
-
-                ext[j] = rev_val
-                ext[Lp + j] = val
-                ext[2Lp + j] = rev_val
-            end
-
-            @inbounds for j in 1:L3
-                d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
-            end
-
-            S[1] = 0.0
-            @inbounds for j in 1:L3
-                S[j+1] = S[j] + d3_vec[j]
-            end
-
-            n_avg = L3 + 1 - m
-            if n_avg > 0
-                block_var = 0.0
-                @inbounds @simd for j in 1:n_avg
-                    block_var += (S[j+m] - S[j])^2
+        Threads.@threads :dynamic for c in 1:nchunks
+            n_lo = (c - 1) * chunk_size + 1
+            n_hi = min(c * chunk_size, nsubs)
+            ext = ext_pool[c]
+            d3_vec = d3_pool[c]
+            local_sum = 0.0
+            for n in n_lo:n_hi
+                half = floor(Int, Lp / 2)
+                s1 = 0.0
+                @inbounds @simd for j in 1:half
+                    s1 += x[n-1+j]
                 end
-                block_var /= (n_avg * 6.0 * Float64(m)^2)
-            else
-                block_var = 0.0
-            end
+                s1 /= half
 
-            total_sum += block_var
+                s2 = 0.0
+                @inbounds @simd for j in (half+1):Lp
+                    s2 += x[n-1+j]
+                end
+                s2 /= (Lp - half)
+
+                slope = (s2 - s1) / ((Lp / 2.0) * tau0)
+
+                @inbounds for j in 1:Lp
+                    val = x[n-1+j] - slope * tau0 * (j - 1)
+                    rev_val = x[n-1 + Lp - j + 1] - slope * tau0 * (Lp - j)
+
+                    ext[j] = rev_val
+                    ext[Lp + j] = val
+                    ext[2Lp + j] = rev_val
+                end
+
+                @inbounds for j in 1:L3
+                    d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
+                end
+
+                n_avg = L3 + 1 - m
+                if n_avg > 0
+                    A = 0.0
+                    @inbounds @simd for j in 1:m
+                        A += d3_vec[j]
+                    end
+                    block_var = A^2
+
+                    @inbounds for j in 1:(n_avg - 1)
+                        A += d3_vec[j+m] - d3_vec[j]
+                        block_var += A^2
+                    end
+                    block_var /= (n_avg * 6.0 * Float64(m)^2)
+                else
+                    block_var = 0.0
+                end
+
+                local_sum += block_var
+            end
+            chunk_sums[c] = local_sum
         end
 
+        total_sum = sum(chunk_sums)
         devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
     end
 
