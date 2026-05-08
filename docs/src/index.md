@@ -30,4 +30,4 @@ Numerical conventions and confidence-interval formulas follow:
 
 - NIST SP1065 [Riley & Howe 2008](@cite RileyHowe2008)
 - Greenhall–Riley 2003 EDF approximations [Greenhall 2003](@cite Greenhall2003)
-- IEEE Std 1139-2022 [@cite IEEE1139_2022]
+- [IEEE Std 1139-2022](@cite IEEE1139_2022)
