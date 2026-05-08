@@ -13,6 +13,7 @@ Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`.
 """
 function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:legacy)
     detrend === :legacy && return _totdev_legacy(x, m_values, tau0)
+    detrend === :howe && return _totdev_howe(x, m_values, tau0)
     throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
 end
 
@@ -71,6 +72,43 @@ function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
         else
             devs[k] = sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
         end
+    end
+
+    return devs
+end
+
+function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # SP1065 eqn 25: no detrend, mean-flip endpoint reflection.
+    # x_star of length 3N-4: [reflected_left | x | reflected_right].
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    x_star = Vector{Float64}(undef, 3N - 4)
+    @inbounds for i in 1:N-2
+        x_star[i] = 2.0*x[1] - x[i+1]
+    end
+    @inbounds for i in 1:N
+        x_star[N-2+i] = x[i]
+    end
+    @inbounds for i in 1:N-2
+        x_star[2N-2+i] = 2.0*x[N] - x[N-i]
+    end
+
+    off = N - 2
+    for (k, m) in enumerate(m_values)
+        D = 0.0
+        count = 0
+        @inbounds @simd for i in 1:N
+            lo = off + i
+            hi = off + i + 2m
+            if hi <= length(x_star)
+                d2 = x_star[hi] - 2.0*x_star[off + i + m] + x_star[lo]
+                D += d2^2
+                count += 1
+            end
+        end
+
+        devs[k] = count == 0 ? NaN : sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
     end
 
     return devs

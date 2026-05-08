@@ -299,6 +299,38 @@ const LK = LegacyKernels
         end
     end
 
+    @testset "TOTDEV :howe matches Stable32 tightly" begin
+        # SP1065 eqn 25 reference: no detrend, mean-flip endpoint reflection.
+        # Should match Stable32's TOTDEV output at rtol=1e-4 (vs the rtol=0.15
+        # boundary-policy floor seen with the :legacy global-LS detrend).
+        ref_dir = joinpath(@__DIR__, "..", "..", "..", "reference", "validation")
+        dat_path = joinpath(ref_dir, "stable32gen.DAT")
+        csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
+
+        if !isfile(dat_path) || !isfile(csv_path)
+            @warn "Stable32 fixtures not present, skipping :howe TOTDEV tightness test"
+        else
+            lines = readlines(dat_path)
+            x = parse.(Float64, strip.(lines[11:end]))
+            @test length(x) == 8192
+            tau0 = 1.0
+
+            rows = [split(line, ',') for line in readlines(csv_path)[2:end]]
+            n_checked = 0
+            for row in rows
+                length(row) < 7 && continue
+                row[1] == "Total" || continue
+                m = parse(Int, row[2])
+                sigma_ref = parse(Float64, row[7])
+
+                got = SigmaTauStability._totdev_core(x, [m], tau0; detrend=:howe)[1]
+                @test got ≈ sigma_ref rtol=1e-4
+                n_checked += 1
+            end
+            @test n_checked >= 5
+        end
+    end
+
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
         # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
