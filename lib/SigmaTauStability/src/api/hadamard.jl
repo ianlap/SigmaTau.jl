@@ -47,9 +47,10 @@ end
 
 Computes the Hadamard time deviation (HTDEV) for the given `PhaseData`
 — a third-difference time deviation, related to MHDEV by
-`σ_HT(τ) = τ / √(10/3) · σ_MH(τ)`. HTDEV is to MHDEV what TDEV is to
-MDEV. The construction is original to this package; SP1065,
-IEEE 1139-2022, and NBS-TN-1337 do not define it.
+`σ_x,HT(τ) = τ / √(10/3) · σ_y,MH(τ)`. HTDEV has units of seconds
+(it is a σ_x quantity); HTDEV is to MHDEV what TDEV is to MDEV. The
+construction is original to this package; SP1065, IEEE 1139-2022,
+and NBS-TN-1337 do not define it.
 """
 function htdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mhdev(data, m_values; calc_ci=calc_ci, confidence=confidence)
