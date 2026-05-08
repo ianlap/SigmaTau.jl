@@ -1,7 +1,7 @@
 # core/total.jl — Core Total Stability Kernels
 
 """
-    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:legacy) → Vector{Float64}
+    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:howe) → Vector{Float64}
 
 Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`.
 
@@ -9,15 +9,16 @@ TOTDEV uses the Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension.
 `detrend` selects the detrending applied before the extension:
 
 - `:howe` — no detrend (canonical SP1065 eqn 25, matches allantools).
+  Default.
 - `:linear` — global least-squares detrend over the whole vector; alias
   for `:legacy` on this kernel.
 - `:legacy` — pre-1.0 SigmaTau behavior; identical to `:linear` here.
 """
-function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:legacy)
+function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:howe)
+    detrend === :howe && return _totdev_howe(x, m_values, tau0)
     if detrend === :legacy || detrend === :linear
         return _totdev_legacy(x, m_values, tau0)
     end
-    detrend === :howe && return _totdev_howe(x, m_values, tau0)
     throw(ArgumentError("unknown detrend recipe: $detrend; valid for TOTDEV: :howe, :linear, :legacy"))
 end
 
