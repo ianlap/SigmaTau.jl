@@ -1,34 +1,46 @@
 # core/total.jl — Core Total Stability Kernels
 
 """
-    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:legacy) → Vector{Float64}
 
 Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`.
+
+`detrend` selects the boundary-handling recipe:
+- `:howe` — no detrend, mean-flip endpoint reflection (Howe 1995, NIST SP1065 eqn 25)
+- `:greenhall` — per-window half-mean slope removal + time-reverse extension (Greenhall 2003)
+- `:linear` — per-window full LS detrend + time-reverse extension
+- `:legacy` — current SigmaTau behavior: global LS detrend + mean-flip reflection
 """
-function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:legacy)
+    detrend === :legacy && return _totdev_legacy(x, m_values, tau0)
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+end
+
+function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
-    # Linear detrend of the whole vector
+
+    # Linear detrend of the whole vector (analytic LS sums)
     N_float = Float64(N)
     sum_i = (N_float * (N_float + 1.0)) / 2.0
     sum_i2 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0)) / 6.0
     delta = N_float * sum_i2 - sum_i^2
-    
+
     sum_x = sum(x)
     sum_ix = 0.0
     @inbounds @simd for i in 1:N
         sum_ix += i * x[i]
     end
-    
+
     a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
     b = (N_float * sum_ix - sum_x * sum_i) / delta
-    
+
     xd = Vector{Float64}(undef, N)
     @inbounds @simd for i in 1:N
         xd[i] = x[i] - (a + b * i)
     end
-    
+
+    # Mean-flip endpoint reflection: x_star of length 3N-4
     x_star = Vector{Float64}(undef, 3N - 4)
     @inbounds for i in 1:N-2
         x_star[i] = 2.0*xd[1] - xd[i+1]
@@ -39,7 +51,7 @@ function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     @inbounds for i in 1:N-2
         x_star[2N-2+i] = 2.0*xd[N] - xd[N-i]
     end
-    
+
     off = N - 2
     for (k, m) in enumerate(m_values)
         D = 0.0
@@ -53,14 +65,14 @@ function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
                 count += 1
             end
         end
-        
+
         if count == 0
             devs[k] = NaN
         else
             devs[k] = sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
         end
     end
-    
+
     return devs
 end
 
