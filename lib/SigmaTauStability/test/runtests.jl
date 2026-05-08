@@ -447,6 +447,39 @@ const LK = LegacyKernels
         @test_throws ArgumentError SigmaTauStability._htotdev_core(x, [1], tau0; detrend=:howe)
     end
 
+    @testset "MHTOTDEV :greenhall smoke" begin
+        # Per-window half-mean slope detrend (vs :linear's full-LS) on the
+        # same time-reverse extension and averaged third-diff operator.
+        # MHTOTDEV is novel to SigmaTau; this is the new default after
+        # the Phase 4 default switch — exercise it on a mid-spectrum noise
+        # plus all five SP1065 power-law types.
+        using Random
+        N    = 1024
+        tau0 = 1.0
+        ms   = [1, 2, 4, 8]
+
+        # Mid-spectrum WHFM check
+        Random.seed!(20260508)
+        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+        devs = SigmaTauStability._mhtotdev_core(x, ms, tau0; detrend=:greenhall)
+        @test length(devs) == length(ms)
+        @test all(isfinite, devs)
+        @test all(>(0), devs)
+
+        # 5-noise-type finite-output smoke (the new default needs basic coverage)
+        for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
+            Random.seed!(20260508)
+            xa = _gen_powerlaw_phase(alpha, N; tau0=tau0)
+            d = SigmaTauStability._mhtotdev_core(xa, ms, tau0; detrend=:greenhall)
+            @test length(d) == length(ms)
+            @test all(isfinite, d)
+            @test all(>(0), d)
+        end
+
+        # :howe is no longer a recipe for MHTOTDEV.
+        @test_throws ArgumentError SigmaTauStability._mhtotdev_core(x, [1], tau0; detrend=:howe)
+    end
+
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
         # Bonus: kernel parity for the more common ADEV/HDEV across all 5
         # noise types, locking in that the synthesizer + kernels survive the

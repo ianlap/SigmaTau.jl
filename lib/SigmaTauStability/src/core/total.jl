@@ -494,15 +494,23 @@ end
 
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
 
-`detrend` selects the boundary-handling recipe (see `_totdev_core`). MHTOTDEV
-is novel to SigmaTau; `:legacy` aliases to `:linear` (current implementation).
+MHTOTDEV is novel to SigmaTau and uses a per-window time-reverse extension
+on phase. `detrend` selects the per-window detrending applied before the
+extension:
+
+- `:greenhall` — half-mean slope removal (matches the MTOTDEV/HTOTDEV
+  Greenhall convention).
+- `:linear` — full least-squares (slope + intercept) per window.
+- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:linear` here.
+
 The default is `:linear` in this phase; switches to `:greenhall` in Phase 4.
 """
 function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:linear)
     if detrend === :linear || detrend === :legacy
         return _mhtotdev_linear(x, m_values, tau0)
     end
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+    detrend === :greenhall && return _mhtotdev_greenhall(x, m_values, tau0)
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for MHTOTDEV: :greenhall, :linear, :legacy"))
 end
 
 function _mhtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
@@ -552,6 +560,91 @@ function _mhtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float
             @inbounds for j in 1:Lp
                 val = x[n-1+j] - (a + b * j)
                 rev_val = x[n-1 + Lp - j + 1] - (a + b * (Lp - j + 1))
+
+                ext[j] = rev_val
+                ext[Lp + j] = val
+                ext[2Lp + j] = rev_val
+            end
+
+            @inbounds for j in 1:L3
+                d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
+            end
+
+            S[1] = 0.0
+            @inbounds for j in 1:L3
+                S[j+1] = S[j] + d3_vec[j]
+            end
+
+            n_avg = L3 + 1 - m
+            if n_avg > 0
+                block_var = 0.0
+                @inbounds @simd for j in 1:n_avg
+                    block_var += (S[j+m] - S[j])^2
+                end
+                block_var /= (n_avg * 6.0 * Float64(m)^2)
+            else
+                block_var = 0.0
+            end
+
+            total_sum += block_var
+        end
+
+        devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
+    end
+
+    return devs
+end
+
+function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # Per-window half-mean slope removal + per-window time-reverse extension
+    # + averaged third-difference operator. Same window/operator structure as
+    # `_mhtotdev_linear`; only the slope estimate differs (half-mean instead
+    # of full LS).
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    max_m = isempty(m_values) ? 0 : maximum(m_values)
+    max_Lp = 3 * max_m + 1
+    ext_len = 3 * max_Lp
+    L3_max = ext_len - 3 * max_m
+    ext = Vector{Float64}(undef, ext_len)
+    d3_vec = Vector{Float64}(undef, L3_max)
+    S = Vector{Float64}(undef, L3_max + 1)
+
+    for (k, m) in enumerate(m_values)
+        if m < 1
+            devs[k] = NaN
+            continue
+        end
+        nsubs = N - 4m + 1
+        if nsubs < 1
+            devs[k] = NaN
+            continue
+        end
+
+        Lp = 3m + 1
+        L3 = 3Lp - 3m
+
+        total_sum = 0.0
+        for n in 1:nsubs
+            half = floor(Int, Lp / 2)
+            s1 = 0.0
+            @inbounds @simd for j in 1:half
+                s1 += x[n-1+j]
+            end
+            s1 /= half
+
+            s2 = 0.0
+            @inbounds @simd for j in (half+1):Lp
+                s2 += x[n-1+j]
+            end
+            s2 /= (Lp - half)
+
+            slope = (s2 - s1) / ((Lp / 2.0) * tau0)
+
+            @inbounds for j in 1:Lp
+                val = x[n-1+j] - slope * tau0 * (j - 1)
+                rev_val = x[n-1 + Lp - j + 1] - slope * tau0 * (Lp - j)
 
                 ext[j] = rev_val
                 ext[Lp + j] = val
