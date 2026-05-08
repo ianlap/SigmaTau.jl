@@ -6,8 +6,46 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `detrend::Symbol` kwarg on the four total-family kernels and API
+  wrappers (`totdev`, `mtotdev`, `htotdev`, `mhtotdev`). Each kernel
+  exposes its canonical recipe and a `:linear` alternative that swaps
+  the kernel's natural detrending for a per-window full LS slope+intercept
+  while preserving the kernel's natural extension shape. `:legacy`
+  aliases the pre-1.0 default of each kernel for backward compat.
+- `_totdev_howe` helper implementing NIST SP1065 eqn 25 verbatim
+  (Greenhall–Howe–Percival 1998 eq 3): no detrend, mean-flip endpoint
+  reflection, sum over centers `n=2..N-1`. Cross-checked against
+  Stable32's TOTDEV at `rtol=1e-4` (12 of 13 m values) and against
+  allantools' `totdev` to ~7 significant figures on the same fixture.
+  The single (m=512) Stable32 row that misses the rtol=1e-4 floor is
+  identified by Stable32 as FLFM and carries an alpha-aware correction
+  that diverges from the raw SP1065 value; documented in the test
+  comment and `TODO.md`.
+
 ### Changed
 
+- **Breaking:** `totdev` default detrend recipe is now `:howe` (SP1065
+  eqn 25: no detrend, mean-flip endpoint reflection). Previous behavior
+  (global LS detrend on top of the same reflection) is available via
+  `totdev(...; detrend=:legacy)` or the `:linear` alias. Output values
+  change for all τ; the new default matches allantools' raw `totdev` to
+  ~7 significant figures and Stable32's `Total` column at `rtol=1e-4`
+  (m=512 outlier excepted, see Added section). Bias correction
+  `bias_correction(:totvar, ...)` is now correctly calibrated against
+  the new `:howe` default — the previous `:legacy` path silently
+  removed drift before the SP1065 bias factor was applied.
+- **Breaking:** `mhtotdev` default detrend recipe is now `:greenhall`
+  (per-window half-mean slope removal), aligning with the convention of
+  MTOT and HTOT in the Hadamard-modified family. Previous behavior
+  (per-window full LS) is available via `mhtotdev(...; detrend=:linear)`
+  or `:legacy`. MHTOTDEV is novel to SigmaTau; no external numerical
+  reference exists, so the recipe choice is a methodology decision
+  rather than a parity contract.
+- MTOTDEV and HTOTDEV default outputs are unchanged. Both keep
+  `:greenhall` (per-window half-mean) as the default; the new `:linear`
+  recipe is opt-in.
 - MHTOTDEV bias-correction policy made explicit: `bias_correction`
   now short-circuits to `B = 1` for `var_type = :mhtot`, with the
   rationale promoted into the function docstring (FCS 2001 and
