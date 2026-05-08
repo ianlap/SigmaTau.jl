@@ -20,7 +20,29 @@ numerical reference is locked in.
 
 ## 🟡 High (correctness / completeness)
 
-_None._
+- [ ] **MHTOTDEV bias / EDF Monte Carlo per detrend recipe.** Synthesize
+  known-noise via `_gen_powerlaw_phase` for each α; compute MHTOT and
+  MHDEV; the ratio yields the bias factor `B(α)`. Re-fit `_coeff_mhtot`
+  empirically per detrend recipe (`:greenhall`, `:linear`). Track
+  per-recipe — EDF is recipe-specific. Spec:
+  `docs/superpowers/specs/2026-05-07-detrend-kwarg-design.md`
+  → "Out-of-scope / future work".
+- [ ] **TOTDEV `:howe` allantools cross-val tightening.** Once
+  `track-b1-allantools` merges to main, update
+  `lib/SigmaTauStability/test/allantools_cross_validation.jl` so the
+  `"Total"` branch uses `_totdev_core(...; detrend=:howe)` at
+  `rtol=1e-7` (allantools' raw `totdev` already matches our `:howe`
+  to ~7 sig figs on the shared fixture; no need for the `m=512` skip
+  there since allantools doesn't apply Stable32's alpha-aware
+  correction).
+- [ ] **TOTDEV m=512 Stable32 quirk follow-up.** The Stable32
+  cross-validation testset skips the m=512 row because Stable32 reports
+  a value ~1.5% larger than the raw SP1065 result (allantools agrees
+  with our `:howe`). Stable32 identifies that row as FLFM (alpha=-1)
+  and appears to apply an alpha-aware correction. Either confirm via
+  `stable32docs/` how Stable32 derives the reported sigma at FLFM-tagged
+  rows and apply the matching correction in the test, or document the
+  divergence as an irreducible Stable32-vs-SP1065 policy gap.
 
 ---
 
