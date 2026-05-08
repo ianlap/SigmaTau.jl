@@ -5,7 +5,19 @@ using Distributions
 """
     calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64) → Vector{Float64}
 
-Calculates EDF based on Greenhall/Riley approximation tables.
+Equivalent degrees of freedom for the chosen `method`. Uses the
+Greenhall–Riley spectral integrals for ADEV / MDEV / HDEV / MHDEV (via
+`_calc_edf_core`) and the published EDF coefficient tables for the
+total-family estimators.
+
+WPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 9 and
+FCS 2001 publish coefficients for α ∈ {0, -1, -2} only. For α ∈ {1, 2}
+this routine falls back to the ADEV-style (`d=2`, `F=m`, `S=1`) or
+HDEV-style (`d=3`, `F=m`, `S=1`) Greenhall–Riley formula so every
+noise type yields a finite EDF instead of NaN. The substitute is
+pragmatic, not canonical — it is dominated by the same noise-shape
+contribution as ADEV/HDEV at WPM/FLPM, but is documented as a policy
+choice rather than a derivation.
 """
 function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64)
     edfs = Vector{Float64}(undef, length(devs))
@@ -172,10 +184,19 @@ end
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
 
 Bias factor B(α). Divide raw deviation by B to get unbiased estimate.
+
+Recognised `var_type` values: `:totvar`, `:mtot`, `:htot`, `:mhtot`.
+
+Policy: `:mhtot` is treated as unbiased (B = 1) — FCS 2001 and NIST
+SP1065 publish no bias-correction model for the modified Hadamard
+total deviation. Stable32 and AllanLab adopt the same convention.
+Anything else falls through to B = 1.
 """
 function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64)
     B = ones(Float64, length(noises))
-    
+
+    var_type == :mhtot && return B
+
     for k in 1:length(noises)
         alpha = _alpha_from_noise(noises[k])
         tau = taus[k]
