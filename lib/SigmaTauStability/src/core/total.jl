@@ -77,29 +77,39 @@ function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
 end
 
 """
-    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
 
 Computes the Modified Total Deviation (MTOTDEV).
+
+`detrend` selects the boundary-handling recipe (see `_totdev_core` docstring).
+For MTOTDEV, `:legacy` is an alias for `:greenhall` (current implementation).
 """
-function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
+    if detrend === :greenhall || detrend === :legacy
+        return _mtotdev_greenhall(x, m_values, tau0)
+    end
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+end
+
+function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
+
     max_m = isempty(m_values) ? 0 : maximum(m_values)
     max_seg = 3 * max_m
     ext = Vector{Float64}(undef, 3 * max_seg)
     cs = Vector{Float64}(undef, 3 * max_seg + 1)
-    
+
     for (k, m) in enumerate(m_values)
         nsubs = N - 3m + 1
         if nsubs < 1
             devs[k] = NaN
             continue
         end
-        
+
         seg_len = 3m
         outer_sum = 0.0
-        
+
         for n in 1:nsubs
             half_n = seg_len / 2.0
             if m == 1
@@ -111,7 +121,7 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
                     s1 += x[n-1+i]
                 end
                 s1 /= hi
-                
+
                 s2 = 0.0
                 @inbounds @simd for i in hi+1:seg_len
                     s2 += x[n-1+i]
@@ -119,21 +129,21 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
                 s2 /= (seg_len - hi)
                 slope = (s2 - s1) / (half_n * tau0)
             end
-            
+
             @inbounds for j in 1:seg_len
                 val = x[n-1+j] - slope * tau0 * (j - 1)
                 rev_val = x[n-1 + seg_len - j + 1] - slope * tau0 * (seg_len - j)
-                
+
                 ext[j] = rev_val
                 ext[seg_len + j] = val
                 ext[2seg_len + j] = rev_val
             end
-            
+
             cs[1] = 0.0
             @inbounds for j in 1:3seg_len
                 cs[j+1] = cs[j] + ext[j]
             end
-            
+
             block_sum = 0.0
             @inbounds @simd for j in 0:(6m - 1)
                 a1 = (cs[j+m+1]  - cs[j+1])
@@ -144,10 +154,10 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             end
             outer_sum += block_sum / (6.0 * m)
         end
-        
+
         devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
     end
-    
+
     return devs
 end
 
