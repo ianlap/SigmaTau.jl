@@ -83,24 +83,85 @@ end
 struct UDFactorizedFilter <: AbstractEstimator end # For low-observability lunar distance
 struct KuramotoOscillator <: AbstractEstimator end # pLEO SWaP constrained nearest-neighbor
 
+# ── PID steering controller ──────────────────────────────────────────────────
+
+"""
+    PIDController(; g_p=0.1, g_i=0.01, g_d=0.05)
+
+Discrete PID controller for clock steering, matching the legacy
+`filter.jl` controller. Holds running phase-error sum and the last
+emitted steer for fold-in via `predict!(…; steering=…)`.
+"""
+Base.@kwdef mutable struct PIDController
+    g_p::Float64 = 0.1
+    g_i::Float64 = 0.01
+    g_d::Float64 = 0.05
+    sumx::Float64 = 0.0
+    last_steer::Float64 = 0.0
+end
+
+"""
+    step!(pid::PIDController, x::AbstractVector{<:Real}) → Float64
+
+Compute and store the next steer value from the current Kalman state
+estimate. Sign convention: drives phase (and frequency, when present) toward
+zero. Mirrors legacy `step!(::PIDController, ::Vector{Float64})`.
+"""
+function step!(pid::PIDController, x::AbstractVector{<:Real})
+    pid.sumx += x[1]
+    steer = -pid.g_p * x[1] - pid.g_i * pid.sumx
+    length(x) >= 2 && (steer -= pid.g_d * x[2])
+    pid.last_steer = steer
+    return steer
+end
+
+"""
+    steer_to_correction(steer::Float64, ns::Int, dt::Float64) → SVector{ns,Float64}
+
+Build the steering correction vector that `predict!(…; steering=…)`
+expects. Phase component is `steer·dt`, frequency component is `steer`,
+higher-order states are zero.
+"""
+function steer_to_correction(steer::Float64, ns::Int, dt::Float64)
+    if ns == 1
+        return SVector{1,Float64}(steer * dt)
+    elseif ns == 2
+        return SVector{2,Float64}(steer * dt, steer)
+    else
+        return SVector{ns,Float64}(steer * dt, steer, ntuple(_ -> 0.0, ns - 2)...)
+    end
+end
+
 # ── The Standardized Update Loop ─────────────────────────────────────────────
 
 """
-    predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Float64)
+    predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Float64;
+             steering::Union{Nothing,AbstractVector{Float64}} = nothing)
 
-Propagate the estimator state forward in time by `dt`.
+Propagate the estimator state forward in time by `dt`. Optionally add a
+`steering` correction vector to the predicted state mean — matches the
+legacy `filter_step!` semantics where a PID controller's last steer is
+folded into the state after the Φ propagation (phase = +`u·dt`,
+frequency = +`u`).
 
 On the first step (k == 0) the prediction is skipped — the initial
 state is used directly, matching the legacy `filter_step!` convention
 where prediction only fires when `s.k > 1` (after the first
 increment).
 """
-function predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Float64)
+function predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Float64;
+                  steering::Union{Nothing,AbstractVector{Float64}} = nothing)
     Phi = state_transition(model)
     Q   = process_noise(model)
 
     if est.k > 0
-        est.x = Phi * est.x
+        x_pred = Phi * est.x
+        if steering !== nothing
+            n = length(x_pred)
+            s = SVector{n, Float64}(ntuple(i -> i <= length(steering) ? steering[i] : 0.0, n))
+            x_pred = x_pred + s
+        end
+        est.x = x_pred
         est.P = Phi * est.P * Phi' + Q
     end
 

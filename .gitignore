@@ -26,6 +26,9 @@ LocalPreferences.toml
 .claude/
 .aider*
 .gemini/
+# Agent-context briefs — local-only, never publish to the public repo
+CLAUDE.md
+AGENTS.md
 
 # Environment
 .env
