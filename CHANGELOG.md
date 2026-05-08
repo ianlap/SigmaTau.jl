@@ -6,6 +6,22 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- allantools (Anders Wallin's Python library) wired in as a second
+  external numerical reference alongside Stable32. New
+  `tools/regen_allantools_fixtures.py` regenerates a row-aligned CSV
+  at `reference/validation/allantools_out/allantools_data_full.csv`
+  (one Sigma column per Stable32 (Type, AF) pair); new
+  `lib/SigmaTauStability/test/allantools_cross_validation.jl` testset
+  asserts the SigmaTau raw kernels against allantools output at
+  `rtol=1e-4` for ADEV/MDEV/HDEV/TDEV and `rtol=0.05–0.10` for the
+  total-family kernels (boundary-extension policy differs). The
+  testset short-circuits silently when the fixture is absent so CI
+  and pre-regen runs stay green. The Python script flushes per row
+  and prints `[N/total] Type m=… → σ=…` progress lines because the
+  total-family kernels are O(N²) on the 8192-sample fixture.
+
 ### Changed
 
 - MHTOTDEV bias-correction policy made explicit: `bias_correction`
