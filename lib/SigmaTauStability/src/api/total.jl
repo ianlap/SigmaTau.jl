@@ -1,12 +1,13 @@
 # api/total.jl — User wrappers for Total stability calculations
 
 """
-    totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+    totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:legacy, calc_ci::Bool=true, confidence::Float64=0.95)
 
-Computes the Total Deviation for the given PhaseData.
+Computes the Total Deviation for the given PhaseData. See `_totdev_core` for
+the meaning of `detrend`.
 """
-function totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
-    raw_devs = _totdev_core(data.x, m_values, data.tau0)
+function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:legacy, calc_ci::Bool=true, confidence::Float64=0.95)
+    raw_devs = _totdev_core(data.x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
     T = (length(data.x) - 1) * data.tau0
 
@@ -25,12 +26,13 @@ function totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, conf
 end
 
 """
-    mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+    mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, confidence::Float64=0.95)
 
-Computes the Modified Total Deviation for the given PhaseData.
+Computes the Modified Total Deviation for the given PhaseData. See `_mtotdev_core` for
+the meaning of `detrend`.
 """
-function mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
-    raw_devs = _mtotdev_core(data.x, m_values, data.tau0)
+function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, confidence::Float64=0.95)
+    raw_devs = _mtotdev_core(data.x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
     T = (length(data.x) - 1) * data.tau0
 
@@ -49,12 +51,13 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, con
 end
 
 """
-    htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+    htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, confidence::Float64=0.95)
 
-Computes the Hadamard Total Deviation for the given PhaseData.
+Computes the Hadamard Total Deviation for the given PhaseData. See `_htotdev_core` for
+the meaning of `detrend`.
 """
-function htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
-    raw_devs = _htotdev_core(data.x, m_values, data.tau0)
+function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, confidence::Float64=0.95)
+    raw_devs = _htotdev_core(data.x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
     T = (length(data.x) - 1) * data.tau0
 
@@ -73,9 +76,10 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, con
 end
 
 """
-    mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+    mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:linear, calc_ci::Bool=true, confidence::Float64=0.95)
 
-Modified Hadamard Total Deviation.
+Modified Hadamard Total Deviation. See `_mhtotdev_core` for
+the meaning of `detrend`.
 
 No bias correction is applied. FCS 2001 and NIST SP1065 publish no
 bias-correction model for MHTOTDEV; the estimator is treated as
@@ -83,8 +87,8 @@ unbiased (B = 1) by policy, matching Stable32 and AllanLab.
 `bias_correction(:mhtot, …)` returns ones for the same reason. EDF
 uses the empirical SP1065 fit coefficients (`_coeff_mhtot`).
 """
-function mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
-    raw_devs = _mhtotdev_core(data.x, m_values, data.tau0)
+function mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:linear, calc_ci::Bool=true, confidence::Float64=0.95)
+    raw_devs = _mhtotdev_core(data.x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
     T = (length(data.x) - 1) * data.tau0
 
