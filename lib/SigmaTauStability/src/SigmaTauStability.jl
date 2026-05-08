@@ -9,6 +9,7 @@ include("core/hadamard.jl")
 include("core/total.jl")
 
 include("noise/lag1.jl")
+include("noise/synth.jl")
 include("stats/edf.jl")
 
 include("utils.jl")
