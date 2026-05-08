@@ -1,5 +1,6 @@
 module SigmaTauEnsemble
 
+using DocStringExtensions
 using LinearAlgebra
 using StaticArrays
 
