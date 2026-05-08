@@ -79,17 +79,38 @@ disambiguation.
 
 ## HDEV — overlapping Hadamard deviation
 
-A third-difference variant that is insensitive to linear frequency
-drift. SP1065 §5.4:
+A third-difference variant with two advantages over ADEV: linear
+frequency drift is filtered out automatically, and the variance
+integral converges over a wider range of low-frequency noise. SP1065
+§5.4:
 
 ```math
 \sigma^2_{H,y}(\tau) \;=\; \frac{1}{6\,(N - 3m)\,(m\tau_0)^2}
-\sum_{i=1}^{N-3m} \bigl(x_{i+3m} - 3\,x_{i+2m} + 3\,x_{i+m} - x_i\bigr)^2
+\sum_{i=1}^{N-3m} \bigl(x_{i+3m} - 3\,x_{i+2m} + 3\,x_{i+m} - x_i\bigr)^2 .
 ```
 
 The `1/6` prefactor arises from the third-difference variance
-normalization. Drift insensitivity follows because a linear-in-`t` term
-is annihilated by the third difference.
+normalization.
+
+**Drift insensitivity.** A linear-in-`t` term in `y(t)` (constant
+frequency drift) is annihilated by the third difference, so HDEV is
+not contaminated by drift the way ADEV is. SP1065 demonstrates this
+on a simulated rubidium record: ADEV picks up a `+τ` slope at long τ
+without prior detrending, while HDEV gives essentially the same
+answer as drift-removed ADEV [@cite RileyHowe2008].
+
+**Noise-type convergence.** ADEV's variance integral diverges for
+`α ≤ −3` (flicker walk FM, random run FM) at the low-frequency end.
+HDEV remains finite down to `α = −4`, because the third difference
+adds an extra factor of `f²` to the kernel that suppresses the
+`f → 0` singularity [@cite Greenhall1997]. In practice this matters
+only for records with very-low-frequency power-law content; most
+laboratory clocks are well-described in `−2 ≤ α ≤ +2` and ADEV
+suffices.
+
+HDEV is the preferred Allan-family estimator for clocks with known
+drift (Cs, Rb, H-maser) and for any analysis that needs to
+characterize the longest power-law tails.
 
 ```julia
 hdev(PhaseData(x, τ₀), τs)

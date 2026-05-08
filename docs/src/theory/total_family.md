@@ -165,6 +165,24 @@ MHTOTDEV; the construction follows HV99's modified-total methodology
 mhtotdev(PhaseData(x, τ₀), τs)
 ```
 
+**Where it sits.** Across the eight time-domain stability estimators
+that SigmaTau implements, MHTOTDEV is the all-three corner of the
+cube formed by three independent design axes:
+
+- **Difference order** — second (Allan) vs third (Hadamard).
+- **Inner averaging** — none (standard) vs phase-averaged (modified).
+- **Boundary handling** — none vs total-style extension.
+
+MHTOTDEV is Hadamard × modified × total, so it carries every
+property that distinguishes the family: drift rejection and
+`α ∈ {−4, −3}` convergence from Hadamard, WPM/FPM disambiguation
+from the phase-averaged inner kernel, and tight long-τ confidence
+from the per-subsegment extension. It is the right tool when a
+record has linear frequency drift, divergent low-frequency noise,
+ambiguity between WPM and FPM, *and* a record length too short to
+let any of the simpler estimators reach long τ with usable
+confidence — all four concerns at once.
+
 ---
 
 ## Summary: extension scheme by estimator
