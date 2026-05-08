@@ -7,7 +7,7 @@ using SigmaTauBase
 
 """
 Package-wide default confidence factor used by every public deviation API
-(`adev`, `mdev`, `hdev`, `tdev`, `mhdev`, `ldev`, `totdev`, `mtotdev`,
+(`adev`, `mdev`, `hdev`, `tdev`, `mhdev`, `htdev`, `totdev`, `mtotdev`,
 `htotdev`, `mhtotdev`) when `confidence` is not supplied.
 
 Set to 0.683 (1-sigma) — the time-and-frequency stability convention used
@@ -39,7 +39,8 @@ export identify_noise, calculate_edf, confidence_intervals, bias_correction
 export DEFAULT_CONFIDENCE
 
 export adev, mdev, tdev
-export hdev, mhdev, ldev
+export hdev, mhdev, htdev
+export ldev   # deprecated alias for htdev — remove in a future release
 export totdev, mtotdev, htotdev, mhtotdev
 
 end # module

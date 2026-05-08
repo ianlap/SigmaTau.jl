@@ -88,7 +88,7 @@ HV99 modified-total methodology applied to the FCS01 Hadamard total.
 For each of `N − 4m + 1` subsegments of phase length `3m + 1`, the
 algorithm linearly detrends the segment, reflects symmetrically,
 forms cumulative third differences, and applies an `m`-point moving
-average. It is the long-τ equivalent of MHDEV (and of LDEV, which is
+average. It is the long-τ equivalent of MHDEV (and of HTDEV, which is
 proportional to MHDEV by `√(3τ²/10)`).
 
 ```julia

@@ -63,7 +63,7 @@ WPM/FPM (α = 2, 1) and uses published `a(α)` values
 
 | Estimator | B(α) applied? | Notes |
 |-----------|---------------|-------|
-| ADEV / MDEV / HDEV / MHDEV / TDEV / LDEV | none | Unbiased estimators |
+| ADEV / MDEV / HDEV / MHDEV / TDEV / HTDEV | none | Unbiased estimators |
 | TOTDEV   | per SP1065 | bias factor on the variance |
 | MTOTDEV  | per SP1065 | ~1.27× under WFM |
 | HTOTDEV  | per FCS01  | bias `a(α)` table — α = 0,−1,−2 |

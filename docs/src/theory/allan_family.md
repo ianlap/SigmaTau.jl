@@ -2,7 +2,7 @@
 
 The Allan family covers the six estimators built from second- and
 third-difference operators on phase data: ADEV, MDEV, TDEV, HDEV, MHDEV,
-and LDEV. They share the same boundary handling (no extension) and
+and HTDEV. They share the same boundary handling (no extension) and
 differ in difference order, phase-averaging, and final scaling.
 
 ## ADEV — overlapping Allan deviation
@@ -86,27 +86,36 @@ to ADEV.
 mhdev(PhaseData(x, τ₀), τs)
 ```
 
-## LDEV — Lapinski deviation (IEEE 1139-2022 Annex C)
+## HTDEV — Hadamard time deviation
 
-A scaled MHDEV variant defined by IEEE 1139-2022 Annex C. SigmaTau
-implements it as `mhdev` followed by the scaling `τ / √(10/3)`:
+HTDEV is to MHDEV what TDEV is to MDEV: a τ-scaled time-domain
+deviation built on the third-difference (Hadamard) kernel instead of
+the second-difference (Allan) kernel. SigmaTau implements it as
+`mhdev` followed by the scaling `τ / √(10/3)`:
 
 ```math
-\sigma_{L,y}(\tau) \;=\; \frac{\tau}{\sqrt{10/3}} \, \sigma_{MH,y}(\tau).
+\sigma_{HT,y}(\tau) \;=\; \frac{\tau}{\sqrt{10/3}} \, \sigma_{MH,y}(\tau).
 ```
 
 ```julia
-ldev(PhaseData(x, τ₀), τs)
+htdev(PhaseData(x, τ₀), τs)
 ```
 
-(Cite [@cite IEEE1139_2022].)
+The `√(10/3)` factor mirrors the `√3` factor in TDEV and follows from
+the third-difference Hadamard kernel variance.
+
+**Provenance.** The construction is original to this package; the
+standard time-and-frequency references — SP1065 [@cite RileyHowe2008],
+IEEE 1139-2022 [@cite IEEE1139_2022], NBS-TN-1337
+[@cite Sullivan_NBS_TN_1337] — do not define it. The earlier name
+`ldev` is retained as a deprecated alias for one release.
 
 ## Slope vs noise table
 
 For each estimator, the deviation slope `μ_dev` versus the spectral
 exponent `α` of `S_y(f)`:
 
-| α  | ADEV | MDEV | HDEV | MHDEV | TDEV | LDEV |
+| α  | ADEV | MDEV | HDEV | MHDEV | TDEV | HTDEV |
 |----|------|------|------|-------|------|------|
 | +2 (WPM)  | −1     | −3/2 | −1     | −3/2 | −1/2  | −1/2 |
 | +1 (FPM)  | −1*    | −1   | −1*    | −1   | 0     | 0    |
@@ -146,7 +155,7 @@ characteristic split that makes MDEV able to disambiguate WPM from FPM.
   `StabilityResult`.
 - `MDEV/MHDEV` use a prefix-sum form algebraically equivalent to the
   textbook `1/m⁴` form; see `legdocs/equations/allan.md` for the proof.
-- `tdev` and `ldev` are scaling wrappers; they do no extra kernel work.
+- `tdev` and `htdev` are scaling wrappers; they do no extra kernel work.
 
 ## See also
 
@@ -160,4 +169,5 @@ characteristic split that makes MDEV able to disambiguate WPM from FPM.
 - NBS Technical Note 1337 [@cite Sullivan_NBS_TN_1337].
 - Greenhall, *Third-difference approach to MVAR*, IEEE T-IM 1997
   [@cite Greenhall1997].
-- IEEE 1139-2022 Annex C [@cite IEEE1139_2022].
+- IEEE 1139-2022 [@cite IEEE1139_2022] for canonical ADEV / MDEV / HDEV
+  / TDEV / MHDEV definitions; HTDEV is **not** defined there.

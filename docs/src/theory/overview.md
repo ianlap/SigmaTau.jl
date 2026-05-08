@@ -53,7 +53,7 @@ HDEV adds drift insensitivity by going to a third difference.
 | HDEV      | 3rd              | no              | no                 | yes               |
 | MHDEV     | 3rd              | yes             | no                 | yes               |
 | TDEV      | 2nd              | yes             | no                 | no                |
-| LDEV      | 3rd              | yes             | no                 | yes               |
+| HTDEV     | 3rd              | yes             | no                 | yes               |
 | TOTDEV    | 2nd              | no              | yes                | no                |
 | MTOTDEV   | 2nd              | yes             | yes                | no                |
 | HTOTDEV   | 3rd              | no              | yes                | yes               |
@@ -92,7 +92,7 @@ should rise roughly as `τ⁺¹/²` (μ = +1/2, RWFM).
 
 ## Where to next
 
-- [Allan family](allan_family.md) — ADEV, MDEV, HDEV, TDEV, MHDEV, LDEV.
+- [Allan family](allan_family.md) — ADEV, MDEV, HDEV, TDEV, MHDEV, HTDEV.
 - [Total family](total_family.md) — boundary-extended estimators.
 - [Confidence](confidence.md) — EDF and χ² intervals.
 - [Noise identification](noise_id.md) — lag-1 ACF classification.
