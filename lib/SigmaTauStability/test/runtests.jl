@@ -480,6 +480,33 @@ const LK = LegacyKernels
         @test_throws ArgumentError SigmaTauStability._mhtotdev_core(x, [1], tau0; detrend=:howe)
     end
 
+    @testset "Cross-recipe equivalence (:legacy aliases)" begin
+        # Each kernel exposes :legacy as an alias for the recipe matching its
+        # pre-1.0 default. The dispatcher routes both to the same helper, so
+        # the outputs agree at machine precision. Lock the alias on a
+        # WPM+RWFM mix at rtol=1e-15 so silent drift in either branch breaks
+        # the test immediately.
+        using Random
+        Random.seed!(20260507)
+        N    = 4096
+        tau0 = 1.0
+        wpm  = randn(N) .* 1e-9
+        rwfm = cumsum(cumsum(randn(N) .* 1e-12))
+        x    = wpm .+ rwfm
+
+        for m in [1, 2, 4, 8, 16]
+            @test SigmaTauStability._mtotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
+                  SigmaTauStability._mtotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
+            @test SigmaTauStability._htotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
+                  SigmaTauStability._htotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
+        end
+
+        for m in [1, 2, 4, 8]
+            @test SigmaTauStability._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈
+                  SigmaTauStability._mhtotdev_core(x, [m], tau0; detrend=:linear)[1] atol=0.0 rtol=1e-15
+        end
+    end
+
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
         # Bonus: kernel parity for the more common ADEV/HDEV across all 5
         # noise types, locking in that the synthesizer + kernels survive the
