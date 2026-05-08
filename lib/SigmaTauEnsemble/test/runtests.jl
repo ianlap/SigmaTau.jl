@@ -4,43 +4,55 @@ using Statistics
 using StaticArrays
 using SigmaTauEnsemble
 
-# Wrap the legacy reference code in its own module so its `step!` and
-# `PIDController` definitions don't collide with ours when present locally.
-const LEGACY_DIR = joinpath(@__DIR__, "..", "..", "..", "legacy", "julia", "src")
-module LegacyKF
-    using LinearAlgebra
-    using Statistics
-    const LEGACY_DIR = joinpath(@__DIR__, "..", "..", "..", "legacy", "julia", "src")
-    include(joinpath(LEGACY_DIR, "clock_model.jl"))
-    include(joinpath(LEGACY_DIR, "filter.jl"))
-end
+# Legacy reference code lives under `legacy/julia/src/` and is gitignored,
+# so it is only present on Ian's working tree. CI checkouts skip the
+# legacy-parity testsets entirely; everything else still runs.
+const LEGACY_DIR     = joinpath(@__DIR__, "..", "..", "..", "legacy", "julia", "src")
+const LEGACY_PRESENT = isfile(joinpath(LEGACY_DIR, "clock_model.jl")) &&
+                       isfile(joinpath(LEGACY_DIR, "filter.jl"))
 
-using .LegacyKF: ClockNoiseParams, ClockModel2, ClockModel3,
-                 build_phi, build_Q,
-                 kalman_filter, PhaseOnlyMeasurement
+if LEGACY_PRESENT
+    # Wrap the legacy reference in its own module so its `step!` and
+    # `PIDController` definitions don't collide with ours.
+    @eval module LegacyKF
+        using LinearAlgebra
+        using Statistics
+        const LEGACY_DIR = joinpath(@__DIR__, "..", "..", "..", "legacy", "julia", "src")
+        include(joinpath(LEGACY_DIR, "clock_model.jl"))
+        include(joinpath(LEGACY_DIR, "filter.jl"))
+    end
+    using .LegacyKF: ClockNoiseParams, ClockModel2, ClockModel3,
+                     build_phi, build_Q,
+                     kalman_filter, PhaseOnlyMeasurement
+else
+    @info "legacy/julia/src not present, skipping legacy-KF parity testsets"
+end
 
 @testset "SigmaTauEnsemble.jl" begin
 
     # ── Φ / Q matrix parity ──────────────────────────────────────────────────
-    @testset "Phi / Q matrix parity" begin
-        tau = 1.0
-        q0 = 1e-22; q1 = 1e-23; q2 = 1e-33; q3 = 1e-43
+    if LEGACY_PRESENT
+        @testset "Phi / Q matrix parity" begin
+            tau = 1.0
+            q0 = 1e-22; q1 = 1e-23; q2 = 1e-33; q3 = 1e-43
 
-        legacy_noise = ClockNoiseParams(q_wpm=q0, q_wfm=q1, q_rwfm=q2, q_irwfm=q3)
-        legacy3 = ClockModel3(noise=legacy_noise, tau=tau)
-        new3    = ThreeStateClock(tau=tau, q0=q0, q1=q1, q2=q2, q3=q3)
+            legacy_noise = ClockNoiseParams(q_wpm=q0, q_wfm=q1, q_rwfm=q2, q_irwfm=q3)
+            legacy3 = ClockModel3(noise=legacy_noise, tau=tau)
+            new3    = ThreeStateClock(tau=tau, q0=q0, q1=q1, q2=q2, q3=q3)
 
-        @test Matrix(state_transition(new3)) ≈ build_phi(legacy3) atol=1e-30
-        @test Matrix(process_noise(new3))    ≈ build_Q(legacy3)   atol=1e-30
+            @test Matrix(state_transition(new3)) ≈ build_phi(legacy3) atol=1e-30
+            @test Matrix(process_noise(new3))    ≈ build_Q(legacy3)   atol=1e-30
 
-        legacy2 = ClockModel2(noise=legacy_noise, tau=tau)
-        new2    = TwoStateClock(tau=tau, q0=q0, q1=q1, q2=q2)
+            legacy2 = ClockModel2(noise=legacy_noise, tau=tau)
+            new2    = TwoStateClock(tau=tau, q0=q0, q1=q1, q2=q2)
 
-        @test Matrix(state_transition(new2)) ≈ build_phi(legacy2) atol=1e-30
-        @test Matrix(process_noise(new2))    ≈ build_Q(legacy2)   atol=1e-30
+            @test Matrix(state_transition(new2)) ≈ build_phi(legacy2) atol=1e-30
+            @test Matrix(process_noise(new2))    ≈ build_Q(legacy2)   atol=1e-30
+        end
     end
 
     # ── Full Kalman filter parity (legacy_compat=true) ───────────────────────
+    if LEGACY_PRESENT
     @testset "StandardKalmanFilter Parity (legacy_compat)" begin
         # Use a fixed seed for deterministic data
         import Random; Random.seed!(42)
@@ -136,6 +148,7 @@ using .LegacyKF: ClockNoiseParams, ClockModel2, ClockModel3,
         @test legacy_res.drift_est ≈ new_drift_est atol=1e-25 rtol=1e-12
         @test legacy_res.P_history ≈ new_P_history atol=1e-25 rtol=1e-12
     end
+    end  # if LEGACY_PRESENT
 
     # ── PID steering controller ──────────────────────────────────────────────
     @testset "PIDController.step!" begin

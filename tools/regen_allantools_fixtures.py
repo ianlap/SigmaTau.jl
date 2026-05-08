@@ -110,10 +110,14 @@ def main() -> int:
                 # allantools refuses some short-tau / long-m combinations
                 # for total-family kernels — record as NaN and let the
                 # Julia side decide whether to assert.
-                w.writerow([kind, m, f"{tau:.6e}", int(ns[0]) if ns.size else 0, "nan"])
+                w.writerow([kind, m, f"{tau:.17e}", int(ns[0]) if ns.size else 0, "nan"])
                 _emit(f"[{written:>3}/{runnable}]  {kind:<22} m={m:<6} → nan ({elapsed:.2f}s)")
             else:
-                w.writerow([kind, m, f"{tau:.6e}", int(ns[0]), f"{devs[0]:.6e}"])
+                # %.17e is the minimum format for round-trip-exact Float64
+                # serialisation, so the CSV preserves full machine precision
+                # and downstream parity tests can assert at rtol≈1e-12 instead
+                # of the rtol≈1e-4 floor we'd be pinned to with %.6e (~7 sig figs).
+                w.writerow([kind, m, f"{tau:.17e}", int(ns[0]), f"{devs[0]:.17e}"])
                 _emit(f"[{written:>3}/{runnable}]  {kind:<22} m={m:<6} → "
                       f"σ={devs[0]:.4e}  ({elapsed:.2f}s)")
             f.flush()  # so the CSV is recoverable if the run is interrupted
