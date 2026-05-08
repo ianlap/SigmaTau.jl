@@ -5,8 +5,12 @@ Reads the Stable32 phase fixture (`reference/validation/stable32gen.DAT`)
 and the Stable32 row schema (`reference/validation/stable32out/
 stable32_data_full.csv`), runs the matching allantools deviation for
 each (Type, AF) pair, and writes the results as
-`reference/validation/allantools_out/allantools_data_full.csv` with the
-same columns Stable32 reports.
+`reference/validation/allantools_out/allantools_data_full.csv`.
+
+Schema: Type, AF, Tau, N, Sigma, Err. `Err` is the absolute one-sigma
+error allantools returns alongside each deviation (normal-approximation
+CI of the form Sigma ± Err); kept distinct from Stable32's Min/Max
+chi-squared bounds so CI-machinery comparisons can plot both.
 
 Run once when allantools is updated; the output is checked into the
 repo so the Julia test does not depend on a runtime Python invocation.
@@ -92,7 +96,7 @@ def main() -> int:
     written = 0
     with open(OUT_CSV, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["Type", "AF", "Tau", "N", "Sigma"])
+        w.writerow(["Type", "AF", "Tau", "N", "Sigma", "Err"])
         for row in rows:
             kind = row["Type"]
             fn = TYPE_TO_AT.get(kind)
@@ -102,24 +106,27 @@ def main() -> int:
             tau = m * TAU0
             written += 1
             t0 = time.monotonic()
-            (_taus, devs, _errs, ns) = fn(x, rate=1.0/TAU0, data_type="phase",
-                                          taus=np.asarray([tau]))
+            (_taus, devs, errs, ns) = fn(x, rate=1.0/TAU0, data_type="phase",
+                                         taus=np.asarray([tau]))
             elapsed = time.monotonic() - t0
 
+            n_eff = int(ns[0]) if ns.size else 0
             if devs.size == 0 or not np.isfinite(devs[0]):
                 # allantools refuses some short-tau / long-m combinations
                 # for total-family kernels — record as NaN and let the
                 # Julia side decide whether to assert.
-                w.writerow([kind, m, f"{tau:.17e}", int(ns[0]) if ns.size else 0, "nan"])
+                w.writerow([kind, m, f"{tau:.17e}", n_eff, "nan", "nan"])
                 _emit(f"[{written:>3}/{runnable}]  {kind:<22} m={m:<6} → nan ({elapsed:.2f}s)")
             else:
                 # %.17e is the minimum format for round-trip-exact Float64
                 # serialisation, so the CSV preserves full machine precision
                 # and downstream parity tests can assert at rtol≈1e-12 instead
                 # of the rtol≈1e-4 floor we'd be pinned to with %.6e (~7 sig figs).
-                w.writerow([kind, m, f"{tau:.17e}", int(ns[0]), f"{devs[0]:.17e}"])
+                err_val = errs[0] if (errs.size and np.isfinite(errs[0])) else float("nan")
+                err_str = f"{err_val:.17e}" if np.isfinite(err_val) else "nan"
+                w.writerow([kind, m, f"{tau:.17e}", n_eff, f"{devs[0]:.17e}", err_str])
                 _emit(f"[{written:>3}/{runnable}]  {kind:<22} m={m:<6} → "
-                      f"σ={devs[0]:.4e}  ({elapsed:.2f}s)")
+                      f"σ={devs[0]:.4e} ±{err_val:.2e}  ({elapsed:.2f}s)")
             f.flush()  # so the CSV is recoverable if the run is interrupted
 
     total = time.monotonic() - t_start

@@ -6,8 +6,127 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `correct_bias::Bool=true` keyword on `totdev`, `mtotdev`, `htotdev`,
+  and `mhtotdev`. Default `true` preserves prior behavior (apply the
+  SP1065 / FCS 2001 noise-type-dependent bias factor `B(α)` to the raw
+  kernel output). Pass `correct_bias=false` to return the raw kernel
+  value, which matches Stable32 and allantools (neither tool applies
+  the bias correction by default). On `mhtotdev` the kwarg is a
+  documented no-op — FCS 2001 and SP1065 publish no `B(α)` for MHTOT
+  and the estimator is treated as unbiased regardless. Side benefit:
+  the `calc_ci=false` fast path now also populates `noise_type` when
+  `correct_bias=true` (previously left empty), since bias correction
+  needs α; the field stays empty when both flags are false.
+- `identify_noise(x, m_values; …, detrend::Bool=true)` keyword. The new
+  default (`true`) keeps the per-m quadratic detrend that allantools
+  applies in `autocorr_noise_id`; passing `detrend=false` skips the
+  polynomial fit so α matches a Stable32-generated reference fixture
+  point-for-point. The 5σ outlier filter on the full record is
+  unchanged and unconditional.
+
+### Changed
+
+- Total-family kernels (`_totdev_legacy`, `_totdev_howe`,
+  `_mtotdev_greenhall`, `_mtotdev_linear`, `_htotdev_greenhall`,
+  `_htotdev_linear`, `_mhtotdev_greenhall`, `_mhtotdev_linear`) now
+  run multithreaded. The two `_totdev_*` kernels parallelize the
+  outer m-loop directly (no inner reduction to thread). The six
+  modified-total kernels parallelize the **inner subsequence loop**:
+  the m-loop runs sequentially, and within each m the per-window
+  `for n in 1:nsubs` reduction is partitioned into
+  `min(nthreads, nsubs)` chunks; each chunk runs on a thread with
+  a private `local_sum` accumulator. Chunks reduce at the end via
+  `outer_sum = sum(chunk_sums)`.
+
+  Per-m threading was tried on the modified kernels and lost.
+  m-work is severely non-uniform (heavy m's dwarf light ones), so
+  per-m `@threads :dynamic` left cores idle once the light m's
+  finished while one core ground through the tail. Stacking inner
+  threading on top (nested `@threads`) made it worse — task
+  scheduling overhead with no spare cores to redistribute to.
+  Subsequence-list parallelism is uniform (every chunk does the
+  same FFT-size work for a given m), so it gets near-linear scaling
+  per m without nesting.
+
+  **Sliding-window inner reduction.** The cumulative-sum buffers (`cs`
+  for `_mtotdev_*` / `_htotdev_*`, `S` for `_mhtotdev_*`) are gone.
+  Their windowed differences `cs[j+km+1] − cs[j+(k−1)m+1]` are now
+  maintained as running sums `a1`, `a2`, `a3` updated by
+  `a += ext[j+km] − ext[j+(k−1)m]` per slide step. Saves a full
+  pass over the data per subsequence (≈9m memory ops on the modified-
+  total kernels) and one chunk-private allocation. Carry chain on
+  the running sums prevents `@simd` vectorisation of the slide loop,
+  but the saved memory traffic outweighs the lost SIMD on the heavy m's.
+
+  **Buffer pool.** The remaining per-chunk scratch (`ext`, plus `d3_vec`
+  on the `_mhtotdev_*` kernels) is allocated once at the top of the
+  kernel call, sized for the largest `m` in `m_values`, and reused
+  across every m. Cheap m's only touch the leading `3·seg_len` /
+  `L3` slice. Eliminates the per-m, per-chunk allocation churn
+  (was ~150 MB on a 2.6M-sample file, ~600 MB on a 3M-sample file)
+  and the GC pauses it triggered. Net effect on the benchmarked
+  `mtotdev(N=4·10⁵)` workload: ~415 s without pool → ~290–340 s
+  with pool on 8 threads.
+
+  **FP determinism caveat:** the inner reduction reorders summation, so
+  results may drift by ~few ULPs across runs with different thread
+  counts. Existing parity tests at `rtol = 1e-12`/`1e-11` may need to
+  loosen to `~1e-9` for the modified-total kernels.
+
+  To see the speedup, start Julia with `--threads auto` (or `-t N`);
+  with `-t 1` the inner `@threads` is a no-op and behavior matches
+  the sequential version exactly.
+- Default confidence factor for every public deviation API (`adev`,
+  `mdev`, `hdev`, `tdev`, `mhdev`, `ldev`, `totdev`, `mtotdev`,
+  `htotdev`, `mhtotdev`) lowered from `0.95` to `0.683` (1-sigma).
+  Now exposed as the exported constant
+  `SigmaTauStability.DEFAULT_CONFIDENCE`. The new value matches the
+  Stable32, AllanLab, allantools, and Greenhall–Riley convention; the
+  prior `0.95` made cross-tool CI overlays disagree by a factor of
+  ~1.96 even when the underlying EDFs matched. Pass
+  `confidence=0.95` explicitly if you want the prior default.
+
+### Removed
+
+- Pre-record linear detrend in the noise-ID `_preprocess` step. Neither
+  Stable32 nor allantools' `autocorr_noise_id` apply a full-record
+  polynomial fit before the per-m loop, so the prior SigmaTau-only
+  step shifted α away from both external references on records with
+  any polynomial structure. The 5σ outlier filter that lived in the
+  same helper is unchanged. The unused `_detrend_linear` helper was
+  deleted in the same commit.
+
 ### Fixed
 
+- Lag-1 ACF `dmax` for the four Hadamard-family kernels (`hdev`,
+  `mhdev`, `htotdev`, `mhtotdev`) bumped from `2` to `3`. Riley &
+  Greenhall, *Power Law Noise Identification Using the Lag 1
+  Autocorrelation* (EFTF 2004, paper #125), §6: "The dmax parameter
+  should be set to 2 or 3 for an Allan or Hadamard (2 or 3-sample)
+  variance analysis respectively." Hadamard-family estimators exist
+  to resolve α ∈ {−3, −4} (FWFM / RRFM); capping the noise-ID
+  iteration at `dmax = 2` prevents the algorithm from ever reporting
+  those types and silently floors the identified α at `−2` (RWFM)
+  even when the data has lower power-law content. `:ldev` inherits
+  the fix transitively via `:mhdev`. `:adev`, `:mdev`, `:totdev`,
+  `:mtotdev` correctly stay at `dmax = 2`.
+- EDF stride factor `S` for the four overlapped variants
+  (`:adev`, `:mdev`, `:hdev`, `:mhdev`) in
+  `lib/SigmaTauStability/src/stats/edf.jl` corrected from `1`
+  (non-overlapped convention) to `m` (overlapped convention). The
+  Greenhall–Riley `M = 1 + ⌊S·(N − L) / m⌋` interpretation
+  documented in AllanLab's `calculate_edf.m` has `S = 1` for
+  non-overlapped and `S = m` for overlapped; we were computing
+  EDFs under the non-overlapped convention and applying them to
+  the overlapping deviation, producing artificially small EDFs
+  (e.g. 127 instead of 8064 at `m = 64`, `N = 8192`) and the
+  correspondingly wider χ² confidence bounds. `:tdev` and `:ldev`
+  inherit the fix transitively via the `mdev` / `mhdev` factor
+  scaling. The `:totdev` / `:htotdev` WPM/FLPM fallback paths in
+  the same file still pass `S = 1`; left for a follow-up since
+  they exercise a different code path.
 - CI: `lib/SigmaTauBase` dropped from the test matrix. It is a
   types-only package with no `test/runtests.jl`; the previous
   workflow's `Pkg.develop(path="lib/SigmaTauBase")` line was

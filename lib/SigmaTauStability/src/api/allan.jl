@@ -25,7 +25,7 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function adev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+function adev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     raw_devs = _adev_core(data.x, m_values, data.tau0)
     taus = m_values .* data.tau0
 
@@ -63,7 +63,7 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+function mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     raw_devs = _mdev_core(data.x, m_values, data.tau0)
     taus = m_values .* data.tau0
 
@@ -79,14 +79,14 @@ function mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confid
 end
 
 """
-    tdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+    tdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Time Deviation (TDEV) for the given PhaseData.
 
 TDEV is defined as `τ · MDEV / √3`. Confidence-interval bounds inherit MDEV's
 χ²/Gaussian limits scaled by the same `τ/√3` factor.
 """
-function tdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+function tdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mdev(data, m_values; calc_ci=calc_ci, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 

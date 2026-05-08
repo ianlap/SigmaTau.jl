@@ -4,11 +4,29 @@ using Statistics
 const NEFF_RELIABLE = 30
 
 """
-    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2) → Vector{Symbol}
+    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, detrend::Bool=true) → Vector{Symbol}
 
-Identifies dominant power-law noise type using lag-1 autocorrelation for phase data with B1-ratio fallback.
+Identifies dominant power-law noise type using lag-1 autocorrelation for
+phase data with B1-ratio fallback.
+
+The full record always passes through a 5σ outlier filter before the
+per-m loop; that step is unconditional and unrelated to the polynomial
+detrend below.
+
+## `detrend`
+
+When `true` (default), each decimated-by-m subseries is quadratically
+detrended before the lag-1 ACF / B1 ratio is computed. Allantools'
+`autocorr_noise_id` does the same thing (`detrend(x, deg=2)` in
+[`ci.py`](https://github.com/aewallin/allantools/blob/master/allantools/ci.py))
+to remove a frequency offset (linear phase ramp) and drift (quadratic
+phase term) from the slow content of each averaging window.
+
+When `false`, the per-m polynomial fit is skipped. This matches
+Stable32's noise-ID convention; use it when you need α values that line
+up with a Stable32-generated reference fixture point-for-point.
 """
-function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2)
+function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, detrend::Bool=true)
     x_clean = _preprocess(x)
     N = length(x_clean)
     noises = Vector{Symbol}(undef, length(m_values))
@@ -17,12 +35,12 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
     for (k, m) in enumerate(m_values)
         N_eff = N ÷ m
         alpha = NaN
-        
+
         try
             if N_eff >= NEFF_RELIABLE
-                alpha, _, _, _ = _noise_id_lag1acf(x_clean, m, dmin, dmax)
+                alpha, _, _, _ = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)
             else
-                alpha, _, _ = _noise_id_b1rn(x_clean, m)
+                alpha, _, _ = _noise_id_b1rn(x_clean, m; detrend=detrend)
             end
         catch
             alpha = NaN
@@ -53,28 +71,18 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
 end
 
 function _preprocess(x::Vector{Float64})
+    # 5σ outlier filter only — no polynomial detrending. The pre-record
+    # linear detrend that lived here previously was distinct to SigmaTau
+    # (Stable32 and allantools both leave the full record untouched and
+    # detrend per-m instead). Removing it lets our default α track the
+    # external references; the per-m polynomial detrend still runs in
+    # `_noise_id_lag1acf` / `_noise_id_b1rn` (toggleable via the
+    # `detrend` kwarg on `identify_noise`).
+    x_std = std(x)
+    x_std < eps() && return x  # degenerate input — nothing to filter against.
     x_mean = mean(x)
-    x_std  = std(x)
-    if x_std < eps()
-        return _detrend_linear(x)
-    end
     z = abs.((x .- x_mean) ./ x_std)
-    return _detrend_linear(x[z .< 5.0])
-end
-
-function _detrend_linear(x::Vector{Float64})
-    N = length(x)
-    N_float = Float64(N)
-    sum_i = (N_float * (N_float + 1.0)) / 2.0
-    sum_i2 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0)) / 6.0
-    delta = N_float * sum_i2 - sum_i^2
-    sum_x = sum(x)
-    sum_ix = sum(i * x[i] for i in 1:N)
-    
-    a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
-    b = (N_float * sum_ix - sum_x * sum_i) / delta
-    
-    return [x[i] - (a + b * i) for i in 1:N]
+    return x[z .< 5.0]
 end
 
 function _detrend_quadratic(x::Vector{Float64})
@@ -100,9 +108,9 @@ function _detrend_quadratic(x::Vector{Float64})
     return [x[i] - (a + b*i + c*i^2) for i in 1:N]
 end
 
-function _noise_id_lag1acf(x::Vector{Float64}, m::Int, dmin::Int = 0, dmax::Int = 2)
+function _noise_id_lag1acf(x::Vector{Float64}, m::Int, dmin::Int = 0, dmax::Int = 2; detrend::Bool=true)
     x_dec = m > 1 ? x[1:m:end] : x
-    x_det = _detrend_quadratic(x_dec)
+    x_det = detrend ? _detrend_quadratic(x_dec) : copy(x_dec)
     
     d = 0
     while true
@@ -129,9 +137,11 @@ function _lag1_acf(x::Vector{Float64})
     return sum(@view(xm[1:end-1]) .* @view(xm[2:end])) / ssx
 end
 
-function _noise_id_b1rn(x::Vector{Float64}, m::Int)
+function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true)
     x_dec = x[1:m:end]
-    x_dec = _detrend_quadratic(x_dec)
+    if detrend
+        x_dec = _detrend_quadratic(x_dec)
+    end
 
     avar_val = _simple_avar(x_dec, 1) / Float64(m)^2
     N_avar   = length(x_dec) - 2
