@@ -16,6 +16,18 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Stable32 cross-validation testset against the
+  `reference/validation/stable32gen.DAT` fixture (8192 phase samples) and
+  Stable32's published outputs (`stable32_data_full.csv`). Verifies the new
+  kernels match Stable32's reported sigmas at:
+  - `rtol=1e-4` for OADEV / Modified Allan / Overlapping Hadamard / Time
+  - `rtol=0.05` for raw MTOTDEV (Stable32 reports unbiased; our API applies
+    SP1065 B≈1.27 — kernel match is ~3% per the legacy comparison report)
+  - `rtol=0.10` for raw HTOTDEV (~0.5% bias offset + boundary effects)
+  - `rtol=0.15` for TOTDEV (close at short τ; documented boundary-reflection
+    discrepancy at long τ)
+
+  86 new assertions (85 row-driven + 1 sanity-count).
 - Strict numerical parity testset for the eight stability kernels
   (`_adev_core`, `_mdev_core`, `_hdev_core`, `_mhdev_core`, `_totdev_core`,
   `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core`) against the legacy

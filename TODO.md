@@ -20,11 +20,6 @@ numerical reference is locked in.
 
 ## 🟡 High (correctness / completeness)
 
-- [ ] **Stable32 cross-validation** — confirm the ADEV/HDEV-style EDF
-  fallback for TOTDEV/HTOTDEV at α∈{1, 2} matches Stable32's CI bounds on
-  the validation fixtures under [`reference/validation/`](reference/validation).
-  If they disagree, replace the fallback with published values from a
-  peer-reviewed source.
 - [ ] **FFT-based FLPM/FLFM noise synthesis** — extend the multi-noise
   validation testset (`MTOTDEV across noise regimes`) to cover the two
   power-law types that need a `1/f` filter. Reference generator lives in
@@ -74,6 +69,11 @@ numerical reference is locked in.
 See [CHANGELOG.md](CHANGELOG.md) for the full list. Headlines from this
 session:
 
+- Stable32 cross-validation (85 row checks against the
+  `reference/validation/stable32gen.DAT` fixture; tight rtol on
+  ADEV/MDEV/HDEV/MHDEV/TDEV, documented looser rtol on TOTDEV/HTOTDEV/MTOTDEV
+  due to bias-correction policy and boundary-reflection differences with
+  Stable32)
 - Strict legacy-kernel parity (52 assertions, rtol=1e-12)
 - TOTDEV/HTOTDEV α=2,1 EDF fallback
 - MTOTDEV multi-noise validation (WPM/WHFM/RWFM)

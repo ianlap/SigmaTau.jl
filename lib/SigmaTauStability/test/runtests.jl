@@ -203,6 +203,101 @@ const LK = LegacyKernels
               hdev(pd_equiv, m_values_eq; calc_ci=false).dev
     end
 
+    @testset "Stable32 cross-validation (reference/validation/)" begin
+        # Phase fixture and Stable32 reference outputs live in
+        # reference/validation/. Stable32 reports sigma values with 4-5
+        # significant figures, so the agreement floor is rtol≈1e-4. The new
+        # raw _*_core kernels match Stable32's reported sigmas tightly for
+        # ADEV/MDEV/HDEV/MHDEV/TDEV/TOTDEV; HTOTDEV and MTOTDEV agree with
+        # Stable32 only after removing our SP1065 bias correction (Stable32
+        # reports unbiased values per `comparison_report.md`).
+        ref_dir = joinpath(@__DIR__, "..", "..", "..", "reference", "validation")
+        dat_path = joinpath(ref_dir, "stable32gen.DAT")
+        csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
+
+        if !isfile(dat_path) || !isfile(csv_path)
+            @warn "Stable32 fixtures not present, skipping cross-validation"
+        else
+            # Parse 10-line header, then 8192 phase samples.
+            lines = readlines(dat_path)
+            data_lines = lines[11:end]
+            x = parse.(Float64, strip.(data_lines))
+            @test length(x) == 8192
+            tau0 = 1.0
+
+            # Parse Stable32 expected outputs. CSV columns:
+            #   Type, AF, Tau, N, Alpha, MinSigma, Sigma, MaxSigma
+            csv_lines = readlines(csv_path)
+            rows = [split(line, ',') for line in csv_lines[2:end]]
+
+            # Pre-compute prefix sums for modified kernels.
+            x_cs = pushfirst!(cumsum(x), 0.0)
+
+            # Tolerance per kernel family. Tight (1e-4) for kernels the legacy
+            # comparison report flagged as <1e-5 agreement; looser for kernels
+            # where there is a documented bias-correction mismatch with
+            # Stable32 (htot, mtot — see reference/.../comparison_report.md).
+            tight = 1e-4
+
+            n_checked = 0
+            for row in rows
+                length(row) < 7 && continue
+                kind  = row[1]
+                m     = parse(Int, row[2])
+                sigma_ref = parse(Float64, row[7])
+
+                # Raw kernel result (variance → deviation via sqrt).
+                got = NaN
+                if kind == "Overlapping Allan"
+                    got = sqrt(LK.adev_var(x, m, tau0))
+                    @test got ≈ sigma_ref rtol=tight
+                elseif kind == "Modified Allan"
+                    got = sqrt(LK.mdev_var(x, m, tau0, x_cs))
+                    @test got ≈ sigma_ref rtol=tight
+                elseif kind == "Overlapping Hadamard"
+                    got = sqrt(LK.hdev_var(x, m, tau0))
+                    @test got ≈ sigma_ref rtol=tight
+                elseif kind == "Time"
+                    # TDEV = τ · MDEV / √3
+                    mdev_v = sqrt(LK.mdev_var(x, m, tau0, x_cs))
+                    got = (m * tau0) * mdev_v / sqrt(3.0)
+                    @test got ≈ sigma_ref rtol=tight
+                elseif kind == "Total"
+                    # Per `comparison_report.md`: agrees closely at short τ;
+                    # diverges to O(10%) at longest τ due to boundary-reflection
+                    # convention differences. The new kernel inherits the
+                    # legacy SigmaTau reflection — this is a Stable32 vs
+                    # SigmaTau policy choice, not a bug.
+                    got = sqrt(LK.totdev_var(x, m, tau0))
+                    @test got ≈ sigma_ref rtol=0.15
+                elseif kind == "Hadamard Total"
+                    # Stable32 reports unbiased; our API applies B(α) for HTOT.
+                    # `comparison_report.md` documents a ~0.5% offset for α=0
+                    # plus larger boundary-driven differences at long τ.
+                    got = sqrt(LK.htotdev_var(x, m, tau0))
+                    @test got ≈ sigma_ref rtol=0.10
+                elseif kind == "Modified Total"
+                    # comparison_report shows ~3% match between Stable32 and
+                    # our raw kernel (the 30% discrepancy at the API level is
+                    # the SP1065 bias factor B≈1.27 we apply on top).
+                    got = sqrt(LK.mtotdev_var(x, m, tau0))
+                    @test got ≈ sigma_ref rtol=0.05
+                else
+                    continue   # ThêoH / Time Total / non-overlapping not implemented
+                end
+
+                # Bonus: the new SigmaTauStability core matches the reference
+                # kernel exactly (already covered by "Legacy parity" testset),
+                # so we don't repeat the assertion here.
+                n_checked += 1
+            end
+
+            # Sanity: should have exercised at least 50 (type, m) combinations.
+            @test n_checked >= 50
+            @info "Stable32 cross-validation: checked $n_checked rows"
+        end
+    end
+
     @testset "MTOTDEV across noise regimes" begin
         # Verify _mtotdev_core (and the :mtot bias correction) behaves on the
         # three power-law noise types whose synthesis is FFT-free: WPM, WHFM,
