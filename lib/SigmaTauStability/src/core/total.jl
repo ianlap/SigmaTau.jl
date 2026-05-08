@@ -5,16 +5,20 @@
 
 Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`.
 
-`detrend` selects the boundary-handling recipe:
-- `:howe` — no detrend, mean-flip endpoint reflection (Howe 1995, NIST SP1065 eqn 25)
-- `:greenhall` — per-window half-mean slope removal + time-reverse extension (Greenhall 2003)
-- `:linear` — per-window full LS detrend + time-reverse extension
-- `:legacy` — current SigmaTau behavior: global LS detrend + mean-flip reflection
+TOTDEV uses the Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension.
+`detrend` selects the detrending applied before the extension:
+
+- `:howe` — no detrend (canonical SP1065 eqn 25, matches allantools).
+- `:linear` — global least-squares detrend over the whole vector; alias
+  for `:legacy` on this kernel.
+- `:legacy` — pre-1.0 SigmaTau behavior; identical to `:linear` here.
 """
 function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:legacy)
-    detrend === :legacy && return _totdev_legacy(x, m_values, tau0)
+    if detrend === :legacy || detrend === :linear
+        return _totdev_legacy(x, m_values, tau0)
+    end
     detrend === :howe && return _totdev_howe(x, m_values, tau0)
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for TOTDEV: :howe, :linear, :legacy"))
 end
 
 function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
