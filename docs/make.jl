@@ -14,7 +14,31 @@ makedocs(
         mathengine = Documenter.KaTeX(),
     ),
     pages = [
-        "Home" => "index.md",
+        "Home"            => "index.md",
+        "Getting Started" => "getting_started.md",
+        "Theory"          => [
+            "theory/overview.md",
+            "theory/allan_family.md",
+            "theory/total_family.md",
+            "theory/confidence.md",
+            "theory/noise_id.md",
+        ],
+        "Tutorials"       => [
+            "tutorials/01_phase_data.md",
+            "tutorials/02_compute_adev.md",
+            "tutorials/03_identify_noise.md",
+            "tutorials/04_confidence_intervals.md",
+            "tutorials/05_single_clock_steering.md",
+        ],
+        "API Reference"   => [
+            "reference/base.md",
+            "reference/stability.md",
+            "reference/ensemble.md",
+        ],
+        "Validation"      => [
+            "validation/methodology.md",
+            "validation/stable32.md",
+        ],
     ],
     doctest  = true,
     warnonly = [:missing_docs, :cross_references],
