@@ -41,9 +41,6 @@ _None._
 
 ## 🟢 Low (polish)
 
-- [ ] **`Documenter.jl` site** under `docs/` — auto-generate API reference
-  from docstrings, port the equation pages from the legacy
-  `legacy/docs/equations/` tree, publish to GitHub Pages.
 - [ ] **More `examples/`** — currently `quickstart.jl` and
   `clock_steering.jl`. Add:
   - `FrequencyData` ↔ `PhaseData` round-trip demo
@@ -67,11 +64,37 @@ _None._
 
 ---
 
+## Docs follow-ups (post-v1)
+
+- Fill theory chapters from `legdocs/handbook/` and `legdocs/equations/`
+  source material (one PR per theory page is fine).
+- Fill tutorial narrative — start with `01_phase_data.md` and
+  `02_compute_adev.md`.
+- Tighten `warnonly = []` in `docs/make.jl` once all public API has
+  docstrings.
+- Add `tutorials/06_masterclock.md` once C6 lands from the parallel
+  implementation track.
+- Add `tutorials/07_ensemble.md` once D1 lands.
+- Add `validation/allantools.md` once B1 lands; extend
+  `validation/methodology.md` with the three-way comparison once B2
+  lands.
+- Refine `docs/src/refs.bib` with DOIs and page numbers from the PDFs
+  in `legdocs/papers/`.
+- Convert remaining kernel docstrings (hdev, mhdev, totdev, etc.) to
+  use `$(SIGNATURES)` + `jldoctest` blocks following the adev/mdev
+  pattern.
+
+---
+
 ## ✅ Recently completed
 
 See [CHANGELOG.md](CHANGELOG.md) for the full list. Headlines from this
 session:
 
+- Documenter.jl docs subproject (`docs/`) — skeleton v1 with theory /
+  tutorials / reference / validation page tree, DocStringExtensions,
+  DocumenterCitations, `jldoctest` on `adev`/`mdev`, GitHub Pages CI,
+  MathJax3.
 - PID steering controller (`PIDController`, `step!`, `steer_to_correction`)
   ported into `SigmaTauEnsemble`; `predict!` gained an optional `steering`
   kwarg that adds a correction vector to the propagated state. Verified
