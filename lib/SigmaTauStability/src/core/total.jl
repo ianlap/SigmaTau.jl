@@ -78,8 +78,13 @@ function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
 end
 
 function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # SP1065 eqn 25: no detrend, mean-flip endpoint reflection.
-    # x_star of length 3N-4: [reflected_left | x | reflected_right].
+    # NIST SP1065 eqn 25 / Greenhall-Howe-Percival 1998 eq (3):
+    #   Totvar = (1 / (2(m·τ₀)²(N−2))) · Σ_{n=2}^{N-1} (x*_{n-m} − 2x*_n + x*_{n+m})²
+    # Mean-flip endpoint reflection (eq 2): x*_{1−j} = 2x[1] − x[1+j],
+    # x*_{N+j} = 2x[N] − x[N−j], for j = 1..N−2. Original data sits in
+    # buffer slots N−1..2N−2; left reflection in 1..N−2; right in 2N−1..3N−4.
+    # Note: this is distinct from `_totdev_legacy`, which sums i=1..N (N terms,
+    # SigmaTau/MATLAB convention) instead of n=2..N−1 (N−2 terms, SP1065).
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
@@ -94,15 +99,16 @@ function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
         x_star[2N-2+i] = 2.0*x[N] - x[N-i]
     end
 
-    off = N - 2
+    L = length(x_star)
     for (k, m) in enumerate(m_values)
         D = 0.0
         count = 0
-        @inbounds @simd for i in 1:N
-            lo = off + i
-            hi = off + i + 2m
-            if hi <= length(x_star)
-                d2 = x_star[hi] - 2.0*x_star[off + i + m] + x_star[lo]
+        @inbounds @simd for n in 2:N-1
+            lo = N - 2 + n - m
+            mid = N - 2 + n
+            hi = N - 2 + n + m
+            if 1 <= lo && hi <= L
+                d2 = x_star[hi] - 2.0*x_star[mid] + x_star[lo]
                 D += d2^2
                 count += 1
             end
