@@ -1,9 +1,29 @@
 # api/allan.jl — User wrappers for stability calculations
 
 """
-    adev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+$(SIGNATURES)
 
-Computes the Allan Deviation for the given PhaseData.
+Overlapping Allan deviation σ_y(τ) for a phase record, per IEEE 1139-2022 §C.2.
+EDF for the χ²-based CI uses the closed-form approximation of [Greenhall2003](@cite).
+
+`m_values` selects the analysis-interval factors (τ = m·τ₀). When
+`calc_ci=true`, the result populates per-τ noise type, χ²-based confidence
+bounds, and equivalent degrees of freedom.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> p = PhaseData(collect(1.0:10.0), 1.0);
+
+julia> r = adev(p, [1, 2]; calc_ci=false);
+
+julia> round.(r.dev; sigdigits=4)
+2-element Vector{Float64}:
+ 0.0
+ 0.0
+```
 """
 function adev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
     raw_devs = _adev_core(data.x, m_values, data.tau0)
@@ -21,9 +41,27 @@ function adev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confid
 end
 
 """
-    mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
+$(SIGNATURES)
 
-Computes the Modified Allan Deviation for the given PhaseData.
+Modified Allan deviation Mod σ_y(τ) for a phase record, per IEEE 1139-2022 §C.3.
+
+Uses a phase-averaged second difference; better than `adev` at separating
+white-PM from flicker-PM noise.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> p = PhaseData(collect(1.0:10.0), 1.0);
+
+julia> r = mdev(p, [1, 2]; calc_ci=false);
+
+julia> round.(r.dev; sigdigits=4)
+2-element Vector{Float64}:
+ 0.0
+ 0.0
+```
 """
 function mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
     raw_devs = _mdev_core(data.x, m_values, data.tau0)

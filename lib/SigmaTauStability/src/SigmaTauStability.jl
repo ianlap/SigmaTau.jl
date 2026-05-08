@@ -2,6 +2,7 @@ module SigmaTauStability
 
 using Statistics
 using Distributions
+using DocStringExtensions
 using SigmaTauBase
 
 include("core/allan.jl")
