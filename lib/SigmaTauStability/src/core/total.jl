@@ -491,7 +491,7 @@ function _htotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float6
 end
 
 """
-    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:linear) → Vector{Float64}
+    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
 
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
 
@@ -500,17 +500,16 @@ on phase. `detrend` selects the per-window detrending applied before the
 extension:
 
 - `:greenhall` — half-mean slope removal (matches the MTOTDEV/HTOTDEV
-  Greenhall convention).
-- `:linear` — full least-squares (slope + intercept) per window.
-- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:linear` here.
-
-The default is `:linear` in this phase; switches to `:greenhall` in Phase 4.
+  Greenhall convention). Default.
+- `:linear` — full least-squares (slope + intercept) per window. Alias
+  for `:legacy` on this kernel.
+- `:legacy` — pre-1.0 SigmaTau behavior; identical to `:linear` here.
 """
-function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:linear)
+function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
+    detrend === :greenhall && return _mhtotdev_greenhall(x, m_values, tau0)
     if detrend === :linear || detrend === :legacy
         return _mhtotdev_linear(x, m_values, tau0)
     end
-    detrend === :greenhall && return _mhtotdev_greenhall(x, m_values, tau0)
     throw(ArgumentError("unknown detrend recipe: $detrend; valid for MHTOTDEV: :greenhall, :linear, :legacy"))
 end
 

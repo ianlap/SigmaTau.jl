@@ -179,10 +179,12 @@ const LK = LegacyKernels
             @test SigmaTauStability._htotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
-        # MHTOTDEV.
+        # MHTOTDEV. Pass detrend=:legacy explicitly: the new _mhtotdev_core
+        # default is :greenhall (per-window half-mean), which differs from
+        # the LK reference's per-window full-LS detrend.
         for m in [1, 2, 4, 8]
             new_dev = sqrt(LK.mhtotdev_var(x, m, tau0))
-            @test SigmaTauStability._mhtotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTauStability._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
         end
     end
 
