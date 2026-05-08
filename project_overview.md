@@ -29,6 +29,12 @@ graph TD
     ST -->|"using"| Reexport
 ```
 
+A `docs/` subproject (Documenter.jl) was added as a sibling to the
+workspace. It develops all three subpackages and the umbrella as path
+deps; its environment is independent of the workspace. Source material
+lifted from the previous cross-language rendition lives gitignored
+under `legdocs/`.
+
 Workspace wiring: root `Project.toml` declares all three subpackages in
 `[deps]`, registers them under `[workspace]` members, and pins each to its
 local path via `[sources.*]`. Subpackages declare relative `[sources]` for
@@ -180,7 +186,7 @@ their internal deps (`SigmaTauBase`).
 | ID | Risk |
 |----|------|
 | R-LOW-3 | `examples/` only has a single quickstart |
-| R-LOW-4 | No `Documenter.jl` site (README is in place) |
+| R-LOW-4 | `Documenter.jl` site skeleton shipped; theory/tutorial pages are stubs |
 | R-LOW-5 | `RelativisticClock`, `UDFactorizedFilter`, `KuramotoOscillator` are stubs |
 
 ---

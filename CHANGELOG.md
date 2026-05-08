@@ -124,6 +124,23 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
     discrepancy at long τ)
 
   86 new assertions (85 row-driven + 1 sanity-count).
+- Documenter.jl docs subproject under `docs/`. Ships skeleton v1 with
+  theory / tutorials / reference / validation page tree. Reference
+  pages auto-generated via `@docs` blocks. Stable32 comparison report
+  migrated from `reference/validation/stable32out/` into
+  `docs/src/validation/stable32.md`.
+- DocStringExtensions integration across all three subpackages;
+  struct docstrings on `PhaseData`, `FrequencyData`, `StabilityResult`
+  with `$(TYPEDFIELDS)`.
+- DocumenterCitations bibliography (`docs/src/refs.bib`) covering 20
+  references; `@cite` markers wired into `adev` docstring and the
+  homepage as a smoke test.
+- `jldoctest` examples on `adev` and `mdev` (build-time asserted).
+- `.github/workflows/Documentation.yml` deploying to GitHub Pages on
+  push to `main` and on tags.
+- `legdocs/` directory (gitignored) for source material lifted from
+  the cross-language predecessor.
+- MathJax3 math engine (replaces KaTeX default for full LaTeX support).
 - Strict numerical parity testset for the eight stability kernels
   (`_adev_core`, `_mdev_core`, `_hdev_core`, `_mhdev_core`, `_totdev_core`,
   `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core`) against the legacy
@@ -173,6 +190,16 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   `src/PlotRecipes.jl` stub has been deleted; recipe code lives entirely in
   the `RecipesBase` package extension. The umbrella package no longer pulls
   any plotting dependency unless one is explicitly loaded.
+- `lib/SigmaTau{Base,Stability,Ensemble}/Project.toml` declare a new
+  `DocStringExtensions` dependency.
+- `adev` and `mdev` docstrings rewritten with `$(SIGNATURES)`,
+  `jldoctest` examples, and `[Greenhall2003](@cite)`.
+
+### Removed
+
+- `reference/validation/stable32out/comparison_report.md` and
+  `comprehensive_comparison.md` (content migrated into
+  `docs/src/validation/stable32.md`).
 
 ### Fixed / Verified
 
