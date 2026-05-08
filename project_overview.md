@@ -186,7 +186,7 @@ their internal deps (`SigmaTauBase`).
 | ID | Risk |
 |----|------|
 | R-LOW-3 | `examples/` only has a single quickstart |
-| R-LOW-4 | `Documenter.jl` site skeleton shipped; theory/tutorial pages are stubs |
+| R-LOW-4 | `Documenter.jl` site skeleton shipped; tutorial pages are stubs (theory pages now filled out) |
 | R-LOW-5 | `RelativisticClock`, `UDFactorizedFilter`, `KuramotoOscillator` are stubs |
 
 ---
