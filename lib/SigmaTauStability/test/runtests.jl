@@ -370,6 +370,8 @@ const LK = LegacyKernels
         @test_throws ArgumentError SigmaTauStability._totdev_core(x, [1], tau0; detrend=:nonsense)
     end
 
+    include("allantools_cross_validation.jl")
+
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
         # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
