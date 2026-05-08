@@ -76,7 +76,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
 end
 
 """
-    mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:linear, calc_ci::Bool=true, confidence::Float64=0.95)
+    mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, confidence::Float64=0.95)
 
 Modified Hadamard Total Deviation. See `_mhtotdev_core` for
 the meaning of `detrend`.
@@ -87,7 +87,7 @@ unbiased (B = 1) by policy, matching Stable32 and AllanLab.
 `bias_correction(:mhtot, …)` returns ones for the same reason. EDF
 uses the empirical SP1065 fit coefficients (`_coeff_mhtot`).
 """
-function mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:linear, calc_ci::Bool=true, confidence::Float64=0.95)
+function mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, confidence::Float64=0.95)
     raw_devs = _mhtotdev_core(data.x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
     T = (length(data.x) - 1) * data.tau0
