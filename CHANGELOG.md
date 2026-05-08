@@ -8,6 +8,18 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- MHTOTDEV bias-correction policy made explicit: `bias_correction`
+  now short-circuits to `B = 1` for `var_type = :mhtot`, with the
+  rationale promoted into the function docstring (FCS 2001 and
+  NIST SP1065 publish no bias model for MHTOTDEV; Stable32 and
+  AllanLab also treat it as unbiased). `mhtotdev` docstring
+  rewritten to state this contract instead of the inline
+  comment it carried before.
+- `calculate_edf` docstring expanded with the WPM/FLPM (α ∈ {1, 2})
+  fallback rationale for TOTDEV and HTOTDEV — the substitute
+  ADEV/HDEV-style Greenhall–Riley formula is a documented policy
+  choice, not a derivation, since SP1065 Table 9 and FCS 2001
+  cover α ∈ {0, -1, -2} only.
 - `Random` is no longer a hard dep of `SigmaTauStability`. The
   `_gen_powerlaw_phase` helper now uses the global RNG (callers seed via
   `Random.seed!`) so the convention "Random in [extras] for both

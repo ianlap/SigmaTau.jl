@@ -75,7 +75,13 @@ end
 """
     mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
 
-Computes the Modified Hadamard Total Deviation for the given PhaseData.
+Modified Hadamard Total Deviation.
+
+No bias correction is applied. FCS 2001 and NIST SP1065 publish no
+bias-correction model for MHTOTDEV; the estimator is treated as
+unbiased (B = 1) by policy, matching Stable32 and AllanLab.
+`bias_correction(:mhtot, …)` returns ones for the same reason. EDF
+uses the empirical SP1065 fit coefficients (`_coeff_mhtot`).
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=0.95)
     raw_devs = _mhtotdev_core(data.x, m_values, data.tau0)
@@ -87,8 +93,6 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, co
     end
 
     noises = identify_noise(data.x, m_values, dmin=0, dmax=2)
-    # MHTOTDEV doesn't have a known bias correction model in FCS 2001/SP1065.
-
     edfs = calculate_edf(:mhtotdev, raw_devs, noises, m_values, taus, length(data.x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(data.x), confidence)
 
