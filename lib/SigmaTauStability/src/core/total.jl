@@ -131,14 +131,20 @@ end
 
 Computes the Modified Total Deviation (MTOTDEV).
 
-`detrend` selects the boundary-handling recipe (see `_totdev_core` docstring).
-For MTOTDEV, `:legacy` is an alias for `:greenhall` (current implementation).
+MTOTDEV uses Greenhall 2003's per-window time-reverse extension. `detrend`
+selects the per-window detrending applied before the extension:
+
+- `:greenhall` — half-mean slope removal (Greenhall 2003 canonical).
+- `:linear` — full least-squares (slope + intercept) per window; tighter
+  detrend at the cost of slightly higher per-window variance.
+- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:greenhall` here.
 """
 function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
     if detrend === :greenhall || detrend === :legacy
         return _mtotdev_greenhall(x, m_values, tau0)
     end
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+    detrend === :linear && return _mtotdev_linear(x, m_values, tau0)
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for MTOTDEV: :greenhall, :linear, :legacy"))
 end
 
 function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
@@ -183,6 +189,77 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
             @inbounds for j in 1:seg_len
                 val = x[n-1+j] - slope * tau0 * (j - 1)
                 rev_val = x[n-1 + seg_len - j + 1] - slope * tau0 * (seg_len - j)
+
+                ext[j] = rev_val
+                ext[seg_len + j] = val
+                ext[2seg_len + j] = rev_val
+            end
+
+            cs[1] = 0.0
+            @inbounds for j in 1:3seg_len
+                cs[j+1] = cs[j] + ext[j]
+            end
+
+            block_sum = 0.0
+            @inbounds @simd for j in 0:(6m - 1)
+                a1 = (cs[j+m+1]  - cs[j+1])
+                a2 = (cs[j+2m+1] - cs[j+m+1])
+                a3 = (cs[j+3m+1] - cs[j+2m+1])
+                d2 = (a3 - 2.0*a2 + a1) / m
+                block_sum += d2^2
+            end
+            outer_sum += block_sum / (6.0 * m)
+        end
+
+        devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
+    end
+
+    return devs
+end
+
+function _mtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # Per-window full LS detrend (analytic slope+intercept) + per-window
+    # time-reverse extension + modified 2nd-difference operator. Same
+    # extension/operator shape as `_mtotdev_greenhall`; only the slope
+    # estimate differs (full LS instead of half-mean).
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    max_m = isempty(m_values) ? 0 : maximum(m_values)
+    max_seg = 3 * max_m
+    ext = Vector{Float64}(undef, 3 * max_seg)
+    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+
+    for (k, m) in enumerate(m_values)
+        nsubs = N - 3m + 1
+        if nsubs < 1
+            devs[k] = NaN
+            continue
+        end
+
+        seg_len = 3m
+        L_float = Float64(seg_len)
+        sum_i = (L_float * (L_float + 1.0)) / 2.0
+        sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
+        delta = L_float * sum_i2 - sum_i^2
+
+        outer_sum = 0.0
+
+        for n in 1:nsubs
+            sum_x = 0.0
+            sum_ix = 0.0
+            @inbounds @simd for j in 1:seg_len
+                v = x[n-1+j]
+                sum_x += v
+                sum_ix += j * v
+            end
+
+            a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
+            b = (L_float * sum_ix - sum_x * sum_i) / delta
+
+            @inbounds for j in 1:seg_len
+                val = x[n-1+j] - (a + b * j)
+                rev_val = x[n-1 + seg_len - j + 1] - (a + b * (seg_len - j + 1))
 
                 ext[j] = rev_val
                 ext[seg_len + j] = val
