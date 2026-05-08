@@ -81,37 +81,39 @@ function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     # NIST SP1065 eqn 25 / Greenhall-Howe-Percival 1998 eq (3):
     #   Totvar = (1 / (2(m·τ₀)²(N−2))) · Σ_{n=2}^{N-1} (x*_{n-m} − 2x*_n + x*_{n+m})²
     # Mean-flip endpoint reflection (eq 2): x*_{1−j} = 2x[1] − x[1+j],
-    # x*_{N+j} = 2x[N] − x[N−j], for j = 1..N−2. Original data sits in
-    # buffer slots N−1..2N−2; left reflection in 1..N−2; right in 2N−1..3N−4.
-    # Note: this is distinct from `_totdev_legacy`, which sums i=1..N (N terms,
-    # SigmaTau/MATLAB convention) instead of n=2..N−1 (N−2 terms, SP1065).
+    # x*_{N+j} = 2x[N] − x[N−j], for j = 1..N−2.
+    # Buffer layout uses a linear k-to-index map so x*_k → buffer[k+N−2] for
+    # k ∈ {3−N..2N−2}. Original x[1..N] sits at buffer[N−1..2N−2]; the left
+    # reflection populates buffer[1..N−2] with x*_{3−N}..x*_0 in increasing k;
+    # the right reflection populates buffer[2N−1..3N−4] with x*_{N+1}..x*_{2N−2}.
+    # (`_totdev_legacy` writes the same region in REVERSE order for the left
+    # block; that helper never reads from there, so the divergence is benign.)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
     x_star = Vector{Float64}(undef, 3N - 4)
-    @inbounds for i in 1:N-2
-        x_star[i] = 2.0*x[1] - x[i+1]
+    @inbounds for j in 1:N-2
+        # buffer[j] = x*_{j-N+2}; for k=j-N+2 ∈ {3-N..0}, x*_k = 2x[1] − x[2-k] = 2x[1] − x[N-j].
+        x_star[j] = 2.0*x[1] - x[N - j]
     end
     @inbounds for i in 1:N
         x_star[N-2+i] = x[i]
     end
-    @inbounds for i in 1:N-2
-        x_star[2N-2+i] = 2.0*x[N] - x[N-i]
+    @inbounds for j in 1:N-2
+        # buffer[2N-2+j] = x*_{N+j}; x*_{N+j} = 2x[N] − x[N-j].
+        x_star[2N-2+j] = 2.0*x[N] - x[N - j]
     end
 
-    L = length(x_star)
     for (k, m) in enumerate(m_values)
         D = 0.0
         count = 0
         @inbounds @simd for n in 2:N-1
-            lo = N - 2 + n - m
+            lo  = N - 2 + n - m
             mid = N - 2 + n
-            hi = N - 2 + n + m
-            if 1 <= lo && hi <= L
-                d2 = x_star[hi] - 2.0*x_star[mid] + x_star[lo]
-                D += d2^2
-                count += 1
-            end
+            hi  = N - 2 + n + m
+            d2 = x_star[hi] - 2.0*x_star[mid] + x_star[lo]
+            D += d2^2
+            count += 1
         end
 
         devs[k] = count == 0 ? NaN : sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
