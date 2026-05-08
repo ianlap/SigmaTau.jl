@@ -1,34 +1,52 @@
 # core/total.jl — Core Total Stability Kernels
 
 """
-    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:howe) → Vector{Float64}
 
 Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`.
+
+TOTDEV uses the Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension.
+`detrend` selects the detrending applied before the extension:
+
+- `:howe` — no detrend (canonical SP1065 eqn 25, matches allantools).
+  Default.
+- `:linear` — global least-squares detrend over the whole vector; alias
+  for `:legacy` on this kernel.
+- `:legacy` — pre-1.0 SigmaTau behavior; identical to `:linear` here.
 """
-function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:howe)
+    detrend === :howe && return _totdev_howe(x, m_values, tau0)
+    if detrend === :legacy || detrend === :linear
+        return _totdev_legacy(x, m_values, tau0)
+    end
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for TOTDEV: :howe, :linear, :legacy"))
+end
+
+function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
-    # Linear detrend of the whole vector
+
+    # Linear detrend of the whole vector (analytic LS sums)
     N_float = Float64(N)
     sum_i = (N_float * (N_float + 1.0)) / 2.0
     sum_i2 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0)) / 6.0
     delta = N_float * sum_i2 - sum_i^2
-    
+
     sum_x = sum(x)
     sum_ix = 0.0
     @inbounds @simd for i in 1:N
         sum_ix += i * x[i]
     end
-    
+
     a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
     b = (N_float * sum_ix - sum_x * sum_i) / delta
-    
+
     xd = Vector{Float64}(undef, N)
     @inbounds @simd for i in 1:N
         xd[i] = x[i] - (a + b * i)
     end
-    
+
+    # Mean-flip endpoint reflection: x_star of length 3N-4
     x_star = Vector{Float64}(undef, 3N - 4)
     @inbounds for i in 1:N-2
         x_star[i] = 2.0*xd[1] - xd[i+1]
@@ -39,7 +57,7 @@ function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     @inbounds for i in 1:N-2
         x_star[2N-2+i] = 2.0*xd[N] - xd[N-i]
     end
-    
+
     off = N - 2
     for (k, m) in enumerate(m_values)
         D = 0.0
@@ -53,41 +71,102 @@ function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
                 count += 1
             end
         end
-        
+
         if count == 0
             devs[k] = NaN
         else
             devs[k] = sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
         end
     end
-    
+
+    return devs
+end
+
+function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # NIST SP1065 eqn 25 / Greenhall-Howe-Percival 1998 eq (3):
+    #   Totvar = (1 / (2(m·τ₀)²(N−2))) · Σ_{n=2}^{N-1} (x*_{n-m} − 2x*_n + x*_{n+m})²
+    # Mean-flip endpoint reflection (eq 2): x*_{1−j} = 2x[1] − x[1+j],
+    # x*_{N+j} = 2x[N] − x[N−j], for j = 1..N−2.
+    # Buffer layout uses a linear k-to-index map so x*_k → buffer[k+N−2] for
+    # k ∈ {3−N..2N−2}. Original x[1..N] sits at buffer[N−1..2N−2]; the left
+    # reflection populates buffer[1..N−2] with x*_{3−N}..x*_0 in increasing k;
+    # the right reflection populates buffer[2N−1..3N−4] with x*_{N+1}..x*_{2N−2}.
+    # (`_totdev_legacy` writes the same region in REVERSE order for the left
+    # block; that helper never reads from there, so the divergence is benign.)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    x_star = Vector{Float64}(undef, 3N - 4)
+    @inbounds for j in 1:N-2
+        # buffer[j] = x*_{j-N+2}; for k=j-N+2 ∈ {3-N..0}, x*_k = 2x[1] − x[2-k] = 2x[1] − x[N-j].
+        x_star[j] = 2.0*x[1] - x[N - j]
+    end
+    @inbounds for i in 1:N
+        x_star[N-2+i] = x[i]
+    end
+    @inbounds for j in 1:N-2
+        # buffer[2N-2+j] = x*_{N+j}; x*_{N+j} = 2x[N] − x[N-j].
+        x_star[2N-2+j] = 2.0*x[N] - x[N - j]
+    end
+
+    for (k, m) in enumerate(m_values)
+        D = 0.0
+        count = 0
+        @inbounds @simd for n in 2:N-1
+            lo  = N - 2 + n - m
+            mid = N - 2 + n
+            hi  = N - 2 + n + m
+            d2 = x_star[hi] - 2.0*x_star[mid] + x_star[lo]
+            D += d2^2
+            count += 1
+        end
+
+        devs[k] = count == 0 ? NaN : sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
+    end
+
     return devs
 end
 
 """
-    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
 
 Computes the Modified Total Deviation (MTOTDEV).
+
+MTOTDEV uses Greenhall 2003's per-window time-reverse extension. `detrend`
+selects the per-window detrending applied before the extension:
+
+- `:greenhall` — half-mean slope removal (Greenhall 2003 canonical).
+- `:linear` — full least-squares (slope + intercept) per window; tighter
+  detrend at the cost of slightly higher per-window variance.
+- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:greenhall` here.
 """
-function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
+    if detrend === :greenhall || detrend === :legacy
+        return _mtotdev_greenhall(x, m_values, tau0)
+    end
+    detrend === :linear && return _mtotdev_linear(x, m_values, tau0)
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for MTOTDEV: :greenhall, :linear, :legacy"))
+end
+
+function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
+
     max_m = isempty(m_values) ? 0 : maximum(m_values)
     max_seg = 3 * max_m
     ext = Vector{Float64}(undef, 3 * max_seg)
     cs = Vector{Float64}(undef, 3 * max_seg + 1)
-    
+
     for (k, m) in enumerate(m_values)
         nsubs = N - 3m + 1
         if nsubs < 1
             devs[k] = NaN
             continue
         end
-        
+
         seg_len = 3m
         outer_sum = 0.0
-        
+
         for n in 1:nsubs
             half_n = seg_len / 2.0
             if m == 1
@@ -99,7 +178,7 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
                     s1 += x[n-1+i]
                 end
                 s1 /= hi
-                
+
                 s2 = 0.0
                 @inbounds @simd for i in hi+1:seg_len
                     s2 += x[n-1+i]
@@ -107,21 +186,21 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
                 s2 /= (seg_len - hi)
                 slope = (s2 - s1) / (half_n * tau0)
             end
-            
+
             @inbounds for j in 1:seg_len
                 val = x[n-1+j] - slope * tau0 * (j - 1)
                 rev_val = x[n-1 + seg_len - j + 1] - slope * tau0 * (seg_len - j)
-                
+
                 ext[j] = rev_val
                 ext[seg_len + j] = val
                 ext[2seg_len + j] = rev_val
             end
-            
+
             cs[1] = 0.0
             @inbounds for j in 1:3seg_len
                 cs[j+1] = cs[j] + ext[j]
             end
-            
+
             block_sum = 0.0
             @inbounds @simd for j in 0:(6m - 1)
                 a1 = (cs[j+m+1]  - cs[j+1])
@@ -132,33 +211,120 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             end
             outer_sum += block_sum / (6.0 * m)
         end
-        
+
         devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
     end
-    
+
+    return devs
+end
+
+function _mtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # Per-window full LS detrend (analytic slope+intercept) + per-window
+    # time-reverse extension + modified 2nd-difference operator. Same
+    # extension/operator shape as `_mtotdev_greenhall`; only the slope
+    # estimate differs (full LS instead of half-mean).
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    max_m = isempty(m_values) ? 0 : maximum(m_values)
+    max_seg = 3 * max_m
+    ext = Vector{Float64}(undef, 3 * max_seg)
+    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+
+    for (k, m) in enumerate(m_values)
+        nsubs = N - 3m + 1
+        if nsubs < 1
+            devs[k] = NaN
+            continue
+        end
+
+        seg_len = 3m
+        L_float = Float64(seg_len)
+        sum_i = (L_float * (L_float + 1.0)) / 2.0
+        sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
+        delta = L_float * sum_i2 - sum_i^2
+
+        outer_sum = 0.0
+
+        for n in 1:nsubs
+            sum_x = 0.0
+            sum_ix = 0.0
+            @inbounds @simd for j in 1:seg_len
+                v = x[n-1+j]
+                sum_x += v
+                sum_ix += j * v
+            end
+
+            a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
+            b = (L_float * sum_ix - sum_x * sum_i) / delta
+
+            @inbounds for j in 1:seg_len
+                val = x[n-1+j] - (a + b * j)
+                rev_val = x[n-1 + seg_len - j + 1] - (a + b * (seg_len - j + 1))
+
+                ext[j] = rev_val
+                ext[seg_len + j] = val
+                ext[2seg_len + j] = rev_val
+            end
+
+            cs[1] = 0.0
+            @inbounds for j in 1:3seg_len
+                cs[j+1] = cs[j] + ext[j]
+            end
+
+            block_sum = 0.0
+            @inbounds @simd for j in 0:(6m - 1)
+                a1 = (cs[j+m+1]  - cs[j+1])
+                a2 = (cs[j+2m+1] - cs[j+m+1])
+                a3 = (cs[j+3m+1] - cs[j+2m+1])
+                d2 = (a3 - 2.0*a2 + a1) / m
+                block_sum += d2^2
+            end
+            outer_sum += block_sum / (6.0 * m)
+        end
+
+        devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
+    end
+
     return devs
 end
 
 """
-    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
 
-Computes the Hadamard Total Deviation (HTOTDEV).
+Computes the Hadamard Total Deviation (HTOTDEV) on the frequency series
+`y = diff(x) / tau0`.
+
+HTOTDEV uses Greenhall 2003's per-window time-reverse extension. `detrend`
+selects the per-window detrending applied to `y` before the extension:
+
+- `:greenhall` — half-mean slope removal on `y` (Greenhall 2003 canonical).
+- `:linear` — full least-squares (slope + intercept) per window on `y`.
+- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:greenhall` here.
 """
-function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
+    if detrend === :greenhall || detrend === :legacy
+        return _htotdev_greenhall(x, m_values, tau0)
+    end
+    detrend === :linear && return _htotdev_linear(x, m_values, tau0)
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for HTOTDEV: :greenhall, :linear, :legacy"))
+end
+
+function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
+
     y = Vector{Float64}(undef, N-1)
     @inbounds @simd for i in 1:N-1
         y[i] = (x[i+1] - x[i]) / tau0
     end
     Ny = length(y)
-    
+
     max_m = isempty(m_values) ? 0 : maximum(m_values)
     max_seg = 3 * max_m
     ext = Vector{Float64}(undef, 3 * max_seg)
     cs = Vector{Float64}(undef, 3 * max_seg + 1)
-    
+
     for (k, m) in enumerate(m_values)
         if m == 1
             L = N - 3
@@ -174,49 +340,49 @@ function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             devs[k] = sqrt(sum_sq / (6.0 * L * tau0^2))
             continue
         end
-        
+
         n_iter = Ny - 3m + 1
         if n_iter < 1
             devs[k] = NaN
             continue
         end
-        
+
         seg_len = 3m
         dev_sum = 0.0
-        
+
         for i in 0:(n_iter - 1)
             hi = floor(Int, seg_len / 2)
             lo_start = ceil(Int, seg_len / 2) + 1
-            
+
             s1 = 0.0
             @inbounds @simd for j in 1:hi
                 s1 += y[i+j]
             end
             m1 = s1 / hi
-            
+
             s2 = 0.0
             @inbounds @simd for j in lo_start:seg_len
                 s2 += y[i+j]
             end
             m2 = s2 / (seg_len - lo_start + 1)
-            
+
             slope = isodd(seg_len) ? (m2 - m1) / (0.5*(seg_len - 1) + 1.0) : (m2 - m1) / (0.5*seg_len)
             mid = floor(seg_len / 2)
-            
+
             @inbounds for j in 1:seg_len
                 val = y[i+j] - slope * (j - 1 - mid)
                 rev_val = y[i + seg_len - j + 1] - slope * (seg_len - j - mid)
-                
+
                 ext[j] = rev_val
                 ext[seg_len + j] = val
                 ext[2seg_len + j] = rev_val
             end
-            
+
             cs[1] = 0.0
             @inbounds for j in 1:3seg_len
                 cs[j+1] = cs[j] + ext[j]
             end
-            
+
             sq = 0.0
             @inbounds @simd for j in 0:(6m - 1)
                 h1 = (cs[j+m+1]  - cs[j+1])
@@ -226,22 +392,131 @@ function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             end
             dev_sum += sq / (6.0 * m)
         end
-        
+
         devs[k] = sqrt(dev_sum / (6.0 * n_iter))
     end
-    
+
+    return devs
+end
+
+function _htotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # Per-window full LS detrend on the frequency series y = diff(x)/tau0
+    # + per-window time-reverse extension + third-difference operator.
+    # Same extension/operator shape as `_htotdev_greenhall`; only the slope
+    # estimate differs (full LS slope + intercept instead of half-mean slope).
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    y = Vector{Float64}(undef, N-1)
+    @inbounds @simd for i in 1:N-1
+        y[i] = (x[i+1] - x[i]) / tau0
+    end
+    Ny = length(y)
+
+    max_m = isempty(m_values) ? 0 : maximum(m_values)
+    max_seg = 3 * max_m
+    ext = Vector{Float64}(undef, 3 * max_seg)
+    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+
+    for (k, m) in enumerate(m_values)
+        if m == 1
+            L = N - 3
+            if L <= 0
+                devs[k] = NaN
+                continue
+            end
+            sum_sq = 0.0
+            @inbounds @simd for i in 1:L
+                d3 = x[i+3] - 3.0*x[i+2] + 3.0*x[i+1] - x[i]
+                sum_sq += d3^2
+            end
+            devs[k] = sqrt(sum_sq / (6.0 * L * tau0^2))
+            continue
+        end
+
+        n_iter = Ny - 3m + 1
+        if n_iter < 1
+            devs[k] = NaN
+            continue
+        end
+
+        seg_len = 3m
+        L_float = Float64(seg_len)
+        sum_i = (L_float * (L_float + 1.0)) / 2.0
+        sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
+        delta = L_float * sum_i2 - sum_i^2
+
+        dev_sum = 0.0
+
+        for i in 0:(n_iter - 1)
+            sum_y = 0.0
+            sum_iy = 0.0
+            @inbounds @simd for j in 1:seg_len
+                v = y[i+j]
+                sum_y += v
+                sum_iy += j * v
+            end
+
+            a = (sum_y * sum_i2 - sum_iy * sum_i) / delta
+            b = (L_float * sum_iy - sum_y * sum_i) / delta
+
+            @inbounds for j in 1:seg_len
+                val = y[i+j] - (a + b * j)
+                rev_val = y[i + seg_len - j + 1] - (a + b * (seg_len - j + 1))
+
+                ext[j] = rev_val
+                ext[seg_len + j] = val
+                ext[2seg_len + j] = rev_val
+            end
+
+            cs[1] = 0.0
+            @inbounds for j in 1:3seg_len
+                cs[j+1] = cs[j] + ext[j]
+            end
+
+            sq = 0.0
+            @inbounds @simd for j in 0:(6m - 1)
+                h1 = (cs[j+m+1]  - cs[j+1])
+                h2 = (cs[j+2m+1] - cs[j+m+1])
+                h3 = (cs[j+3m+1] - cs[j+2m+1])
+                sq += ((h3 - 2.0*h2 + h1) / m)^2
+            end
+            dev_sum += sq / (6.0 * m)
+        end
+
+        devs[k] = sqrt(dev_sum / (6.0 * n_iter))
+    end
+
     return devs
 end
 
 """
-    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
 
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
+
+MHTOTDEV is novel to SigmaTau and uses a per-window time-reverse extension
+on phase. `detrend` selects the per-window detrending applied before the
+extension:
+
+- `:greenhall` — half-mean slope removal (matches the MTOTDEV/HTOTDEV
+  Greenhall convention). Default.
+- `:linear` — full least-squares (slope + intercept) per window. Alias
+  for `:legacy` on this kernel.
+- `:legacy` — pre-1.0 SigmaTau behavior; identical to `:linear` here.
 """
-function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
+    detrend === :greenhall && return _mhtotdev_greenhall(x, m_values, tau0)
+    if detrend === :linear || detrend === :legacy
+        return _mhtotdev_linear(x, m_values, tau0)
+    end
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for MHTOTDEV: :greenhall, :linear, :legacy"))
+end
+
+function _mhtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
+
     max_m = isempty(m_values) ? 0 : maximum(m_values)
     max_Lp = 3 * max_m + 1
     ext_len = 3 * max_Lp
@@ -249,7 +524,7 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
     ext = Vector{Float64}(undef, ext_len)
     d3_vec = Vector{Float64}(undef, L3_max)
     S = Vector{Float64}(undef, L3_max + 1)
-    
+
     for (k, m) in enumerate(m_values)
         if m < 1
             devs[k] = NaN
@@ -260,17 +535,17 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
             devs[k] = NaN
             continue
         end
-        
+
         Lp = 3m + 1
         L3 = 3Lp - 3m
-        
+
         total_sum = 0.0
         for n in 1:nsubs
             Lp_float = Float64(Lp)
             sum_i = (Lp_float * (Lp_float + 1.0)) / 2.0
             sum_i2 = (Lp_float * (Lp_float + 1.0) * (2.0*Lp_float + 1.0)) / 6.0
             delta = Lp_float * sum_i2 - sum_i^2
-            
+
             sum_x = 0.0
             sum_ix = 0.0
             @inbounds @simd for j in 1:Lp
@@ -278,28 +553,28 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
                 sum_x += val
                 sum_ix += j * val
             end
-            
+
             a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
             b = (Lp_float * sum_ix - sum_x * sum_i) / delta
-            
+
             @inbounds for j in 1:Lp
                 val = x[n-1+j] - (a + b * j)
                 rev_val = x[n-1 + Lp - j + 1] - (a + b * (Lp - j + 1))
-                
+
                 ext[j] = rev_val
                 ext[Lp + j] = val
                 ext[2Lp + j] = rev_val
             end
-            
+
             @inbounds for j in 1:L3
                 d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
             end
-            
+
             S[1] = 0.0
             @inbounds for j in 1:L3
                 S[j+1] = S[j] + d3_vec[j]
             end
-            
+
             n_avg = L3 + 1 - m
             if n_avg > 0
                 block_var = 0.0
@@ -310,12 +585,97 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
             else
                 block_var = 0.0
             end
-            
+
             total_sum += block_var
         end
-        
+
         devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
     end
-    
+
+    return devs
+end
+
+function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # Per-window half-mean slope removal + per-window time-reverse extension
+    # + averaged third-difference operator. Same window/operator structure as
+    # `_mhtotdev_linear`; only the slope estimate differs (half-mean instead
+    # of full LS).
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    max_m = isempty(m_values) ? 0 : maximum(m_values)
+    max_Lp = 3 * max_m + 1
+    ext_len = 3 * max_Lp
+    L3_max = ext_len - 3 * max_m
+    ext = Vector{Float64}(undef, ext_len)
+    d3_vec = Vector{Float64}(undef, L3_max)
+    S = Vector{Float64}(undef, L3_max + 1)
+
+    for (k, m) in enumerate(m_values)
+        if m < 1
+            devs[k] = NaN
+            continue
+        end
+        nsubs = N - 4m + 1
+        if nsubs < 1
+            devs[k] = NaN
+            continue
+        end
+
+        Lp = 3m + 1
+        L3 = 3Lp - 3m
+
+        total_sum = 0.0
+        for n in 1:nsubs
+            half = floor(Int, Lp / 2)
+            s1 = 0.0
+            @inbounds @simd for j in 1:half
+                s1 += x[n-1+j]
+            end
+            s1 /= half
+
+            s2 = 0.0
+            @inbounds @simd for j in (half+1):Lp
+                s2 += x[n-1+j]
+            end
+            s2 /= (Lp - half)
+
+            slope = (s2 - s1) / ((Lp / 2.0) * tau0)
+
+            @inbounds for j in 1:Lp
+                val = x[n-1+j] - slope * tau0 * (j - 1)
+                rev_val = x[n-1 + Lp - j + 1] - slope * tau0 * (Lp - j)
+
+                ext[j] = rev_val
+                ext[Lp + j] = val
+                ext[2Lp + j] = rev_val
+            end
+
+            @inbounds for j in 1:L3
+                d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
+            end
+
+            S[1] = 0.0
+            @inbounds for j in 1:L3
+                S[j+1] = S[j] + d3_vec[j]
+            end
+
+            n_avg = L3 + 1 - m
+            if n_avg > 0
+                block_var = 0.0
+                @inbounds @simd for j in 1:n_avg
+                    block_var += (S[j+m] - S[j])^2
+                end
+                block_var /= (n_avg * 6.0 * Float64(m)^2)
+            else
+                block_var = 0.0
+            end
+
+            total_sum += block_var
+        end
+
+        devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
+    end
+
     return devs
 end
