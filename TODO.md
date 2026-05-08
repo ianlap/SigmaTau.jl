@@ -88,8 +88,6 @@ numerical reference is locked in.
 
 ## Docs follow-ups (post-v1)
 
-- Fill theory chapters from `legdocs/handbook/` and `legdocs/equations/`
-  source material (one PR per theory page is fine).
 - Fill tutorial narrative — start with `01_phase_data.md` and
   `02_compute_adev.md`.
 - Tighten `warnonly = []` in `docs/make.jl` once all public API has

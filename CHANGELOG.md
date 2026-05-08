@@ -8,6 +8,22 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Theory section: filled out `overview`, `allan_family`, `total_family`,
+  `confidence`, and `noise_id` from SP1065 / IEEE 1139-2022 / GR03 /
+  FCS01 / RG04 source material. Hybrid narrative/reference structure
+  with small `@example` blocks for slope-vs-noise demonstrations and a
+  bias-policy admonition on the total-family page that cross-links the
+  validation page. Bib entries `Sullivan_NBS_TN_1337` (NBS-TN-1337,
+  Sullivan/Allan/Howe/Walls 1990) and `Riley_R_2020` (Riley, *Frequency
+  Stability Analysis Using R*, Hamilton Tech, Rev. C 2020) added to
+  `docs/src/refs.bib`.
+- Reference-material consolidation: `stable32docs/` merged into
+  `legdocs/`. Stable32 product PDFs moved to `legdocs/vendor/`;
+  preprocessing papers (gaps, outliers) under
+  `legdocs/papers/preprocessing/`; HTML web articles renamed and placed
+  alongside their topical PDFs; one byte-identical PDF dupe removed.
+  Both folders remain gitignored; `.gitignore` updated to drop the
+  now-defunct `stable32docs/` line.
 - `correct_bias::Bool=true` keyword on `totdev`, `mtotdev`, `htotdev`,
   and `mhtotdev`. Default `true` preserves prior behavior (apply the
   SP1065 / FCS 2001 noise-type-dependent bias factor `B(α)` to the raw
