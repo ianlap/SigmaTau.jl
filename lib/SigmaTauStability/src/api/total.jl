@@ -1,12 +1,12 @@
 # api/total.jl — User wrappers for Total stability calculations
 
 """
-    totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:legacy, calc_ci::Bool=true, confidence::Float64=0.95)
+    totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, calc_ci::Bool=true, confidence::Float64=0.95)
 
 Computes the Total Deviation for the given PhaseData. See `_totdev_core` for
 the meaning of `detrend`.
 """
-function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:legacy, calc_ci::Bool=true, confidence::Float64=0.95)
+function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, calc_ci::Bool=true, confidence::Float64=0.95)
     raw_devs = _totdev_core(data.x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
     T = (length(data.x) - 1) * data.tau0

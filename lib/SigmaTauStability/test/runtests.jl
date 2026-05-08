@@ -159,10 +159,12 @@ const LK = LegacyKernels
         end
 
         # TOTDEV. (Smaller grid — kernel is O(N) per m but allocates an extended
-        # 3N-4 array each call.)
+        # 3N-4 array each call.) Pass detrend=:legacy explicitly: the new
+        # _totdev_core default is :howe (SP1065 eqn 25), which differs from
+        # the LK reference by O(few %) at short τ.
         for m in [1, 2, 4, 8, 16, 32]
             new_dev = sqrt(LK.totdev_var(x, m, tau0))
-            @test SigmaTauStability._totdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTauStability._totdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # MTOTDEV.
