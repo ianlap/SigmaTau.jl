@@ -426,6 +426,27 @@ const LK = LegacyKernels
         @test_throws ArgumentError SigmaTauStability._mtotdev_core(x, [1], tau0; detrend=:howe)
     end
 
+    @testset "HTOTDEV :linear smoke" begin
+        # Per-window full-LS detrend on the frequency series (vs :greenhall's
+        # half-mean) + same time-reverse extension and third-diff operator.
+        using Random
+        Random.seed!(20260508)
+        N    = 1024
+        tau0 = 1.0
+        ms   = [1, 2, 4, 8, 16]
+        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+
+        devs = SigmaTauStability._htotdev_core(x, ms, tau0; detrend=:linear)
+        @test length(devs) == length(ms)
+        @test all(isfinite, devs)
+        @test all(>(0), devs)
+        devs_legacy = SigmaTauStability._htotdev_core(x, ms, tau0; detrend=:legacy)
+        @test all(0.1 .<= devs ./ devs_legacy .<= 10.0)
+
+        # :howe is no longer a recipe for HTOTDEV.
+        @test_throws ArgumentError SigmaTauStability._htotdev_core(x, [1], tau0; detrend=:howe)
+    end
+
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
         # Bonus: kernel parity for the more common ADEV/HDEV across all 5
         # noise types, locking in that the synthesizer + kernels survive the

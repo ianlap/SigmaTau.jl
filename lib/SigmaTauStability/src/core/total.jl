@@ -291,17 +291,22 @@ end
 """
     _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
 
-Computes the Hadamard Total Deviation (HTOTDEV).
+Computes the Hadamard Total Deviation (HTOTDEV) on the frequency series
+`y = diff(x) / tau0`.
 
-`detrend` selects the boundary-handling recipe (see `_totdev_core`). For HTOTDEV,
-`:legacy` is an alias for `:greenhall`. The recipe operates on the frequency
-series `y = diff(x) / tau0`.
+HTOTDEV uses Greenhall 2003's per-window time-reverse extension. `detrend`
+selects the per-window detrending applied to `y` before the extension:
+
+- `:greenhall` — half-mean slope removal on `y` (Greenhall 2003 canonical).
+- `:linear` — full least-squares (slope + intercept) per window on `y`.
+- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:greenhall` here.
 """
 function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
     if detrend === :greenhall || detrend === :legacy
         return _htotdev_greenhall(x, m_values, tau0)
     end
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+    detrend === :linear && return _htotdev_linear(x, m_values, tau0)
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid for HTOTDEV: :greenhall, :linear, :legacy"))
 end
 
 function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
@@ -366,6 +371,97 @@ function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
             @inbounds for j in 1:seg_len
                 val = y[i+j] - slope * (j - 1 - mid)
                 rev_val = y[i + seg_len - j + 1] - slope * (seg_len - j - mid)
+
+                ext[j] = rev_val
+                ext[seg_len + j] = val
+                ext[2seg_len + j] = rev_val
+            end
+
+            cs[1] = 0.0
+            @inbounds for j in 1:3seg_len
+                cs[j+1] = cs[j] + ext[j]
+            end
+
+            sq = 0.0
+            @inbounds @simd for j in 0:(6m - 1)
+                h1 = (cs[j+m+1]  - cs[j+1])
+                h2 = (cs[j+2m+1] - cs[j+m+1])
+                h3 = (cs[j+3m+1] - cs[j+2m+1])
+                sq += ((h3 - 2.0*h2 + h1) / m)^2
+            end
+            dev_sum += sq / (6.0 * m)
+        end
+
+        devs[k] = sqrt(dev_sum / (6.0 * n_iter))
+    end
+
+    return devs
+end
+
+function _htotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # Per-window full LS detrend on the frequency series y = diff(x)/tau0
+    # + per-window time-reverse extension + third-difference operator.
+    # Same extension/operator shape as `_htotdev_greenhall`; only the slope
+    # estimate differs (full LS slope + intercept instead of half-mean slope).
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    y = Vector{Float64}(undef, N-1)
+    @inbounds @simd for i in 1:N-1
+        y[i] = (x[i+1] - x[i]) / tau0
+    end
+    Ny = length(y)
+
+    max_m = isempty(m_values) ? 0 : maximum(m_values)
+    max_seg = 3 * max_m
+    ext = Vector{Float64}(undef, 3 * max_seg)
+    cs = Vector{Float64}(undef, 3 * max_seg + 1)
+
+    for (k, m) in enumerate(m_values)
+        if m == 1
+            L = N - 3
+            if L <= 0
+                devs[k] = NaN
+                continue
+            end
+            sum_sq = 0.0
+            @inbounds @simd for i in 1:L
+                d3 = x[i+3] - 3.0*x[i+2] + 3.0*x[i+1] - x[i]
+                sum_sq += d3^2
+            end
+            devs[k] = sqrt(sum_sq / (6.0 * L * tau0^2))
+            continue
+        end
+
+        n_iter = Ny - 3m + 1
+        if n_iter < 1
+            devs[k] = NaN
+            continue
+        end
+
+        seg_len = 3m
+        L_float = Float64(seg_len)
+        sum_i = (L_float * (L_float + 1.0)) / 2.0
+        sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
+        delta = L_float * sum_i2 - sum_i^2
+
+        dev_sum = 0.0
+
+        for i in 0:(n_iter - 1)
+            sum_y = 0.0
+            sum_iy = 0.0
+            @inbounds @simd for j in 1:seg_len
+                v = y[i+j]
+                sum_y += v
+                sum_iy += j * v
+            end
+
+            a = (sum_y * sum_i2 - sum_iy * sum_i) / delta
+            b = (L_float * sum_iy - sum_y * sum_i) / delta
+
+            @inbounds for j in 1:seg_len
+                val = y[i+j] - (a + b * j)
+                rev_val = y[i + seg_len - j + 1] - (a + b * (seg_len - j + 1))
 
                 ext[j] = rev_val
                 ext[seg_len + j] = val
