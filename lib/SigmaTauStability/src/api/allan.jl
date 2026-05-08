@@ -4,6 +4,7 @@
 $(SIGNATURES)
 
 Overlapping Allan deviation σ_y(τ) for a phase record, per IEEE 1139-2022 §C.2.
+EDF for the χ²-based CI uses the closed-form approximation of [Greenhall2003](@cite).
 
 `m_values` selects the analysis-interval factors (τ = m·τ₀). When
 `calc_ci=true`, the result populates per-τ noise type, χ²-based confidence

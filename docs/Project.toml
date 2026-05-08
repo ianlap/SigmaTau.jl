@@ -1,5 +1,6 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocumenterCitations = "daee34ce-89f3-4625-b898-19384cb65244"
 SigmaTau = "1434c4cc-a461-4fa3-9ce6-cb17a59e9a11"
 SigmaTauBase = "e7b0a8c4-1234-5678-9abc-def012345678"
 SigmaTauEnsemble = "f4c9c4cc-a461-4fa3-9ce6-cb17a59e9a11"
@@ -19,4 +20,5 @@ path = "../lib/SigmaTauStability"
 
 [compat]
 Documenter = "1"
+DocumenterCitations = "1"
 julia = "1.11"
