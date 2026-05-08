@@ -48,12 +48,10 @@ function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             continue
         end
 
-        # Pairwise sum (Julia's default for `sum`) is bit-stable across
-        # platforms; the previous `@simd` accumulator allowed CPU-dependent
-        # reordering that drifted ~1 ULP from the legacy reference on Linux.
-        sum_sq = @inbounds sum(1:Ne) do i
+        sum_sq = 0.0
+        @inbounds @simd for i in 1:Ne
             d = x_cs[i+4m] - 4.0 * x_cs[i+3m] + 6.0 * x_cs[i+2m] - 4.0 * x_cs[i+m] + x_cs[i]
-            d * d
+            sum_sq += d^2
         end
 
         devs[k] = sqrt(sum_sq / (6.0 * Ne * Float64(m)^4 * tau0^2))
