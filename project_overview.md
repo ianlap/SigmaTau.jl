@@ -99,10 +99,11 @@ their internal deps (`SigmaTauBase`).
 
 | Test | Status | Notes |
 |------|--------|-------|
-| [runtests.jl](lib/SigmaTauStability/test/runtests.jl) | ✅ 219/219 pass |
+| [runtests.jl](lib/SigmaTauStability/test/runtests.jl) | ✅ 339/339 pass |
 | Numerical legacy parity | ✅ 52 assertions across 8 kernels at rtol=1e-12 ([`legacy_kernels.jl`](lib/SigmaTauStability/test/legacy_kernels.jl)) |
 | Stable32 cross-validation | ✅ 86 assertions vs `reference/validation/stable32_data_full.csv` |
-| Multi-noise MTOTDEV validation | ✅ WPM / WHFM / RWFM kernel + pipeline |
+| Multi-noise MTOTDEV validation | ✅ All 5 SP1065 noise types via [`synth.jl`](lib/SigmaTauStability/src/noise/synth.jl) |
+| ADEV/MDEV/HDEV/MHDEV across α∈{-2..2} | ✅ Synthesized noise + legacy-kernel parity |
 | Noise-ID boundary at `NEFF_RELIABLE` | ✅ Tested at N_eff ∈ {29, 31} |
 | TOTDEV/HTOTDEV EDF for WPM/FLPM | ✅ ADEV/HDEV-style fallback covers α=2,1 |
 

@@ -1,7 +1,8 @@
 using Test
+using FFTW                                  # AbstractFFTs backend for noise synth
 using SigmaTauBase
 using SigmaTauStability
-using SigmaTauStability: NEFF_RELIABLE
+using SigmaTauStability: NEFF_RELIABLE, _gen_powerlaw_phase
 
 include("legacy_kernels.jl")
 const LK = LegacyKernels
@@ -298,39 +299,69 @@ const LK = LegacyKernels
         end
     end
 
-    @testset "MTOTDEV across noise regimes" begin
-        # Verify _mtotdev_core (and the :mtot bias correction) behaves on the
-        # three power-law noise types whose synthesis is FFT-free: WPM, WHFM,
-        # RWFM. (FLPM/FLFM need a 1/f filter and are exercised indirectly via
-        # the mixed-noise fixture in the legacy parity testset above.)
+    @testset "MTOTDEV across all 5 power-law noise types" begin
+        # Verify kernel parity + end-to-end pipeline on every SP1065 noise
+        # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
+        # is via the f^(α/2) shaping helper (`_gen_powerlaw_phase`).
         using Random
-        Random.seed!(20260507)
         N    = 1024
         tau0 = 1.0
         ms   = [1, 2, 4, 8, 16]
         rt   = 1e-12
 
-        noise_fixtures = (
-            WPM  = randn(N) .* 1e-9,
-            WHFM = cumsum(randn(N) .* 1e-9),
-            RWFM = cumsum(cumsum(randn(N) .* 1e-12)),
-        )
+        # Match the (α, label) ordering used elsewhere in the package.
+        cases = [
+            (2.0,  :WPM),
+            (1.0,  :FLPM),
+            (0.0,  :WHFM),
+            (-1.0, :FLFM),
+            (-2.0, :RWFM),
+        ]
 
-        for (label, x) in pairs(noise_fixtures)
+        for (alpha, label) in cases
+            x = _gen_powerlaw_phase(alpha, N; tau0=tau0,
+                                     rng=Random.MersenneTwister(20260507))
             for m in ms
                 ref = sqrt(LK.mtotdev_var(x, m, tau0))
                 got = SigmaTauStability._mtotdev_core(x, [m], tau0)[1]
                 @test got ≈ ref atol=1e-25 rtol=rt
             end
 
-            # End-to-end pipeline (bias correction + CI bounds) should produce
-            # finite, ordered outputs on all three noise types.
+            # End-to-end pipeline (bias correction + CI bounds) — finite,
+            # ordered outputs on every noise type.
             res = mtotdev(PhaseData(x, tau0), ms)
             @test res.deviation_type == :mtotdev
             @test all(isfinite, res.dev)
             @test all(.>(0.0), res.dev)
-            @test all(.<=(0.0), res.ci_lower .- res.dev)   # lower ≤ dev
-            @test all(.>=(0.0), res.ci_upper .- res.dev)   # upper ≥ dev
+            @test all(.<=(0.0), res.ci_lower .- res.dev)
+            @test all(.>=(0.0), res.ci_upper .- res.dev)
+        end
+    end
+
+    @testset "ADEV/HDEV across all 5 power-law noise types" begin
+        # Bonus: kernel parity for the more common ADEV/HDEV across all 5
+        # noise types, locking in that the synthesizer + kernels survive the
+        # full SP1065 alpha range.
+        using Random
+        N    = 1024
+        tau0 = 1.0
+        ms   = [1, 2, 4, 8, 16]
+        rt   = 1e-12
+
+        for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
+            x    = _gen_powerlaw_phase(alpha, N; tau0=tau0,
+                                       rng=Random.MersenneTwister(123))
+            x_cs = pushfirst!(cumsum(x), 0.0)
+            for m in ms
+                @test SigmaTauStability._adev_core(x, [m], tau0)[1]  ≈
+                      sqrt(LK.adev_var(x, m, tau0))                 atol=1e-25 rtol=rt
+                @test SigmaTauStability._mdev_core(x, [m], tau0)[1]  ≈
+                      sqrt(LK.mdev_var(x, m, tau0, x_cs))            atol=1e-25 rtol=rt
+                @test SigmaTauStability._hdev_core(x, [m], tau0)[1]  ≈
+                      sqrt(LK.hdev_var(x, m, tau0))                  atol=1e-25 rtol=rt
+                @test SigmaTauStability._mhdev_core(x, [m], tau0)[1] ≈
+                      sqrt(LK.mhdev_var(x, m, tau0, x_cs))           atol=1e-25 rtol=rt
+            end
         end
     end
 

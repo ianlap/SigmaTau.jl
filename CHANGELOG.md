@@ -16,6 +16,19 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Power-law phase-noise synthesizer in `SigmaTauStability` at
+  `src/noise/synth.jl`. `_gen_powerlaw_phase(α, N; tau0, rng)` generates an
+  N-sample phase residual whose fractional-frequency PSD ∝ `f^α` via
+  `f^(α/2)` shaping of white Gaussian noise (DC zeroed, integrated to phase).
+  Non-exported helper. Requires an `AbstractFFTs` backend (e.g. `using
+  FFTW`) loaded by the caller; `AbstractFFTs` is now a hard dep, `FFTW`
+  is in test extras.
+- MTOTDEV multi-noise validation extended from 3 → 5 power-law types
+  (added FLPM and FLFM via the new synthesizer). New
+  "ADEV/HDEV across all 5 power-law noise types" testset extends
+  `_adev_core` / `_mdev_core` / `_hdev_core` / `_mhdev_core` kernel parity
+  to the same alpha range. 120 new assertions; full Stability test count
+  is now `339/339` passing.
 - Stable32 cross-validation testset against the
   `reference/validation/stable32gen.DAT` fixture (8192 phase samples) and
   Stable32's published outputs (`stable32_data_full.csv`). Verifies the new

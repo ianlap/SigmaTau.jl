@@ -20,10 +20,6 @@ numerical reference is locked in.
 
 ## 🟡 High (correctness / completeness)
 
-- [ ] **FFT-based FLPM/FLFM noise synthesis** — extend the multi-noise
-  validation testset (`MTOTDEV across noise regimes`) to cover the two
-  power-law types that need a `1/f` filter. Reference generator lives in
-  `legacy/julia/src/noise_gen.jl`.
 - [ ] **PID steering port** — legacy `kalman_filter` includes a PID
   controller around the predict/update loop; the new `predict!`/`update!`
   is steering-free. Needed before any clock-steering examples can land.
@@ -69,6 +65,10 @@ numerical reference is locked in.
 See [CHANGELOG.md](CHANGELOG.md) for the full list. Headlines from this
 session:
 
+- Power-law phase-noise synthesizer (`_gen_powerlaw_phase`, AbstractFFTs-based);
+  MTOTDEV multi-noise validation extended from 3 to all 5 SP1065 noise types
+  (WPM, FLPM, WHFM, FLFM, RWFM); ADEV/MDEV/HDEV/MHDEV kernel-parity
+  cross-checked across the same alpha range
 - Stable32 cross-validation (85 row checks against the
   `reference/validation/stable32gen.DAT` fixture; tight rtol on
   ADEV/MDEV/HDEV/MHDEV/TDEV, documented looser rtol on TOTDEV/HTOTDEV/MTOTDEV
