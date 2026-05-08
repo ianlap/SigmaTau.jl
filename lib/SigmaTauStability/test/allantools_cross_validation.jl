@@ -39,12 +39,18 @@
         # Per-kernel rtol. ADEV/MDEV/HDEV/TDEV agree tightly between
         # SigmaTau and allantools (same kernel definition, same
         # boundary handling). TOTDEV / HTOTDEV / MTOTDEV agree less
-        # tightly — different boundary-extension conventions. The
-        # tolerances mirror the Stable32 cross-validation testset
-        # above, since the policy floor is the same (SigmaTau inherits
-        # the legacy MATLAB-era boundary reflection; allantools and
-        # Stable32 use their own conventions).
-        tight = 1e-4
+        # tightly — different boundary-extension conventions.
+        #
+        # `tight = 1e-11` (was 1e-4): the regen script now writes the
+        # CSV at %.17e (round-trip-exact Float64) instead of %.6e
+        # (~7 sig figs), so the fixture itself preserves machine
+        # precision. Three-way verification on macOS x86_64 (2026-05-08)
+        # shows ours/legacy/allantools agree to ≤ 8.5e-14 worst case
+        # on this fixture, so 1e-11 is comfortable headroom for the
+        # ~10,000-ULP cross-platform LLVM codegen drift we see on
+        # Linux x86_64. TOTDEV/HTOTDEV/MTOTDEV stay at their original
+        # boundary-policy floors below.
+        tight = 1e-11
 
         n_checked = Dict{String,Int}()
         n_skipped = 0
