@@ -17,7 +17,7 @@ makedocs(
     format   = Documenter.HTML(
         prettyurls = get(ENV, "CI", "false") == "true",
         canonical  = "https://ianlap.github.io/SigmaTau.jl",
-        mathengine = Documenter.KaTeX(),
+        mathengine = Documenter.MathJax3(),
     ),
     plugins = [bib],
     pages = [
