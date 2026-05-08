@@ -162,25 +162,36 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
 end
 
 """
-    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
 
 Computes the Hadamard Total Deviation (HTOTDEV).
+
+`detrend` selects the boundary-handling recipe (see `_totdev_core`). For HTOTDEV,
+`:legacy` is an alias for `:greenhall`. The recipe operates on the frequency
+series `y = diff(x) / tau0`.
 """
-function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
+    if detrend === :greenhall || detrend === :legacy
+        return _htotdev_greenhall(x, m_values, tau0)
+    end
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+end
+
+function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
+
     y = Vector{Float64}(undef, N-1)
     @inbounds @simd for i in 1:N-1
         y[i] = (x[i+1] - x[i]) / tau0
     end
     Ny = length(y)
-    
+
     max_m = isempty(m_values) ? 0 : maximum(m_values)
     max_seg = 3 * max_m
     ext = Vector{Float64}(undef, 3 * max_seg)
     cs = Vector{Float64}(undef, 3 * max_seg + 1)
-    
+
     for (k, m) in enumerate(m_values)
         if m == 1
             L = N - 3
@@ -196,49 +207,49 @@ function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             devs[k] = sqrt(sum_sq / (6.0 * L * tau0^2))
             continue
         end
-        
+
         n_iter = Ny - 3m + 1
         if n_iter < 1
             devs[k] = NaN
             continue
         end
-        
+
         seg_len = 3m
         dev_sum = 0.0
-        
+
         for i in 0:(n_iter - 1)
             hi = floor(Int, seg_len / 2)
             lo_start = ceil(Int, seg_len / 2) + 1
-            
+
             s1 = 0.0
             @inbounds @simd for j in 1:hi
                 s1 += y[i+j]
             end
             m1 = s1 / hi
-            
+
             s2 = 0.0
             @inbounds @simd for j in lo_start:seg_len
                 s2 += y[i+j]
             end
             m2 = s2 / (seg_len - lo_start + 1)
-            
+
             slope = isodd(seg_len) ? (m2 - m1) / (0.5*(seg_len - 1) + 1.0) : (m2 - m1) / (0.5*seg_len)
             mid = floor(seg_len / 2)
-            
+
             @inbounds for j in 1:seg_len
                 val = y[i+j] - slope * (j - 1 - mid)
                 rev_val = y[i + seg_len - j + 1] - slope * (seg_len - j - mid)
-                
+
                 ext[j] = rev_val
                 ext[seg_len + j] = val
                 ext[2seg_len + j] = rev_val
             end
-            
+
             cs[1] = 0.0
             @inbounds for j in 1:3seg_len
                 cs[j+1] = cs[j] + ext[j]
             end
-            
+
             sq = 0.0
             @inbounds @simd for j in 0:(6m - 1)
                 h1 = (cs[j+m+1]  - cs[j+1])
@@ -248,10 +259,10 @@ function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             end
             dev_sum += sq / (6.0 * m)
         end
-        
+
         devs[k] = sqrt(dev_sum / (6.0 * n_iter))
     end
-    
+
     return devs
 end
 
