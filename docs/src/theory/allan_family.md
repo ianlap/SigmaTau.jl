@@ -51,14 +51,31 @@ mdev(PhaseData(x, τ₀), τs)
 
 ## TDEV — time deviation
 
-A scaled MDEV (SP1065 Eq. 17). TDEV measures time-error stability, so
-its units are seconds (it is a `\sigma_x` quantity, not `\sigma_y`):
+Time deviation. TDEV measures time-error stability, so its units are
+seconds (it is a `\sigma_x` quantity, not `\sigma_y`). SP1065 Eq. 17
+defines it as a scaled MDEV:
 
 ```math
 \sigma_x^2(\tau) \;=\; \mathrm{TVAR}(\tau) \;=\; \frac{\tau^2}{3}\,\mathrm{MVAR}(\tau).
 ```
 
 `tdev(...)` wraps `mdev(...)` and applies the `\tau / \sqrt{3}` scaling.
+The factor of `\sqrt{3}` comes from the integral of the second-difference
+sampling function squared against the fractional-frequency-to-time-error
+kernel.
+
+**Use case.** TDEV is the standard tool for characterizing the time
+error of a clock or a time-distribution system — telecommunications
+synchronization networks (PTP / SyncE / Recommendation G.810), GNSS
+time transfer, atomic-clock comparison links, and any infrastructure
+where the operative question is "how badly will a downstream
+consumer's clock drift away from the reference over τ seconds?"
+SP1065 §5 [@cite RileyHowe2008] frames it as the way to characterize
+"the time error of a time source (clock) or distribution system." For
+records dominated by white PM noise, TVAR reduces to the standard
+variance of the time deviations themselves; for the other power-law
+noises it remains a convergent estimator and inherits MDEV's WPM/FPM
+disambiguation.
 
 ## HDEV — overlapping Hadamard deviation
 
@@ -80,8 +97,26 @@ hdev(PhaseData(x, τ₀), τs)
 
 ## MHDEV — modified Hadamard deviation
 
-Phase-averaged third difference; same relation to HDEV that MDEV has
-to ADEV.
+A phase-averaged third difference. Combining the SP1065 form with the
+prefix-sum / third-difference equivalence from Greenhall 1997
+[@cite Greenhall1997]:
+
+```math
+\mathrm{MHVAR}(\tau) \;=\; \frac{1}{6\,m^4 \tau_0^2 \, N_e}
+\sum_{j=1}^{N_e} \biggl[\sum_{k=0}^{m-1}
+\bigl(x_{j+k+3m} - 3\,x_{j+k+2m} + 3\,x_{j+k+m} - x_{j+k}\bigr)\biggr]^2,
+\qquad N_e = N - 4m + 1.
+```
+
+The relationship between MHDEV and HDEV mirrors the MDEV / ADEV
+relationship: phase-averaging the inner third-difference window splits
+the WPM/FPM degeneracy (slope `μ_dev` is `−3/2` under WPM, `−1` under
+FPM), while the third-difference kernel preserves HDEV's drift
+insensitivity. MHDEV is the right choice when a record contains
+linear frequency drift *and* phase noise that ADEV / MDEV cannot
+disambiguate. SigmaTau's kernel uses the prefix-sum form for
+performance; the equivalence to the textbook expression above is in
+`legdocs/equations/hadamard.md`.
 
 ```julia
 mhdev(PhaseData(x, τ₀), τs)
@@ -103,8 +138,34 @@ seconds (it is a `\sigma_x` quantity). SigmaTau implements it as
 htdev(PhaseData(x, τ₀), τs)
 ```
 
-The `√(10/3)` factor mirrors the `√3` factor in TDEV and follows from
-the third-difference Hadamard kernel variance.
+The `\sqrt{10/3}` factor mirrors the `\sqrt{3}` factor in TDEV: each
+arises from the integral of the kernel's sampling function squared
+against the frequency-to-time-error map. The second-difference (Allan)
+kernel produces `1/3`; the third-difference (Hadamard) kernel produces
+`3/10`.
+
+**Use case.** HTDEV inherits TDEV's purpose — characterizing the time
+error of a clock or time-distribution system — and adds two
+properties TDEV cannot offer:
+
+- **Linear frequency-drift insensitivity.** The third-difference
+  kernel annihilates terms linear in `t`, so a record from a Cesium,
+  Rubidium, or H-maser clock with significant drift can be analyzed
+  without first removing the drift. SP1065 §5 makes the equivalent
+  point for HDEV vs ADEV: "the Hadamard deviation may be used to
+  reject linear frequency drift when a stability analysis is performed"
+  [@cite RileyHowe2008]. HTDEV carries that benefit into the
+  time-domain.
+- **Wider noise-type convergence.** The Hadamard family converges
+  over `α ∈ {−4, −3}` (frequency walk-walk and random-run FM) where
+  the Allan family diverges [@cite Greenhall1997]. HTDEV is the
+  time-domain extension of that range.
+
+For records dominated by white-PM noise without drift, TDEV is fine
+and slightly more efficient (tighter CI per τ on shorter records).
+For records with drift, divergent low-frequency noise, or both, HTDEV
+gives a numerically valid time-stability summary where TDEV would be
+contaminated.
 
 **Provenance.** The construction is original to this package; the
 standard time-and-frequency references — SP1065 [@cite RileyHowe2008],
