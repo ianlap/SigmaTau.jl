@@ -267,14 +267,25 @@ function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
 end
 
 """
-    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:linear) → Vector{Float64}
 
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
+
+`detrend` selects the boundary-handling recipe (see `_totdev_core`). MHTOTDEV
+is novel to SigmaTau; `:legacy` aliases to `:linear` (current implementation).
+The default is `:linear` in this phase; switches to `:greenhall` in Phase 4.
 """
-function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:linear)
+    if detrend === :linear || detrend === :legacy
+        return _mhtotdev_linear(x, m_values, tau0)
+    end
+    throw(ArgumentError("unknown detrend recipe: $detrend; valid: :howe, :greenhall, :linear, :legacy"))
+end
+
+function _mhtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
+
     max_m = isempty(m_values) ? 0 : maximum(m_values)
     max_Lp = 3 * max_m + 1
     ext_len = 3 * max_Lp
@@ -282,7 +293,7 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
     ext = Vector{Float64}(undef, ext_len)
     d3_vec = Vector{Float64}(undef, L3_max)
     S = Vector{Float64}(undef, L3_max + 1)
-    
+
     for (k, m) in enumerate(m_values)
         if m < 1
             devs[k] = NaN
@@ -293,17 +304,17 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
             devs[k] = NaN
             continue
         end
-        
+
         Lp = 3m + 1
         L3 = 3Lp - 3m
-        
+
         total_sum = 0.0
         for n in 1:nsubs
             Lp_float = Float64(Lp)
             sum_i = (Lp_float * (Lp_float + 1.0)) / 2.0
             sum_i2 = (Lp_float * (Lp_float + 1.0) * (2.0*Lp_float + 1.0)) / 6.0
             delta = Lp_float * sum_i2 - sum_i^2
-            
+
             sum_x = 0.0
             sum_ix = 0.0
             @inbounds @simd for j in 1:Lp
@@ -311,28 +322,28 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
                 sum_x += val
                 sum_ix += j * val
             end
-            
+
             a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
             b = (Lp_float * sum_ix - sum_x * sum_i) / delta
-            
+
             @inbounds for j in 1:Lp
                 val = x[n-1+j] - (a + b * j)
                 rev_val = x[n-1 + Lp - j + 1] - (a + b * (Lp - j + 1))
-                
+
                 ext[j] = rev_val
                 ext[Lp + j] = val
                 ext[2Lp + j] = rev_val
             end
-            
+
             @inbounds for j in 1:L3
                 d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
             end
-            
+
             S[1] = 0.0
             @inbounds for j in 1:L3
                 S[j+1] = S[j] + d3_vec[j]
             end
-            
+
             n_avg = L3 + 1 - m
             if n_avg > 0
                 block_var = 0.0
@@ -343,12 +354,12 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
             else
                 block_var = 0.0
             end
-            
+
             total_sum += block_var
         end
-        
+
         devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
     end
-    
+
     return devs
 end
