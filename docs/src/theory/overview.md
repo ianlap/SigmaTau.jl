@@ -67,7 +67,10 @@ HDEV adds drift insensitivity by going to a third difference.
 - `N`: phase sample count; `M = N − 1`: frequency sample count
 - `α`: power-law exponent of `S_y(f)`
 - `μ`: corresponding slope of `σ²_y(τ)` on log-log axes
-- `σ²_y(τ)`: variance; `σ_y(τ)`: deviation
+- `σ²_y(τ)`: fractional-frequency variance; `σ_y(τ)`: fractional-frequency
+  deviation. Used by ADEV / MDEV / HDEV / MHDEV.
+- `σ²_x(τ)`: time variance; `σ_x(τ)`: time deviation, units of seconds.
+  Used by TDEV and HTDEV.
 
 ## Slope demonstration
 

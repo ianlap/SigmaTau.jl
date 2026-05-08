@@ -51,13 +51,14 @@ mdev(PhaseData(x, τ₀), τs)
 
 ## TDEV — time deviation
 
-A scaled MDEV (SP1065 Eq. 17):
+A scaled MDEV (SP1065 Eq. 17). TDEV measures time-error stability, so
+its units are seconds (it is a `\sigma_x` quantity, not `\sigma_y`):
 
 ```math
-\mathrm{TVAR}(\tau) \;=\; \frac{\tau^2}{3}\,\mathrm{MVAR}(\tau).
+\sigma_x^2(\tau) \;=\; \mathrm{TVAR}(\tau) \;=\; \frac{\tau^2}{3}\,\mathrm{MVAR}(\tau).
 ```
 
-`tdev(...)` wraps `mdev(...)` and applies the scaling.
+`tdev(...)` wraps `mdev(...)` and applies the `\tau / \sqrt{3}` scaling.
 
 ## HDEV — overlapping Hadamard deviation
 
@@ -90,11 +91,12 @@ mhdev(PhaseData(x, τ₀), τs)
 
 HTDEV is to MHDEV what TDEV is to MDEV: a τ-scaled time-domain
 deviation built on the third-difference (Hadamard) kernel instead of
-the second-difference (Allan) kernel. SigmaTau implements it as
+the second-difference (Allan) kernel. Like TDEV, HTDEV has units of
+seconds (it is a `\sigma_x` quantity). SigmaTau implements it as
 `mhdev` followed by the scaling `τ / √(10/3)`:
 
 ```math
-\sigma_{HT,y}(\tau) \;=\; \frac{\tau}{\sqrt{10/3}} \, \sigma_{MH,y}(\tau).
+\sigma_{x,\mathrm{HT}}(\tau) \;=\; \frac{\tau}{\sqrt{10/3}} \, \sigma_{y,\mathrm{MH}}(\tau).
 ```
 
 ```julia
