@@ -43,23 +43,35 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confi
 end
 
 """
-    ldev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    htdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
-Computes the Hadamard Time Deviation (LDEV) for the given PhaseData.
+Computes the Hadamard time deviation (HTDEV) for the given `PhaseData`
+— a third-difference time deviation, related to MHDEV by
+`σ_x,HT(τ) = τ / √(10/3) · σ_y,MH(τ)`. HTDEV has units of seconds
+(it is a σ_x quantity); HTDEV is to MHDEV what TDEV is to MDEV. The
+construction is original to this package; SP1065, IEEE 1139-2022,
+and NBS-TN-1337 do not define it.
 """
-function ldev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function htdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mhdev(data, m_values; calc_ci=calc_ci, confidence=confidence)
     factor = res.tau ./ sqrt(10.0 / 3.0)
 
     if !calc_ci
-        return StabilityResult(:ldev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:htdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
     end
 
-    return StabilityResult(:ldev, res.tau, res.dev .* factor, res.noise_type,
+    return StabilityResult(:htdev, res.tau, res.dev .* factor, res.noise_type,
                            res.ci_lower .* factor, res.ci_upper .* factor, res.edf)
 end
+
+"""
+    ldev(args...; kwargs...)
+
+Deprecated alias for [`htdev`](@ref). Will be removed in a future release.
+"""
+ldev(args...; kwargs...) = htdev(args...; kwargs...)
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
 hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = hdev(_freq_to_phase(data),  m_values; kwargs...)
 mhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhdev(_freq_to_phase(data), m_values; kwargs...)
-ldev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = ldev(_freq_to_phase(data),  m_values; kwargs...)
+htdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = htdev(_freq_to_phase(data), m_values; kwargs...)

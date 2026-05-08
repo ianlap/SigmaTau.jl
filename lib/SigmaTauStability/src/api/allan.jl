@@ -83,8 +83,9 @@ end
 
 Computes the Time Deviation (TDEV) for the given PhaseData.
 
-TDEV is defined as `τ · MDEV / √3`. Confidence-interval bounds inherit MDEV's
-χ²/Gaussian limits scaled by the same `τ/√3` factor.
+TDEV has units of seconds (it is a σ_x quantity, not σ_y), defined as
+`σ_x(τ) = (τ/√3) · σ_y,MDEV(τ)`. Confidence-interval bounds inherit
+MDEV's χ²/Gaussian limits scaled by the same `τ/√3` factor.
 """
 function tdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mdev(data, m_values; calc_ci=calc_ci, confidence=confidence)
