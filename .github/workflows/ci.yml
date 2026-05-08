@@ -21,7 +21,9 @@ jobs:
         julia-version: ['1.11']
         os: [ubuntu-latest, macos-latest]
         package:
-          - lib/SigmaTauBase
+          # SigmaTauBase is types-only and has no `test/runtests.jl`; it's
+          # exercised indirectly by Stability/Ensemble (both `[deps]` it) and
+          # by the umbrella `using SigmaTau` job below.
           - lib/SigmaTauStability
           - lib/SigmaTauEnsemble
     steps:
