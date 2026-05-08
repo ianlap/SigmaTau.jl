@@ -126,7 +126,8 @@ t = totdev(PhaseData(x, 1.0), τs; calc_ci=true)
 
 # CI half-width at the largest τ — TOTVAR should be tighter
 ci_half(r, i) = (r.ci_upper[i] - r.ci_lower[i]) / 2
-round.((ci_half(a, end), ci_half(t, end)); sigdigits=3)
+last_τ = length(τs)
+round.((ci_half(a, last_τ), ci_half(t, last_τ)); sigdigits=3)
 ```
 
 The TOTVAR half-width at the largest τ should be smaller than ADEV's
