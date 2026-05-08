@@ -10,10 +10,9 @@
 # backend; pulling in `using FFTW` at the call site supplies the methods.
 
 using AbstractFFTs
-using Random: Random, AbstractRNG, default_rng
 
 """
-    _gen_powerlaw_phase(alpha, N; tau0=1.0, rng=Random.default_rng()) → Vector{Float64}
+    _gen_powerlaw_phase(alpha, N; tau0=1.0) → Vector{Float64}
 
 Synthesize an N-sample phase residual vector whose fractional-frequency
 sequence has power spectral density ∝ `f^alpha`. Mapping:
@@ -26,15 +25,14 @@ sequence has power spectral density ∝ `f^alpha`. Mapping:
 | -1 | FLFM       | 1/f³           |
 | -2 | RWFM       | 1/f⁴           |
 
+For deterministic output, seed the global RNG (`Random.seed!`) before calling.
 The DC component is zeroed before the inverse transform so the output has
 zero mean. Calls into `AbstractFFTs.fft`/`ifft` — caller must have an FFT
 backend loaded (e.g. `using FFTW`).
 """
-function _gen_powerlaw_phase(alpha::Real, N::Int;
-                             tau0::Real = 1.0,
-                             rng::AbstractRNG = default_rng())
+function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0)
     # White Gaussian noise → fractional-frequency series shaped to f^alpha.
-    w = randn(rng, N)
+    w = randn(N)
     W = fft(w)
 
     # Symmetric FFT-bin frequency magnitude. Bin 0 (DC) gets a placeholder

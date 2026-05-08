@@ -118,14 +118,14 @@ their internal deps (`SigmaTauBase`).
 | `safe_sqrt_sq` + `clamp_covariance_diag` | same | ✅ | Reproduces MATLAB-era diagonal clamping when `legacy_compat=true` |
 | `UDFactorizedFilter`, `KuramotoOscillator` | same | 🔲 Stub | Reserved for lunar PNT / SWaP work |
 | `StaticArrays` dep | [Project.toml](lib/SigmaTauEnsemble/Project.toml) | ✅ Declared |
-| PID steering port | — | ❌ Deferred |
+| `PIDController`, `step!`, `steer_to_correction` | same | ✅ Ported; `predict!(…; steering=…)` integrates the correction |
 | `ClockNoiseParams` | — | ✅ Inlined as `q0..q3` fields on clock structs (intentional design choice) |
 
 #### Tests
 
 | Test | Status | Notes |
 |------|--------|-------|
-| [runtests.jl](lib/SigmaTauEnsemble/test/runtests.jl) | ✅ 15/15 pass | Includes 4 Φ/Q parity, 4 legacy_compat parity, 4 AD-clean parity, 3 TwoStateClock smoke |
+| [runtests.jl](lib/SigmaTauEnsemble/test/runtests.jl) | ✅ 21/21 pass | Φ/Q parity, legacy_compat Kalman parity, AD-clean parity, TwoStateClock smoke, PID step + steering-corrected predict |
 
 ### 2.4 SigmaTau Umbrella
 

@@ -319,8 +319,8 @@ const LK = LegacyKernels
         ]
 
         for (alpha, label) in cases
-            x = _gen_powerlaw_phase(alpha, N; tau0=tau0,
-                                     rng=Random.MersenneTwister(20260507))
+            Random.seed!(20260507)
+            x = _gen_powerlaw_phase(alpha, N; tau0=tau0)
             for m in ms
                 ref = sqrt(LK.mtotdev_var(x, m, tau0))
                 got = SigmaTauStability._mtotdev_core(x, [m], tau0)[1]
@@ -349,8 +349,8 @@ const LK = LegacyKernels
         rt   = 1e-12
 
         for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
-            x    = _gen_powerlaw_phase(alpha, N; tau0=tau0,
-                                       rng=Random.MersenneTwister(123))
+            Random.seed!(123)
+            x    = _gen_powerlaw_phase(alpha, N; tau0=tau0)
             x_cs = pushfirst!(cumsum(x), 0.0)
             for m in ms
                 @test SigmaTauStability._adev_core(x, [m], tau0)[1]  ≈

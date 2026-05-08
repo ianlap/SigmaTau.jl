@@ -20,9 +20,7 @@ numerical reference is locked in.
 
 ## 🟡 High (correctness / completeness)
 
-- [ ] **PID steering port** — legacy `kalman_filter` includes a PID
-  controller around the predict/update loop; the new `predict!`/`update!`
-  is steering-free. Needed before any clock-steering examples can land.
+_None._
 
 ---
 
@@ -46,8 +44,8 @@ numerical reference is locked in.
 - [ ] **`Documenter.jl` site** under `docs/` — auto-generate API reference
   from docstrings, port the equation pages from the legacy
   `legacy/docs/equations/` tree, publish to GitHub Pages.
-- [ ] **More `examples/`** — currently only `quickstart.jl`. Add:
-  - Kalman-only ensemble walkthrough (no stability-deviation overlap)
+- [ ] **More `examples/`** — currently `quickstart.jl` and
+  `clock_steering.jl`. Add:
   - `FrequencyData` ↔ `PhaseData` round-trip demo
   - Multi-clock ensemble scenario (once a multi-clock model lands)
 - [ ] **Compat bounds** in subpackage `Project.toml`s — currently only
@@ -60,11 +58,25 @@ numerical reference is locked in.
 
 ---
 
+## 🟢 Housekeeping
+
+- [ ] **Agent-context briefs** (`CLAUDE.md`, `AGENTS.md`) are gitignored
+  while in active use. When the package matures and conventions stabilise,
+  decide whether to delete them or to land a sanitised version (without the
+  authorship rules) under `docs/contributing/`.
+
+---
+
 ## ✅ Recently completed
 
 See [CHANGELOG.md](CHANGELOG.md) for the full list. Headlines from this
 session:
 
+- PID steering controller (`PIDController`, `step!`, `steer_to_correction`)
+  ported into `SigmaTauEnsemble`; `predict!` gained an optional `steering`
+  kwarg that adds a correction vector to the propagated state. Verified
+  end-to-end on a drifting-clock fixture (`examples/clock_steering.jl`,
+  ~600× phase-residual reduction).
 - Power-law phase-noise synthesizer (`_gen_powerlaw_phase`, AbstractFFTs-based);
   MTOTDEV multi-noise validation extended from 3 to all 5 SP1065 noise types
   (WPM, FLPM, WHFM, FLFM, RWFM); ADEV/MDEV/HDEV/MHDEV kernel-parity

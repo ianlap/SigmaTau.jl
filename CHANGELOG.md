@@ -8,6 +8,18 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- `Random` is no longer a hard dep of `SigmaTauStability`. The
+  `_gen_powerlaw_phase` helper now uses the global RNG (callers seed via
+  `Random.seed!`) so the convention "Random in [extras] for both
+  subpackages" is preserved. `Random` stays in `[extras]` and the test
+  target.
+- Test runner under `lib/SigmaTauEnsemble/test/runtests.jl` now wraps the
+  legacy `clock_model.jl` / `filter.jl` includes in a `LegacyKF` module
+  and selectively imports the symbols it needs. This stops the legacy
+  `step!`/`PIDController` from shadowing the new ones at test scope.
+- `.gitignore` now excludes the `CLAUDE.md` and `AGENTS.md` agent-context
+  briefs. They are local-only working documents and should not appear on
+  the public repo.
 - **Project workflow**: every shipped change must remove its TODO entry and
   add a CHANGELOG line under `## [Unreleased]` in the same commit. TODO.md
   rewritten to drop the now-stale "Author README", "Maintain CHANGELOG"
@@ -16,6 +28,14 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- PID steering controller in `SigmaTauEnsemble`. New `PIDController`
+  struct (g_p / g_i / g_d gains + integral state) plus `step!(pid, x)` and
+  `steer_to_correction(steer, ns, dt)`. `predict!(est, model, dt;
+  steering=…)` now accepts an optional steering vector that's added to the
+  propagated state mean — matches the legacy `filter_step!` semantics where
+  a PID's last steer is folded in after Φ propagation.
+- `examples/clock_steering.jl` — PID + Kalman walkthrough on a drifting
+  clock; demonstrates ~600× residual-phase reduction vs the unsteered case.
 - Power-law phase-noise synthesizer in `SigmaTauStability` at
   `src/noise/synth.jl`. `_gen_powerlaw_phase(α, N; tau0, rng)` generates an
   N-sample phase residual whose fractional-frequency PSD ∝ `f^α` via
