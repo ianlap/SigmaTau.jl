@@ -37,26 +37,28 @@ Computes the Modified Allan Deviation (MDEV) using prefix sums for O(N) performa
 function _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    
+
     # Precompute cumulative sum
     x_cs = cumsum(pushfirst!(copy(x), 0.0))
-    
+
     for (k, m) in enumerate(m_values)
         Ne = N - 3m + 1
         if Ne <= 0
             devs[k] = NaN
             continue
         end
-        
-        sum_sq = 0.0
-        @inbounds @simd for i in 1:Ne
+
+        # Pairwise sum (Julia's default for `sum`) is bit-stable across
+        # platforms; the previous `@simd` accumulator allowed CPU-dependent
+        # reordering that drifted ~1 ULP from the legacy reference on Linux.
+        sum_sq = @inbounds sum(1:Ne) do i
             d = x_cs[i+3m] - 3x_cs[i+2m] + 3x_cs[i+m] - x_cs[i]
-            sum_sq += d^2
+            d * d
         end
-        
+
         devs[k] = sqrt(sum_sq / (2.0 * Ne * Float64(m)^4 * tau0^2))
     end
-    
+
     return devs
 end
 

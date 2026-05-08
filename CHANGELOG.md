@@ -6,6 +6,40 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- CI: `lib/SigmaTauBase` test job no longer self-`Pkg.develop`s. The
+  workflow's `Pkg.develop(path="lib/SigmaTauBase")` line ran for every
+  matrix entry, but for `lib/SigmaTauBase` itself this attempts to
+  develop the active project — Pkg refuses with "same name or UUID as
+  the active project". The line was redundant for the other two
+  packages anyway (their `Project.toml` declares
+  `[sources.SigmaTauBase] path = "../SigmaTauBase"`), so it's dropped
+  entirely.
+- CI: umbrella `using SigmaTau` job now uses `Pkg.instantiate()`
+  instead of `Pkg.resolve()`. With no checked-in `Manifest.toml`,
+  `resolve` in workspace mode failed to register the General
+  registry on a fresh CI runner ("expected package Reexport
+  [189a3867] to be registered"). `instantiate` triggers registry
+  init.
+- CI: `lib/SigmaTauEnsemble` test runner now guards the
+  `legacy/julia/src` includes behind an `isfile` check. The legacy
+  reference codebase is gitignored under `legacy/`, so CI checkouts
+  don't have it; the legacy-parity testsets (`Phi/Q matrix parity`,
+  `StandardKalmanFilter Parity (legacy_compat)`, `AD-clean`) are
+  conditionally skipped when the directory is absent and a
+  `@info "legacy/julia/src not present, skipping legacy-KF parity testsets"`
+  message replaces the previous load-time `SystemError`. The
+  PID / steering / TwoStateClock testsets still run unconditionally.
+- `_mdev_core` and `_mhdev_core` summation switched from
+  `@simd for i; sum_sq += d^2; end` to a closure-form
+  `sum(do…end, 1:Ne)`. The `@simd` reduction permitted CPU-dependent
+  reordering that drifted ~1 ULP from the legacy `mdev_var` /
+  `mhdev_var` reference on Linux x86_64 (macOS happened to agree
+  by coincidence), tripping the `rtol=1e-12` parity test. Pairwise
+  summation (Julia's `sum` default) is bit-stable across platforms
+  and keeps the rtol=1e-12 contract honest.
+
 ### Added
 
 - `detrend::Symbol` kwarg on the four total-family kernels and API
