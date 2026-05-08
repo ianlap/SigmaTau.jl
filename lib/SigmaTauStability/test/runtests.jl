@@ -341,6 +341,31 @@ const LK = LegacyKernels
         end
     end
 
+    @testset "TOTDEV :linear ≡ :legacy" begin
+        # For TOTDEV, :linear (global LS detrend + endpoint mean-flip) is
+        # numerically identical to :legacy by construction. Lock the alias.
+        using Random
+        Random.seed!(20260508)
+        N    = 1024
+        tau0 = 1.0
+        ms   = [1, 2, 4, 8, 16]
+        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+
+        devs_linear = SigmaTauStability._totdev_core(x, ms, tau0; detrend=:linear)
+        devs_legacy = SigmaTauStability._totdev_core(x, ms, tau0; detrend=:legacy)
+
+        @test length(devs_linear) == length(ms)
+        @test all(isfinite, devs_linear)
+        @test all(>(0), devs_linear)
+        for k in eachindex(ms)
+            @test devs_linear[k] ≈ devs_legacy[k] atol=0.0 rtol=1e-15
+        end
+
+        # Unsupported recipes (:greenhall on TOTDEV) raise ArgumentError.
+        @test_throws ArgumentError SigmaTauStability._totdev_core(x, [1], tau0; detrend=:greenhall)
+        @test_throws ArgumentError SigmaTauStability._totdev_core(x, [1], tau0; detrend=:nonsense)
+    end
+
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
         # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
