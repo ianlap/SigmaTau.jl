@@ -87,12 +87,15 @@ numerical reference is locked in.
 
 ## 🟡 Medium (new metrics, estimators, models)
 
-- [ ] **MTIE (Maximum Time Interval Error).** ITU-T G.810/G.823 metric;
-  sliding-window peak-to-peak of the phase record. The only stability
-  metric in `AllanDeviations.jl` that SigmaTau lacks. Add `_mtie_core`
-  in `src/stab/core/mtie.jl` and `mtie(::PhaseData)` in
-  `src/stab/api/mtie.jl`; cross-check against `AllanDeviations.mtie`
-  on the shared `reference/validation/` fixtures.
+- [ ] **MTIE O(N log m) optimisation.** Initial v1 ships an O(N·m)
+  sliding-window kernel (`src/stab/core/mtie.jl`); long records will
+  benefit from a monotonic-deque or sparse-table reformulation when
+  the bench warrants it. Functional output is unchanged.
+- [ ] **PDEV EDF / χ² confidence model.** Vernotte 2015 / 2020 derive
+  the parabolic-variance EDF in closed form for the five canonical
+  power-law noises; port the table into `_coeff_pdev` and wire CI
+  into the `pdev` API (currently returns empty `noise_type` / CI /
+  EDF vectors).
 - [ ] **Flicker-noise Markov approximation in the KF.** `TwoStateClock` /
   `ThreeStateClock` cover only integer-α processes (WPM, WFM, RWFM);
   flicker (FPM α=1, especially FFM α=−1) is the dominant regime for

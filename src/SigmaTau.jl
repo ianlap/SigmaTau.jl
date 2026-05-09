@@ -34,6 +34,8 @@ module Stab
     include("stab/core/allan.jl")
     include("stab/core/hadamard.jl")
     include("stab/core/total.jl")
+    include("stab/core/mtie.jl")
+    include("stab/core/pdev.jl")
 
     include("stab/noise/lag1.jl")
     include("stab/noise/synth.jl")
@@ -44,10 +46,13 @@ module Stab
     include("stab/api/allan.jl")
     include("stab/api/hadamard.jl")
     include("stab/api/total.jl")
+    include("stab/api/mtie.jl")
+    include("stab/api/pdev.jl")
 
     export _adev_core, _mdev_core, _tdev_core
     export _hdev_core, _mhdev_core
     export _totdev_core, _mtotdev_core, _htotdev_core, _mhtotdev_core
+    export _mtie_core, _pdev_core
 
     export identify_noise, calculate_edf, confidence_intervals, bias_correction
     export DEFAULT_CONFIDENCE
@@ -56,6 +61,7 @@ module Stab
     export hdev, mhdev, htdev
     export ldev   # deprecated alias for htdev — remove in a future release
     export totdev, mtotdev, htotdev, mhtotdev
+    export mtie, pdev
 end
 
 # ── Est: clock estimation ───────────────────────────────────────────────
