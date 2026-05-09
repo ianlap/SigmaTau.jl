@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "file": "6krb25apr.txt",
+    "N": 406763,
+    "tau0_s": 1.0000002337619662,
+    "n_m": 10,
+    "m_min": 1,
+    "m_max": 512,
+    "threads": 1,
+    "python_version": "3.14.4",
+    "allantools_version": "2024.06",
+    "mode": "one-shot",
+    "m_max_cap": 512
+  },
+  "results": [
+    {
+      "kernel": "adev",
+      "time_s": 0.008559431997127831,
+      "rss_delta_bytes": 2244608,
+      "implemented": true
+    },
+    {
+      "kernel": "mdev",
+      "time_s": 0.021127510932274163,
+      "rss_delta_bytes": 8192,
+      "implemented": true
+    },
+    {
+      "kernel": "tdev",
+      "time_s": 0.02100655995309353,
+      "rss_delta_bytes": 8192,
+      "implemented": true
+    },
+    {
+      "kernel": "hdev",
+      "time_s": 0.015127538936212659,
+      "rss_delta_bytes": 3256320,
+      "implemented": true
+    },
+    {
+      "kernel": "mhdev",
+      "time_s": null,
+      "rss_delta_bytes": null,
+      "implemented": false
+    },
+    {
+      "kernel": "ldev",
+      "time_s": null,
+      "rss_delta_bytes": null,
+      "implemented": false
+    },
+    {
+      "kernel": "totdev",
+      "time_s": 0.01589279097970575,
+      "rss_delta_bytes": 6508544,
+      "implemented": true
+    },
+    {
+      "kernel": "mtotdev",
+      "time_s": 1803.5610933980206,
+      "rss_delta_bytes": 126976,
+      "implemented": true
+    },
+    {
+      "kernel": "htotdev",
+      "time_s": 1927.9846174570266,
+      "rss_delta_bytes": 6381568,
+      "implemented": true
+    },
+    {
+      "kernel": "mhtotdev",
+      "time_s": null,
+      "rss_delta_bytes": null,
+      "implemented": false
+    }
+  ]
+}
