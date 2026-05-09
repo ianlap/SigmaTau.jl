@@ -8,7 +8,7 @@ fair against SigmaTau (BLAS=1) and Stable32 (single-threaded).
 Run from repo root:
 
     OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
-      python3 validation/bench/bench_allantools.py \\
+      python3 benchmarks/bench/bench_allantools.py \\
         reference/clock_data/6krb25apr.txt
 
 Optional `--kernels adev,mtotdev` to time a subset.

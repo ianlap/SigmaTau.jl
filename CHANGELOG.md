@@ -6,6 +6,26 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Repository housekeeping. `lib.bak/` (pre-restructure recovery
+  snapshot) and `rough_changelog/` (six superseded
+  implementation_plan/walkthrough drafts from May 7) deleted from the
+  working tree; both were already gitignored. The three internal
+  `docs/_pass4_apply_log.md`, `docs/_reconciliation_plan.md`, and
+  `docs/_restructure_plan.md` planning logs moved out of Documenter's
+  source root into `docs/superpowers/plans/`. The orphan
+  `docs/MatsakisPIDControllersPTTI20-0022 (1).pdf` moved into
+  `legdocs/papers/deviations/2020_matsakis_pid_controllers_ptti.pdf`
+  (gitignored). Top-level `validation/` renamed to `benchmarks/` via
+  `git mv` to disambiguate from `reference/validation/` (numerical
+  fixtures) and `docs/src/validation/` (doc pages); every internal
+  path reference inside the bench scripts and result reports updated
+  in lockstep. `scratch.jl` and `scratch.py` added to `.gitignore`
+  under a new "Scratchpad files" section. `.gitignore` updated to
+  drop the `lib.bak/` and `rough_changelog/` stanzas and to rename
+  `validation/plots/` → `benchmarks/plots/`.
+
 ### Changed (BREAKING)
 
 - Restructured from a three-subpackage workspace

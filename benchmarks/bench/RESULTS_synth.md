@@ -4,7 +4,7 @@ Run on remote workstation (12-core Linux, Julia 1.12.6 / Python 3.14.4, allantoo
 Repo at `a4a93e0` (post total-family perf work).
 
 **Design**: 30 realizations of N=25000 white phase noise (numpy `default_rng(seed=i)`,
-single-column .txt files in `validation/bench/synth/`). Identical data feeds both
+single-column .txt files in `benchmarks/bench/synth/`). Identical data feeds both
 libraries. m grid: 1, 2, 4, ..., 512 (10 octave-spaced values). Kernels called one-shot
 (single fn call passing all 10 taus, no allantools internals touched). Per-kernel
 warmup pass before the realization loop. `GC.gc()` before each Julia kernel call.
@@ -23,7 +23,7 @@ warmup pass before the realization loop. `GC.gc()` before each Julia kernel call
   htotdev   |        3.15e-2    2.3e-3    3.11e-2    2.82e-2    3.48e-2 |        114.250   2.19e-1   114.287  113.910   114.557   |     3632.0×
 ```
 
-(All numbers from the renderer output verbatim — see `validation/bench/per_realization.csv`
+(All numbers from the renderer output verbatim — see `benchmarks/bench/per_realization.csv`
 for the raw per-realization arrays suitable for histograms / violins / ECDFs.)
 
 ## Memory per kernel call (MiB)
@@ -68,41 +68,41 @@ RSS above the input array.
 
 ## Bench machinery (left on remote, not pushed)
 
-- `validation/bench/gen_synth.py` — deterministic realization generator (seed = realization index, 25k samples per file)
-- `validation/bench/synth/` — 30 single-column .txt files (15 MiB total)
-- `validation/bench/results_sigmatau_synth.json` — full per-realization SigmaTau data (per-kernel array of `{realization, time_s, bytes, gctime_s}`)
-- `validation/bench/results_allantools_synth.json` — full per-realization allantools data (per-kernel array of `{realization, time_s, rss_delta_bytes}`)
-- `validation/bench/per_realization.csv` — long-format CSV (kernel, library, realization, time_s, mem_bytes), 420 rows — load with pandas/matplotlib for histograms
-- `validation/bench/render_stats.py` — produces the table above
-- `validation/bench/bench_sigmatau.jl` — added `--synth <dir>` mode
-- `validation/bench/bench_allantools.py` — added `--synth <dir>` mode
-- `validation/bench/bench_*synth*.log` — raw run logs
+- `benchmarks/bench/gen_synth.py` — deterministic realization generator (seed = realization index, 25k samples per file)
+- `benchmarks/bench/synth/` — 30 single-column .txt files (15 MiB total)
+- `benchmarks/bench/results_sigmatau_synth.json` — full per-realization SigmaTau data (per-kernel array of `{realization, time_s, bytes, gctime_s}`)
+- `benchmarks/bench/results_allantools_synth.json` — full per-realization allantools data (per-kernel array of `{realization, time_s, rss_delta_bytes}`)
+- `benchmarks/bench/per_realization.csv` — long-format CSV (kernel, library, realization, time_s, mem_bytes), 420 rows — load with pandas/matplotlib for histograms
+- `benchmarks/bench/render_stats.py` — produces the table above
+- `benchmarks/bench/bench_sigmatau.jl` — added `--synth <dir>` mode
+- `benchmarks/bench/bench_allantools.py` — added `--synth <dir>` mode
+- `benchmarks/bench/bench_*synth*.log` — raw run logs
 
 ## Reproduce
 
 ```bash
 # 1. generate data (~5 s)
-.bench-venv/bin/python validation/bench/gen_synth.py --N 25000 --reals 30 \
-  --out-dir validation/bench/synth
+.bench-venv/bin/python benchmarks/bench/gen_synth.py --N 25000 --reals 30 \
+  --out-dir benchmarks/bench/synth
 
 # 2. SigmaTau bench (~10 s, 12 threads)
-julia --project=validation/bench -t auto \
-  validation/bench/bench_sigmatau.jl --synth validation/bench/synth \
-  validation/bench/results_sigmatau_synth.json 512
+julia --project=benchmarks/bench -t auto \
+  benchmarks/bench/bench_sigmatau.jl --synth benchmarks/bench/synth \
+  benchmarks/bench/results_sigmatau_synth.json 512
 
 # 3. allantools bench (~1h45m, single-thread)
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-  .bench-venv/bin/python validation/bench/bench_allantools.py \
-  --synth validation/bench/synth \
-  --out validation/bench/results_allantools_synth.json \
+  .bench-venv/bin/python benchmarks/bench/bench_allantools.py \
+  --synth benchmarks/bench/synth \
+  --out benchmarks/bench/results_allantools_synth.json \
   --m-max 512 \
   --kernels adev,mdev,hdev,tdev,totdev,mtotdev,htotdev
 
 # 4. stats table + CSV export
-.bench-venv/bin/python validation/bench/render_stats.py \
-  validation/bench/results_sigmatau_synth.json \
-  validation/bench/results_allantools_synth.json \
-  --csv-out validation/bench/per_realization.csv \
+.bench-venv/bin/python benchmarks/bench/render_stats.py \
+  benchmarks/bench/results_sigmatau_synth.json \
+  benchmarks/bench/results_allantools_synth.json \
+  --csv-out benchmarks/bench/per_realization.csv \
   --kernels adev,mdev,hdev,tdev,totdev,mtotdev,htotdev
 ```
 
@@ -110,7 +110,7 @@ OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 
 ```python
 import pandas as pd, matplotlib.pyplot as plt
-df = pd.read_csv("validation/bench/per_realization.csv")
+df = pd.read_csv("benchmarks/bench/per_realization.csv")
 
 # histogram of mtotdev wall-time, both libs
 fig, ax = plt.subplots(1, 2, figsize=(10, 4), sharey=True)

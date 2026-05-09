@@ -1,7 +1,7 @@
 {
   "meta": {
     "mode": "synth",
-    "synth_dir": "/home/ian/SigmaTau.jl/validation/bench/synth",
+    "synth_dir": "/home/ian/SigmaTau.jl/benchmarks/bench/synth",
     "n_reals": 30,
     "N": 25000,
     "tau0_s": 1.0,

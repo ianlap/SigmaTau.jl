@@ -1,4 +1,4 @@
-# validation/bench/_loader.jl
+# benchmarks/bench/_loader.jl
 # Tiny phase-record loader for the 2-column .txt files under
 # `reference/clock_data/`. Format: each row is `<MJD-time> <phase-value>`,
 # whitespace-separated. We infer τ₀ from the median Δt of the time column
