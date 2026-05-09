@@ -29,6 +29,16 @@ makedocs(
             "theory/total_family.md",
             "theory/confidence.md",
             "theory/noise_id.md",
+            "theory/ensemble_overview.md",
+            "theory/kalman.md",
+            "theory/steering.md",
+            "Relativistic PNT" => [
+                "theory/relativistic_clocks.md",
+                "theory/relativistic_frames_and_timescales.md",
+                "theory/relativistic_corrections.md",
+                "theory/lunar_pnt_systems.md",
+            ],
+            "theory/ensembles_and_oscillator_networks.md",
         ],
         "Tutorials"       => [
             "tutorials/01_phase_data.md",
