@@ -1,0 +1,147 @@
+# models/clocks.jl — Clock Model Definitions
+
+"""
+    AbstractClockModel
+
+Supertype for discrete-time clock state-space models used by the Kalman
+estimators. Concrete subtypes parameterize the polynomial clock SDE
+(phase / frequency / drift) plus per-process diffusion coefficients,
+and must overload `nstates`, `state_transition`, `process_noise`,
+`measurement_matrix`, and `measurement_noise`.
+
+Shipped subtypes: [`TwoStateClock`](@ref), [`ThreeStateClock`](@ref),
+and [`RelativisticClock`](@ref) (stub).
+"""
+abstract type AbstractClockModel end
+
+"""
+    TwoStateClock(; tau, q0=0.0, q1=0.0, q2=0.0)
+
+Two-state polynomial clock model with state vector `[phase, frequency]`.
+Step size `tau` is the discretization interval; `q0` is the white
+phase-modulation (WPM) measurement-noise diffusion coefficient, `q1`
+is white FM (state), and `q2` is random-walk FM (state). Parameterizes
+the closed-form Φ and Q matrices used by the Kalman update loop.
+"""
+Base.@kwdef struct TwoStateClock <: AbstractClockModel
+    tau::Float64
+    q0::Float64 = 0.0 # WPM (measurement)
+    q1::Float64 = 0.0 # WFM (state)
+    q2::Float64 = 0.0 # RWFM (state)
+end
+
+"""
+    ThreeStateClock(; tau, q0=0.0, q1=0.0, q2=0.0, q3=0.0)
+
+Three-state polynomial clock model with state vector
+`[phase, frequency, frequency_drift]`. Adds an integrated random-walk
+FM (IRWFM / drift) channel with diffusion coefficient `q3` over
+[`TwoStateClock`](@ref); meanings of `tau`, `q0`, `q1`, `q2` are
+identical. Suited to clocks with non-negligible drift such as ageing
+cesium tubes or GPS-grade rubidiums over long horizons.
+"""
+Base.@kwdef struct ThreeStateClock <: AbstractClockModel
+    tau::Float64
+    q0::Float64 = 0.0 # WPM (measurement)
+    q1::Float64 = 0.0 # WFM (state)
+    q2::Float64 = 0.0 # RWFM (state)
+    q3::Float64 = 0.0 # IRWFM (state)
+end
+
+"""
+    RelativisticClock <: AbstractClockModel
+
+Clock model intended to capture lunar-PNT relativistic corrections —
+gravitational redshift plus kinematic time-dilation under a 1PN
+proper-time differential and TCB ↔ TCL transformation.
+
+!!! note "Stub implementation"
+    This type is exported but no methods (`nstates`, `state_transition`,
+    `process_noise`, `measurement_matrix`, `measurement_noise`) are
+    defined for it yet. Calling clock-model accessors on a
+    `RelativisticClock` instance will hit a `MethodError`. The intended
+    near-term implementation follows the closed-form Keplerian path
+    described in Seyffert 2025; 2PN corrections may be neglected at
+    current cislunar accuracies.
+"""
+struct RelativisticClock <: AbstractClockModel end # Lunar PNT specifics
+
+"""
+    nstates(model::AbstractClockModel) → Int
+
+Return the dimension of the state vector for `model`. Used by
+[`steer_to_correction`](@ref) to size the steering `SVector`. Defined
+for [`TwoStateClock`](@ref) (returns `2`) and [`ThreeStateClock`](@ref)
+(returns `3`); not defined for the [`RelativisticClock`](@ref) stub.
+"""
+nstates(::TwoStateClock) = 2
+nstates(::ThreeStateClock) = 3
+
+"""
+    state_transition(model::AbstractClockModel) → SMatrix
+
+Return the discrete-time state transition matrix Φ that propagates the
+clock state forward by `model.tau`. The two-state Φ is the standard
+phase/frequency integrator `[1 τ; 0 1]`; the three-state Φ adds the
+`τ²/2` and `τ` couplings for the drift row. Returned as a
+`StaticArrays.SMatrix` for zero-allocation Kalman propagation.
+"""
+function state_transition(m::TwoStateClock)
+    @SMatrix [1.0 m.tau; 0.0 1.0]
+end
+
+function state_transition(m::ThreeStateClock)
+    @SMatrix [1.0 m.tau m.tau^2 / 2.0; 0.0 1.0 m.tau; 0.0 0.0 1.0]
+end
+
+"""
+    process_noise(model::AbstractClockModel) → SMatrix
+
+Return the process-noise covariance matrix Q obtained by closed-form
+analytic integration of the Wiener increments in the clock SDE over a
+step of length `model.tau`, given the WFM / RWFM / (IRWFM) diffusion
+coefficients on `model`. Coefficients match the Galleani / Zucca
+derivations standard in the timescale literature. Returned as an
+`SMatrix` for Kalman composition.
+"""
+function process_noise(m::TwoStateClock)
+    τ = m.tau
+    Q11 = m.q1*τ + m.q2*τ^3/3.0
+    Q12 = m.q2*τ^2/2.0
+    Q22 = m.q2*τ
+    @SMatrix [Q11 Q12; Q12 Q22]
+end
+
+function process_noise(m::ThreeStateClock)
+    τ = m.tau
+    τ2 = τ^2; τ3 = τ^3; τ4 = τ^4; τ5 = τ^5
+    Q11 = m.q1*τ + m.q2*τ3/3.0 + m.q3*τ5/20.0
+    Q12 = m.q2*τ2/2.0 + m.q3*τ4/8.0
+    Q13 = m.q3*τ3/6.0
+    Q22 = m.q2*τ + m.q3*τ3/3.0
+    Q23 = m.q3*τ2/2.0
+    Q33 = m.q3*τ
+    @SMatrix [Q11 Q12 Q13; Q12 Q22 Q23; Q13 Q23 Q33]
+end
+
+"""
+    measurement_matrix(model::AbstractClockModel) → SMatrix
+
+Return the linear measurement map H. Both shipped clock models observe
+phase only, so H is a 1×n row vector picking out the first state
+component (`[1 0]` for two-state, `[1 0 0]` for three-state).
+Consumed by `update!` when forming the innovation `ν = z − H x`.
+"""
+measurement_matrix(::TwoStateClock) = @SMatrix [1.0 0.0]
+measurement_matrix(::ThreeStateClock) = @SMatrix [1.0 0.0 0.0]
+
+"""
+    measurement_noise(model::AbstractClockModel) → SMatrix
+
+Return the measurement-noise covariance R as a 1×1 `SMatrix` wrapping
+the WPM diffusion coefficient `model.q0`. Identical for both shipped
+clock types since the measurement is phase-only WPM. Consumed by
+`update!` when forming the innovation covariance `S = H P Hᵀ + R`.
+"""
+measurement_noise(m::TwoStateClock) = @SMatrix [m.q0]
+measurement_noise(m::ThreeStateClock) = @SMatrix [m.q0]

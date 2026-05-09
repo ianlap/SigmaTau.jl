@@ -2,13 +2,23 @@
 
 Frequency-stability analysis and clock-ensemble estimation in Julia.
 
-`SigmaTau` is an umbrella package that re-exports three focused subpackages:
+`SigmaTau` ships shared types at the top level (`PhaseData`,
+`FrequencyData`, `StabilityResult`) and two thematic submodules:
 
-| Subpackage | Purpose |
+| Submodule | Purpose |
 |---|---|
-| [`SigmaTauBase`](lib/SigmaTauBase) | Core types (`PhaseData`, `FrequencyData`, `StabilityResult`) shared across the rest of the suite. |
-| [`SigmaTauStability`](lib/SigmaTauStability) | Stability deviations (Allan / Hadamard / Total families), noise identification, equivalent degrees of freedom, χ² confidence intervals. |
-| [`SigmaTauEnsemble`](lib/SigmaTauEnsemble) | Clock state-space models and Kalman filtering for atomic-clock ensembles. AD-friendly out-of-place math via `StaticArrays`. |
+| `SigmaTau.Stab` | Stability deviations (Allan / Hadamard / Total families), noise identification, equivalent degrees of freedom, χ² confidence intervals. |
+| `SigmaTau.Est`  | Clock state-space models (`TwoStateClock`, `ThreeStateClock`, `RelativisticClock`) and Kalman filtering for atomic-clock ensembles. AD-friendly out-of-place math via `StaticArrays`. |
+
+All public symbols are re-exported from the umbrella, so casual code
+(`using SigmaTau; adev(data, [1, 2, 4])`) is unchanged. Power-user code
+can import the submodules directly:
+
+```julia
+using SigmaTau                # adev, mdev, predict!, …
+SigmaTau.Stab.adev(data, m)   # qualified
+using SigmaTau.Stab           # bring stability symbols in directly
+```
 
 ## Install
 
@@ -22,9 +32,6 @@ Or, working from a clone of this repo:
 pkg> activate .
 pkg> instantiate
 ```
-
-The repo is structured as a Julia 1.11 workspace; the root `Project.toml`
-pulls each subpackage from its local `lib/…` path via `[sources]`.
 
 ## Quickstart
 
@@ -95,8 +102,9 @@ Pass `legacy_compat=true` to the constructor to reproduce the MATLAB-era
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Each subpackage has its own `test/runtests.jl` and can be tested in
-isolation, e.g. `julia --project=lib/SigmaTauStability -e 'using Pkg; Pkg.test()'`.
+Tests are organized into three subdirectories under `test/`
+(`types/`, `stab/`, `est/`); the command above runs all three under a
+single top-level `test/runtests.jl`.
 
 ## Status
 

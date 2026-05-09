@@ -17,7 +17,7 @@ phase or fractional-frequency. Every section below names the specific
 scheme for that estimator.
 
 The cost of extension is a small noise-type-dependent bias `B(α)`,
-quantified per estimator in SP1065 §5 [@cite RileyHowe2008]. SigmaTau
+quantified per estimator in SP1065 §5 [@cite riley-2008-sp1065]. SigmaTau
 applies it by default; see the bias-correction policy section below.
 
 ---
@@ -31,8 +31,8 @@ record, with no per-τ subsegmentation and no detrending. The
 overlapping ADEV second-difference operator then runs on `x*` exactly
 as it would on the original record.
 
-**Definition** (SP1065 §5 Eq. 25 [@cite RileyHowe2008];
-GHP99 [@cite Greenhall1999]):
+**Definition** (SP1065 §5 Eq. 25 [@cite riley-2008-sp1065];
+GHP99 [@cite greenhall-1999-totvar]):
 
 ```math
 \mathrm{TOTVAR}(\tau) \;=\; \frac{1}{2\,(m\tau_0)^2 \,(N-2)}
@@ -68,7 +68,7 @@ phase record. For each subsegment the algorithm:
    valid window positions inside the extension.
 
 The outer sum is over the `N − 3m + 1` subsegments. This is HV99's
-construction [@cite Howe1999]; SP1065 §5 reproduces the algorithm.
+construction [@cite howe-1999-modtotvar]; SP1065 §5 reproduces the algorithm.
 
 ```math
 \mathrm{MTOTVAR}(\tau) \;=\; \frac{1}{2\,(m\tau_0)^2 \,(N - 3m + 1)}
@@ -86,6 +86,29 @@ window splits the degeneracy that ADEV / TOTDEV cannot.
 ```julia
 mtotdev(PhaseData(x, τ₀), τs)
 ```
+
+---
+
+## TTOT — time-total deviation
+
+TTOT (Time-Total Deviation) is the time-deviation rescaling of MTOTDEV,
+analogous to how TDEV rescales MDEV [@cite riley-2008-sp1065]. It
+gives a `σ_x`-units summary (seconds) of long-τ stability for a record
+with WPM-dominated noise, leveraging MTOTDEV's per-subsegment extension
+to extend the usable τ range beyond TDEV's reach on short records
+[@cite banerjee-2023-timekeeping].
+
+```math
+\sigma_{x,\text{TTOT}}(\tau) \;=\; \frac{\tau}{\sqrt{3}}\,
+\sigma_{y,\text{MTOT}}(\tau).
+```
+
+The `√3` factor matches TDEV's exactly because TTOT inherits MTOTDEV's
+modified second-difference operator [@cite riley-2008-sp1065].
+
+!!! note "Planned implementation"
+    The mathematical definition is documented above. The `ttot`
+    function is not yet implemented in SigmaTauStability.jl.
 
 ---
 
@@ -109,11 +132,11 @@ there is no useful reflection (the third-difference window is `3m + 1 = 4`
 samples; reflection would produce trivially-correlated extensions).
 SigmaTau falls back to ordinary HDEV at `m = 1`. This matches the
 reference HTOTDEV implementations and is not a numerical defect — it
-is the design of the FCS01 algorithm [@cite Howe2001].
+is the design of the FCS01 algorithm [@cite howe-2001-tothvar-steering].
 
-The construction originates in Howe 2000 [@cite Howe2000] with bias
-coefficients `a(α)` introduced in the FCS01 paper [@cite Howe2001];
-Howe 2005 [@cite Howe2005] contributed long-τ refinements.
+The construction originates in Howe 2000 [@cite howe-2000-tothvar-ptti] with bias
+coefficients `a(α)` introduced in the FCS01 paper [@cite howe-2001-tothvar-steering];
+Howe 2005 [@cite howe-2005-tothvar-ieee] contributed long-τ refinements.
 
 HTOTDEV inherits HDEV's drift insensitivity (the third-difference
 kernel annihilates linear-in-`t` terms) so a record with significant
@@ -156,10 +179,24 @@ sequence on the extended segment. Full algebraic detail is in
 `legdocs/equations/total.md`.
 
 MHTOTDEV is the long-τ extension of MHDEV: phase-averaged third
-differences with boundary extension. There is no canonical paper for
-MHTOTDEV; the construction follows HV99's modified-total methodology
-[@cite Howe1999] applied to the FCS01 Hadamard total
-[@cite Howe2001].
+differences with boundary extension.
+
+!!! info "Original contribution"
+    MHTOTDEV is original to SigmaTau. There is no
+    canonical paper for it; the construction follows HV99's
+    modified-total methodology [@cite howe-1999-modtotvar] applied
+    to the FCS01 Hadamard total [@cite howe-2001-tothvar-steering],
+    with the modified third-difference operator from Greenhall 1997
+    [@cite greenhall-1997-third-difference-mvar]. The authoritative
+    definition lives in the package source itself; the kernel sits at
+    [`src/stab/core/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/stab/core/total.jl)
+    and the public wrapper at
+    [`src/stab/api/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/stab/api/total.jl).
+    Equivalently, MHTOTDEV completes the 2×2 matrix of total-family
+    estimators along the (Allan/Hadamard) × (modified/un-modified)
+    axes — the un-modified Hadamard total is HTOTDEV, the modified
+    Allan total is MTOTDEV, the un-modified Allan total is TOTDEV,
+    and the modified-Hadamard-total corner is filled by MHTOTDEV.
 
 ```julia
 mhtotdev(PhaseData(x, τ₀), τs)
@@ -210,7 +247,7 @@ confidence — all four concerns at once.
     [Validation: Stable32](../validation/stable32.md). To reproduce
     Stable32's output exactly, pass `correct_bias=false`.
 
-(Cite SP1065 §5 [@cite RileyHowe2008] and FCS01 [@cite Howe2001] for
+(Cite SP1065 §5 [@cite riley-2008-sp1065] and FCS01 [@cite howe-2001-tothvar-steering] for
 the `a(α)` / `B(α)` tables.)
 
 ---
@@ -242,10 +279,9 @@ on this short record — the data-extension is doing its job.
 
 ## Implementation notes
 
-- All four total kernels live in `lib/SigmaTauStability/src/core/total.jl`.
-- Bias correction is applied in
-  `lib/SigmaTauStability/src/api/total.jl` via the `bias_correction`
-  helper from `lib/SigmaTauStability/src/stats/edf.jl`.
+- All four total kernels live in `src/stab/core/total.jl`.
+- Bias correction is applied in `src/stab/api/total.jl` via the
+  `bias_correction` helper from `src/stab/stats/edf.jl`.
 - The MHTOTDEV EDF model uses an HDEV-style approximation (no
   published analytic form for MHTOTDEV); known limitation tracked as
   `R-MED-6`.
@@ -264,8 +300,8 @@ on this short record — the data-extension is doing its job.
 
 ## References
 
-- TOTVAR: Greenhall, Howe & Percival 1999 [@cite Greenhall1999].
-- MTOT: Howe & Vernotte 1999 [@cite Howe1999].
-- HTOT: Howe 2000 [@cite Howe2000]; FCS01 [@cite Howe2001];
-  Howe 2005 [@cite Howe2005].
-- SP1065 §5 [@cite RileyHowe2008].
+- TOTVAR: Greenhall, Howe & Percival 1999 [@cite greenhall-1999-totvar].
+- MTOT: Howe & Vernotte 1999 [@cite howe-1999-modtotvar].
+- HTOT: Howe 2000 [@cite howe-2000-tothvar-ptti]; FCS01 [@cite howe-2001-tothvar-steering];
+  Howe 2005 [@cite howe-2005-tothvar-ieee].
+- SP1065 §5 [@cite riley-2008-sp1065].
