@@ -7,7 +7,7 @@ frequency, and (optionally) frequency aging — to states driven by
 independent Wiener processes. Discretising the SDE on a uniform
 sample interval `τ` yields the propagator `Φ` and the innovation
 covariance `Q` that drive the discrete-time
-[Kalman filter](kalman.md) used by SigmaTauEnsemble.
+[Kalman filter](kalman.md) used by `SigmaTau.Est`.
 
 This page collects the time-domain models in one place: the
 deterministic polynomial skeleton, the two- and three-state SDEs that
@@ -405,8 +405,8 @@ drives the mean to about 5.9 ns, far exceeding the noise budget
   proper-time corrections for cislunar PNT.
 - [Theory: Time-Scale Algorithms and Oscillator Networks](ensembles_and_oscillator_networks.md) —
   combines multiple clock states into an ensemble timescale.
-- [API: SigmaTauEnsemble](../reference/ensemble.md) — exported types
-  and functions.
+- [API: `SigmaTau.Est`](../reference/est.md) — exported types and
+  functions.
 
 ## References
 

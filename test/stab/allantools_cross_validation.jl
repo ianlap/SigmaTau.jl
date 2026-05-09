@@ -1,4 +1,4 @@
-# allantools_cross_validation.jl — Compares the SigmaTauStability raw
+# allantools_cross_validation.jl — Compares the SigmaTau.Stab raw
 # kernels against Anders Wallin's `allantools` (Python) on the same
 # Stable32 phase fixture. Skipped silently when the fixture has not
 # been regenerated locally (`reference/validation/allantools_out/

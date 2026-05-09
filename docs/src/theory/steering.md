@@ -165,7 +165,7 @@ Kalman filter that supplies `(p, f)` to the controller, see
 - [Theory: Time-Scale Algorithms and Oscillator Networks](ensembles_and_oscillator_networks.md) —
   ensemble-mean realisation can be steered toward a reference using
   the same controller.
-- [API: SigmaTauEnsemble](../reference/ensemble.md) —
+- [API: `SigmaTau.Est`](../reference/est.md) —
   [`PIDController`](@ref), [`step!`](@ref),
   [`steer_to_correction`](@ref).
 

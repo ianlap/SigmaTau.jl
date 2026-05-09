@@ -6,7 +6,7 @@ using SigmaTau.Stab: NEFF_RELIABLE, _gen_powerlaw_phase
 include("legacy_kernels.jl")
 const LK = LegacyKernels
 
-@testset "SigmaTauStability Math Core Parity" begin
+@testset "SigmaTau.Stab Math Core Parity" begin
     # Mock data equivalent to NIST SP1065 sample
     x = collect(1.0:100.0) .^ 2  # simple quadratic
     m_values = [1, 2, 4]
@@ -141,25 +141,25 @@ const LK = LegacyKernels
         # ADEV: 8 m-values × 1 kernel = 8 assertions.
         for m in m_grid
             new_dev = sqrt(LK.adev_var(x, m, tau0))
-            @test SigmaTauStability._adev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._adev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # MDEV.
         for m in m_grid
             new_dev = sqrt(LK.mdev_var(x, m, tau0, x_cs))
-            @test SigmaTauStability._mdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._mdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # HDEV.
         for m in m_grid
             new_dev = sqrt(LK.hdev_var(x, m, tau0))
-            @test SigmaTauStability._hdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._hdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # MHDEV.
         for m in m_grid
             new_dev = sqrt(LK.mhdev_var(x, m, tau0, x_cs))
-            @test SigmaTauStability._mhdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._mhdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # TOTDEV. (Smaller grid — kernel is O(N) per m but allocates an extended
@@ -168,19 +168,19 @@ const LK = LegacyKernels
         # the LK reference by O(few %) at short τ.
         for m in [1, 2, 4, 8, 16, 32]
             new_dev = sqrt(LK.totdev_var(x, m, tau0))
-            @test SigmaTauStability._totdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._totdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # MTOTDEV.
         for m in [1, 2, 4, 8, 16]
             new_dev = sqrt(LK.mtotdev_var(x, m, tau0))
-            @test SigmaTauStability._mtotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._mtotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # HTOTDEV.
         for m in [1, 2, 4, 8, 16]
             new_dev = sqrt(LK.htotdev_var(x, m, tau0))
-            @test SigmaTauStability._htotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._htotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # MHTOTDEV. Pass detrend=:legacy explicitly: the new _mhtotdev_core
@@ -188,7 +188,7 @@ const LK = LegacyKernels
         # the LK reference's per-window full-LS detrend.
         for m in [1, 2, 4, 8]
             new_dev = sqrt(LK.mhtotdev_var(x, m, tau0))
-            @test SigmaTauStability._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
+            @test SigmaTau.Stab._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
         end
     end
 
@@ -295,7 +295,7 @@ const LK = LegacyKernels
                     continue   # ThêoH / Time Total / non-overlapping not implemented
                 end
 
-                # Bonus: the new SigmaTauStability core matches the reference
+                # Bonus: the new SigmaTau.Stab core matches the reference
                 # kernel exactly (already covered by "Legacy parity" testset),
                 # so we don't repeat the assertion here.
                 n_checked += 1
@@ -341,7 +341,7 @@ const LK = LegacyKernels
                 m == 512 && continue                 # Stable32-only quirk; see comment above
                 sigma_ref = parse(Float64, row[7])
 
-                got = SigmaTauStability._totdev_core(x, [m], tau0; detrend=:howe)[1]
+                got = SigmaTau.Stab._totdev_core(x, [m], tau0; detrend=:howe)[1]
                 @test got ≈ sigma_ref rtol=1e-4
                 n_checked += 1
             end
@@ -359,8 +359,8 @@ const LK = LegacyKernels
         ms   = [1, 2, 4, 8, 16]
         x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
 
-        devs_linear = SigmaTauStability._totdev_core(x, ms, tau0; detrend=:linear)
-        devs_legacy = SigmaTauStability._totdev_core(x, ms, tau0; detrend=:legacy)
+        devs_linear = SigmaTau.Stab._totdev_core(x, ms, tau0; detrend=:linear)
+        devs_legacy = SigmaTau.Stab._totdev_core(x, ms, tau0; detrend=:legacy)
 
         @test length(devs_linear) == length(ms)
         @test all(isfinite, devs_linear)
@@ -370,8 +370,8 @@ const LK = LegacyKernels
         end
 
         # Unsupported recipes (:greenhall on TOTDEV) raise ArgumentError.
-        @test_throws ArgumentError SigmaTauStability._totdev_core(x, [1], tau0; detrend=:greenhall)
-        @test_throws ArgumentError SigmaTauStability._totdev_core(x, [1], tau0; detrend=:nonsense)
+        @test_throws ArgumentError SigmaTau.Stab._totdev_core(x, [1], tau0; detrend=:greenhall)
+        @test_throws ArgumentError SigmaTau.Stab._totdev_core(x, [1], tau0; detrend=:nonsense)
     end
 
     include("allantools_cross_validation.jl")
@@ -400,7 +400,7 @@ const LK = LegacyKernels
             x = _gen_powerlaw_phase(alpha, N; tau0=tau0)
             for m in ms
                 ref = sqrt(LK.mtotdev_var(x, m, tau0))
-                got = SigmaTauStability._mtotdev_core(x, [m], tau0)[1]
+                got = SigmaTau.Stab._mtotdev_core(x, [m], tau0)[1]
                 @test got ≈ ref atol=1e-25 rtol=rt
             end
 
@@ -425,15 +425,15 @@ const LK = LegacyKernels
         ms   = [1, 2, 4, 8, 16]
         x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
 
-        devs = SigmaTauStability._mtotdev_core(x, ms, tau0; detrend=:linear)
+        devs = SigmaTau.Stab._mtotdev_core(x, ms, tau0; detrend=:linear)
         @test length(devs) == length(ms)
         @test all(isfinite, devs)
         @test all(>(0), devs)
-        devs_legacy = SigmaTauStability._mtotdev_core(x, ms, tau0; detrend=:legacy)
+        devs_legacy = SigmaTau.Stab._mtotdev_core(x, ms, tau0; detrend=:legacy)
         @test all(0.1 .<= devs ./ devs_legacy .<= 10.0)
 
         # :howe is no longer a recipe for MTOTDEV.
-        @test_throws ArgumentError SigmaTauStability._mtotdev_core(x, [1], tau0; detrend=:howe)
+        @test_throws ArgumentError SigmaTau.Stab._mtotdev_core(x, [1], tau0; detrend=:howe)
     end
 
     @testset "HTOTDEV :linear smoke" begin
@@ -446,15 +446,15 @@ const LK = LegacyKernels
         ms   = [1, 2, 4, 8, 16]
         x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
 
-        devs = SigmaTauStability._htotdev_core(x, ms, tau0; detrend=:linear)
+        devs = SigmaTau.Stab._htotdev_core(x, ms, tau0; detrend=:linear)
         @test length(devs) == length(ms)
         @test all(isfinite, devs)
         @test all(>(0), devs)
-        devs_legacy = SigmaTauStability._htotdev_core(x, ms, tau0; detrend=:legacy)
+        devs_legacy = SigmaTau.Stab._htotdev_core(x, ms, tau0; detrend=:legacy)
         @test all(0.1 .<= devs ./ devs_legacy .<= 10.0)
 
         # :howe is no longer a recipe for HTOTDEV.
-        @test_throws ArgumentError SigmaTauStability._htotdev_core(x, [1], tau0; detrend=:howe)
+        @test_throws ArgumentError SigmaTau.Stab._htotdev_core(x, [1], tau0; detrend=:howe)
     end
 
     @testset "MHTOTDEV :greenhall smoke" begin
@@ -471,7 +471,7 @@ const LK = LegacyKernels
         # Mid-spectrum WHFM check
         Random.seed!(20260508)
         x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
-        devs = SigmaTauStability._mhtotdev_core(x, ms, tau0; detrend=:greenhall)
+        devs = SigmaTau.Stab._mhtotdev_core(x, ms, tau0; detrend=:greenhall)
         @test length(devs) == length(ms)
         @test all(isfinite, devs)
         @test all(>(0), devs)
@@ -480,14 +480,14 @@ const LK = LegacyKernels
         for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
             Random.seed!(20260508)
             xa = _gen_powerlaw_phase(alpha, N; tau0=tau0)
-            d = SigmaTauStability._mhtotdev_core(xa, ms, tau0; detrend=:greenhall)
+            d = SigmaTau.Stab._mhtotdev_core(xa, ms, tau0; detrend=:greenhall)
             @test length(d) == length(ms)
             @test all(isfinite, d)
             @test all(>(0), d)
         end
 
         # :howe is no longer a recipe for MHTOTDEV.
-        @test_throws ArgumentError SigmaTauStability._mhtotdev_core(x, [1], tau0; detrend=:howe)
+        @test_throws ArgumentError SigmaTau.Stab._mhtotdev_core(x, [1], tau0; detrend=:howe)
     end
 
     @testset "Cross-recipe equivalence (:legacy aliases)" begin
@@ -505,15 +505,15 @@ const LK = LegacyKernels
         x    = wpm .+ rwfm
 
         for m in [1, 2, 4, 8, 16]
-            @test SigmaTauStability._mtotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
-                  SigmaTauStability._mtotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
-            @test SigmaTauStability._htotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
-                  SigmaTauStability._htotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
+            @test SigmaTau.Stab._mtotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
+                  SigmaTau.Stab._mtotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
+            @test SigmaTau.Stab._htotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
+                  SigmaTau.Stab._htotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
         end
 
         for m in [1, 2, 4, 8]
-            @test SigmaTauStability._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈
-                  SigmaTauStability._mhtotdev_core(x, [m], tau0; detrend=:linear)[1] atol=0.0 rtol=1e-15
+            @test SigmaTau.Stab._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈
+                  SigmaTau.Stab._mhtotdev_core(x, [m], tau0; detrend=:linear)[1] atol=0.0 rtol=1e-15
         end
     end
 
@@ -542,13 +542,13 @@ const LK = LegacyKernels
             x    = _gen_powerlaw_phase(alpha, N; tau0=tau0)
             x_cs = pushfirst!(cumsum(x), 0.0)
             for m in ms
-                @test SigmaTauStability._adev_core(x, [m], tau0)[1]  ≈
+                @test SigmaTau.Stab._adev_core(x, [m], tau0)[1]  ≈
                       sqrt(LK.adev_var(x, m, tau0))                 atol=1e-25 rtol=rt
-                @test SigmaTauStability._mdev_core(x, [m], tau0)[1]  ≈
+                @test SigmaTau.Stab._mdev_core(x, [m], tau0)[1]  ≈
                       sqrt(LK.mdev_var(x, m, tau0, x_cs))            atol=1e-25 rtol=rt
-                @test SigmaTauStability._hdev_core(x, [m], tau0)[1]  ≈
+                @test SigmaTau.Stab._hdev_core(x, [m], tau0)[1]  ≈
                       sqrt(LK.hdev_var(x, m, tau0))                  atol=1e-25 rtol=rt
-                @test SigmaTauStability._mhdev_core(x, [m], tau0)[1] ≈
+                @test SigmaTau.Stab._mhdev_core(x, [m], tau0)[1] ≈
                       sqrt(LK.mhdev_var(x, m, tau0, x_cs))           atol=1e-25 rtol=rt
             end
         end
@@ -565,19 +565,19 @@ const LK = LegacyKernels
         T_eq        = (N_eq - 1) * 1.0
         # α=2 (WPM)
         noises_wpm = fill(:WHPM, length(m_values_eq))
-        edfs = SigmaTauStability.calculate_edf(:totdev, ones(length(m_values_eq)),
+        edfs = SigmaTau.Stab.calculate_edf(:totdev, ones(length(m_values_eq)),
                                                noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
         @test all(isfinite, edfs)
         @test all(>(0.0), edfs)
 
         # α=1 (FLPM)
         noises_flpm = fill(:FLPM, length(m_values_eq))
-        edfs = SigmaTauStability.calculate_edf(:totdev, ones(length(m_values_eq)),
+        edfs = SigmaTau.Stab.calculate_edf(:totdev, ones(length(m_values_eq)),
                                                noises_flpm, m_values_eq, taus_eq, N_eq, T_eq)
         @test all(isfinite, edfs)
 
         # htotdev gets the HDEV-style fallback at α=2,1 too.
-        edfs_h = SigmaTauStability.calculate_edf(:htotdev, ones(length(m_values_eq)),
+        edfs_h = SigmaTau.Stab.calculate_edf(:htotdev, ones(length(m_values_eq)),
                                                  noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
         @test all(isfinite, edfs_h)
     end

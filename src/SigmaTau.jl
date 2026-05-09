@@ -1,6 +1,7 @@
 module SigmaTau
 
 using DocStringExtensions
+using Reexport
 
 # ── Shared types ────────────────────────────────────────────────────────
 include("types/abstract.jl")
@@ -76,8 +77,8 @@ module Est
 end
 
 # ── Flatten submodule exports onto the umbrella ─────────────────────────
-using .Stab
-using .Est
+@reexport using .Stab
+@reexport using .Est
 
 # Make submodules themselves accessible without qualification.
 export Stab, Est
