@@ -1,19 +1,17 @@
 using Documenter
 using DocumenterCitations
-using SigmaTau, SigmaTauBase, SigmaTauStability, SigmaTauEnsemble
+using SigmaTau
 
 bib = CitationBibliography(
     joinpath(@__DIR__, "src", "refs.bib");
     style = :authoryear,
 )
 
-DocMeta.setdocmeta!(SigmaTauBase,      :DocTestSetup, :(using SigmaTau); recursive=true)
-DocMeta.setdocmeta!(SigmaTauStability, :DocTestSetup, :(using SigmaTau); recursive=true)
-DocMeta.setdocmeta!(SigmaTauEnsemble,  :DocTestSetup, :(using SigmaTau); recursive=true)
+DocMeta.setdocmeta!(SigmaTau, :DocTestSetup, :(using SigmaTau); recursive=true)
 
 makedocs(
     sitename = "SigmaTau.jl",
-    modules  = [SigmaTau, SigmaTauBase, SigmaTauStability, SigmaTauEnsemble],
+    modules  = [SigmaTau, SigmaTau.Stab, SigmaTau.Est],
     format   = Documenter.HTML(
         prettyurls = get(ENV, "CI", "false") == "true",
         canonical  = "https://ianlap.github.io/SigmaTau.jl",
@@ -48,9 +46,9 @@ makedocs(
             "tutorials/05_single_clock_steering.md",
         ],
         "API Reference"   => [
-            "reference/base.md",
-            "reference/stability.md",
-            "reference/ensemble.md",
+            "reference/types.md",
+            "reference/stab.md",
+            "reference/est.md",
         ],
         "Validation"      => [
             "validation/methodology.md",

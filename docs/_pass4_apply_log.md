@@ -298,3 +298,27 @@ docs/build/theory/
 - The vault `Concepts/ensemble/clock-models/Relativistic clock.md` was deliberately not modified per the pass-2-redux disposition recommendation (keep where it is, cross-link from the new relativistic/ notes).
 - The `RelativisticClock` Julia stub was not implemented in this redux — the closed-form Keplerian-Orbital path remains an open TODO item; this docs work is the spec it should implement against.
 - Vault `references.bib` and docs `refs.bib` are now in sync on the 8 new entries (they were divergent before this redux because the pass-1 incremental ingest had only added them to the vault file).
+
+---
+
+## Restructure — 2026-05-09
+
+- Workspace `lib/{SigmaTauBase, SigmaTauStability, SigmaTauEnsemble}`
+  collapsed into single package `SigmaTau` with submodules
+  `SigmaTau.Stab` (was `SigmaTauStability`) and `SigmaTau.Est` (was
+  `SigmaTauEnsemble`). Shared types (`PhaseData`, `FrequencyData`,
+  `StabilityResult`) live at the top level.
+- `docs/src/reference/{base,stability,ensemble}.md` renamed to
+  `{types,stab,est}.md`; H1 titles updated; `@docs` symbol lists left
+  unqualified (Documenter resolves them through the `modules=…`
+  argument to `makedocs`).
+- `docs/make.jl` reduced to a single `using SigmaTau` and a single
+  `DocMeta.setdocmeta!` call with `recursive=true`. `modules =
+  [SigmaTau, SigmaTau.Stab, SigmaTau.Est]`.
+- All Code-link YAML metadata in `legdocs/.../Code links/` updated to
+  reflect the new module names and source paths. Note prose bodies
+  untouched.
+- `lib/` renamed to `lib.bak/` and gitignored as a recovery point.
+- Package UUID regenerated; the previous umbrella UUID shared its last
+  24 hex chars with `SigmaTauEnsemble`'s, indicating it had been
+  hand-derived rather than randomly generated.
