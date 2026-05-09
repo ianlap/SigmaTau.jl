@@ -63,18 +63,23 @@ numerical reference is locked in.
   `rtol = 1e-12`/`1e-11` may need to drop to `~1e-9` for the
   modified-total kernels on `--threads auto` CI runners. Verify on a
   multi-thread CI run and loosen only the testsets that actually drift.
-- [ ] **`prop!` — measurement-less covariance propagation.** Add a
-  public `prop!(est::AbstractEstimator, model, dt; steering=nothing)`
-  that advances `est.x ← Φ x` and `est.P ← Φ P Φ' + Q` unconditionally,
-  i.e. **without** the `est.k > 0` gate that `predict!` uses today
-  (`src/est/estimators/filters.jl:202`). Use case: forward holdover-
-  budget prediction with no measurements (see
-  `examples/05_holdover_comparison.jl`, which currently drives Φ/Q
-  manually because `predict!` no-ops on a fresh `est`). Should land
-  alongside a TwoStateClock + ThreeStateClock testset that locks in
-  `prop!`-vs-analytical Q-integration parity at `rtol=1e-14`. After
-  this lands, refactor `examples/05_holdover_comparison.jl` to
-  call `prop!` instead of the inline Φ·P·Φ' + Q loop.
+- [ ] **`prop!` — covariance propagation without a measurement.**
+  Public `prop!(est::AbstractEstimator, model, dt; steering=nothing)`
+  that advances `est.x ← Φ x` and `est.P ← Φ P Φ' + Q`
+  unconditionally — i.e. without the `est.k > 0` gate that
+  `predict!` uses today (`src/est/estimators/filters.jl:202`). Note:
+  the gate matches the MATLAB reference (`legdocs/.../kalman_filter.m`
+  uses the same `if k > 1` guard at the start of the predict step),
+  so this is *not* a bug — it's a convention to ensure the very first
+  step's measurement is a pure update, not a propagated prior. The
+  feature gap `prop!` fills is a different one: producing a 1σ
+  *covariance band* around a deterministic forward projection (e.g.
+  the holdover-budget plot in `examples/05_holdover_comparison.jl`,
+  where the KF RMS prediction-error curve is currently a point
+  estimate). Should land alongside a `TwoStateClock` +
+  `ThreeStateClock` testset that locks `prop!`-vs-analytical
+  Q-integration parity at `rtol=1e-14`, and a follow-up to add a
+  shaded ±1σ band to the holdover example using `prop!`.
 
 ---
 
