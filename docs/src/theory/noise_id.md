@@ -21,7 +21,7 @@ frequency modulation (WHFM, α=0), flicker frequency modulation
 
 ## Lag-1 ACF on differenced phase
 
-Riley & Greenhall 2004 [@cite Riley2004] show that the lag-1
+Riley & Greenhall 2004 [@cite riley-2004-lag1-acf] show that the lag-1
 autocorrelation `r₁` of an appropriately differenced phase series maps
 monotonically onto the spectral exponent α. Their procedure:
 
@@ -31,14 +31,16 @@ monotonically onto the spectral exponent α. Their procedure:
 
 For `r₁` near 0.5 the noise is white; near zero, flicker; near −0.5,
 random-walk. The α-to-`r₁` mapping is implemented in
-`lib/SigmaTauStability/src/noise/lag1.jl`.
+`src/stab/noise/lag1.jl`.
 
 ```julia
-identify_noise(PhaseData(x, 1.0); m=8)
+identify_noise(x, [1, 2, 4, 8]; dmin=0, dmax=2)
 ```
 
-The result is a `Symbol`: one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`,
-`:RWFM`.
+The first argument is the raw phase vector (a `Vector{Float64}`), not
+a `PhaseData` record; `m_values` is a vector of averaging factors
+(`τ = m·τ₀`). The result is a `Vector{Symbol}`, one entry per `m`:
+each entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`.
 
 Internally the kernel iterates the difference operator: at each step it
 recomputes `r₁`, converts to ρ = r₁ / (1 + r₁), and stops once ρ falls
@@ -51,7 +53,7 @@ between adjacent power-law families.
 
 For short records or borderline cases, SigmaTau falls back to the
 Allan-variance B1 ratio with the R(n) factor for WPM/FPM
-disambiguation, per SP1065 §6 [@cite RileyHowe2008]. This path is
+disambiguation, per SP1065 §6 [@cite riley-2008-sp1065]. This path is
 triggered automatically when the lag-1 method's confidence is low.
 
 B1 compares the classical (standard) variance of the averaged
@@ -67,7 +69,7 @@ The lag-1 method needs a minimum effective sample count for `r₁` to
 be a reliable estimator. SigmaTau uses `NEFF_RELIABLE = 30` as the
 threshold; below this, classification falls back to B1/R(n) regardless
 of `r₁`. The threshold tracks the Riley R 2020 recommendation
-[@cite Riley_R_2020] and the historical SigmaTau policy mandate.
+[@cite riley-2020-r-frequency-stability] and the historical SigmaTau policy mandate.
 
 ## The `noise_type` field
 
@@ -90,12 +92,12 @@ last reliable classification rather than emitting `:unknown` mid-run.
 ## See also
 
 - [Theory: Confidence](confidence.md).
-- [API: SigmaTauStability](../reference/stability.md).
+- [API: `SigmaTau.Stab`](../reference/stab.md).
 
 ## References
 
 - Riley & Greenhall, *Power-law noise identification using the lag-1
-  autocorrelation*, PTTI 2004 [@cite Riley2004].
-- SP1065 §6 [@cite RileyHowe2008].
+  autocorrelation*, PTTI 2004 [@cite riley-2004-lag1-acf].
+- SP1065 §6 [@cite riley-2008-sp1065].
 - Riley, *Frequency Stability Analysis Using R*, 2020
-  [@cite Riley_R_2020].
+  [@cite riley-2020-r-frequency-stability].

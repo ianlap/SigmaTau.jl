@@ -22,27 +22,38 @@ interval `τ₀`. SigmaTau stores phase as `PhaseData` and frequency as
 `FrequencyData`; the deviation API accepts either, converting via
 prefix-sum where needed.
 
-(Cite [@cite Banerjee2023] for modern presentation; SP1065 §4
-[@cite RileyHowe2008] for the conventions.)
+(Cite [@cite banerjee-2023-timekeeping] for modern presentation; SP1065 §4
+[@cite riley-2008-sp1065] for the conventions.)
 
 ## Power-law noise model
 
-Oscillator noise is modeled as a sum of five power-law processes
-indexed by `α`, the spectral exponent of the one-sided PSD `S_y(f) ∝ f^α`:
+Oscillator noise is modeled as a sum of power-law processes indexed
+by `α`, the spectral exponent of the one-sided PSD `S_y(f) ∝ f^α`:
 
 | α  | Noise type | Symbol | ADEV slope (μ_dev) | MDEV slope |
 |----|------------|--------|--------------------|------------|
-| +2 | White PM   | WPM    | −1                 | −3/2       |
-| +1 | Flicker PM | FPM    | −1 (with log term) | −1         |
-| 0  | White FM   | WFM    | −1/2               | −1/2       |
-| −1 | Flicker FM | FFM    | 0                  | 0          |
-| −2 | Random-walk FM | RWFM | +1/2             | +1/2       |
+| +2 | White PM         | WPM     | −1                 | −3/2       |
+| +1 | Flicker PM       | FPM     | −1 (with log term) | −1         |
+|  0 | White FM         | WFM     | −1/2               | −1/2       |
+| −1 | Flicker FM       | FFM     | 0                  | 0          |
+| −2 | Random-walk FM   | RWFM    | +1/2               | +1/2       |
+| −3 | Flicker walk FM  | FWFM    | (Allan diverges)¹  | (diverges)¹ |
+| −4 | Random run FM    | RRFM    | (Allan diverges)¹  | (diverges)¹ |
+
+¹ The Allan family's variance integral diverges for `α ≤ −3`. The
+Hadamard family (HDEV / MHDEV / HTOTDEV / MHTOTDEV) replaces the
+second difference with a third difference and remains finite down to
+`α = −4`, so records with very-low-frequency power-law content should
+be analyzed with the Hadamard family rather than ADEV / MDEV
+[@cite greenhall-1997-third-difference-mvar]. SigmaTau's three-state
+clock SDE additionally models random-run FM via the σ₃ Wiener channel
+[@cite zucca-2005-clock-model-allan].
 
 ADEV's degeneracy on WPM/FPM is the historical motivation for MDEV.
 HDEV adds drift insensitivity by going to a third difference.
 
-(Cite SP1065 §4–5 [@cite RileyHowe2008]; IEEE 1139-2022
-[@cite IEEE1139_2022].)
+(Cite SP1065 §4–5 [@cite riley-2008-sp1065]; IEEE 1139-2022
+[@cite ieee1139-2022-definitions].)
 
 ## Estimator family map
 
@@ -58,6 +69,30 @@ HDEV adds drift insensitivity by going to a third difference.
 | MTOTDEV   | 2nd              | yes             | yes                | no                |
 | HTOTDEV   | 3rd              | no              | yes                | yes               |
 | MHTOTDEV  | 3rd              | yes             | yes                | yes               |
+
+## MTIE — Maximum Time Interval Error
+
+MTIE complements the variance estimator family with a **peak-to-peak**
+phase metric: at each averaging interval `τ`, MTIE reports the largest
+phase excursion observed in any window of length `τ` across the entire
+record [@cite riley-2008-sp1065]. Where the Allan family characterizes
+the *spread* of the phase residual, MTIE characterizes the worst-case
+*excursion* — the relevant figure of merit for synchronization
+applications where a single large transient is operationally
+significant (telecom synchronization masks, GNSS holdover budgets,
+financial-trading timestamping). Banerjee & Matsakis frame it as the
+canonical time-distribution-network metric
+[@cite banerjee-2023-timekeeping].
+
+```math
+\mathrm{MTIE}(\tau) \;=\; \max_{1 \le i \le N-m}\;
+\Bigl[\max_{0 \le k \le m} x_{i+k} \;-\; \min_{0 \le k \le m} x_{i+k}\Bigr],
+\qquad m = \tau / \tau_0.
+```
+
+!!! note "Planned implementation"
+    The mathematical definition is documented above. The `mtie`
+    function is not yet implemented in SigmaTauStability.jl.
 
 ## Notation used throughout these pages
 
@@ -103,8 +138,8 @@ should rise roughly as `τ⁺¹/²` (μ = +1/2, RWFM).
 ## References
 
 - NIST SP1065, *Handbook of Frequency Stability Analysis*, Riley & Howe
-  2008. [@cite RileyHowe2008]
+  2008. [@cite riley-2008-sp1065]
 - *IEEE Standard Definitions of Physical Quantities for Fundamental
-  Frequency and Time Metrology*, IEEE 1139-2022. [@cite IEEE1139_2022]
+  Frequency and Time Metrology*, IEEE 1139-2022. [@cite ieee1139-2022-definitions]
 - Banerjee & Matsakis, *An Introduction to Modern Timekeeping and Time
-  Transfer*, Springer 2023. [@cite Banerjee2023]
+  Transfer*, Springer 2023. [@cite banerjee-2023-timekeeping]

@@ -45,3 +45,7 @@ validation/plots/
 
 # Proprietary / large clock recordings used for off-repo validation
 reference/clock_data/
+
+# lib.bak/ — pre-restructure recovery point; safe to delete after the new
+# structure has been validated for at least one development cycle.
+lib.bak/

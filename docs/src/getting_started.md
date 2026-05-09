@@ -2,14 +2,15 @@
 
 ## Installation
 
-SigmaTau.jl is a workspace monorepo. From the Pkg REPL:
+SigmaTau.jl is a single registerable package. From the Pkg REPL:
 
 ```julia-repl
 pkg> add https://github.com/ianlap/SigmaTau.jl
 ```
 
-This pulls the umbrella `SigmaTau` package, which `@reexport`s
-`SigmaTauBase`, `SigmaTauStability`, and `SigmaTauEnsemble`.
+`using SigmaTau` brings the shared types (`PhaseData`, `FrequencyData`,
+`StabilityResult`) and every export of the `SigmaTau.Stab` and
+`SigmaTau.Est` submodules into scope.
 
 ## A minimal example
 
@@ -29,7 +30,7 @@ r = adev(p, [1, 4, 16]; calc_ci=true)
 round.(r.dev; sigdigits=4)
 ```
 
-The result is a [`StabilityResult`](reference/base.md#SigmaTauBase.StabilityResult)
+The result is a [`StabilityResult`](reference/types.md#SigmaTau.StabilityResult)
 populated with `tau`, `dev`, per-τ `noise_type`, χ²-based confidence bounds
 `ci_lower` / `ci_upper`, and `edf` per Greenhall–Riley.
 

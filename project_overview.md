@@ -1,44 +1,49 @@
 # SigmaTau.jl — Project Overview
 
-> **Last Updated**: 2026-05-07 (post initial-commit audit)
+> **Last Updated**: 2026-05-09 (post-restructure)
 > **Scope**: Full audit of repository state at `https://github.com/ianlap/SigmaTau.jl`
+
+> **Restructure note (2026-05-09):** the previous three-subpackage
+> workspace (`SigmaTauBase` / `SigmaTauStability` / `SigmaTauEnsemble`)
+> was collapsed into a single package with two submodules
+> (`SigmaTau.Stab`, `SigmaTau.Est`). The Section 2 status tables below
+> are still labeled by their old subpackage names while the per-symbol
+> status content stays correct; the file: links point into the new
+> `src/{types,stab,est}/` tree.
 
 ---
 
-## 1. Package Dependency Graph
+## 1. Package Layout
 
 ```mermaid
 graph TD
-    subgraph "Umbrella"
-        ST["SigmaTau<br/>(src/SigmaTau.jl)"]
+    ST["SigmaTau<br/>(src/SigmaTau.jl)<br/>shared types: PhaseData,<br/>FrequencyData, StabilityResult"]
+
+    subgraph "Submodules"
+        STAB["SigmaTau.Stab<br/>10 deviation cores + API<br/>Noise ID + EDF/CI"]
+        EST["SigmaTau.Est<br/>Clock models + Kalman filter"]
     end
 
-    subgraph "Subpackages"
-        STB["SigmaTauBase<br/>PhaseData, FrequencyData,<br/>StabilityResult"]
-        STS["SigmaTauStability<br/>10 deviation cores + API<br/>Noise ID + EDF/CI"]
-        STE["SigmaTauEnsemble<br/>Clock models + Kalman filter"]
-    end
-
-    ST -->|"@reexport"| STB
-    ST -->|"@reexport"| STS
-    ST -->|"@reexport"| STE
-    STS -->|"using"| STB
-    STE -->|"deps"| STB
-    STE -->|"using"| StaticArrays
-    STS -->|"using"| Distributions
-    ST -->|"using"| Reexport
+    ST -->|"defines"| STAB
+    ST -->|"defines"| EST
+    STAB -->|"using ..SigmaTau"| ST
+    EST -->|"using ..SigmaTau"| ST
+    STAB -->|"using"| Distributions
+    EST -->|"using"| StaticArrays
+    ST -.->|"weakdep / extension"| RecipesBase
 ```
 
-A `docs/` subproject (Documenter.jl) was added as a sibling to the
-workspace. It develops all three subpackages and the umbrella as path
-deps; its environment is independent of the workspace. Source material
-lifted from the previous cross-language rendition lives gitignored
-under `legdocs/`.
+A `docs/` subproject (Documenter.jl) develops `SigmaTau` as a single
+path dep; its environment is independent of the package environment.
+Source material lifted from the previous cross-language rendition lives
+gitignored under `legdocs/`.
 
-Workspace wiring: root `Project.toml` declares all three subpackages in
-`[deps]`, registers them under `[workspace]` members, and pins each to its
-local path via `[sources.*]`. Subpackages declare relative `[sources]` for
-their internal deps (`SigmaTauBase`).
+Single-package wiring: the root `Project.toml` declares one package
+with merged `[deps]` (no `[workspace]`, no `[sources]`). Submodules
+`Stab` and `Est` are defined inline in `src/SigmaTau.jl` and bring in
+shared types via `using ..SigmaTau`. Every public symbol is re-exported
+from the umbrella so casual user code (`using SigmaTau; adev(...)`)
+remains unchanged.
 
 ---
 
