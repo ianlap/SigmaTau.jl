@@ -182,16 +182,16 @@ MHTOTDEV is the long-τ extension of MHDEV: phase-averaged third
 differences with boundary extension.
 
 !!! info "Original contribution"
-    MHTOTDEV is original to SigmaTauStability.jl. There is no
+    MHTOTDEV is original to SigmaTau. There is no
     canonical paper for it; the construction follows HV99's
     modified-total methodology [@cite howe-1999-modtotvar] applied
     to the FCS01 Hadamard total [@cite howe-2001-tothvar-steering],
     with the modified third-difference operator from Greenhall 1997
     [@cite greenhall-1997-third-difference-mvar]. The authoritative
     definition lives in the package source itself; the kernel sits at
-    [`lib/SigmaTauStability/src/core/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/lib/SigmaTauStability/src/core/total.jl#L591)
+    [`src/stab/core/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/stab/core/total.jl)
     and the public wrapper at
-    [`lib/SigmaTauStability/src/api/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/lib/SigmaTauStability/src/api/total.jl#L97).
+    [`src/stab/api/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/stab/api/total.jl).
     Equivalently, MHTOTDEV completes the 2×2 matrix of total-family
     estimators along the (Allan/Hadamard) × (modified/un-modified)
     axes — the un-modified Hadamard total is HTOTDEV, the modified
@@ -279,10 +279,9 @@ on this short record — the data-extension is doing its job.
 
 ## Implementation notes
 
-- All four total kernels live in `lib/SigmaTauStability/src/core/total.jl`.
-- Bias correction is applied in
-  `lib/SigmaTauStability/src/api/total.jl` via the `bias_correction`
-  helper from `lib/SigmaTauStability/src/stats/edf.jl`.
+- All four total kernels live in `src/stab/core/total.jl`.
+- Bias correction is applied in `src/stab/api/total.jl` via the
+  `bias_correction` helper from `src/stab/stats/edf.jl`.
 - The MHTOTDEV EDF model uses an HDEV-style approximation (no
   published analytic form for MHTOTDEV); known limitation tracked as
   `R-MED-6`.

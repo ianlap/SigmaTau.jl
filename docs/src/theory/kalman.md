@@ -487,7 +487,7 @@ ladder
   the loop with a controller acting on the Kalman estimates.
 - [Theory: Time-Scale Algorithms and Oscillator Networks](ensembles_and_oscillator_networks.md) —
   multi-clock ensemble timescales built on top of the Kalman recursion.
-- [API: SigmaTauEnsemble](../reference/ensemble.md) —
+- [API: `SigmaTau.Est`](../reference/est.md) —
   [`StandardKalmanFilter`](@ref), [`UDFactorizedFilter`](@ref),
   [`predict!`](@ref), [`update!`](@ref).
 

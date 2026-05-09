@@ -322,3 +322,39 @@ docs/build/theory/
 - Package UUID regenerated; the previous umbrella UUID shared its last
   24 hex chars with `SigmaTauEnsemble`'s, indicating it had been
   hand-derived rather than randomly generated.
+
+### Restructure complete — 2026-05-09
+
+- All 328 tests pass (`julia --project=. -e 'using Pkg; Pkg.test()'` green).
+  Three test sub-suites skipped because their input fixtures are
+  gitignored: Stable32 cross-validation, allantools cross-validation,
+  legacy-KF parity. That skip behavior is unchanged from before the
+  restructure.
+- Docs build clean: 5 Documenter warnings, all pre-existing
+  (3 `@cite` parser warnings on bib lines, 1 missing-docs callout
+  for 6 internal helpers, 1 deploy-skip on local builds). Zero broken
+  links, zero errors.
+- REPL smoke test: `using SigmaTau`, top-level `adev`/`PhaseData`,
+  `SigmaTau.Stab`/`SigmaTau.Est` modules, and `TwoStateClock isa
+  SigmaTau.Est.AbstractClockModel` all resolve.
+- Vault Code-link grep returns zero matches against the old subpackage
+  names (47 notes updated).
+- src/ ext/ test/ docs/src/ grep against subpackage names returns only
+  the explicitly-deferred Planned-implementation admonitions and the
+  relativistic concept notes (12 lines), per the do-not-touch rule
+  in the plan.
+- `lib.bak/` retained on disk as a recovery point; gitignored.
+
+### Post-restructure follow-ups
+
+- The umbrella's `using .Stab; using .Est` had to be promoted to
+  `Reexport.@reexport using .Stab` / `… using .Est` so that
+  `using SigmaTau` brings every Stab/Est export into the caller's
+  namespace. `Reexport` is back in `[deps]` as a result.
+- `test/stab/runtests.jl` had 36 qualified `SigmaTauStability.<name>`
+  calls (used to reach internal kernels like `_adev_core` from the test
+  side); rewritten to `SigmaTau.Stab.<name>`.
+- 11 docs internal links (`reference/{base,stability,ensemble}.md`) and
+  ~9 implementation-detail file paths in `docs/src/theory/*` updated
+  to the new `src/{stab,est}/...` tree. Two MHTOTDEV/HTDEV originality
+  callouts updated to "original to SigmaTau".

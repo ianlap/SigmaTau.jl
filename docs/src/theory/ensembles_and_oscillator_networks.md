@@ -482,7 +482,7 @@ predictions to shorter `τ`
   the time-scale output.
 - [Allan family](allan_family.md) — the deviation kernels used as
   pairwise inputs to the cornered-hat closures.
-- [API: SigmaTauEnsemble](../reference/ensemble.md) —
+- [API: `SigmaTau.Est`](../reference/est.md) —
   [`KuramotoOscillator`](@ref).
 
 ## References

@@ -138,7 +138,7 @@ the chosen coordinate timescale.
   that closes the loop on a disciplined clock.
 - [Allan family](allan_family.md) — verification of the
   post-correction stability with $\sigma_y(\tau)$ slope identification.
-- [API: SigmaTauEnsemble](../reference/ensemble.md) —
+- [API: `SigmaTau.Est`](../reference/est.md) —
   [`RelativisticClock`](@ref).
 
 ## Primary sources

@@ -7,21 +7,22 @@ PID steering.
 
 ## Package layout
 
-SigmaTau.jl is a Julia 1.11 workspace monorepo. Three subpackages are
-re-exported through an umbrella `SigmaTau`:
+SigmaTau.jl is a single Julia 1.11 package. Shared types live at the
+top level; clock-stability and clock-estimation code is split across
+two submodules whose exports are flattened back onto the umbrella:
 
-| Subpackage | Responsibility |
+| Surface | Responsibility |
 |---|---|
-| [`SigmaTauBase`](reference/base.md)         | Core data types: `PhaseData`, `FrequencyData`, `StabilityResult`. |
-| [`SigmaTauStability`](reference/stability.md) | Deviation kernels, EDF / CI, noise identification. |
-| [`SigmaTauEnsemble`](reference/ensemble.md)   | Clock state-space models, Kalman filter, PID steering. |
+| [Top level](reference/types.md)        | Shared data types: `PhaseData`, `FrequencyData`, `StabilityResult`. |
+| [`SigmaTau.Stab`](reference/stab.md)   | Deviation kernels, EDF / CI, noise identification. |
+| [`SigmaTau.Est`](reference/est.md)     | Clock state-space models, Kalman filter, PID steering. |
 
 ## Where to next
 
 - **First time?** See [Getting Started](getting_started.md).
 - **Need theory?** Start with [Theory: Overview](theory/overview.md).
 - **Want a worked example?** Pick a [Tutorial](tutorials/01_phase_data.md).
-- **Looking up an API?** Browse the [API Reference](reference/base.md).
+- **Looking up an API?** Browse the [API Reference](reference/types.md).
 - **Verifying numerics?** See [Validation](validation/methodology.md).
 
 ## Reference math

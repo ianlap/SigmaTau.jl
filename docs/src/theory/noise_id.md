@@ -31,7 +31,7 @@ monotonically onto the spectral exponent α. Their procedure:
 
 For `r₁` near 0.5 the noise is white; near zero, flicker; near −0.5,
 random-walk. The α-to-`r₁` mapping is implemented in
-`lib/SigmaTauStability/src/noise/lag1.jl`.
+`src/stab/noise/lag1.jl`.
 
 ```julia
 identify_noise(x, [1, 2, 4, 8]; dmin=0, dmax=2)
@@ -92,7 +92,7 @@ last reliable classification rather than emitting `:unknown` mid-run.
 ## See also
 
 - [Theory: Confidence](confidence.md).
-- [API: SigmaTauStability](../reference/stability.md).
+- [API: `SigmaTau.Stab`](../reference/stab.md).
 
 ## References
 

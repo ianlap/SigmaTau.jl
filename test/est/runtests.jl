@@ -28,7 +28,7 @@ else
     @info "legacy/julia/src not present, skipping legacy-KF parity testsets"
 end
 
-@testset "SigmaTauEnsemble.jl" begin
+@testset "SigmaTau.Est" begin
 
     # ── Φ / Q matrix parity ──────────────────────────────────────────────────
     if LEGACY_PRESENT

@@ -40,7 +40,7 @@ A phase-averaged second difference. SP1065 Eq. 16:
 ```
 
 The inner phase-averaging step decouples WPM (μ_dev = −3/2) from FPM
-(μ_dev = −1). In `lib/SigmaTauStability/src/core/allan.jl` this is
+(μ_dev = −1). In `src/stab/core/allan.jl` this is
 implemented in third-difference form via prefix sums (Greenhall 1997
 [@cite greenhall-1997-third-difference-mvar]) — algebraically identical to the SP1065 form
 above; see `legdocs/equations/allan.md` for the equivalence proof.
@@ -286,14 +286,14 @@ gives a numerically valid time-stability summary where TDEV would be
 contaminated.
 
 !!! info "Original contribution"
-    HTDEV is original to SigmaTauStability.jl. The standard
+    HTDEV is original to SigmaTau. The standard
     time-and-frequency references — SP1065
     [@cite riley-2008-sp1065], IEEE 1139-2022
     [@cite ieee1139-2022-definitions], NBS-TN-1337
     [@cite sullivan-1990-tn1337] — do not define it. The
     authoritative definition lives in the package source itself; the
     public wrapper sits at
-    [`lib/SigmaTauStability/src/api/hadamard.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/lib/SigmaTauStability/src/api/hadamard.jl#L45)
+    [`src/stab/api/hadamard.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/stab/api/hadamard.jl)
     and uses the same `τ`-rescale-of-a-Modified-deviation pattern as
     TDEV (SP1065 §5.2.7 [@cite riley-2008-sp1065]) applied to the
     modified-Hadamard kernel rather than the modified-Allan kernel.
@@ -339,10 +339,9 @@ characteristic split that makes MDEV able to disambiguate WPM from FPM.
 
 ## Implementation notes
 
-- All cores in `lib/SigmaTauStability/src/core/{allan,hadamard}.jl` take
+- All cores in `src/stab/core/{allan,hadamard}.jl` take
   `Vector{Float64}` and return raw arrays; the public API in
-  `lib/SigmaTauStability/src/api/` wraps them and returns
-  `StabilityResult`.
+  `src/stab/api/` wraps them and returns `StabilityResult`.
 - `MDEV/MHDEV` use a prefix-sum form algebraically equivalent to the
   textbook `1/m⁴` form; see `legdocs/equations/allan.md` for the proof.
 - `tdev` and `htdev` are scaling wrappers; they do no extra kernel work.
@@ -351,7 +350,7 @@ characteristic split that makes MDEV able to disambiguate WPM from FPM.
 
 - [Theory: Total family](total_family.md) — boundary-extended estimators.
 - [Theory: Confidence](confidence.md) — EDF and CI for these estimators.
-- [API: SigmaTauStability](../reference/stability.md) — function signatures.
+- [API: `SigmaTau.Stab`](../reference/stab.md) — function signatures.
 
 ## References
 
