@@ -6,6 +6,29 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- Restructured from a three-subpackage workspace
+  (`SigmaTauBase` / `SigmaTauStability` / `SigmaTauEnsemble`) into a
+  single registerable package with two submodules (`SigmaTau.Stab`
+  and `SigmaTau.Est`). Shared types (`PhaseData`, `FrequencyData`,
+  `StabilityResult`) now live at the top level. All previous exports
+  continue to be re-exported from `SigmaTau`, so user code that imported
+  via `using SigmaTau` keeps working unchanged. Code that explicitly
+  imported `using SigmaTauBase`, `using SigmaTauStability`, or
+  `using SigmaTauEnsemble` must switch to `using SigmaTau` (or
+  `using SigmaTau.Stab` / `using SigmaTau.Est` for the submodules).
+- Repository no longer contains the `lib/` workspace tree. `Project.toml`
+  is a single-package manifest with no `[workspace]` or `[sources]`
+  blocks. Package UUID regenerated; `julia` compat bumped to `1.11`.
+- `Plots` removed from the merged `[deps]` (it was only declared on the
+  legacy `SigmaTauStability/Project.toml`, never imported in source);
+  plot recipes still load via the existing `RecipesBase` weakdep
+  extension.
+- `docs/src/reference/{base,stability,ensemble}.md` renamed to
+  `{types,stab,est}.md`; `docs/make.jl` collapsed to a single
+  `using SigmaTau` and one recursive `DocMeta.setdocmeta!` call.
+
 ### Added
 
 - Theory: relativistic-PNT cluster expanded from a Seyffert-only

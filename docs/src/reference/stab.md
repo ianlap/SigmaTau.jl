@@ -1,4 +1,4 @@
-# SigmaTauStability API
+# SigmaTau.Stab — Stability analysis
 
 ## Allan family deviations
 

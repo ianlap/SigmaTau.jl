@@ -1,4 +1,4 @@
-# SigmaTauEnsemble API
+# SigmaTau.Est — Estimation
 
 ## Clock models
 
