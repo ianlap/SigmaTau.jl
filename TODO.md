@@ -6,7 +6,9 @@ should remove the matching entry here and add one under `## [Unreleased]` in
 the changelog in the same commit.
 
 > **Audit date**: 2026-05-09 (post single-package restructure + theory-pages
-> + relativistic-PNT cluster + total-family threading + EDF stride fix).
+> + relativistic-PNT cluster + total-family threading + EDF stride fix;
+> Julia-ecosystem research pass added flicker-Markov, MTIE, IMM,
+> calibration, and JSMD-lunar-stack entries).
 > Top-level test layout: `test/runtests.jl` aggregates `test/types/`,
 > `test/stab/` and `test/est/`. `using SigmaTau` precompiles in ~6 s.
 
@@ -83,19 +85,64 @@ numerical reference is locked in.
 
 ---
 
-## 🟡 Medium (new estimators / models)
+## 🟡 Medium (new metrics, estimators, models)
 
+- [ ] **MTIE (Maximum Time Interval Error).** ITU-T G.810/G.823 metric;
+  sliding-window peak-to-peak of the phase record. The only stability
+  metric in `AllanDeviations.jl` that SigmaTau lacks. Add `_mtie_core`
+  in `src/stab/core/mtie.jl` and `mtie(::PhaseData)` in
+  `src/stab/api/mtie.jl`; cross-check against `AllanDeviations.mtie`
+  on the shared `reference/validation/` fixtures.
+- [ ] **Flicker-noise Markov approximation in the KF.** `TwoStateClock` /
+  `ThreeStateClock` cover only integer-α processes (WPM, WFM, RWFM);
+  flicker (FPM α=1, especially FFM α=−1) is the dominant regime for
+  Cs / Rb / H-maser clocks over the τ range we care about and is
+  currently unmodelled. Approximate 1/f as a sum of N first-order
+  Gauss–Markov processes with log-spaced poles `βᵢ` over the band of
+  interest, append N states to the clock vector, build Φ/Q
+  block-diagonally — stays AD-clean and StaticArrays-friendly with N
+  as a type parameter. New `FlickerClock{N}` (or a
+  `flicker::FlickerMarkov{N}` block on `ThreeStateClock`) in
+  [`src/est/models/clocks.jl`](src/est/models/clocks.jl). References:
+  Davis–Greenhall–Stacey 2005 "A Kalman filter clock algorithm for use
+  in the presence of flicker frequency modulation noise";
+  Galleani–Tavella 2010 "Time and the Kalman filter"; Zucca–Tavella
+  2005. Validation: synthesise FFM via `_gen_powerlaw_phase`, fit the
+  augmented filter, check residual whitening and recovered σ_y(τ)
+  flicker floor.
+- [ ] **`fit_clock_params(::PhaseData)` calibration helper.** Inverse
+  problem: given a measured phase record, recover diffusion
+  coefficients (`q0..q3` for `ThreeStateClock`, plus `(βᵢ, σᵢ)` for
+  the flicker block when present). Backend:
+  `EnsembleKalmanProcesses.jl` (Apache-2.0) — EKI/UKI is fast on this
+  low-dimensional, derivative-free inverse fit and composes cleanly
+  with whatever clock model is in play. Add as a weakdep + extension
+  to keep `[deps]` slim.
+- [ ] **IMM (Interacting Multiple Models) estimator** for clock fault
+  detection — switching dynamics between healthy / glitch / aging
+  modes. Reference implementation:
+  `LowLevelParticleFilters.InteractingMultipleModels`. Pairs naturally
+  with the existing noise-ID anomaly detector and a future
+  "anomaly demo" example.
 - [ ] **`RelativisticClock`** — empty struct in
   [`src/est/models/clocks.jl`](src/est/models/clocks.jl). Lunar-PNT
   future work; design the relativistic correction terms and
   `state_transition` / `process_noise` overrides. Docstring
   (`!!! note "Stub implementation"`) is in place per the recent
-  Est-docstring batch.
+  Est-docstring batch. When this lands, adopt the
+  JuliaSpaceMissionDesign stack as deps: `Tempo.jl`
+  (TAI/UTC/TT/TDB/TCG/TCB epoch transformations, allocation-free,
+  leap seconds), `Ephemerides.jl` (pure-Julia DE440/PA440 SPK/PCK
+  reader, ForwardDiff-clean, faster than SPICE.jl), and
+  `FrameTransformations.jl` (lunar frames via PA440 + user-defined
+  frames). All MIT, all pure Julia, all AD-clean.
 - [ ] **`UDFactorizedFilter`** — empty struct in
   [`src/est/estimators/filters.jl`](src/est/estimators/filters.jl).
   U–D Bierman/Thornton factorisation for low-observability
   lunar-distance measurements (numerical stability when `S` is
-  near-singular). Docstring stub callout in place.
+  near-singular). Reference: `LowLevelParticleFilters.SqKalmanFilter`
+  (square-root form, same numerical-stability goal — read its source
+  before implementing). Docstring stub callout in place.
 - [ ] **`KuramotoOscillator`** — empty struct in the same file.
   Nearest-neighbor phase coupling estimator targeted at SWaP-constrained
   pLEO ensembles. Docstring stub callout in place.
@@ -113,6 +160,19 @@ numerical reference is locked in.
     fleshed out per the Medium-priority entry).
   - Three-cornered-hat noise separation on three independent
     `PhaseData` records.
+  - **GP-based holdover prediction** via `TemporalGPs.jl` with a
+    sum-of-Matérn-1/2 kernel — mathematically equivalent to the
+    flicker Markov approximation (Matérn-1/2 ≡ OU); sits next to the
+    existing TDEV / HTDEV / KF curves in
+    `examples/05_holdover_comparison.jl` as a fourth reference line.
+  - **UDE drift learning** via `DiffEqFlux.jl` — show how a
+    `TwoStateClock`'s `predict!` composes with a NeuralODE that
+    learns the unmodelled drift residual. Don't take SciML as a dep;
+    keep it confined to the example.
+- [ ] **`taus` enum API** (`AllTaus`, `Octave`, `HalfOctave`,
+  `QuarterOctave`, `Decade`, `HalfDecade`) à la `AllanDeviations.jl`
+  — cleaner than passing arrays. Backwards-compatible if added as an
+  alternative to the current array form.
 - [ ] **Compat upper bounds** in the root `Project.toml`. The merged
   manifest already pins `Distributions = "0.25.125"` and lists
   `compat` for AbstractFFTs, DocStringExtensions, RecipesBase,
