@@ -13,6 +13,7 @@ when the docs build. Edit the script, rebuild, and the corresponding
 | `02_compute_adev.jl`                | Run `adev`; explore `StabilityResult` (CI, EDF, noise type).         |
 | `03_kalman_single_clock.jl`         | Track a `ThreeStateClock` with `StandardKalmanFilter` (open-loop).   |
 | `04_kalman_pid_steering.jl`         | Closed-loop PID steering with critical-damping gains.                |
+| `05_holdover_comparison.jl`         | Holdover budget three ways: TDEV vs HTDEV vs Kalman `predict!`.      |
 
 ## Running
 
