@@ -1,5 +1,6 @@
 using Documenter
 using DocumenterCitations
+using Literate
 using SigmaTau
 # Plot backend: PGFPlotsX renders LaTeX-quality vector PDFs and
 # font-matches the docs body. Loaded here so that any `@example` block
@@ -11,6 +12,23 @@ using SigmaTau
 using Plots
 using PGFPlotsX
 Plots.pgfplotsx()
+# Enable `\text{…}` (and friends) inside math labels — PGFPlotsX's
+# default preamble ships pgfplots only, not amsmath.
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{amsmath}")
+
+# ── Literate.jl: render examples/*.jl into docs/src/tutorials/ ──────────────
+# Each top-level `examples/*.jl` is single-source: edit the script,
+# rebuild, and the matching `tutorials/<name>.md` regenerates. The
+# generated pages are gitignored (only the `.jl` files are tracked).
+const EXAMPLES_DIR  = joinpath(@__DIR__, "..", "examples")
+const TUTORIALS_DIR = joinpath(@__DIR__, "src", "tutorials")
+mkpath(TUTORIALS_DIR)
+for jl in sort(readdir(EXAMPLES_DIR; join=true))
+    endswith(jl, ".jl") || continue
+    Literate.markdown(jl, TUTORIALS_DIR;
+                      documenter = true,
+                      credit     = false)
+end
 
 bib = CitationBibliography(
     joinpath(@__DIR__, "src", "refs.bib");
@@ -53,9 +71,8 @@ makedocs(
         "Tutorials"       => [
             "tutorials/01_phase_data.md",
             "tutorials/02_compute_adev.md",
-            "tutorials/03_identify_noise.md",
-            "tutorials/04_confidence_intervals.md",
-            "tutorials/05_single_clock_steering.md",
+            "tutorials/03_kalman_single_clock.md",
+            "tutorials/04_kalman_pid_steering.md",
             "tutorials/single_clock_holdover.md",
         ],
         "API Reference"   => [

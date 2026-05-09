@@ -36,7 +36,8 @@ populated with `tau`, `dev`, per-τ `noise_type`, χ²-based confidence bounds
 
 ## Where to next
 
-- [Tutorial 1: Phase Data](tutorials/01_phase_data.md) — load and inspect a record.
-- [Tutorial 2: Computing Allan Deviation](tutorials/02_compute_adev.md) — `adev`, `mdev`, `hdev`.
-- [Tutorial 3: Identifying Noise Type](tutorials/03_identify_noise.md) — lag-1 ACF.
+- [Tutorial 1: Phase data](tutorials/01_phase_data.md) — `PhaseData` / `FrequencyData` basics.
+- [Tutorial 2: Computing Allan deviation](tutorials/02_compute_adev.md) — `adev` and the `StabilityResult` it returns (incl. EDF, χ² CI, noise type).
+- [Tutorial 3: Tracking a single clock with the Kalman filter](tutorials/03_kalman_single_clock.md) — `predict!` / `update!` loop.
+- [Tutorial 4: Closed-loop PID steering](tutorials/04_kalman_pid_steering.md) — critical-damping gains.
 - [Theory: Overview](theory/overview.md) — what σ_y(τ) means.
