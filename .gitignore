@@ -48,3 +48,10 @@ reference/clock_data/
 # Scratchpad files (Ian's REPL throwaways, never checked in)
 scratch.jl
 scratch.py
+
+# Literate.jl-generated tutorial pages. `docs/make.jl` walks
+# `examples/*.jl` and renders each into `docs/src/tutorials/<name>.md`
+# at build time; the `.jl` files are the single source of truth.
+# Hand-written tutorials (e.g. `single_clock_holdover.md`) are NOT
+# matched by this pattern — only the numeric-prefix Literate output is.
+docs/src/tutorials/0*_*.md
