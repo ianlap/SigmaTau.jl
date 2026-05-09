@@ -4,7 +4,7 @@
 # whitespace-separated. We infer τ₀ from the median Δt of the time column
 # (in seconds) and return a `PhaseData`.
 
-using SigmaTauBase: PhaseData
+using SigmaTau: PhaseData
 using DelimitedFiles: readdlm
 using Statistics: median
 
@@ -21,4 +21,11 @@ end
 function bench_m_values(N::Integer)
     cap = floor(Int, log2(N / 3))
     return [1 << k for k in 0:cap]
+end
+
+"Single-column phase loader (used by the synthetic bench)."
+function load_phase_1col(path::AbstractString; tau0::Float64=1.0)
+    arr = readdlm(path, Float64)
+    arr = vec(arr)
+    return PhaseData(arr, tau0), length(arr), tau0
 end

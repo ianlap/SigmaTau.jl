@@ -1,0 +1,6 @@
+[deps]
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+SigmaTau = "c34468cf-613a-4a89-b990-738073237867"
+
+[sources]
+SigmaTau = {path = "../.."}
