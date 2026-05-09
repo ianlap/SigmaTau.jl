@@ -1,6 +1,16 @@
 using Documenter
 using DocumenterCitations
 using SigmaTau
+# Plot backend: PGFPlotsX renders LaTeX-quality vector PDFs and
+# font-matches the docs body. Loaded here so that any `@example` block
+# that subsequently `using Plots` picks up PGFPlotsX as the default
+# backend automatically (Plots.jl module state is process-global).
+# Requires `pdflatex` / `lualatex` and `pdftocairo` in PATH — see
+# .github/workflows/Documentation.yml for the CI install of texlive
+# packages and poppler-utils.
+using Plots
+using PGFPlotsX
+Plots.pgfplotsx()
 
 bib = CitationBibliography(
     joinpath(@__DIR__, "src", "refs.bib");
