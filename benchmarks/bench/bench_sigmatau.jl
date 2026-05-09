@@ -1,4 +1,4 @@
-# validation/bench/bench_sigmatau.jl
+# benchmarks/bench/bench_sigmatau.jl
 # Wall-clock benchmark for every SigmaTau public deviation on a real
 # clock recording. The total-family kernels are multithreaded across the
 # m-loop (see `Threads.@threads :dynamic` in core/total.jl); start Julia
@@ -10,7 +10,7 @@
 # first so the JIT/precompile cost is paid out of band. Then time the
 # real run with @elapsed. Reported in seconds.
 #
-# Run from the persistent REPL (assuming the validation/plots project
+# Run from the persistent REPL (assuming the benchmarks/plots project
 # is active — it has SigmaTauStability dev'd):
 #
 #     bench("reference/clock_data/6krb25apr.txt")
@@ -34,7 +34,7 @@ BLAS.set_num_threads(1)  # we don't use BLAS in the kernels; keep it out of the 
 
 if Threads.nthreads() == 1
     @warn "Julia started with -t 1 (single-threaded). Total-family kernels are " *
-          "Threads.@threads-parallel; restart with `julia --project=validation/plots -t auto` " *
+          "Threads.@threads-parallel; restart with `julia --project=benchmarks/plots -t auto` " *
           "to see the multithreaded speedup."
 else
     @info "Julia threads: $(Threads.nthreads())"
@@ -213,8 +213,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #   <path> [out.json] [m_max]           — single-record bench (legacy)
     #   --synth <dir> [out.json] [m_max]    — synthetic statistical bench
     length(ARGS) >= 1 || error("usage:\n" *
-        "  julia --project=validation/bench -t auto bench_sigmatau.jl <path> [out.json] [m_max]\n" *
-        "  julia --project=validation/bench -t auto bench_sigmatau.jl --synth <dir> [out.json] [m_max]")
+        "  julia --project=benchmarks/bench -t auto bench_sigmatau.jl <path> [out.json] [m_max]\n" *
+        "  julia --project=benchmarks/bench -t auto bench_sigmatau.jl --synth <dir> [out.json] [m_max]")
     if ARGS[1] == "--synth"
         length(ARGS) >= 2 || error("--synth requires a directory argument")
         synth_dir = ARGS[2]

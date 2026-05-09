@@ -4,7 +4,7 @@ for the statistical bench. Each file is a single-column whitespace-separated
 .txt of N standard-normal values; seed = realization index.
 
 Usage:
-    python gen_synth.py --N 25000 --reals 30 --out-dir validation/bench/synth
+    python gen_synth.py --N 25000 --reals 30 --out-dir benchmarks/bench/synth
 """
 from __future__ import annotations
 import argparse

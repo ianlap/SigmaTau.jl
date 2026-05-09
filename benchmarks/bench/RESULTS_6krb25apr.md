@@ -41,35 +41,35 @@ Memory: SigmaTau = Julia @timed .bytes (cumulative alloc);
 
 ## Bench machinery (left on remote, not pushed)
 
-- `validation/bench/results_sigmatau.json` — full SigmaTau JSON (per-kernel time + alloc + gctime, run meta)
-- `validation/bench/results_allantools.json` — allantools JSON (per-kernel time + peak ΔRSS, run meta)
-- `validation/bench/render_table.py` — merges the two JSONs into the table above; supports `--kernels k1,k2,...` filter
-- `validation/bench/Project.toml` — bench env (path-source dev'd `SigmaTauStability` + `SigmaTauBase` + `JSON`); created because root `Project.toml`'s `[workspace] members = [...]` block isn't accepted by Julia 1.12.6 Pkg
-- `validation/bench/bench_sigmatau.jl` — added `@timed` per-kernel memory capture, JSON output, CLI entry, optional 3rd arg `m_max`
-- `validation/bench/bench_allantools.py` — added `RSSPeakSampler` (25 ms-poll psutil), one-shot mode (default) with optional `--per-m` diagnostic mode, `--m-max` flag, JSON output
-- `validation/bench/bench_*.log` — raw run logs
+- `benchmarks/bench/results_sigmatau.json` — full SigmaTau JSON (per-kernel time + alloc + gctime, run meta)
+- `benchmarks/bench/results_allantools.json` — allantools JSON (per-kernel time + peak ΔRSS, run meta)
+- `benchmarks/bench/render_table.py` — merges the two JSONs into the table above; supports `--kernels k1,k2,...` filter
+- `benchmarks/bench/Project.toml` — bench env (path-source dev'd `SigmaTauStability` + `SigmaTauBase` + `JSON`); created because root `Project.toml`'s `[workspace] members = [...]` block isn't accepted by Julia 1.12.6 Pkg
+- `benchmarks/bench/bench_sigmatau.jl` — added `@timed` per-kernel memory capture, JSON output, CLI entry, optional 3rd arg `m_max`
+- `benchmarks/bench/bench_allantools.py` — added `RSSPeakSampler` (25 ms-poll psutil), one-shot mode (default) with optional `--per-m` diagnostic mode, `--m-max` flag, JSON output
+- `benchmarks/bench/bench_*.log` — raw run logs
 - `.bench-venv/` — Python venv (allantools 2024.06, numpy 2.4.4, psutil 7.2.2)
 
 ## Reproduce
 
 ```bash
 # SigmaTau (~1 s wall + warmup, 12 threads, m capped at 512)
-julia --project=validation/bench -t auto \
-  validation/bench/bench_sigmatau.jl \
+julia --project=benchmarks/bench -t auto \
+  benchmarks/bench/bench_sigmatau.jl \
   reference/clock_data/6krb25apr.txt \
-  validation/bench/results_sigmatau.json \
+  benchmarks/bench/results_sigmatau.json \
   512
 
 # allantools (~62 min wall, single-thread, m capped at 512)
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-  .bench-venv/bin/python validation/bench/bench_allantools.py \
+  .bench-venv/bin/python benchmarks/bench/bench_allantools.py \
   reference/clock_data/6krb25apr.txt \
-  --out validation/bench/results_allantools.json \
+  --out benchmarks/bench/results_allantools.json \
   --m-max 512
 
 # Combined table (filter to the 7 kernels both implement)
-.bench-venv/bin/python validation/bench/render_table.py \
+.bench-venv/bin/python benchmarks/bench/render_table.py \
   --kernels adev,mdev,hdev,tdev,totdev,mtotdev,htotdev \
-  validation/bench/results_sigmatau.json \
-  validation/bench/results_allantools.json
+  benchmarks/bench/results_sigmatau.json \
+  benchmarks/bench/results_allantools.json
 ```

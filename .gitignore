@@ -37,15 +37,14 @@ AGENTS.md
 # Internal planning / migration artifacts (not for public repo)
 legacy/
 legdocs/
-rough_changelog/
 
 # Throwaway diagnostic plot scripts + their generated PNGs.
-# `validation/bench/` is real perf-measurement infrastructure and stays tracked.
-validation/plots/
+# `benchmarks/bench/` is real perf-measurement infrastructure and stays tracked.
+benchmarks/plots/
 
 # Proprietary / large clock recordings used for off-repo validation
 reference/clock_data/
 
-# lib.bak/ — pre-restructure recovery point; safe to delete after the new
-# structure has been validated for at least one development cycle.
-lib.bak/
+# Scratchpad files (Ian's REPL throwaways, never checked in)
+scratch.jl
+scratch.py

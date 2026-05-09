@@ -19,7 +19,7 @@
     "mode": "synth",
     "n_m": 10,
     "n_reals": 30,
-    "synth_dir": "validation/bench/synth",
+    "synth_dir": "benchmarks/bench/synth",
     "tau0_s": 1.0,
     "threads": 12
   },

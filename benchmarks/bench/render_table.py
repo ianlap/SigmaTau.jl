@@ -2,8 +2,8 @@
 """Merge bench_sigmatau.jl + bench_allantools.py JSON outputs into one table.
 
 Usage:
-    python render_table.py validation/bench/results_sigmatau.json \
-                           validation/bench/results_allantools.json
+    python render_table.py benchmarks/bench/results_sigmatau.json \
+                           benchmarks/bench/results_allantools.json
 """
 from __future__ import annotations
 import json
