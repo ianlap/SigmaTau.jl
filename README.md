@@ -1,5 +1,11 @@
 # SigmaTau.jl
 
+[![CI](https://github.com/ianlap/SigmaTau.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/ianlap/SigmaTau.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Docs — stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://ianlap.github.io/SigmaTau.jl/stable/)
+[![Docs — dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ianlap.github.io/SigmaTau.jl/dev/)
+[![Julia ≥ 1.11](https://img.shields.io/badge/julia-%E2%89%A5%201.11-9558B2.svg)](https://julialang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Frequency-stability analysis and clock-ensemble estimation in Julia.
 
 `SigmaTau` ships shared types at the top level (`PhaseData`,
