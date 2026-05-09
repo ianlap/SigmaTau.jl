@@ -16,7 +16,7 @@
 # allantools and Stable32 on totals are documented and small.
 
 @testset "allantools cross-validation" begin
-    ref_dir = joinpath(@__DIR__, "..", "..", "..", "reference", "validation")
+    ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
     dat_path = joinpath(ref_dir, "stable32gen.DAT")
     at_csv   = joinpath(ref_dir, "allantools_out", "allantools_data_full.csv")
 
