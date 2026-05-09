@@ -220,7 +220,7 @@ const LK = LegacyKernels
         # ADEV/MDEV/HDEV/MHDEV/TDEV/TOTDEV; HTOTDEV and MTOTDEV agree with
         # Stable32 only after removing our SP1065 bias correction (Stable32
         # reports unbiased values per `comparison_report.md`).
-        ref_dir = joinpath(@__DIR__, "..", "..", "..", "reference", "validation")
+        ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
         dat_path = joinpath(ref_dir, "stable32gen.DAT")
         csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
 
@@ -320,7 +320,7 @@ const LK = LegacyKernels
         # Stable32 appears to apply alpha-aware correction opaquely at that
         # one point. Skipped here, tracked in TODO.md for follow-up against
         # the allantools cross-validation fixture.
-        ref_dir = joinpath(@__DIR__, "..", "..", "..", "reference", "validation")
+        ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
         dat_path = joinpath(ref_dir, "stable32gen.DAT")
         csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
 
