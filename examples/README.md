@@ -19,14 +19,16 @@ when the docs build. Edit the script, rebuild, and the corresponding
 From the repo root:
 
 ```bash
-julia --project=. examples/01_phase_data.jl
+julia --project=examples examples/01_phase_data.jl
 ```
 
-The path-based project file (`Project.toml` in the repo root) is the
-right environment for the examples. They use `Plots` + `PGFPlotsX` if
-present, but they don't crash without them — the plot calls at the
-end will simply error and you'll get the computational results in
-the REPL.
+`examples/Project.toml` is the env that carries `Plots` + `PGFPlotsX`
+(the package's runtime `Project.toml` deliberately doesn't depend on
+either — they're only needed for visualisation). On the first run,
+`julia --project=examples -e 'using Pkg; Pkg.instantiate()'` will
+resolve and download deps; subsequent runs skip straight to compile.
+A clean checkout under `--project=.` would fail with
+`Package Plots not found` — use `--project=examples`.
 
 ## Docs build
 
