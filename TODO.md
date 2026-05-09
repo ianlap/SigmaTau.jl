@@ -63,6 +63,18 @@ numerical reference is locked in.
   `rtol = 1e-12`/`1e-11` may need to drop to `~1e-9` for the
   modified-total kernels on `--threads auto` CI runners. Verify on a
   multi-thread CI run and loosen only the testsets that actually drift.
+- [ ] **`prop!` — measurement-less covariance propagation.** Add a
+  public `prop!(est::AbstractEstimator, model, dt; steering=nothing)`
+  that advances `est.x ← Φ x` and `est.P ← Φ P Φ' + Q` unconditionally,
+  i.e. **without** the `est.k > 0` gate that `predict!` uses today
+  (`src/est/estimators/filters.jl:202`). Use case: forward holdover-
+  budget prediction with no measurements (see
+  `examples/05_holdover_comparison.jl`, which currently drives Φ/Q
+  manually because `predict!` no-ops on a fresh `est`). Should land
+  alongside a TwoStateClock + ThreeStateClock testset that locks in
+  `prop!`-vs-analytical Q-integration parity at `rtol=1e-14`. After
+  this lands, refactor `examples/05_holdover_comparison.jl` to
+  call `prop!` instead of the inline Φ·P·Φ' + Q loop.
 
 ---
 
@@ -87,10 +99,15 @@ numerical reference is locked in.
 
 ## 🟢 Low (polish)
 
-- [ ] **More `examples/`** — currently `quickstart.jl` and
-  `clock_steering.jl`. Add:
-  - `FrequencyData` ↔ `PhaseData` round-trip demo.
+- [ ] **More `examples/`** — Literate pipeline now ships
+  `01_phase_data`, `02_compute_adev`, `03_kalman_single_clock`,
+  `04_kalman_pid_steering`, `05_holdover_comparison`. Next batch
+  candidates:
   - Multi-clock ensemble scenario (once a multi-clock model lands).
+  - `RelativisticClock` walk-through (depends on the stub being
+    fleshed out per the Medium-priority entry).
+  - Three-cornered-hat noise separation on three independent
+    `PhaseData` records.
 - [ ] **Compat upper bounds** in the root `Project.toml`. The merged
   manifest already pins `Distributions = "0.25.125"` and lists
   `compat` for AbstractFFTs, DocStringExtensions, RecipesBase,
