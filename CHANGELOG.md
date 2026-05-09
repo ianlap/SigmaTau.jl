@@ -6,6 +6,27 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **MTIE** (Maximum Time Interval Error) per ITU-T G.810. Public
+  `mtie(::PhaseData, m_values)` + `mtie(::FrequencyData, …)` plus
+  `_mtie_core` kernel in `src/stab/core/mtie.jl`. Sliding-window
+  peak-to-peak phase excursion; reported as a deterministic envelope
+  (no published EDF / χ² model, so CI fields are empty). Closes the
+  only stability metric SigmaTau lacked vs `AllanDeviations.jl`.
+- **PDEV** (parabolic deviation) per Vernotte–Lenczner–Bourgeois–
+  Rubiola, IEEE T-UFFC 63(4) 2016 and Vernotte 2020. Public
+  `pdev(::PhaseData, m_values)` + `pdev(::FrequencyData, …)` plus
+  `_pdev_core` kernel in `src/stab/core/pdev.jl`. Built from a
+  least-squares parabolic fit; recommended for ω-averaged frequency
+  uncertainty. PDEV(τ₀) ≡ overlapping ADEV(τ₀) by construction at
+  `m=1`. CI fields empty pending future EDF port (TODO).
+- New testsets cross-checking MTIE on a hand fixture, monotonic ramp,
+  constant phase, and naive-double-loop parity at `rtol=1e-15`; PDEV
+  against the allantools reference formula at `rtol=1e-12`, plus the
+  m=1 ≡ ADEV identity, linear-trend annihilation, and constant-phase
+  invariants.
+
 ### Changed
 
 - Repository housekeeping. `lib.bak/` (pre-restructure recovery
