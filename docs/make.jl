@@ -37,6 +37,8 @@ makedocs(
                 "theory/lunar_pnt_systems.md",
             ],
             "theory/ensembles_and_oscillator_networks.md",
+            "theory/validation.md",
+            "theory/publications.md",
         ],
         "Tutorials"       => [
             "tutorials/01_phase_data.md",
@@ -44,6 +46,7 @@ makedocs(
             "tutorials/03_identify_noise.md",
             "tutorials/04_confidence_intervals.md",
             "tutorials/05_single_clock_steering.md",
+            "tutorials/single_clock_holdover.md",
         ],
         "API Reference"   => [
             "reference/types.md",
