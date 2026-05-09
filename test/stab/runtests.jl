@@ -582,6 +582,136 @@ const LK = LegacyKernels
         @test all(isfinite, edfs_h)
     end
 
+    @testset "MTIE core" begin
+        # Hand-checkable fixture: x = [0, 1, 0.5, 2, 1.5]. Window size = m+1.
+        #   m=1: peak-to-peak per window ∈ {1.0, 0.5, 1.5, 0.5}     → 1.5
+        #   m=2: peak-to-peak per window ∈ {1.0, 1.5, 1.5}          → 1.5
+        #   m=3: peak-to-peak per window ∈ {2.0, 1.5}               → 2.0
+        #   m=4: peak-to-peak per window ∈ {2.0}                    → 2.0
+        x = [0.0, 1.0, 0.5, 2.0, 1.5]
+        devs = SigmaTau.Stab._mtie_core(x, [1, 2, 3, 4], 1.0)
+        @test devs ≈ [1.5, 1.5, 2.0, 2.0]
+
+        # Monotonic ramp: max - min over any window of m+1 contiguous samples
+        # is exactly m (the spacing).
+        ramp = collect(0.0:99.0)
+        m_grid = [1, 2, 5, 10, 50]
+        ramp_devs = SigmaTau.Stab._mtie_core(ramp, m_grid, 1.0)
+        @test ramp_devs ≈ Float64.(m_grid)
+
+        # Constant phase → MTIE = 0 at every τ.
+        const_devs = SigmaTau.Stab._mtie_core(fill(3.14, 64), [1, 2, 4, 8], 1.0)
+        @test all(==(0.0), const_devs)
+
+        # NaN guard for windows wider than the record.
+        @test isnan(SigmaTau.Stab._mtie_core(ramp, [200], 1.0)[1])
+
+        # Naive double-loop reference parity on a noisy fixture.
+        using Random
+        Random.seed!(20260509)
+        N = 256
+        xn = cumsum(randn(N))
+        ref = zeros(length(m_grid))
+        for (i, m) in enumerate(m_grid)
+            best = 0.0
+            for j in 1:(N - m)
+                w = view(xn, j:(j + m))
+                d = maximum(w) - minimum(w)
+                d > best && (best = d)
+            end
+            ref[i] = best
+        end
+        got = SigmaTau.Stab._mtie_core(xn, m_grid, 1.0)
+        @test got ≈ ref atol=0.0 rtol=1e-15
+
+        # API wrapper returns a StabilityResult with empty CI fields.
+        pd = PhaseData(xn, 1.0)
+        res = mtie(pd, m_grid)
+        @test res.deviation_type == :mtie
+        @test res.dev ≈ ref
+        @test isempty(res.noise_type)
+        @test isempty(res.ci_lower)
+        @test isempty(res.ci_upper)
+        @test isempty(res.edf)
+
+        # FrequencyData entry point: cumsum-equivalence smoke check.
+        Random.seed!(20260509)
+        y = randn(100) .* 1e-9
+        fd = FrequencyData(y, 1.0)
+        pd_eq = PhaseData(cumsum(y) .* 1.0, 1.0)
+        @test mtie(fd, [1, 2, 4]).dev ≈ mtie(pd_eq, [1, 2, 4]).dev
+    end
+
+    @testset "PDEV core" begin
+        # Identity at m=1: PDEV(τ₀) ≡ overlapping ADEV(τ₀) (Vernotte 2015).
+        using Random
+        Random.seed!(20260509)
+        x = cumsum(randn(512))
+        @test SigmaTau.Stab._pdev_core(x, [1], 1.0)[1] ≈
+              SigmaTau.Stab._adev_core(x, [1], 1.0)[1] atol=0.0 rtol=1e-15
+
+        # Constant phase → PDEV = 0.
+        const_devs = SigmaTau.Stab._pdev_core(fill(2.718, 128), [1, 2, 4, 8], 1.0)
+        @test all(==(0.0), const_devs)
+
+        # Linear phase x[i] = a + b·i: parabolic weights ((m-1)/2 - k) sum to
+        # zero, so the operator kills any linear trend → PDEV = 0.
+        lin = collect(1.0:128.0) .* 0.5 .+ 7.0
+        @test all(d -> d < 1e-12, SigmaTau.Stab._pdev_core(lin, [2, 4, 8, 16], 1.0))
+
+        # NaN guard when M = N - 2m < 1.
+        @test isnan(SigmaTau.Stab._pdev_core(collect(1.0:10.0), [6], 1.0)[1])
+
+        # Reference implementation matching the allantools formula verbatim
+        # (Vernotte 2020): asum = Σ_{k=0}^{m-1} ((m-1)/2 - k)·(x[i+k] - x[i+k+m]),
+        # σ² = 72·ΣMᵢ² / ((N-2m)·m⁴·(m·τ₀)²).
+        function _pdev_reference(x, m_values, tau0)
+            N = length(x)
+            out = Vector{Float64}(undef, length(m_values))
+            for (idx, m) in enumerate(m_values)
+                if m == 1
+                    out[idx] = SigmaTau.Stab._adev_core(x, [1], tau0)[1]
+                    continue
+                end
+                M = N - 2m
+                if M < 1
+                    out[idx] = NaN
+                    continue
+                end
+                Msum = 0.0
+                for i in 1:M
+                    asum = 0.0
+                    for k in 0:(m - 1)
+                        asum += ((m - 1) / 2 - k) * (x[i + k] - x[i + k + m])
+                    end
+                    Msum += asum^2
+                end
+                out[idx] = sqrt(72 * Msum / (M * m^4 * (m * tau0)^2))
+            end
+            return out
+        end
+
+        Random.seed!(20260509)
+        x_noise = cumsum(randn(1024))
+        ms = [1, 2, 4, 8, 16, 32]
+        ref = _pdev_reference(x_noise, ms, 1.0)
+        got = SigmaTau.Stab._pdev_core(x_noise, ms, 1.0)
+        @test got ≈ ref atol=1e-25 rtol=1e-12
+
+        # API wrapper: empty CI fields, FrequencyData dispatch.
+        pd = PhaseData(x_noise, 1.0)
+        res = pdev(pd, ms)
+        @test res.deviation_type == :pdev
+        @test res.dev ≈ ref
+        @test isempty(res.ci_lower) && isempty(res.ci_upper) && isempty(res.edf)
+
+        Random.seed!(20260509)
+        y = randn(200) .* 1e-9
+        fd = FrequencyData(y, 1.0)
+        pd_eq = PhaseData(cumsum(y) .* 1.0, 1.0)
+        @test pdev(fd, [1, 2, 4]).dev ≈ pdev(pd_eq, [1, 2, 4]).dev
+    end
+
     @testset "NEFF_RELIABLE boundary" begin
         # NEFF_RELIABLE = 30 per legacy GEMINI.md §2 mandate. The boundary
         # determines whether identify_noise uses lag-1 ACF (N_eff ≥ threshold)
