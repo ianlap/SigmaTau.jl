@@ -28,6 +28,6 @@ re-exported through an umbrella `SigmaTau`:
 
 Numerical conventions and confidence-interval formulas follow:
 
-- NIST SP1065 [Riley & Howe 2008](@cite RileyHowe2008)
-- Greenhall–Riley 2003 EDF approximations [Greenhall 2003](@cite Greenhall2003)
-- [IEEE Std 1139-2022](@cite IEEE1139_2022)
+- NIST SP1065 [Riley & Howe 2008](@cite riley-2008-sp1065)
+- Greenhall–Riley 2003 EDF approximations [Greenhall 2003](@cite greenhall-2003-edf-stability)
+- [IEEE Std 1139-2022](@cite ieee1139-2022-definitions)

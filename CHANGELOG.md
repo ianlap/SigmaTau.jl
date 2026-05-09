@@ -8,6 +8,29 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Theory: relativistic-PNT cluster expanded from a Seyffert-only
+  placeholder into four pages — `relativistic_clocks` (hub), new
+  `relativistic_frames_and_timescales` (BCRS / GCRS / LCRS, TT / TCG /
+  TCB / TDB / TCL / TL with defining constants and conversions), new
+  `relativistic_corrections` (1PN proper-time mapping, gravitational
+  redshift on the Moon, $L_{Gm}$ Earth–Moon rate constant and
+  Earth–Moon Lagrange-point offsets, cislunar drift regimes for
+  vLLO / LLO / ELFO / L1 / NRHO, Shapiro and Sagnac), and new
+  `lunar_pnt_systems` (TWSTFT synchronous / asynchronous in the ESA
+  Moonlight architecture, relativistic positioning systems with
+  emission coordinates / ABC). Multi-source grounding from Ashby &
+  Patla 2024, Turyshev 2025, Leonard et al. 2026, Iess et al. 2025
+  and 2026, Cacciapuoti & Salomon 2009, Reinhardt et al. 2024, and
+  Gomboc et al. 2013, in addition to the existing Seyffert 2025.
+  Eight bib entries added to `docs/src/refs.bib` for the new sources;
+  pages nested under a "Relativistic PNT" sub-tree in `docs/make.jl`.
+- Docstrings for twelve previously-undocumented `SigmaTauEnsemble`
+  exports (`AbstractClockModel`, `TwoStateClock`, `ThreeStateClock`,
+  `RelativisticClock`, `nstates`, `state_transition`, `process_noise`,
+  `measurement_matrix`, `measurement_noise`, `AbstractEstimator`,
+  `UDFactorizedFilter`, `KuramotoOscillator`); the three stub types
+  carry explicit `!!! note "Stub implementation"` callouts. Substantive
+  docs warnings fall from 23 to 1.
 - Theory section: filled out `overview`, `allan_family`, `total_family`,
   `confidence`, and `noise_id` from SP1065 / IEEE 1139-2022 / GR03 /
   FCS01 / RG04 source material. Hybrid narrative/reference structure

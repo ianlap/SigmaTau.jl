@@ -25,8 +25,8 @@ In SigmaTau:
 adev(PhaseData(x, τ₀), [1, 2, 4, 8, 16])
 ```
 
-(Cite [@cite Sullivan_NBS_TN_1337] for origin; SP1065 §5
-[@cite RileyHowe2008].)
+(Cite [@cite sullivan-1990-tn1337] for origin; SP1065 §5
+[@cite riley-2008-sp1065].)
 
 ## MDEV — modified Allan deviation
 
@@ -42,12 +42,37 @@ A phase-averaged second difference. SP1065 Eq. 16:
 The inner phase-averaging step decouples WPM (μ_dev = −3/2) from FPM
 (μ_dev = −1). In `lib/SigmaTauStability/src/core/allan.jl` this is
 implemented in third-difference form via prefix sums (Greenhall 1997
-[@cite Greenhall1997]) — algebraically identical to the SP1065 form
+[@cite greenhall-1997-third-difference-mvar]) — algebraically identical to the SP1065 form
 above; see `legdocs/equations/allan.md` for the equivalence proof.
 
 ```julia
 mdev(PhaseData(x, τ₀), τs)
 ```
+
+## PVAR — parabolic variance
+
+The parabolic variance is an unbiased estimator of frequency drift
+that uses a quadratic (parabolic) weighting kernel rather than the
+finite-difference kernels of the Allan family
+[@cite banerjee-2023-timekeeping]. PVAR's defining feature is its
+specific design for **detecting and quantifying frequency drift** in
+records that also contain stochastic power-law noise; it gives a
+clean separation of drift from white/flicker FM components that ADEV
+and HDEV cannot achieve via finite-difference cancellation alone.
+
+```math
+\mathrm{PVAR}(\tau) \;=\; \frac{2}{N_e\,m^2\,\tau_0^2}
+\sum_{i} \biggl[\sum_{k=0}^{m} c_k\,x_{i+k}\biggr]^2 ,
+```
+
+with `c_k` a quadratic weighting kernel (parabolic shape over the
+window) constructed so that the operator integrates to zero against
+both constants and linear ramps but responds nonzero to quadratic
+curvature in `x(t)` [@cite banerjee-2023-timekeeping].
+
+!!! note "Planned implementation"
+    The mathematical definition is documented above. The `pvar`
+    function is not yet implemented in SigmaTauStability.jl.
 
 ## TDEV — time deviation
 
@@ -70,7 +95,7 @@ synchronization networks (PTP / SyncE / Recommendation G.810), GNSS
 time transfer, atomic-clock comparison links, and any infrastructure
 where the operative question is "how badly will a downstream
 consumer's clock drift away from the reference over τ seconds?"
-SP1065 §5 [@cite RileyHowe2008] frames it as the way to characterize
+SP1065 §5 [@cite riley-2008-sp1065] frames it as the way to characterize
 "the time error of a time source (clock) or distribution system." For
 records dominated by white PM noise, TVAR reduces to the standard
 variance of the time deviations themselves; for the other power-law
@@ -97,13 +122,13 @@ frequency drift) is annihilated by the third difference, so HDEV is
 not contaminated by drift the way ADEV is. SP1065 demonstrates this
 on a simulated rubidium record: ADEV picks up a `+τ` slope at long τ
 without prior detrending, while HDEV gives essentially the same
-answer as drift-removed ADEV [@cite RileyHowe2008].
+answer as drift-removed ADEV [@cite riley-2008-sp1065].
 
 **Noise-type convergence.** ADEV's variance integral diverges for
 `α ≤ −3` (flicker walk FM, random run FM) at the low-frequency end.
 HDEV remains finite down to `α = −4`, because the third difference
 adds an extra factor of `f²` to the kernel that suppresses the
-`f → 0` singularity [@cite Greenhall1997]. In practice this matters
+`f → 0` singularity [@cite greenhall-1997-third-difference-mvar]. In practice this matters
 only for records with very-low-frequency power-law content; most
 laboratory clocks are well-described in `−2 ≤ α ≤ +2` and ADEV
 suffices.
@@ -120,7 +145,7 @@ hdev(PhaseData(x, τ₀), τs)
 
 A phase-averaged third difference. Combining the SP1065 form with the
 prefix-sum / third-difference equivalence from Greenhall 1997
-[@cite Greenhall1997]:
+[@cite greenhall-1997-third-difference-mvar]:
 
 ```math
 \mathrm{MHVAR}(\tau) \;=\; \frac{1}{6\,m^4 \tau_0^2 \, N_e}
@@ -142,6 +167,78 @@ performance; the equivalence to the textbook expression above is in
 ```julia
 mhdev(PhaseData(x, τ₀), τs)
 ```
+
+## Theo1 — theoretical variance #1
+
+Theo1 (Theoretical Variance #1) extends the usable averaging-time
+range of a stability estimator by sampling longer windows than ADEV
+permits on the same record [@cite riley-2008-sp1065]. Where overlapping
+ADEV uses pairs separated by `mτ₀` with a maximum `m ≤ N/2`, Theo1
+operates over windows of length `(N − 1)·τ₀` regardless of `m` and
+extracts stability information from internal cross-products inside
+that long window. The estimator's headline benefit is **factor-of-3
+extension of the long-τ reach** at fixed record length, with a
+noise-type-dependent bias that is corrected via the Theo1 bias
+table.
+
+```math
+\mathrm{Theo1}(m, \tau_0, N) \;=\;
+\frac{1}{(N - m)\,(0.75\,m\,\tau_0)^2}\,
+\sum_{i=1}^{N-m}\,\sum_{\delta=0}^{m/2-1}
+\frac{1}{m/2 - \delta}\,
+\bigl(x_i - x_{i-\delta+m/2} + x_{i+m} - x_{i+\delta+m/2}\bigr)^2.
+```
+
+[@cite riley-2008-sp1065]
+
+!!! note "Planned implementation"
+    The mathematical definition is documented above. The `theo1`
+    function is not yet implemented in SigmaTauStability.jl.
+
+## ThêoH — composite Theo1 + ADEV estimator
+
+ThêoH (pronounced "theo-H") is a composite estimator that uses
+overlapping ADEV at short averaging factors and switches to the
+bias-corrected Theo1 (TheoBR) at longer averaging factors, producing
+a single continuous σ_y(τ) curve from `m = 1` out to the Theo1
+long-τ limit [@cite riley-2008-sp1065]. The crossover point is chosen
+so that the resulting curve has tight CIs across the entire τ range
+that neither ADEV nor Theo1 alone could provide on a fixed-length
+record. Banerjee & Matsakis recommend ThêoH as the default
+long-record stability summary in modern timekeeping practice
+[@cite banerjee-2023-timekeeping].
+
+!!! note "Planned implementation"
+    The mathematical definition is documented above. The `theoh`
+    function is not yet implemented in SigmaTauStability.jl.
+
+## Dynamic Allan deviation — DADEV
+
+The dynamic Allan deviation generalizes σ_y(τ) to a
+**time-resolved** stability map: instead of a single scalar curve
+versus τ, DADEV produces a 2-D surface σ_y(t, τ) by sliding an
+analysis window across the record and computing ADEV inside each
+window [@cite mckelvy-2025-telemetrystability]. The original
+construction is due to Galleani & Tavella (2009); McKelvy et al.
+2025 apply it to telemetry-based stability estimation of high-
+precision atomic clocks and demonstrate its ability to localize
+non-stationary stability events that a static ADEV averages over.
+
+The estimator structure is
+
+```math
+\sigma_y^2(t_c,\,\tau) \;=\; \frac{1}{2(N_w - 2m)\,(m\tau_0)^2}
+\sum_{i \in W(t_c)} \bigl(x_{i+2m} - 2 x_{i+m} + x_i\bigr)^2 ,
+```
+
+where `W(t_c)` is an analysis window of `N_w` phase samples centered
+at coordinate time `t_c`. The window slides across the record to
+produce DADEV at every `t_c` of interest
+[@cite mckelvy-2025-telemetrystability].
+
+!!! note "Planned implementation"
+    The mathematical definition is documented above. The `dadev`
+    function is not yet implemented in SigmaTauStability.jl.
 
 ## HTDEV — Hadamard time deviation
 
@@ -175,11 +272,11 @@ properties TDEV cannot offer:
   without first removing the drift. SP1065 §5 makes the equivalent
   point for HDEV vs ADEV: "the Hadamard deviation may be used to
   reject linear frequency drift when a stability analysis is performed"
-  [@cite RileyHowe2008]. HTDEV carries that benefit into the
+  [@cite riley-2008-sp1065]. HTDEV carries that benefit into the
   time-domain.
 - **Wider noise-type convergence.** The Hadamard family converges
   over `α ∈ {−4, −3}` (frequency walk-walk and random-run FM) where
-  the Allan family diverges [@cite Greenhall1997]. HTDEV is the
+  the Allan family diverges [@cite greenhall-1997-third-difference-mvar]. HTDEV is the
   time-domain extension of that range.
 
 For records dominated by white-PM noise without drift, TDEV is fine
@@ -188,11 +285,20 @@ For records with drift, divergent low-frequency noise, or both, HTDEV
 gives a numerically valid time-stability summary where TDEV would be
 contaminated.
 
-**Provenance.** The construction is original to this package; the
-standard time-and-frequency references — SP1065 [@cite RileyHowe2008],
-IEEE 1139-2022 [@cite IEEE1139_2022], NBS-TN-1337
-[@cite Sullivan_NBS_TN_1337] — do not define it. The earlier name
-`ldev` is retained as a deprecated alias for one release.
+!!! info "Original contribution"
+    HTDEV is original to SigmaTauStability.jl. The standard
+    time-and-frequency references — SP1065
+    [@cite riley-2008-sp1065], IEEE 1139-2022
+    [@cite ieee1139-2022-definitions], NBS-TN-1337
+    [@cite sullivan-1990-tn1337] — do not define it. The
+    authoritative definition lives in the package source itself; the
+    public wrapper sits at
+    [`lib/SigmaTauStability/src/api/hadamard.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/lib/SigmaTauStability/src/api/hadamard.jl#L45)
+    and uses the same `τ`-rescale-of-a-Modified-deviation pattern as
+    TDEV (SP1065 §5.2.7 [@cite riley-2008-sp1065]) applied to the
+    modified-Hadamard kernel rather than the modified-Allan kernel.
+    The earlier name `ldev` is retained as a deprecated alias for one
+    release.
 
 ## Slope vs noise table
 
@@ -249,9 +355,9 @@ characteristic split that makes MDEV able to disambiguate WPM from FPM.
 
 ## References
 
-- SP1065 §5 [@cite RileyHowe2008].
-- NBS Technical Note 1337 [@cite Sullivan_NBS_TN_1337].
+- SP1065 §5 [@cite riley-2008-sp1065].
+- NBS Technical Note 1337 [@cite sullivan-1990-tn1337].
 - Greenhall, *Third-difference approach to MVAR*, IEEE T-IM 1997
-  [@cite Greenhall1997].
-- IEEE 1139-2022 [@cite IEEE1139_2022] for canonical ADEV / MDEV / HDEV
+  [@cite greenhall-1997-third-difference-mvar].
+- IEEE 1139-2022 [@cite ieee1139-2022-definitions] for canonical ADEV / MDEV / HDEV
   / TDEV / MHDEV definitions; HTDEV is **not** defined there.
