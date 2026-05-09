@@ -1,6 +1,6 @@
 module SigmaTauRecipesBaseExt
 
-using SigmaTauBase: StabilityResult
+using SigmaTau: StabilityResult
 using RecipesBase
 
 @recipe function f(res::StabilityResult)
