@@ -133,7 +133,17 @@ end
 function _lag1_acf(x::Vector{Float64})
     xm   = x .- mean(x)
     ssx  = sum(abs2, xm)
-    ssx < eps(Float64) * length(x) && return NaN
+    # Scale-invariant degeneracy guard: bail out only when the centred
+    # signal really has no power (or float-zero relative to the
+    # raw-magnitude scale). The previous form `ssx < eps(Float64) * N`
+    # mixed dimensions — it tripped on any data with std below
+    # ~√eps ≈ 1.5e-8 regardless of N, so phase records in seconds
+    # (typically 1e-9 .. 1e-12) produced spurious NaN classifications
+    # even though there was 12+ orders of dynamic range left in the
+    # Float64 representation.
+    raw_scale = sum(abs2, x)
+    raw_scale > 0 && ssx <= eps(Float64) * raw_scale && return NaN
+    ssx == 0.0 && return NaN
     return sum(@view(xm[1:end-1]) .* @view(xm[2:end])) / ssx
 end
 
