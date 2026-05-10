@@ -36,6 +36,7 @@ populated with `tau`, `dev`, per-τ `noise_type`, χ²-based confidence bounds
 
 ## Where to next
 
+- [Tutorial 0: Julia for metrologists](tutorials/00_julia_for_metrologists.md) — coming from Stable32? Start here. Covers installation, loading `.DAT` files, your first `adev`, overlaying plots, and saving results to disk.
 - [Tutorial 1: Phase data](tutorials/01_phase_data.md) — `PhaseData` / `FrequencyData` basics.
 - [Tutorial 2: Computing Allan deviation](tutorials/02_compute_adev.md) — `adev` and the `StabilityResult` it returns (incl. EDF, χ² CI, noise type).
 - [Tutorial 3: Tracking a single clock with the Kalman filter](tutorials/03_kalman_single_clock.md) — `predict!` / `update!` loop.

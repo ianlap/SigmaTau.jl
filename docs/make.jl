@@ -69,6 +69,7 @@ makedocs(
             "theory/publications.md",
         ],
         "Tutorials"       => [
+            "tutorials/00_julia_for_metrologists.md",
             "tutorials/01_phase_data.md",
             "tutorials/02_compute_adev.md",
             "tutorials/03_kalman_single_clock.md",
