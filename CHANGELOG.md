@@ -62,6 +62,13 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- **HTDEV CI scaling formally verified** (closes R-MED-5). New
+  assertions in `test/stab/runtests.jl` lock the identity that
+  `htdev = mhdev × τ/√(10/3)` propagates correctly through the χ²
+  CI mapping: dev, ci_lower, and ci_upper all scale by the same
+  multiplicative factor, so the relative-CI ratios
+  `ci_lower / dev` and `ci_upper / dev` are identical to MHDEV's at
+  every τ. Same pattern as the existing TDEV / MDEV verification.
 - **`predict!` now actually uses its `dt` argument.** Previously the
   signature accepted `dt` and silently ignored it in favour of
   `model.tau` (latent issue R-MED-8). With the dt-aware
