@@ -88,6 +88,13 @@ last reliable classification rather than emitting `:unknown` mid-run.
   offset and drift from each decimated subseries; pass `detrend=false`
   to match Stable32's no-detrend convention when comparing fixtures
   point-for-point.
+- **Scale-invariance.** The lag-1 ACF degeneracy guard uses a
+  relative threshold (`ssx ≤ eps · ‖x‖²`) so classification is
+  invariant under positive linear rescaling — phase records in
+  seconds (typically ~1e-9..1e-12) classify identically to the same
+  shape rescaled into any other units. This guard exists only to
+  prevent 0/0 on truly constant input; meaningful tiny-magnitude
+  records pass through normally.
 
 ## See also
 

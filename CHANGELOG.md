@@ -6,6 +6,26 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Noise-ID was silently returning `:unknown` for any phase record
+  with std below ~√eps ≈ 1.5e-8.** `_lag1_acf` (`src/stab/noise/lag1.jl`)
+  guarded against 0/0 with `ssx < eps(Float64) * length(x)`, but that
+  threshold mixes dimensions: for length-N data with std σ,
+  `ssx ≈ σ²·N`, and the rule reduces to `σ² < eps`, i.e. tripping on
+  any data with std below ~1.5e-8 regardless of N. Phase records in
+  seconds (typically 1e-9..1e-12) hit it; they round-tripped through
+  `_lag1_acf` → NaN → `:unknown`, and the rendered docs example
+  (`tutorials/02_compute_adev.md`) showed 8 of 10 m values as
+  `:unknown`. Replaced with a scale-invariant relative guard
+  (`ssx ≤ eps · ‖x‖²`) that only catches genuinely-constant input.
+  Cross-validated against `allantools.autocorr_noise_id 2024.06` on
+  `reference/validation/stable32gen.DAT`: 8/9 m values match exactly,
+  with one borderline disagreement at m=4 (documented). Two new
+  regression testsets in `test/stab/runtests.jl` lock no-`:unknown`
+  on the compute_adev fixture, scale invariance under ×1e6
+  rescaling, and the allantools cross-check (8 m values).
+
 ### Added
 
 - **Three-cornered-hat tutorial** at
