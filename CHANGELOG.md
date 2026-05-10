@@ -6,6 +6,23 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **B1(N, μ) and R(n)(af, b) closed-form regression coverage** in
+  `test/stab/runtests.jl`. Cross-checks the constants in
+  `_b1_theory` and `_rn_theory` against the canonical allantools
+  reference (`ci.py`, Wallin 2018 citing Howe 2000) at machine
+  precision for every (N, μ) and (af, b) consumed by the B1/R(n)
+  noise-ID fallback. Audit confirmed the existing implementation
+  is bit-identical to allantools — these tests now lock the
+  contract so silent drift in either constant fails CI.
+- **Pedagogical Kalman-filter reference** added to `docs/src/refs.bib`
+  and cited in `docs/src/theory/kalman.md` References block:
+  Chaudhari 2022, *Kalman Filter and its Variants* (UVA Link Lab,
+  Learning in Robotics course notes, Chapter 3) — useful as a
+  from-first-principles refresher of the KF/EKF/UKF/PF recursions
+  this module implements.
+
 ### Fixed
 
 - **Noise-ID was silently returning `:unknown` for any phase record
