@@ -66,6 +66,15 @@ proper-time differential and TCB ↔ TCL transformation.
 """
 struct RelativisticClock <: AbstractClockModel end # Lunar PNT specifics
 
+const _RELCLOCK_STUB_MSG = "RelativisticClock is a stub. See the type docstring for the planned implementation."
+nstates(::RelativisticClock)                          = throw(ArgumentError(_RELCLOCK_STUB_MSG))
+state_transition(::RelativisticClock, ::Real)          = throw(ArgumentError(_RELCLOCK_STUB_MSG))
+state_transition(::RelativisticClock)                  = throw(ArgumentError(_RELCLOCK_STUB_MSG))
+process_noise(::RelativisticClock, ::Real)             = throw(ArgumentError(_RELCLOCK_STUB_MSG))
+process_noise(::RelativisticClock)                     = throw(ArgumentError(_RELCLOCK_STUB_MSG))
+measurement_matrix(::RelativisticClock)                = throw(ArgumentError(_RELCLOCK_STUB_MSG))
+measurement_noise(::RelativisticClock)                 = throw(ArgumentError(_RELCLOCK_STUB_MSG))
+
 """
     nstates(model::AbstractClockModel) → Int
 

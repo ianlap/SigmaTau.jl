@@ -357,4 +357,19 @@ end
 
         @test all(diff(sigmas) .> 0.0)
     end
+
+    @testset "Stub type ArgumentError" begin
+        rc = RelativisticClock()
+        @test_throws ArgumentError nstates(rc)
+        @test_throws ArgumentError state_transition(rc, 1.0)
+        @test_throws ArgumentError process_noise(rc, 1.0)
+        @test_throws ArgumentError measurement_matrix(rc)
+        @test_throws ArgumentError measurement_noise(rc)
+
+        m = TwoStateClock(tau=1.0, q0=1e-22)
+        @test_throws ArgumentError predict!(UDFactorizedFilter(), m, 1.0)
+        @test_throws ArgumentError update!(UDFactorizedFilter(), m, 1e-9)
+        @test_throws ArgumentError predict!(KuramotoOscillator(), m, 1.0)
+        @test_throws ArgumentError update!(KuramotoOscillator(), m, 1e-9)
+    end
 end

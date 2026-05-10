@@ -35,10 +35,19 @@ bias_correction
 confidence_intervals
 ```
 
-## Internal kernels
+## I/O
 
-These are exported for advanced use and benchmarking. Most users should
-prefer the wrappers above.
+```@docs
+save_result
+load_result
+```
+
+## Advanced / research kernels
+
+These are exported for benchmarking, parity validation against reference
+implementations, and research use. The underscore prefix signals that the
+calling convention is not stability-guaranteed across minor versions; prefer
+the wrappers above for application code.
 
 ```@docs
 _adev_core
@@ -50,4 +59,6 @@ _totdev_core
 _mtotdev_core
 _htotdev_core
 _mhtotdev_core
+_mtie_core
+_pdev_core
 ```

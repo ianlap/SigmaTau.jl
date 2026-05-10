@@ -48,6 +48,12 @@ reference/clock_data/
 scratch.jl
 scratch.py
 
+# Internal planning docs (not for public repo)
+docs/superpowers/
+
+# One-off repo-setup script
+makedir.sh
+
 # Literate.jl-generated tutorial pages. `docs/make.jl` walks
 # `examples/*.jl` and renders each into `docs/src/tutorials/<name>.md`
 # at build time; the `.jl` files are the single source of truth.
