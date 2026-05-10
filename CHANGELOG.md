@@ -8,6 +8,30 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **`prop!(est, model, dt; steering=nothing)`** — unconditional
+  covariance propagation alongside the existing `predict!` /
+  `update!` loop. Advances `est.x ← Φ(dt) x` and
+  `est.P ← Φ(dt) P Φ(dt)' + Q(dt)` regardless of `est.k`, never
+  bumping the step counter. Powers the shaded ±1σ holdover-band
+  pattern (`examples/05_holdover_comparison.jl` follow-up) and
+  side-channel "what-if" projections without disturbing live filter
+  sequencing.
+- **`state_transition(model, dt)`** / **`process_noise(model, dt)`**
+  overloads in `src/est/models/clocks.jl`. Existing single-arg
+  methods (`state_transition(model)`, `process_noise(model)`)
+  delegate to the new dt-aware forms with `model.tau`, so legacy
+  callers see no behaviour change. Tested at `rtol=1e-14`
+  Q-integration parity against hand-derived closed-form expressions,
+  Φ group property + Q additivity composition (two prop!s ≡ one
+  prop! at any (dt₁, dt₂)), and full prop!-vs-predict! parity once
+  past the `est.k > 0` gate.
+- **Top-level umbrella smoke test** at `test/umbrella_smoke.jl`.
+  Verifies a bare `using SigmaTau` exposes every public symbol
+  (Stab + Est + types), confirms `SigmaTau.Stab` / `SigmaTau.Est`
+  are reachable as modules, exercises the `FrequencyData` dispatch
+  on every deviation including the new MTIE / PDEV, and locks the
+  `ldev` ≡ `htdev` deprecated-alias contract. Closes the
+  "exercised only indirectly" gap from the previous TODO.
 - **MTIE** (Maximum Time Interval Error) per ITU-T G.810. Public
   `mtie(::PhaseData, m_values)` + `mtie(::FrequencyData, …)` plus
   `_mtie_core` kernel in `src/stab/core/mtie.jl`. Sliding-window

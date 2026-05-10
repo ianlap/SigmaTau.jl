@@ -78,7 +78,7 @@ module Est
     export AbstractClockModel, TwoStateClock, ThreeStateClock, RelativisticClock
     export nstates, state_transition, process_noise, measurement_matrix, measurement_noise
     export AbstractEstimator, StandardKalmanFilter, UDFactorizedFilter, KuramotoOscillator
-    export predict!, update!
+    export predict!, update!, prop!
     export PIDController, step!, steer_to_correction
 end
 
