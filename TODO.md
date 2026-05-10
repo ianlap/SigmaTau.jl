@@ -30,12 +30,6 @@ numerical reference is locked in.
   per-recipe — EDF is recipe-specific. Spec:
   `docs/superpowers/specs/2026-05-07-detrend-kwarg-design.md`
   → "Out-of-scope / future work".
-- [ ] **TOTDEV `:howe` allantools cross-val tightening.** Update
-  `test/stab/allantools_cross_validation.jl` so the `"Total"` branch
-  uses `_totdev_core(...; detrend=:howe)` at `rtol=1e-7` (allantools'
-  raw `totdev` already matches our `:howe` to ~7 sig figs on the shared
-  fixture; no need for the `m=512` skip there since allantools doesn't
-  apply Stable32's alpha-aware correction).
 - [ ] **TOTDEV m=512 Stable32 quirk follow-up.** The Stable32
   cross-validation testset skips the m=512 row because Stable32 reports
   a value ~1.5% larger than the raw SP1065 result (allantools agrees
@@ -45,13 +39,6 @@ numerical reference is locked in.
   FLFM-tagged rows and apply the matching correction in the test, or
   document the divergence as an irreducible Stable32-vs-SP1065 policy
   gap.
-- [ ] **EDF stride factor `S` for the totdev/htotdev WPM/FLPM fallback
-  path** in `src/stab/stats/edf.jl`. The four overlapped variants
-  (`:adev`, `:mdev`, `:hdev`, `:mhdev`) were corrected from `S=1` to
-  `S=m` in the recent EDF fix. The Greenhall–Riley fallback that
-  totdev/htotdev hit at α∈{1,2} still passes `S = 1`. Apply the same
-  overlapped convention to the fallback or document why it stays
-  non-overlapped.
 - [ ] **HTOTDEV EDF off-by-one investigation** (`R-MED-6` from the
   theory-pages spec). Reconcile the EDF count returned for HTOTDEV
   against the FCS01 / GR03 expectation; fix or document the offset.
@@ -65,11 +52,6 @@ numerical reference is locked in.
   `rtol = 1e-12`/`1e-11` may need to drop to `~1e-9` for the
   modified-total kernels on `--threads auto` CI runners. Verify on a
   multi-thread CI run and loosen only the testsets that actually drift.
-- [ ] **Add ±1σ band to `examples/05_holdover_comparison.jl` using
-  `prop!`.** `prop!` shipped this batch with full Q-integration parity
-  at rtol=1e-14; the example currently shows the KF RMS prediction-error
-  curve as a point estimate, so the next step is shading ±√P[1,1] over
-  the τ-grid. Pure example refactor — no API change.
 - [ ] **`predict!` `dt` argument is currently ignored** in favour of
   `model.tau` (`src/est/estimators/filters.jl:194`). After the
   `state_transition(model, dt)` / `process_noise(model, dt)` refactor

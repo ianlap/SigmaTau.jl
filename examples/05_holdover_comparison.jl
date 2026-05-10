@@ -148,10 +148,11 @@ end
 #   prediction-error curve.
 #
 # This is purely deterministic propagation of `x` — no Q, no
-# `predict!` recursion, just `Φ^h · x`. Predicting *with* a
-# covariance band (the `prop!` future feature) would let us put
-# error bars on the prediction; the RMS curve here is the
-# point-estimate equivalent.
+# `predict!` recursion, just `Φ^h · x`. The companion *theoretical*
+# 1σ curve is computed in §6.5 below using `prop!`, which integrates
+# Q forward over the same horizon grid; the empirical RMS and the
+# theoretical 1σ should overlay closely once the filter has
+# converged.
 
 const MATURITY = N ÷ 2
 
@@ -171,6 +172,30 @@ for np in MATURITY:(N - 1)
     end
 end
 kf_rms = sqrt.(err_var ./ err_n)
+
+# ## 6.5. Theoretical 1σ via `prop!`
+#
+# `prop!(est, model, dt)` propagates `Φ x` and `Φ P Φ' + Q` over an
+# arbitrary horizon `dt` without bumping the filter's step counter
+# (no `update!`, so it's safe to use on a side-channel copy). At
+# maturity the filter's covariance has converged to a steady-state
+# value `P_mature`; for each horizon `h` we re-seed a fresh estimator
+# at `P_mature` and prop! forward by `h·τ₀`, then read
+# `√P[1,1]` as the theoretical 1σ phase error after `h·τ₀` of
+# free-running.
+#
+# This is the closed-form companion to the empirical RMS curve in
+# §6: same physics (state-noise integration over the horizon),
+# different angle (analytic Q-integration vs. RMS over many starting
+# epochs). They should overlay closely.
+
+P_mature = Matrix(est.P)         # converged P at the end of the filtering loop
+kf_1sigma = zeros(length(m_values))
+for (i, h) in enumerate(m_values)
+    side = StandardKalmanFilter(zeros(3), copy(P_mature))
+    prop!(side, clock, h * tau0)
+    kf_1sigma[i] = sqrt(side.P[1, 1])
+end
 
 # ## 7. Side-by-side comparison
 #
@@ -225,6 +250,10 @@ plot!(result_tdev.tau, kf_rms;
       label = "KF RMS prediction error",
       ls    = :dash,
       lw    = 1.5)
+plot!(result_tdev.tau, kf_1sigma;
+      label = "KF 1σ via prop!",
+      ls    = :dot,
+      lw    = 1.5)
 
 # !!! note "Adding ageing"
 #     The fixture above is noise-only — the WHFM and RWFM
@@ -255,10 +284,11 @@ function readout(tau_grid, curve, target_tau)
 end
 
 for τ_target in (100.0, 1_000.0, 10_000.0)
-    t_tdev  = readout(result_tdev.tau,  result_tdev.dev,  τ_target)
-    t_htdev = readout(result_htdev.tau, result_htdev.dev, τ_target)
-    t_kf    = readout(result_tdev.tau,  kf_rms,            τ_target)
-    @info "Horizon τ ≈ $(t_tdev.tau) s" tdev=t_tdev.value htdev=t_htdev.value kf_rms=t_kf.value
+    t_tdev   = readout(result_tdev.tau,  result_tdev.dev,  τ_target)
+    t_htdev  = readout(result_htdev.tau, result_htdev.dev, τ_target)
+    t_kf     = readout(result_tdev.tau,  kf_rms,           τ_target)
+    t_prop   = readout(result_tdev.tau,  kf_1sigma,        τ_target)
+    @info "Horizon τ ≈ $(t_tdev.tau) s" tdev=t_tdev.value htdev=t_htdev.value kf_rms=t_kf.value kf_1sigma_prop=t_prop.value
 end
 
 # ## 9. When to use which
