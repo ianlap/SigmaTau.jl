@@ -79,8 +79,14 @@
                 mdev_v = sqrt(LK.mdev_var(x, m, tau0, x_cs))
                 got = (m * tau0) * mdev_v / sqrt(3.0)
             elseif kind == "Total"
-                got = sqrt(LK.totdev_var(x, m, tau0))
-                rtol = 0.15   # boundary-extension policy floor (matches Stable32 testset)
+                # allantools' raw `totdev` follows SP1065 eqn 25 verbatim
+                # (no detrend), which is what our `:howe` recipe implements.
+                # Apples-to-apples: agreement is ~7 sig figs across all m
+                # on this fixture (no need for the m=512 skip Stable32 needs
+                # — allantools doesn't apply Stable32's alpha-aware
+                # correction).
+                got = SigmaTau.Stab._totdev_core(x, [m], tau0; detrend=:howe)[1]
+                rtol = 1e-7
             elseif kind == "Hadamard Total"
                 got = sqrt(LK.htotdev_var(x, m, tau0))
                 rtol = 0.10   # ~0.5% bias + boundary effects
