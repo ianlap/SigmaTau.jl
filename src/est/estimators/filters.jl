@@ -177,24 +177,32 @@ end
 # ── The Standardized Update Loop ─────────────────────────────────────────────
 
 """
-    predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Float64;
+    predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Real;
              steering::Union{Nothing,AbstractVector{Float64}} = nothing)
 
-Propagate the estimator state forward in time by `dt`. Optionally add a
-`steering` correction vector to the predicted state mean — matches the
-legacy `filter_step!` semantics where a PID controller's last steer is
-folded into the state after the Φ propagation (phase = +`u·dt`,
-frequency = +`u`).
+Propagate the estimator state forward in time by `dt`. Φ and Q are
+re-derived from `model` for the supplied `dt` via the dt-aware
+[`state_transition`](@ref) / [`process_noise`](@ref) overloads, so
+`predict!(est, model, dt)` covers arbitrary horizons — not only the
+discretization step `model.tau`. Passing `dt = model.tau` reproduces
+the historical behaviour bit-exactly.
+
+Optionally adds a `steering` correction vector to the predicted state
+mean — matches the legacy `filter_step!` semantics where a PID
+controller's last steer is folded into the state after the Φ
+propagation (phase = +`u·dt`, frequency = +`u`).
 
 On the first step (k == 0) the prediction is skipped — the initial
 state is used directly, matching the legacy `filter_step!` convention
 where prediction only fires when `s.k > 1` (after the first
-increment).
+increment). For an unconditional propagation that ignores this gate
+(e.g. covariance-band projection from a fresh side-channel filter)
+use [`prop!`](@ref).
 """
-function predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Float64;
+function predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Real;
                   steering::Union{Nothing,AbstractVector{Float64}} = nothing)
-    Phi = state_transition(model)
-    Q   = process_noise(model)
+    Phi = state_transition(model, dt)
+    Q   = process_noise(model, dt)
 
     if est.k > 0
         x_pred = Phi * est.x

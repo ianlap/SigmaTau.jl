@@ -52,22 +52,10 @@ numerical reference is locked in.
   `rtol = 1e-12`/`1e-11` may need to drop to `~1e-9` for the
   modified-total kernels on `--threads auto` CI runners. Verify on a
   multi-thread CI run and loosen only the testsets that actually drift.
-- [ ] **`predict!` `dt` argument is currently ignored** in favour of
-  `model.tau` (`src/est/estimators/filters.jl:194`). After the
-  `state_transition(model, dt)` / `process_noise(model, dt)` refactor
-  (this batch), wiring `predict!` to actually use its `dt` is a
-  one-line change. Risk: any caller passing `dt ≠ model.tau` would see
-  a behaviour change. None do today, but the gate is worth documenting
-  + flipping deliberately.
-
 ---
 
 ## 🟡 Medium (new metrics, estimators, models)
 
-- [ ] **MTIE O(N log m) optimisation.** Initial v1 ships an O(N·m)
-  sliding-window kernel (`src/stab/core/mtie.jl`); long records will
-  benefit from a monotonic-deque or sparse-table reformulation when
-  the bench warrants it. Functional output is unchanged.
 - [ ] **PDEV EDF / χ² confidence model.** Vernotte 2015 / 2020 derive
   the parabolic-variance EDF in closed form for the five canonical
   power-law noises; port the table into `_coeff_pdev` and wire CI

@@ -190,7 +190,6 @@ remains unchanged.
 | R-MED-5 | HTDEV CI scaling unverified | CI bounds scaled linearly from MHDEV — likely valid but no formal check |
 | R-MED-6 | HTOTDEV EDF off-by-one suspected | Flagged in legacy `discrepancies.md` — not yet audited |
 | R-MED-7 | Noise-ID does not block-process for N > 10⁷ | Performance (not correctness) limit |
-| R-MED-8 | `predict!` ignores its `dt` arg, uses `model.tau` | Latent — no caller hits it today; flagged in TODO |
 
 ### 🟢 Low / Polish
 
@@ -199,7 +198,6 @@ remains unchanged.
 | R-LOW-3 | Tutorials cover the single-clock + steering + holdover path; multi-clock ensemble + relativistic walk-throughs queued |
 | R-LOW-4 | `Documenter.jl` site skeleton shipped; tutorial pages are stubs (theory pages now filled out) |
 | R-LOW-5 | `RelativisticClock`, `UDFactorizedFilter`, `KuramotoOscillator` are stubs |
-| R-LOW-6 | MTIE kernel is O(N·m); monotonic-deque optimisation queued (TODO) |
 
 ---
 

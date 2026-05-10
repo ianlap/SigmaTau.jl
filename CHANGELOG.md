@@ -62,6 +62,24 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- **`predict!` now actually uses its `dt` argument.** Previously the
+  signature accepted `dt` and silently ignored it in favour of
+  `model.tau` (latent issue R-MED-8). With the dt-aware
+  `state_transition(model, dt)` / `process_noise(model, dt)`
+  overloads in place, `predict!` now re-derives Φ and Q for the
+  caller-supplied `dt`. Backwards-compatible at every existing call
+  site — they all pass `dt = model.tau` — but `predict!(est, model, h)`
+  with `h ≠ model.tau` is now usable as a finer-than-tau or
+  coarser-than-tau propagator instead of a no-op. Signature also
+  loosened from `dt::Float64` to `dt::Real` for symmetry with `prop!`.
+- **MTIE kernel reimplemented as a monotonic-deque sliding window**
+  in `src/stab/core/mtie.jl`. Each m runs in O(N) total work via two
+  parallel pre-allocated index deques (one for the running window
+  max, one for the min). Bench at `N = 50 000` with 20 log-spaced m
+  values (max m = N/2) shows a 138× speedup over the previous
+  O(N·m) kernel; output is bit-identical (the existing
+  naive-double-loop parity test at `rtol = 1e-15` continues to
+  pass). No external dependency added.
 - **TOTDEV `:howe` allantools cross-validation tightened** from
   `rtol = 0.15` (legacy-kernel boundary-policy floor) to `rtol = 1e-7`
   (`test/stab/allantools_cross_validation.jl`). Switched the `"Total"`
