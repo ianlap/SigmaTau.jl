@@ -827,4 +827,66 @@ const LK = LegacyKernels
             end
         end
     end
+
+    @testset "B1(N, μ) closed-form parity vs allantools canonical" begin
+        # Locks the closed-form B1 ratios used by the B1/R(n) noise-ID
+        # fallback (`_noise_id_b1rn`) against the canonical allantools
+        # `b1_theory(N, mu)` reference (Wallin 2018, citing Howe 2000).
+        # Drift in any constant here changes which noise type the
+        # B1 fallback picks at every m where lag-1 ACF can't run, so
+        # the table is checked at machine precision.
+        import SigmaTau.Stab as S
+
+        # Canonical reference: allantools/ci.py b1_theory(N, mu).
+        # mu ∈ {1, 0, -1, -2} are the values actually consumed by
+        # _noise_id_b1rn (mu=2 is dead-code defensive, exercised below
+        # for completeness).
+        for N in (50, 100, 1000, 10_000)
+            @test S._b1_theory(N, 2)  ≈ N * (N + 1) / 6                              rtol=0.0
+            @test S._b1_theory(N, 1)  ≈ N / 2                                        rtol=0.0
+            @test S._b1_theory(N, 0)  ≈ N * log(N) / (2 * (N - 1) * log(2))           rtol=0.0
+            @test S._b1_theory(N, -1) == 1.0
+            @test S._b1_theory(N, -2) ≈ (N^2 - 1) / (1.5 * N * (N - 1))              rtol=0.0
+        end
+
+        # Generic Howe formula B1 = N(1 - N^μ) / (2(N-1)(1 - 2^μ))
+        # — the closed forms above are special simplifications. Verify
+        # the simplifications agree with the generic form at a sanity
+        # μ value where both branches return finite values.
+        for N in (100, 1000)
+            generic = N * (1 - Float64(N)^(-2)) / (2 * (N - 1) * (1 - 2.0^(-2)))
+            @test S._b1_theory(N, -2) ≈ generic atol=0.0 rtol=1e-14
+        end
+    end
+
+    @testset "R(n)(af, b) closed-form parity vs allantools canonical" begin
+        # Locks the R(n) = MVAR/AVAR closed-form used by the WPM/FLPM
+        # disambiguation step in `_noise_id_b1rn`. b=0 is the
+        # WHFM-shape (also covers WPM via slope ratio); b=-1 is the
+        # FLFM-shape (also covers FLPM). All other b values fall
+        # through to the af⁰ = 1 branch.
+        import SigmaTau.Stab as S
+
+        # b=0 branch: R(n) = 1/af for every af ≥ 1.
+        for af in (1, 2, 4, 16, 64, 256, 1024)
+            @test S._rn_theory(af, 0) ≈ 1 / af atol=0.0 rtol=0.0
+        end
+
+        # b=-1 branch: explicit Howe/Greenhall formula for the
+        # FLFM/FLPM shape. avar = (1.038 + 3·log(2π·0.5·af)) / (4π²);
+        # mvar = 3·log(256/27) / (8π²); R(n) = mvar/avar.
+        for af in (1, 2, 4, 16, 64, 256, 1024)
+            avar = (1.038 + 3 * log(2π * 0.5 * af)) / (4π^2)
+            mvar = 3 * log(256 / 27) / (8π^2)
+            @test S._rn_theory(af, -1) ≈ mvar / avar atol=0.0 rtol=1e-15
+        end
+
+        # All other b values (including b=2, 1, -2) are not in the
+        # closed-form table and fall through to the constant-1 branch.
+        for af in (1, 4, 64)
+            @test S._rn_theory(af, 1)  == 1.0
+            @test S._rn_theory(af, 2)  == 1.0
+            @test S._rn_theory(af, -2) == 1.0
+        end
+    end
 end
