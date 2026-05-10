@@ -187,7 +187,6 @@ remains unchanged.
 
 | ID | Risk | Impact |
 |----|------|--------|
-| R-MED-5 | HTDEV CI scaling unverified | CI bounds scaled linearly from MHDEV — likely valid but no formal check |
 | R-MED-6 | HTOTDEV EDF off-by-one suspected | Flagged in legacy `discrepancies.md` — not yet audited |
 | R-MED-7 | Noise-ID does not block-process for N > 10⁷ | Performance (not correctness) limit |
 

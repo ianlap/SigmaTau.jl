@@ -42,10 +42,6 @@ numerical reference is locked in.
 - [ ] **HTOTDEV EDF off-by-one investigation** (`R-MED-6` from the
   theory-pages spec). Reconcile the EDF count returned for HTOTDEV
   against the FCS01 / GR03 expectation; fix or document the offset.
-- [ ] **LDEV / HTDEV CI scaling formal verification** (`R-MED-5`).
-  Confirm the `τ / √(10/3)` scaling propagates correctly through the
-  χ² interval mapping in `confidence_intervals` for the `:htdev`
-  branch.
 - [ ] **Modified-total kernel parity rtol** under multi-thread runs.
   Per the threading note in `CHANGELOG.md`, the inner `@threads`
   reduction reorders summation, so kernel-vs-legacy parity tests at

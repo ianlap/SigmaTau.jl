@@ -92,6 +92,22 @@ const LK = LegacyKernels
         @test res_ldev_alias.dev == res_htdev.dev
         @test res_ldev_alias.deviation_type == :htdev
 
+        # htdev wraps mhdev with the τ/√(10/3) scaling — point estimates AND
+        # CI bounds inherit the same multiplicative factor. Closes R-MED-5
+        # (HTDEV CI scaling formal verification): for a non-degenerate
+        # Y = c · X with c constant in τ, the χ²-based CI scales linearly in
+        # c, so [Y.lo, Y.hi] = c · [X.lo, X.hi] is the correct operation.
+        res_mhdev_ref = mhdev(pd, m_values)
+        h_factor = res_htdev.tau ./ sqrt(10.0 / 3.0)
+        @test res_htdev.dev      ≈ res_mhdev_ref.dev      .* h_factor
+        @test res_htdev.ci_lower ≈ res_mhdev_ref.ci_lower .* h_factor
+        @test res_htdev.ci_upper ≈ res_mhdev_ref.ci_upper .* h_factor
+        # χ² invariant: the multiplicative scaling cancels in the ratio
+        # CI_bound / dev, so HTDEV's relative CI structure is identical to
+        # MHDEV's at every τ.
+        @test res_htdev.ci_lower ./ res_htdev.dev ≈ res_mhdev_ref.ci_lower ./ res_mhdev_ref.dev
+        @test res_htdev.ci_upper ./ res_htdev.dev ≈ res_mhdev_ref.ci_upper ./ res_mhdev_ref.dev
+
         # tdev wraps mdev with the τ/√3 scaling — point estimates and CI bounds
         # must be consistent with that identity.
         res_tdev = tdev(pd, m_values)
