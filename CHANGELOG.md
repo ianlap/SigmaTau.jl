@@ -8,6 +8,15 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **KF 1σ holdover band via `prop!`** in
+  `examples/05_holdover_comparison.jl`. New §6.5 captures the
+  filter's converged `P_mature`, re-seeds a side-channel estimator
+  per horizon, calls `prop!(side, clock, h·τ₀)` and reads
+  `√P[1,1]` as the theoretical 1σ phase-error envelope. Plots
+  alongside the existing TDEV / HTDEV / KF-RMS curves on the same
+  log-log axis; the prose comparison is updated since `prop!` is
+  no longer a "future feature".
+
 - **`prop!(est, model, dt; steering=nothing)`** — unconditional
   covariance propagation alongside the existing `predict!` /
   `update!` loop. Advances `est.x ← Φ(dt) x` and
@@ -53,6 +62,22 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- **TOTDEV `:howe` allantools cross-validation tightened** from
+  `rtol = 0.15` (legacy-kernel boundary-policy floor) to `rtol = 1e-7`
+  (`test/stab/allantools_cross_validation.jl`). Switched the `"Total"`
+  branch from `LK.totdev_var` (legacy detrend) to
+  `_totdev_core(...; detrend=:howe)` — apples-to-apples against
+  allantools' SP1065-verbatim raw totdev. All 13 Total rows pass
+  including m=512 (allantools doesn't apply Stable32's α-aware
+  correction, so no skip needed there).
+- **EDF stride factor `S` corrected from `1` to `m`** in the
+  WPM/FLPM fallback path for `:totdev` and `:htotdev` in
+  `src/stab/stats/edf.jl`. Matches the overlapped convention applied
+  to the four overlapped variants (ADEV/MDEV/HDEV/MHDEV) — both
+  TOTDEV and HTOTDEV operate on a stride-1 phase record (Howe's
+  reflected-boundary extension preserves overlap), so the overlapped
+  EDF is the consistent choice. Existing CI bounds shift slightly at
+  α ∈ {1, 2} on long records.
 - Repository housekeeping. `lib.bak/` (pre-restructure recovery
   snapshot) and `rough_changelog/` (six superseded
   implementation_plan/walkthrough drafts from May 7) deleted from the
