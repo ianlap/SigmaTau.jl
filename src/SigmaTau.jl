@@ -42,6 +42,7 @@ module Stab
     include("stab/stats/edf.jl")
 
     include("stab/utils.jl")
+    include("stab/io.jl")
 
     include("stab/api/allan.jl")
     include("stab/api/hadamard.jl")
@@ -56,6 +57,7 @@ module Stab
 
     export identify_noise, calculate_edf, confidence_intervals, bias_correction
     export DEFAULT_CONFIDENCE
+    export save_result, load_result
 
     export adev, mdev, tdev
     export hdev, mhdev, htdev

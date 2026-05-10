@@ -103,6 +103,7 @@ remains unchanged.
 | `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | ✅ | No CI fields (no published EDF model) |
 | `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | ✅ | No CI fields (EDF port tracked in TODO) |
 | `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) + each api file | ✅ | All 12 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
+| `save_result`, `load_result` | [src/stab/io.jl](src/stab/io.jl) | ✅ | TSV round-trip for `StabilityResult`; stdlib only, no new deps |
 
 #### Tests
 
