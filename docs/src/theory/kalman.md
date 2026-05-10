@@ -515,3 +515,7 @@ ladder
   ALS-driven KF for rubidium GPSDO.
 - [Stein 2003](@cite stein-2003-timescales) — innovation-driven
   random-shock estimates in clock ensembles.
+- [Chaudhari 2022](@cite chaudhari-2022-uva-kalman-chapter) —
+  pedagogical chapter on the Kalman filter and its variants
+  (EKF / UKF / particle filter); useful as a from-first-principles
+  refresher of the recursion this module implements.
