@@ -11,6 +11,24 @@ include("types/stability_result.jl")
 
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult
 
+# ── IO: file readers, detrend, gap-fill, result round-trip ──────────────
+# IO functions return top-level types (PhaseData / FrequencyData /
+# StabilityResult), so they live at the umbrella level rather than inside
+# Stab. Their dependencies (DelimitedFiles, FFTW, Statistics) are imported
+# here so included files don't need to repeat the directives.
+using DelimitedFiles
+using FFTW
+using Statistics: median
+
+include("io/results.jl")
+include("io/detrend.jl")
+include("io/fillgaps.jl")
+include("io/read.jl")
+
+export save_result, load_result
+export read_phase, read_frequency
+export detrend, fillgaps
+
 # ── Stab: clock-stability analysis ──────────────────────────────────────
 module Stab
     using ..SigmaTau: AbstractTimingData, PhaseData, FrequencyData,
@@ -42,7 +60,6 @@ module Stab
     include("stab/stats/edf.jl")
 
     include("stab/utils.jl")
-    include("stab/io.jl")
 
     include("stab/api/allan.jl")
     include("stab/api/hadamard.jl")
@@ -57,7 +74,6 @@ module Stab
 
     export identify_noise, calculate_edf, confidence_intervals, bias_correction
     export DEFAULT_CONFIDENCE
-    export save_result, load_result
 
     export adev, mdev, tdev
     export hdev, mhdev, htdev
