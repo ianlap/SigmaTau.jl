@@ -211,6 +211,46 @@ function predict!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Floa
 end
 
 """
+    prop!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Real;
+          steering::Union{Nothing,AbstractVector{Float64}} = nothing)
+
+Unconditional covariance propagation. Advances `est.x ← Φ(dt) x` and
+`est.P ← Φ(dt) P Φ(dt)' + Q(dt)` regardless of `est.k`. Unlike
+[`predict!`](@ref) — which gates on `est.k > 0` to match the legacy
+MATLAB `if k > 1` convention — `prop!` always propagates, which is
+what you want for producing a 1σ covariance band around a
+deterministic forward projection (e.g. shaded ±1σ holdover bounds).
+
+Does not increment `est.k` (only [`update!`](@ref) does), so a sequence
+`prop!(est, model, h·τ)` is safe to call from a freshly constructed
+filter or in a side-channel "what-if" copy without disturbing the live
+filter's update sequencing.
+
+The optional `steering` correction is added to the predicted state mean
+exactly as in `predict!`: phase = `+u·dt`, frequency = `+u`, higher
+states zero.
+"""
+function prop!(est::StandardKalmanFilter, model::AbstractClockModel, dt::Real;
+               steering::Union{Nothing,AbstractVector{Float64}} = nothing)
+    Phi = state_transition(model, dt)
+    Q   = process_noise(model, dt)
+
+    x_pred = Phi * est.x
+    if steering !== nothing
+        n = length(x_pred)
+        s = SVector{n, Float64}(ntuple(i -> i <= length(steering) ? steering[i] : 0.0, n))
+        x_pred = x_pred + s
+    end
+    est.x = x_pred
+
+    Pm   = SMatrix(est.P)
+    Pnew = Phi * Pm * Phi' + Q
+    est.P = Symmetric((Pnew + Pnew') ./ 2.0)
+
+    return est
+end
+
+"""
     update!(est::StandardKalmanFilter, model::AbstractClockModel, z)
 
 Scalar or vector measurement update.
