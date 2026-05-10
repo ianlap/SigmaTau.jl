@@ -65,23 +65,18 @@ numerical reference is locked in.
   `rtol = 1e-12`/`1e-11` may need to drop to `~1e-9` for the
   modified-total kernels on `--threads auto` CI runners. Verify on a
   multi-thread CI run and loosen only the testsets that actually drift.
-- [ ] **`prop!` — covariance propagation without a measurement.**
-  Public `prop!(est::AbstractEstimator, model, dt; steering=nothing)`
-  that advances `est.x ← Φ x` and `est.P ← Φ P Φ' + Q`
-  unconditionally — i.e. without the `est.k > 0` gate that
-  `predict!` uses today (`src/est/estimators/filters.jl:202`). Note:
-  the gate matches the MATLAB reference (`legdocs/.../kalman_filter.m`
-  uses the same `if k > 1` guard at the start of the predict step),
-  so this is *not* a bug — it's a convention to ensure the very first
-  step's measurement is a pure update, not a propagated prior. The
-  feature gap `prop!` fills is a different one: producing a 1σ
-  *covariance band* around a deterministic forward projection (e.g.
-  the holdover-budget plot in `examples/05_holdover_comparison.jl`,
-  where the KF RMS prediction-error curve is currently a point
-  estimate). Should land alongside a `TwoStateClock` +
-  `ThreeStateClock` testset that locks `prop!`-vs-analytical
-  Q-integration parity at `rtol=1e-14`, and a follow-up to add a
-  shaded ±1σ band to the holdover example using `prop!`.
+- [ ] **Add ±1σ band to `examples/05_holdover_comparison.jl` using
+  `prop!`.** `prop!` shipped this batch with full Q-integration parity
+  at rtol=1e-14; the example currently shows the KF RMS prediction-error
+  curve as a point estimate, so the next step is shading ±√P[1,1] over
+  the τ-grid. Pure example refactor — no API change.
+- [ ] **`predict!` `dt` argument is currently ignored** in favour of
+  `model.tau` (`src/est/estimators/filters.jl:194`). After the
+  `state_transition(model, dt)` / `process_noise(model, dt)` refactor
+  (this batch), wiring `predict!` to actually use its `dt` is a
+  one-line change. Risk: any caller passing `dt ≠ model.tau` would see
+  a behaviour change. None do today, but the gate is worth documenting
+  + flipping deliberately.
 
 ---
 
@@ -182,10 +177,6 @@ numerical reference is locked in.
   Reexport, StaticArrays, julia. Tighten upper bounds for
   `Distributions` and `StaticArrays` once the dep matrix has been
   exercised on the General registry.
-- [ ] **Top-level `using SigmaTau` smoke test** — verify the umbrella
-  re-exports `tdev`, `htdev`, the `FrequencyData` dispatches, and the
-  `Stab` / `Est` submodule names. Currently exercised only indirectly
-  via the per-submodule testsets.
 - [ ] **Remove `ldev` deprecated alias.** `htdev` is now the canonical
   Hadamard time-deviation export; `ldev` is kept as a forwarding alias
   "for one release." Schedule deletion post-0.2.
@@ -198,12 +189,6 @@ numerical reference is locked in.
   while in active use. When the package matures and conventions
   stabilise, decide whether to delete them or to land a sanitised
   version (without the authorship rules) under `docs/contributing/`.
-- [ ] **Refresh `project_overview.md`** for the single-package layout.
-  Every `lib/SigmaTauBase/...`, `lib/SigmaTauStability/...`,
-  `lib/SigmaTauEnsemble/...` link in the per-component status tables
-  and the §6 file-inventory tree is stale; rewrite to point into
-  `src/{types,stab,est}/` and `test/{types,stab,est}/`. The top-of-file
-  "Restructure note" promises this has happened — close the gap.
 
 ---
 

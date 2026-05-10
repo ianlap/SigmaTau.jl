@@ -78,42 +78,55 @@ nstates(::TwoStateClock) = 2
 nstates(::ThreeStateClock) = 3
 
 """
-    state_transition(model::AbstractClockModel) → SMatrix
+    state_transition(model::AbstractClockModel)            → SMatrix
+    state_transition(model::AbstractClockModel, dt::Real)  → SMatrix
 
 Return the discrete-time state transition matrix Φ that propagates the
-clock state forward by `model.tau`. The two-state Φ is the standard
-phase/frequency integrator `[1 τ; 0 1]`; the three-state Φ adds the
-`τ²/2` and `τ` couplings for the drift row. Returned as a
-`StaticArrays.SMatrix` for zero-allocation Kalman propagation.
+clock state forward by `dt` (or by `model.tau` when omitted). The
+two-state Φ is the standard phase/frequency integrator `[1 dt; 0 1]`;
+the three-state Φ adds the `dt²/2` and `dt` couplings for the drift
+row. Returned as a `StaticArrays.SMatrix` for zero-allocation Kalman
+propagation.
+
+The `dt` overload is what `prop!` uses to integrate over arbitrary
+horizons without requiring a separate model instance per step.
 """
-function state_transition(m::TwoStateClock)
-    @SMatrix [1.0 m.tau; 0.0 1.0]
+function state_transition(m::TwoStateClock, dt::Real)
+    @SMatrix [1.0 Float64(dt); 0.0 1.0]
 end
 
-function state_transition(m::ThreeStateClock)
-    @SMatrix [1.0 m.tau m.tau^2 / 2.0; 0.0 1.0 m.tau; 0.0 0.0 1.0]
+function state_transition(m::ThreeStateClock, dt::Real)
+    τ = Float64(dt)
+    @SMatrix [1.0 τ τ^2 / 2.0; 0.0 1.0 τ; 0.0 0.0 1.0]
 end
 
+state_transition(m::TwoStateClock)   = state_transition(m, m.tau)
+state_transition(m::ThreeStateClock) = state_transition(m, m.tau)
+
 """
-    process_noise(model::AbstractClockModel) → SMatrix
+    process_noise(model::AbstractClockModel)            → SMatrix
+    process_noise(model::AbstractClockModel, dt::Real)  → SMatrix
 
 Return the process-noise covariance matrix Q obtained by closed-form
 analytic integration of the Wiener increments in the clock SDE over a
-step of length `model.tau`, given the WFM / RWFM / (IRWFM) diffusion
-coefficients on `model`. Coefficients match the Galleani / Zucca
-derivations standard in the timescale literature. Returned as an
-`SMatrix` for Kalman composition.
+step of length `dt` (or `model.tau` when omitted), given the WFM /
+RWFM / (IRWFM) diffusion coefficients on `model`. Coefficients match
+the Galleani / Zucca derivations standard in the timescale literature.
+Returned as an `SMatrix` for Kalman composition.
+
+The `dt` overload is what `prop!` uses to integrate over arbitrary
+horizons.
 """
-function process_noise(m::TwoStateClock)
-    τ = m.tau
+function process_noise(m::TwoStateClock, dt::Real)
+    τ = Float64(dt)
     Q11 = m.q1*τ + m.q2*τ^3/3.0
     Q12 = m.q2*τ^2/2.0
     Q22 = m.q2*τ
     @SMatrix [Q11 Q12; Q12 Q22]
 end
 
-function process_noise(m::ThreeStateClock)
-    τ = m.tau
+function process_noise(m::ThreeStateClock, dt::Real)
+    τ = Float64(dt)
     τ2 = τ^2; τ3 = τ^3; τ4 = τ^4; τ5 = τ^5
     Q11 = m.q1*τ + m.q2*τ3/3.0 + m.q3*τ5/20.0
     Q12 = m.q2*τ2/2.0 + m.q3*τ4/8.0
@@ -123,6 +136,9 @@ function process_noise(m::ThreeStateClock)
     Q33 = m.q3*τ
     @SMatrix [Q11 Q12 Q13; Q12 Q22 Q23; Q13 Q23 Q33]
 end
+
+process_noise(m::TwoStateClock)   = process_noise(m, m.tau)
+process_noise(m::ThreeStateClock) = process_noise(m, m.tau)
 
 """
     measurement_matrix(model::AbstractClockModel) → SMatrix
