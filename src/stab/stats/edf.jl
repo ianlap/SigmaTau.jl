@@ -12,9 +12,13 @@ total-family estimators.
 
 WPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 9 and
 FCS 2001 publish coefficients for α ∈ {0, -1, -2} only. For α ∈ {1, 2}
-this routine falls back to the ADEV-style (`d=2`, `F=m`, `S=1`) or
-HDEV-style (`d=3`, `F=m`, `S=1`) Greenhall–Riley formula so every
-noise type yields a finite EDF instead of NaN. The substitute is
+this routine falls back to the ADEV-style (`d=2`, `F=m`, `S=m`) or
+HDEV-style (`d=3`, `F=m`, `S=m`) Greenhall–Riley formula so every
+noise type yields a finite EDF instead of NaN. `S=m` matches the
+overlapped convention applied to the four overlapped variants
+(ADEV/MDEV/HDEV/MHDEV); both TOTDEV and HTOTDEV operate on a stride-1
+phase record (Howe's reflected-boundary extension preserves overlap),
+so the overlapped EDF is the consistent choice. The substitute is
 pragmatic, not canonical — it is dominated by the same noise-shape
 contribution as ADEV/HDEV at WPM/FLPM, but is documented as a policy
 choice rather than a derivation.
@@ -39,11 +43,11 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :totdev
             # SP1065 Table 9 covers α ∈ {0,-1,-2}. For WPM/FLPM (α=2,1) TOTDEV
             # is dominated by the same noise-shape contribution as ADEV, so the
-            # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=1) is the
-            # accepted pragmatic substitute when no totvar-specific table value
-            # is published.
+            # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m — overlapped
+            # convention) is the accepted pragmatic substitute when no
+            # totvar-specific table value is published.
             if alpha == 2 || alpha == 1
-                edfs[k] = _calc_edf_core(alpha, 2, m, m, 1, N)
+                edfs[k] = _calc_edf_core(alpha, 2, m, m, m, N)
             else
                 b, c = _coeff_totvar(alpha)
                 edfs[k] = b * (T / tau) - c
@@ -53,10 +57,10 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             edfs[k] = b * (T / tau) - c
         elseif method == :htotdev
             # Same logic as :totdev: for WPM/FLPM, fall back to HDEV-style EDF
-            # (third-difference, F=m, S=1) since the FCS 2001 table only gives
-            # coefficients for α ∈ {0,-1,-2}.
+            # (third-difference, F=m, S=m — overlapped convention) since the
+            # FCS 2001 table only gives coefficients for α ∈ {0,-1,-2}.
             if alpha == 2 || alpha == 1
-                edfs[k] = _calc_edf_core(alpha, 3, m, m, 1, N)
+                edfs[k] = _calc_edf_core(alpha, 3, m, m, m, N)
             else
                 b0, b1 = _coeff_htot(alpha)
                 edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
