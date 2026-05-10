@@ -7,11 +7,11 @@ const _IO_VERSION = "1"
 
 Write a `StabilityResult` to a tab-delimited text file at `path`.
 
-The file is self-describing: two comment lines encode the format version and
-deviation type, followed by a column-name header and one data row per τ value.
-All six data columns are always present; `noise_type`, `ci_lower`, `ci_upper`,
-and `edf` are written as `""` / `NaN` when the result was computed with
-`calc_ci=false`, and are reconstructed as empty vectors by [`load_result`](@ref).
+The file is self-describing: three comment lines encode the format version,
+deviation type, and whether confidence intervals were computed (`calc_ci`),
+followed by a column-name header and one data row per τ value. All six data
+columns are always present; `noise_type`, `ci_lower`, `ci_upper`, and `edf`
+are written as `""` / `NaN` when `calc_ci=false`.
 
 Returns `path` so the call can be chained.
 
@@ -34,6 +34,7 @@ function save_result(path::AbstractString, r::StabilityResult)
     open(path, "w") do io
         println(io, "# SigmaTau StabilityResult v", _IO_VERSION)
         println(io, "# deviation_type=", r.deviation_type)
+        println(io, "# calc_ci=", has_ci)
         println(io, "tau\tdev\tnoise_type\tci_lower\tci_upper\tedf")
         for k in 1:N
             noise_s  = has_ci ? string(r.noise_type[k]) : ""
@@ -52,9 +53,9 @@ end
 
 Read a `StabilityResult` previously written by [`save_result`](@ref).
 
-Rows with `NaN` in the `ci_lower` column are treated as a result computed with
-`calc_ci=false`; `noise_type`, `ci_lower`, `ci_upper`, and `edf` are returned
-as empty vectors in that case, matching the standard deviation API contract.
+The `# calc_ci=` header line determines whether confidence interval fields are
+reconstructed. When `calc_ci=false`, `noise_type`, `ci_lower`, `ci_upper`, and
+`edf` are returned as empty vectors, matching the standard deviation API contract.
 
 See also [`save_result`](@ref).
 """
@@ -62,10 +63,14 @@ function load_result(path::AbstractString)
     lines = readlines(path)
 
     deviation_type = :unknown
+    has_ci         = true   # default: assume CI present if header is absent (v1 compat)
+
     for line in lines
-        startswith(line, "# deviation_type=") || continue
-        deviation_type = Symbol(line[length("# deviation_type=") + 1 : end])
-        break
+        if startswith(line, "# deviation_type=")
+            deviation_type = Symbol(line[length("# deviation_type=") + 1 : end])
+        elseif startswith(line, "# calc_ci=")
+            has_ci = strip(line[length("# calc_ci=") + 1 : end]) == "true"
+        end
     end
 
     data_lines = filter(l -> !startswith(l, '#') && !startswith(l, "tau"), lines)
@@ -90,10 +95,8 @@ function load_result(path::AbstractString)
         edf_vec[k]  = parse(Float64, parts[6])
     end
 
-    if all(isnan, ci_lower)
-        return StabilityResult(deviation_type, tau, dev,
-                               Symbol[], Float64[], Float64[], Float64[])
-    end
+    has_ci || return StabilityResult(deviation_type, tau, dev,
+                                     Symbol[], Float64[], Float64[], Float64[])
 
     return StabilityResult(deviation_type, tau, dev,
                            Symbol.(noise_s), ci_lower, ci_upper, edf_vec)
