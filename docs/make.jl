@@ -74,6 +74,7 @@ makedocs(
             "tutorials/03_kalman_single_clock.md",
             "tutorials/04_kalman_pid_steering.md",
             "tutorials/05_holdover_comparison.md",
+            "tutorials/06_three_cornered_hat.md",
         ],
         "API Reference"   => [
             "reference/types.md",

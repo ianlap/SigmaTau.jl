@@ -8,6 +8,20 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **Three-cornered-hat tutorial** at
+  `examples/06_three_cornered_hat.jl`. Synthesises three independent
+  free-running clocks via `_gen_powerlaw_phase`, builds the three
+  pairwise difference records, runs `adev` on each, and solves the
+  classical TCH linear system to recover each clock's individual
+  σ_y(τ). End-to-end runs cleanly; recovered σ tracks ground truth
+  to within ~5 % at small τ, illustrates "TCH break-points"
+  (negative-variance recoveries clamped to zero) at long τ.
+  Includes prose callout for the two real-world failure modes —
+  correlated noises and one clock dominating. Wired into the docs
+  Tutorials nav as `tutorials/06_three_cornered_hat.md`.
+  `examples/Project.toml` gains `FFTW` for the noise-synthesis FFT
+  backend.
+
 - **KF 1σ holdover band via `prop!`** in
   `examples/05_holdover_comparison.jl`. New §6.5 captures the
   filter's converged `P_mature`, re-seeds a side-channel estimator
