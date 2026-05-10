@@ -25,6 +25,7 @@ end
                 :mtie, :pdev,
                 :identify_noise, :calculate_edf, :confidence_intervals,
                 :bias_correction, :DEFAULT_CONFIDENCE,
+                :save_result, :load_result,
                 :_adev_core, :_mdev_core, :_tdev_core,
                 :_hdev_core, :_mhdev_core,
                 :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,

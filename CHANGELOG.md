@@ -8,6 +8,17 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- `save_result(path, r)` and `load_result(path)` — round-trip a
+  `StabilityResult` to/from a tab-separated text file using stdlib I/O only
+  (no new dependencies). Handles both `calc_ci=true` and `calc_ci=false`; CI
+  columns are written as `NaN` when absent and reconstructed as empty vectors
+  on load. Wired into `SigmaTau.Stab` exports.
+- `examples/00_julia_for_metrologists.jl` — Literate tutorial targeted at
+  Stable32 users migrating to Julia. Covers `juliaup` installation, REPL /
+  script / Pluto.jl usage modes, `.DAT` file loading idiom, first `adev` call,
+  `StabilityResult` field guide, overlaying multiple deviations on one plot,
+  and `save_result`. Wired into the docs Tutorials nav as tutorial 00.
+
 - **B1(N, μ) and R(n)(af, b) closed-form regression coverage** in
   `test/stab/runtests.jl`. Cross-checks the constants in
   `_b1_theory` and `_rn_theory` against the canonical allantools
@@ -42,6 +53,17 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   regression testsets in `test/stab/runtests.jl` lock no-`:unknown`
   on the compute_adev fixture, scale invariance under ×1e6
   rescaling, and the allantools cross-check (8 m values).
+
+### Changed
+
+- `ldev` forwarding alias replaced with `Base.@deprecate ldev htdev`; callers
+  now receive a deprecation warning and should migrate to `htdev`.
+- Stub types `RelativisticClock`, `UDFactorizedFilter`, and `KuramotoOscillator`
+  now throw `ArgumentError` with a descriptive message on any method call,
+  replacing the previous silent `MethodError`.
+- `docs/src/reference/stab.md` kernel section renamed to "Advanced / research
+  kernels" with a usage note; `_mtie_core` and `_pdev_core` added to the
+  `@docs` block (were exported but not documented).
 
 ### Added
 
