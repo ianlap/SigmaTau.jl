@@ -117,13 +117,11 @@ numerical reference is locked in.
 
 - [ ] **More `examples/`** — Literate pipeline now ships
   `01_phase_data`, `02_compute_adev`, `03_kalman_single_clock`,
-  `04_kalman_pid_steering`, `05_holdover_comparison`. Next batch
-  candidates:
+  `04_kalman_pid_steering`, `05_holdover_comparison`,
+  `06_three_cornered_hat`. Next batch candidates:
   - Multi-clock ensemble scenario (once a multi-clock model lands).
   - `RelativisticClock` walk-through (depends on the stub being
     fleshed out per the Medium-priority entry).
-  - Three-cornered-hat noise separation on three independent
-    `PhaseData` records.
   - **GP-based holdover prediction** via `TemporalGPs.jl` with a
     sum-of-Matérn-1/2 kernel — mathematically equivalent to the
     flicker Markov approximation (Matérn-1/2 ≡ OU); sits next to the
