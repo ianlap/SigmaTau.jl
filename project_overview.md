@@ -103,7 +103,10 @@ remains unchanged.
 | `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | ✅ | No CI fields (no published EDF model) |
 | `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | ✅ | No CI fields (EDF port tracked in TODO) |
 | `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) + each api file | ✅ | All 12 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
-| `save_result`, `load_result` | [src/stab/io.jl](src/stab/io.jl) | ✅ | TSV round-trip for `StabilityResult`; stdlib only, no new deps |
+| `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | ✅ | TSV round-trip for `StabilityResult`; relocated to top-level IO |
+| `read_phase`, `read_frequency` | [src/io/read.jl](src/io/read.jl) | ✅ | stdlib `readdlm` with `scaling` / `detrend` / `fillgaps` kwargs |
+| `detrend(::PhaseData/::FrequencyData)` | [src/io/detrend.jl](src/io/detrend.jl) | ✅ | `:linear` / `:endpoint` / `:mean` / `:none`; multiple dispatch keeps the bare name collision-free |
+| `fillgaps(::PhaseData/::FrequencyData)` | [src/io/fillgaps.jl](src/io/fillgaps.jl) | ✅ | Howe & Schlossberger 2009 reflect-and-FFT-filter imputation, FFTW backend |
 
 #### Tests
 

@@ -8,11 +8,28 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **IO expansion: file readers, detrend, Howe gap imputation.** New
+  top-level `src/io/` directory consolidating all data-side IO.
+  `read_phase(path; …)` and `read_frequency(path; …)` parse 2-column
+  (or N-column with `time_col=0`) text files via stdlib
+  `DelimitedFiles.readdlm` and return `PhaseData` / `FrequencyData` with
+  optional preprocessing (`scaling`, `detrend`, `fillgaps`).
+  `detrend(::PhaseData; method=:linear)` and the matching
+  `FrequencyData` method support `:linear`, `:endpoint`, `:mean`, and
+  `:none` modes; multiple dispatch on the timing-data types keeps the
+  bare name `detrend` collision-free with other packages' vector-only
+  definitions. `fillgaps(::PhaseData)` / `fillgaps(::FrequencyData)`
+  port the Howe & Schlossberger reflect-and-FFT-filter algorithm
+  (PTTI 2009) so imputed samples preserve local noise character and
+  AVAR/MDEV shape. `FFTW.jl` promoted from test-extra to core dep (also
+  needed by upcoming spectral plots). 34 new tests under `test/io/`.
 - `save_result(path, r)` and `load_result(path)` — round-trip a
   `StabilityResult` to/from a tab-separated text file using stdlib I/O only
   (no new dependencies). Handles both `calc_ci=true` and `calc_ci=false`; CI
   columns are written as `NaN` when absent and reconstructed as empty vectors
-  on load. Wired into `SigmaTau.Stab` exports.
+  on load. Exported at the top-level umbrella alongside `read_phase` /
+  `read_frequency` (relocated from `SigmaTau.Stab`); the old call path
+  still works through the umbrella re-export.
 - `examples/00_julia_for_metrologists.jl` — Literate tutorial targeted at
   Stable32 users migrating to Julia. Covers `juliaup` installation, REPL /
   script / Pluto.jl usage modes, `.DAT` file loading idiom, first `adev` call,
