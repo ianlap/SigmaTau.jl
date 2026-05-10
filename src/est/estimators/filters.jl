@@ -110,6 +110,10 @@ Gram–Schmidt and rank-one Bierman/Carlson updates.
 """
 struct UDFactorizedFilter <: AbstractEstimator end # For low-observability lunar distance
 
+const _UDFILTER_STUB_MSG = "UDFactorizedFilter is a stub. See the type docstring for the planned implementation."
+predict!(::UDFactorizedFilter, ::AbstractClockModel, ::Real; kwargs...)           = throw(ArgumentError(_UDFILTER_STUB_MSG))
+update!(::UDFactorizedFilter, ::AbstractClockModel, ::Union{Real,AbstractVector}; kwargs...) = throw(ArgumentError(_UDFILTER_STUB_MSG))
+
 """
     KuramotoOscillator <: AbstractEstimator
 
@@ -124,6 +128,10 @@ synchronization rather than centralized Kalman estimation.
     nearest-neighbor topology suited to small spacecraft.
 """
 struct KuramotoOscillator <: AbstractEstimator end # pLEO SWaP constrained nearest-neighbor
+
+const _KURAMOTO_STUB_MSG = "KuramotoOscillator is a stub. See the type docstring for the planned implementation."
+predict!(::KuramotoOscillator, ::AbstractClockModel, ::Real; kwargs...)           = throw(ArgumentError(_KURAMOTO_STUB_MSG))
+update!(::KuramotoOscillator, ::AbstractClockModel, ::Union{Real,AbstractVector}; kwargs...) = throw(ArgumentError(_KURAMOTO_STUB_MSG))
 
 # ── PID steering controller ──────────────────────────────────────────────────
 

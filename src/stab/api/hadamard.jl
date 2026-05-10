@@ -67,9 +67,12 @@ end
 """
     ldev(args...; kwargs...)
 
-Deprecated alias for [`htdev`](@ref). Will be removed in a future release.
+Deprecated alias for [`htdev`](@ref). Will be removed after v0.2.0.
 """
-ldev(args...; kwargs...) = htdev(args...; kwargs...)
+function ldev(args...; kwargs...)
+    Base.depwarn("`ldev` is deprecated, use `htdev` instead.", :ldev)
+    return htdev(args...; kwargs...)
+end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
 hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = hdev(_freq_to_phase(data),  m_values; kwargs...)

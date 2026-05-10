@@ -141,9 +141,11 @@ numerical reference is locked in.
   Reexport, StaticArrays, julia. Tighten upper bounds for
   `Distributions` and `StaticArrays` once the dep matrix has been
   exercised on the General registry.
-- [ ] **Remove `ldev` deprecated alias.** `htdev` is now the canonical
-  Hadamard time-deviation export; `ldev` is kept as a forwarding alias
-  "for one release." Schedule deletion post-0.2.
+- [ ] **Remove `ldev` alias** — now marked `@deprecate`; delete after v0.2.0 is tagged.
+- [ ] **`save_clock` / `load_clock`** — serialize `StandardKalmanFilter` state
+  (`x`, `P`, `k`) for warm-start resumption. Deferred from the I/O batch;
+  requires a clock-model-type tag in the file header to reconstruct the
+  correct `SVector`/`SMatrix` type parameters on load.
 
 ---
 
