@@ -51,17 +51,17 @@ pd13 = PhaseData(x13, τ₀)
 pd23 = PhaseData(x23, τ₀)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">PhaseData{Float64}([5.6986973301448425e-12, 1.0580611762470801e-11, 6.692027804698887e-12, 3.3698677269368607e-12, 7.0389026116403535e-12, 1.1871025603842176e-11, 1.2607988458244111e-11, 1.2345310710741088e-11, 1.0538606420362356e-11, 1.5092856938269848e-11  …  -3.47500282187955e-11, -2.542504502302337e-11, -2.8140853546308457e-11, -2.451998466095036e-11, -2.1614039795660468e-11, -2.1036905731696213e-11, -1.615684534100529e-11, -1.1035016484233208e-11, -7.558141362892716e-12, -5.593747687271388e-25], 1.0)</code></pre><h2 id="4.-ADEV-on-each-pair"><a class="docs-heading-anchor" href="#4.-ADEV-on-each-pair">4. ADEV on each pair</a><a id="4.-ADEV-on-each-pair-1"></a><a class="docs-heading-anchor-permalink" href="#4.-ADEV-on-each-pair" title="Permalink"></a></h2><p><code>calc_ci=false</code> keeps the noise-ID / EDF machinery out of the loop — TCH operates on the raw deviations.</p><pre><code class="language-julia hljs">a12 = adev(pd12, m_values; calc_ci = false).dev
 a13 = adev(pd13, m_values; calc_ci = false).dev
 a23 = adev(pd23, m_values; calc_ci = false).dev</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">12-element Vector{Float64}:
- 3.671613426570977e-12
- 2.576226437753074e-12
- 1.8602471301723667e-12
+ 3.671613426570976e-12
+ 2.5762264377530734e-12
+ 1.860247130172367e-12
  1.4500385190234172e-12
- 1.254072267797713e-12
- 1.1590559319873774e-12
+ 1.2540722677977132e-12
+ 1.1590559319873772e-12
  1.2999987941353943e-12
  1.5634308988943126e-12
- 1.6390442747436945e-12
- 1.9860601618648713e-12
- 2.7676689519263484e-12
+ 1.6390442747436947e-12
+ 1.986060161864871e-12
+ 2.767668951926348e-12
  3.6525809854927396e-12</code></pre><h2 id="5.-Solve-the-TCH-system"><a class="docs-heading-anchor" href="#5.-Solve-the-TCH-system">5. Solve the TCH system</a><a id="5.-Solve-the-TCH-system-1"></a><a class="docs-heading-anchor-permalink" href="#5.-Solve-the-TCH-system" title="Permalink"></a></h2><p>Square to get variances, apply the linear inversion, then square-root back to deviations. Track any τ where the solution would go negative — those are the &quot;TCH break points&quot; and a diagnostic that the independence assumption is straining. We clamp at zero so <code>sqrt</code> stays defined; downstream consumers can inspect the raw variances if they care.</p><pre><code class="language-julia hljs">function tch_solve(a12, a13, a23)
     v12 = a12.^2;  v13 = a13.^2;  v23 = a23.^2
     v1  = (v12 .+ v13 .- v23) ./ 2
@@ -79,17 +79,17 @@ neg &gt; 0 &amp;&amp; @warn &quot;TCH yielded $neg negative variances (clamped t
 <span class="sgr33"><span class="sgr1">└ </span></span><span class="sgr90">@ Main 06_three_cornered_hat.md:159</span></code></pre><h2 id="6.-Ground-truth-reference"><a class="docs-heading-anchor" href="#6.-Ground-truth-reference">6. Ground-truth reference</a><a id="6.-Ground-truth-reference-1"></a><a class="docs-heading-anchor-permalink" href="#6.-Ground-truth-reference" title="Permalink"></a></h2><p>Because we synthesised the inputs, we can compute each clock&#39;s <em>actual</em> σ_y(τ) directly and check the recovery:</p><pre><code class="language-julia hljs">σ1_truth = adev(PhaseData(x1, τ₀), m_values; calc_ci = false).dev
 σ2_truth = adev(PhaseData(x2, τ₀), m_values; calc_ci = false).dev
 σ3_truth = adev(PhaseData(x3, τ₀), m_values; calc_ci = false).dev</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">12-element Vector{Float64}:
- 2.0154927462354702e-12
- 1.4541794222325324e-12
+ 2.01549274623547e-12
+ 1.4541794222325326e-12
  1.0693644749559437e-12
  8.902094188258109e-13
  8.646057759339313e-13
  9.513528357198484e-13
  1.1768709642595004e-12
  1.5049720047852454e-12
- 1.6489104656645975e-12
+ 1.648910465664597e-12
  2.0061977343220884e-12
- 2.7429259761615522e-12
+ 2.742925976161552e-12
  3.641190243819039e-12</code></pre><h2 id="7.-Compare-recovered-vs-ground-truth"><a class="docs-heading-anchor" href="#7.-Compare-recovered-vs-ground-truth">7. Compare recovered vs ground truth</a><a id="7.-Compare-recovered-vs-ground-truth-1"></a><a class="docs-heading-anchor-permalink" href="#7.-Compare-recovered-vs-ground-truth" title="Permalink"></a></h2><p>A short tabular readout at a few representative τ values:</p><pre><code class="language-julia hljs">function readout_idx(target_tau, taus)
     argmin(abs.(taus .- target_tau))
 end
@@ -100,36 +100,36 @@ for τt in (1.0, 10.0, 100.0)
     @info &quot;                  &quot; tch2=σ2_tch[i]  truth2=σ2_truth[i]    ratio2=σ2_tch[i]/σ2_truth[i]
     @info &quot;                  &quot; tch3=σ3_tch[i]  truth3=σ3_truth[i]    ratio3=σ3_tch[i]/σ3_truth[i]
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr36"><span class="sgr1">┌ Info: </span></span>τ ≈ 1.0 s
-<span class="sgr36"><span class="sgr1">│ </span></span>  tch1 = 9.29726841099241e-13
+<span class="sgr36"><span class="sgr1">│ </span></span>  tch1 = 9.297268410992427e-13
 <span class="sgr36"><span class="sgr1">│ </span></span>  truth1 = 1.011565388818107e-12
-<span class="sgr36"><span class="sgr1">└ </span></span>  ratio1 = 0.9190971254814437
+<span class="sgr36"><span class="sgr1">└ </span></span>  ratio1 = 0.9190971254814454
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>
-<span class="sgr36"><span class="sgr1">│ </span></span>  tch2 = 3.0652203324442797e-12
+<span class="sgr36"><span class="sgr1">│ </span></span>  tch2 = 3.0652203324442793e-12
 <span class="sgr36"><span class="sgr1">│ </span></span>  truth2 = 3.0388054364393774e-12
-<span class="sgr36"><span class="sgr1">└ </span></span>  ratio2 = 1.0086925262434219
+<span class="sgr36"><span class="sgr1">└ </span></span>  ratio2 = 1.0086925262434216
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>
-<span class="sgr36"><span class="sgr1">│ </span></span>  tch3 = 2.021180216543406e-12
-<span class="sgr36"><span class="sgr1">│ </span></span>  truth3 = 2.0154927462354702e-12
-<span class="sgr36"><span class="sgr1">└ </span></span>  ratio3 = 1.0028218758507361
+<span class="sgr36"><span class="sgr1">│ </span></span>  tch3 = 2.0211802165434052e-12
+<span class="sgr36"><span class="sgr1">│ </span></span>  truth3 = 2.01549274623547e-12
+<span class="sgr36"><span class="sgr1">└ </span></span>  ratio3 = 1.002821875850736
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>τ ≈ 12.0 s
-<span class="sgr36"><span class="sgr1">│ </span></span>  tch1 = 2.142756864017706e-13
-<span class="sgr36"><span class="sgr1">│ </span></span>  truth1 = 2.8788372790962705e-13
-<span class="sgr36"><span class="sgr1">└ </span></span>  ratio1 = 0.7443132960576236
+<span class="sgr36"><span class="sgr1">│ </span></span>  tch1 = 2.1427568640177037e-13
+<span class="sgr36"><span class="sgr1">│ </span></span>  truth1 = 2.87883727909627e-13
+<span class="sgr36"><span class="sgr1">└ </span></span>  ratio1 = 0.744313296057623
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>
-<span class="sgr36"><span class="sgr1">│ </span></span>  tch2 = 9.087304931700438e-13
-<span class="sgr36"><span class="sgr1">│ </span></span>  truth2 = 8.815199335223823e-13
-<span class="sgr36"><span class="sgr1">└ </span></span>  ratio2 = 1.030867775773298
+<span class="sgr36"><span class="sgr1">│ </span></span>  tch2 = 9.087304931700439e-13
+<span class="sgr36"><span class="sgr1">│ </span></span>  truth2 = 8.815199335223826e-13
+<span class="sgr36"><span class="sgr1">└ </span></span>  ratio2 = 1.0308677757732978
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>
-<span class="sgr36"><span class="sgr1">│ </span></span>  tch3 = 8.642373190520227e-13
+<span class="sgr36"><span class="sgr1">│ </span></span>  tch3 = 8.642373190520229e-13
 <span class="sgr36"><span class="sgr1">│ </span></span>  truth3 = 8.646057759339313e-13
-<span class="sgr36"><span class="sgr1">└ </span></span>  ratio3 = 0.9995738440660883
+<span class="sgr36"><span class="sgr1">└ </span></span>  ratio3 = 0.9995738440660885
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>τ ≈ 82.0 s
 <span class="sgr36"><span class="sgr1">│ </span></span>  tch1 = 0.0
-<span class="sgr36"><span class="sgr1">│ </span></span>  truth1 = 1.0740940268952107e-13
+<span class="sgr36"><span class="sgr1">│ </span></span>  truth1 = 1.0740940268952105e-13
 <span class="sgr36"><span class="sgr1">└ </span></span>  ratio1 = 0.0
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>
 <span class="sgr36"><span class="sgr1">│ </span></span>  tch2 = 3.671798519117103e-13
-<span class="sgr36"><span class="sgr1">│ </span></span>  truth2 = 3.4502068798136986e-13
+<span class="sgr36"><span class="sgr1">│ </span></span>  truth2 = 3.450206879813698e-13
 <span class="sgr36"><span class="sgr1">└ </span></span>  ratio2 = 1.0642256093684939
 <span class="sgr36"><span class="sgr1">┌ Info: </span></span>
 <span class="sgr36"><span class="sgr1">│ </span></span>  tch3 = 1.5197023168922172e-12
@@ -150,4 +150,4 @@ plot!(taus, σ1_tch;   label = &quot;Clock 1 TCH&quot;,   ls = :dash, lw = 1.5)
 plot!(taus, σ2_truth; label = &quot;Clock 2 truth&quot;, lw = 1.5)
 plot!(taus, σ2_tch;   label = &quot;Clock 2 TCH&quot;,   ls = :dash, lw = 1.5)
 plot!(taus, σ3_truth; label = &quot;Clock 3 truth&quot;, lw = 1.5)
-plot!(taus, σ3_tch;   label = &quot;Clock 3 TCH&quot;,   ls = :dash, lw = 1.5)</code></pre><img src="b83b0c6e.svg" alt="Example block output"/><h2 id="9.-When-TCH-breaks-down"><a class="docs-heading-anchor" href="#9.-When-TCH-breaks-down">9. When TCH breaks down</a><a id="9.-When-TCH-breaks-down-1"></a><a class="docs-heading-anchor-permalink" href="#9.-When-TCH-breaks-down" title="Permalink"></a></h2><p>Two real-world failure modes worth flagging:</p><ol><li><strong>Correlated noises.</strong> A shared reference offset, common temperature coupling, or correlated power-supply ripple violates the independence assumption and shows up as systematic bias (often negative variances at specific τ). Diagnose by repeating the analysis with a fourth, electrically-isolated clock and inspecting whether recovered σ is invariant to the choice of triplet.</li><li><strong>One clock dominating.</strong> If one clock is much noisier than the other two, the pairwise differences look like that clock&#39;s noise alone, and the recovered σ for the two quieter clocks becomes ill-conditioned (high relative scatter). The classical countermeasure is to run the TCH on three clocks of similar grade — pre-screen the population before applying it.</li></ol><p>For larger ensembles, the natural extension is to estimate every clock&#39;s σ from the full N(N−1)/2 pairwise differences via weighted least squares — see Riley&#39;s GTCH and the <code>EnsembleKalmanProcesses.jl</code> calibration pattern flagged in TODO.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../05_holdover_comparison/">« Single-clock holdover: TDEV vs HTDEV vs Kalman prediction error</a><a class="docs-footer-nextpage" href="../../reference/types/">Shared types »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 10 May 2026 08:12">Sunday 10 May 2026</span>. Using Julia version 1.11.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+plot!(taus, σ3_tch;   label = &quot;Clock 3 TCH&quot;,   ls = :dash, lw = 1.5)</code></pre><img src="b83b0c6e.svg" alt="Example block output"/><h2 id="9.-When-TCH-breaks-down"><a class="docs-heading-anchor" href="#9.-When-TCH-breaks-down">9. When TCH breaks down</a><a id="9.-When-TCH-breaks-down-1"></a><a class="docs-heading-anchor-permalink" href="#9.-When-TCH-breaks-down" title="Permalink"></a></h2><p>Two real-world failure modes worth flagging:</p><ol><li><strong>Correlated noises.</strong> A shared reference offset, common temperature coupling, or correlated power-supply ripple violates the independence assumption and shows up as systematic bias (often negative variances at specific τ). Diagnose by repeating the analysis with a fourth, electrically-isolated clock and inspecting whether recovered σ is invariant to the choice of triplet.</li><li><strong>One clock dominating.</strong> If one clock is much noisier than the other two, the pairwise differences look like that clock&#39;s noise alone, and the recovered σ for the two quieter clocks becomes ill-conditioned (high relative scatter). The classical countermeasure is to run the TCH on three clocks of similar grade — pre-screen the population before applying it.</li></ol><p>For larger ensembles, the natural extension is to estimate every clock&#39;s σ from the full N(N−1)/2 pairwise differences via weighted least squares — see Riley&#39;s GTCH and the <code>EnsembleKalmanProcesses.jl</code> calibration pattern flagged in TODO.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../05_holdover_comparison/">« Single-clock holdover: TDEV vs HTDEV vs Kalman prediction error</a><a class="docs-footer-nextpage" href="../../reference/types/">Shared types »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Tuesday 12 May 2026 19:24">Tuesday 12 May 2026</span>. Using Julia version 1.11.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
