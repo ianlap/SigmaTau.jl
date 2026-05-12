@@ -14,6 +14,13 @@ measurement_matrix
 measurement_noise
 ```
 
+## Clock ensembles
+
+```@docs
+ClockEnsemble
+EnsembleWeights
+```
+
 ## Estimators
 
 ```@docs
@@ -23,6 +30,7 @@ UDFactorizedFilter
 KuramotoOscillator
 predict!
 update!
+prop!
 ```
 
 ## Steering

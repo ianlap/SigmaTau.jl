@@ -372,4 +372,239 @@ end
         @test_throws ArgumentError predict!(KuramotoOscillator(), m, 1.0)
         @test_throws ArgumentError update!(KuramotoOscillator(), m, 1e-9)
     end
+
+    # ── ClockEnsemble: stacked time-scale Kalman model ───────────────────────
+    @testset "ClockEnsemble construction & operator algebra" begin
+        cA = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=1e-43)
+        cB = ThreeStateClock(tau=1.0, q0=1e-22, q1=2e-23, q2=2e-33, q3=2e-43)
+        cC = ThreeStateClock(tau=1.0, q0=1e-22, q1=4e-23, q2=4e-33, q3=4e-43)
+
+        # Binary + → ClockEnsemble
+        e2 = cA + cB
+        @test e2 isa ClockEnsemble{2, ThreeStateClock}
+        @test e2.clocks === (cA, cB)
+        @test e2.ref == 1
+        @test e2.tau == 1.0
+
+        # Left-associative chaining
+        e3 = (cA + cB) + cC
+        @test e3 isa ClockEnsemble{3, ThreeStateClock}
+        @test e3.clocks === (cA, cB, cC)
+
+        # Right-associative chaining preserves the original reference clock
+        # (semantic, not syntactic, associativity).
+        e3r = cA + (cB + cC)
+        @test e3r isa ClockEnsemble{3, ThreeStateClock}
+        @test e3r.clocks === (cA, cB, cC)
+
+        # Varargs explicit constructor
+        e3v = ClockEnsemble(cA, cB, cC)
+        @test e3v isa ClockEnsemble{3, ThreeStateClock}
+        @test e3v.clocks === (cA, cB, cC)
+
+        # Heterogeneous mix throws
+        t2 = TwoStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33)
+        @test_throws ArgumentError t2 + cA
+        @test_throws ArgumentError cA + t2
+
+        # Mismatched tau throws
+        cD = ThreeStateClock(tau=2.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=1e-43)
+        @test_throws ArgumentError ClockEnsemble((cA, cD))
+
+        # Ref-index bounds
+        @test_throws ArgumentError ClockEnsemble((cA, cB); ref=0)
+        @test_throws ArgumentError ClockEnsemble((cA, cB); ref=3)
+
+        # N ≥ 2 enforcement (single-clock "ensemble" is meaningless)
+        @test_throws ArgumentError ClockEnsemble((cA,))
+    end
+
+    @testset "ClockEnsemble matrix shapes" begin
+        cA = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=1e-43)
+        cB = ThreeStateClock(tau=1.0, q0=2e-22, q1=2e-23, q2=2e-33, q3=2e-43)
+        cC = ThreeStateClock(tau=1.0, q0=3e-22, q1=3e-23, q2=3e-33, q3=3e-43)
+        e3 = cA + cB + cC
+
+        @test nstates(e3) == 9
+
+        Φ = state_transition(e3, 1.0)
+        Q = process_noise(e3, 1.0)
+        @test size(Φ) == (9, 9)
+        @test size(Q) == (9, 9)
+
+        # Block-diagonal structure of Φ
+        for k in 1:3
+            off = (k - 1) * 3
+            @test Matrix(Φ[off+1:off+3, off+1:off+3]) ≈ Matrix(state_transition(e3.clocks[k], 1.0))
+        end
+        # Off-block entries identically zero
+        @test all(Φ[i, j] == 0.0 for i in 1:3, j in 4:9)
+        @test all(Φ[i, j] == 0.0 for i in 4:6, j in [1:3..., 7:9...])
+
+        # Block-diagonal structure of Q
+        for k in 1:3
+            off = (k - 1) * 3
+            @test Matrix(Q[off+1:off+3, off+1:off+3]) ≈ Matrix(process_noise(e3.clocks[k], 1.0))
+        end
+
+        # H selects phase differences vs ref=1
+        H = measurement_matrix(e3)
+        @test size(H) == (2, 9)
+        @test H[1, 1] == -1.0 && H[1, 4] == 1.0   # x_B − x_A
+        @test H[2, 1] == -1.0 && H[2, 7] == 1.0   # x_C − x_A
+        @test sum(abs, H) == 4.0   # exactly four ±1 entries
+
+        # R = Cov(v_i − v_ref, v_j − v_ref) under independent v_k ∼ N(0, q0_k):
+        # diagonal q0_ref + q0_i, off-diagonal q0_ref (shared reference noise).
+        R = measurement_noise(e3)
+        @test size(R) == (2, 2)
+        @test R[1, 1] ≈ cA.q0 + cB.q0
+        @test R[2, 2] ≈ cA.q0 + cC.q0
+        @test R[1, 2] ≈ cA.q0
+        @test R[2, 1] ≈ cA.q0
+        # R must stay symmetric PSD for the Kalman update to remain stable.
+        @test Matrix(R) ≈ Matrix(R)'
+        @test minimum(eigvals(Symmetric(Matrix(R)))) > 0
+
+        # Non-default ref: x_A − x_B, x_C − x_B
+        e3_ref2 = ClockEnsemble((cA, cB, cC); ref=2)
+        H2 = measurement_matrix(e3_ref2)
+        @test H2[1, 4] == -1.0 && H2[1, 1] == 1.0
+        @test H2[2, 4] == -1.0 && H2[2, 7] == 1.0
+    end
+
+    @testset "ClockEnsemble auto-weights (Stein §VI–VII)" begin
+        # Identical clocks → equal weights
+        cI = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=1e-43)
+        eI = cI + cI
+        @test eI.weights.a ≈ [0.5, 0.5]
+        @test eI.weights.b ≈ [0.5, 0.5]
+        @test eI.weights.c ≈ [0.5, 0.5]
+
+        # 10-dB lower q1 on clock B → a_B is 10× a_A (inverse-variance weight)
+        cA = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=1e-43)
+        cB = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-24, q2=1e-33, q3=1e-43)
+        e = cA + cB
+        @test e.weights.a[2] / e.weights.a[1] ≈ 10.0 rtol=1e-12
+        @test sum(e.weights.a) ≈ 1.0
+        @test sum(e.weights.b) ≈ 1.0
+        @test sum(e.weights.c) ≈ 1.0
+
+        # All q3 == 0 → c-vector is zeros (TwoStateClock-like sentinel)
+        cN1 = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=0.0)
+        cN2 = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=0.0)
+        eN = cN1 + cN2
+        @test all(eN.weights.c .== 0.0)
+
+        # TwoStateClock ensemble: c always zero
+        t1 = TwoStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33)
+        t2 = TwoStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33)
+        et = t1 + t2
+        @test all(et.weights.c .== 0.0)
+        @test et.weights.a ≈ [0.5, 0.5]
+
+        # q1 == 0 → ArgumentError (auto-weights undefined)
+        c0 = ThreeStateClock(tau=1.0, q0=1e-22, q1=0.0, q2=1e-33, q3=1e-43)
+        @test_throws ArgumentError c0 + cA
+
+        # Explicit weights override
+        w = EnsembleWeights{2}(SVector(0.3, 0.7), SVector(0.4, 0.6), SVector(0.0, 0.0))
+        eW = ClockEnsemble((cA, cB); weights=w)
+        @test eW.weights === w
+
+        # Auto-weights fallback for unsupported clock types throws a
+        # deliberate ArgumentError instead of a MethodError. The
+        # `RelativisticClock` stub is the in-tree witness for this path.
+        @test_throws ArgumentError RelativisticClock() + RelativisticClock()
+    end
+
+    @testset "ClockEnsemble runs through StandardKalmanFilter" begin
+        import Random; Random.seed!(2025)
+
+        # Two ThreeStateClocks, mild noise — full Kalman over a synthesised
+        # phase-difference record. Tests that the generic predict!/update!
+        # path consumes the ensemble model unmodified.
+        τ  = 1.0
+        cA = ThreeStateClock(tau=τ, q0=1e-20, q1=1e-22, q2=1e-30, q3=0.0)
+        cB = ThreeStateClock(tau=τ, q0=1e-20, q1=2e-22, q2=2e-30, q3=0.0)
+        e  = cA + cB
+
+        # Synthesise independent free-running phase records via cumulative
+        # noise — good enough for filter-stability checking.
+        N      = 256
+        xA     = cumsum(randn(N) * sqrt(cA.q1 * τ))
+        xB     = cumsum(randn(N) * sqrt(cB.q1 * τ))
+        z      = xB .- xA .+ sqrt(cA.q0 + cB.q0) .* randn(N)
+
+        ns = nstates(e)
+        x0 = zeros(ns); x0[1] = xA[1]; x0[4] = xB[1]
+        P0 = Matrix(1e-14 * I(ns))
+        kf = StandardKalmanFilter(x0, P0)
+
+        for k in 1:N
+            predict!(kf, e, τ)
+            update!(kf, e, z[k])
+        end
+
+        # Numerical health
+        @test all(isfinite, kf.x)
+        @test all(isfinite, Matrix(kf.P))
+        # Covariance stays symmetric
+        Pm = Matrix(kf.P)
+        @test Pm ≈ Pm' atol=1e-30 rtol=1e-12
+        # PSD — all eigenvalues ≥ 0 (within fp noise)
+        @test minimum(eigvals(Symmetric(Pm))) > -1e-20
+
+        # Innovation drift: at the end the predicted difference should track
+        # the last measurement within a few σ of the observation noise.
+        H        = measurement_matrix(e)
+        z_hat    = (H * kf.x)[1]
+        z_sigma  = sqrt(cA.q0 + cB.q0)
+        @test abs(z_hat - z[end]) < 10 * z_sigma   # loose — KF lag at the boundary
+
+        # Counter advanced once per update
+        @test kf.k == N
+    end
+
+    @testset "ClockEnsemble observable vs non-observable modes" begin
+        # With ref=1, the differential mode (x_B − x_A) is observable
+        # and its posterior variance stays bounded, while the common
+        # mode (x_A absolute phase) is non-observable and its variance
+        # grows monotonically — Stein §II / Galleani–Tavella's free-clock
+        # non-observability statement, made concrete on the filter output.
+        import Random; Random.seed!(7)
+
+        τ   = 1.0
+        c   = ThreeStateClock(tau=τ, q0=1e-20, q1=1e-22, q2=1e-30, q3=0.0)
+        e   = c + c
+        ns  = nstates(e)
+
+        # Drive z = 0 to isolate the structural growth, not noise.
+        Nshort = 16
+        Nlong  = 512
+        kf_short = StandardKalmanFilter(zeros(ns), Matrix(1e-14 * I(ns)))
+        for _ in 1:Nshort
+            predict!(kf_short, e, τ); update!(kf_short, e, 0.0)
+        end
+        kf_long = StandardKalmanFilter(zeros(ns), Matrix(1e-14 * I(ns)))
+        for _ in 1:Nlong
+            predict!(kf_long, e, τ); update!(kf_long, e, 0.0)
+        end
+
+        H = measurement_matrix(e)
+        Pdiff_short = (H * SMatrix(kf_short.P) * H')[1, 1]
+        Pdiff_long  = (H * SMatrix(kf_long.P)  * H')[1, 1]
+        Pref_short  = kf_short.P[1, 1]
+        Pref_long   = kf_long.P[1, 1]
+
+        # Reference-clock absolute-phase variance grows substantially
+        # over the run.
+        @test Pref_long > 10 * Pref_short
+        # Differential-mode variance grows far less (close to its
+        # steady-state bound — Riccati fixed point dominated by R).
+        @test Pdiff_long < 2 * Pdiff_short
+        # And on absolute scale, the non-observable mode dominates the
+        # observable mode after sufficient steps.
+        @test Pref_long > Pdiff_long
+    end
 end

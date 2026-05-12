@@ -91,9 +91,11 @@ module Est
     using DocStringExtensions
 
     include("est/models/clocks.jl")
+    include("est/models/ensemble.jl")
     include("est/estimators/filters.jl")
 
     export AbstractClockModel, TwoStateClock, ThreeStateClock, RelativisticClock
+    export ClockEnsemble, EnsembleWeights
     export nstates, state_transition, process_noise, measurement_matrix, measurement_noise
     export AbstractEstimator, StandardKalmanFilter, UDFactorizedFilter, KuramotoOscillator
     export predict!, update!, prop!

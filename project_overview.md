@@ -130,6 +130,7 @@ remains unchanged.
 | `TwoStateClock`, `ThreeStateClock` | [src/est/models/clocks.jl](src/est/models/clocks.jl) | ✅ | `@kwdef` + StaticArrays Φ/Q/H/R |
 | `state_transition(model[, dt])` | same | ✅ | dt-overload for arbitrary horizons; single-arg defers to `model.tau` |
 | `process_noise(model[, dt])` | same | ✅ | Closed-form Galleani/Zucca integration; dt-overload mirrors Φ |
+| `ClockEnsemble`, `EnsembleWeights` | [src/est/models/ensemble.jl](src/est/models/ensemble.jl) | ✅ | Stein 2003 stacked time-scale model. `Base.:+` overloaded on `AbstractClockModel` (homogeneous-only). Block-diagonal Φ/Q; H selects N-1 phase differences vs reference clock. Stein §VI–VII auto-weights from clock q1/q2/q3. Reuses `StandardKalmanFilter` unchanged |
 | `RelativisticClock` | same | 🔲 Stub | Empty struct (lunar PNT future work) |
 | `StandardKalmanFilter` | [src/est/estimators/filters.jl](src/est/estimators/filters.jl) | ✅ | AD-clean default; opt-in `legacy_compat` |
 | `predict!`, `update!` | same | ✅ | Out-of-place SMatrix math; symmetrized P. `predict!` keeps the legacy `est.k > 0` gate. |
@@ -198,7 +199,7 @@ remains unchanged.
 
 | ID | Risk |
 |----|------|
-| R-LOW-3 | Tutorials cover the single-clock + steering + holdover path; multi-clock ensemble + relativistic walk-throughs queued |
+| R-LOW-3 | Tutorials cover the single-clock + steering + holdover + TCH + ensemble path; relativistic walk-through queued |
 | R-LOW-4 | `Documenter.jl` site skeleton shipped; tutorial pages are stubs (theory pages now filled out) |
 | R-LOW-5 | `RelativisticClock`, `UDFactorizedFilter`, `KuramotoOscillator` are stubs |
 
