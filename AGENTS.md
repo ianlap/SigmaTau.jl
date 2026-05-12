@@ -15,19 +15,36 @@ You are working on a Julia 1.11 package authored by Ian Lapinski.
 
 ## Package architecture
 
-Single Julia 1.11 package. Two submodules under `src/`:
+Single Julia 1.11 package. Two submodules under `src/`, plus umbrella-level
+IO that produces top-level types:
 
+- `SigmaTau`      — umbrella module; re-exports shared types and owns
+  IO (file readers, detrend, gap fill, result round-trip)
 - `SigmaTau.Stab` — deviation cores + API + noise ID + EDF/CI
-- `SigmaTau.Est`  — clock state-space models + Kalman filter
+- `SigmaTau.Est`  — clock state-space models + Kalman filter + PID steering
 
 Types (`PhaseData`, `FrequencyData`, `StabilityResult`) live in `src/types/`
 and are re-exported from the umbrella `SigmaTau` module via `@reexport`.
+Both submodules' exports are also flattened onto the umbrella, so callers
+write `using SigmaTau` and get everything.
 
 ### File map (most-touched paths)
 
+- `src/SigmaTau.jl` — umbrella module. Includes `types/`, `io/`, then
+  `Stab` and `Est` submodules; `@reexport`s both. IO functions live at the
+  umbrella level (not inside `Stab`) because they return top-level types.
+- `src/io/` — umbrella-level IO. All files use `DelimitedFiles`, `FFTW`,
+  `Statistics` imported once in `SigmaTau.jl`.
+  - `read.jl`     — `read_phase`, `read_frequency` (with optional scaling,
+    detrend, gap fill in one call)
+  - `detrend.jl`  — `detrend(::PhaseData / ::FrequencyData)`, modes
+    `:none | :mean | :endpoint | :linear`
+  - `fillgaps.jl` — `fillgaps` (Howe & Schlossberger PTTI-2009 imputation)
+  - `results.jl`  — `save_result`, `load_result` (self-describing
+    tab-delimited round-trip, stdlib only)
 - `src/stab/core/` — `_adev_core`, `_mdev_core`, etc., split by deviation family:
   - `allan.jl`    — `_adev_core`, `_mdev_core`, `_tdev_core`
-  - `hadamard.jl` — `_hdev_core`, `_mhdev_core`, `_htotdev_core`
+  - `hadamard.jl` — `_hdev_core`, `_mhdev_core`
   - `total.jl`    — `_totdev_core`, `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core`
   - `mtie.jl`     — `_mtie_core`
   - `pdev.jl`     — `_pdev_core`
@@ -35,25 +52,38 @@ and are re-exported from the umbrella `SigmaTau` module via `@reexport`.
 - `src/stab/api/` — public API entry points, split by deviation family:
   - `allan.jl`, `hadamard.jl`, `total.jl`, `mtie.jl`, `pdev.jl`
   Each wraps `PhaseData`/`FrequencyData` → `StabilityResult`.
+  `api/hadamard.jl` also exposes `htdev` and the deprecated alias `ldev`
+  (slated for removal in a future release).
   New deviations need a `PhaseData` *and* `FrequencyData` method here.
 - `src/stab/stats/edf.jl` — EDF/CI math (chi-squared, Greenhall–Riley fallbacks).
 - `src/stab/noise/` — noise identification (`lag1.jl`, `synth.jl`).
 - `src/stab/utils.jl` — shared helpers including `_freq_to_phase`.
-- `src/est/models/clocks.jl` — clock structs
-  (Cesium, Hydrogen, Rubidium, RelativisticClock stub).
-- `src/est/estimators/filters.jl` — Kalman
-  (out-of-place, StaticArrays) + `UDFactorizedFilter` /
-  `KuramotoOscillator` stubs.
+- `DEFAULT_CONFIDENCE = 0.683` is defined at the top of the `Stab` submodule
+  in `src/SigmaTau.jl` (not in `utils.jl`); it is the default `confidence`
+  argument across every public deviation API.
+- `src/est/models/clocks.jl` — `AbstractClockModel` and concrete
+  `TwoStateClock`, `ThreeStateClock` (kwdef structs with `tau`, `q0`, `q1`,
+  `q2`, optional `q3`); `RelativisticClock` is a stub that throws on
+  method dispatch.
+- `src/est/estimators/filters.jl` — `StandardKalmanFilter`
+  (out-of-place, `StaticArrays`-based, AD-friendly), plus `UDFactorizedFilter`
+  and `KuramotoOscillator` stubs, and `PIDController` + `step!` /
+  `steer_to_correction` for closed-loop steering.
 - `src/types/` — `abstract.jl`, `phase_data.jl`, `frequency_data.jl`,
   `stability_result.jl`.
-- `ext/SigmaTauRecipesBaseExt.jl` — all plot recipes.
+- `ext/SigmaTauRecipesBaseExt.jl` — all plot recipes (loaded only when
+  `RecipesBase` is available; declared in `[weakdeps]`).
 - `reference/validation/` — parity fixtures. **Read-only.**
   - `stable32gen.DAT` — input data
   - `stable32out/stable32_data_full.csv` — Stable32 reference outputs (~5 sig figs, rtol ≥ 1e-4)
   - `allantools_out/allantools_data_full.csv` — allantools reference (full Float64, rtol ≈ 1e-11)
-- `test/runtests.jl` — root test entry point.
-  - `test/stab/legacy_kernels.jl` — rtol=1e-12 parity contract.
-  - `test/stab/allantools_cross_validation.jl` — allantools cross-checks.
+- `test/runtests.jl` — root test entry point. Drives five sub-suites:
+  - `test/types/runtests.jl`
+  - `test/stab/runtests.jl` — includes `legacy_kernels.jl` (rtol=1e-12
+    parity contract) and `allantools_cross_validation.jl` (allantools cross-checks)
+  - `test/est/runtests.jl`
+  - `test/io/runtests.jl` — `detrend.jl`, `fillgaps.jl`, `read.jl`
+  - `test/umbrella_smoke.jl` — sanity check that re-exports resolve
 
 ### Agent-context pair
 
