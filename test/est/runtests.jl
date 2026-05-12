@@ -454,12 +454,17 @@ end
         @test H[2, 1] == -1.0 && H[2, 7] == 1.0   # x_C − x_A
         @test sum(abs, H) == 4.0   # exactly four ±1 entries
 
-        # R diagonal: q0_ref + q0_i per row
+        # R = Cov(v_i − v_ref, v_j − v_ref) under independent v_k ∼ N(0, q0_k):
+        # diagonal q0_ref + q0_i, off-diagonal q0_ref (shared reference noise).
         R = measurement_noise(e3)
         @test size(R) == (2, 2)
         @test R[1, 1] ≈ cA.q0 + cB.q0
         @test R[2, 2] ≈ cA.q0 + cC.q0
-        @test R[1, 2] == 0.0 && R[2, 1] == 0.0
+        @test R[1, 2] ≈ cA.q0
+        @test R[2, 1] ≈ cA.q0
+        # R must stay symmetric PSD for the Kalman update to remain stable.
+        @test Matrix(R) ≈ Matrix(R)'
+        @test minimum(eigvals(Symmetric(Matrix(R)))) > 0
 
         # Non-default ref: x_A − x_B, x_C − x_B
         e3_ref2 = ClockEnsemble((cA, cB, cC); ref=2)
@@ -506,6 +511,11 @@ end
         w = EnsembleWeights{2}(SVector(0.3, 0.7), SVector(0.4, 0.6), SVector(0.0, 0.0))
         eW = ClockEnsemble((cA, cB); weights=w)
         @test eW.weights === w
+
+        # Auto-weights fallback for unsupported clock types throws a
+        # deliberate ArgumentError instead of a MethodError. The
+        # `RelativisticClock` stub is the in-tree witness for this path.
+        @test_throws ArgumentError RelativisticClock() + RelativisticClock()
     end
 
     @testset "ClockEnsemble runs through StandardKalmanFilter" begin

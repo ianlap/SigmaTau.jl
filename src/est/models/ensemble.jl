@@ -77,6 +77,14 @@ function _stein_weights(clocks::NTuple{N, TwoStateClock}) where {N}
     return EnsembleWeights{N}(a ./ sum(a), b ./ sum(b), zero(SVector{N,Float64}))
 end
 
+# Fallback: any other AbstractClockModel subtype (RelativisticClock stub
+# or user-defined clocks) hits this and gets a deliberate ArgumentError
+# instead of a MethodError. Auto-weights are inverse-noise-coefficient
+# specific to the polynomial-clock SDE; extend `_stein_weights` for new
+# clock families before they can flow through `+` / auto-weights.
+_stein_weights(::NTuple{N, <:AbstractClockModel}) where {N} =
+    throw(ArgumentError("Stein auto-weights are only defined for TwoStateClock and ThreeStateClock ensembles. Pass explicit `weights::EnsembleWeights{N}` to ClockEnsemble, or extend `_stein_weights` for the new clock type."))
+
 # ── ClockEnsemble type ───────────────────────────────────────────────────────
 
 """
@@ -291,20 +299,29 @@ end
 """
     measurement_noise(e::ClockEnsemble) → SMatrix
 
-Diagonal `(N-1) × (N-1)` measurement-noise covariance. Each diagonal
-entry is the sum of the WPM diffusion coefficients of the two clocks
-in the corresponding phase difference (`q0_ref + q0_i`) — the
-independent-noise sum of variances. Off-diagonal entries are zero;
-all `N-1` differences share the reference clock so in principle a
-small correlation exists, but in the standard time-scale formulation
-that correlation is absorbed into the reference clock's own state
-trajectory and not into R.
+`(N-1) × (N-1)` measurement-noise covariance for the phase
+differences against the reference clock. Treating each clock's WPM
+diffusion `q0_i` as the variance of an independent measurement
+noise term `v_i`, every observation row is `z_i = (x_i − x_ref) +
+(v_i − v_ref)`. The covariance of those independent noises gives:
+
+- Diagonal: `R[i,i] = q0_ref + q0_i` — the independent-sum variance
+  of one difference observation.
+- Off-diagonal (`i ≠ j`): `R[i,j] = q0_ref` — every pair of
+  differences shares the same `v_ref` term, so the cross-covariance
+  is `Var(v_ref) = q0_ref`. Omitting this cross-term makes the filter
+  overcount information from multiple differences against the same
+  reference and underestimates uncertainty for `N ≥ 3`.
+
+For `N = 2` the matrix is 1×1 and collapses to `q0_ref + q0_other`.
 """
 function measurement_noise(e::ClockEnsemble{N,M}) where {N, M<:AbstractClockModel}
     rows = N - 1
     R    = MMatrix{rows, rows, Float64}(undef)
-    fill!(R, 0.0)
     q0_ref = e.clocks[e.ref].q0
+    # Off-diagonals carry the shared reference-clock WPM term.
+    fill!(R, q0_ref)
+    # Diagonals add the non-reference clock's WPM.
     row = 0
     for i in 1:N
         i == e.ref && continue
