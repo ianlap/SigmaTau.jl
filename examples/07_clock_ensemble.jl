@@ -35,7 +35,6 @@ using SigmaTau
 using SigmaTau.Stab: _gen_powerlaw_phase
 using LinearAlgebra
 using Random
-using StaticArrays
 using Statistics: mean
 using FFTW                          # AbstractFFTs backend for noise synth
 
@@ -161,13 +160,15 @@ x_TS = ensemble.weights.a[1] .* xA_est .+ ensemble.weights.a[2] .* xB_est
 
 # ## 6. Compare ADEV of the time scale to each clock
 #
-# `adev` computes the Allan deviation curve. We expect:
+# `adev` computes the Allan deviation curve at the requested integer
+# `m` multiples of `τ₀`. We expect:
 # - At every τ the ensemble σ_y sits at or below the better of the
 #   two individual clocks at that τ — Stein Figure 4.
 
-adev_A  = adev(PhaseData(xA, τ))
-adev_B  = adev(PhaseData(xB, τ))
-adev_TS = adev(PhaseData(x_TS, τ))
+m_grid  = unique(round.(Int, exp10.(range(0, log10(N ÷ 4); length = 12))))
+adev_A  = adev(PhaseData(xA,   τ), m_grid; calc_ci=false)
+adev_B  = adev(PhaseData(xB,   τ), m_grid; calc_ci=false)
+adev_TS = adev(PhaseData(x_TS, τ), m_grid; calc_ci=false)
 
 # A few sample points for the prose record (full curves in the
 # plot below):
