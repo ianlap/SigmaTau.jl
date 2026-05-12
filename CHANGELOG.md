@@ -8,6 +8,26 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **`ClockEnsemble` model for joint Kalman time-scale estimation.**
+  Stein 2003 §V / Galleani–Tavella stacked-state formulation: the
+  joint state concatenates per-clock states, Φ and Q are
+  block-diagonal, and H selects the `N−1` phase differences against
+  a reference clock. The ensemble is itself an `AbstractClockModel`,
+  so the existing `predict!` / `update!` / `prop!` loop on
+  `StandardKalmanFilter` consumes it unmodified. Operator `Base.:+`
+  overloaded on `AbstractClockModel` for ergonomic construction
+  (`ensemble = clockA + clockB + clockC`); homogeneous-only (mixing
+  `TwoStateClock` and `ThreeStateClock` throws `ArgumentError`).
+  Auto-derives Stein §VI–VII inverse-noise weights from each
+  member's diffusion coefficients (`a_i ∝ 1/q1_i`, `b_i ∝ 1/q2_i`,
+  `c_i ∝ 1/q3_i`); explicit `weights=` override supported. New file
+  `src/est/models/ensemble.jl`. References: Stein 2003
+  *"Time Scales Demystified"* IFCS; Galleani–Tavella 2010
+  *"Time and the Kalman filter"* IEEE CSM.
+- `examples/07_clock_ensemble.jl` — Literate tutorial building a
+  two-clock paper time scale from a Cs-like and an Rb-like
+  `ThreeStateClock`, qualitatively reproducing Stein 2003 Figure 4
+  (ensemble σ_y(τ) below both members).
 - **IO expansion: file readers, detrend, Howe gap imputation.** New
   top-level `src/io/` directory consolidating all data-side IO.
   `read_phase(path; …)` and `read_frequency(path; …)` parse 2-column
