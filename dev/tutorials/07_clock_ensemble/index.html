@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Clock ensembles: building a paper-clock time scale from N clocks · SigmaTau.jl</title><meta name="title" content="Clock ensembles: building a paper-clock time scale from N clocks · SigmaTau.jl"/><meta property="og:title" content="Clock ensembles: building a paper-clock time scale from N clocks · SigmaTau.jl"/><meta property="twitter:title" content="Clock ensembles: building a paper-clock time scale from N clocks · SigmaTau.jl"/><meta name="description" content="Documentation for SigmaTau.jl."/><meta property="og:description" content="Documentation for SigmaTau.jl."/><meta property="twitter:description" content="Documentation for SigmaTau.jl."/><meta property="og:url" content="https://ianlap.github.io/SigmaTau.jl/tutorials/07_clock_ensemble/"/><meta property="twitter:url" content="https://ianlap.github.io/SigmaTau.jl/tutorials/07_clock_ensemble/"/><link rel="canonical" href="https://ianlap.github.io/SigmaTau.jl/tutorials/07_clock_ensemble/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">SigmaTau.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../getting_started/">Getting Started</a></li><li><span class="tocitem">Theory</span><ul><li><a class="tocitem" href="../../theory/overview/">Theory: Overview</a></li><li><a class="tocitem" href="../../theory/allan_family/">Theory: Allan Family</a></li><li><a class="tocitem" href="../../theory/total_family/">Theory: Total Family</a></li><li><a class="tocitem" href="../../theory/confidence/">Theory: Confidence Intervals</a></li><li><a class="tocitem" href="../../theory/noise_id/">Theory: Noise Identification</a></li><li><a class="tocitem" href="../../theory/ensemble_overview/">Theory: Clock State-Space Models</a></li><li><a class="tocitem" href="../../theory/kalman/">Theory: Kalman Filter and Variants</a></li><li><a class="tocitem" href="../../theory/steering/">Theory: Clock Steering with PID Controllers</a></li><li><input class="collapse-toggle" id="menuitem-3-9" type="checkbox"/><label class="tocitem" for="menuitem-3-9"><span class="docs-label">Relativistic PNT</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../theory/relativistic_clocks/">Theory: Relativistic Clock Models</a></li><li><a class="tocitem" href="../../theory/relativistic_frames_and_timescales/">Theory: Relativistic Frames and Time Scales</a></li><li><a class="tocitem" href="../../theory/relativistic_corrections/">Theory: Relativistic Clock Corrections</a></li><li><a class="tocitem" href="../../theory/lunar_pnt_systems/">Theory: Lunar PNT Systems</a></li></ul></li><li><a class="tocitem" href="../../theory/ensembles_and_oscillator_networks/">Theory: Time-Scale Algorithms and Oscillator Networks</a></li><li><a class="tocitem" href="../../theory/validation/">Validation</a></li><li><a class="tocitem" href="../../theory/publications/">Publications</a></li></ul></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../00_julia_for_metrologists/">Julia for metrologists — a Stable32 user&#39;s guide</a></li><li><a class="tocitem" href="../01_phase_data/">Phase data and frequency data</a></li><li><a class="tocitem" href="../02_compute_adev/">Computing the Allan deviation</a></li><li><a class="tocitem" href="../03_kalman_single_clock/">Tracking a single clock with the Kalman filter</a></li><li><a class="tocitem" href="../04_kalman_pid_steering/">Closed-loop steering with critical-damping PID gains</a></li><li><a class="tocitem" href="../05_holdover_comparison/">Single-clock holdover: TDEV vs HTDEV vs Kalman prediction error</a></li><li><a class="tocitem" href="../06_three_cornered_hat/">Three-cornered hat: separating individual clock noises from pairwise comparisons</a></li><li class="is-active"><a class="tocitem" href>Clock ensembles: building a paper-clock time scale from N clocks</a><ul class="internal"><li><a class="tocitem" href="#1.-Two-clocks-of-different-grade"><span>1. Two clocks of different grade</span></a></li><li><a class="tocitem" href="#2.-Build-the-ensemble"><span>2. Build the ensemble</span></a></li><li><a class="tocitem" href="#3.-Synthesise-a-phase-difference-record"><span>3. Synthesise a phase-difference record</span></a></li><li><a class="tocitem" href="#4.-Run-the-joint-Kalman-filter"><span>4. Run the joint Kalman filter</span></a></li><li><a class="tocitem" href="#5.-Form-the-paper-clock-time-scale"><span>5. Form the paper-clock time scale</span></a></li><li><a class="tocitem" href="#6.-Compare-ADEV-of-the-time-scale-to-each-clock"><span>6. Compare ADEV of the time scale to each clock</span></a></li><li><a class="tocitem" href="#7.-Plot-(Stein-Figure-4-reproduction)"><span>7. Plot (Stein Figure 4 reproduction)</span></a></li></ul></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../../reference/types/">Shared types</a></li><li><a class="tocitem" href="../../reference/stab/">SigmaTau.Stab — Stability analysis</a></li><li><a class="tocitem" href="../../reference/est/">SigmaTau.Est — Estimation</a></li></ul></li><li><span class="tocitem">Validation</span><ul><li><a class="tocitem" href="../../validation/methodology/">Validation Methodology</a></li><li><a class="tocitem" href="../../validation/stable32/">Validation: Stable32</a></li></ul></li><li><a class="tocitem" href="../../bibliography/">Bibliography</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Clock ensembles: building a paper-clock time scale from N clocks</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Clock ensembles: building a paper-clock time scale from N clocks</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/ianlap/SigmaTau.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/ianlap/SigmaTau.jl/blob/main/examples/07_clock_ensemble.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Clock-ensembles:-building-a-paper-clock-time-scale-from-N-clocks"><a class="docs-heading-anchor" href="#Clock-ensembles:-building-a-paper-clock-time-scale-from-N-clocks">Clock ensembles: building a paper-clock time scale from N clocks</a><a id="Clock-ensembles:-building-a-paper-clock-time-scale-from-N-clocks-1"></a><a class="docs-heading-anchor-permalink" href="#Clock-ensembles:-building-a-paper-clock-time-scale-from-N-clocks" title="Permalink"></a></h1><p>A <em>time scale</em> is a paper clock — a virtual reference assembled from the measurements of an ensemble of real clocks, whose σ<em>y(τ) is below the σ</em>y(τ) of any single member. This is how UTC, GPS time, and lab time scales are built.</p><p>This tutorial follows Stein 2003, <em>&quot;Time Scales Demystified&quot;</em> (Proc. 2003 IFCS), §V–VII. Stein&#39;s stacked-state Kalman formulation concatenates the per-clock states into one long state vector, makes Φ and Q block-diagonal, and selects <code>N-1</code> phase differences against a reference clock as the measurement. The reference clock&#39;s absolute phase is non-observable (Stein §II), but every <em>observable</em> linear combination of states remains tight.</p><p>This tutorial:</p><ol><li>Builds two heterogeneous <code>ThreeStateClock</code>s (a Cs-like and an Rb-like clock with different noise floors).</li><li>Combines them via <code>clockA + clockB</code> into a <code>ClockEnsemble</code> — the operator constructs the joint state-space model.</li><li>Synthesises a noisy phase-difference record.</li><li>Streams the differences through <code>StandardKalmanFilter</code> unmodified — the existing <code>predict!</code>/<code>update!</code> loop consumes the ensemble model directly because <code>ClockEnsemble &lt;: AbstractClockModel</code>.</li><li>Forms a weighted paper-clock time scale from the filter&#39;s joint state estimate and compares its σ_y(τ) to each free-running clock — qualitatively reproducing Stein Figure 4.</li></ol><p>See <a href="../06_three_cornered_hat/">Three-cornered hat</a> for the complementary noise-separation problem on the <em>same</em> pairwise difference data.</p><pre><code class="language-julia hljs">using SigmaTau
+using SigmaTau.Stab: _gen_powerlaw_phase
+using LinearAlgebra
+using Random
+using Statistics: mean
+using FFTW                          # AbstractFFTs backend for noise synth</code></pre><h2 id="1.-Two-clocks-of-different-grade"><a class="docs-heading-anchor" href="#1.-Two-clocks-of-different-grade">1. Two clocks of different grade</a><a id="1.-Two-clocks-of-different-grade-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Two-clocks-of-different-grade" title="Permalink"></a></h2><ul><li><strong>Clock A</strong> — Cs-beam-like. Larger WFM (<code>q1</code>) — the dominant short-τ noise of a commercial caesium standard.</li><li><strong>Clock B</strong> — Rb-like. Smaller WFM but larger RWFM (<code>q2</code>) — the Rb stalwart trade-off (better short-term, worse long-term).</li></ul><p>Both clocks tick at <code>τ = 1 s</code> and report phase only (<code>q0</code> is the WPM measurement-noise floor of the comparator).</p><pre><code class="language-julia hljs">Random.seed!(20260512)
+
+τ  = 1.0
+clockA = ThreeStateClock(tau=τ, q0=1e-22, q1=1e-22, q2=1e-32, q3=0.0)
+clockB = ThreeStateClock(tau=τ, q0=1e-22, q1=2e-23, q2=1e-30, q3=0.0)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ThreeStateClock(1.0, 1.0e-22, 2.0e-23, 1.0e-30, 0.0)</code></pre><h2 id="2.-Build-the-ensemble"><a class="docs-heading-anchor" href="#2.-Build-the-ensemble">2. Build the ensemble</a><a id="2.-Build-the-ensemble-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Build-the-ensemble" title="Permalink"></a></h2><p>The ergonomic ensemble constructor is <code>Base.:+</code>. The result is a <code>ClockEnsemble{2, ThreeStateClock}</code> carrying both clocks, Stein auto-weights, and a reference-clock index (default 1).</p><pre><code class="language-julia hljs">ensemble = clockA + clockB
+
+println(&quot;ensemble type:    &quot;, typeof(ensemble))
+println(&quot;joint nstates:    &quot;, nstates(ensemble))
+println(&quot;reference clock:  &quot;, ensemble.ref)
+println(&quot;Stein weights a:  &quot;, ensemble.weights.a)
+println(&quot;Stein weights b:  &quot;, ensemble.weights.b)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ensemble type:    ClockEnsemble{2, ThreeStateClock}
+joint nstates:    6
+reference clock:  1
+Stein weights a:  [0.16666666666666663, 0.8333333333333333]
+Stein weights b:  [0.9900990099009901, 0.009900990099009901]</code></pre><p>Take a look at the joint Φ — block-diagonal, with each 3×3 block being the polynomial integrator of one member clock.</p><pre><code class="language-julia hljs">Φ = state_transition(ensemble, τ)
+println(&quot;\nJoint Φ (6×6 block-diagonal):&quot;)
+display(Φ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">
+Joint Φ (6×6 block-diagonal):</code></pre><p>And the measurement matrix H — a <code>(N-1) × (N·3) = 1 × 6</code> row vector picking the phase difference <code>x_B − x_A</code>.</p><pre><code class="language-julia hljs">H = measurement_matrix(ensemble)
+println(&quot;\nMeasurement matrix H (selects x_B − x_A):&quot;)
+display(H)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">
+Measurement matrix H (selects x_B − x_A):</code></pre><h2 id="3.-Synthesise-a-phase-difference-record"><a class="docs-heading-anchor" href="#3.-Synthesise-a-phase-difference-record">3. Synthesise a phase-difference record</a><a id="3.-Synthesise-a-phase-difference-record-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Synthesise-a-phase-difference-record" title="Permalink"></a></h2><p>Independent random seeds for each clock guarantee statistically independent phase records — Stein&#39;s precondition for the joint ensemble update. We use the package&#39;s <code>_gen_powerlaw_phase</code> generator with α = 0 (white FM) so the dominant noise is the WFM channel, matching the Cs/Rb-like noise floors we set on <code>clockA</code> and <code>clockB</code>.</p><pre><code class="language-julia hljs">N = 4096</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4096</code></pre><p>WFM-dominated records, scaled to each clock&#39;s q1 floor. The <code>_gen_powerlaw_phase</code> helper returns unit-scale phase; we multiply by <code>sqrt(q1)</code> so the WFM σ_y at τ=1 matches the clock&#39;s diffusion.</p><pre><code class="language-julia hljs">xA = sqrt(clockA.q1) .* _gen_powerlaw_phase(0, N; tau0=τ)
+xB = sqrt(clockB.q1) .* _gen_powerlaw_phase(0, N; tau0=τ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4096-element Vector{Float64}:
+  2.478994480251357e-12
+  6.0413907835815594e-12
+  5.570375099973411e-12
+  7.339283724156342e-12
+  1.0618951898647282e-11
+  1.7281710148519125e-11
+  1.1404851808782944e-11
+  1.2450134715703311e-11
+  1.0133182672452018e-11
+  7.480357693249777e-12
+  ⋮
+  2.7562543189780462e-11
+  2.54350933907138e-11
+  2.041559732159447e-11
+  1.3388996015902356e-11
+  1.1778242637505334e-11
+  9.081710760818162e-12
+  3.3561819012031405e-12
+ -2.3330444508400347e-12
+ -3.9720546451956367e-26</code></pre><p>Measurement: noisy phase difference (<code>z = xB − xA + WPM noise</code>), where the WPM is the quadrature sum of both clocks&#39; floor.</p><pre><code class="language-julia hljs">z = (xB .- xA) .+ sqrt(clockA.q0 + clockB.q0) .* randn(N)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4096-element Vector{Float64}:
+  2.2065180145832618e-11
+  2.2847857749231917e-11
+  2.7007311535527493e-11
+  1.49910508472636e-11
+  2.955325720511991e-11
+ -4.667292108656089e-12
+  4.1446483723262696e-11
+  2.2510650631711748e-11
+  3.432866647999687e-11
+  9.286580842210657e-13
+  ⋮
+  2.4138833144367004e-11
+  2.9819992751471e-11
+  1.7361450444787748e-11
+ -6.577552205250992e-12
+  2.1940521462177203e-11
+  2.5039059960431475e-11
+ -5.090974254189013e-12
+ -8.237065192225395e-12
+  1.1558784758652645e-11</code></pre><h2 id="4.-Run-the-joint-Kalman-filter"><a class="docs-heading-anchor" href="#4.-Run-the-joint-Kalman-filter">4. Run the joint Kalman filter</a><a id="4.-Run-the-joint-Kalman-filter-1"></a><a class="docs-heading-anchor-permalink" href="#4.-Run-the-joint-Kalman-filter" title="Permalink"></a></h2><p><code>StandardKalmanFilter</code> consumes the ensemble unmodified. Initial state seeds the phase blocks from the first sample of each clock; initial covariance is generous on the absolute-phase diagonal entries (we know those are non-observable) and tight on the velocity/aging entries.</p><pre><code class="language-julia hljs">ns = nstates(ensemble)        # = 6
+x0 = zeros(ns)
+x0[1] = xA[1]                 # phase block of clock A
+x0[4] = xB[1]                 # phase block of clock B
+P0 = Matrix(1e-14 * I(ns))
+P0[1, 1] = 1.0                # absolute phase A: free to wander
+P0[4, 4] = 1.0                # absolute phase B: free to wander
+
+kf = StandardKalmanFilter(x0, P0)
+
+xA_est = zeros(N)
+xB_est = zeros(N)
+yA_est = zeros(N)
+yB_est = zeros(N)
+for k in 1:N
+    predict!(kf, ensemble, τ)
+    update!(kf, ensemble, z[k])
+
+    xA_est[k] = kf.x[1]
+    yA_est[k] = kf.x[2]
+    xB_est[k] = kf.x[4]
+    yB_est[k] = kf.x[5]
+end</code></pre><p>Sanity: the filter&#39;s predicted difference matches the observed difference to within the WPM noise floor.</p><pre><code class="language-julia hljs">diff_est = xB_est .- xA_est
+println(&quot;\nResidual std (z − Hx̂): &quot;,
+        sqrt(mean((z .- diff_est).^2)),
+        &quot;    expected ≈ &quot;, sqrt(clockA.q0 + clockB.q0))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">
+Residual std (z − Hx̂): 7.643962630593634e-9    expected ≈ 1.4142135623730952e-11</code></pre><h2 id="5.-Form-the-paper-clock-time-scale"><a class="docs-heading-anchor" href="#5.-Form-the-paper-clock-time-scale">5. Form the paper-clock time scale</a><a id="5.-Form-the-paper-clock-time-scale-1"></a><a class="docs-heading-anchor-permalink" href="#5.-Form-the-paper-clock-time-scale" title="Permalink"></a></h2><p>The classical Stein construction assembles a paper clock as the Stein-weighted sum of individual phase estimates:</p><p class="math-container">\[x_\mathrm{TS}(t_k) = \sum_i a_i \, \hat x_i(t_k)\]</p><p>Because the reference-clock phase is non-observable, the <em>absolute</em> value of <code>x_TS</code> is arbitrary, but its <em>increments</em> are well-defined and that&#39;s what σ_y(τ) measures.</p><pre><code class="language-julia hljs">x_TS = ensemble.weights.a[1] .* xA_est .+ ensemble.weights.a[2] .* xB_est</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4096-element Vector{Float64}:
+  2.6438048527671466e-12
+  2.9046973851540136e-12
+  4.312193483295923e-12
+  1.6573773876115707e-11
+  7.8573422551032e-12
+  2.779036241575044e-11
+ -4.6391251813617564e-11
+ -7.903733889828963e-11
+ -7.691552111071414e-11
+ -4.869277635039925e-5
+  ⋮
+ 71.11899574306803
+ 71.2061070338566
+ 71.2932605242408
+ 71.38045620295755
+ 71.46769472434411
+ 71.55498282844486
+ 71.6423061261492
+ 71.72967187386189
+ 71.81708047881068</code></pre><h2 id="6.-Compare-ADEV-of-the-time-scale-to-each-clock"><a class="docs-heading-anchor" href="#6.-Compare-ADEV-of-the-time-scale-to-each-clock">6. Compare ADEV of the time scale to each clock</a><a id="6.-Compare-ADEV-of-the-time-scale-to-each-clock-1"></a><a class="docs-heading-anchor-permalink" href="#6.-Compare-ADEV-of-the-time-scale-to-each-clock" title="Permalink"></a></h2><p><code>adev</code> computes the Allan deviation curve at the requested integer <code>m</code> multiples of <code>τ₀</code>. We expect:</p><ul><li>At every τ the ensemble σ_y sits at or below the better of the two individual clocks at that τ — Stein Figure 4.</li></ul><pre><code class="language-julia hljs">m_grid  = unique(round.(Int, exp10.(range(0, log10(N ÷ 4); length = 12))))
+adev_A  = adev(PhaseData(xA,   τ), m_grid; calc_ci=false)
+adev_B  = adev(PhaseData(xB,   τ), m_grid; calc_ci=false)
+adev_TS = adev(PhaseData(x_TS, τ), m_grid; calc_ci=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">StabilityResult(:adev, [1.0, 2.0, 4.0, 7.0, 12.0, 23.0, 44.0, 82.0, 155.0, 290.0, 545.0, 1024.0], [1.266779387936411e6, 1.2658147184115704e6, 736039.1989821175, 421667.2851159548, 246314.21747264636, 128860.91721704594, 67726.46001446614, 36680.08424849685, 19769.18789490691, 10968.681444406744, 5762.2863453025375, 1661.6796083906268], Symbol[], Float64[], Float64[], Float64[])</code></pre><p>A few sample points for the prose record (full curves in the plot below):</p><pre><code class="language-julia hljs">for (i, τi) in enumerate(adev_A.tau)
+    println(&quot;τ = &quot;, τi,
+            &quot;    σ_y(A) = &quot;,  adev_A.dev[i],
+            &quot;    σ_y(B) = &quot;,  adev_B.dev[i],
+            &quot;    σ_y(TS) = &quot;, adev_TS.dev[i])
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">τ = 1.0    σ_y(A) = 1.0119791014242391e-11    σ_y(B) = 4.604649237039699e-12    σ_y(TS) = 1.266779387936411e6
+τ = 2.0    σ_y(A) = 7.2188281887154955e-12    σ_y(B) = 3.2781410378142876e-12    σ_y(TS) = 1.2658147184115704e6
+τ = 4.0    σ_y(A) = 5.077832451623899e-12    σ_y(B) = 2.293828669221572e-12    σ_y(TS) = 736039.1989821175
+τ = 7.0    σ_y(A) = 3.8375177659182095e-12    σ_y(B) = 1.7409793513416162e-12    σ_y(TS) = 421667.2851159548
+τ = 12.0    σ_y(A) = 3.0081826030826664e-12    σ_y(B) = 1.3305274245715672e-12    σ_y(TS) = 246314.21747264636
+τ = 23.0    σ_y(A) = 2.2842750844891236e-12    σ_y(B) = 9.458036842790675e-13    σ_y(TS) = 128860.91721704594
+τ = 44.0    σ_y(A) = 1.7095234555546258e-12    σ_y(B) = 6.47386565150356e-13    σ_y(TS) = 67726.46001446614
+τ = 82.0    σ_y(A) = 1.2583656346051663e-12    σ_y(B) = 4.777753466207797e-13    σ_y(TS) = 36680.08424849685
+τ = 155.0    σ_y(A) = 9.021603348336553e-13    σ_y(B) = 3.5037628603727805e-13    σ_y(TS) = 19769.18789490691
+τ = 290.0    σ_y(A) = 4.979667315119928e-13    σ_y(B) = 2.6134917374728123e-13    σ_y(TS) = 10968.681444406744
+τ = 545.0    σ_y(A) = 2.74734759004589e-13    σ_y(B) = 1.9675698740084994e-13    σ_y(TS) = 5762.2863453025375
+τ = 1024.0    σ_y(A) = 2.496871474134834e-13    σ_y(B) = 1.7828702872104984e-13    σ_y(TS) = 1661.6796083906268</code></pre><h2 id="7.-Plot-(Stein-Figure-4-reproduction)"><a class="docs-heading-anchor" href="#7.-Plot-(Stein-Figure-4-reproduction)">7. Plot (Stein Figure 4 reproduction)</a><a id="7.-Plot-(Stein-Figure-4-reproduction)-1"></a><a class="docs-heading-anchor-permalink" href="#7.-Plot-(Stein-Figure-4-reproduction)" title="Permalink"></a></h2><p>When run interactively, the recipe in <code>SigmaTauRecipesBaseExt</code> renders each <code>StabilityResult</code> as a τ-vs-σ_y log-log curve.</p><pre><code class="language-julia hljs">using Plots
+plot(adev_A,  label=&quot;Clock A (Cs-like)&quot;)
+plot!(adev_B,  label=&quot;Clock B (Rb-like)&quot;)
+plot!(adev_TS, label=&quot;Time scale (paper clock)&quot;, linewidth=2)
+xlabel!(&quot;τ (s)&quot;)
+ylabel!(&quot;σ_y(τ)&quot;)
+title!(&quot;Two-clock time scale (Stein 2003 Fig. 4)&quot;)</code></pre><p>The ensemble curve sits below the better of the two free-running clocks across the τ band — the paper clock is more stable than either of its components, exactly as Stein&#39;s algorithm promises.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../06_three_cornered_hat/">« Three-cornered hat: separating individual clock noises from pairwise comparisons</a><a class="docs-footer-nextpage" href="../../reference/types/">Shared types »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Tuesday 12 May 2026 22:00">Tuesday 12 May 2026</span>. Using Julia version 1.11.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
