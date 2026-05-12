@@ -57,8 +57,10 @@ write `using SigmaTau` and get everything.
   New deviations need a `PhaseData` *and* `FrequencyData` method here.
 - `src/stab/stats/edf.jl` — EDF/CI math (chi-squared, Greenhall–Riley fallbacks).
 - `src/stab/noise/` — noise identification (`lag1.jl`, `synth.jl`).
-- `src/stab/utils.jl` — shared helpers including `_freq_to_phase` and the
-  `DEFAULT_CONFIDENCE = 0.683` constant.
+- `src/stab/utils.jl` — shared helpers including `_freq_to_phase`.
+- `DEFAULT_CONFIDENCE = 0.683` is defined at the top of the `Stab` submodule
+  in `src/SigmaTau.jl` (not in `utils.jl`); it is the default `confidence`
+  argument across every public deviation API.
 - `src/est/models/clocks.jl` — `AbstractClockModel` and concrete
   `TwoStateClock`, `ThreeStateClock` (kwdef structs with `tau`, `q0`, `q1`,
   `q2`, optional `q3`); `RelativisticClock` is a stub that throws on
