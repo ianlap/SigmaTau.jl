@@ -82,6 +82,23 @@ numerical reference is locked in.
   low-dimensional, derivative-free inverse fit and composes cleanly
   with whatever clock model is in play. Add as a weakdep + extension
   to keep `[deps]` slim.
+- [ ] **Stein per-pair shock recombination on top of `ClockEnsemble`.**
+  The joint stacked Kalman ships (Stein 2003 §V); Stein's §VI–VII
+  basic / supplemental time-scale equations (6.2, 6.3, 7.2, 7.3) that
+  recover individual-clock phase / frequency / aging shock estimates
+  via the weighted-sum-to-zero constraint are deferred. The
+  `EnsembleWeights{N}` struct on `ClockEnsemble` already stores
+  `a_i`, `b_i`, `c_i` so the API will not break when this lands —
+  the work is a post-processing pass that reads the filter's
+  innovation history and applies the algebra. Validation target:
+  reproduce Stein 2003 Figure 4 quantitatively (5% / 18% short-term
+  and 10% / 6% long-term improvements over each member).
+- [ ] **Mixed-dimension `ClockEnsemble`.** v1 ships
+  homogeneous-only (`TwoStateClock + ThreeStateClock` throws). Real
+  labs mix two-state Cs beams and three-state H-masers in the same
+  ensemble. Supporting this requires per-clock state-block offsets
+  in Φ/Q/H construction (instead of `N · nstates(M)` strides) and
+  loosening the type signature to `NTuple{N, <:AbstractClockModel}`.
 - [ ] **IMM (Interacting Multiple Models) estimator** for clock fault
   detection — switching dynamics between healthy / glitch / aging
   modes. Reference implementation:
@@ -118,8 +135,7 @@ numerical reference is locked in.
 - [ ] **More `examples/`** — Literate pipeline now ships
   `01_phase_data`, `02_compute_adev`, `03_kalman_single_clock`,
   `04_kalman_pid_steering`, `05_holdover_comparison`,
-  `06_three_cornered_hat`. Next batch candidates:
-  - Multi-clock ensemble scenario (once a multi-clock model lands).
+  `06_three_cornered_hat`, `07_clock_ensemble`. Next batch candidates:
   - `RelativisticClock` walk-through (depends on the stub being
     fleshed out per the Medium-priority entry).
   - **GP-based holdover prediction** via `TemporalGPs.jl` with a
@@ -167,7 +183,6 @@ numerical reference is locked in.
   Est-docstring batch).
 - Add `tutorials/06_masterclock.md` once C6 lands from the parallel
   implementation track.
-- Add `tutorials/07_ensemble.md` once D1 lands.
 - Refine `docs/src/refs.bib` with DOIs and page numbers from the PDFs
   in `legdocs/papers/`.
 - Convert remaining kernel docstrings (hdev, mhdev, totdev, etc.) to
