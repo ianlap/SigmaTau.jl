@@ -1,5 +1,14 @@
 # api/total.jl — User wrappers for Total stability calculations
 
+# Map variance-scale bias factor B to its deviation-scale unbias divisor √B,
+# treating non-positive B as NaN. Only :totvar can yield B ≤ 0 in practice
+# (its B = 1 − a·τ/T formula goes negative if a caller passes an oversized
+# τ — e.g., τ > T/a for FFM); the :mtot and :htot tables are bounded
+# positive. Without this guard a single out-of-range τ would throw
+# DomainError from sqrt and abort the whole deviation call instead of
+# producing a NaN row for just that τ.
+_unbias_divisor(B::Vector{Float64}) = [b > 0 ? sqrt(b) : NaN for b in B]
+
 """
     totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
@@ -23,7 +32,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, c
     need_noise = correct_bias || calc_ci
     noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ sqrt.(bias_correction(noises, :totvar, taus, T)) : raw_devs
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, taus, T)) : raw_devs
 
     if !calc_ci
         return StabilityResult(:totdev, taus, devs, noises, Float64[], Float64[], Float64[])
@@ -56,7 +65,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
     need_noise = correct_bias || calc_ci
     noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ sqrt.(bias_correction(noises, :mtot, taus, T)) : raw_devs
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, taus, T)) : raw_devs
 
     if !calc_ci
         return StabilityResult(:mtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
@@ -92,7 +101,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
     need_noise = correct_bias || calc_ci
     noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=3) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ sqrt.(bias_correction(noises, :htot, taus, T)) : raw_devs
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, taus, T)) : raw_devs
 
     if !calc_ci
         return StabilityResult(:htotdev, taus, devs, noises, Float64[], Float64[], Float64[])
