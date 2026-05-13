@@ -1,13 +1,12 @@
 # Theory: Clock State-Space Models
 
-The ensemble subpackage models a precision oscillator as a linear
-stochastic differential equation (SDE) whose state vector promotes
-the polynomial coefficients of the deterministic clock model — phase,
-frequency, and (optionally) frequency aging — to states driven by
-independent Wiener processes. Discretising the SDE on a uniform
-sample interval `τ` yields the propagator `Φ` and the innovation
-covariance `Q` that drive the discrete-time
-[Kalman filter](kalman.md) used by `SigmaTau.Est`.
+`SigmaTau.Est` models a precision oscillator as a linear stochastic
+differential equation (SDE) whose state vector promotes the polynomial
+coefficients of the deterministic clock model — phase, frequency, and
+(optionally) frequency aging — to states driven by independent Wiener
+processes. Discretising the SDE on a uniform sample interval `τ` yields
+the propagator `Φ` and the innovation covariance `Q` that drive the
+discrete-time [Kalman filter](kalman.md).
 
 This page collects the time-domain models in one place: the
 deterministic polynomial skeleton, the two- and three-state SDEs that

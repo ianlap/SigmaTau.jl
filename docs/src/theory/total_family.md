@@ -107,8 +107,12 @@ The `√3` factor matches TDEV's exactly because TTOT inherits MTOTDEV's
 modified second-difference operator [@cite riley-2008-sp1065].
 
 !!! note "Planned implementation"
-    The mathematical definition is documented above. The `ttot`
-    function is not yet implemented in SigmaTauStability.jl.
+    The mathematical definition is documented above. A standalone
+    `ttot` (or `ttotdev`) API is not yet implemented in `SigmaTau.Stab`;
+    callers can derive it on demand via
+    `mtotdev(...).dev .* tau ./ √3` (the same identity used in the
+    Stable32 cross-validation fixture under
+    `reference/validation/s32_5_12_26/compute_sigmatau.jl`).
 
 ---
 
