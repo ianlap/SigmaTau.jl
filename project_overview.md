@@ -87,10 +87,11 @@ remains unchanged.
 |-----------|------|--------|-------|
 | `calculate_edf` | [src/stab/stats/edf.jl](src/stab/stats/edf.jl) | ✅ | Full Greenhall/Riley `_compute_sz/_sx/_sw` |
 | `confidence_intervals` | same | ✅ | `Distributions.jl` for χ² + Normal |
-| `bias_correction` | same | ✅ | totvar / mtot / htot covered; mhtot has no published model |
+| `bias_correction` | same | ✅ | Returns SP1065 variance-ratio B; callers apply `σ ← σ/√B`. totvar / mtot / htot covered; mhtot has no published model |
 | `_coeff_totvar` | same | ✅ | ADEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
-| `_coeff_htot` | same | ✅ | HDEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
-| `_coeff_mtot`, `_coeff_mhtot` | same | ✅ | Cover α∈[-2,2] |
+| `_coeff_htot` | same | ✅ | FCS 2001 / Howe & Tasset 2005 Table I `(b₀, b₁)` for α∈{0,-1,-2,-3,-4}; HDEV-style fallback for α=2,1. Matches Stable32 EDF to <0.01% for `τ ≥ 16τ₀` |
+| `_coeff_mtot` | same | ⚠ | α=0 fit to Stable32 from two AFs `(1.330, 1.890)`; α=−1, α=−2 single-point fits (SP1065 manual values disagree with Stable32 by 5–20%) |
+| `_coeff_mhtot` | same | ✅ | Cover α∈[-2,2] |
 
 #### User API
 
@@ -114,7 +115,7 @@ remains unchanged.
 |------|--------|-------|
 | [test/stab/runtests.jl](test/stab/runtests.jl) | ✅ All pass | Full suite is 633 tests across the package |
 | Numerical legacy parity | ✅ | 52 assertions across 8 kernels at rtol=1e-12 |
-| Stable32 cross-validation | ✅ | 85 rows checked vs `reference/validation/stable32_data_full.csv` |
+| Stable32 cross-validation | ✅ | 85 rows checked vs `reference/validation/stable32_data_full.csv`; plus 100-row composite-noise fixture under `reference/validation/s32_5_12_26/` matching all 8 deviations to 5 sig figs on σ and 3–4 sig figs on σ_min/σ_max |
 | allantools cross-validation | ✅ | 7 deviations × 12 m-values = 85 rows at rtol=1e-11 |
 | Multi-noise MTOTDEV validation | ✅ | All 5 SP1065 noise types via [`_gen_powerlaw_phase`](src/stab/noise/synth.jl) |
 | ADEV/MDEV/HDEV/MHDEV across α∈{-2..2} | ✅ | Synthesised noise + legacy-kernel parity |
@@ -192,8 +193,9 @@ remains unchanged.
 
 | ID | Risk | Impact |
 |----|------|--------|
-| R-MED-6 | HTOTDEV EDF off-by-one suspected | Flagged in legacy `discrepancies.md` — not yet audited |
+| R-MED-6 | ~~HTOTDEV EDF off-by-one suspected~~ | ✅ Closed: `_coeff_htot` aligned to FCS 2001 / Howe & Tasset 2005 Table I; HTOTDEV EDF now matches Stable32 to <0.01% for `τ ≥ 16τ₀`. Sub-`16τ₀` regime is outside the paper's stated validity range. |
 | R-MED-7 | Noise-ID does not block-process for N > 10⁷ | Performance (not correctness) limit |
+| R-MED-8 | `_coeff_mtot` for α=−1 and α=−2 are single-point fits against Stable32 (`s32_5_12_26` fixture). Need one additional AF per α to pin both `b` and `c`. |
 
 ### 🟢 Low / Polish
 
