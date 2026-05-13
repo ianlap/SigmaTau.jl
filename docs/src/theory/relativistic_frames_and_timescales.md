@@ -270,7 +270,7 @@ orbits up to ~0.81 µs near NRHO apoapsis
   [Leonard, Stewart & Gaylor 2026](@cite leonard-2026-lcrns-relativistic).
 - **Parameterise, don't hardcode.** Whether the IAU adopts
   $L_L^{(\mathrm{def})} = 3.139\,05 \times 10^{-11}$ or a differently
-  anchored value is still an open community decision; SigmaTauEnsemble's
+  anchored value is still an open community decision; `SigmaTau.Est`'s
   [`RelativisticClock`](@ref) should parameterise $L_L$ rather than
   hardcode it
   [Turyshev 2025](@cite turyshev-2025-cislunar-time-scales)
