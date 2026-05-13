@@ -154,7 +154,12 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true)
     end
 
     avar_val = _simple_avar(x_dec, 1) / Float64(m)^2
-    N_avar   = length(x_dec) - 2
+    # Howe 2005 / Barnes 1971: the N in B1_theory(N, r=1, μ) refers to the
+    # input data run, not the post-averaging sample count. Using the latter
+    # collapses the dynamic range of the theoretical B1 values at small N_eff
+    # and misclassifies long-τ points. The original frequency-sample count
+    # `length(x) - 1` keeps the boundaries well-separated regardless of AF.
+    N_avar   = length(x) - 1
 
     dx = diff(x)
     Nd = (length(dx) ÷ m) * m
@@ -162,7 +167,11 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true)
     
     y_blocks = reshape(dx[1:Nd], m, :)
     y_avg = vec(mean(y_blocks, dims=1))
-    var_class = var(y_avg; corrected=false)
+    # Bessel-corrected (N-1 divisor) — Howe/Barnes B1 theory assumes the
+    # unbiased population-variance estimator. The N-divisor variant
+    # systematically understates B1 at small N_eff and pushes long-τ
+    # classifications into the PM region. Matches Stable32 exactly.
+    var_class = var(y_avg)
 
     (isnan(avar_val) || avar_val <= 0) && return (NaN, -2, NaN)
 

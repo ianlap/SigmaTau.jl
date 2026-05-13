@@ -151,11 +151,17 @@ function _coeff_totvar(alpha::Int)
 end
 
 function _coeff_mtot(alpha::Int)
-    alpha == 2  && return (1.90, 2.10)
-    alpha == 1  && return (1.20, 1.40)
-    alpha == 0  && return (1.10, 1.20)
-    alpha == -1 && return (0.85, 0.50)
-    alpha == -2 && return (0.75, 0.31)
+    # Coefficients for edf = b·(T/τ) − c. The values published in the
+    # Stable32 manual / SP1065 give EDFs ~5–20 % below what Stable32
+    # actually computes. The values below are reverse-engineered from
+    # Stable32 (s32_5_12_26 fixture) and match its output to 1e-3 at the
+    # tested AFs. α=0 is well-determined (two AFs); α=-1 and α=-2 are
+    # single-point fits with c assumed from the manual.
+    alpha == 2  && return (1.90, 2.10)   # manual; not yet verified
+    alpha == 1  && return (1.20, 1.40)   # manual; not yet verified
+    alpha == 0  && return (1.330, 1.890) # fitted, AF=10 and AF=4000
+    alpha == -1 && return (0.919, 0.50)  # fitted, AF=100 (c assumed)
+    alpha == -2 && return (0.788, 0.31)  # fitted, AF=1000 (c assumed)
     return (NaN, NaN)
 end
 
@@ -169,9 +175,15 @@ function _coeff_mhtot(alpha::Int)
 end
 
 function _coeff_htot(alpha::Int)
-    alpha == 0  && return (0.546, 1.41)
-    alpha == -1 && return (0.667, 2.00)
-    alpha == -2 && return (0.909, 1.00)
+    # FCS 2001 / Howe & Tasset 2005 Table I, columns b₀ and b₁ of
+    #   edf(τ) = (T/τ) / (b₀ + b₁·τ/T)
+    # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses
+    # an undocumented fallback that we do not currently match.
+    alpha == 0  && return (0.559, 1.004)
+    alpha == -1 && return (0.868, 1.140)
+    alpha == -2 && return (0.938, 1.696)
+    alpha == -3 && return (0.974, 2.554)
+    alpha == -4 && return (1.276, 3.149)
     return (NaN, NaN)
 end
 
@@ -187,14 +199,43 @@ end
 """
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
 
-Bias factor B(α). Divide raw deviation by B to get unbiased estimate.
+Variance-scale bias factor `B(α) = E[estimator²] / true_variance` in the
+SP1065 / FCS 2001 convention. Apply as `σ_unbiased = σ_raw / √B`, i.e.,
+the caller takes the square root before dividing the deviation.
+
+- `B < 1` → estimator biased low (raw σ understates the truth).
+- `B > 1` → estimator biased high (raw σ overstates the truth).
 
 Recognised `var_type` values: `:totvar`, `:mtot`, `:htot`, `:mhtot`.
 
-Policy: `:mhtot` is treated as unbiased (B = 1) — FCS 2001 and NIST
-SP1065 publish no bias-correction model for the modified Hadamard
-total deviation. Stable32 and AllanLab adopt the same convention.
-Anything else falls through to B = 1.
+Conventions per variance type:
+- `:totvar` — Howe/Walter (1994). `B = 1 − a·τ/T` with `a = 1/(3·ln 2)`
+  for FFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
+  divergent FM noises only.
+- `:mtot`   — SP1065 Table 11 / Greenhall 1999. Independent of τ.
+  Biased high (B > 1); MTOT overstates MVAR. Corroborated by Howe &
+  Vernotte 2003 "Generalization of the Total variance approach to the
+  modified Allan variance", Table 1 — 100-trial Monte Carlo with
+  N_xmax = 16384 gives `Bias = (1 − √(MTOTVAR/MVAR))·100%` ranging from
+  ~−2% (WHPM) to ~−18% (RWFM), i.e. √(MTOTVAR/MVAR) ∈ [1.02, 1.18],
+  implying B ∈ [1.04, 1.39] — consistent with the table values below.
+
+  The Riley document "Confidence Intervals and Bias Corrections for the
+  Stable32 Variance Functions" lists B values (0.94, 0.83, 0.73, 0.70,
+  0.69) that contradict both SP1065 and Howe & Vernotte 2003 in
+  direction; treated as a doc typo and ignored. Stable32 empirically
+  does NOT apply MTOT bias to its default output regardless of doc
+  claims, so `correct_bias=false` on `mtotdev` matches Stable32;
+  `correct_bias=true` applies the textbook-correct unbias `σ ← σ/√B`.
+- `:htot`   — FCS 2001 (Howe & Tasset) Table I `a` column. `B = 1 + a`
+  with the published `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}`
+  for α ∈ {0, -1, -2, -3, -4}. Biased low (B < 1) — HTOT understates
+  the divergent-FM variance. B = 1 for α > 0 (no published model;
+  matches Stable32).
+- `:mhtot`  — treated as unbiased (B = 1) by policy; FCS 2001 and
+  NIST SP1065 publish no model. Stable32 and AllanLab agree.
+
+Anything unrecognised falls through to B = 1.
 """
 function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64)
     B = ones(Float64, length(noises))
@@ -204,7 +245,7 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
     for k in 1:length(noises)
         alpha = _alpha_from_noise(noises[k])
         tau = taus[k]
-        
+
         if var_type == :totvar
             a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
             B[k] = 1 - a * (tau / T)
@@ -212,11 +253,16 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             table = Dict(2=>1.06, 1=>1.17, 0=>1.27, -1=>1.30, -2=>1.31)
             B[k] = get(table, clamp(alpha, -2, 2), 1.0)
         elseif var_type == :htot
-            table = Dict(0=>-0.005, -1=>-0.149, -2=>-0.229, -3=>-0.283, -4=>-0.321)
-            B[k] = 1 / (1 + get(table, clamp(alpha, -4, 0), 0.0))
+            # FCS 2001 (Howe & Tasset) Table I, column `a`: normalized bias
+            # = E[TotHvar]/E[Hvar] - 1, negative because HTOT is biased low.
+            # B = 1 + a. Defined only for α ∈ {0, -1, -2, -3, -4}; for α > 0
+            # (PM noises) Stable32 leaves B = 1.
+            a_table = Dict(0=>-0.005, -1=>-0.149, -2=>-0.229,
+                           -3=>-0.283, -4=>-0.321)
+            B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
         end
     end
-    
+
     return B
 end
 

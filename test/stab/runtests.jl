@@ -1,4 +1,5 @@
 using Test
+using Random
 using FFTW                                  # AbstractFFTs backend for noise synth
 using SigmaTau
 using SigmaTau.Stab: NEFF_RELIABLE, _gen_powerlaw_phase
@@ -596,6 +597,22 @@ const LK = LegacyKernels
         edfs_h = SigmaTau.Stab.calculate_edf(:htotdev, ones(length(m_values_eq)),
                                                  noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
         @test all(isfinite, edfs_h)
+    end
+
+    @testset "_unbias_divisor maps non-positive B to NaN" begin
+        # Regression: TOTDEV's variance-scale bias factor B = 1 − a·τ/T can
+        # go non-positive when a caller passes an oversized τ (a = 0.75 for
+        # RWFM means τ/T > 4/3 trips it). Before the guard, dividing the
+        # deviation by √B threw DomainError and aborted the whole call;
+        # the helper now returns NaN for those rows so other τ values still
+        # produce valid results.
+        f = SigmaTau.Stab._unbias_divisor
+        out = f([1.0, 0.5, 0.0, -0.1, 1e-300])
+        @test out[1] == 1.0
+        @test out[2] ≈ sqrt(0.5)
+        @test isnan(out[3])           # B = 0 → NaN, not Inf
+        @test isnan(out[4])           # B < 0 → NaN, not DomainError
+        @test isfinite(out[5])        # tiny positive B still works
     end
 
     @testset "MTIE core" begin
