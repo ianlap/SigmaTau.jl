@@ -77,6 +77,11 @@ write `using SigmaTau` and get everything.
   - `stable32gen.DAT` — input data
   - `stable32out/stable32_data_full.csv` — Stable32 reference outputs (~5 sig figs, rtol ≥ 1e-4)
   - `allantools_out/allantools_data_full.csv` — allantools reference (full Float64, rtol ≈ 1e-11)
+  - **Coverage gaps — no external reference exists:**
+    - `mhtotdev` — not implemented in Stable32 or allantools. SigmaTau is the only library that computes it.
+    - `htdev` (Hadamard time deviation) — not implemented in Stable32 or allantools. SigmaTau is the only library that computes it. The deprecated alias `ldev` resolves to the same function.
+    - `mhdev` — defined in NIST SP1065 but not implemented in Stable32 or allantools. SigmaTau is (to our knowledge) the only library that actually computes it.
+    Validate these three via `test/stab/legacy_kernels.jl` (MATLAB-era parity, rtol=1e-12) and internal consistency only.
 - `test/runtests.jl` — root test entry point. Drives five sub-suites:
   - `test/types/runtests.jl`
   - `test/stab/runtests.jl` — includes `legacy_kernels.jl` (rtol=1e-12
