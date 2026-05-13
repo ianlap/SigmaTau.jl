@@ -8,9 +8,9 @@
 # Bias-correction settings (after the 2026-05-12 σ/√B fix):
 #   - totdev:  correct_bias=true  (Stable32 applies √B unbias for TOTVAR)
 #   - mtotdev: correct_bias=false (Stable32 reports raw biased MTOT)
+#   - ttotdev: correct_bias=false (matches the mtotdev convention; ttotdev
+#                                  is just σ_y,MTOT · τ/√3 internally)
 #   - htotdev: correct_bias=true  (Stable32 empirically matches √B unbias)
-# ttotdev is derived from mtotdev as σ_x = (τ/√3) · σ_y,MTOT — SigmaTau does
-# not expose a ttotdev API directly.
 
 using SigmaTau
 using Printf
@@ -36,17 +36,9 @@ results["tdev"]    = tdev(pd,    AF_SHORT; calc_ci=true)
 results["hdev"]    = hdev(pd,    AF_SHORT; calc_ci=true)
 results["totdev"]  = totdev(pd,  AF_LONG;  calc_ci=true, correct_bias=true)
 results["mtotdev"] = mtotdev(pd, AF_LONG;  calc_ci=true, correct_bias=false)
+results["ttotdev"] = ttotdev(pd, AF_LONG;  calc_ci=true, correct_bias=false)
 results["htotdev"] = htotdev(pd, AF_LONG;  calc_ci=true, correct_bias=true)
 println("  core deviations done in $(round(time()-t0, digits=2))s")
-
-# Derive TTOTDEV from MTOTDEV: σ_x,TTOT = (τ/√3) · σ_y,MTOT
-let r = results["mtotdev"]
-    f = r.tau ./ sqrt(3.0)
-    results["ttotdev"] = StabilityResult(
-        :ttotdev, r.tau, r.dev .* f, r.noise_type,
-        r.ci_lower .* f, r.ci_upper .* f, r.edf,
-    )
-end
 
 println("\nWriting CSV: $OUT_CSV")
 open(OUT_CSV, "w") do io
