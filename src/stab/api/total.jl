@@ -7,9 +7,12 @@ Computes the Total Deviation for the given PhaseData. See `_totdev_core` for
 the meaning of `detrend`.
 
 `correct_bias=true` (default) applies the SP1065 noise-type-dependent
-bias factor `B(α)` to the raw kernel output. Set `correct_bias=false`
-to return the raw kernel value, which matches Stable32 and allantools'
-default outputs (neither of those tools applies the bias correction).
+unbias correction `σ_unbiased = σ_raw / √B`, where `B = E[TOTVAR]/AVAR`
+is the variance-scale bias factor from [`bias_correction`](@ref). TOTVAR
+is biased low for FFM and RWFM as τ approaches T, so the correction
+increases σ at long τ. Set `correct_bias=false` to return the raw
+kernel value (Stable32 actually applies the correction by default,
+contrary to older notes — verify against the build you compare with).
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     raw_devs = _totdev_core(data.x, m_values, data.tau0; detrend=detrend)
@@ -20,7 +23,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, c
     need_noise = correct_bias || calc_ci
     noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ bias_correction(noises, :totvar, taus, T) : raw_devs
+    devs = correct_bias ? raw_devs ./ sqrt.(bias_correction(noises, :totvar, taus, T)) : raw_devs
 
     if !calc_ci
         return StabilityResult(:totdev, taus, devs, noises, Float64[], Float64[], Float64[])
@@ -38,11 +41,12 @@ end
 Computes the Modified Total Deviation for the given PhaseData. See `_mtotdev_core` for
 the meaning of `detrend`.
 
-`correct_bias=true` (default) applies the SP1065 bias factor `B(α)` to
-the raw kernel output (B≈1.27 for white FM). Pass `correct_bias=false`
-to return the raw kernel — matches Stable32 and allantools, which do
-not apply this correction. The resulting centerline drops by ~6–30%
-depending on τ.
+`correct_bias=true` (default) applies the SP1065 Table 11 unbias
+correction `σ_unbiased = σ_raw / √B`, where `B ∈ {1.06, 1.17, 1.27,
+1.30, 1.31}` for α ∈ {2, 1, 0, -1, -2}. MTOT is biased high, so the
+correction drops σ by roughly 3 – 13 %. Pass `correct_bias=false` to
+return the raw kernel — matches Stable32 and allantools, which do not
+apply this correction.
 """
 function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     raw_devs = _mtotdev_core(data.x, m_values, data.tau0; detrend=detrend)
@@ -52,7 +56,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
     need_noise = correct_bias || calc_ci
     noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ bias_correction(noises, :mtot, taus, T) : raw_devs
+    devs = correct_bias ? raw_devs ./ sqrt.(bias_correction(noises, :mtot, taus, T)) : raw_devs
 
     if !calc_ci
         return StabilityResult(:mtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
@@ -70,9 +74,15 @@ end
 Computes the Hadamard Total Deviation for the given PhaseData. See `_htotdev_core` for
 the meaning of `detrend`.
 
-`correct_bias=true` (default) applies the FCS 2001 bias factor (B≈1.005
-for white FM, larger for divergent noises). Pass `correct_bias=false`
-to match Stable32 and allantools, which report the raw kernel value.
+`correct_bias=true` (default) applies the FCS 2001 (Howe & Tasset)
+Table I unbias correction `σ_unbiased = σ_raw / √B`, where
+`B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
+α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0), so the
+correction raises σ — substantially for divergent FM. PM noises
+(α > 0) get B = 1 (no published model). Pass
+`correct_bias=false` to return the raw kernel value (Stable32 actually
+applies the correction by default — see TOTDEV docstring for the same
+caveat).
 """
 function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     raw_devs = _htotdev_core(data.x, m_values, data.tau0; detrend=detrend)
@@ -82,7 +92,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
     need_noise = correct_bias || calc_ci
     noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=3) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ bias_correction(noises, :htot, taus, T) : raw_devs
+    devs = correct_bias ? raw_devs ./ sqrt.(bias_correction(noises, :htot, taus, T)) : raw_devs
 
     if !calc_ci
         return StabilityResult(:htotdev, taus, devs, noises, Float64[], Float64[], Float64[])
