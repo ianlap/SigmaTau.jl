@@ -453,6 +453,45 @@ const LK = LegacyKernels
         @test_throws ArgumentError SigmaTau.Stab._mtotdev_core(x, [1], tau0; detrend=:howe)
     end
 
+    @testset "TTOTDEV = MTOTDEV · τ/√3 identity" begin
+        # ttotdev wraps mtotdev with a τ/√3 rescaling (analogous to tdev
+        # over mdev). Verifies the wrapper produces the documented
+        # relationship and preserves CI / EDF / noise-type alignment.
+        Random.seed!(20260513)
+        N    = 1024
+        tau0 = 1.0
+        x    = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+        pd   = PhaseData(x, tau0)
+        ms   = [1, 2, 4, 8, 16, 32]
+
+        # Centerline identity (correct_bias=false isolates the wrapper).
+        rm = mtotdev(pd, ms; calc_ci=false, correct_bias=false)
+        rt = ttotdev(pd, ms; calc_ci=false, correct_bias=false)
+        @test rt.tau == rm.tau
+        @test isapprox(rt.dev, rm.dev .* (rm.tau ./ sqrt(3.0)); rtol=1e-14)
+
+        # CI / EDF / α flow through with the same τ/√3 scaling.
+        rm_ci = mtotdev(pd, ms; calc_ci=true, correct_bias=true)
+        rt_ci = ttotdev(pd, ms; calc_ci=true, correct_bias=true)
+        f = rm_ci.tau ./ sqrt(3.0)
+        @test isapprox(rt_ci.dev,      rm_ci.dev      .* f; rtol=1e-14)
+        @test isapprox(rt_ci.ci_lower, rm_ci.ci_lower .* f; rtol=1e-14)
+        @test isapprox(rt_ci.ci_upper, rm_ci.ci_upper .* f; rtol=1e-14)
+        @test rt_ci.edf        == rm_ci.edf
+        @test rt_ci.noise_type == rm_ci.noise_type
+
+        # FrequencyData entry routes via _freq_to_phase (cumsum). Reconstructed
+        # phase has one fewer sample than the original x, so values differ
+        # from the direct PhaseData call at the percent level — assert the
+        # entry point runs and stays in the right ballpark, not bit-identity.
+        fd = FrequencyData(diff(x) ./ tau0, tau0)
+        rt_fd = ttotdev(fd, ms; calc_ci=false, correct_bias=false)
+        @test length(rt_fd.dev) == length(ms)
+        @test all(isfinite, rt_fd.dev)
+        @test all(>(0), rt_fd.dev)
+        @test isapprox(rt_fd.dev, rt.dev; rtol=5e-3)
+    end
+
     @testset "HTOTDEV :linear smoke" begin
         # Per-window full-LS detrend on the frequency series (vs :greenhall's
         # half-mean) + same time-reverse extension and third-diff operator.
