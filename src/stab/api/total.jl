@@ -114,6 +114,34 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
 end
 
 """
+    ttotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+
+Time-Total Deviation. Wraps [`mtotdev`](@ref) and rescales by `τ/√3`,
+analogous to [`tdev`](@ref) wrapping [`mdev`](@ref). TTOTDEV has units
+of seconds (it is a `σ_x` quantity, not `σ_y`) and gives a
+time-deviation summary of long-τ stability with MTOTDEV's
+per-subsegment extended window — useful for telecom / time-transfer
+analyses on records too short for ordinary TDEV at the τ of interest.
+
+The `detrend`, `correct_bias`, `calc_ci`, and `confidence` kwargs flow
+through to the underlying `mtotdev` call unchanged. Confidence-interval
+bounds inherit MTOTDEV's χ²/Gaussian limits scaled by the same
+`τ / √3` factor; the EDF column is reused as-is (a time rescaling does
+not change the degrees of freedom).
+"""
+function ttotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mtotdev(data, m_values; detrend=detrend, calc_ci=calc_ci, correct_bias=correct_bias, confidence=confidence)
+    factor = res.tau ./ sqrt(3.0)
+
+    if !calc_ci
+        return StabilityResult(:ttotdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
+    end
+
+    return StabilityResult(:ttotdev, res.tau, res.dev .* factor, res.noise_type,
+                           res.ci_lower .* factor, res.ci_upper .* factor, res.edf)
+end
+
+"""
     mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Modified Hadamard Total Deviation. See `_mhtotdev_core` for
@@ -147,5 +175,6 @@ end
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
 totdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)   = totdev(_freq_to_phase(data),   m_values; kwargs...)
 mtotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = mtotdev(_freq_to_phase(data),  m_values; kwargs...)
+ttotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = ttotdev(_freq_to_phase(data),  m_values; kwargs...)
 htotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = htotdev(_freq_to_phase(data),  m_values; kwargs...)
 mhtotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhtotdev(_freq_to_phase(data), m_values; kwargs...)

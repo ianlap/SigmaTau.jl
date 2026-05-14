@@ -21,7 +21,7 @@ end
 @testset "Stab public API re-exported" begin
     # Must be accessible bare (not via SigmaTau.Stab.adev).
     for sym in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
-                :totdev, :mtotdev, :htotdev, :mhtotdev,
+                :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
                 :mtie, :pdev,
                 :identify_noise, :calculate_edf, :confidence_intervals,
                 :bias_correction, :DEFAULT_CONFIDENCE,

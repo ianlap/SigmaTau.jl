@@ -100,10 +100,10 @@ remains unchanged.
 | `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | ✅ | PhaseData → StabilityResult with CI |
 | `tdev` | same | ✅ | Wraps `mdev` and scales by `τ/√3` |
 | `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | ✅ | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; `ldev` retained as deprecated alias |
-| `totdev`, `mtotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | ✅ | Bias correction applied where defined |
+| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | ✅ | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with the `τ/√3` rescaling |
 | `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | ✅ | No CI fields (no published EDF model) |
 | `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | ✅ | No CI fields (EDF port tracked in TODO) |
-| `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) + each api file | ✅ | All 12 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
+| `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) + each api file | ✅ | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
 | `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | ✅ | TSV round-trip for `StabilityResult`; relocated to top-level IO |
 | `read_phase`, `read_frequency` | [src/io/read.jl](src/io/read.jl) | ✅ | stdlib `readdlm` with `scaling` / `detrend` / `fillgaps` kwargs |
 | `detrend(::PhaseData/::FrequencyData)` | [src/io/detrend.jl](src/io/detrend.jl) | ✅ | `:linear` / `:endpoint` / `:mean` / `:none`; multiple dispatch keeps the bare name collision-free |

@@ -8,6 +8,15 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **`ttotdev` — Time-Total Deviation API.** Wraps `mtotdev` with a
+  `τ/√3` rescaling (analogous to `tdev` over `mdev`). Exposed for both
+  `PhaseData` and `FrequencyData` inputs. Centerline, `ci_lower`, and
+  `ci_upper` are scaled by the same factor; `edf` and `noise_type` are
+  reused unchanged. Previously the identity had to be applied by
+  callers (the `reference/validation/s32_5_12_26/` Stable32 fixture
+  derived it inline); now it's a first-class function in
+  `SigmaTau.Stab`. Closes the "`ttotdev` standalone API" note in
+  `docs/src/theory/total_family.md`.
 - **`ClockEnsemble` model for joint Kalman time-scale estimation.**
   Stein 2003 §V / Galleani–Tavella stacked-state formulation: the
   joint state concatenates per-clock states, Φ and Q are
