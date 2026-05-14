@@ -57,6 +57,7 @@ module Stab
 
     include("stab/noise/lag1.jl")
     include("stab/noise/synth.jl")
+    include("stab/noise/gen.jl")
     include("stab/stats/edf.jl")
 
     include("stab/utils.jl")
@@ -80,6 +81,8 @@ module Stab
     export ldev   # deprecated alias for htdev — remove in a future release
     export totdev, mtotdev, ttotdev, htotdev, mhtotdev
     export mtie, pdev
+
+    export noise_gen
 end
 
 # ── Est: clock estimation ───────────────────────────────────────────────

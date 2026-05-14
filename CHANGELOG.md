@@ -8,6 +8,23 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **`noise_gen` — calibrated power-law clock-noise generator.** Public
+  wrapper around the `_gen_powerlaw_y` spectral shaper that lets callers
+  specify the noise mixture as a `Dict{Int, Float64}` keyed by SP1065
+  α exponent (∈ {-2, -1, 0, 1, 2}). Two input modes, choose one:
+  `sigma1[α] = σ_y(τ=τ₀)` (clock-spec-sheet style) or `h[α] = h_α`
+  (PSD coefficient in `S_y(f) = h_α f^α`). Composite mixtures are drawn
+  independently per α and summed. For WPM (α=2) and FPM (α=1) the
+  `σ ↔ h` relation uses the Nyquist convention `f_h = 1/(2τ₀)`.
+  Per-realization rescaling pegs each component's empirical
+  `σ_y(τ=τ₀)` to the requested value exactly; the natural power-law
+  slope carries to larger τ. Dispatches on the first type argument to
+  return either `PhaseData` or `FrequencyData`
+  (`noise_gen(PhaseData, …)` / `noise_gen(FrequencyData, …)`). Exported
+  at the umbrella level. Internal `_gen_powerlaw_phase` is now a thin
+  wrapper around the new `_gen_powerlaw_y` primitive — no change in
+  RNG consumption order, so legacy tests that pin synthesized phase
+  to a seed continue to match bit-for-bit.
 - **Scaling-fit benchmark trio** under `benchmarks/bench/`:
   `scaling.jl` (SigmaTau, full public-API defaults; per-octave m-grid via
   `_default_m_values`), `scaling_allantools.py` (allantools, bare-kernel
