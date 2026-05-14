@@ -178,4 +178,4 @@ an operational blueprint.
   page for the [`RelativisticClock`](@ref) Julia stub.
 - [Theory: Single-Clock Steering](steering.md) — the PID controller
   on which any operational time-transfer / disciplining loop in
-  SigmaTauEnsemble would close.
+  `SigmaTau.Est` would close.

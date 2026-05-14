@@ -90,9 +90,11 @@ canonical time-distribution-network metric
 \qquad m = \tau / \tau_0.
 ```
 
-!!! note "Planned implementation"
-    The mathematical definition is documented above. The `mtie`
-    function is not yet implemented in SigmaTauStability.jl.
+!!! note "Implementation status"
+    Implemented as [`mtie`](@ref) in `SigmaTau.Stab` (block-windowed
+    `_mtie_core` kernel with allocation-free per-window peak/trough
+    scan). Returns a `StabilityResult` with `mtie` units of seconds;
+    no CI bounds — no published EDF model for the peak statistic.
 
 ## Notation used throughout these pages
 

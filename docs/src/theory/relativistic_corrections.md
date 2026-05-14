@@ -247,9 +247,9 @@ The choice between a closed-form Keplerian path (no ephemeris
 dependency) and a DE440 numerical-integration path is an
 architectural commitment for [`RelativisticClock`](@ref); the
 closed-form path is the recommended near-term implementation in
-SigmaTauEnsemble (per Seyffert §6) and avoids any ephemeris
+`SigmaTau.Est` (per Seyffert §6) and avoids any ephemeris
 dependency, while a DE440 path may eventually justify a separate
-SigmaTauLunar subpackage
+`SigmaTauLunar` subpackage
 [Seyffert 2025](@cite seyffert-2025-relativistic-lunar-pnt).
 
 ## Light-time corrections — Shapiro and Sagnac
