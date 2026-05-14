@@ -1,5 +1,6 @@
 # noise/lag1.jl — Lag-1 Autocorrelation for noise identification
 using Statistics
+using StaticArrays
 
 const NEFF_RELIABLE = 30
 
@@ -81,31 +82,58 @@ function _preprocess(x::Vector{Float64})
     x_std = std(x)
     x_std < eps() && return x  # degenerate input — nothing to filter against.
     x_mean = mean(x)
-    z = abs.((x .- x_mean) ./ x_std)
-    return x[z .< 5.0]
+    thresh = 5.0 * x_std
+    # Two-pass count-then-fill avoids the N-length boolean mask + temporary
+    # `z` array the broadcast form allocated.
+    nkeep = 0
+    @inbounds for v in x
+        nkeep += (abs(v - x_mean) < thresh) ? 1 : 0
+    end
+    nkeep == length(x) && return x
+    out = Vector{Float64}(undef, nkeep)
+    j = 1
+    @inbounds for v in x
+        if abs(v - x_mean) < thresh
+            out[j] = v
+            j += 1
+        end
+    end
+    return out
 end
 
 function _detrend_quadratic(x::Vector{Float64})
     N = length(x)
     N_float = Float64(N)
-    
-    X1 = sum(x)
-    X2 = sum(i * x[i] for i in 1:N)
-    X3 = sum(i^2 * x[i] for i in 1:N)
-    
+
+    # One pass for the three weighted-sum moments. Comprehensions in the
+    # previous form allocated a generator state per `sum(... for i in 1:N)`.
+    X1 = 0.0; X2 = 0.0; X3 = 0.0
+    @inbounds @simd for i in 1:N
+        v = x[i]; fi = Float64(i)
+        X1 += v
+        X2 += fi * v
+        X3 += fi * fi * v
+    end
+
     S1 = N_float
     S2 = (N_float * (N_float + 1.0)) / 2.0
     S3 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0)) / 6.0
     S4 = (N_float^2 * (N_float + 1.0)^2) / 4.0
     S5 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0) * (3.0*N_float^2 + 3.0*N_float - 1.0)) / 30.0
-    
-    M = [S1 S2 S3; S2 S3 S4; S3 S4 S5]
-    V = [X1, X2, X3]
-    
+
+    # 3×3 LS solve via StaticArrays — heap-free (vs `M = [S1 S2 S3; …]`
+    # which allocated the matrix, the V vector, and the LU work).
+    M = @SMatrix [S1 S2 S3; S2 S3 S4; S3 S4 S5]
+    V = @SVector [X1, X2, X3]
     C = M \ V
     a, b, c = C[1], C[2], C[3]
-    
-    return [x[i] - (a + b*i + c*i^2) for i in 1:N]
+
+    out = Vector{Float64}(undef, N)
+    @inbounds @simd for i in 1:N
+        fi = Float64(i)
+        out[i] = x[i] - (a + b*fi + c*fi*fi)
+    end
+    return out
 end
 
 function _noise_id_lag1acf(x::Vector{Float64}, m::Int, dmin::Int = 0, dmax::Int = 2; detrend::Bool=true)
@@ -131,8 +159,20 @@ function _noise_id_lag1acf(x::Vector{Float64}, m::Int, dmin::Int = 0, dmax::Int 
 end
 
 function _lag1_acf(x::Vector{Float64})
-    xm   = x .- mean(x)
-    ssx  = sum(abs2, xm)
+    # Three single-pass loops over `x` rather than allocating a centred
+    # copy and a broadcasted product. Equivalent up to FP reduction order.
+    N = length(x)
+    N < 2 && return NaN
+    s = 0.0
+    @inbounds @simd for v in x; s += v; end
+    mu = s / N
+    ssx = 0.0
+    raw = 0.0
+    @inbounds @simd for v in x
+        d = v - mu
+        ssx += d*d
+        raw += v*v
+    end
     # Scale-invariant degeneracy guard: bail out only when the centred
     # signal really has no power (or float-zero relative to the
     # raw-magnitude scale). The previous form `ssx < eps(Float64) * N`
@@ -141,10 +181,13 @@ function _lag1_acf(x::Vector{Float64})
     # (typically 1e-9 .. 1e-12) produced spurious NaN classifications
     # even though there was 12+ orders of dynamic range left in the
     # Float64 representation.
-    raw_scale = sum(abs2, x)
-    raw_scale > 0 && ssx <= eps(Float64) * raw_scale && return NaN
+    raw > 0 && ssx <= eps(Float64) * raw && return NaN
     ssx == 0.0 && return NaN
-    return sum(@view(xm[1:end-1]) .* @view(xm[2:end])) / ssx
+    num = 0.0
+    @inbounds @simd for i in 1:N-1
+        num += (x[i] - mu) * (x[i+1] - mu)
+    end
+    return num / ssx
 end
 
 function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true)
@@ -241,10 +284,24 @@ function _simple_mdev(x::Vector{Float64}, m::Int, tau0::Float64)
     N  = length(x)
     Ne = N - 3m + 1
     Ne <= 0 && return NaN
-    cs = cumsum(pushfirst!(copy(x), 0.0))
-    s1 = @view(cs[1+m:Ne+m])   .- @view(cs[1:Ne])
-    s2 = @view(cs[1+2m:Ne+2m]) .- @view(cs[1+m:Ne+m])
-    s3 = @view(cs[1+3m:Ne+3m]) .- @view(cs[1+2m:Ne+2m])
-    d  = (s3 .- 2 .* s2 .+ s1) ./ m
-    return sqrt(sum(abs2, d) / (2.0 * Float64(m)^2 * tau0^2 * Ne))
+    # One length-(N+1) buffer for the prefix sum, then fold the three
+    # running-sum differences into a single accumulator. Previously three
+    # broadcast subtractions and `cumsum(pushfirst!(copy(x), 0.0))` allocated
+    # six length-N(ish) intermediates per call.
+    cs = Vector{Float64}(undef, N + 1)
+    cs[1] = 0.0
+    acc = 0.0
+    @inbounds for i in 1:N
+        acc += x[i]
+        cs[i+1] = acc
+    end
+    sum_sq = 0.0
+    @inbounds for i in 1:Ne
+        s1 = cs[i+m]  - cs[i]
+        s2 = cs[i+2m] - cs[i+m]
+        s3 = cs[i+3m] - cs[i+2m]
+        d  = (s3 - 2.0*s2 + s1) / m
+        sum_sq += d * d
+    end
+    return sqrt(sum_sq / (2.0 * Float64(m)^2 * tau0^2 * Ne))
 end

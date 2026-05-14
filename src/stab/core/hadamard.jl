@@ -38,8 +38,15 @@ function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    # Precompute cumulative sum
-    x_cs = cumsum(pushfirst!(copy(x), 0.0))
+    # Prefix sum x_cs[1] = 0, x_cs[i+1] = Σⱼ₌₁ⁱ x[j]. One length-(N+1)
+    # allocation; the carry chain blocks SIMD, so no @simd here.
+    x_cs = Vector{Float64}(undef, N + 1)
+    x_cs[1] = 0.0
+    acc = 0.0
+    @inbounds for i in 1:N
+        acc += x[i]
+        x_cs[i+1] = acc
+    end
 
     for (k, m) in enumerate(m_values)
         Ne = N - 4m + 1

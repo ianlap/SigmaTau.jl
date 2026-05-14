@@ -64,8 +64,9 @@ def main():
     p.add_argument("--kernels", type=str,
                    default="adev,mdev,hdev,tdev,totdev,mtotdev,htotdev")
     p.add_argument("--csv-out", type=Path,
-                   default=Path(__file__).parent / "per_realization.csv",
-                   help="Long-format CSV: kernel,library,realization,time_s,mem_bytes")
+                   default=Path(__file__).parent / "per_realization.tsv",
+                   help="Long-format TSV: kernel/library/realization/time_s/mem_bytes "
+                        "(library = ST or AT; time_s in scientific notation, 4 sig figs)")
     args = p.parse_args()
 
     sj = json.loads(args.sigmatau_json.read_text())
@@ -131,18 +132,20 @@ def main():
               f"{ab_cols[0]:>16} {ab_cols[1]:>10} {ab_cols[2]:>10}")
     print()
 
-    # ---- CSV export (long format for plotting) ----
+    # ---- TSV export (long format, text-editor friendly) ----
+    # Tab-separated; time_s in %.3e (4 sig figs); library coded as ST / AT.
     with args.csv_out.open("w", newline="") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, delimiter="\t", lineterminator="\n")
         w.writerow(["kernel", "library", "realization", "time_s", "mem_bytes"])
         for k in kernels:
             _, _, _, _, s_per, a_per = kernel_rows(k, sj["results"], aj["results"])
             for r in s_per:
-                w.writerow([k, "sigmatau", r["realization"], r["time_s"], r["bytes"]])
+                w.writerow([k, "ST", r["realization"],
+                            f"{r['time_s']:.3e}", r["bytes"]])
             for r in a_per:
-                w.writerow([k, "allantools", r["realization"], r["time_s"],
-                            r.get("rss_delta_bytes", 0)])
-    print(f"wrote {args.csv_out} (long-format per-realization data for plotting)")
+                w.writerow([k, "AT", r["realization"],
+                            f"{r['time_s']:.3e}", r.get("rss_delta_bytes", 0)])
+    print(f"wrote {args.csv_out} (long-format per-realization data, TSV)")
 
 
 if __name__ == "__main__":

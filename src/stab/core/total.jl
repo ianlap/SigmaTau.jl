@@ -86,44 +86,67 @@ end
 function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     # NIST SP1065 eqn 25 / Greenhall-Howe-Percival 1998 eq (3):
     #   Totvar = (1 / (2(m·τ₀)²(N−2))) · Σ_{n=2}^{N-1} (x*_{n-m} − 2x*_n + x*_{n+m})²
-    # Mean-flip endpoint reflection (eq 2): x*_{1−j} = 2x[1] − x[1+j],
-    # x*_{N+j} = 2x[N] − x[N−j], for j = 1..N−2.
-    # Buffer layout uses a linear k-to-index map so x*_k → buffer[k+N−2] for
-    # k ∈ {3−N..2N−2}. Original x[1..N] sits at buffer[N−1..2N−2]; the left
-    # reflection populates buffer[1..N−2] with x*_{3−N}..x*_0 in increasing k;
-    # the right reflection populates buffer[2N−1..3N−4] with x*_{N+1}..x*_{2N−2}.
-    # (`_totdev_legacy` writes the same region in REVERSE order for the left
-    # block; that helper never reads from there, so the divergence is benign.)
+    # Mean-flip endpoint reflection (SP1065 eq 2):
+    #   x*_k =  x[k]                   for 1 ≤ k ≤ N
+    #   x*_k =  2·x[1] − x[2 − k]      for k ≤ 0       (left reflect)
+    #   x*_k =  2·x[N] − x[2N − k]     for k ≥ N + 1   (right reflect)
+    #
+    # Stream the extension on the fly rather than materialising a (3N−4)-Float64
+    # buffer. The inner n-loop splits into three ranges so the central majority
+    # (which only reads x[n±m] without reflection) stays SIMD-vectorisable;
+    # the two short tail loops resolve the reflection inline. Saves a 24·N-byte
+    # allocation per call (~72 MiB at N = 3 × 10⁶).
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    x_star = Vector{Float64}(undef, 3N - 4)
-    @inbounds for j in 1:N-2
-        # buffer[j] = x*_{j-N+2}; for k=j-N+2 ∈ {3-N..0}, x*_k = 2x[1] − x[2-k] = 2x[1] − x[N-j].
-        x_star[j] = 2.0*x[1] - x[N - j]
+    if N <= 2
+        fill!(devs, NaN)
+        return devs
     end
-    @inbounds for i in 1:N
-        x_star[N-2+i] = x[i]
-    end
-    @inbounds for j in 1:N-2
-        # buffer[2N-2+j] = x*_{N+j}; x*_{N+j} = 2x[N] − x[N-j].
-        x_star[2N-2+j] = 2.0*x[N] - x[N - j]
-    end
+
+    x1 = x[1]
+    xN = x[N]
 
     Threads.@threads :dynamic for k in eachindex(m_values)
         m = m_values[k]
         D = 0.0
-        count = 0
-        @inbounds @simd for n in 2:N-1
-            lo  = N - 2 + n - m
-            mid = N - 2 + n
-            hi  = N - 2 + n + m
-            d2 = x_star[hi] - 2.0*x_star[mid] + x_star[lo]
+
+        # Left tail: lo_k = n − m < 1. hi_k may or may not reflect.
+        n_left_end = min(N - 1, m)
+        @inbounds for n in 2:n_left_end
+            lo_k = n - m
+            hi_k = n + m
+            lo_val = lo_k >= 1 ? x[lo_k] : 2.0*x1 - x[2 - lo_k]
+            hi_val = hi_k <= N ? x[hi_k] : 2.0*xN - x[2N - hi_k]
+            d2 = hi_val - 2.0*x[n] + lo_val
             D += d2^2
-            count += 1
         end
 
-        devs[k] = count == 0 ? NaN : sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
+        # Central: lo_k ≥ 1 AND hi_k ≤ N. Plain three-point stencil, vectorises.
+        n_central_start = max(2, m + 1)
+        n_central_end   = min(N - 1, N - m)
+        if n_central_start <= n_central_end
+            @inbounds @simd for n in n_central_start:n_central_end
+                d2 = x[n+m] - 2.0*x[n] + x[n-m]
+                D += d2^2
+            end
+        end
+
+        # Right tail: hi_k = n + m > N. lo_k is central for m ≤ (N−1)/2; the
+        # branch below covers the rare m > (N−1)/2 case where lo_k still reflects.
+        # `max(n_left_end + 1, …)` prevents double-counting n values already
+        # visited by the left loop when the two regions would otherwise overlap.
+        n_right_start = max(n_left_end + 1, N - m + 1)
+        @inbounds for n in n_right_start:N-1
+            lo_k = n - m
+            hi_k = n + m
+            lo_val = lo_k >= 1 ? x[lo_k] : 2.0*x1 - x[2 - lo_k]
+            hi_val = hi_k <= N ? x[hi_k] : 2.0*xN - x[2N - hi_k]
+            d2 = hi_val - 2.0*x[n] + lo_val
+            D += d2^2
+        end
+
+        devs[k] = sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
     end
 
     return devs
@@ -186,29 +209,39 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
         chunk_size = cld(nsubs, nchunks)
         chunk_sums = zeros(nchunks)
 
+        half_n = seg_len / 2.0
+        hi_half = floor(Int, half_n)
+        lo_half_len = seg_len - hi_half
+        inv_hi = 1.0 / hi_half
+        inv_lo = 1.0 / lo_half_len
+        inv_half_n_tau0 = 1.0 / (half_n * tau0)
+
         Threads.@threads :dynamic for c in 1:nchunks
             n_lo = (c - 1) * chunk_size + 1
             n_hi = min(c * chunk_size, nsubs)
             ext = ext_pool[c]
             local_sum = 0.0
+
+            # Seed the running half-window sums for the chunk's first window.
+            # For m ≥ 2 we then update s1/s2 in O(1) per n inside the loop
+            # rather than re-summing hi/lo_half_len samples each window.
+            # Seed the running half-sums for the chunk's first window (m ≥ 2).
+            s1 = 0.0
+            s2 = 0.0
+            if m >= 2
+                @inbounds @simd for i in 1:hi_half
+                    s1 += x[n_lo - 1 + i]
+                end
+                @inbounds @simd for i in hi_half+1:seg_len
+                    s2 += x[n_lo - 1 + i]
+                end
+            end
+
             for n in n_lo:n_hi
-                half_n = seg_len / 2.0
                 if m == 1
                     slope = (x[n+2] - x[n]) / (2.0 * tau0)
                 else
-                    hi = floor(Int, half_n)
-                    s1 = 0.0
-                    @inbounds @simd for i in 1:hi
-                        s1 += x[n-1+i]
-                    end
-                    s1 /= hi
-
-                    s2 = 0.0
-                    @inbounds @simd for i in hi+1:seg_len
-                        s2 += x[n-1+i]
-                    end
-                    s2 /= (seg_len - hi)
-                    slope = (s2 - s1) / (half_n * tau0)
+                    slope = (s2 * inv_lo - s1 * inv_hi) * inv_half_n_tau0
                 end
 
                 @inbounds for j in 1:seg_len
@@ -248,6 +281,17 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
                     block_sum += d2^2
                 end
                 local_sum += block_sum / (6.0 * m)
+
+                # O(1) half-sum update for the next window: drop the head of
+                # each half and pick up the new tail. s1 covers x[n..n+hi_half-1],
+                # s2 covers x[n+hi_half..n+seg_len-1]; shifting by 1 swaps x[n]
+                # out of s1, x[n+hi_half] from s2 into s1, and x[n+seg_len] into s2.
+                if m >= 2 && n < n_hi
+                    @inbounds begin
+                        s1 += x[n + hi_half] - x[n]
+                        s2 += x[n + seg_len] - x[n + hi_half]
+                    end
+                end
             end
             chunk_sums[c] = local_sum
         end
