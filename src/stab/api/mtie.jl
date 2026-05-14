@@ -37,3 +37,8 @@ function mtie(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confid
 end
 
 mtie(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mtie(_freq_to_phase(data), m_values; kwargs...)
+
+# Zero-arg convenience: octave-spaced m_values up to MTIE's algorithmic
+# m-max (`N − 1`, see `_default_m_values`).
+mtie(data::PhaseData;     kwargs...) = mtie(data, _default_m_values(length(data.x), :mtie); kwargs...)
+mtie(data::FrequencyData; kwargs...) = mtie(data, _default_m_values(length(data.y), :mtie); kwargs...)
