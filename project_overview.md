@@ -97,7 +97,7 @@ remains unchanged.
 
 | Function | File | Status | Notes |
 |----------|------|--------|-------|
-| `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | ✅ | PhaseData → StabilityResult with CI |
+| `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | ✅ | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid |
 | `tdev` | same | ✅ | Wraps `mdev` and scales by `τ/√3` |
 | `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | ✅ | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; `ldev` retained as deprecated alias |
 | `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | ✅ | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with the `τ/√3` rescaling |

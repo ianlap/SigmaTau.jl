@@ -9,9 +9,12 @@
 # This tutorial:
 #
 # 1. Runs `adev` on the WPM + RWFM fixture from
-#    [Phase data and frequency data](01_phase_data.md).
-# 2. Walks through every field of the returned `StabilityResult`.
-# 3. Renders σ_y(τ) on log-log axes with χ² error bars via the bundled
+#    [Phase data and frequency data](01_phase_data.md) with the default
+#    octave τ-grid (no `m_values` argument needed).
+# 2. Repeats the call with an explicit `m_values` to show how to take
+#    control of which τ values get sampled.
+# 3. Walks through every field of the returned `StabilityResult`.
+# 4. Renders σ_y(τ) on log-log axes with χ² error bars via the bundled
 #    `RecipesBase` extension.
 
 using SigmaTau
@@ -31,15 +34,17 @@ rwfm = cumsum(cumsum(randn(N) .* 1e-12))
 x    = wpm .+ rwfm
 pd   = PhaseData(x, τ₀)
 
-# ## Run `adev` on an octave-spaced τ-grid
+# ## Run `adev` with no `m_values` argument
 #
-# The averaging factor `m` selects which τ values get sampled — the
-# package multiplies by `τ₀` internally to produce `result.tau`. An
-# octave grid (`m = 1, 2, 4, …`) covers a wide range with few points
-# and matches the convention in NIST SP1065.
+# The shortest path: pass the data and nothing else. `adev` defaults to
+# an octave-spaced τ-grid (`m = 1, 2, 4, 8, …`) up to the largest
+# averaging factor the ADEV kernel can compute on a record of this
+# length (`m_max = ⌊(N−1)/2⌋` for ADEV; smaller for MDEV / HDEV /
+# MHDEV — see `SigmaTau.Stab._default_m_values` for the per-kernel
+# table). This matches the convention in NIST SP1065 and is the right
+# default for a first look at a clock record.
 
-m_grid = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
-result = adev(pd, m_grid)
+result = adev(pd)
 
 # ## What's in the result?
 #
@@ -47,7 +52,7 @@ result = adev(pd, m_grid)
 # follow-up call needed for noise classification, EDF, or confidence
 # bounds.
 
-result.tau          # τ values (s)
+result.tau          # τ values (s) on the default octave grid
 
 #-
 
@@ -79,11 +84,34 @@ result.deviation_type  # which deviation kernel produced this result
 # a single keyword:
 #
 # ```julia
-# adev(pd, m_grid; calc_ci = false)
+# adev(pd; calc_ci = false)
 # ```
 #
 # `result.ci_lower`, `result.ci_upper`, and `result.edf` come back
 # empty in that mode.
+
+# ## Run `adev` with an explicit `m_values`
+#
+# When you need a specific τ-grid — e.g. matching a reference table, or
+# probing one particular τ — pass it as a `Vector{Int}` of averaging
+# factors. The package multiplies by `τ₀` internally to produce
+# `result.tau`. Anything from a single point (`[10]`) to a custom
+# decade grid works:
+
+m_grid    = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+result_m  = adev(pd, m_grid)
+
+# Same fields, same physics — only the sampled τ values differ.
+
+result_m.tau ≈ m_grid .* τ₀
+
+# `adev` accepts the same kwargs in both forms:
+#
+# ```julia
+# adev(pd; calc_ci = false)                 # default grid, no CI
+# adev(pd, [10, 100]; confidence = 0.95)    # explicit grid, 95 % CI
+# adev(fd)                                  # FrequencyData entry point
+# ```
 
 # ## The plot recipe
 #
