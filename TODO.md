@@ -57,6 +57,48 @@ numerical reference is locked in.
 
 ## 🟡 Medium (new metrics, estimators, models)
 
+- [ ] **`Sy(::PhaseData | ::FrequencyData)` — fractional-frequency
+  PSD.** One-sided power spectral density of `y(t)` per IEEE 1139-2022
+  §3.4, units `1/Hz`. Welch's method on the fractional-frequency
+  sequence (after `_phase_to_freq` for `PhaseData` input) with a
+  Hann/Hamming window, configurable segment length and overlap, and
+  one-sided normalization so that `∫₀^{f_h} S_y(f) df` equals the
+  variance of `y` over the analysis bandwidth. Returns a new
+  `SpectralResult` (frequency vector + PSD vector + window/segment
+  metadata) that mirrors `StabilityResult`'s self-describing layout.
+  Validation: closes the loop with `noise_gen` — synthesize WPM /
+  WFM / FFM / RWFM at known `h_α`, recover the slope and offset to
+  within Welch's expected variance bound.
+- [ ] **`Sx(::PhaseData | ::FrequencyData)` — phase PSD.** Same
+  estimator pipeline applied to phase residuals (or `_freq_to_phase`
+  of a frequency input). Units `s²/Hz`. Theoretical relation
+  `S_x(f) = S_y(f) / (2πf)²` (IEEE 1139-2022 §3.3) → testset asserts
+  the two estimators agree under that conversion to within
+  ensemble-Welch tolerance.
+- [ ] **`L(::PhaseData; f_carrier)` — single-sideband phase noise
+  ℒ(f).** IEEE 1139-2022 §3.5: `ℒ(f) = (1/2) S_φ(f)` in dBc/Hz,
+  with `S_φ(f) = (2π f_carrier)² S_x(f)` converting our
+  seconds-valued phase record `x(t)` into radians at the user-
+  supplied carrier frequency. Required kwarg `f_carrier` (Hz) — no
+  meaningful default. Returns the same `SpectralResult` type with
+  `units=:dBc_per_Hz`. Useful for direct comparison against
+  spec-sheet plots from oscillator vendors. Cross-check via
+  `noise_gen`: WPM at known σ_y(τ₀=1) yields a flat `ℒ(f)` whose
+  level matches the analytic formula in SP1065 Table 3.
+
+Common machinery for all three:
+
+  - New file `src/stab/spectral.jl` (or `src/stab/spectral/welch.jl`
+    + a thin api wrapper) with a Welch `_welch_psd(y, fs; nperseg,
+    noverlap, window)` core that uses `FFTW` (already a dep).
+  - New `SpectralResult` type alongside `StabilityResult` in
+    `src/types/spectral_result.jl`, re-exported from the umbrella.
+  - Plot recipe in `ext/SigmaTauRecipesBaseExt.jl` for log-log PSD
+    overlays with α-slope reference lines.
+  - Tests under `test/stab/spectral.jl`: round-trip with
+    `noise_gen`, `S_x ↔ S_y` consistency, ℒ(f) carrier-scaling
+    identity, segment/overlap edge cases.
+
 - [ ] **PDEV EDF / χ² confidence model.** Vernotte 2015 / 2020 derive
   the parabolic-variance EDF in closed form for the five canonical
   power-law noises; port the table into `_coeff_pdev` and wire CI
