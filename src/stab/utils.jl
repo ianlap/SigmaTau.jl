@@ -37,13 +37,17 @@ convenience methods on every public deviation API
 
 Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
 
-| `kernel`                                                   | m_max          |
-|------------------------------------------------------------|----------------|
-| `:adev`, `:totdev`, `:pdev`                                | `(N − 1) ÷ 2`  |
-| `:mdev`, `:tdev`, `:mtotdev`, `:ttotdev`, `:htotdev`       | `N ÷ 3`        |
-| `:hdev`                                                    | `(N − 1) ÷ 3`  |
-| `:mhdev`, `:htdev`, `:mhtotdev`                            | `N ÷ 4`        |
-| `:mtie`                                                    | `N − 1`        |
+| `kernel`                                     | m_max          |
+|----------------------------------------------|----------------|
+| `:adev`, `:totdev`, `:pdev`                  | `(N − 1) ÷ 2`  |
+| `:mdev`, `:tdev`, `:mtotdev`, `:ttotdev`     | `N ÷ 3`        |
+| `:hdev`, `:htotdev`                          | `(N − 1) ÷ 3`  |
+| `:mhdev`, `:htdev`, `:mhtotdev`              | `N ÷ 4`        |
+| `:mtie`                                      | `N − 1`        |
+
+(HTOTDEV's general branch operates on `y = diff(x)` of length `N−1`,
+so its `n_iter = (N−1) − 3m + 1 ≥ 1` constraint matches HDEV's even
+though MTOTDEV — which runs on phase directly — uses `N ÷ 3`.)
 
 Throws `ArgumentError` for unknown kernel symbols or `N` too short to
 admit any `m ≥ 1`.
@@ -51,10 +55,10 @@ admit any `m ≥ 1`.
 function _default_m_values(N::Int, kernel::Symbol)
     m_max = if kernel === :adev || kernel === :totdev || kernel === :pdev
         (N - 1) ÷ 2
-    elseif kernel === :mdev || kernel === :tdev || kernel === :mtotdev ||
-           kernel === :ttotdev || kernel === :htotdev
+    elseif kernel === :mdev || kernel === :tdev ||
+           kernel === :mtotdev || kernel === :ttotdev
         N ÷ 3
-    elseif kernel === :hdev
+    elseif kernel === :hdev || kernel === :htotdev
         (N - 1) ÷ 3
     elseif kernel === :mhdev || kernel === :htdev || kernel === :mhtotdev
         N ÷ 4
