@@ -178,3 +178,16 @@ mtotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = mtotdev(_freq_
 ttotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = ttotdev(_freq_to_phase(data),  m_values; kwargs...)
 htotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = htotdev(_freq_to_phase(data),  m_values; kwargs...)
 mhtotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhtotdev(_freq_to_phase(data), m_values; kwargs...)
+
+# Zero-arg convenience: octave-spaced m_values up to each kernel's
+# algorithmic m-max (see `_default_m_values`). All kwargs pass through.
+totdev(data::PhaseData;       kwargs...) = totdev(data,   _default_m_values(length(data.x), :totdev);   kwargs...)
+totdev(data::FrequencyData;   kwargs...) = totdev(data,   _default_m_values(length(data.y), :totdev);   kwargs...)
+mtotdev(data::PhaseData;      kwargs...) = mtotdev(data,  _default_m_values(length(data.x), :mtotdev);  kwargs...)
+mtotdev(data::FrequencyData;  kwargs...) = mtotdev(data,  _default_m_values(length(data.y), :mtotdev);  kwargs...)
+ttotdev(data::PhaseData;      kwargs...) = ttotdev(data,  _default_m_values(length(data.x), :ttotdev);  kwargs...)
+ttotdev(data::FrequencyData;  kwargs...) = ttotdev(data,  _default_m_values(length(data.y), :ttotdev);  kwargs...)
+htotdev(data::PhaseData;      kwargs...) = htotdev(data,  _default_m_values(length(data.x), :htotdev);  kwargs...)
+htotdev(data::FrequencyData;  kwargs...) = htotdev(data,  _default_m_values(length(data.y), :htotdev);  kwargs...)
+mhtotdev(data::PhaseData;     kwargs...) = mhtotdev(data, _default_m_values(length(data.x), :mhtotdev); kwargs...)
+mhtotdev(data::FrequencyData; kwargs...) = mhtotdev(data, _default_m_values(length(data.y), :mhtotdev); kwargs...)

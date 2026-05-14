@@ -37,3 +37,8 @@ function pdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confid
 end
 
 pdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = pdev(_freq_to_phase(data), m_values; kwargs...)
+
+# Zero-arg convenience: octave-spaced m_values up to PDEV's algorithmic
+# m-max (`(N − 1) ÷ 2`, see `_default_m_values`).
+pdev(data::PhaseData;     kwargs...) = pdev(data, _default_m_values(length(data.x), :pdev); kwargs...)
+pdev(data::FrequencyData; kwargs...) = pdev(data, _default_m_values(length(data.y), :pdev); kwargs...)
