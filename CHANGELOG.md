@@ -17,10 +17,14 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   | Deviation                                          | m_max          |
   |----------------------------------------------------|----------------|
   | `adev`, `totdev`, `pdev`                           | `(N − 1) ÷ 2`  |
-  | `mdev`, `tdev`, `mtotdev`, `ttotdev`, `htotdev`    | `N ÷ 3`        |
-  | `hdev`                                             | `(N − 1) ÷ 3`  |
+  | `mdev`, `tdev`, `mtotdev`, `ttotdev`               | `N ÷ 3`        |
+  | `hdev`, `htotdev`                                  | `(N − 1) ÷ 3`  |
   | `mhdev`, `htdev`, `mhtotdev`                       | `N ÷ 4`        |
   | `mtie`                                             | `N − 1`        |
+
+  (HTOTDEV's general branch operates on `y = diff(x)` of length
+  `N−1`, so its constraint matches HDEV's even though MTOTDEV — which
+  runs on phase directly — uses `N ÷ 3`.)
 
   Shared via `SigmaTau.Stab._default_m_values(N, kernel::Symbol)`.
   All kwargs (`calc_ci`, `confidence`, `detrend`, `correct_bias`)

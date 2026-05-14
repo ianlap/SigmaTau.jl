@@ -994,14 +994,15 @@ const LK = LegacyKernels
             @test SigmaTau.Stab._default_m_values(N, :adev)   == 2 .^ (0:8)
             @test SigmaTau.Stab._default_m_values(N, :totdev) == 2 .^ (0:8)
             @test SigmaTau.Stab._default_m_values(N, :pdev)   == 2 .^ (0:8)
-            # MDEV/TDEV/MTOTDEV/TTOTDEV/HTOTDEV: m_max = N÷3 = 341 → 2^0..2^8
+            # MDEV/TDEV/MTOTDEV/TTOTDEV: m_max = N÷3 = 341 → 2^0..2^8
             @test SigmaTau.Stab._default_m_values(N, :mdev)    == 2 .^ (0:8)
             @test SigmaTau.Stab._default_m_values(N, :tdev)    == 2 .^ (0:8)
             @test SigmaTau.Stab._default_m_values(N, :mtotdev) == 2 .^ (0:8)
             @test SigmaTau.Stab._default_m_values(N, :ttotdev) == 2 .^ (0:8)
+            # HDEV / HTOTDEV: m_max = (N-1)÷3 = 341 → 2^0..2^8
+            # (HTOTDEV operates on y = diff(x); same constraint as HDEV.)
+            @test SigmaTau.Stab._default_m_values(N, :hdev)    == 2 .^ (0:8)
             @test SigmaTau.Stab._default_m_values(N, :htotdev) == 2 .^ (0:8)
-            # HDEV: m_max = (N-1)÷3 = 341 → 2^0..2^8
-            @test SigmaTau.Stab._default_m_values(N, :hdev) == 2 .^ (0:8)
             # MHDEV/HTDEV/MHTOTDEV: m_max = N÷4 = 256 → 2^0..2^8
             @test SigmaTau.Stab._default_m_values(N, :mhdev)    == 2 .^ (0:8)
             @test SigmaTau.Stab._default_m_values(N, :htdev)    == 2 .^ (0:8)
@@ -1015,6 +1016,21 @@ const LK = LegacyKernels
             # N too small to admit any m ≥ 1
             @test_throws ArgumentError SigmaTau.Stab._default_m_values(1, :adev)
             @test_throws ArgumentError SigmaTau.Stab._default_m_values(3, :mhdev)
+        end
+
+        @testset "HTOTDEV at N=1536 stays clear of the diff(x) m-max" begin
+            # Regression for codex review on PR #35: HTOTDEV operates on
+            # y = diff(x), so its valid m-range is `m ≤ (N−1) ÷ 3`. At
+            # N=1536, naïvely using `N ÷ 3 = 512` would push past
+            # `(1535) ÷ 3 = 511`, putting an invalid `m = 512` into the
+            # octave grid and producing a trailing NaN.
+            ms = SigmaTau.Stab._default_m_values(1536, :htotdev)
+            @test maximum(ms) <= (1536 - 1) ÷ 3
+            @test 512 ∉ ms
+            Random.seed!(2026)
+            p = PhaseData(_gen_powerlaw_phase(0.0, 1536; tau0=1.0), 1.0)
+            r = htotdev(p; calc_ci = false)
+            @test all(isfinite, r.dev)
         end
 
         @testset "zero-arg API matches explicit-m_values dispatch" begin
