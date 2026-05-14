@@ -8,6 +8,38 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **Zero-arg convenience methods on every deviation API.** Calls like
+  `adev(pd)`, `mdev(fd)`, `hdev(pd)`, …, `mtie(pd)`, `pdev(pd)` now
+  resolve without a `m_values` argument. The default is an octave-
+  spaced grid `1, 2, 4, …, 2^k` capped at the kernel's algorithmic
+  m-max — derived from each `_*_core`'s `L`/`Ne` guard:
+
+  | Deviation                                          | m_max          |
+  |----------------------------------------------------|----------------|
+  | `adev`, `totdev`, `pdev`                           | `(N − 1) ÷ 2`  |
+  | `mdev`, `tdev`, `mtotdev`, `ttotdev`               | `N ÷ 3`        |
+  | `hdev`, `htotdev`                                  | `(N − 1) ÷ 3`  |
+  | `mhdev`, `htdev`, `mhtotdev`                       | `N ÷ 4`        |
+  | `mtie`                                             | `N − 1`        |
+
+  (HTOTDEV's general branch operates on `y = diff(x)` of length
+  `N−1`, so its constraint matches HDEV's even though MTOTDEV — which
+  runs on phase directly — uses `N ÷ 3`.)
+
+  Shared via `SigmaTau.Stab._default_m_values(N, kernel::Symbol)`.
+  All kwargs (`calc_ci`, `confidence`, `detrend`, `correct_bias`)
+  pass through unchanged. The richer `taus` enum API
+  (`AllTaus`/`Octave`/`Decade`/…) listed under
+  [TODO.md](TODO.md) remains a future expansion; this is the
+  one-call quality-of-life knob.
+- `SigmaTau.Stab._phase_to_freq(::PhaseData) → FrequencyData` —
+  internal companion to `_freq_to_phase`. Implements the canonical
+  first difference `y[k] = (x[k+1] − x[k]) / τ₀` (length `N → N−1`).
+  Test coverage verifies the round-trip identity (
+  `_phase_to_freq ∘ _freq_to_phase` returns `y[2:end]`;
+  `_freq_to_phase ∘ _phase_to_freq` returns `x[2:end] .- x[1]`) and
+  that ADEV/MDEV/HDEV agree on the original phase record vs its
+  differenced frequency form at matched `m_values`.
 - **`ttotdev` — Time-Total Deviation API.** Wraps `mtotdev` with a
   `τ/√3` rescaling (analogous to `tdev` over `mdev`). Exposed for both
   `PhaseData` and `FrequencyData` inputs. Centerline, `ci_lower`, and

@@ -78,3 +78,12 @@ end
 hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = hdev(_freq_to_phase(data),  m_values; kwargs...)
 mhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhdev(_freq_to_phase(data), m_values; kwargs...)
 htdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = htdev(_freq_to_phase(data), m_values; kwargs...)
+
+# Zero-arg convenience: octave-spaced m_values up to each kernel's
+# algorithmic m-max (see `_default_m_values`). All kwargs pass through.
+hdev(data::PhaseData;      kwargs...) = hdev(data,  _default_m_values(length(data.x), :hdev);  kwargs...)
+hdev(data::FrequencyData;  kwargs...) = hdev(data,  _default_m_values(length(data.y), :hdev);  kwargs...)
+mhdev(data::PhaseData;     kwargs...) = mhdev(data, _default_m_values(length(data.x), :mhdev); kwargs...)
+mhdev(data::FrequencyData; kwargs...) = mhdev(data, _default_m_values(length(data.y), :mhdev); kwargs...)
+htdev(data::PhaseData;     kwargs...) = htdev(data, _default_m_values(length(data.x), :htdev); kwargs...)
+htdev(data::FrequencyData; kwargs...) = htdev(data, _default_m_values(length(data.y), :htdev); kwargs...)

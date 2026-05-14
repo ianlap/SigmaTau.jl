@@ -984,4 +984,151 @@ const LK = LegacyKernels
         # save_result returns the path
         @test save_result(path, r) == path
     end
+
+    @testset "Zero-arg convenience: default octave m-grid per deviation" begin
+        # Octave grid shape: 1, 2, 4, ..., 2^floor(log2(m_max)).
+        # m_max per kernel matches each `_*_core`'s L-check.
+        @testset "_default_m_values per kernel" begin
+            N = 1024
+            # ADEV / TOTDEV / PDEV: m_max = (N-1)÷2 = 511 → 2^0..2^8 = [1..256]
+            @test SigmaTau.Stab._default_m_values(N, :adev)   == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :totdev) == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :pdev)   == 2 .^ (0:8)
+            # MDEV/TDEV/MTOTDEV/TTOTDEV: m_max = N÷3 = 341 → 2^0..2^8
+            @test SigmaTau.Stab._default_m_values(N, :mdev)    == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :tdev)    == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :mtotdev) == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :ttotdev) == 2 .^ (0:8)
+            # HDEV / HTOTDEV: m_max = (N-1)÷3 = 341 → 2^0..2^8
+            # (HTOTDEV operates on y = diff(x); same constraint as HDEV.)
+            @test SigmaTau.Stab._default_m_values(N, :hdev)    == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :htotdev) == 2 .^ (0:8)
+            # MHDEV/HTDEV/MHTOTDEV: m_max = N÷4 = 256 → 2^0..2^8
+            @test SigmaTau.Stab._default_m_values(N, :mhdev)    == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :htdev)    == 2 .^ (0:8)
+            @test SigmaTau.Stab._default_m_values(N, :mhtotdev) == 2 .^ (0:8)
+            # MTIE: m_max = N-1 = 1023 → 2^0..2^9 = [1..512]
+            @test SigmaTau.Stab._default_m_values(N, :mtie) == 2 .^ (0:9)
+        end
+
+        @testset "_default_m_values argument validation" begin
+            @test_throws ArgumentError SigmaTau.Stab._default_m_values(1024, :nope)
+            # N too small to admit any m ≥ 1
+            @test_throws ArgumentError SigmaTau.Stab._default_m_values(1, :adev)
+            @test_throws ArgumentError SigmaTau.Stab._default_m_values(3, :mhdev)
+        end
+
+        @testset "HTOTDEV at N=1536 stays clear of the diff(x) m-max" begin
+            # Regression for codex review on PR #35: HTOTDEV operates on
+            # y = diff(x), so its valid m-range is `m ≤ (N−1) ÷ 3`. At
+            # N=1536, naïvely using `N ÷ 3 = 512` would push past
+            # `(1535) ÷ 3 = 511`, putting an invalid `m = 512` into the
+            # octave grid and producing a trailing NaN.
+            ms = SigmaTau.Stab._default_m_values(1536, :htotdev)
+            @test maximum(ms) <= (1536 - 1) ÷ 3
+            @test 512 ∉ ms
+            Random.seed!(2026)
+            p = PhaseData(_gen_powerlaw_phase(0.0, 1536; tau0=1.0), 1.0)
+            r = htotdev(p; calc_ci = false)
+            @test all(isfinite, r.dev)
+        end
+
+        @testset "zero-arg API matches explicit-m_values dispatch" begin
+            # Synthesize a deterministic WFM phase fixture and verify
+            # `dev(pd)` ≡ `dev(pd, _default_m_values(N, :dev))` across both
+            # PhaseData and FrequencyData entry points.
+            Random.seed!(2026)
+            N    = 512
+            tau0 = 1.0
+            x    = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+            p    = PhaseData(x, tau0)
+            f    = FrequencyData(diff(x) ./ tau0, tau0)
+
+            for (kernel, fn) in (
+                    (:adev,    adev),  (:mdev,  mdev),  (:tdev,  tdev),
+                    (:hdev,    hdev),  (:mhdev, mhdev), (:htdev, htdev),
+                    (:totdev,  totdev),
+                    (:mtotdev, mtotdev), (:htotdev, htotdev),
+                    (:mtie,    mtie),  (:pdev,  pdev),
+                )
+                ms = SigmaTau.Stab._default_m_values(N, kernel)
+                r_default  = fn(p; calc_ci = false)
+                r_explicit = fn(p, ms; calc_ci = false)
+                @test r_default.tau == r_explicit.tau
+                @test r_default.dev == r_explicit.dev
+                # FrequencyData entry point resolves to its own default m-grid
+                # (computed from length(f.y) = N-1, not N).
+                ms_f = SigmaTau.Stab._default_m_values(length(f.y), kernel)
+                r_default_f = fn(f; calc_ci = false)
+                @test r_default_f.tau == ms_f .* tau0
+            end
+        end
+
+        @testset "kwargs pass through (calc_ci, confidence, detrend)" begin
+            Random.seed!(7)
+            p = PhaseData(_gen_powerlaw_phase(0.0, 512; tau0=1.0), 1.0)
+            # calc_ci=true populates CI; calc_ci=false leaves them empty.
+            r_ci = adev(p; calc_ci = true)
+            @test !isempty(r_ci.ci_lower)
+            @test !isempty(r_ci.edf)
+            r_no = adev(p; calc_ci = false)
+            @test isempty(r_no.ci_lower)
+            @test isempty(r_no.edf)
+            # totdev's `detrend` kwarg passes through.
+            r_howe   = totdev(p; calc_ci = false, detrend = :howe)
+            r_linear = totdev(p; calc_ci = false, detrend = :linear)
+            @test r_howe.tau == r_linear.tau
+        end
+    end
+
+    @testset "_phase_to_freq / _freq_to_phase helpers" begin
+        # Canonical mapping: y[k] = (x[k+1] − x[k]) / τ₀, length N → N−1.
+        @testset "definition and shape" begin
+            τ₀ = 0.5
+            x  = [0.0, 1.0, 3.0, 7.0, 15.0]
+            pd = PhaseData(x, τ₀)
+            fd = SigmaTau.Stab._phase_to_freq(pd)
+            @test fd isa FrequencyData
+            @test fd.tau0 == τ₀
+            @test fd.y == diff(x) ./ τ₀
+            @test length(fd.y) == length(x) - 1
+        end
+
+        @testset "round-trip identities (modulo the lost offset/sample)" begin
+            Random.seed!(31)
+            τ₀ = 1.0
+            # Frequency → phase → frequency drops the first sample.
+            y  = randn(64)
+            fd = FrequencyData(y, τ₀)
+            fd2 = SigmaTau.Stab._phase_to_freq(SigmaTau.Stab._freq_to_phase(fd))
+            @test length(fd2.y) == length(y) - 1
+            @test fd2.y ≈ y[2:end]
+            # Phase → frequency → phase recovers x[2:end] − x[1].
+            x   = cumsum(randn(64))
+            pd  = PhaseData(x, τ₀)
+            pd2 = SigmaTau.Stab._freq_to_phase(SigmaTau.Stab._phase_to_freq(pd))
+            @test length(pd2.x) == length(x) - 1
+            @test pd2.x ≈ x[2:end] .- x[1]
+        end
+
+        @testset "deviation equivalence: adev/mdev/hdev agree on either domain" begin
+            # Build a synthetic WFM phase record, compute ADEV/MDEV/HDEV via
+            # the phase path and via the frequency path (after _phase_to_freq).
+            # Second- and third-difference kernels are shift-invariant so the
+            # lost initial sample is the only source of disagreement; with
+            # N=4096 the σ values agree to well within rtol=5e-3.
+            Random.seed!(2026)
+            τ₀ = 1.0
+            p_full = PhaseData(_gen_powerlaw_phase(0.0, 4096; tau0=τ₀), τ₀)
+            f_diff = SigmaTau.Stab._phase_to_freq(p_full)
+            @test length(f_diff.y) == length(p_full.x) - 1
+            ms = [1, 4, 16, 64]
+            for fn in (adev, mdev, hdev)
+                r_phase = fn(p_full,  ms; calc_ci = false)
+                r_freq  = fn(f_diff,  ms; calc_ci = false)
+                @test r_freq.tau == r_phase.tau
+                @test isapprox(r_freq.dev, r_phase.dev; rtol = 5e-3)
+            end
+        end
+    end
 end
