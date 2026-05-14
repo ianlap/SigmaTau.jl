@@ -110,7 +110,7 @@ the chosen coordinate timescale.
 
 !!! note "Planned implementation"
     [`RelativisticClock`](@ref) is currently exported as a stub in
-    SigmaTauEnsemble. The mathematical form of every correction —
+    `SigmaTau.Est`. The mathematical form of every correction —
     1PN proper-time differential, TCB / TCG / TCL transformations,
     surface redshift, Sagnac, Shapiro, ELFO orbit formulas — is
     documented across this page and the three companion pages above;

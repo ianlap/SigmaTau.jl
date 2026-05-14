@@ -57,7 +57,8 @@ TOTDEV and HTOTDEV when no total-specific table value is published.
 The total-family estimators do not have published GR03-style EDF
 formulas in general. SigmaTau falls back to ADEV/HDEV-style EDF for
 WPM/FPM (α = 2, 1) and uses published `a(α)` values
-[@cite howe-2001-tothvar-steering] for α ∈ {0, −1, −2}.
+[@cite howe-2001-tothvar-steering] for α ∈ {0, −1, −2, −3, −4} (FCS 2001
+Table I covers the full Hadamard FM range).
 
 ## Bias correction summary
 
@@ -66,16 +67,20 @@ WPM/FPM (α = 2, 1) and uses published `a(α)` values
 | ADEV / MDEV / HDEV / MHDEV / TDEV / HTDEV | none | Unbiased estimators |
 | TOTDEV   | per SP1065 | bias factor on the variance |
 | MTOTDEV  | per SP1065 | ~1.27× under WFM |
-| HTOTDEV  | per FCS01  | bias `a(α)` table — α = 0,−1,−2 |
+| HTOTDEV  | per FCS01  | bias `a(α)` table — α ∈ {0,−1,−2,−3,−4} |
 | MHTOTDEV | none      | no published analytic model — HDEV-style fallback (limitation) |
 
 Bias factors are applied to the *variance* before the square root and
-before EDF lookup. The SP1065 TOTDEV factor `1 - a(α)·(τ/T)` shrinks
-toward 1 as τ/T → 0 [@cite riley-2008-sp1065]. MTOTDEV uses a
-τ-independent table `{1.06, 1.17, 1.27, 1.30, 1.31}` for
-α ∈ {2, 1, 0, −1, −2} [@cite riley-2020-r-frequency-stability]. HTOTDEV uses the
-FCS 2001 form `1 / (1 + a(α))` [@cite howe-2001-tothvar-steering]. MHTOTDEV is treated
-as unbiased; Stable32 and AllanLab adopt the same convention.
+before EDF lookup — i.e., the API divides the raw deviation by `√B`,
+not `B`. The SP1065 TOTDEV factor `B = 1 − a(α)·(τ/T)` shrinks toward 1
+as τ/T → 0 [@cite riley-2008-sp1065]. MTOTDEV uses a τ-independent
+table `{1.06, 1.17, 1.27, 1.30, 1.31}` for α ∈ {2, 1, 0, −1, −2}
+[@cite riley-2020-r-frequency-stability]. HTOTDEV uses the FCS 2001
+form `B = 1 + a(α)` with `a` from Table I of Howe & Tasset 2001
+(`a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}` for α ∈ {0,−1,−2,−3,−4};
+all `a < 0`, so `B < 1`, reflecting that HTOT is biased *low* for FM
+noises) [@cite howe-2001-tothvar-steering]. MHTOTDEV is treated as
+unbiased; Stable32 and AllanLab adopt the same convention.
 
 ## Implementation contract
 

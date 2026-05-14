@@ -131,7 +131,7 @@ above.
 
 ## SigmaTau implementation
 
-The PID steering controller is exposed in the ensemble subpackage as
+The PID steering controller is exposed in `SigmaTau.Est` as
 [`PIDController`](@ref), with the per-step update wired through
 [`step!`](@ref) and the bridge to the underlying SDE state through
 [`steer_to_correction`](@ref). Steering folds into the prediction
@@ -139,16 +139,21 @@ half of the Kalman recursion by passing the current correction into
 [`predict!`](@ref) via its `steering=` keyword argument:
 
 ```julia
-u = step!(controller, kf.x)
-predict!(kf, model; steering = steer_to_correction(u))
-update!(kf, z)
+# After at least one update! so kf.x carries a posterior estimate:
+step!(controller, kf.x)                                # advances controller, stores last_steer
+corr = steer_to_correction(controller.last_steer,
+                           nstates(model), dt)         # SVector{ns} with phase = u·dt, freq = u
+predict!(kf, model, dt; steering = corr)               # Φ propagation + steering fold-in
+update!(kf, model, z)                                  # measurement update
 ```
 
 The integral state lives on `controller`, not on the Kalman state, so
 the Kalman gains and covariances computed from `Q`, `R` are unchanged
 by the steering loop — matching the Matsakis result that the Riccati
 equation is independent of the controller gains
-[Matsakis & Coleman 2020](@cite matsakis-2020-pid-controllers).
+[Matsakis & Coleman 2020](@cite matsakis-2020-pid-controllers). See
+[`examples/04_kalman_pid_steering.jl`](../tutorials/04_kalman_pid_steering.md)
+for a complete worked closed-loop run.
 
 For background on the SDE clock model whose frequency state the
 controller drives, see

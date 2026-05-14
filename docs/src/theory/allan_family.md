@@ -70,9 +70,13 @@ window) constructed so that the operator integrates to zero against
 both constants and linear ramps but responds nonzero to quadratic
 curvature in `x(t)` [@cite banerjee-2023-timekeeping].
 
-!!! note "Planned implementation"
-    The mathematical definition is documented above. The `pvar`
-    function is not yet implemented in SigmaTauStability.jl.
+!!! note "Implementation status"
+    Implemented as [`pdev`](@ref) (parabolic deviation σ = √PVAR);
+    `m=1` reproduces ADEV exactly and a linear-trend annihilation test
+    pins the kernel. CI / EDF bounds are not yet populated — the
+    `StabilityResult.ci_lower` / `ci_upper` / `edf` fields are empty
+    until the Vernotte 2015 / 2020 closed-form EDF coefficients are
+    ported (tracked in `TODO.md`).
 
 ## TDEV — time deviation
 
@@ -193,7 +197,7 @@ table.
 
 !!! note "Planned implementation"
     The mathematical definition is documented above. The `theo1`
-    function is not yet implemented in SigmaTauStability.jl.
+    function is not yet implemented in `SigmaTau.Stab`.
 
 ## ThêoH — composite Theo1 + ADEV estimator
 
@@ -210,7 +214,7 @@ long-record stability summary in modern timekeeping practice
 
 !!! note "Planned implementation"
     The mathematical definition is documented above. The `theoh`
-    function is not yet implemented in SigmaTauStability.jl.
+    function is not yet implemented in `SigmaTau.Stab`.
 
 ## Dynamic Allan deviation — DADEV
 
@@ -238,7 +242,7 @@ produce DADEV at every `t_c` of interest
 
 !!! note "Planned implementation"
     The mathematical definition is documented above. The `dadev`
-    function is not yet implemented in SigmaTauStability.jl.
+    function is not yet implemented in `SigmaTau.Stab`.
 
 ## HTDEV — Hadamard time deviation
 
