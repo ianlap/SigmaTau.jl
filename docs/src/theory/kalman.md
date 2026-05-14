@@ -241,7 +241,7 @@ entries of `D`
 
 !!! note "Planned implementation"
     [`UDFactorizedFilter`](@ref) is currently an empty struct stub in
-    SigmaTauEnsemble. The mathematical recipe above is documented;
+    `SigmaTau.Est`. The mathematical recipe above is documented;
     no Bierman/Thornton predict / update loop is wired up yet.
 
 ## Generalized ALS noise tuning
@@ -489,7 +489,8 @@ ladder
   multi-clock ensemble timescales built on top of the Kalman recursion.
 - [API: `SigmaTau.Est`](../reference/est.md) —
   [`StandardKalmanFilter`](@ref), [`UDFactorizedFilter`](@ref),
-  [`predict!`](@ref), [`update!`](@ref).
+  [`predict!`](@ref), [`update!`](@ref), [`prop!`](@ref) (unconditional
+  covariance propagation for holdover-style ±1σ bands).
 
 ## References
 

@@ -232,7 +232,7 @@ stability proof
 
 !!! note "Planned implementation"
     [`KuramotoOscillator`](@ref) is currently exported as a stub in
-    SigmaTauEnsemble. The mathematical form above (the per-link
+    `SigmaTau.Est`. The mathematical form above (the per-link
     correction, the linearisation, the SDE augmentation) is
     documented; no time-stepped chain simulator is wired up yet.
 
