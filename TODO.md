@@ -132,6 +132,30 @@ numerical reference is locked in.
 - [ ] **`KuramotoOscillator`** — empty struct in the same file.
   Nearest-neighbor phase coupling estimator targeted at SWaP-constrained
   pLEO ensembles. Docstring stub callout in place.
+- [ ] **Total-family kernel constant-factor speedups follow-up.** The
+  recent perf pass amortised the half-mean slope to O(1) per window in
+  `_mtotdev_greenhall` but the wall-time gain was below run-to-run
+  noise — the original `@simd` slope sums were already
+  memory-bandwidth-bound on cached x[]. Two remaining levers, in order
+  of likely yield:
+  1. **Multi-accumulator slide loop** to unblock `@simd` on the
+     `a1 += ext[j+m] - ext[j]; …` carry chain in
+     `_mtotdev_greenhall`/`_htotdev_greenhall`/`_mhtotdev_greenhall`.
+     Re-introducing a per-window `cs` prefix-sum of `ext` would let the
+     `d²` computation vectorise; trade-off is 9m memory ops/window
+     that the current sliding form avoids (the comment at
+     `src/stab/core/total.jl:257-263` describes the prior decision to
+     remove `cs`; codegen has changed since, worth revisiting on a
+     `--threads auto` runner).
+  2. **`ext` streaming** — each `ext[k]` is a closed-form
+     `x[idx] − slope·τ₀·offset`. Could avoid the 9m memory writes per
+     window at the cost of 3× more arithmetic per slide step;
+     back-of-envelope says this is probably a regression on N ≥ 65k
+     where the writes were cache-resident anyway, but worth verifying
+     once SIMD is unblocked.
+  Carry the slope-amortisation pattern from `_mtotdev_greenhall` over
+  to `_htotdev_greenhall`/`_mhtotdev_greenhall` for consistency while
+  doing this — same formula, different argument names.
 
 ---
 

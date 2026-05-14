@@ -59,11 +59,11 @@ remains unchanged.
 | Kernel | File | Status | Verified vs SP1065? |
 |--------|------|--------|---------------------|
 | `_adev_core` | [src/stab/core/allan.jl](src/stab/core/allan.jl) | ✅ | ✅ Tested (quadratic parity) |
-| `_mdev_core` | same | ✅ | ⚠️ `isfinite`-only |
+| `_mdev_core` | same | ✅ | ⚠️ `isfinite`-only. Single length-(N+1) prefix-sum buffer (no `cumsum(copy(x))` chain). |
 | `_tdev_core` | same | ✅ | ⚠️ `isfinite`-only |
 | `_hdev_core` | [src/stab/core/hadamard.jl](src/stab/core/hadamard.jl) | ✅ | ⚠️ Zero-on-quadratic only |
-| `_mhdev_core` | same | ✅ | ⚠️ Zero-on-quadratic only |
-| `_totdev_core` | [src/stab/core/total.jl](src/stab/core/total.jl) | ✅ | ⚠️ `isfinite`-only |
+| `_mhdev_core` | same | ✅ | ⚠️ Zero-on-quadratic only. Single length-(N+1) prefix-sum buffer. |
+| `_totdev_core` | [src/stab/core/total.jl](src/stab/core/total.jl) | ✅ | ⚠️ `isfinite`-only. `:howe` variant streams the mean-flip extension on the fly — kernel-only allocation is now O(1) in N. |
 | `_mtotdev_core` | same | ✅ | ⚠️ `isfinite`-only |
 | `_htotdev_core` | same | ✅ | ⚠️ `isfinite`-only |
 | `_mhtotdev_core` | same | ✅ | ⚠️ `isfinite`-only |
@@ -74,18 +74,18 @@ remains unchanged.
 
 | Component | File | Status | Notes |
 |-----------|------|--------|-------|
-| `identify_noise` | [src/stab/noise/lag1.jl](src/stab/noise/lag1.jl) | ✅ | lag-1 ACF + B1/R(n) fallback |
+| `identify_noise` | [src/stab/noise/lag1.jl](src/stab/noise/lag1.jl) | ✅ | lag-1 ACF + B1/R(n) fallback. ~2.1× faster after the allocation-cleanup pass (two-pass `_preprocess`, StaticArrays 3×3 solve, single-pass `_lag1_acf`). |
 | `_noise_id_lag1acf` | same | ✅ | Quadratic detrend, differencing, ρ threshold |
-| `_noise_id_b1rn` | same | ✅ | B1-ratio with R(n) WPM/FLPM disambiguation |
+| `_noise_id_b1rn` | same | ✅ | B1-ratio with R(n) WPM/FLPM disambiguation. `_simple_mdev` now uses the same single-buffer prefix-sum as `_mdev_core`. |
 | `NEFF_RELIABLE = 30` | same | ✅ | Per legacy GEMINI.md §2 mandate; boundary test added |
-| Preprocessing | same | ✅ | 5σ outlier rejection + linear detrend |
+| Preprocessing | same | ✅ | 5σ outlier rejection (two-pass count-then-fill; no boolean mask). |
 | Power-law synthesis | [src/stab/noise/synth.jl](src/stab/noise/synth.jl) | ✅ | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2} |
 
 #### Statistics (EDF / CI / Bias)
 
 | Component | File | Status | Notes |
 |-----------|------|--------|-------|
-| `calculate_edf` | [src/stab/stats/edf.jl](src/stab/stats/edf.jl) | ✅ | Full Greenhall/Riley `_compute_sz/_sx/_sw` |
+| `calculate_edf` | [src/stab/stats/edf.jl](src/stab/stats/edf.jl) | ✅ | Full Greenhall/Riley `_compute_sz/_sx/_sw`. Inner helpers `@inline`'d, typed to `Float64`, closure removed; ~5× faster on the fast-kernel API path. |
 | `confidence_intervals` | same | ✅ | `Distributions.jl` for χ² + Normal |
 | `bias_correction` | same | ✅ | Returns SP1065 variance-ratio B; callers apply `σ ← σ/√B`. totvar / mtot / htot covered; mhtot has no published model |
 | `_coeff_totvar` | same | ✅ | ADEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
@@ -253,7 +253,12 @@ test/
 └── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
 
 docs/                                    Documenter.jl subproject
-benchmarks/                              Long-record perf runs (gitignored outputs)
+benchmarks/                              Long-record perf runs + scaling fits (gitignored outputs):
+                                         `bench_sigmatau.jl` / `bench_allantools.py` — wall-clock per-record;
+                                         `scaling.jl` / `scaling_allantools.py` / `render_scaling.py` —
+                                         log-log power-law fits + cross-library comparison;
+                                         `btime_sigmatau.jl` / `btime_allantools.py` — BenchmarkTools
+                                         quick-look on synthetic randn input.
 examples/                                Literate-driven tutorials 01..05
 reference/validation/                    Stable32 + allantools cross-check fixtures
 tools/Project.toml                       Dev-tools env

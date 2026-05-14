@@ -23,7 +23,7 @@ warmup pass before the realization loop. `GC.gc()` before each Julia kernel call
   htotdev   |        3.15e-2    2.3e-3    3.11e-2    2.82e-2    3.48e-2 |        114.250   2.19e-1   114.287  113.910   114.557   |     3632.0×
 ```
 
-(All numbers from the renderer output verbatim — see `benchmarks/bench/per_realization.csv`
+(All numbers from the renderer output verbatim — see `benchmarks/bench/per_realization.tsv`
 for the raw per-realization arrays suitable for histograms / violins / ECDFs.)
 
 ## Memory per kernel call (MiB)
@@ -72,7 +72,7 @@ RSS above the input array.
 - `benchmarks/bench/synth/` — 30 single-column .txt files (15 MiB total)
 - `benchmarks/bench/results_sigmatau_synth.json` — full per-realization SigmaTau data (per-kernel array of `{realization, time_s, bytes, gctime_s}`)
 - `benchmarks/bench/results_allantools_synth.json` — full per-realization allantools data (per-kernel array of `{realization, time_s, rss_delta_bytes}`)
-- `benchmarks/bench/per_realization.csv` — long-format CSV (kernel, library, realization, time_s, mem_bytes), 420 rows — load with pandas/matplotlib for histograms
+- `benchmarks/bench/per_realization.tsv` — long-format TSV (kernel, library, realization, time_s, mem_bytes), 420 rows — `library` is `ST` or `AT`, `time_s` in scientific notation (4 sig figs); load with pandas/matplotlib for histograms
 - `benchmarks/bench/render_stats.py` — produces the table above
 - `benchmarks/bench/bench_sigmatau.jl` — added `--synth <dir>` mode
 - `benchmarks/bench/bench_allantools.py` — added `--synth <dir>` mode
@@ -102,7 +102,7 @@ OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 .bench-venv/bin/python benchmarks/bench/render_stats.py \
   benchmarks/bench/results_sigmatau_synth.json \
   benchmarks/bench/results_allantools_synth.json \
-  --csv-out benchmarks/bench/per_realization.csv \
+  --csv-out benchmarks/bench/per_realization.tsv \
   --kernels adev,mdev,hdev,tdev,totdev,mtotdev,htotdev
 ```
 
@@ -110,12 +110,12 @@ OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 
 ```python
 import pandas as pd, matplotlib.pyplot as plt
-df = pd.read_csv("benchmarks/bench/per_realization.csv")
+df = pd.read_csv("benchmarks/bench/per_realization.tsv", sep="\t")
 
 # histogram of mtotdev wall-time, both libs
 fig, ax = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
-mt_s = df.query("kernel == 'mtotdev' and library == 'sigmatau'").time_s
-mt_a = df.query("kernel == 'mtotdev' and library == 'allantools'").time_s
+mt_s = df.query("kernel == 'mtotdev' and library == 'ST'").time_s
+mt_a = df.query("kernel == 'mtotdev' and library == 'AT'").time_s
 ax[0].hist(mt_s, bins=15); ax[0].set_title(f"SigmaTau mtotdev (n={len(mt_s)})")
 ax[0].set_xlabel("wall time (s)")
 ax[1].hist(mt_a, bins=15, color='tab:orange'); ax[1].set_title(f"allantools mtotdev (n={len(mt_a)})")

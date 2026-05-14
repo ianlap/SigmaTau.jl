@@ -8,6 +8,24 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- **Scaling-fit benchmark trio** under `benchmarks/bench/`:
+  `scaling.jl` (SigmaTau, full public-API defaults; per-octave m-grid via
+  `_default_m_values`), `scaling_allantools.py` (allantools, bare-kernel
+  calls; capped N for the O(N²) `mtotdev`/`htotdev`), and
+  `render_scaling.py` (cross-library comparison renderer). Each writes a
+  machine-readable JSON (`scaling_sigmatau.json`,
+  `scaling_allantools.json`). `predict(:kernel, N)` reads cached fits to
+  estimate wall-time for arbitrary N. Power-law fit in log-log space
+  (`T ≈ a · N^b`), with `R²` reported per kernel. Sub-call: `BenchmarkTools.@belapsed`
+  on the Julia side, `timeit.Timer.repeat` (best of N) on Python.
+- **`BenchmarkTools.@btime` quick-look scripts** at
+  `benchmarks/bench/btime_sigmatau.jl` and `btime_allantools.py` —
+  minimal-overhead per-kernel timings on synthetic randn input for
+  `adev`/`mdev`/`hdev` (and their allantools equivalents `oadev`/`mdev`/`ohdev`).
+  Synthetic input lets the scripts run anywhere without the
+  `reference/clock_data/` fixtures the wall-clock `bench_sigmatau.jl` /
+  `bench_allantools.py` scripts need. `BenchmarkTools` added to
+  `benchmarks/bench/Project.toml` deps.
 - **Zero-arg convenience methods on every deviation API.** Calls like
   `adev(pd)`, `mdev(fd)`, `hdev(pd)`, …, `mtie(pd)`, `pdev(pd)` now
   resolve without a `m_values` argument. The default is an octave-
@@ -197,6 +215,54 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- **Performance pass on `identify_noise` and `calculate_edf` — full-API
+  call ~3.5× faster on fast kernels at N = 65 536.** Cumulative wall-time
+  on `adev(pd; calc_ci=true)`: 1.945 ms → 0.55 ms; same magnitude across
+  `mdev`/`tdev`/`hdev`/`mhdev`/`htdev`/`totdev`. Stable32 parity bit-identical
+  against `reference/validation/s32_5_12_26/` (max σ rel-diff unchanged at
+  ≤ 4.3 × 10⁻⁵; all 914 tests pass). Breakdown of contributing changes
+  below.
+- `identify_noise` (`src/stab/noise/lag1.jl`) refactored to cut allocation
+  and per-m work. `_preprocess`'s 5σ outlier filter is now two-pass
+  count-then-fill instead of allocating `z = abs.((x .- μ) ./ σ)` plus a
+  boolean mask. `_detrend_quadratic`'s 3×3 LS solve uses `StaticArrays`
+  (`SMatrix{3,3,Float64}` / `SVector{3,Float64}`) instead of building heap
+  matrices. `_lag1_acf` is three single-pass loops instead of allocating
+  a centred copy and a broadcasted lag-product. `_simple_mdev` replaces
+  the `cumsum(pushfirst!(copy(x), 0.0))` chain with one length-(N+1)
+  prefix-sum buffer, mirroring the `_mdev_core` fix. Net: noise-ID time
+  on a typical fast-kernel call drops ~2.1×.
+- `calculate_edf` (`src/stab/stats/edf.jl`) hot path inlined — ~5× faster.
+  `_compute_sw`/`_compute_sx`/`_compute_sz` are now `@inline`'d and accept
+  `Float64` (was `Real`, dispatch-unstable). The inner closure
+  `sx(u) = _compute_sx(u, F, alpha)` inside `_compute_sz` was preventing
+  Julia from inlining the stencil; replaced with direct calls. Integer
+  powers expanded to literal multiplications (`ta^5` → `ta*ta*…*ta`) and
+  the reciprocal `1/F` is computed once outside the j-loop as `inv_F`.
+- `_totdev_howe` (`src/stab/core/total.jl`) streams the SP1065 eqn 2
+  mean-flip endpoint reflection on the fly rather than materialising a
+  `(3N − 4)`-Float64 buffer. Inner n-loop split into three ranges — short
+  scalar tails for `n ≤ m` and `n ≥ N − m + 1` (which need reflection),
+  fully SIMD-vectorised central region for the bulk. Kernel-only
+  allocation: 0.577 MiB → 0.005 MiB (constant in N; ~24·N bytes saved
+  per call, ~72 MiB at N = 3 × 10⁶). `:legacy`/`:linear` code path
+  unchanged.
+- `_mdev_core` and `_mhdev_core` (`src/stab/core/allan.jl`,
+  `src/stab/core/hadamard.jl`) replace `cumsum(pushfirst!(copy(x), 0.0))`
+  (≈ 3 length-N allocations) with a single length-(N+1) buffer filled by
+  an explicit scalar prefix-sum loop. `@simd` dropped since the carry
+  chain blocks vectorisation either way. Cumulative bytes per call drops
+  ~75 % on the synth bench (819 200 → 200 632 at N = 25 000).
+- `_mtotdev_greenhall` half-mean slope (`src/stab/core/total.jl`) now
+  amortised across overlapping windows: each chunk seeds its first
+  window's `s1`, `s2` half-sums (cost O(m)) and updates them in O(1)
+  per subsequent window (`s1 += x[n+hi] − x[n]`,
+  `s2 += x[n+seg_len] − x[n+hi]`). Algorithmically correct but the
+  wall-time savings are in run-to-run noise — the original `@simd` half-
+  mean sums were already memory-bandwidth-bound on the same cached x[]
+  reads the ext-build pass needs. Kept for code-clarity reasons; the
+  irreducible O(N²) cost remains the per-window detrended extension
+  build + slide-reduction.
 - `ldev` forwarding alias replaced with `Base.@deprecate ldev htdev`; callers
   now receive a deprecation warning and should migrate to `htdev`.
 - Stub types `RelativisticClock`, `UDFactorizedFilter`, and `KuramotoOscillator`
