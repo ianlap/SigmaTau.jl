@@ -106,9 +106,17 @@ to extend the usable τ range beyond TDEV's reach on short records
 The `√3` factor matches TDEV's exactly because TTOT inherits MTOTDEV's
 modified second-difference operator [@cite riley-2008-sp1065].
 
-!!! note "Planned implementation"
-    The mathematical definition is documented above. The `ttot`
-    function is not yet implemented in SigmaTauStability.jl.
+In SigmaTau:
+
+```julia
+ttotdev(PhaseData(x, τ₀), τs)
+```
+
+[`ttotdev`](@ref) wraps [`mtotdev`](@ref) and rescales the centerline
+and CI bounds by `τ / √3`. The `detrend`, `correct_bias`, `calc_ci`,
+and `confidence` kwargs pass through unchanged; the `edf` and
+`noise_type` columns are reused as-is since a time rescaling does not
+change the degrees of freedom.
 
 ---
 

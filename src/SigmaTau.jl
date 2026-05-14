@@ -78,7 +78,7 @@ module Stab
     export adev, mdev, tdev
     export hdev, mhdev, htdev
     export ldev   # deprecated alias for htdev — remove in a future release
-    export totdev, mtotdev, htotdev, mhtotdev
+    export totdev, mtotdev, ttotdev, htotdev, mhtotdev
     export mtie, pdev
 end
 
