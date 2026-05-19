@@ -18,6 +18,7 @@ LocalPreferences.toml
 # Editors / IDEs
 .vscode/
 .idea/
+.obsidian/
 *.swp
 *.swo
 *~
