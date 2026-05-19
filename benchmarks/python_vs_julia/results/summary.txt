@@ -1,0 +1,31 @@
+
+# Wall-clock times (best of N repeats, seconds)
+
+     N  kernel              allantools                 numba       sigmatau_single    sigmatau_threaded4
+--------------------------------------------------------------------------------------------------------
+  1000  mtotdev                1.9637s               0.0050s               0.0032s               0.0019s
+  1000  htotdev                2.1061s               0.0053s               0.0033s               0.0021s
+  4000  mtotdev               30.2329s               0.0806s               0.0522s               0.0165s
+  4000  htotdev               32.5109s               0.0832s               0.0527s               0.0205s
+ 16000  mtotdev                     --               1.3251s               0.8891s               0.2371s
+ 16000  htotdev                     --               1.3397s               0.9322s               0.2507s
+
+# Speedup vs allantools (single-threaded)
+
+     N  kernel              allantools                 numba       sigmatau_single    sigmatau_threaded4
+--------------------------------------------------------------------------------------------------------
+  1000  mtotdev                   1.0x                391.3x                607.0x               1028.4x
+  1000  htotdev                   1.0x                396.8x                629.0x               1011.2x
+  4000  mtotdev                   1.0x                375.2x                579.6x               1835.0x
+  4000  htotdev                   1.0x                390.5x                617.2x               1589.3x
+ 16000  mtotdev                     --                    --                    --                    --
+ 16000  htotdev                     --                    --                    --                    --
+
+# Deviation cross-check (max relative diff per (kernel, N))
+
+  N= 1000 mtotdev   numba vs julia: 2.08e-16  allantools vs julia: 6.23e-16  allantools vs numba: 4.43e-16
+  N= 4000 mtotdev   numba vs julia: 3.21e-16  allantools vs julia: 1.13e-15  allantools vs numba: 1.13e-15
+  N=16000 mtotdev   numba vs julia: 4.34e-16  allantools vs julia: nan  allantools vs numba: nan
+  N= 1000 htotdev   numba vs julia: 4.15e-16  allantools vs julia: 1.78e-15  allantools vs numba: 1.78e-15
+  N= 4000 htotdev   numba vs julia: 1.19e-15  allantools vs julia: 2.69e-15  allantools vs numba: 2.69e-15
+  N=16000 htotdev   numba vs julia: 1.81e-15  allantools vs julia: nan  allantools vs numba: nan

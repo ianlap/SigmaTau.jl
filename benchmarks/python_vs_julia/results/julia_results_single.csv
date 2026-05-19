@@ -1,0 +1,7 @@
+N,kernel,impl,seconds
+1000,mtotdev,sigmatau_single,0.003235159
+1000,htotdev,sigmatau_single,0.003348211
+4000,mtotdev,sigmatau_single,0.052161217
+4000,htotdev,sigmatau_single,0.052673086
+16000,mtotdev,sigmatau_single,0.889126691
+16000,htotdev,sigmatau_single,0.93221571

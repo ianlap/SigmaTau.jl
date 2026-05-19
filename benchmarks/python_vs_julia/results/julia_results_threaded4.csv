@@ -1,0 +1,7 @@
+N,kernel,impl,seconds
+1000,mtotdev,sigmatau_threaded4,0.001909443
+1000,htotdev,sigmatau_threaded4,0.002082724
+4000,mtotdev,sigmatau_threaded4,0.016476006
+4000,htotdev,sigmatau_threaded4,0.020456368
+16000,mtotdev,sigmatau_threaded4,0.237060092
+16000,htotdev,sigmatau_threaded4,0.250667963
