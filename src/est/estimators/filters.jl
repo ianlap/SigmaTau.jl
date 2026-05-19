@@ -8,9 +8,7 @@ Supertype for state estimators consumed by the standardized
 mean and covariance (or an equivalent factorization) and must overload
 `predict!` and `update!` against an [`AbstractClockModel`](@ref).
 
-Shipped subtypes: [`StandardKalmanFilter`](@ref),
-[`UDFactorizedFilter`](@ref) (stub), and [`KuramotoOscillator`](@ref)
-(stub).
+Shipped subtype: [`StandardKalmanFilter`](@ref).
 """
 abstract type AbstractEstimator end
 
@@ -91,47 +89,6 @@ function StandardKalmanFilter(x0::AbstractVector{Float64}, P0::AbstractMatrix{Fl
     P = SMatrix{n, n, Float64}(P0...)
     return StandardKalmanFilter(x, P, 0, legacy_compat)
 end
-
-"""
-    UDFactorizedFilter <: AbstractEstimator
-
-Bierman/Thornton U-D factorized Kalman filter intended for
-low-observability scenarios such as lunar distance, where direct
-covariance propagation can lose positive-definiteness. Propagates the
-upper-triangular U and diagonal D factors via Weighted Modified
-Gram–Schmidt and rank-one Bierman/Carlson updates.
-
-!!! note "Stub implementation"
-    This type is exported but no fields, no `predict!`, and no
-    `update!` methods are defined for it yet. The intended
-    implementation follows Ramos 2022 (WMGS time update + modified
-    Agee–Turner rank-one measurement update with `U_R^{-1}`
-    pre-decorrelation for correlated measurements).
-"""
-struct UDFactorizedFilter <: AbstractEstimator end # For low-observability lunar distance
-
-const _UDFILTER_STUB_MSG = "UDFactorizedFilter is a stub. See the type docstring for the planned implementation."
-predict!(::UDFactorizedFilter, ::AbstractClockModel, ::Real; kwargs...)           = throw(ArgumentError(_UDFILTER_STUB_MSG))
-update!(::UDFactorizedFilter, ::AbstractClockModel, ::Union{Real,AbstractVector}; kwargs...) = throw(ArgumentError(_UDFILTER_STUB_MSG))
-
-"""
-    KuramotoOscillator <: AbstractEstimator
-
-Phase-coupled oscillator network framed as a distributed estimator,
-targeted at pLEO SWaP-constrained nearest-neighbor clock
-synchronization rather than centralized Kalman estimation.
-
-!!! note "Stub implementation"
-    This type is exported but no fields, no `predict!`, and no
-    `update!` methods are defined for it yet. The intended
-    implementation realizes the Kuramoto-style phase coupling on a
-    nearest-neighbor topology suited to small spacecraft.
-"""
-struct KuramotoOscillator <: AbstractEstimator end # pLEO SWaP constrained nearest-neighbor
-
-const _KURAMOTO_STUB_MSG = "KuramotoOscillator is a stub. See the type docstring for the planned implementation."
-predict!(::KuramotoOscillator, ::AbstractClockModel, ::Real; kwargs...)           = throw(ArgumentError(_KURAMOTO_STUB_MSG))
-update!(::KuramotoOscillator, ::AbstractClockModel, ::Union{Real,AbstractVector}; kwargs...) = throw(ArgumentError(_KURAMOTO_STUB_MSG))
 
 # ── PID steering controller ──────────────────────────────────────────────────
 

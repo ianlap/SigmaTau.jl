@@ -77,11 +77,11 @@ function _stein_weights(clocks::NTuple{N, TwoStateClock}) where {N}
     return EnsembleWeights{N}(a ./ sum(a), b ./ sum(b), zero(SVector{N,Float64}))
 end
 
-# Fallback: any other AbstractClockModel subtype (RelativisticClock stub
-# or user-defined clocks) hits this and gets a deliberate ArgumentError
-# instead of a MethodError. Auto-weights are inverse-noise-coefficient
-# specific to the polynomial-clock SDE; extend `_stein_weights` for new
-# clock families before they can flow through `+` / auto-weights.
+# Fallback: any user-defined `AbstractClockModel` subtype hits this and
+# gets a deliberate ArgumentError instead of a MethodError. Auto-weights
+# are inverse-noise-coefficient specific to the polynomial-clock SDE;
+# extend `_stein_weights` for new clock families before they can flow
+# through `+` / auto-weights.
 _stein_weights(::NTuple{N, <:AbstractClockModel}) where {N} =
     throw(ArgumentError("Stein auto-weights are only defined for TwoStateClock and ThreeStateClock ensembles. Pass explicit `weights::EnsembleWeights{N}` to ClockEnsemble, or extend `_stein_weights` for the new clock type."))
 

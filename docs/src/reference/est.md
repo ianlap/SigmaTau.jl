@@ -6,7 +6,6 @@
 AbstractClockModel
 TwoStateClock
 ThreeStateClock
-RelativisticClock
 nstates
 state_transition
 process_noise
@@ -26,8 +25,6 @@ EnsembleWeights
 ```@docs
 AbstractEstimator
 StandardKalmanFilter
-UDFactorizedFilter
-KuramotoOscillator
 predict!
 update!
 prop!

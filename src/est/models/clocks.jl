@@ -10,7 +10,7 @@ and must overload `nstates`, `state_transition`, `process_noise`,
 `measurement_matrix`, and `measurement_noise`.
 
 Shipped subtypes: [`TwoStateClock`](@ref), [`ThreeStateClock`](@ref),
-and [`RelativisticClock`](@ref) (stub).
+and [`ClockEnsemble`](@ref).
 """
 abstract type AbstractClockModel end
 
@@ -49,39 +49,13 @@ Base.@kwdef struct ThreeStateClock <: AbstractClockModel
 end
 
 """
-    RelativisticClock <: AbstractClockModel
-
-Clock model intended to capture lunar-PNT relativistic corrections —
-gravitational redshift plus kinematic time-dilation under a 1PN
-proper-time differential and TCB ↔ TCL transformation.
-
-!!! note "Stub implementation"
-    This type is exported but no methods (`nstates`, `state_transition`,
-    `process_noise`, `measurement_matrix`, `measurement_noise`) are
-    defined for it yet. Calling clock-model accessors on a
-    `RelativisticClock` instance will hit a `MethodError`. The intended
-    near-term implementation follows the closed-form Keplerian path
-    described in Seyffert 2025; 2PN corrections may be neglected at
-    current cislunar accuracies.
-"""
-struct RelativisticClock <: AbstractClockModel end # Lunar PNT specifics
-
-const _RELCLOCK_STUB_MSG = "RelativisticClock is a stub. See the type docstring for the planned implementation."
-nstates(::RelativisticClock)                          = throw(ArgumentError(_RELCLOCK_STUB_MSG))
-state_transition(::RelativisticClock, ::Real)          = throw(ArgumentError(_RELCLOCK_STUB_MSG))
-state_transition(::RelativisticClock)                  = throw(ArgumentError(_RELCLOCK_STUB_MSG))
-process_noise(::RelativisticClock, ::Real)             = throw(ArgumentError(_RELCLOCK_STUB_MSG))
-process_noise(::RelativisticClock)                     = throw(ArgumentError(_RELCLOCK_STUB_MSG))
-measurement_matrix(::RelativisticClock)                = throw(ArgumentError(_RELCLOCK_STUB_MSG))
-measurement_noise(::RelativisticClock)                 = throw(ArgumentError(_RELCLOCK_STUB_MSG))
-
-"""
     nstates(model::AbstractClockModel) → Int
 
 Return the dimension of the state vector for `model`. Used by
 [`steer_to_correction`](@ref) to size the steering `SVector`. Defined
 for [`TwoStateClock`](@ref) (returns `2`) and [`ThreeStateClock`](@ref)
-(returns `3`); not defined for the [`RelativisticClock`](@ref) stub.
+(returns `3`); [`ClockEnsemble`](@ref) overloads it to return
+`N · nstates(member)`.
 """
 nstates(::TwoStateClock) = 2
 nstates(::ThreeStateClock) = 3
