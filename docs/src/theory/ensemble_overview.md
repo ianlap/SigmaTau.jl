@@ -10,9 +10,8 @@ discrete-time [Kalman filter](kalman.md).
 
 This page collects the time-domain models in one place: the
 deterministic polynomial skeleton, the two- and three-state SDEs that
-generalise it, the closed-form discretisation `(Φ, Q)`, and two
-non-stationary phenomena — frequency-jump detection and deterministic
-clock-error jumps — that sit alongside the stationary noise model.
+generalise it, and the closed-form discretisation `(Φ, Q)` consumed by
+the Kalman recursion.
 
 ## Polynomial clock model
 
@@ -157,12 +156,6 @@ freshly commissioned cesium clocks; middle-life clocks showed none
 over a one-year window
 [Tryon & Jones 1983](@cite tryon-1983-cesium-parameter-estimation).
 
-The three-state SDE can be augmented with deterministic-time
-Heaviside-step terms in each state to capture phase, frequency, or
-drift jumps observed in GNSS space clocks (see
-[Clock error jumps](#clock-error-jumps) below)
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps).
-
 In SigmaTau the three-state SDE corresponds to
 [`ThreeStateClock`](@ref).
 
@@ -275,135 +268,20 @@ When `Φ`, `Q`, and `R` are block-diagonal in a multi-clock ensemble,
 per-clock 2×2 inversions and cost is linear in clock count
 [Breakiron 2001](@cite breakiron-2001-kalman-timescales). When `Q` is
 unknown a priori it can be calibrated from observed Allan- or
-Hadamard-deviation slopes, or estimated online via the Autocovariance
-Least-Squares (ALS) framework — see
-[Generalized ALS noise tuning](kalman.md#generalized-als-noise-tuning)
-on the Kalman page
-[Åkesson et al. 2008](@cite akesson-2008-generalized-als),
-[Liu et al. 2024](@cite liu-2024-adaptive-kf-rubidium).
+Hadamard-deviation slopes.
 
 In SigmaTau, `Q` is built by the [`process_noise`](@ref) hook on
 each `AbstractClockModel`.
 
-## Frequency jump detection
-
-Frequency-jump detection scans a clock's fractional-frequency
-residuals — after outlier and deterministic-drift removal — for step
-changes in the local mean, complementing the dynamic Allan deviation
-as a non-stationarity diagnostic
-[Riley 2008](@cite riley-2008-frequency-jump-detection). The Stable32
-toolbox documents three time-domain methods: block-average (BLKAVG),
-sequential-average (SEQAVG, an adaptation of Rodionov's STARS), and
-cumulative-sum (CUSUM)
-[Riley 2008](@cite riley-2008-frequency-jump-detection).
-
-The CUSUM running sum of mean-removed frequency residuals is
-
-```math
-S_i \;=\; S_{i-1} + (y_i - \bar{y}),
-```
-
-with a slope change of `S_i` marking a jump
-[Riley 2008](@cite riley-2008-frequency-jump-detection). The
-estimated jump magnitude from a CUSUM extremum `M` at point `P` over
-`N` total points is
-
-```math
-\Delta y_{\text{jump}} \;=\; \frac{M}{P-1} + \frac{M}{N-P}.
-```
-
-BLKAVG declares a jump when the absolute difference of two
-non-overlapping window means exceeds either an absolute
-fractional-frequency limit or a sigma-factor times `σ_y` at an
-averaging factor matching the window length; default Stable32
-parameters are window length `max(N_pts/10, 5)`, zero offset, and
-threshold `3 σ_y` at the corresponding averaging factor
-[Riley 2008](@cite riley-2008-frequency-jump-detection). SEQAVG
-reports a jump at the start of its averaging window and is therefore
-biased in location; the bias is reduced by combining forward and
-reversed-record SEQAVG estimates as `J = (F + (N − R))/2`
-[Riley 2008](@cite riley-2008-frequency-jump-detection).
-
-Significance is assessed against an absolute fractional-frequency
-limit or a sigma-multiple of `σ_y(τ)` at the detection-window length,
-in preference to a Student's-t test which is judged too sensitive for
-clock noise and produces excessive false alarms on white-FM data
-[Riley 2008](@cite riley-2008-frequency-jump-detection). AR(1)
-prewhitening using the lag-1 autocorrelation `ρ₁` distinguishes
-genuine jumps from apparent jumps caused by lurches in divergent
-(flicker, random-walk) noise
-[Riley 2008](@cite riley-2008-frequency-jump-detection),
-[Riley 2004](@cite riley-2004-lag1-acf). The Allan deviation of a
-clock record containing a jump is not strongly affected at short `τ`
-but flattens and turns up at longer `τ`; that upturn is itself a clue
-[Riley 2008](@cite riley-2008-frequency-jump-detection). The
-confidence of a CUSUM jump can be estimated by Monte-Carlo
-permutation, comparing the observed CUSUM range to a null distribution
-built from random reorderings of the data
-[Riley 2008](@cite riley-2008-frequency-jump-detection).
-
-## Clock error jumps
-
-Clock-error jumps are anomalous deterministic-time changes in the
-phase, frequency, or frequency-drift state of an atomic clock that
-lie outside the stationary stochastic-clock model and have been
-observed in GNSS space clocks with potential safety-of-life
-consequences
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps). The
-Zucca–Tavella jump model extends the canonical three-state SDE by
-adding instantaneous Heaviside-step terms `a_i dH(t − θ_i)` to each
-state equation:
-
-```math
-\begin{aligned}
-dX_1 &= (X_2 + \mu_1)\,dt + \sigma_1\,dW_1 + a_1\,dH(t - \theta_1), \\
-dX_2 &= (X_3 + \mu_2)\,dt + \sigma_2\,dW_2 + a_2\,dH(t - \theta_2), \\
-dX_3 &= \mu_3\,dt + \sigma_3\,dW_3 + a_3\,dH(t - \theta_3).
-\end{aligned}
-```
-
-Three anomaly families are addressed: deterministic-time instantaneous
-jumps in phase, frequency, or drift; equal-and-opposite frequency
-excursions over a finite interval; and step changes in the noise
-variance during a finite interval
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps).
-
-A phase jump appears in the discrete iterative form as a Kronecker
-delta only in its own state component; the covariance matrix `Q` is
-unchanged because the jumps are deterministic
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps). A pair of
-equal-and-opposite frequency jumps at `θ₀` and `θ₁` produces a
-linear-in-`t` phase ramp during `[θ₀, θ₁]` and an accumulated phase
-offset `a · H(t − θ₁)` afterward
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps). A
-variance-increase anomaly is modelled by swapping the innovation
-covariance `Q → Q′` during the affected interval while leaving the
-mean trajectory unchanged
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps). Cholesky
-factorisation `Q = A Aᵀ` gives an explicit lower-triangular `A` so
-that `J_k = A Z` with `Z ∼ N(0, I)` — exact innovation generation in
-three dimensions for jump-augmented simulation
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps).
-
-After a frequency jump at `θ`, the time-deviation prediction error
-grows linearly in `(t − θ)`; the worst case is a jump at `θ = 0`. For
-a Galileo RAFS with `σ₁ = 5 × 10⁻¹²` and a 6000 s re-synchronisation
-interval, the no-anomaly time-deviation 95% confidence interval is
-`±1.96 σ₁ √t ≈ ±0.8 ns`; a `10⁻¹²` frequency jump at `θ = 100 s`
-drives the mean to about 5.9 ns, far exceeding the noise budget
-[Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps).
-
 ## See also
 
-- [Theory: Kalman Filter and Variants](kalman.md) — discrete-time
-  estimator that consumes `Φ` and `Q`.
+- [Theory: Kalman Filter](kalman.md) — discrete-time estimator that
+  consumes `Φ` and `Q`.
+- [Theory: Clock Ensembles](clock_ensembles.md) — joint stacked-state
+  Kalman model built on top of the per-clock SDE.
 - [Theory: Clock Steering with PID Controllers](steering.md) —
   closes the loop between the estimator and the oscillator's
   frequency control input.
-- [Theory: Relativistic Clock Models](relativistic_clocks.md) —
-  proper-time corrections for cislunar PNT.
-- [Theory: Time-Scale Algorithms and Oscillator Networks](ensembles_and_oscillator_networks.md) —
-  combines multiple clock states into an ensemble timescale.
 - [API: `SigmaTau.Est`](../reference/est.md) — exported types and
   functions.
 
@@ -424,10 +302,5 @@ drives the mean to about 5.9 ns, far exceeding the noise budget
   maser-ensemble Kalman filter.
 - [Zucca & Tavella 2005](@cite zucca-2005-clock-model-allan) — the
   canonical three-state clock SDE and the integrated `Q` matrix.
-- [Zucca & Tavella 2015](@cite zucca-2015-clock-error-jumps) — jump
-  augmentation of the three-state SDE.
-- [Riley 2004](@cite riley-2004-lag1-acf) — lag-1 ACF for noise ID.
-- [Riley 2008](@cite riley-2008-frequency-jump-detection) — Stable32
-  jump-detection algorithms.
 - [Yan et al. 2023](@cite yan-2023-structured-kf-timescale) —
   homogeneous-ensemble factorisation `F = A ⊗ I_m`.
