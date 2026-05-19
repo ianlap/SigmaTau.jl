@@ -36,11 +36,11 @@ end
 end
 
 @testset "Est public API re-exported" begin
-    for sym in (:AbstractClockModel, :TwoStateClock, :ThreeStateClock, :RelativisticClock,
+    for sym in (:AbstractClockModel, :TwoStateClock, :ThreeStateClock,
+                :ClockEnsemble, :EnsembleWeights,
                 :nstates, :state_transition, :process_noise,
                 :measurement_matrix, :measurement_noise,
                 :AbstractEstimator, :StandardKalmanFilter,
-                :UDFactorizedFilter, :KuramotoOscillator,
                 :predict!, :update!, :prop!,
                 :PIDController, :step!, :steer_to_correction)
         @test isdefined(@__MODULE__, sym)

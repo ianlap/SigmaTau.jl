@@ -97,10 +97,10 @@ module Est
     include("est/models/ensemble.jl")
     include("est/estimators/filters.jl")
 
-    export AbstractClockModel, TwoStateClock, ThreeStateClock, RelativisticClock
+    export AbstractClockModel, TwoStateClock, ThreeStateClock
     export ClockEnsemble, EnsembleWeights
     export nstates, state_transition, process_noise, measurement_matrix, measurement_noise
-    export AbstractEstimator, StandardKalmanFilter, UDFactorizedFilter, KuramotoOscillator
+    export AbstractEstimator, StandardKalmanFilter
     export predict!, update!, prop!
     export PIDController, step!, steer_to_correction
 end
