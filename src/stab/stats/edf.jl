@@ -93,51 +93,68 @@ function _calc_edf_core(alpha::Int, d::Int, m::Int, F::Int, S::Int, N::Int)
     M = 1 + floor(Int, S * (N - L) / m)
     J = min(M, (d + 1) * S)
 
-    sz0 = Float64(_compute_sz(0.0, F, alpha, d))
-    bsum = sz0^2
+    inv_F   = 1.0 / Float64(F)
+    inv_S   = 1.0 / Float64(S)
+    inv_M_f = 1.0 / Float64(M)
+
+    sz0 = _compute_sz(0.0, F, alpha, d, inv_F)
+    bsum = sz0 * sz0
     for j in 1:(J-1)
-        szj = _compute_sz(j/S, F, alpha, d)
-        bsum += 2 * (1 - j/M) * szj^2
+        szj = _compute_sz(j * inv_S, F, alpha, d, inv_F)
+        bsum += 2.0 * (1.0 - j * inv_M_f) * szj * szj
     end
     if J <= M
-        szJ = _compute_sz(J/S, F, alpha, d)
-        bsum += (1 - J/M) * szJ^2
+        szJ = _compute_sz(J * inv_S, F, alpha, d, inv_F)
+        bsum += (1.0 - J * inv_M_f) * szJ * szJ
     end
 
     bsum > 0 || return NaN
-    return M * sz0^2 / bsum
+    return M * sz0 * sz0 / bsum
 end
 
-function _compute_sw(t::Real, alpha::Int)
+@inline function _compute_sw(t::Float64, alpha::Int)
     ta = abs(t)
     if alpha == 2;  return -ta
-    elseif alpha == 1;  return t^2 * log(max(ta, eps()))
-    elseif alpha == 0;  return ta^3
-    elseif alpha == -1; return -t^4 * log(max(ta, eps()))
-    elseif alpha == -2; return -ta^5
-    elseif alpha == -3; return  t^6 * log(max(ta, eps()))
-    elseif alpha == -4; return  ta^7
+    elseif alpha == 1;  return t*t * log(max(ta, eps()))
+    elseif alpha == 0;  return ta*ta*ta
+    elseif alpha == -1; return -(t*t)*(t*t) * log(max(ta, eps()))
+    elseif alpha == -2; return -(ta*ta*ta*ta*ta)
+    elseif alpha == -3; return  (t*t)*(t*t)*(t*t) * log(max(ta, eps()))
+    elseif alpha == -4; return  (ta*ta*ta*ta)*(ta*ta*ta)
     else; return NaN
     end
 end
 
-function _compute_sx(t::Real, F::Int, alpha::Int)
+@inline function _compute_sx(t::Float64, F::Int, alpha::Int, inv_F::Float64)
     if F > 100 && alpha <= 0
         return _compute_sw(t, alpha + 2)
     end
-    return F^2 * (2 * _compute_sw(t, alpha) -
-                  _compute_sw(t - 1/F, alpha) -
-                  _compute_sw(t + 1/F, alpha))
+    return Float64(F*F) * (2.0 * _compute_sw(t, alpha) -
+                           _compute_sw(t - inv_F, alpha) -
+                           _compute_sw(t + inv_F, alpha))
 end
 
-function _compute_sz(t::Real, F::Int, alpha::Int, d::Int)
-    sx(u) = _compute_sx(u, F, alpha)
+@inline function _compute_sz(t::Float64, F::Int, alpha::Int, d::Int, inv_F::Float64)
+    # Inline sx calls (the previous `sx(u) = _compute_sx(...)` closure
+    # interfered with Julia inlining the body inside this branchy hot loop).
     if d == 1
-        return 2sx(t) - sx(t-1) - sx(t+1)
+        return 2.0*_compute_sx(t,     F, alpha, inv_F) -
+                   _compute_sx(t-1.0, F, alpha, inv_F) -
+                   _compute_sx(t+1.0, F, alpha, inv_F)
     elseif d == 2
-        return 6sx(t) - 4sx(t-1) - 4sx(t+1) + sx(t-2) + sx(t+2)
+        return 6.0*_compute_sx(t,     F, alpha, inv_F) -
+               4.0*_compute_sx(t-1.0, F, alpha, inv_F) -
+               4.0*_compute_sx(t+1.0, F, alpha, inv_F) +
+                   _compute_sx(t-2.0, F, alpha, inv_F) +
+                   _compute_sx(t+2.0, F, alpha, inv_F)
     elseif d == 3
-        return 20sx(t) - 15sx(t-1) - 15sx(t+1) + 6sx(t-2) + 6sx(t+2) - sx(t-3) - sx(t+3)
+        return 20.0*_compute_sx(t,     F, alpha, inv_F) -
+               15.0*_compute_sx(t-1.0, F, alpha, inv_F) -
+               15.0*_compute_sx(t+1.0, F, alpha, inv_F) +
+                6.0*_compute_sx(t-2.0, F, alpha, inv_F) +
+                6.0*_compute_sx(t+2.0, F, alpha, inv_F) -
+                    _compute_sx(t-3.0, F, alpha, inv_F) -
+                    _compute_sx(t+3.0, F, alpha, inv_F)
     else
         return NaN
     end
