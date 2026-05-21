@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "N": 406763,
+    "file": "6krb25apr.txt",
+    "julia_version": "1.12.6",
+    "m_max": 512,
+    "m_min": 1,
+    "n_m": 10,
+    "tau0_s": 1.0000002337619662,
+    "threads": 12
+  },
+  "results": [
+    {
+      "bytes": 496,
+      "gctime_s": 0.0,
+      "kernel": "adev",
+      "time_s": 0.000369401
+    },
+    {
+      "bytes": 11742696,
+      "gctime_s": 0.0,
+      "kernel": "mdev",
+      "time_s": 0.000766703
+    },
+    {
+      "bytes": 11743112,
+      "gctime_s": 0.0,
+      "kernel": "tdev",
+      "time_s": 0.000709102
+    },
+    {
+      "bytes": 496,
+      "gctime_s": 0.0,
+      "kernel": "hdev",
+      "time_s": 0.000363032
+    },
+    {
+      "bytes": 11742696,
+      "gctime_s": 0.0,
+      "kernel": "mhdev",
+      "time_s": 0.000862623
+    },
+    {
+      "bytes": 11743112,
+      "gctime_s": 0.0,
+      "kernel": "ldev",
+      "time_s": 0.000845663
+    },
+    {
+      "bytes": 58600744,
+      "gctime_s": 0.000446602,
+      "kernel": "totdev",
+      "time_s": 0.00501183
+    },
+    {
+      "bytes": 49334592,
+      "gctime_s": 0.000474172,
+      "kernel": "mtotdev",
+      "time_s": 0.46944589
+    },
+    {
+      "bytes": 52583496,
+      "gctime_s": 0.000444732,
+      "kernel": "htotdev",
+      "time_s": 0.455426606
+    },
+    {
+      "bytes": 796400,
+      "gctime_s": 0.0,
+      "kernel": "mhtotdev",
+      "time_s": 0.206525062
+    }
+  ]
+}

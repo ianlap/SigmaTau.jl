@@ -1,0 +1,35 @@
+name = "SigmaTau"
+uuid = "c34468cf-613a-4a89-b990-738073237867"
+authors = ["Ian Lapinski <ianlapinski01@gmail.com>"]
+version = "0.3.0"
+
+[deps]
+AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[weakdeps]
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+
+[extensions]
+SigmaTauRecipesBaseExt = "RecipesBase"
+
+[compat]
+AbstractFFTs = "1"
+Distributions = "0.25.125"
+DocStringExtensions = "0.9"
+FFTW = "1"
+RecipesBase = "1"
+StaticArrays = "1"
+julia = "1.11"
+
+[extras]
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Random", "Test"]
