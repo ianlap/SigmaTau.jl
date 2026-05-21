@@ -36,11 +36,10 @@ end
 end
 
 @testset "Est public API re-exported" begin
-    for sym in (:AbstractClockModel, :TwoStateClock, :ThreeStateClock, :RelativisticClock,
+    for sym in (:AbstractClockModel, :TwoStateClock, :ThreeStateClock,
                 :nstates, :state_transition, :process_noise,
                 :measurement_matrix, :measurement_noise,
-                :AbstractEstimator, :StandardKalmanFilter,
-                :UDFactorizedFilter, :KuramotoOscillator,
+                :KalmanFilter,
                 :predict!, :update!, :prop!,
                 :PIDController, :step!, :steer_to_correction)
         @test isdefined(@__MODULE__, sym)
@@ -64,7 +63,7 @@ end
 
 @testset "End-to-end Est call works under bare using" begin
     m  = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=0.0)
-    est = StandardKalmanFilter([0.0, 0.0, 0.0], Matrix(1e-18 * I(3)))
+    est = KalmanFilter([0.0, 0.0, 0.0], Matrix(1e-18 * I(3)))
     update!(est, m, 1e-9)
     prop!(est, m, 5.0)
     @test est.k == 1

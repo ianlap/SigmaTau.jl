@@ -14,7 +14,7 @@ Frequency-stability analysis and clock-ensemble estimation in Julia.
 | Submodule | Purpose |
 |---|---|
 | `SigmaTau.Stab` | Stability deviations (Allan / Hadamard / Total families), noise identification, equivalent degrees of freedom, χ² confidence intervals. |
-| `SigmaTau.Est`  | Clock state-space models (`TwoStateClock`, `ThreeStateClock`, `RelativisticClock`) and Kalman filtering for atomic-clock ensembles. AD-friendly out-of-place math via `StaticArrays`. |
+| `SigmaTau.Est`  | Clock state-space models (`TwoStateClock`, `ThreeStateClock`) and Kalman filtering for atomic-clock work. AD-friendly out-of-place math via `StaticArrays`. |
 
 All public symbols are re-exported from the umbrella, so casual code
 (`using SigmaTau; adev(data, [1, 2, 4])`) is unchanged. Power-user code
@@ -91,16 +91,13 @@ plot(adev(data, [1, 2, 4, 8, 16, 32, 64]))
 using SigmaTau
 
 model = ThreeStateClock(tau=1.0, q0=1e-22, q1=1e-23, q2=1e-33, q3=1e-43)
-est   = StandardKalmanFilter([0.0, 0.0, 0.0], 1e-12 * I(3))
+est   = KalmanFilter([0.0, 0.0, 0.0], 1e-12 * I(3))
 
 for z in measurements
     predict!(est, model, model.tau)
     update!(est, model, z)
 end
 ```
-
-Pass `legacy_compat=true` to the constructor to reproduce the MATLAB-era
-`safe_sqrt` diagonal clamping bit-for-bit.
 
 ## Running tests
 

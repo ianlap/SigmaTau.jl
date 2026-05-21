@@ -11,7 +11,7 @@
 # 2. **HTDEV** — Hadamard time deviation. Same idea as TDEV, but
 #    built from the third difference instead of the second, so it
 #    rejects constant frequency drift.
-# 3. **Kalman RMS prediction error** — run a `StandardKalmanFilter`
+# 3. **Kalman RMS prediction error** — run a `KalmanFilter`
 #    over the observed phase data to maturity, then at each mature
 #    epoch project the converged state forward by every horizon h
 #    and compare to the actual phase. The RMS prediction error vs
@@ -115,7 +115,7 @@ result_htdev = htdev(data, m_values; calc_ci = false)
 # few thousand samples. Capture the per-step phase / freq / drift
 # estimates for the prediction analysis below.
 
-est = StandardKalmanFilter([phase_meas[1], 0.0, 0.0],
+est = KalmanFilter([phase_meas[1], 0.0, 0.0],
                            Matrix(1.0e-12 * I(3)))
 
 phase_est = zeros(N)
@@ -192,7 +192,7 @@ kf_rms = sqrt.(err_var ./ err_n)
 P_mature = Matrix(est.P)         # converged P at the end of the filtering loop
 kf_1sigma = zeros(length(m_values))
 for (i, h) in enumerate(m_values)
-    side = StandardKalmanFilter(zeros(3), copy(P_mature))
+    side = KalmanFilter(zeros(3), copy(P_mature))
     prop!(side, clock, h * tau0)
     kf_1sigma[i] = sqrt(side.P[1, 1])
 end
