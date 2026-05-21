@@ -79,7 +79,8 @@ remains unchanged.
 | `_noise_id_b1rn` | same | ✅ | B1-ratio with R(n) WPM/FLPM disambiguation. `_simple_mdev` now uses the same single-buffer prefix-sum as `_mdev_core`. |
 | `NEFF_RELIABLE = 30` | same | ✅ | Per legacy GEMINI.md §2 mandate; boundary test added |
 | Preprocessing | same | ✅ | 5σ outlier rejection (two-pass count-then-fill; no boolean mask). |
-| Power-law synthesis | [src/stab/noise/synth.jl](src/stab/noise/synth.jl) | ✅ | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2} |
+| Power-law synthesis (internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`) | [src/stab/noise/synth.jl](src/stab/noise/synth.jl) | ✅ | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2} |
+| `noise_gen` (public, calibrated) | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | ✅ | Composite α-mixture; input mode `sigma1[α]=σ_y(τ₀)` or `h[α]=h_α`; returns `PhaseData` or `FrequencyData` |
 
 #### Statistics (EDF / CI / Bias)
 
@@ -235,7 +236,7 @@ src/
 ├── types/{abstract,phase_data,frequency_data,stability_result}.jl
 ├── stab/
 │   ├── core/{allan,hadamard,total,mtie,pdev}.jl
-│   ├── noise/{lag1,synth}.jl
+│   ├── noise/{lag1,synth,gen}.jl
 │   ├── stats/edf.jl
 │   ├── api/{allan,hadamard,total,mtie,pdev}.jl
 │   └── utils.jl                         (FrequencyData → PhaseData helper)

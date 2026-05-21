@@ -12,6 +12,30 @@
 using AbstractFFTs
 
 """
+    _gen_powerlaw_y(alpha, N) → Vector{Float64}
+
+Internal primitive. Synthesize an N-sample fractional-frequency vector `y`
+with power spectral density ∝ `f^alpha`. The DC component is zeroed so the
+output has zero mean; the absolute amplitude is whatever the f^(α/2) shaper
+happens to produce on unit-variance white noise. Callers that need a
+calibrated level should rescale (e.g. via [`noise_gen`](@ref)).
+"""
+function _gen_powerlaw_y(alpha::Real, N::Int)
+    # White Gaussian noise → fractional-frequency series shaped to f^alpha.
+    w = randn(N)
+    W = fft(w)
+
+    # Symmetric FFT-bin frequency magnitude. Bin 0 (DC) gets a placeholder
+    # so the f^(alpha/2) term is finite; we zero the DC bin afterwards.
+    f = abs.(AbstractFFTs.fftfreq(N, 1.0))
+    f[1] = 1.0
+
+    Y    = W .* f .^ (alpha / 2)
+    Y[1] = 0.0
+    return real.(ifft(Y))
+end
+
+"""
     _gen_powerlaw_phase(alpha, N; tau0=1.0) → Vector{Float64}
 
 Synthesize an N-sample phase residual vector whose fractional-frequency
@@ -31,19 +55,6 @@ zero mean. Calls into `AbstractFFTs.fft`/`ifft` — caller must have an FFT
 backend loaded (e.g. `using FFTW`).
 """
 function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0)
-    # White Gaussian noise → fractional-frequency series shaped to f^alpha.
-    w = randn(N)
-    W = fft(w)
-
-    # Symmetric FFT-bin frequency magnitude. Bin 0 (DC) gets a placeholder
-    # so the f^(alpha/2) term is finite; we zero the DC bin afterwards.
-    f = abs.(AbstractFFTs.fftfreq(N, 1.0))
-    f[1] = 1.0
-
-    Y    = W .* f .^ (alpha / 2)
-    Y[1] = 0.0
-    y    = real.(ifft(Y))
-
     # Phase: x[k] = τ₀ · Σⱼ₌₁ᵏ y[j]
-    return cumsum(y) .* tau0
+    return cumsum(_gen_powerlaw_y(alpha, N)) .* tau0
 end
