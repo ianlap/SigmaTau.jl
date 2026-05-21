@@ -56,7 +56,12 @@ write `using SigmaTau` and get everything.
   (slated for removal in a future release).
   New deviations need a `PhaseData` *and* `FrequencyData` method here.
 - `src/stab/stats/edf.jl` — EDF/CI math (chi-squared, Greenhall–Riley fallbacks).
-- `src/stab/noise/` — noise identification (`lag1.jl`, `synth.jl`).
+- `src/stab/noise/` — noise identification + synthesis.
+  - `lag1.jl` — lag-1 ACF / B1 / R(n) noise-type ID.
+  - `synth.jl` — internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`
+    spectral shaper used by the test suite.
+  - `gen.jl` — public `noise_gen(::Type{PhaseData} | ::Type{FrequencyData},
+    N, tau0; sigma1=…, h=…)` calibrated power-law generator.
 - `src/stab/utils.jl` — shared helpers including `_freq_to_phase`.
 - `DEFAULT_CONFIDENCE = 0.683` is defined at the top of the `Stab` submodule
   in `src/SigmaTau.jl` (not in `utils.jl`); it is the default `confidence`

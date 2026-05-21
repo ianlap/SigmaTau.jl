@@ -1131,4 +1131,108 @@ const LK = LegacyKernels
             end
         end
     end
+
+    @testset "noise_gen — calibrated power-law noise generator" begin
+        @testset "single-α σ_y(τ=τ₀) target hit exactly per realization" begin
+            Random.seed!(42)
+            N    = 4096
+            tau0 = 1.0
+            for (α, σ) in ((-2, 1e-13), (-1, 5e-13), (0, 1e-12),
+                           (1, 2e-12), (2, 3e-12))
+                p = noise_gen(PhaseData, N, tau0; sigma1 = Dict(α => σ))
+                @test p isa PhaseData
+                @test length(p.x) == N
+                σ_emp = _adev_core(p.x, [1], tau0)[1]
+                @test isapprox(σ_emp, σ; rtol = 1e-10)
+            end
+        end
+
+        @testset "FrequencyData path matches PhaseData via cumsum" begin
+            Random.seed!(7)
+            f = noise_gen(FrequencyData, 1024, 1.0; sigma1 = Dict(0 => 1e-12))
+            Random.seed!(7)
+            p = noise_gen(PhaseData, 1024, 1.0; sigma1 = Dict(0 => 1e-12))
+            @test f isa FrequencyData
+            @test length(f.y) == 1024
+            @test cumsum(f.y) .* f.tau0 ≈ p.x
+        end
+
+        @testset "composite mixture: independent components sum in quadrature" begin
+            # Two comparable-amplitude noises (WFM + FFM) at the same σ_y(τ₀).
+            # Single-α calibration pegs each component to exactly σ at τ=τ₀;
+            # being statistically independent, their sum has variance ≈ 2σ²
+            # at τ=τ₀ (the cross-term is zero in expectation; sample
+            # covariance fluctuates around zero at scale 1/√N).
+            Random.seed!(99)
+            σ = 1e-12
+            N = 8192
+            p = noise_gen(PhaseData, N, 1.0; sigma1 = Dict(0 => σ, -1 => σ))
+            @test p isa PhaseData
+            @test length(p.x) == N
+            σ_emp = _adev_core(p.x, [1], 1.0)[1]
+            # Allow ±20% — the independent-components cross-term has a
+            # sample-size-limited spread; well within tolerance at N=8192.
+            @test isapprox(σ_emp, sqrt(2) * σ; rtol = 0.2)
+        end
+
+        @testset "h-mode hits requested σ_y(τ=τ₀) through analytic conversion" begin
+            Random.seed!(5)
+            tau0 = 1.0
+            # WFM: σ²_y(τ₀) = h_0 / (2 τ₀)  ⇒  h_0 = 2 τ₀ σ²
+            target_σ = 2e-12
+            h0       = 2 * tau0 * target_σ^2
+            p = noise_gen(PhaseData, 4096, tau0; h = Dict(0 => h0))
+            σ_emp = _adev_core(p.x, [1], tau0)[1]
+            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
+        end
+
+        @testset "h-mode FFM: σ² = 2 ln(2) h_{-1}" begin
+            Random.seed!(11)
+            target_σ = 3e-13
+            h_m1     = target_σ^2 / (2 * log(2))
+            p = noise_gen(PhaseData, 4096, 1.0; h = Dict(-1 => h_m1))
+            σ_emp = _adev_core(p.x, [1], 1.0)[1]
+            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
+        end
+
+        @testset "h-mode RWFM at τ₀ ≠ 1: σ² = (2π²/3) h_{-2} τ₀" begin
+            Random.seed!(13)
+            tau0     = 0.5
+            target_σ = 4e-14
+            h_m2     = 3 * target_σ^2 / (2 * π^2 * tau0)
+            p = noise_gen(PhaseData, 4096, tau0; h = Dict(-2 => h_m2))
+            σ_emp = _adev_core(p.x, [1], tau0)[1]
+            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
+        end
+
+        @testset "determinism: seed → same output" begin
+            Random.seed!(123)
+            a = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12))
+            Random.seed!(123)
+            b = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12))
+            @test a.x == b.x
+        end
+
+        @testset "argument validation" begin
+            @test_throws ArgumentError noise_gen(PhaseData, 4096, 1.0)
+            @test_throws ArgumentError noise_gen(PhaseData, 4096, 1.0;
+                sigma1 = Dict(0 => 1e-12), h = Dict(0 => 1e-24))
+            @test_throws ArgumentError noise_gen(PhaseData, 3, 1.0;
+                sigma1 = Dict(0 => 1e-12))
+            @test_throws ArgumentError noise_gen(PhaseData, 256, -1.0;
+                sigma1 = Dict(0 => 1e-12))
+            @test_throws ArgumentError noise_gen(PhaseData, 256, 1.0;
+                sigma1 = Dict(3 => 1e-12))
+            @test_throws ArgumentError noise_gen(PhaseData, 256, 1.0;
+                sigma1 = Dict(0 => -1e-12))
+            @test_throws ArgumentError noise_gen(PhaseData, 256, 1.0;
+                h = Dict(0 => -1e-24))
+        end
+
+        @testset "zero amplitude → zero-vector contribution" begin
+            Random.seed!(0)
+            p = noise_gen(PhaseData, 256, 1.0; sigma1 = Dict(0 => 0.0))
+            @test all(iszero, p.x)
+        end
+    end
 end
