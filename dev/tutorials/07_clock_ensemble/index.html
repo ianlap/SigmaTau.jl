@@ -91,49 +91,49 @@ end</code></pre><p>Sanity: the filter&#39;s predicted difference matches the obs
 println(&quot;\nResidual std (z − Hx̂): &quot;,
         sqrt(mean((z .- diff_est).^2)),
         &quot;    expected ≈ &quot;, sqrt(clockA.q0 + clockB.q0))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">
-Residual std (z − Hx̂): 2.81474976710656e14    expected ≈ 1.4142135623730952e-11</code></pre><h2 id="5.-Form-the-paper-clock-time-scale"><a class="docs-heading-anchor" href="#5.-Form-the-paper-clock-time-scale">5. Form the paper-clock time scale</a><a id="5.-Form-the-paper-clock-time-scale-1"></a><a class="docs-heading-anchor-permalink" href="#5.-Form-the-paper-clock-time-scale" title="Permalink"></a></h2><p>The classical Stein construction assembles a paper clock as the Stein-weighted sum of individual phase estimates:</p><p class="math-container">\[x_\mathrm{TS}(t_k) = \sum_i a_i \, \hat x_i(t_k)\]</p><p>Because the reference-clock phase is non-observable, the <em>absolute</em> value of <code>x_TS</code> is arbitrary, but its <em>increments</em> are well-defined and that&#39;s what σ_y(τ) measures.</p><pre><code class="language-julia hljs">x_TS = ensemble.weights.a[1] .* xA_est .+ ensemble.weights.a[2] .* xB_est</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4096-element Vector{Float64}:
+Residual std (z − Hx̂): 7.643962630593634e-9    expected ≈ 1.4142135623730952e-11</code></pre><h2 id="5.-Form-the-paper-clock-time-scale"><a class="docs-heading-anchor" href="#5.-Form-the-paper-clock-time-scale">5. Form the paper-clock time scale</a><a id="5.-Form-the-paper-clock-time-scale-1"></a><a class="docs-heading-anchor-permalink" href="#5.-Form-the-paper-clock-time-scale" title="Permalink"></a></h2><p>The classical Stein construction assembles a paper clock as the Stein-weighted sum of individual phase estimates:</p><p class="math-container">\[x_\mathrm{TS}(t_k) = \sum_i a_i \, \hat x_i(t_k)\]</p><p>Because the reference-clock phase is non-observable, the <em>absolute</em> value of <code>x_TS</code> is arbitrary, but its <em>increments</em> are well-defined and that&#39;s what σ_y(τ) measures.</p><pre><code class="language-julia hljs">x_TS = ensemble.weights.a[1] .* xA_est .+ ensemble.weights.a[2] .* xB_est</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4096-element Vector{Float64}:
   2.6438048527671466e-12
   2.9046973851540136e-12
   4.312193483295923e-12
   1.6573773876115707e-11
-  1.2564601815937286e-11
- -1.7273446850916076e-6
- -3.4175766377328342e-6
-  0.693024106910881
-  0.7455659492062308
-  0.7601083966764148
+  7.8573422551032e-12
+  2.779036241575044e-11
+ -4.6391251813617564e-11
+ -7.903733889828963e-11
+ -7.691552111071414e-11
+ -4.869277635039925e-5
   ⋮
-  1.816728472552421e32
-  1.824076742710961e32
-  2.4587051582015222e33
-  2.60660439373538e33
-  1.5874256805463997e33
-  1.5881385066771518e33
-  1.605610727562689e33
-  1.6913243007096272e33
-  3.419330620292918e33</code></pre><h2 id="6.-Compare-ADEV-of-the-time-scale-to-each-clock"><a class="docs-heading-anchor" href="#6.-Compare-ADEV-of-the-time-scale-to-each-clock">6. Compare ADEV of the time scale to each clock</a><a id="6.-Compare-ADEV-of-the-time-scale-to-each-clock-1"></a><a class="docs-heading-anchor-permalink" href="#6.-Compare-ADEV-of-the-time-scale-to-each-clock" title="Permalink"></a></h2><p><code>adev</code> computes the Allan deviation curve at the requested integer <code>m</code> multiples of <code>τ₀</code>. We expect:</p><ul><li>At every τ the ensemble σ_y sits at or below the better of the two individual clocks at that τ — Stein Figure 4.</li></ul><pre><code class="language-julia hljs">m_grid  = unique(round.(Int, exp10.(range(0, log10(N ÷ 4); length = 12))))
+ 71.11899574306803
+ 71.2061070338566
+ 71.2932605242408
+ 71.38045620295755
+ 71.46769472434411
+ 71.55498282844486
+ 71.6423061261492
+ 71.72967187386189
+ 71.81708047881068</code></pre><h2 id="6.-Compare-ADEV-of-the-time-scale-to-each-clock"><a class="docs-heading-anchor" href="#6.-Compare-ADEV-of-the-time-scale-to-each-clock">6. Compare ADEV of the time scale to each clock</a><a id="6.-Compare-ADEV-of-the-time-scale-to-each-clock-1"></a><a class="docs-heading-anchor-permalink" href="#6.-Compare-ADEV-of-the-time-scale-to-each-clock" title="Permalink"></a></h2><p><code>adev</code> computes the Allan deviation curve at the requested integer <code>m</code> multiples of <code>τ₀</code>. We expect:</p><ul><li>At every τ the ensemble σ_y sits at or below the better of the two individual clocks at that τ — Stein Figure 4.</li></ul><pre><code class="language-julia hljs">m_grid  = unique(round.(Int, exp10.(range(0, log10(N ÷ 4); length = 12))))
 adev_A  = adev(PhaseData(xA,   τ), m_grid; calc_ci=false)
 adev_B  = adev(PhaseData(xB,   τ), m_grid; calc_ci=false)
-adev_TS = adev(PhaseData(x_TS, τ), m_grid; calc_ci=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">StabilityResult(:adev, [1.0, 2.0, 4.0, 7.0, 12.0, 23.0, 44.0, 82.0, 155.0, 290.0, 545.0, 1024.0], [5.777603338819963e31, 4.835379383199182e31, 2.399404804907859e31, 1.0496925829624078e31, 5.110400816183024e30, 3.8462146684028106e30, 2.5586513254349644e30, 1.03563117692286e30, 4.699987007391613e29, 2.9826407800648045e29, 1.7164548816302486e29, 1.1067727295395578e29], Symbol[], Float64[], Float64[], Float64[])</code></pre><p>A few sample points for the prose record (full curves in the plot below):</p><pre><code class="language-julia hljs">for (i, τi) in enumerate(adev_A.tau)
+adev_TS = adev(PhaseData(x_TS, τ), m_grid; calc_ci=false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">StabilityResult(:adev, [1.0, 2.0, 4.0, 7.0, 12.0, 23.0, 44.0, 82.0, 155.0, 290.0, 545.0, 1024.0], [1.266779387936411e6, 1.2658147184115704e6, 736039.1989821175, 421667.2851159548, 246314.21747264636, 128860.91721704594, 67726.46001446614, 36680.08424849685, 19769.18789490691, 10968.681444406744, 5762.2863453025375, 1661.6796083906268], Symbol[], Float64[], Float64[], Float64[])</code></pre><p>A few sample points for the prose record (full curves in the plot below):</p><pre><code class="language-julia hljs">for (i, τi) in enumerate(adev_A.tau)
     println(&quot;τ = &quot;, τi,
             &quot;    σ_y(A) = &quot;,  adev_A.dev[i],
             &quot;    σ_y(B) = &quot;,  adev_B.dev[i],
             &quot;    σ_y(TS) = &quot;, adev_TS.dev[i])
-end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">τ = 1.0    σ_y(A) = 1.0119791014242391e-11    σ_y(B) = 4.604649237039699e-12    σ_y(TS) = 5.777603338819963e31
-τ = 2.0    σ_y(A) = 7.2188281887154955e-12    σ_y(B) = 3.2781410378142876e-12    σ_y(TS) = 4.835379383199182e31
-τ = 4.0    σ_y(A) = 5.077832451623899e-12    σ_y(B) = 2.293828669221572e-12    σ_y(TS) = 2.399404804907859e31
-τ = 7.0    σ_y(A) = 3.8375177659182095e-12    σ_y(B) = 1.7409793513416162e-12    σ_y(TS) = 1.0496925829624078e31
-τ = 12.0    σ_y(A) = 3.0081826030826664e-12    σ_y(B) = 1.3305274245715672e-12    σ_y(TS) = 5.110400816183024e30
-τ = 23.0    σ_y(A) = 2.2842750844891236e-12    σ_y(B) = 9.458036842790675e-13    σ_y(TS) = 3.8462146684028106e30
-τ = 44.0    σ_y(A) = 1.7095234555546258e-12    σ_y(B) = 6.47386565150356e-13    σ_y(TS) = 2.5586513254349644e30
-τ = 82.0    σ_y(A) = 1.2583656346051663e-12    σ_y(B) = 4.777753466207797e-13    σ_y(TS) = 1.03563117692286e30
-τ = 155.0    σ_y(A) = 9.021603348336553e-13    σ_y(B) = 3.5037628603727805e-13    σ_y(TS) = 4.699987007391613e29
-τ = 290.0    σ_y(A) = 4.979667315119928e-13    σ_y(B) = 2.6134917374728123e-13    σ_y(TS) = 2.9826407800648045e29
-τ = 545.0    σ_y(A) = 2.74734759004589e-13    σ_y(B) = 1.9675698740084994e-13    σ_y(TS) = 1.7164548816302486e29
-τ = 1024.0    σ_y(A) = 2.496871474134834e-13    σ_y(B) = 1.7828702872104984e-13    σ_y(TS) = 1.1067727295395578e29</code></pre><h2 id="7.-Plot-(Stein-Figure-4-reproduction)"><a class="docs-heading-anchor" href="#7.-Plot-(Stein-Figure-4-reproduction)">7. Plot (Stein Figure 4 reproduction)</a><a id="7.-Plot-(Stein-Figure-4-reproduction)-1"></a><a class="docs-heading-anchor-permalink" href="#7.-Plot-(Stein-Figure-4-reproduction)" title="Permalink"></a></h2><p>When run interactively, the recipe in <code>SigmaTauRecipesBaseExt</code> renders each <code>StabilityResult</code> as a τ-vs-σ_y log-log curve.</p><pre><code class="language-julia hljs">using Plots
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">τ = 1.0    σ_y(A) = 1.0119791014242391e-11    σ_y(B) = 4.604649237039699e-12    σ_y(TS) = 1.266779387936411e6
+τ = 2.0    σ_y(A) = 7.2188281887154955e-12    σ_y(B) = 3.2781410378142876e-12    σ_y(TS) = 1.2658147184115704e6
+τ = 4.0    σ_y(A) = 5.077832451623899e-12    σ_y(B) = 2.293828669221572e-12    σ_y(TS) = 736039.1989821175
+τ = 7.0    σ_y(A) = 3.8375177659182095e-12    σ_y(B) = 1.7409793513416162e-12    σ_y(TS) = 421667.2851159548
+τ = 12.0    σ_y(A) = 3.0081826030826664e-12    σ_y(B) = 1.3305274245715672e-12    σ_y(TS) = 246314.21747264636
+τ = 23.0    σ_y(A) = 2.2842750844891236e-12    σ_y(B) = 9.458036842790675e-13    σ_y(TS) = 128860.91721704594
+τ = 44.0    σ_y(A) = 1.7095234555546258e-12    σ_y(B) = 6.47386565150356e-13    σ_y(TS) = 67726.46001446614
+τ = 82.0    σ_y(A) = 1.2583656346051663e-12    σ_y(B) = 4.777753466207797e-13    σ_y(TS) = 36680.08424849685
+τ = 155.0    σ_y(A) = 9.021603348336553e-13    σ_y(B) = 3.5037628603727805e-13    σ_y(TS) = 19769.18789490691
+τ = 290.0    σ_y(A) = 4.979667315119928e-13    σ_y(B) = 2.6134917374728123e-13    σ_y(TS) = 10968.681444406744
+τ = 545.0    σ_y(A) = 2.74734759004589e-13    σ_y(B) = 1.9675698740084994e-13    σ_y(TS) = 5762.2863453025375
+τ = 1024.0    σ_y(A) = 2.496871474134834e-13    σ_y(B) = 1.7828702872104984e-13    σ_y(TS) = 1661.6796083906268</code></pre><h2 id="7.-Plot-(Stein-Figure-4-reproduction)"><a class="docs-heading-anchor" href="#7.-Plot-(Stein-Figure-4-reproduction)">7. Plot (Stein Figure 4 reproduction)</a><a id="7.-Plot-(Stein-Figure-4-reproduction)-1"></a><a class="docs-heading-anchor-permalink" href="#7.-Plot-(Stein-Figure-4-reproduction)" title="Permalink"></a></h2><p>When run interactively, the recipe in <code>SigmaTauRecipesBaseExt</code> renders each <code>StabilityResult</code> as a τ-vs-σ_y log-log curve.</p><pre><code class="language-julia hljs">using Plots
 plot(adev_A,  label=&quot;Clock A (Cs-like)&quot;)
 plot!(adev_B,  label=&quot;Clock B (Rb-like)&quot;)
 plot!(adev_TS, label=&quot;Time scale (paper clock)&quot;, linewidth=2)
 xlabel!(&quot;τ (s)&quot;)
 ylabel!(&quot;σ_y(τ)&quot;)
-title!(&quot;Two-clock time scale (Stein 2003 Fig. 4)&quot;)</code></pre><p>The ensemble curve sits below the better of the two free-running clocks across the τ band — the paper clock is more stable than either of its components, exactly as Stein&#39;s algorithm promises.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../06_three_cornered_hat/">« Three-cornered hat: separating individual clock noises from pairwise comparisons</a><a class="docs-footer-nextpage" href="../../reference/types/">Shared types »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Thursday 21 May 2026 03:52">Thursday 21 May 2026</span>. Using Julia version 1.11.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+title!(&quot;Two-clock time scale (Stein 2003 Fig. 4)&quot;)</code></pre><p>The ensemble curve sits below the better of the two free-running clocks across the τ band — the paper clock is more stable than either of its components, exactly as Stein&#39;s algorithm promises.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../06_three_cornered_hat/">« Three-cornered hat: separating individual clock noises from pairwise comparisons</a><a class="docs-footer-nextpage" href="../../reference/types/">Shared types »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Thursday 21 May 2026 04:16">Thursday 21 May 2026</span>. Using Julia version 1.11.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
