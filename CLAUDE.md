@@ -69,11 +69,6 @@ write `using SigmaTau` and get everything.
 - `src/est/models/clocks.jl` — `AbstractClockModel` and concrete
   `TwoStateClock`, `ThreeStateClock` (kwdef structs with `tau`, `q0`, `q1`,
   `q2`, optional `q3`).
-- `src/est/models/ensemble.jl` — `ClockEnsemble` (homogeneous stacked-
-  state time-scale model, Stein 2003 §V / Galleani–Tavella; `Base.:+`
-  sugar for `c1 + c2 + …`) and `EnsembleWeights` (Stein §VI–VII
-  inverse-noise weights auto-derived from each member's diffusion
-  coefficients).
 - `src/est/estimators/filters.jl` — `StandardKalmanFilter`
   (out-of-place, `StaticArrays`-based, AD-friendly), plus `PIDController`
   + `step!` / `steer_to_correction` for closed-loop steering.

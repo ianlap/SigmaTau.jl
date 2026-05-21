@@ -51,12 +51,7 @@ grow without bound
 atomic-clock-ensemble system inherits this undetectability; the
 conventional Kalman covariance therefore grows on the non-observable
 common-mode component while observable linear combinations of states
-remain tight. When `Φ`, `Q`, and `R` are block-diagonal in a multi-
-clock ensemble, `P` is also block-diagonal, so the recursion factors
-into per-clock 2×2 inversions and cost is linear in clock count
-[Breakiron 2001](@cite breakiron-2001-kalman-timescales). See
-[Clock ensembles](clock_ensembles.md) for how `SigmaTau`'s
-[`ClockEnsemble`](@ref) wires this up.
+remain tight.
 
 In `SigmaTau` the standard recursion is implemented by
 [`StandardKalmanFilter`](@ref) with [`predict!`](@ref) and
@@ -138,8 +133,6 @@ of `dt₁ + dt₂` — a property locked at `rtol = 1e-14` in
 
 - [Theory: Clock State-Space Models](ensemble_overview.md) — supplies
   `Φ`, `Q`, and the underlying SDE the Kalman filter inverts.
-- [Theory: Clock Ensembles](clock_ensembles.md) — stacked-state
-  Kalman ensemble built on top of the per-clock recursion.
 - [Theory: Clock Steering with PID Controllers](steering.md) — closes
   the loop with a controller acting on the Kalman estimates.
 - [API: `SigmaTau.Est`](../reference/est.md) —
