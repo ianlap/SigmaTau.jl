@@ -117,9 +117,9 @@ Common machinery for all three:
   registry.
 - [ ] **Remove `ldev` alias** — now marked `@deprecate`; delete after
   v0.2.0 is tagged.
-- [ ] **`save_clock` / `load_clock`** — serialize `StandardKalmanFilter`
-  state (`x`, `P`, `k`) for warm-start resumption. Deferred from the
-  I/O batch; requires a clock-model-type tag in the file header to
+- [ ] **`save_clock` / `load_clock`** — serialize `KalmanFilter` state
+  (`x`, `P`, `k`) for warm-start resumption. Deferred from the I/O
+  batch; requires a clock-model-type tag in the file header to
   reconstruct the correct `SVector`/`SMatrix` type parameters on load.
 
 ---

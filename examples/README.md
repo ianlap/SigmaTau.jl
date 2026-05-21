@@ -11,7 +11,7 @@ when the docs build. Edit the script, rebuild, and the corresponding
 |-------------------------------------|----------------------------------------------------------------------|
 | `01_phase_data.jl`                  | Build a `PhaseData` / `FrequencyData` record; phase ↔ frequency.    |
 | `02_compute_adev.jl`                | Run `adev`; explore `StabilityResult` (CI, EDF, noise type).         |
-| `03_kalman_single_clock.jl`         | Track a `ThreeStateClock` with `StandardKalmanFilter` (open-loop).   |
+| `03_kalman_single_clock.jl`         | Track a `ThreeStateClock` with `KalmanFilter` (open-loop).   |
 | `04_kalman_pid_steering.jl`         | Closed-loop PID steering with critical-damping gains.                |
 | `05_holdover_comparison.jl`         | Holdover budget four ways: TDEV / HTDEV / KF RMS / KF 1σ via `prop!`.|
 | `06_three_cornered_hat.jl`          | Recover individual clock σ_y(τ) from three pairwise differences.     |

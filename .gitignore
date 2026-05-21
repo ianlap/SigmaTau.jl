@@ -57,6 +57,7 @@ reference/clock_data/
 # Scratchpad files (Ian's REPL throwaways, never checked in)
 scratch.jl
 scratch.py
+scratch/
 
 # Internal planning docs (not for public repo)
 docs/superpowers/

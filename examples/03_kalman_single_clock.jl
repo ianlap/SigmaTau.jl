@@ -1,6 +1,6 @@
 # # Tracking a single clock with the Kalman filter
 #
-# `StandardKalmanFilter` propagates a clock-state estimate through
+# `KalmanFilter` propagates a clock-state estimate through
 # [`predict!`](@ref) (apply Φ, accumulate Q) and [`update!`](@ref)
 # (fold in a phase measurement). Together they solve the
 # minimum-variance state-tracking problem for the linear-Gaussian
@@ -79,7 +79,7 @@ z = phase_true .+ sqrt(q0) .* randn(N)
 
 # ## Run the filter
 #
-# `StandardKalmanFilter` is constructed with an initial state mean
+# `KalmanFilter` is constructed with an initial state mean
 # and covariance. Both convert internally to `SVector` / `SMatrix`.
 # Loose initial uncertainty (`P₀ = 1e-12 · I`) lets the filter
 # converge in a handful of steps even though the seed is intentionally
@@ -88,7 +88,7 @@ z = phase_true .+ sqrt(q0) .* randn(N)
 x₀ = [z[1], 0.0, 0.0]
 P₀ = 1e-12 * Matrix(I(3))
 
-est = StandardKalmanFilter(x₀, P₀)
+est = KalmanFilter(x₀, P₀)
 
 phase_est = zeros(N)
 freq_est  = zeros(N)

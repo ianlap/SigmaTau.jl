@@ -1,4 +1,4 @@
-# models/clocks.jl — Clock Model Definitions
+# clocks.jl — Clock state-space models
 
 """
     AbstractClockModel

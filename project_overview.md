@@ -108,13 +108,12 @@ remains unchanged.
 
 | Component | File | Notes |
 |-----------|------|-------|
-| `TwoStateClock`, `ThreeStateClock` | [src/est/models/clocks.jl](src/est/models/clocks.jl) | `@kwdef` + StaticArrays Φ/Q/H/R |
+| `TwoStateClock`, `ThreeStateClock` | [src/est/clocks.jl](src/est/clocks.jl) | `@kwdef` + StaticArrays Φ/Q/H/R |
 | `state_transition(model[, dt])` | same | dt-overload for arbitrary horizons; single-arg defers to `model.tau` |
 | `process_noise(model[, dt])` | same | Closed-form Galleani/Zucca integration; dt-overload mirrors Φ |
-| `StandardKalmanFilter` | [src/est/estimators/filters.jl](src/est/estimators/filters.jl) | AD-clean default; opt-in `legacy_compat` |
-| `predict!`, `update!` | same | Out-of-place SMatrix math; symmetrized P. `predict!` keeps the legacy `est.k > 0` gate |
+| `KalmanFilter` | [src/est/filters.jl](src/est/filters.jl) | Mutable `(x::SVector, P::SMatrix, k)` over-out-of-place arithmetic, AD-clean |
+| `predict!`, `update!` | same | Out-of-place SMatrix math; symmetrized P. `predict!` keeps the `est.k > 0` first-step gate |
 | `prop!` | same | Unconditional covariance propagation; uses dt-overloads of Φ/Q. Powers shaded ±1σ holdover bands without disturbing live filter sequencing |
-| `safe_sqrt_sq` + `clamp_covariance_diag` | same | Reproduces MATLAB-era diagonal clamping when `legacy_compat=true` |
 | `PIDController`, `step!`, `steer_to_correction` | same | Discrete PID; `predict!(…; steering=…)` and `prop!(…; steering=…)` integrate the correction |
 
 ### 2.4 Umbrella
@@ -150,8 +149,8 @@ src/
 │   ├── api/{allan,hadamard,total,mtie,pdev}.jl
 │   └── utils.jl                         (FrequencyData → PhaseData helper)
 └── est/
-    ├── models/clocks.jl                 (TwoStateClock, ThreeStateClock; Φ + Q with dt overloads)
-    └── estimators/filters.jl            (StandardKalmanFilter; predict!, update!, prop!; PID + steering)
+    ├── clocks.jl                        (TwoStateClock, ThreeStateClock; Φ + Q with dt overloads)
+    └── filters.jl                       (KalmanFilter; predict!, update!, prop!; PID + steering)
 
 ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
 

@@ -227,6 +227,16 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- **`StandardKalmanFilter` → `KalmanFilter` (BREAKING).** There is only
+  one Kalman filter in `SigmaTau.Est`; the `Standard…` prefix only made
+  sense alongside the U-D / Kuramoto stubs that v0.2.0 also removes.
+  The constructor and methods (`predict!` / `update!` / `prop!`) keep
+  the same signature otherwise. The `AbstractEstimator` supertype is
+  dropped at the same time — see Removed.
+- **Est file layout flattened (BREAKING — internal path only).** Moved
+  `src/est/models/clocks.jl` → `src/est/clocks.jl` and
+  `src/est/estimators/filters.jl` → `src/est/filters.jl`. Two
+  single-file subdirectories collapsed. No public-API impact.
 - **Restructured from a three-subpackage workspace
   (`SigmaTauBase` / `SigmaTauStability` / `SigmaTauEnsemble`) into a
   single registerable package with two submodules (`SigmaTau.Stab` and
@@ -436,13 +446,25 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Removed
 
+- **`ClockEnsemble` + `EnsembleWeights`.** The Stein 2003 stacked-state
+  time-scale model and its inverse-noise auto-weights were removed
+  ahead of the v0.2.0 cut. The mathematics is sound but it wasn't
+  pulling its weight for a presentation release. Dropped from
+  `src/est/`, the umbrella exports, the five ClockEnsemble testsets in
+  `test/est/runtests.jl`, the Est re-export smoke check, the
+  `examples/07_clock_ensemble.jl` tutorial, and the docs nav.
 - **Stub types `RelativisticClock`, `UDFactorizedFilter`, and
   `KuramotoOscillator`** along with the throwing methods that made them
-  inert. Dropped from `src/est/models/clocks.jl`,
-  `src/est/estimators/filters.jl`, the umbrella export list,
+  inert. Dropped from `src/est/`, the umbrella export list,
   `test/est/runtests.jl`, `test/umbrella_smoke.jl`, and
-  `docs/src/reference/est.md`. The `AbstractClockModel` and
-  `AbstractEstimator` docstrings dropped the stub subtype callouts.
+  `docs/src/reference/est.md`.
+- **`AbstractEstimator` supertype.** Only one concrete subtype
+  (`KalmanFilter`) remained after the stubs were removed. Deleted.
+- **MATLAB-era `legacy_compat=true` path.** The opt-in `safe_sqrt_sq` /
+  `clamp_covariance_diag` diagonal clamping was gated behind a
+  gitignored `legacy/julia/src` tree that CI never sees. Deleted along
+  with the corresponding parity testsets in `test/est/runtests.jl`
+  (already always-skip on CI).
 - **Speculative theory pages.** `theory/relativistic_clocks.md`,
   `theory/relativistic_corrections.md`,
   `theory/relativistic_frames_and_timescales.md`,
