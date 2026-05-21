@@ -13,11 +13,10 @@ measurement_matrix
 measurement_noise
 ```
 
-## Estimators
+## Kalman filter
 
 ```@docs
-AbstractEstimator
-StandardKalmanFilter
+KalmanFilter
 predict!
 update!
 prop!

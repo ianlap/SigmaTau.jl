@@ -93,12 +93,12 @@ module Est
     using StaticArrays
     using DocStringExtensions
 
-    include("est/models/clocks.jl")
-    include("est/estimators/filters.jl")
+    include("est/clocks.jl")
+    include("est/filters.jl")
 
     export AbstractClockModel, TwoStateClock, ThreeStateClock
     export nstates, state_transition, process_noise, measurement_matrix, measurement_noise
-    export AbstractEstimator, StandardKalmanFilter
+    export KalmanFilter
     export predict!, update!, prop!
     export PIDController, step!, steer_to_correction
 end

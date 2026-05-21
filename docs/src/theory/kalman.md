@@ -16,8 +16,7 @@ This page collects the standard predict / update recursion, the
 innovation and Kalman gain that drive it, the unconditional covariance
 propagator that `SigmaTau.Est` adds alongside `predict!` for
 holdover-band projection, and a pedagogical reading list. The
-implementation lives at
-[`StandardKalmanFilter`](@ref) in `src/est/estimators/filters.jl`.
+implementation lives at [`KalmanFilter`](@ref) in `src/est/filters.jl`.
 
 ## Standard Kalman filter
 
@@ -54,10 +53,9 @@ common-mode component while observable linear combinations of states
 remain tight.
 
 In `SigmaTau` the standard recursion is implemented by
-[`StandardKalmanFilter`](@ref) with [`predict!`](@ref) and
+[`KalmanFilter`](@ref) with [`predict!`](@ref) and
 [`update!`](@ref). The filter is mutable but uses out-of-place
-`StaticArrays` math for AD-cleanness; the legacy MATLAB-era
-`safe_sqrt` diagonal clamping is opt-in via `legacy_compat=true`.
+`StaticArrays` math for AD-cleanness.
 
 ## Innovation
 
@@ -136,7 +134,7 @@ of `dt₁ + dt₂` — a property locked at `rtol = 1e-14` in
 - [Theory: Clock Steering with PID Controllers](steering.md) — closes
   the loop with a controller acting on the Kalman estimates.
 - [API: `SigmaTau.Est`](../reference/est.md) —
-  [`StandardKalmanFilter`](@ref), [`predict!`](@ref),
+  [`KalmanFilter`](@ref), [`predict!`](@ref),
   [`update!`](@ref), [`prop!`](@ref).
 
 ## References

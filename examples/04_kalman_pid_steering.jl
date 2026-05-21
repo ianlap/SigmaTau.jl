@@ -1,6 +1,6 @@
 # # Closed-loop steering with critical-damping PID gains
 #
-# `predict!(::StandardKalmanFilter, …; steering = …)` accepts an
+# `predict!(::KalmanFilter, …; steering = …)` accepts an
 # additive correction vector applied to the predicted state mean. The
 # bundled [`PIDController`](@ref) computes that correction from the
 # filter's current phase / frequency estimate; together they form a
@@ -84,7 +84,7 @@ z          = phase_true .+ sqrt(q0) .* randn(N)
 # The filter still tracks the phase, but nothing drives it back to
 # zero — the clock keeps drifting.
 
-est_open = StandardKalmanFilter([z[1], 0.0, 0.0], 1e-12 * Matrix(I(3)))
+est_open = KalmanFilter([z[1], 0.0, 0.0], 1e-12 * Matrix(I(3)))
 
 phase_est_open = zeros(N)
 for k in 1:N
@@ -101,7 +101,7 @@ end
 # `predict!(…; steering = …)` expects (phase row gets ``s \cdot \tau``,
 # frequency row gets ``s``, drift row stays zero).
 
-est_closed = StandardKalmanFilter([z[1], 0.0, 0.0], 1e-12 * Matrix(I(3)))
+est_closed = KalmanFilter([z[1], 0.0, 0.0], 1e-12 * Matrix(I(3)))
 pid        = PIDController(g_p=g_p, g_i=g_i, g_d=g_d)
 
 phase_est_closed = zeros(N)

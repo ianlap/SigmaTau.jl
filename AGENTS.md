@@ -66,12 +66,13 @@ write `using SigmaTau` and get everything.
 - `DEFAULT_CONFIDENCE = 0.683` is defined at the top of the `Stab` submodule
   in `src/SigmaTau.jl` (not in `utils.jl`); it is the default `confidence`
   argument across every public deviation API.
-- `src/est/models/clocks.jl` — `AbstractClockModel` and concrete
+- `src/est/clocks.jl` — `AbstractClockModel` and concrete
   `TwoStateClock`, `ThreeStateClock` (kwdef structs with `tau`, `q0`, `q1`,
   `q2`, optional `q3`).
-- `src/est/estimators/filters.jl` — `StandardKalmanFilter`
-  (out-of-place, `StaticArrays`-based, AD-friendly), plus `PIDController`
-  + `step!` / `steer_to_correction` for closed-loop steering.
+- `src/est/filters.jl` — `KalmanFilter` (out-of-place,
+  `StaticArrays`-based, AD-friendly: `predict!` / `update!` / `prop!`)
+  plus `PIDController` + `step!` / `steer_to_correction` for
+  closed-loop steering.
 - `src/types/` — `abstract.jl`, `phase_data.jl`, `frequency_data.jl`,
   `stability_result.jl`.
 - `ext/SigmaTauRecipesBaseExt.jl` — all plot recipes (loaded only when
@@ -110,8 +111,6 @@ attribution rules.
   Preserve this contract.
 - Kalman filter math is out-of-place via StaticArrays for AD-friendliness.
   In-place mutation is opt-in only.
-- `legacy_compat=true` reproduces MATLAB-era `safe_sqrt` diagonal clamping
-  bit-for-bit. Do not "fix" the clamp — it is a parity contract.
 - Plot recipes live ONLY in `ext/SigmaTauRecipesBaseExt.jl`. Do not add
   plotting code to `src/SigmaTau.jl`.
 
