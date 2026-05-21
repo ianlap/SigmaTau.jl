@@ -277,8 +277,6 @@ each `AbstractClockModel`.
 
 - [Theory: Kalman Filter](kalman.md) — discrete-time estimator that
   consumes `Φ` and `Q`.
-- [Theory: Clock Ensembles](clock_ensembles.md) — joint stacked-state
-  Kalman model built on top of the per-clock SDE.
 - [Theory: Clock Steering with PID Controllers](steering.md) —
   closes the loop between the estimator and the oscillator's
   frequency control input.

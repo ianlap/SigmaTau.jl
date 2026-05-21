@@ -9,8 +9,7 @@ estimators. Concrete subtypes parameterize the polynomial clock SDE
 and must overload `nstates`, `state_transition`, `process_noise`,
 `measurement_matrix`, and `measurement_noise`.
 
-Shipped subtypes: [`TwoStateClock`](@ref), [`ThreeStateClock`](@ref),
-and [`ClockEnsemble`](@ref).
+Shipped subtypes: [`TwoStateClock`](@ref) and [`ThreeStateClock`](@ref).
 """
 abstract type AbstractClockModel end
 
@@ -51,11 +50,9 @@ end
 """
     nstates(model::AbstractClockModel) → Int
 
-Return the dimension of the state vector for `model`. Used by
-[`steer_to_correction`](@ref) to size the steering `SVector`. Defined
-for [`TwoStateClock`](@ref) (returns `2`) and [`ThreeStateClock`](@ref)
-(returns `3`); [`ClockEnsemble`](@ref) overloads it to return
-`N · nstates(member)`.
+Return the dimension of the state vector for `model`. `TwoStateClock`
+returns `2`, `ThreeStateClock` returns `3`. Used by
+[`steer_to_correction`](@ref) to size the steering `SVector`.
 """
 nstates(::TwoStateClock) = 2
 nstates(::ThreeStateClock) = 3

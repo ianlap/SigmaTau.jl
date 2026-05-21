@@ -27,20 +27,6 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   wrapper around the new `_gen_powerlaw_y` primitive — no change in
   RNG consumption order, so legacy tests that pin synthesized phase
   to a seed continue to match bit-for-bit.
-- **`ClockEnsemble` model for joint Kalman time-scale estimation.** Stein
-  2003 §V / Galleani–Tavella stacked-state formulation: the joint state
-  concatenates per-clock states, Φ and Q are block-diagonal, and H selects
-  the `N − 1` phase differences against a reference clock. The ensemble
-  is itself an `AbstractClockModel`, so the existing `predict!` /
-  `update!` / `prop!` loop on `StandardKalmanFilter` consumes it
-  unmodified. `Base.:+` overloaded on `AbstractClockModel` for ergonomic
-  construction (`ensemble = clockA + clockB + clockC`); homogeneous-only
-  (mixing `TwoStateClock` and `ThreeStateClock` throws `ArgumentError`).
-  Auto-derives Stein §VI–VII inverse-noise weights from each member's
-  diffusion coefficients (`a_i ∝ 1/q1_i`, `b_i ∝ 1/q2_i`,
-  `c_i ∝ 1/q3_i`); explicit `weights=` override supported. References:
-  Stein 2003 *"Time Scales Demystified"* IFCS; Galleani–Tavella 2010
-  *"Time and the Kalman filter"* IEEE CSM.
 - **`prop!(est, model, dt; steering=nothing)`** — unconditional
   covariance propagation alongside `predict!` / `update!`. Advances
   `est.x ← Φ(dt) x` and `est.P ← Φ(dt) P Φ(dt)' + Q(dt)` regardless of
@@ -182,19 +168,18 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   DocumenterCitations bibliography (`docs/src/refs.bib`); MathJax3 math
   engine; `jldoctest` examples on `adev` and `mdev` build-time asserted.
   Theory section fills out `overview`, `allan_family`, `total_family`,
-  `confidence`, `noise_id`, `ensemble_overview`, `kalman`, `steering`,
-  and `clock_ensembles` from SP1065 / IEEE 1139-2022 / GR03 / FCS01 /
-  RG04 / Stein 2003 / Tryon–Jones 1983 / Breakiron 2001 source material.
+  `confidence`, `noise_id`, `ensemble_overview`, `kalman`, and
+  `steering` from SP1065 / IEEE 1139-2022 / GR03 / FCS01 / RG04 /
+  Stein 2003 / Tryon–Jones 1983 / Breakiron 2001 source material.
   PGFPlotsX backend for LaTeX-quality vector PDFs in `@example` blocks.
 - **GitHub Actions CI.** Julia 1.11 × {ubuntu, macOS} matrix on the
   single package, plus `julia-actions/docdeploy` to GitHub Pages on
   push to `main` and on tags.
-- **Eight Literate-driven tutorials** under `examples/`:
+- **Seven Literate-driven tutorials** under `examples/`:
   `00_julia_for_metrologists`, `01_phase_data`, `02_compute_adev`,
   `03_kalman_single_clock`, `04_kalman_pid_steering`,
-  `05_holdover_comparison`, `06_three_cornered_hat`,
-  `07_clock_ensemble`. Auto-rendered into `docs/src/tutorials/` by
-  Literate.jl at docs-build time.
+  `05_holdover_comparison`, `06_three_cornered_hat`. Auto-rendered
+  into `docs/src/tutorials/` by Literate.jl at docs-build time.
 - **Validation fixtures.** Stable32 cross-check against
   `reference/validation/stable32gen.DAT` (8192 phase samples) at
   `rtol=1e-4` for OADEV / Modified Allan / Overlapping Hadamard / Time
@@ -463,17 +448,13 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   `theory/relativistic_frames_and_timescales.md`,
   `theory/lunar_pnt_systems.md`,
   `theory/ensembles_and_oscillator_networks.md`, and
-  `theory/publications.md` deleted. The Stein 2003 time-scale equation
-  and three-cornered-hat material that backs `ClockEnsemble` and
-  `tutorials/06_three_cornered_hat.md` is consolidated into a new
-  shorter `theory/clock_ensembles.md` page. The `theory/kalman.md` page
-  was trimmed to the standard predict / update recursion plus the
-  innovation / Kalman-gain / `prop!` discussion, dropping the U-D,
-  generalised-ALS, adaptive, structured-KF, and Wu LTI-performance-bound
-  sections (none of which back shipped code). The
-  `theory/ensemble_overview.md` page dropped the
-  frequency-jump-detection and clock-error-jumps sections (likewise
-  unshipped).
+  `theory/publications.md` deleted. `theory/kalman.md` was trimmed to
+  the standard predict / update recursion plus the innovation /
+  Kalman-gain / `prop!` discussion, dropping the U-D, generalised-ALS,
+  adaptive, structured-KF, and Wu LTI-performance-bound sections (none
+  of which back shipped code). `theory/ensemble_overview.md` dropped
+  the frequency-jump-detection and clock-error-jumps sections
+  (likewise unshipped).
 - **Pre-record linear detrend from the noise-ID `_preprocess` step.**
   Neither Stable32 nor allantools' `autocorr_noise_id` apply a
   full-record polynomial fit before the per-m loop, so the prior

@@ -14,7 +14,7 @@ graph TD
 
     subgraph "Submodules"
         STAB["SigmaTau.Stab<br/>13 deviations + MTIE + PDEV<br/>Noise ID + EDF/CI"]
-        EST["SigmaTau.Est<br/>Clock models + ClockEnsemble<br/>Kalman filter (predict! / update! / prop!)<br/>PID steering"]
+        EST["SigmaTau.Est<br/>Clock models<br/>Kalman filter (predict! / update! / prop!)<br/>PID steering"]
     end
 
     ST -->|"defines"| STAB
@@ -111,7 +111,6 @@ remains unchanged.
 | `TwoStateClock`, `ThreeStateClock` | [src/est/models/clocks.jl](src/est/models/clocks.jl) | `@kwdef` + StaticArrays Φ/Q/H/R |
 | `state_transition(model[, dt])` | same | dt-overload for arbitrary horizons; single-arg defers to `model.tau` |
 | `process_noise(model[, dt])` | same | Closed-form Galleani/Zucca integration; dt-overload mirrors Φ |
-| `ClockEnsemble`, `EnsembleWeights` | [src/est/models/ensemble.jl](src/est/models/ensemble.jl) | Stein 2003 §V stacked time-scale model. `Base.:+` overloaded on `AbstractClockModel` (homogeneous-only). Block-diagonal Φ/Q; H selects N−1 phase differences vs reference clock. Stein §VI–VII auto-weights from clock q1/q2/q3. Reuses `StandardKalmanFilter` unchanged |
 | `StandardKalmanFilter` | [src/est/estimators/filters.jl](src/est/estimators/filters.jl) | AD-clean default; opt-in `legacy_compat` |
 | `predict!`, `update!` | same | Out-of-place SMatrix math; symmetrized P. `predict!` keeps the legacy `est.k > 0` gate |
 | `prop!` | same | Unconditional covariance propagation; uses dt-overloads of Φ/Q. Powers shaded ±1σ holdover bands without disturbing live filter sequencing |
@@ -126,7 +125,7 @@ remains unchanged.
 | Root `Project.toml` deps | Single-package manifest; no `[workspace]` / `[sources]` |
 | Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots` |
 | Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) — verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; `ldev` ≡ `htdev` |
-| `examples/` | Eight Literate-driven tutorials (`00_julia_for_metrologists` → `07_clock_ensemble`) |
+| `examples/` | Seven Literate-driven tutorials (`00_julia_for_metrologists` → `06_three_cornered_hat`) |
 
 ---
 
@@ -151,7 +150,7 @@ src/
 │   ├── api/{allan,hadamard,total,mtie,pdev}.jl
 │   └── utils.jl                         (FrequencyData → PhaseData helper)
 └── est/
-    ├── models/{clocks,ensemble}.jl      (TwoState, ThreeState, ClockEnsemble; Φ + Q with dt overloads)
+    ├── models/clocks.jl                 (TwoStateClock, ThreeStateClock; Φ + Q with dt overloads)
     └── estimators/filters.jl            (StandardKalmanFilter; predict!, update!, prop!; PID + steering)
 
 ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
@@ -166,7 +165,7 @@ test/
 
 docs/                                    Documenter.jl subproject
 benchmarks/                              Long-record perf runs (gitignored outputs)
-examples/                                Literate-driven tutorials 00..07
+examples/                                Literate-driven tutorials 00..06
 reference/validation/                    Stable32 + allantools cross-check fixtures
 tools/Project.toml                       Dev-tools env
 ```

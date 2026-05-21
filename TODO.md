@@ -95,9 +95,10 @@ Common machinery for all three:
 ## 🟢 Polish
 
 - [ ] **More `examples/`** — Literate pipeline currently ships
-  `01_phase_data`, `02_compute_adev`, `03_kalman_single_clock`,
-  `04_kalman_pid_steering`, `05_holdover_comparison`,
-  `06_three_cornered_hat`, `07_clock_ensemble`. Next batch candidates:
+  `00_julia_for_metrologists`, `01_phase_data`, `02_compute_adev`,
+  `03_kalman_single_clock`, `04_kalman_pid_steering`,
+  `05_holdover_comparison`, `06_three_cornered_hat`. Next batch
+  candidates:
   - GP-based holdover prediction via `TemporalGPs.jl` (Matérn-1/2
     kernel ≡ OU), as a fourth reference line alongside the existing
     TDEV / HTDEV / KF curves in `examples/05_holdover_comparison.jl`.
