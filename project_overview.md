@@ -1,8 +1,8 @@
 # SigmaTau.jl — Project Overview
 
-> **Last Updated**: 2026-05-09 (post-MTIE/PDEV/prop! batch).
-> **Scope**: Full audit of repository state at `https://github.com/ianlap/SigmaTau.jl`.
-> Single registerable package with two submodules (`SigmaTau.Stab`, `SigmaTau.Est`); shared types at the top level.
+> **Last Updated**: 2026-05-18 (v0.2.0 cut).
+> **Scope**: Single registerable Julia 1.11 package with two submodules
+> (`SigmaTau.Stab`, `SigmaTau.Est`); shared types at the top level.
 
 ---
 
@@ -10,11 +10,11 @@
 
 ```mermaid
 graph TD
-    ST["SigmaTau<br/>(src/SigmaTau.jl)<br/>shared types: PhaseData,<br/>FrequencyData, StabilityResult"]
+    ST["SigmaTau<br/>(src/SigmaTau.jl)<br/>shared types: PhaseData,<br/>FrequencyData, StabilityResult<br/>+ top-level IO"]
 
     subgraph "Submodules"
-        STAB["SigmaTau.Stab<br/>11 deviations + MTIE<br/>Noise ID + EDF/CI"]
-        EST["SigmaTau.Est<br/>Clock models + Kalman filter<br/>predict! / update! / prop!"]
+        STAB["SigmaTau.Stab<br/>13 deviations + MTIE + PDEV<br/>Noise ID + EDF/CI"]
+        EST["SigmaTau.Est<br/>Clock models<br/>Kalman filter (predict! / update! / prop!)<br/>PID steering"]
     end
 
     ST -->|"defines"| STAB
@@ -44,196 +44,104 @@ remains unchanged.
 
 ### 2.1 Shared Types
 
-| Component | File | Status | Notes |
-|-----------|------|--------|-------|
-| `PhaseData{T}` | [src/types/phase_data.jl](src/types/phase_data.jl) | ✅ | Parametric on `T<:AbstractFloat` |
-| `FrequencyData{T}` | [src/types/frequency_data.jl](src/types/frequency_data.jl) | ✅ | Parametric; wired into every Stab dispatch |
-| `StabilityResult` | [src/types/stability_result.jl](src/types/stability_result.jl) | ✅ | Non-parametric `Vector{Float64}` fields; includes `edf` (empty when `calc_ci=false`) |
-| `AbstractTimingData` | [src/types/abstract.jl](src/types/abstract.jl) | ✅ | Abstract supertype |
-| Tests | [test/types/runtests.jl](test/types/runtests.jl) | ✅ | Constructor + field smoke |
+| Component | File | Notes |
+|-----------|------|-------|
+| `PhaseData{T}` | [src/types/phase_data.jl](src/types/phase_data.jl) | Parametric on `T<:AbstractFloat` |
+| `FrequencyData{T}` | [src/types/frequency_data.jl](src/types/frequency_data.jl) | Parametric; wired into every Stab dispatch |
+| `StabilityResult` | [src/types/stability_result.jl](src/types/stability_result.jl) | Non-parametric `Vector{Float64}` fields; includes `edf` (empty when `calc_ci=false`) |
+| `AbstractTimingData` | [src/types/abstract.jl](src/types/abstract.jl) | Abstract supertype |
 
 ### 2.2 SigmaTau.Stab
 
 #### Core Kernels
 
-| Kernel | File | Status | Verified vs SP1065? |
-|--------|------|--------|---------------------|
-| `_adev_core` | [src/stab/core/allan.jl](src/stab/core/allan.jl) | ✅ | ✅ Tested (quadratic parity) |
-| `_mdev_core` | same | ✅ | ⚠️ `isfinite`-only. Single length-(N+1) prefix-sum buffer (no `cumsum(copy(x))` chain). |
-| `_tdev_core` | same | ✅ | ⚠️ `isfinite`-only |
-| `_hdev_core` | [src/stab/core/hadamard.jl](src/stab/core/hadamard.jl) | ✅ | ⚠️ Zero-on-quadratic only |
-| `_mhdev_core` | same | ✅ | ⚠️ Zero-on-quadratic only. Single length-(N+1) prefix-sum buffer. |
-| `_totdev_core` | [src/stab/core/total.jl](src/stab/core/total.jl) | ✅ | ⚠️ `isfinite`-only. `:howe` variant streams the mean-flip extension on the fly — kernel-only allocation is now O(1) in N. |
-| `_mtotdev_core` | same | ✅ | ⚠️ `isfinite`-only |
-| `_htotdev_core` | same | ✅ | ⚠️ `isfinite`-only |
-| `_mhtotdev_core` | same | ✅ | ⚠️ `isfinite`-only |
-| `_mtie_core` | [src/stab/core/mtie.jl](src/stab/core/mtie.jl) | ✅ | Sliding peak-to-peak; ITU-T G.810 |
-| `_pdev_core` | [src/stab/core/pdev.jl](src/stab/core/pdev.jl) | ✅ | Vernotte 2016/2020; allantools formula parity |
+| Kernel | File | Notes |
+|--------|------|-------|
+| `_adev_core`, `_mdev_core`, `_tdev_core` | [src/stab/core/allan.jl](src/stab/core/allan.jl) | Overlapping ADEV / MDEV / TDEV |
+| `_hdev_core`, `_mhdev_core` | [src/stab/core/hadamard.jl](src/stab/core/hadamard.jl) | Hadamard family |
+| `_totdev_core`, `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core` | [src/stab/core/total.jl](src/stab/core/total.jl) | Boundary-extended; threaded |
+| `_mtie_core` | [src/stab/core/mtie.jl](src/stab/core/mtie.jl) | O(N) monotonic-deque sliding window; ITU-T G.810 |
+| `_pdev_core` | [src/stab/core/pdev.jl](src/stab/core/pdev.jl) | Vernotte 2016/2020; allantools formula parity |
 
 #### Noise Identification
 
-| Component | File | Status | Notes |
-|-----------|------|--------|-------|
-| `identify_noise` | [src/stab/noise/lag1.jl](src/stab/noise/lag1.jl) | ✅ | lag-1 ACF + B1/R(n) fallback. ~2.1× faster after the allocation-cleanup pass (two-pass `_preprocess`, StaticArrays 3×3 solve, single-pass `_lag1_acf`). |
-| `_noise_id_lag1acf` | same | ✅ | Quadratic detrend, differencing, ρ threshold |
-| `_noise_id_b1rn` | same | ✅ | B1-ratio with R(n) WPM/FLPM disambiguation. `_simple_mdev` now uses the same single-buffer prefix-sum as `_mdev_core`. |
-| `NEFF_RELIABLE = 30` | same | ✅ | Per legacy GEMINI.md §2 mandate; boundary test added |
-| Preprocessing | same | ✅ | 5σ outlier rejection (two-pass count-then-fill; no boolean mask). |
-| Power-law synthesis (internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`) | [src/stab/noise/synth.jl](src/stab/noise/synth.jl) | ✅ | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2} |
-| `noise_gen` (public, calibrated) | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | ✅ | Composite α-mixture; input mode `sigma1[α]=σ_y(τ₀)` or `h[α]=h_α`; returns `PhaseData` or `FrequencyData` |
+| Component | File | Notes |
+|-----------|------|-------|
+| `identify_noise` | [src/stab/noise/lag1.jl](src/stab/noise/lag1.jl) | lag-1 ACF + B1/R(n) fallback |
+| `_noise_id_lag1acf` | same | Quadratic detrend, differencing, ρ threshold |
+| `_noise_id_b1rn` | same | B1-ratio with R(n) WPM/FLPM disambiguation |
+| `NEFF_RELIABLE = 30` | same | Per legacy GEMINI.md §2 mandate; boundary test added |
+| Preprocessing | same | 5σ outlier rejection (per-record); per-m quadratic detrend opt-in via `detrend=true` |
+| Power-law synthesis (internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`) | [src/stab/noise/synth.jl](src/stab/noise/synth.jl) | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2} |
+| `noise_gen` (public, calibrated) | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | Composite α-mixture; input mode `sigma1[α]=σ_y(τ₀)` or `h[α]=h_α`; returns `PhaseData` or `FrequencyData` |
 
 #### Statistics (EDF / CI / Bias)
 
-| Component | File | Status | Notes |
-|-----------|------|--------|-------|
-| `calculate_edf` | [src/stab/stats/edf.jl](src/stab/stats/edf.jl) | ✅ | Full Greenhall/Riley `_compute_sz/_sx/_sw`. Inner helpers `@inline`'d, typed to `Float64`, closure removed; ~5× faster on the fast-kernel API path. |
-| `confidence_intervals` | same | ✅ | `Distributions.jl` for χ² + Normal |
-| `bias_correction` | same | ✅ | Returns SP1065 variance-ratio B; callers apply `σ ← σ/√B`. totvar / mtot / htot covered; mhtot has no published model |
-| `_coeff_totvar` | same | ✅ | ADEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
-| `_coeff_htot` | same | ✅ | FCS 2001 / Howe & Tasset 2005 Table I `(b₀, b₁)` for α∈{0,-1,-2,-3,-4}; HDEV-style fallback for α=2,1. Matches Stable32 EDF to <0.01% for `τ ≥ 16τ₀` |
-| `_coeff_mtot` | same | ⚠ | α=0 fit to Stable32 from two AFs `(1.330, 1.890)`; α=−1, α=−2 single-point fits (SP1065 manual values disagree with Stable32 by 5–20%) |
-| `_coeff_mhtot` | same | ✅ | Cover α∈[-2,2] |
+| Component | File | Notes |
+|-----------|------|-------|
+| `calculate_edf` | [src/stab/stats/edf.jl](src/stab/stats/edf.jl) | Full Greenhall/Riley `_compute_sz/_sx/_sw` |
+| `confidence_intervals` | same | `Distributions.jl` for χ² + Normal |
+| `bias_correction` | same | SP1065 variance-ratio B; callers apply `σ ← σ/√B`. totvar / mtot / htot covered; mhtot has no published model |
+| `_coeff_totvar` | same | ADEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
+| `_coeff_htot` | same | FCS 2001 / Howe & Tasset 2005 Table I `(b₀, b₁)` for α∈{0,-1,-2,-3,-4}; matches Stable32 EDF to <0.01% for `τ ≥ 16τ₀` |
+| `_coeff_mtot` | same | α=0 two-AF fit to Stable32 `(1.330, 1.890)`; α=−1, α=−2 single-point fits with `c` from SP1065 (interim; see TODO) |
+| `_coeff_mhtot` | same | Cover α∈[−2,2] |
 
 #### User API
 
-| Function | File | Status | Notes |
-|----------|------|--------|-------|
-| `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | ✅ | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid |
-| `tdev` | same | ✅ | Wraps `mdev` and scales by `τ/√3` |
-| `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | ✅ | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; `ldev` retained as deprecated alias |
-| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | ✅ | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with the `τ/√3` rescaling |
-| `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | ✅ | No CI fields (no published EDF model) |
-| `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | ✅ | No CI fields (EDF port tracked in TODO) |
-| `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) + each api file | ✅ | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
-| `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | ✅ | TSV round-trip for `StabilityResult`; relocated to top-level IO |
-| `read_phase`, `read_frequency` | [src/io/read.jl](src/io/read.jl) | ✅ | stdlib `readdlm` with `scaling` / `detrend` / `fillgaps` kwargs |
-| `detrend(::PhaseData/::FrequencyData)` | [src/io/detrend.jl](src/io/detrend.jl) | ✅ | `:linear` / `:endpoint` / `:mean` / `:none`; multiple dispatch keeps the bare name collision-free |
-| `fillgaps(::PhaseData/::FrequencyData)` | [src/io/fillgaps.jl](src/io/fillgaps.jl) | ✅ | Howe & Schlossberger 2009 reflect-and-FFT-filter imputation, FFTW backend |
-
-#### Tests
-
-| Test | Status | Notes |
-|------|--------|-------|
-| [test/stab/runtests.jl](test/stab/runtests.jl) | ✅ All pass | Full suite is 633 tests across the package |
-| Numerical legacy parity | ✅ | 52 assertions across 8 kernels at rtol=1e-12 |
-| Stable32 cross-validation | ✅ | 85 rows checked vs `reference/validation/stable32_data_full.csv`; plus 100-row composite-noise fixture under `reference/validation/s32_5_12_26/` matching all 8 deviations to 5 sig figs on σ and 3–4 sig figs on σ_min/σ_max |
-| allantools cross-validation | ✅ | 7 deviations × 12 m-values = 85 rows at rtol=1e-11 |
-| Multi-noise MTOTDEV validation | ✅ | All 5 SP1065 noise types via [`_gen_powerlaw_phase`](src/stab/noise/synth.jl) |
-| ADEV/MDEV/HDEV/MHDEV across α∈{-2..2} | ✅ | Synthesised noise + legacy-kernel parity |
-| Noise-ID boundary at `NEFF_RELIABLE` | ✅ | Tested at N_eff ∈ {29, 31} |
-| TOTDEV/HTOTDEV EDF fallback for WPM/FLPM | ✅ | ADEV/HDEV-style fallback covers α=2,1 |
-| MTIE | ✅ | Hand fixture + monotonic ramp + naive-double-loop parity at rtol=1e-15 |
-| PDEV | ✅ | m=1 ≡ ADEV identity, linear-trend annihilation, allantools formula parity at rtol=1e-12 |
+| Function | File | Notes |
+|----------|------|-------|
+| `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid capped at each kernel's algorithmic m-max |
+| `tdev` | same | Wraps `mdev` and scales by `τ/√3` |
+| `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; deprecated `ldev` alias forwards to `htdev` |
+| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling |
+| `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | No CI fields (no published EDF model) |
+| `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | No CI fields (EDF port tracked in TODO) |
+| `noise_gen` | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | Calibrated power-law clock-noise generator; returns `PhaseData` or `FrequencyData` |
+| `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
+| `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for `StabilityResult` |
+| `read_phase`, `read_frequency` | [src/io/read.jl](src/io/read.jl) | stdlib `readdlm` with `scaling` / `detrend` / `fillgaps` kwargs |
+| `detrend(::PhaseData/::FrequencyData)` | [src/io/detrend.jl](src/io/detrend.jl) | `:linear` / `:endpoint` / `:mean` / `:none` |
+| `fillgaps(::PhaseData/::FrequencyData)` | [src/io/fillgaps.jl](src/io/fillgaps.jl) | Howe & Schlossberger 2009 reflect-and-FFT-filter imputation, FFTW backend |
 
 ### 2.3 SigmaTau.Est
 
-| Component | File | Status | Notes |
-|-----------|------|--------|-------|
-| `TwoStateClock`, `ThreeStateClock` | [src/est/models/clocks.jl](src/est/models/clocks.jl) | ✅ | `@kwdef` + StaticArrays Φ/Q/H/R |
-| `state_transition(model[, dt])` | same | ✅ | dt-overload for arbitrary horizons; single-arg defers to `model.tau` |
-| `process_noise(model[, dt])` | same | ✅ | Closed-form Galleani/Zucca integration; dt-overload mirrors Φ |
-| `ClockEnsemble`, `EnsembleWeights` | [src/est/models/ensemble.jl](src/est/models/ensemble.jl) | ✅ | Stein 2003 stacked time-scale model. `Base.:+` overloaded on `AbstractClockModel` (homogeneous-only). Block-diagonal Φ/Q; H selects N-1 phase differences vs reference clock. Stein §VI–VII auto-weights from clock q1/q2/q3. Reuses `StandardKalmanFilter` unchanged |
-| `RelativisticClock` | same | 🔲 Stub | Empty struct (lunar PNT future work) |
-| `StandardKalmanFilter` | [src/est/estimators/filters.jl](src/est/estimators/filters.jl) | ✅ | AD-clean default; opt-in `legacy_compat` |
-| `predict!`, `update!` | same | ✅ | Out-of-place SMatrix math; symmetrized P. `predict!` keeps the legacy `est.k > 0` gate. |
-| `prop!` | same | ✅ | Unconditional covariance propagation; uses dt-overloads of Φ/Q. Powers shaded ±1σ holdover bands without disturbing live filter sequencing. |
-| `safe_sqrt_sq` + `clamp_covariance_diag` | same | ✅ | Reproduces MATLAB-era diagonal clamping when `legacy_compat=true` |
-| `UDFactorizedFilter`, `KuramotoOscillator` | same | 🔲 Stub | Reserved for lunar PNT / SWaP work |
-| `PIDController`, `step!`, `steer_to_correction` | same | ✅ | Ported; `predict!(…; steering=…)` and `prop!(…; steering=…)` integrate the correction |
-| `ClockNoiseParams` | — | ✅ | Inlined as `q0..q3` fields on clock structs (intentional design choice) |
+| Component | File | Notes |
+|-----------|------|-------|
+| `TwoStateClock`, `ThreeStateClock` | [src/est/clocks.jl](src/est/clocks.jl) | `@kwdef` + StaticArrays Φ/Q/H/R |
+| `state_transition(model[, dt])` | same | dt-overload for arbitrary horizons; single-arg defers to `model.tau` |
+| `process_noise(model[, dt])` | same | Closed-form Galleani/Zucca integration; dt-overload mirrors Φ |
+| `KalmanFilter` | [src/est/filters.jl](src/est/filters.jl) | Mutable `(x::SVector, P::SMatrix, k)` over-out-of-place arithmetic, AD-clean |
+| `predict!`, `update!` | same | Out-of-place SMatrix math; symmetrized P. `predict!` keeps the `est.k > 0` first-step gate |
+| `prop!` | same | Unconditional covariance propagation; uses dt-overloads of Φ/Q. Powers shaded ±1σ holdover bands without disturbing live filter sequencing |
+| `PIDController`, `step!`, `steer_to_correction` | same | Discrete PID; `predict!(…; steering=…)` and `prop!(…; steering=…)` integrate the correction |
 
-#### Tests
+### 2.4 Umbrella
 
-| Test | Status | Notes |
-|------|--------|-------|
-| [test/est/runtests.jl](test/est/runtests.jl) | ✅ | 41+ assertions: Φ/Q parity, legacy_compat Kalman parity, AD-clean parity, TwoStateClock smoke, PID step + steering-corrected predict, **prop! Q-integration parity**, **prop! group/additivity composition**, **prop! vs predict! parity after k>0**, **prop! steering**, **prop! covariance band over horizons** |
-
-### 2.4 SigmaTau Umbrella
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| `@reexport` wiring | ✅ | Stab + Est public symbols re-exported from `SigmaTau` |
-| Root `Project.toml` deps | ✅ | Single-package manifest; no `[workspace]` / `[sources]` |
-| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) | ✅ | Package extension on `RecipesBase`; auto-loads with `Plots` |
-| Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) | ✅ | Verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; `ldev` ≡ `htdev`. |
-| `examples/` | ✅ | Five Literate-driven tutorials (`01_phase_data` → `05_holdover_comparison`) |
+| Component | Notes |
+|-----------|-------|
+| `@reexport` wiring | Stab + Est public symbols re-exported from `SigmaTau` |
+| Root `Project.toml` deps | Single-package manifest; no `[workspace]` / `[sources]` |
+| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots` |
+| Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) — verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; `ldev` ≡ `htdev` |
+| `examples/` | Seven Literate-driven tutorials (`00_julia_for_metrologists` → `06_three_cornered_hat`) |
 
 ---
 
-## 3. Open Questions
-
-### Resolved
-
-| # | Question | Resolution |
-|---|----------|------------|
-| 1 | Distributions.jl vs lightweight CDF? | ✅ `Distributions.jl` in deps |
-| 2 | `predict!/update!` return value? | ✅ Returns `est` (self) |
-| 3 | `update!` signature? | ✅ `update!(est, model, z)` — model carries H, R |
-| 4 | `safe_sqrt`? | ✅ Re-introduced as `legacy_compat=true` opt-in (default off) |
-| 5 | `ClockNoiseParams` struct vs inline? | ✅ Inlined as `q0..q3` |
-| 6 | Workspace package resolution? | ✅ Single-package `Project.toml` (workspace tree dropped) |
-| 7 | `NEFF_RELIABLE = 50 or 30`? | ✅ Set to 30 (GEMINI.md §2 mandate) |
-| 8 | `prop!` covariance propagation? | ✅ Shipped (this batch); dt-overloads of Φ/Q under it |
-| 9 | `StabilityResult.edf` field? | ✅ Added; populated when `calc_ci=true`, empty otherwise |
-
-### Still Open
-
-| # | Question | Source | Impact |
-|---|----------|--------|--------|
-| 10 | MHTOTDEV EDF model refinement | — | 🟡 Uses HTOT approx (known limitation) |
-| 11 | `_coeff_totvar` α=2,1 entries | SP1065 | 🟡 NaN EDF for WPM/FLPM under TOTDEV |
-| 12 | `RelativisticClock` implementation | — | 🟢 Future lunar PNT work |
-| 13 | 5-state diurnal clock model | — | 🟢 Not yet needed |
-| 14 | PDEV EDF / χ² CI port | Vernotte 2015/2020 | 🟢 Closed-form coefficients exist |
-
----
-
-## 4. Known Risks & Technical Debt
-
-### 🟡 Medium
-
-| ID | Risk | Impact |
-|----|------|--------|
-| R-MED-6 | ~~HTOTDEV EDF off-by-one suspected~~ | ✅ Closed: `_coeff_htot` aligned to FCS 2001 / Howe & Tasset 2005 Table I; HTOTDEV EDF now matches Stable32 to <0.01% for `τ ≥ 16τ₀`. Sub-`16τ₀` regime is outside the paper's stated validity range. |
-| R-MED-7 | Noise-ID does not block-process for N > 10⁷ | Performance (not correctness) limit |
-| R-MED-8 | `_coeff_mtot` for α=−1 and α=−2 are single-point fits against Stable32 (`s32_5_12_26` fixture). Need one additional AF per α to pin both `b` and `c`. |
-
-### 🟢 Low / Polish
-
-| ID | Risk |
-|----|------|
-| R-LOW-3 | Tutorials cover the single-clock + steering + holdover + TCH + ensemble path; relativistic walk-through queued |
-| R-LOW-4 | `Documenter.jl` site skeleton shipped; tutorial pages are stubs (theory pages now filled out) |
-| R-LOW-5 | `RelativisticClock`, `UDFactorizedFilter`, `KuramotoOscillator` are stubs |
-
----
-
-## 5. Design Principle Compliance
-
-| Principle | Status | Notes |
-|-----------|--------|-------|
-| No "God Engine" | ✅ | I/O (types), math (Stab cores), stats (edf.jl), plotting (recipes ext) are separate |
-| Type-Driven Dispatch | ✅ | API takes `PhaseData` / `FrequencyData`, returns `StabilityResult`; cores take `Vector{Float64}` |
-| Dual-Use API (Tier 1/Tier 2) | ✅ | `_*_core` exported alongside high-level wrappers |
-| AD-Friendly Ensembling | ✅ | Default path is out-of-place StaticArrays; mutation only opt-in |
-| StaticArrays for Kalman | ✅ | All Φ, Q, H, R, x, P use `@SMatrix`/`SVector`; dt-overloads preserve this |
-| Covariance prediction without coupling to update | ✅ | `prop!` is a side-channel propagator; never bumps `est.k` |
-
----
-
-## 6. File Inventory (tracked, public repo)
+## 3. File Inventory (tracked, public repo)
 
 ```
 .gitignore
 LICENSE                                  MIT, © Ian Lapinski 2026
 README.md                                Project intro + quickstart + badges
 CHANGELOG.md                             Keep-a-Changelog
-TODO.md                                  Outstanding work, sorted by priority
+TODO.md                                  Outstanding work
 project_overview.md                      This file (per-component audit)
 Project.toml                             Single-package manifest + extension
 src/
 ├── SigmaTau.jl                          Umbrella + @reexport wiring
 ├── types/{abstract,phase_data,frequency_data,stability_result}.jl
+├── io/{results,detrend,fillgaps,read}.jl
 ├── stab/
 │   ├── core/{allan,hadamard,total,mtie,pdev}.jl
 │   ├── noise/{lag1,synth,gen}.jl
@@ -241,8 +149,8 @@ src/
 │   ├── api/{allan,hadamard,total,mtie,pdev}.jl
 │   └── utils.jl                         (FrequencyData → PhaseData helper)
 └── est/
-    ├── models/clocks.jl                 (TwoState, ThreeState, RelativisticClock stub; Φ + Q with dt overloads)
-    └── estimators/filters.jl            (StandardKalmanFilter; predict!, update!, prop!; PID + steering)
+    ├── clocks.jl                        (TwoStateClock, ThreeStateClock; Φ + Q with dt overloads)
+    └── filters.jl                       (KalmanFilter; predict!, update!, prop!; PID + steering)
 
 ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
 
@@ -251,16 +159,12 @@ test/
 ├── types/runtests.jl
 ├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl
 ├── est/runtests.jl
+├── io/{detrend,fillgaps,read,runtests}.jl
 └── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
 
 docs/                                    Documenter.jl subproject
-benchmarks/                              Long-record perf runs + scaling fits (gitignored outputs):
-                                         `bench_sigmatau.jl` / `bench_allantools.py` — wall-clock per-record;
-                                         `scaling.jl` / `scaling_allantools.py` / `render_scaling.py` —
-                                         log-log power-law fits + cross-library comparison;
-                                         `btime_sigmatau.jl` / `btime_allantools.py` — BenchmarkTools
-                                         quick-look on synthetic randn input.
-examples/                                Literate-driven tutorials 01..05
+benchmarks/                              Long-record perf runs (gitignored outputs)
+examples/                                Literate-driven tutorials 00..06
 reference/validation/                    Stable32 + allantools cross-check fixtures
 tools/Project.toml                       Dev-tools env
 ```

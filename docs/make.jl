@@ -58,15 +58,7 @@ makedocs(
             "theory/ensemble_overview.md",
             "theory/kalman.md",
             "theory/steering.md",
-            "Relativistic PNT" => [
-                "theory/relativistic_clocks.md",
-                "theory/relativistic_frames_and_timescales.md",
-                "theory/relativistic_corrections.md",
-                "theory/lunar_pnt_systems.md",
-            ],
-            "theory/ensembles_and_oscillator_networks.md",
             "theory/validation.md",
-            "theory/publications.md",
         ],
         "Tutorials"       => [
             "tutorials/00_julia_for_metrologists.md",
@@ -76,7 +68,6 @@ makedocs(
             "tutorials/04_kalman_pid_steering.md",
             "tutorials/05_holdover_comparison.md",
             "tutorials/06_three_cornered_hat.md",
-            "tutorials/07_clock_ensemble.md",
         ],
         "API Reference"   => [
             "reference/types.md",

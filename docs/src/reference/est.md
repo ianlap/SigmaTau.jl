@@ -6,7 +6,6 @@
 AbstractClockModel
 TwoStateClock
 ThreeStateClock
-RelativisticClock
 nstates
 state_transition
 process_noise
@@ -14,20 +13,10 @@ measurement_matrix
 measurement_noise
 ```
 
-## Clock ensembles
+## Kalman filter
 
 ```@docs
-ClockEnsemble
-EnsembleWeights
-```
-
-## Estimators
-
-```@docs
-AbstractEstimator
-StandardKalmanFilter
-UDFactorizedFilter
-KuramotoOscillator
+KalmanFilter
 predict!
 update!
 prop!
