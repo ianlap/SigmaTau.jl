@@ -6,6 +6,7 @@ using Distributions
 using StaticArrays
 using DelimitedFiles
 using FFTW
+using Dates
 
 # ── Shared types ────────────────────────────────────────────────────────
 include("types/abstract.jl")
@@ -60,7 +61,7 @@ include("stab/api/suite.jl")
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
 
-export save_result, load_result
+export save_result, load_result, save_suite, load_suite
 export read_phase, read_frequency
 export detrend, fillgaps
 
