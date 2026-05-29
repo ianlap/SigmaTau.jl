@@ -28,6 +28,10 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 - `TOTDEV_DETREND_DEFAULT` (`:howe`) and `TOTAL_FAMILY_DETREND_DEFAULT`
   (`:greenhall`) constants, exported so the active total-family detrend
   default can be read rather than hardcoded. The default values are unchanged.
+- Plot recipes for `StabilitySuite` and `Vector{StabilityResult}` overlays (one
+  curve per result on shared log-log axes), plus an opt-in `ci_band` plot
+  attribute that renders a result's confidence interval as a filled band instead
+  of error bars. The default single-result rendering is unchanged.
 
 ### Changed
 
