@@ -39,12 +39,16 @@ end
 end
 
 @testset "Internal core kernels are not exported" begin
+    # Check export-ness against `names(SigmaTau)` rather than the caller's
+    # namespace: other test files (`test/stab/runtests.jl`) import the cores
+    # explicitly for unqualified use, which would pollute `@__MODULE__`.
+    exported = names(SigmaTau)
     cores = (:_adev_core, :_mdev_core, :_tdev_core, :_hdev_core, :_mhdev_core,
              :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,
              :_mtie_core, :_pdev_core)
     for sym in cores
-        @test isdefined(SigmaTau, sym)       # reachable as `SigmaTau._adev_core`
-        @test !isdefined(@__MODULE__, sym)   # but NOT bare under `using SigmaTau`
+        @test isdefined(SigmaTau, sym)   # reachable as `SigmaTau._adev_core`
+        @test sym ∉ exported             # but not part of the exported surface
     end
 end
 
