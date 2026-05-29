@@ -6,6 +6,14 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `TauMode` averaging-factor grid selector (`AllTaus`, `Octave`, `HalfOctave`,
+  `QuarterOctave`, `Decade`, `HalfDecade`) and the `tau_values(mode, N, kernel)`
+  helper. Every deviation now accepts a `TauMode` in place of an explicit
+  `m_values` array — e.g. `adev(pd, Decade)`. The default octave grid is
+  unchanged (`tau_values(Octave, N, kernel) == _default_m_values(N, kernel)`).
+
 ### Fixed
 
 - **Out-of-bounds write in `_make_equispaced`.** When a record's time span

@@ -1269,3 +1269,5 @@ const LK = LegacyKernels
         end
     end
 end
+
+include("taus.jl")

@@ -38,6 +38,10 @@ end
 
 pdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = pdev(_freq_to_phase(data), m_values; kwargs...)
 
+# TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
+pdev(data::PhaseData,     taus::TauMode; kwargs...) = pdev(data, tau_values(taus, length(data.x), :pdev); kwargs...)
+pdev(data::FrequencyData, taus::TauMode; kwargs...) = pdev(data, tau_values(taus, length(data.y), :pdev); kwargs...)
+
 # Zero-arg convenience: octave-spaced m_values up to PDEV's algorithmic
 # m-max (`(N − 1) ÷ 2`, see `_default_m_values`).
 pdev(data::PhaseData;     kwargs...) = pdev(data, _default_m_values(length(data.x), :pdev); kwargs...)

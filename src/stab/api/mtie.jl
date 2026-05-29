@@ -38,6 +38,10 @@ end
 
 mtie(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mtie(_freq_to_phase(data), m_values; kwargs...)
 
+# TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
+mtie(data::PhaseData,     taus::TauMode; kwargs...) = mtie(data, tau_values(taus, length(data.x), :mtie); kwargs...)
+mtie(data::FrequencyData, taus::TauMode; kwargs...) = mtie(data, tau_values(taus, length(data.y), :mtie); kwargs...)
+
 # Zero-arg convenience: octave-spaced m_values up to MTIE's algorithmic
 # m-max (`N − 1`, see `_default_m_values`).
 mtie(data::PhaseData;     kwargs...) = mtie(data, _default_m_values(length(data.x), :mtie); kwargs...)
