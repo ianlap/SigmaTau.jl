@@ -23,6 +23,14 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   (`:greenhall`) constants, exported so the active total-family detrend
   default can be read rather than hardcoded. The default values are unchanged.
 
+### Changed
+
+- `PhaseData` and `FrequencyData` now validate their arguments at construction:
+  `tau0` must be positive and the sample vector must have at least two elements,
+  otherwise an `ArgumentError` is thrown (previously invalid input surfaced as a
+  cryptic downstream error or `NaN`). Integer `tau0` is still accepted and stored
+  as `Float64`.
+
 ### Changed (BREAKING)
 
 - Removed the no-op `confidence` kwarg from `mtie` and `pdev`. Neither has a
