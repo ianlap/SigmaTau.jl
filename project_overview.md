@@ -112,7 +112,7 @@ raw `Vector{Float64}`.
 |-----------|-------|
 | Single flat export block | `src/SigmaTau.jl` exports types, IO, deviations, noise-ID, EDF/CI, MTIE, PDEV, and `noise_gen` directly |
 | Root `Project.toml` deps | Single-package manifest; `AbstractFFTs`, `Dates`, `DelimitedFiles`, `Distributions`, `DocStringExtensions`, `FFTW`, `StaticArrays`, `Statistics` |
-| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots` |
+| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots`. Single-result curve (opt-in `ci_band` ribbon), plus `StabilitySuite` and `Vector{StabilityResult}` overlays |
 | Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) — verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; `ldev` ≡ `htdev`; pins the absence of the old `Stab`/`Est` submodules |
 | `examples/` | Four Literate-driven tutorials (`00_julia_for_metrologists`, `01_phase_data`, `02_compute_adev`, `06_three_cornered_hat`) |
 
@@ -143,11 +143,12 @@ src/
 ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
 
 test/
-├── runtests.jl                          Aggregator (4 sub-suites)
+├── runtests.jl                          Aggregator (5 sub-suites)
 ├── types/runtests.jl
 ├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl + taus.jl + suite.jl
 ├── io/{detrend,fillgaps,read,results,runtests}.jl
-└── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
+├── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
+└── recipes.jl                           RecipesBase extension smoke (overlays + ci_band)
 
 docs/                                    Documenter.jl subproject
 benchmarks/                              Long-record perf runs (gitignored outputs)
