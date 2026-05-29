@@ -49,6 +49,10 @@ so user code is just `using SigmaTau; adev(...)`.
 
 #### Core Kernels
 
+Internal — **not exported** (reach via `SigmaTau._adev_core`); the leading
+underscore marks them unsupported. Each takes `Vector{Float64}` and returns a
+raw `Vector{Float64}`.
+
 | Kernel | File | Notes |
 |--------|------|-------|
 | `_adev_core`, `_mdev_core`, `_tdev_core` | [src/stab/core/allan.jl](src/stab/core/allan.jl) | Overlapping ADEV / MDEV / TDEV |

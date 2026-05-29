@@ -68,10 +68,9 @@ export TOTDEV_DETREND_DEFAULT, TOTAL_FAMILY_DETREND_DEFAULT
 export TauMode, AllTaus, Octave, HalfOctave, QuarterOctave, Decade, HalfDecade
 export tau_values
 
-export _adev_core, _mdev_core, _tdev_core
-export _hdev_core, _mhdev_core
-export _totdev_core, _mtotdev_core, _htotdev_core, _mhtotdev_core
-export _mtie_core, _pdev_core
+# Internal deviation kernels (`_*_core`) are intentionally NOT exported — they
+# are reachable as `SigmaTau._adev_core` etc. for power users, but the leading
+# underscore marks them unsupported and they are kept out of the bare namespace.
 
 export identify_noise, calculate_edf, confidence_intervals, bias_correction
 

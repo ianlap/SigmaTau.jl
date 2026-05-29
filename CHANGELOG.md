@@ -24,6 +24,9 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   now errors. `calc_ci` is retained (a documented no-op) so the batch
   `stability` API can forward it uniformly and `pdev` is future-proofed for a
   real CI model.
+- Un-exported the internal `_*_core` deviation kernels. They were never part of
+  the supported API (the leading underscore marks them internal); reach them as
+  `SigmaTau._adev_core` etc. if needed.
 
 ### Fixed
 
