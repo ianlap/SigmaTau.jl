@@ -3,6 +3,11 @@ using Random
 using FFTW                                  # AbstractFFTs backend for noise synth
 using SigmaTau
 using SigmaTau: NEFF_RELIABLE, _gen_powerlaw_phase
+# Core kernels are no longer exported; bring them in explicitly for the
+# unqualified uses in the parity testsets below.
+using SigmaTau: _adev_core, _mdev_core, _tdev_core, _hdev_core, _mhdev_core,
+                _totdev_core, _mtotdev_core, _htotdev_core, _mhtotdev_core,
+                _mtie_core, _pdev_core
 
 include("legacy_kernels.jl")
 const LK = LegacyKernels

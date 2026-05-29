@@ -25,16 +25,25 @@ end
                 :mtie, :pdev,
                 :identify_noise, :calculate_edf, :confidence_intervals,
                 :bias_correction, :DEFAULT_CONFIDENCE,
+                :TOTDEV_DETREND_DEFAULT, :TOTAL_FAMILY_DETREND_DEFAULT,
+                :TauMode, :AllTaus, :Octave, :HalfOctave,
+                :QuarterOctave, :Decade, :HalfDecade, :tau_values,
                 :save_result, :load_result,
                 :read_phase, :read_frequency,
                 :detrend, :fillgaps,
                 :noise_gen,
-                :_adev_core, :_mdev_core, :_tdev_core,
-                :_hdev_core, :_mhdev_core,
-                :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,
-                :_mtie_core, :_pdev_core,
                 :ldev)        # deprecated alias, still re-exported
         @test isdefined(@__MODULE__, sym)
+    end
+end
+
+@testset "Internal core kernels are not exported" begin
+    cores = (:_adev_core, :_mdev_core, :_tdev_core, :_hdev_core, :_mhdev_core,
+             :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,
+             :_mtie_core, :_pdev_core)
+    for sym in cores
+        @test isdefined(SigmaTau, sym)       # reachable as `SigmaTau._adev_core`
+        @test !isdefined(@__MODULE__, sym)   # but NOT bare under `using SigmaTau`
     end
 end
 
