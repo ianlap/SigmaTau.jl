@@ -17,6 +17,14 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   (`:greenhall`) constants, exported so the active total-family detrend
   default can be read rather than hardcoded. The default values are unchanged.
 
+### Changed (BREAKING)
+
+- Removed the no-op `confidence` kwarg from `mtie` and `pdev`. Neither has a
+  published EDF/χ² model, so the kwarg never affected the result; passing it
+  now errors. `calc_ci` is retained (a documented no-op) so the batch
+  `stability` API can forward it uniformly and `pdev` is future-proofed for a
+  real CI model.
+
 ### Fixed
 
 - **Out-of-bounds write in `_make_equispaced`.** When a record's time span
