@@ -6,17 +6,18 @@
 Computes the Overlapping Hadamard Deviation for the given PhaseData.
 """
 function hdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _hdev_core(data.x, m_values, data.tau0)
+    x = _f64(data.x)
+    raw_devs = _hdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
-    T = (length(data.x) - 1) * data.tau0
+    T = (length(x) - 1) * data.tau0
 
     if !calc_ci
         return StabilityResult(:hdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
-    noises = identify_noise(data.x, m_values, dmin=0, dmax=3)
-    edfs = calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(data.x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(data.x), confidence)
+    noises = identify_noise(x, m_values, dmin=0, dmax=3)
+    edfs = calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(x), T)
+    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:hdev, taus, raw_devs, noises, lower, upper, edfs)
 end
@@ -27,17 +28,18 @@ end
 Computes the Modified Hadamard Deviation for the given PhaseData.
 """
 function mhdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _mhdev_core(data.x, m_values, data.tau0)
+    x = _f64(data.x)
+    raw_devs = _mhdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
-    T = (length(data.x) - 1) * data.tau0
+    T = (length(x) - 1) * data.tau0
 
     if !calc_ci
         return StabilityResult(:mhdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
-    noises = identify_noise(data.x, m_values, dmin=0, dmax=3)
-    edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(data.x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(data.x), confidence)
+    noises = identify_noise(x, m_values, dmin=0, dmax=3)
+    edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(x), T)
+    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:mhdev, taus, raw_devs, noises, lower, upper, edfs)
 end
@@ -67,7 +69,8 @@ end
 """
     ldev(args...; kwargs...)
 
-Deprecated alias for [`htdev`](@ref). Will be removed after v0.2.0.
+Deprecated alias for [`htdev`](@ref). Scheduled for removal in a future
+0.x release; migrate to `htdev`.
 """
 function ldev(args...; kwargs...)
     Base.depwarn("`ldev` is deprecated, use `htdev` instead.", :ldev)
