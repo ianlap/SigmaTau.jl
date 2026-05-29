@@ -29,7 +29,7 @@ end
                 :TOTDEV_DETREND_DEFAULT, :TOTAL_FAMILY_DETREND_DEFAULT,
                 :TauMode, :AllTaus, :Octave, :HalfOctave,
                 :QuarterOctave, :Decade, :HalfDecade, :tau_values,
-                :save_result, :load_result,
+                :save_result, :load_result, :save_suite, :load_suite,
                 :read_phase, :read_frequency,
                 :detrend, :fillgaps,
                 :noise_gen,

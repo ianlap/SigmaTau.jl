@@ -14,6 +14,12 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   The batch analog of calling each deviation by hand; `devs` defaults to
   `DEFAULT_DEVIATIONS` (`:adev, :mdev, :hdev, :tdev`). Extra kwargs (`detrend`,
   `correct_bias`) are forwarded only to the total family.
+- `save_suite` / `load_suite` — round-trip a whole `StabilitySuite` to a
+  self-describing tab-delimited file (format v2) that also records session
+  metadata (package version, ISO-8601 timestamp, source file, data kind, τ₀, N,
+  confidence, tau mode, deviation set). `save_result` / `load_result` are
+  unchanged for single results and reject the other format with a clear error;
+  v1 files still load. Adds the `Dates` stdlib dependency for the timestamp.
 - `TauMode` averaging-factor grid selector (`AllTaus`, `Octave`, `HalfOctave`,
   `QuarterOctave`, `Decade`, `HalfDecade`) and the `tau_values(mode, N, kernel)`
   helper. Every deviation now accepts a `TauMode` in place of an explicit
