@@ -13,6 +13,9 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   helper. Every deviation now accepts a `TauMode` in place of an explicit
   `m_values` array — e.g. `adev(pd, Decade)`. The default octave grid is
   unchanged (`tau_values(Octave, N, kernel) == _default_m_values(N, kernel)`).
+- `TOTDEV_DETREND_DEFAULT` (`:howe`) and `TOTAL_FAMILY_DETREND_DEFAULT`
+  (`:greenhall`) constants, exported so the active total-family detrend
+  default can be read rather than hardcoded. The default values are unchanged.
 
 ### Fixed
 
@@ -42,6 +45,9 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   from the rendered manual.
 - Corrected the stale `ldev` deprecation note (it referenced a version that
   has already shipped).
+- Documented the intentional split between `totdev`'s `:howe` detrend default
+  and the modified/Hadamard total family's `:greenhall` default, via a
+  "Detrend default" admonition on each total-family function.
 
 ## [0.3.0] — 2026-05-21
 
