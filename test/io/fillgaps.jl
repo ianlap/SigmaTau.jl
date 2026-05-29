@@ -63,4 +63,22 @@
         @test isnan(xfilled[5])
         @test xfilled[[1,2,3,4,6,7]] == [0.0,1.0,2.0,3.0,5.0,6.0]
     end
+
+    @testset "_make_equispaced span not a multiple of dt (no OOB)" begin
+        # Regression: when (t[end]-t[1]) is not an integer multiple of dt the
+        # final sample's grid index rounds past a naive `t[1]:dt:t[end]` grid,
+        # which previously wrote out of bounds (a segfault under @inbounds).
+        # The grid must be sized to cover the rounded last index.
+        t = [0.0, 1.0, 2.7]
+        x = [10.0, 20.0, 30.0]
+        tfilled, xfilled = SigmaTau._make_equispaced(t, x)
+        @test length(tfilled) == length(xfilled)
+        @test xfilled[1] == 10.0
+        @test xfilled[2] == 20.0
+        @test xfilled[end] == 30.0          # last sample lands on the last grid point
+        @test count(!isnan, xfilled) == 3   # every input sample placed
+
+        # And the non-strictly-increasing guard still fires.
+        @test_throws ArgumentError SigmaTau._make_equispaced([0.0, 2.0, 1.0], [1.0, 2.0, 3.0])
+    end
 end

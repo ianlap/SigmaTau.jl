@@ -654,6 +654,39 @@ const LK = LegacyKernels
         @test isfinite(out[5])        # tiny positive B still works
     end
 
+    @testset "Non-Float64 PhaseData flows through the API" begin
+        # Regression: PhaseData{Float32} (and any AbstractFloat eltype) used
+        # to hit a MethodError on the Vector{Float64}-typed core kernels. The
+        # API now promotes the sample vector at the boundary, so a Float32
+        # record gives the same deviations as its Float64 twin.
+        Random.seed!(20260529)
+        x64 = cumsum(randn(512))
+        x32 = Float32.(x64)
+        ms  = [1, 2, 4, 8, 16]
+        pd64 = PhaseData(x64, 1.0)
+        pd32 = PhaseData(x32, 1.0)
+        for f in (adev, mdev, tdev, hdev, mhdev, htdev,
+                  totdev, mtotdev, ttotdev, htotdev, mhtotdev,
+                  mtie, pdev)
+            r32 = f(pd32, ms; calc_ci=false)
+            r64 = f(pd64, ms; calc_ci=false)
+            # Float32 input carries ~1e-7 relative precision; compare loosely.
+            @test isapprox(r32.dev, r64.dev; rtol=1e-4, nans=true)
+        end
+        # CI path also runs without error on the promoted vector.
+        @test adev(pd32, ms; calc_ci=true).edf == adev(pd64, ms; calc_ci=true).edf
+    end
+
+    @testset "confidence_intervals floors the lower bound at zero" begin
+        # Regression: the Gaussian fallback (edf < 1) is a symmetric ±half
+        # interval that could push the lower limit below zero — unphysical for
+        # a deviation. It is now floored at 0.
+        lo, hi = SigmaTau.confidence_intervals([1.0], [0.5], [:WHPM], 4, 0.99)
+        @test lo[1] == 0.0            # would have been ≈ -0.275 before the floor
+        @test hi[1] > 1.0
+        @test all(lo .>= 0.0)
+    end
+
     @testset "MTIE core" begin
         # Hand-checkable fixture: x = [0, 1, 0.5, 2, 1.5]. Window size = m+1.
         #   m=1: peak-to-peak per window ∈ {1.0, 0.5, 1.5, 0.5}     → 1.5

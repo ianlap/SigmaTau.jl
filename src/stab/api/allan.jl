@@ -26,16 +26,17 @@ julia> round.(r.dev; sigdigits=4)
 ```
 """
 function adev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _adev_core(data.x, m_values, data.tau0)
+    x = _f64(data.x)
+    raw_devs = _adev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
 
     if !calc_ci
         return StabilityResult(:adev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
-    noises = identify_noise(data.x, m_values, dmin=0, dmax=2)
-    edfs = calculate_edf(:adev, raw_devs, noises, m_values, taus, length(data.x), (length(data.x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(data.x), confidence)
+    noises = identify_noise(x, m_values, dmin=0, dmax=2)
+    edfs = calculate_edf(:adev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
+    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:adev, taus, raw_devs, noises, lower, upper, edfs)
 end
@@ -64,16 +65,17 @@ julia> round.(r.dev; sigdigits=4)
 ```
 """
 function mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _mdev_core(data.x, m_values, data.tau0)
+    x = _f64(data.x)
+    raw_devs = _mdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
 
     if !calc_ci
         return StabilityResult(:mdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
-    noises = identify_noise(data.x, m_values, dmin=0, dmax=2)
-    edfs = calculate_edf(:mdev, raw_devs, noises, m_values, taus, length(data.x), (length(data.x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(data.x), confidence)
+    noises = identify_noise(x, m_values, dmin=0, dmax=2)
+    edfs = calculate_edf(:mdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
+    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:mdev, taus, raw_devs, noises, lower, upper, edfs)
 end
