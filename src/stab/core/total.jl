@@ -190,10 +190,6 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
     # (was ~600 MB of churn on the 3M-sample file, max_m=2^19).
     nthreads = Threads.nthreads()
     max_m = maximum(m_values; init=0)
-    if max_m < 1 || N - 3*max_m + 1 < 1
-        # All m's invalid or no subsequences possible: fall through and
-        # let the per-k NaN branch handle each.
-    end
     ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
 
     for k in eachindex(m_values)

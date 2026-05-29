@@ -31,7 +31,7 @@ julia> r.dev
 ```
 """
 function mtie(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _mtie_core(data.x, m_values, data.tau0)
+    raw_devs = _mtie_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     return StabilityResult(:mtie, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
 end

@@ -1,6 +1,19 @@
 # utils.jl — Shared helpers for the stability API
 
 """
+    _f64(v::AbstractVector{<:Real}) → Vector{Float64}
+
+Promote a sample vector to the `Vector{Float64}` the core kernels and
+`identify_noise` require. A no-op (returns the same array, no copy) when `v`
+is already a `Vector{Float64}`; otherwise allocates a converted copy. Lets
+`PhaseData{Float32}` (and any other `AbstractFloat` element type) flow through
+the public deviation API instead of hitting a `MethodError` on the
+`Vector{Float64}`-typed kernels.
+"""
+_f64(v::Vector{Float64}) = v
+_f64(v::AbstractVector{<:Real}) = Vector{Float64}(v)
+
+"""
     _freq_to_phase(data::FrequencyData) → PhaseData
 
 Convert fractional-frequency samples to phase residuals using the running

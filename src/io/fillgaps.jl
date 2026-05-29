@@ -366,9 +366,15 @@ function _make_equispaced(t::AbstractVector{<:Real}, x::AbstractVector{<:Real})
     length(t) >= 2 || throw(ArgumentError("_make_equispaced: need at least 2 samples"))
     dt = minimum(diff(t))
     dt > 0 || throw(ArgumentError("_make_equispaced: time vector is not strictly increasing"))
-    tfilled = collect(t[1]:dt:t[end])
-    xfilled = fill(NaN, length(tfilled))
-    @inbounds for i in eachindex(t)
+    # Size the grid to the same rounding scheme used to place samples below,
+    # so the last sample's index never lands past the grid end. A plain
+    # `t[1]:dt:t[end]` truncates when the span isn't an exact multiple of `dt`,
+    # which previously let `idx` overrun `xfilled` (an out-of-bounds write, and
+    # a hard crash under `@inbounds`).
+    n = round(Int, (t[end] - t[1]) / dt) + 1
+    tfilled = collect(range(t[1]; step=dt, length=n))
+    xfilled = fill(NaN, n)
+    for i in eachindex(t)
         idx = round(Int, (t[i] - t[1]) / dt) + 1
         xfilled[idx] = x[i]
     end
