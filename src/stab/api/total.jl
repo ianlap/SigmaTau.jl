@@ -24,13 +24,14 @@ kernel value (Stable32 actually applies the correction by default,
 contrary to older notes — verify against the build you compare with).
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _totdev_core(data.x, m_values, data.tau0; detrend=detrend)
+    x = _f64(data.x)
+    raw_devs = _totdev_core(x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
-    T = (length(data.x) - 1) * data.tau0
+    T = (length(x) - 1) * data.tau0
 
     # Noise IDs needed for either path — bias correction reads α, CIs read α.
     need_noise = correct_bias || calc_ci
-    noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=2) : Symbol[]
+    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, taus, T)) : raw_devs
 
@@ -38,8 +39,8 @@ function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, c
         return StabilityResult(:totdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 
-    edfs = calculate_edf(:totdev, devs, noises, m_values, taus, length(data.x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(data.x), confidence)
+    edfs = calculate_edf(:totdev, devs, noises, m_values, taus, length(x), T)
+    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:totdev, taus, devs, noises, lower, upper, edfs)
 end
@@ -58,12 +59,13 @@ return the raw kernel — matches Stable32 and allantools, which do not
 apply this correction.
 """
 function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _mtotdev_core(data.x, m_values, data.tau0; detrend=detrend)
+    x = _f64(data.x)
+    raw_devs = _mtotdev_core(x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
-    T = (length(data.x) - 1) * data.tau0
+    T = (length(x) - 1) * data.tau0
 
     need_noise = correct_bias || calc_ci
-    noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=2) : Symbol[]
+    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, taus, T)) : raw_devs
 
@@ -71,8 +73,8 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
         return StabilityResult(:mtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 
-    edfs = calculate_edf(:mtotdev, devs, noises, m_values, taus, length(data.x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(data.x), confidence)
+    edfs = calculate_edf(:mtotdev, devs, noises, m_values, taus, length(x), T)
+    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:mtotdev, taus, devs, noises, lower, upper, edfs)
 end
@@ -94,12 +96,13 @@ applies the correction by default — see TOTDEV docstring for the same
 caveat).
 """
 function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    raw_devs = _htotdev_core(data.x, m_values, data.tau0; detrend=detrend)
+    x = _f64(data.x)
+    raw_devs = _htotdev_core(x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
-    T = (length(data.x) - 1) * data.tau0
+    T = (length(x) - 1) * data.tau0
 
     need_noise = correct_bias || calc_ci
-    noises = need_noise ? identify_noise(data.x, m_values, dmin=0, dmax=3) : Symbol[]
+    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
 
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, taus, T)) : raw_devs
 
@@ -107,8 +110,8 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenh
         return StabilityResult(:htotdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 
-    edfs = calculate_edf(:htotdev, devs, noises, m_values, taus, length(data.x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(data.x), confidence)
+    edfs = calculate_edf(:htotdev, devs, noises, m_values, taus, length(x), T)
+    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:htotdev, taus, devs, noises, lower, upper, edfs)
 end
@@ -157,17 +160,18 @@ uses the empirical SP1065 fit coefficients (`_coeff_mhtot`).
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _ = correct_bias  # accepted for API symmetry; B = 1 by FCS 2001 / SP1065 policy. See docstring.
-    raw_devs = _mhtotdev_core(data.x, m_values, data.tau0; detrend=detrend)
+    x = _f64(data.x)
+    raw_devs = _mhtotdev_core(x, m_values, data.tau0; detrend=detrend)
     taus = m_values .* data.tau0
-    T = (length(data.x) - 1) * data.tau0
+    T = (length(x) - 1) * data.tau0
 
     if !calc_ci
         return StabilityResult(:mhtotdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
-    noises = identify_noise(data.x, m_values, dmin=0, dmax=3)
-    edfs = calculate_edf(:mhtotdev, raw_devs, noises, m_values, taus, length(data.x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(data.x), confidence)
+    noises = identify_noise(x, m_values, dmin=0, dmax=3)
+    edfs = calculate_edf(:mhtotdev, raw_devs, noises, m_values, taus, length(x), T)
+    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
     return StabilityResult(:mhtotdev, taus, raw_devs, noises, lower, upper, edfs)
 end

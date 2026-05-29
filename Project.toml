@@ -20,11 +20,15 @@ SigmaTauRecipesBaseExt = "RecipesBase"
 
 [compat]
 AbstractFFTs = "1"
+DelimitedFiles = "1"
 Distributions = "0.25.125"
 DocStringExtensions = "0.9"
 FFTW = "1"
+Random = "1"
 RecipesBase = "1"
 StaticArrays = "1"
+Statistics = "1"
+Test = "1"
 julia = "1.11"
 
 [extras]

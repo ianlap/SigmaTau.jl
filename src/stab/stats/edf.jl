@@ -313,7 +313,10 @@ function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, nois
         else
             Kn = _kn_from_alpha(_alpha_from_noise(noises[k]))
             half = Kn * d * z / sqrt(Float64(N))
-            lower[k] = d - half
+            # A deviation is non-negative by construction, so floor the lower
+            # limit at zero — the symmetric Gaussian approximation can otherwise
+            # push it below zero for short records at high confidence.
+            lower[k] = max(d - half, 0.0)
             upper[k] = d + half
         end
     end

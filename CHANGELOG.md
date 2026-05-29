@@ -6,6 +6,35 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Out-of-bounds write in `_make_equispaced`.** When a record's time span
+  was not an integer multiple of the inferred sample interval, the final
+  sample's grid index rounded past a `t[1]:dt:t[end]` grid and was written
+  out of bounds — a memory corruption that crashed under `@inbounds`,
+  reachable from `read_phase` / `read_frequency` with `fillgaps=true`. The
+  grid is now sized to the same rounding used to place samples, so every
+  sample lands in range.
+- **`MethodError` on non-`Float64` timing data.** `PhaseData{Float32}` (and
+  any other `AbstractFloat` element type) failed on the deviation API because
+  the core kernels are typed `Vector{Float64}`. The sample vector is now
+  promoted to `Vector{Float64}` at the API boundary, so a Float32 record
+  produces the same results as its Float64 twin.
+- **Negative confidence-interval lower bound.** The Gaussian (`edf < 1`)
+  fallback in `confidence_intervals` is symmetric and could return a lower
+  limit below zero for short records at high confidence; it is now floored
+  at zero.
+- Added `[compat]` bounds for `DelimitedFiles`, `Statistics`, `Random`, and
+  `Test`.
+
+### Documentation
+
+- API reference now documents `mtie`, `pdev`, `noise_gen`, `read_phase`,
+  `read_frequency`, `detrend`, and `fillgaps`, which were exported but absent
+  from the rendered manual.
+- Corrected the stale `ldev` deprecation note (it referenced a version that
+  has already shipped).
+
 ## [0.3.0] — 2026-05-21
 
 ### Changed (BREAKING)

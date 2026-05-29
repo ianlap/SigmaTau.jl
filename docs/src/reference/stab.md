@@ -22,10 +22,18 @@ htotdev
 mhtotdev
 ```
 
+## MTIE and PDEV
+
+```@docs
+mtie
+pdev
+```
+
 ## Noise identification
 
 ```@docs
 identify_noise
+noise_gen
 ```
 
 ## EDF, bias, and confidence intervals
@@ -36,9 +44,13 @@ bias_correction
 confidence_intervals
 ```
 
-## I/O
+## I/O and preprocessing
 
 ```@docs
+read_phase
+read_frequency
+detrend
+fillgaps
 save_result
 load_result
 ```
