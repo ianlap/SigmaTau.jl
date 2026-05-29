@@ -12,8 +12,9 @@ ADEV.
 
 No standard EDF / χ² confidence model is published for PDEV, so the
 returned `noise_type`, `ci_lower`, `ci_upper`, and `edf` vectors are
-empty. The `calc_ci` and `confidence` kwargs are accepted for API
-uniformity.
+empty. `calc_ci` is accepted for API uniformity (and to future-proof the
+signature for when a PDEV EDF model lands) but is currently a no-op;
+there is no `confidence` kwarg.
 
 # Examples
 
@@ -30,7 +31,7 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function pdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function pdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true)
     raw_devs = _pdev_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     return StabilityResult(:pdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
