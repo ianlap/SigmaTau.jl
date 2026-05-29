@@ -93,6 +93,7 @@ so user code is just `using SigmaTau; adev(...)`.
 | `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | No CI fields (EDF port tracked in TODO) |
 | `noise_gen` | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | Calibrated power-law clock-noise generator; returns `PhaseData` or `FrequencyData` |
 | `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
+| `TauMode`, `tau_values` | [src/stab/taus.jl](src/stab/taus.jl) | Grid selector `AllTaus`/`Octave`/`HalfOctave`/`QuarterOctave`/`Decade`/`HalfDecade`; every deviation accepts a `TauMode` in place of `m_values`; `_default_m_values` is `tau_values(Octave, …)` so the octave default is unchanged |
 | `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for `StabilityResult` |
 | `read_phase`, `read_frequency` | [src/io/read.jl](src/io/read.jl) | stdlib `readdlm` with `scaling` / `detrend` / `fillgaps` kwargs |
 | `detrend(::PhaseData/::FrequencyData)` | [src/io/detrend.jl](src/io/detrend.jl) | `:linear` / `:endpoint` / `:mean` / `:none` |
@@ -129,6 +130,7 @@ src/
     ├── noise/{lag1,synth,gen}.jl
     ├── stats/edf.jl
     ├── api/{allan,hadamard,total,mtie,pdev}.jl
+    ├── taus.jl                          (TauMode grid selector + tau_values)
     └── utils.jl                         (FrequencyData → PhaseData helper)
 
 ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
@@ -136,7 +138,7 @@ ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plot
 test/
 ├── runtests.jl                          Aggregator (4 sub-suites)
 ├── types/runtests.jl
-├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl
+├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl + taus.jl
 ├── io/{detrend,fillgaps,read,runtests}.jl
 └── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
 

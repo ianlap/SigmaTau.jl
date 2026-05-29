@@ -47,6 +47,7 @@ include("stab/noise/gen.jl")
 include("stab/stats/edf.jl")
 
 include("stab/utils.jl")
+include("stab/taus.jl")
 
 include("stab/api/allan.jl")
 include("stab/api/hadamard.jl")
@@ -62,6 +63,9 @@ export read_phase, read_frequency
 export detrend, fillgaps
 
 export DEFAULT_CONFIDENCE
+
+export TauMode, AllTaus, Octave, HalfOctave, QuarterOctave, Decade, HalfDecade
+export tau_values
 
 export _adev_core, _mdev_core, _tdev_core
 export _hdev_core, _mhdev_core

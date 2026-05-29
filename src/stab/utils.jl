@@ -65,22 +65,4 @@ though MTOTDEV — which runs on phase directly — uses `N ÷ 3`.)
 Throws `ArgumentError` for unknown kernel symbols or `N` too short to
 admit any `m ≥ 1`.
 """
-function _default_m_values(N::Int, kernel::Symbol)
-    m_max = if kernel === :adev || kernel === :totdev || kernel === :pdev
-        (N - 1) ÷ 2
-    elseif kernel === :mdev || kernel === :tdev ||
-           kernel === :mtotdev || kernel === :ttotdev
-        N ÷ 3
-    elseif kernel === :hdev || kernel === :htotdev
-        (N - 1) ÷ 3
-    elseif kernel === :mhdev || kernel === :htdev || kernel === :mhtotdev
-        N ÷ 4
-    elseif kernel === :mtie
-        N - 1
-    else
-        throw(ArgumentError("_default_m_values: unknown kernel symbol :$kernel"))
-    end
-    m_max < 1 && throw(ArgumentError(
-        "_default_m_values: N=$N is too short to support any m for :$kernel"))
-    return [2^k for k in 0:floor(Int, log2(m_max))]
-end
+_default_m_values(N::Int, kernel::Symbol) = _grid(Octave, _kernel_m_max(N, kernel))
