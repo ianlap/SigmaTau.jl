@@ -8,6 +8,12 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- `stability(data; devs, taus, calc_ci, confidence, …)` compute-all entry point
+  that runs a suite of deviations in one call and returns a new `StabilitySuite`
+  (ordered, indexable by deviation symbol, iterable, carrying session metadata).
+  The batch analog of calling each deviation by hand; `devs` defaults to
+  `DEFAULT_DEVIATIONS` (`:adev, :mdev, :hdev, :tdev`). Extra kwargs (`detrend`,
+  `correct_bias`) are forwarded only to the total family.
 - `TauMode` averaging-factor grid selector (`AllTaus`, `Octave`, `HalfOctave`,
   `QuarterOctave`, `Decade`, `HalfDecade`) and the `tau_values(mode, N, kernel)`
   helper. Every deviation now accepts a `TauMode` in place of an explicit

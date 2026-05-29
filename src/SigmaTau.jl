@@ -12,6 +12,7 @@ include("types/abstract.jl")
 include("types/phase_data.jl")
 include("types/frequency_data.jl")
 include("types/stability_result.jl")
+include("types/stability_suite.jl")
 
 # ── IO: file readers, detrend, gap fill, result round-trip ──────────────
 # IO functions return top-level types (PhaseData / FrequencyData /
@@ -54,9 +55,10 @@ include("stab/api/hadamard.jl")
 include("stab/api/total.jl")
 include("stab/api/mtie.jl")
 include("stab/api/pdev.jl")
+include("stab/api/suite.jl")
 
 # ── Flat exports ────────────────────────────────────────────────────────
-export AbstractTimingData, PhaseData, FrequencyData, StabilityResult
+export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
 
 export save_result, load_result
 export read_phase, read_frequency
@@ -79,6 +81,7 @@ export hdev, mhdev, htdev
 export ldev   # deprecated alias for htdev — remove in a future release
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, pdev
+export stability, DEFAULT_DEVIATIONS
 
 export noise_gen
 

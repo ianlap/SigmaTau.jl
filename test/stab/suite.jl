@@ -1,0 +1,78 @@
+# test/stab/suite.jl — stability() compute-all + StabilitySuite.
+# Standalone-runnable and included from test/stab/runtests.jl.
+
+using Test
+using Random
+using SigmaTau
+
+@testset "stability() compute-all + StabilitySuite" begin
+    Random.seed!(11)
+    pd = PhaseData(cumsum(randn(1024)) .* 1e-9, 1.0)
+
+    @testset "ordered results, indexing, keys, metadata" begin
+        s = stability(pd; devs=(:adev, :mdev, :hdev), taus=Octave, calc_ci=false)
+        @test s isa StabilitySuite
+        @test length(s) == 3
+        @test keys(s) == [:adev, :mdev, :hdev]        # request order preserved
+        @test haskey(s, :mdev)
+        @test !haskey(s, :pdev)
+        @test s[:adev].deviation_type === :adev
+        @test s[2].deviation_type === :mdev           # positional indexing
+        @test_throws KeyError s[:pdev]
+        @test [r.deviation_type for r in s] == [:adev, :mdev, :hdev]
+        @test s.data_kind === :phase
+        @test s.n == 1024
+        @test s.tau0 == 1.0
+        @test s.tau_mode === :Octave
+        @test isnan(s.confidence)                      # calc_ci=false ⇒ NaN
+    end
+
+    @testset "matches individual calls on the per-deviation grid" begin
+        s = stability(pd; devs=(:adev, :hdev, :mtie), taus=Octave, calc_ci=false)
+        @test s[:adev].dev == adev(pd, tau_values(Octave, 1024, :adev); calc_ci=false).dev
+        @test s[:adev].tau == adev(pd, tau_values(Octave, 1024, :adev); calc_ci=false).tau
+        @test s[:hdev].dev == hdev(pd, tau_values(Octave, 1024, :hdev); calc_ci=false).dev
+        @test s[:mtie].dev == mtie(pd, tau_values(Octave, 1024, :mtie)).dev
+    end
+
+    @testset "calc_ci / confidence propagate" begin
+        s = stability(pd; devs=(:adev,), calc_ci=true, confidence=0.9)
+        @test !isempty(s[:adev].ci_lower)
+        @test s.confidence == 0.9
+        s0 = stability(pd; devs=(:adev,), calc_ci=false)
+        @test isempty(s0[:adev].ci_lower)
+    end
+
+    @testset "kwarg filtering: detrend reaches total family, not adev" begin
+        s = stability(pd; devs=(:adev, :totdev), taus=Octave, calc_ci=false, detrend=:linear)
+        @test s[:adev].dev   == adev(pd, tau_values(Octave, 1024, :adev); calc_ci=false).dev
+        @test s[:totdev].dev == totdev(pd, tau_values(Octave, 1024, :totdev);
+                                       calc_ci=false, detrend=:linear).dev
+        # totdev with :linear differs from its :howe default — confirms the
+        # kwarg actually reached the total family.
+        @test s[:totdev].dev != totdev(pd, tau_values(Octave, 1024, :totdev); calc_ci=false).dev
+    end
+
+    @testset "default devs, explicit Vector{Int}, and TauMode taus" begin
+        sd = stability(pd; calc_ci=false)
+        @test keys(sd) == collect(DEFAULT_DEVIATIONS)   # (:adev, :mdev, :hdev, :tdev)
+        se = stability(pd; devs=(:adev,), taus=[1, 2, 4, 8], calc_ci=false)
+        @test se[:adev].tau == [1.0, 2.0, 4.0, 8.0]
+        @test se.tau_mode === :explicit
+        sde = stability(pd; devs=(:adev,), taus=Decade, calc_ci=false)
+        @test sde.tau_mode === :Decade
+    end
+
+    @testset "FrequencyData entry point" begin
+        Random.seed!(12)
+        fd = FrequencyData(randn(512) .* 1e-9, 1.0)
+        s = stability(fd; devs=(:adev, :hdev), taus=Octave, calc_ci=false)
+        @test s.data_kind === :frequency
+        @test s.n == 512
+        @test s[:adev].dev == adev(fd, tau_values(Octave, 512, :adev); calc_ci=false).dev
+    end
+
+    @testset "unknown deviation errors" begin
+        @test_throws ArgumentError stability(pd; devs=(:nope,), calc_ci=false)
+    end
+end
