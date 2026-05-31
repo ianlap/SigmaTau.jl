@@ -49,6 +49,8 @@ makedocs(
     pages = [
         "Home"            => "index.md",
         "Getting Started" => "getting_started.md",
+        "From Stable32"   => "migration_from_stable32.md",
+        "Performance"     => "performance.md",
         "Theory"          => [
             "theory/overview.md",
             "theory/allan_family.md",

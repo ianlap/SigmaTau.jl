@@ -6,20 +6,37 @@
 [![Julia ≥ 1.11](https://img.shields.io/badge/julia-%E2%89%A5%201.11-9558B2.svg)](https://julialang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Frequency-stability analysis in Julia: Allan / Modified Allan /
-Hadamard / Total deviations, lag-1 ACF noise identification,
-Greenhall–Riley EDF / χ² confidence intervals, MTIE, parabolic
-deviation, and a calibrated power-law noise generator.
+An open-source, scriptable clock-stability toolkit for Julia — the Allan /
+Modified Allan / Hadamard / Total deviation families, MTIE, parabolic
+deviation, lag-1 ACF noise identification, Greenhall–Riley EDF / χ² confidence
+intervals, and a calibrated power-law noise generator, all in one flat
+namespace.
 
-`SigmaTau.jl` ships a single flat module covering the full stability
-surface. Shared types (`PhaseData`, `FrequencyData`, `StabilityResult`)
-plus every deviation, noise-ID, EDF/CI, MTIE, PDEV, and IO function
-land in one namespace under `using SigmaTau`.
+If you reach for **Stable32** or **allantools**, SigmaTau computes the same
+statistics, cross-validated against both — but as a Julia library you can
+script, embed, and run on any platform. Coming from Stable32? See the
+[migration guide](https://ianlap.github.io/SigmaTau.jl/stable/migration_from_stable32/).
+
+## Why SigmaTau
+
+- **Cross-validated numerics.** Deviation kernels are checked against Stable32,
+  allantools, and a MATLAB reference; the agreed value sets the tolerance floor.
+- **Fast on long records.** Against allantools 2024.06 on a real N≈407 000
+  record, the modified-total kernels run **~3,800–4,200× faster**
+  (`mtotdev` 0.47 s vs ~30 min; `htotdev` 0.46 s vs ~32 min), and the full
+  seven-kernel sweep finishes ~4,000× sooner. The cheap kernels
+  (`adev`/`mdev`/`hdev`/`tdev`) run 13–40× faster. See
+  [Performance](https://ianlap.github.io/SigmaTau.jl/stable/performance/).
+  *(Benchmarked against allantools; Stable32 is parity-verified for numerics,
+  not speed-tested.)*
+- **One flat API.** `using SigmaTau` brings the shared types (`PhaseData`,
+  `FrequencyData`, `StabilityResult`) and every deviation, noise-ID, EDF/CI,
+  MTIE, PDEV, and IO function into scope — no submodules to navigate.
 
 For clock state-space estimation (Kalman filter, PID steering, holdover
 projection) see the sister package
-[ClockEnsemble.jl](https://github.com/ianlap/ClockEnsemble.jl) (formerly
-the `SigmaTau.Est` submodule, split out at v0.3.0).
+[ClockEnsemble.jl](https://github.com/ianlap/ClockEnsemble.jl) (formerly the
+`SigmaTau.Est` submodule, split out at v0.3.0).
 
 ## Install
 
@@ -39,22 +56,40 @@ pkg> instantiate
 ```julia
 using SigmaTau
 
-# Phase residuals (in seconds), sampled every τ₀ = 1 s.
+# Phase residuals (seconds), sampled every τ₀ = 1 s.
 x = randn(10_000)
 data = PhaseData(x, 1.0)
 
-# Overlapping Allan deviation across a power-of-two τ grid.
-result = adev(data, [1, 2, 4, 8, 16, 32, 64])
+# One deviation, octave-spaced τ grid (Stable32's default spacing).
+result = adev(data)
 
 result.tau          # τ values (s)
 result.dev          # σ_y(τ)
-result.noise_type   # :WHPM / :FLPM / :WHFM / :FLFM / :RWFM
+result.noise_type   # :WHPM / :FLPM / :WHFM / :FLFM / :RWFM, per τ
 result.ci_lower     # χ² (or Gaussian fallback) confidence bounds
 result.ci_upper
 result.edf          # equivalent degrees of freedom (empty when calc_ci=false)
 ```
 
-`adev` and the other public functions also accept `FrequencyData`:
+Compute a whole suite in one call and index it by deviation:
+
+```julia
+suite = stability(data; devs=(:adev, :mdev, :hdev, :tdev))
+suite[:adev].dev    # the ADEV curve
+keys(suite)         # which deviations are present, in order
+```
+
+Read a Stable32-style data file and choose a τ grid explicitly or by spacing.
+A single-column `.DAT` needs `time_col=0` (no time column) and an explicit
+`tau0`:
+
+```julia
+p = read_phase("clock.DAT"; time_col=0, value_col=1, tau0=1.0)
+adev(p, [1, 2, 4, 8, 16, 32, 64])   # explicit averaging factors
+adev(p, Decade)                     # decade-spaced grid
+```
+
+Every public function also accepts `FrequencyData`:
 
 ```julia
 y = randn(10_000) .* 1e-9
@@ -73,13 +108,20 @@ mtie  pdev
 ### Plotting
 
 `SigmaTau` ships a `RecipesBase` package extension. Loading any
-`Plots`-compatible backend brings in a log-log τ–σ recipe with optional
-error bars from the result's CI bounds:
+`Plots`-compatible backend brings in a log-log τ–σ recipe with optional error
+bars from the result's CI bounds, plus overlays for a whole suite:
 
 ```julia
 using Plots, SigmaTau
-plot(adev(data, [1, 2, 4, 8, 16, 32, 64]))
+plot(adev(data))                    # single deviation with CI error bars
+plot(stability(data))              # overlay the default suite
 ```
+
+## Documentation
+
+Full docs — tutorials, theory, the migration guide, performance numbers, and
+the API reference — are at
+**[ianlap.github.io/SigmaTau.jl](https://ianlap.github.io/SigmaTau.jl/stable/)**.
 
 ## Running tests
 
@@ -88,15 +130,16 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
 Tests are organised under `test/` (`types/`, `stab/`, `io/`,
-`umbrella_smoke.jl`); the command above runs all sub-suites under a
-single top-level `test/runtests.jl`.
+`umbrella_smoke.jl`); the command above runs all sub-suites under a single
+top-level `test/runtests.jl`.
 
-## Status
+## Contributing
 
-See [`project_overview.md`](project_overview.md) for the per-component
-status matrix and [`TODO.md`](TODO.md) for outstanding work. Notable
-references for the underlying math: NIST SP1065 (Riley & Howe), Greenhall &
-Riley 2003, IEEE 1139-2022.
+Bug reports, new deviations, validation fixtures, and benchmarks are welcome —
+see [`CONTRIBUTING.md`](CONTRIBUTING.md). Notable references for the underlying
+math: NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, IEEE 1139-2022.
+[`project_overview.md`](project_overview.md) has the per-component status matrix
+and [`TODO.md`](TODO.md) lists outstanding work.
 
 ## License
 

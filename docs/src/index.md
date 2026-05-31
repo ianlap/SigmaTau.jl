@@ -22,6 +22,7 @@ under one namespace:
 ## Where to next
 
 - **First time?** See [Getting Started](getting_started.md).
+- **Coming from Stable32?** See [Migrating from Stable32](migration_from_stable32.md).
 - **Need theory?** Start with [Theory: Overview](theory/overview.md).
 - **Want a worked example?** Pick a [Tutorial](tutorials/01_phase_data.md).
 - **Looking up an API?** Browse the [API Reference](reference/types.md).
