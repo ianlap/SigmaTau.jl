@@ -36,7 +36,7 @@ function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
 end
 
 function _noise_gen_y(N::Int, tau0::Float64,
-                     sigma1::AbstractDict, h::AbstractDict)
+                     sigma1::AbstractDict, h::AbstractDict; rng=nothing)
     !isempty(sigma1) && !isempty(h) &&
         throw(ArgumentError("noise_gen: pass either `sigma1` or `h`, not both"))
     isempty(sigma1) && isempty(h) &&
@@ -70,7 +70,7 @@ function _noise_gen_y(N::Int, tau0::Float64,
     y_total = zeros(Float64, N)
     for (α, σ_target) in targets
         σ_target == 0 && continue
-        y_raw = _gen_powerlaw_y(α, N)
+        y_raw = _gen_powerlaw_y(α, N; rng=rng)
         σ_raw = _measure_sigma1(y_raw, tau0)
         σ_raw > 0 || continue
         y_total .+= y_raw .* (σ_target / σ_raw)
@@ -118,7 +118,9 @@ equals the requested value to numerical precision; the natural slope of the
 power-law carries through to larger τ. Components from different α are
 statistically independent.
 
-Seed the global RNG (`Random.seed!`) before calling for reproducible output.
+Seed the global RNG (`Random.seed!`) before calling for reproducible output,
+or pass an `AbstractRNG` as `rng` to draw from a specific stream (e.g. for a
+Monte Carlo with independent per-realization seeds).
 
 # Examples
 
@@ -138,16 +140,18 @@ noise_gen(PhaseData, 8192, 1.0; h = Dict(0 => 2e-24))
 """
 function noise_gen(::Type{PhaseData}, N::Int, tau0::Real;
                    sigma1::AbstractDict = Dict{Int,Float64}(),
-                   h::AbstractDict      = Dict{Int,Float64}())
+                   h::AbstractDict      = Dict{Int,Float64}(),
+                   rng = nothing)
     τ₀ = Float64(tau0)
-    y  = _noise_gen_y(N, τ₀, sigma1, h)
+    y  = _noise_gen_y(N, τ₀, sigma1, h; rng=rng)
     return PhaseData(cumsum(y) .* τ₀, τ₀)
 end
 
 function noise_gen(::Type{FrequencyData}, N::Int, tau0::Real;
                    sigma1::AbstractDict = Dict{Int,Float64}(),
-                   h::AbstractDict      = Dict{Int,Float64}())
+                   h::AbstractDict      = Dict{Int,Float64}(),
+                   rng = nothing)
     τ₀ = Float64(tau0)
-    y  = _noise_gen_y(N, τ₀, sigma1, h)
+    y  = _noise_gen_y(N, τ₀, sigma1, h; rng=rng)
     return FrequencyData(y, τ₀)
 end
