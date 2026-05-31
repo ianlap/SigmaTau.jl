@@ -8,6 +8,19 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Spectral-density estimators `Sy`, `Sx`, and `L`, returning a new
+  `SpectralResult` type. `Sy` is the one-sided fractional-frequency PSD
+  `S_y(f)` (1/Hz, IEEE 1139-2022 §3.4); `Sx` is the phase PSD `S_x(f)`
+  (s²/Hz, §3.3); `L` is single-sideband phase noise `ℒ(f)` (dBc/Hz, §3.5),
+  taking a required `f_carrier`. All accept both `PhaseData` and
+  `FrequencyData` (converting via `_phase_to_freq` / `_freq_to_phase`) and
+  share `nperseg` / `noverlap` / `window` Welch parameters (defaulting to the
+  scipy convention `min(N, 256)`, 50 % overlap, Hann window). Backed by a new
+  one-sided "density"-normalized Welch core `_welch_psd` in
+  `src/stab/spectral.jl`; the estimate is variance-preserving
+  (`Σ S_y·Δf ≈ var(y)`) and recovers the power-law slope of `noise_gen` output.
+  A `SpectralResult` plot recipe renders `S_y`/`S_x` log-log and `ℒ(f)` on a
+  dB-vs-log-frequency axis.
 - `stability(data; devs, taus, calc_ci, confidence, …)` compute-all entry point
   that runs a suite of deviations in one call and returns a new `StabilitySuite`
   (ordered, indexable by deviation symbol, iterable, carrying session metadata).

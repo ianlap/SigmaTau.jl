@@ -1238,3 +1238,4 @@ end
 
 include("taus.jl")
 include("suite.jl")
+include("spectral.jl")

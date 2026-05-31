@@ -36,6 +36,14 @@ identify_noise
 noise_gen
 ```
 
+## Spectral densities
+
+```@docs
+Sy
+Sx
+L
+```
+
 ## EDF, bias, and confidence intervals
 
 ```@docs
