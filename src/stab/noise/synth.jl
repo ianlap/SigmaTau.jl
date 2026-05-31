@@ -12,17 +12,21 @@
 using AbstractFFTs
 
 """
-    _gen_powerlaw_y(alpha, N) → Vector{Float64}
+    _gen_powerlaw_y(alpha, N; rng=nothing) → Vector{Float64}
 
 Internal primitive. Synthesize an N-sample fractional-frequency vector `y`
 with power spectral density ∝ `f^alpha`. The DC component is zeroed so the
 output has zero mean; the absolute amplitude is whatever the f^(α/2) shaper
 happens to produce on unit-variance white noise. Callers that need a
 calibrated level should rescale (e.g. via [`noise_gen`](@ref)).
+
+Pass an `AbstractRNG` as `rng` to draw from a specific stream (e.g. for a
+Monte Carlo with independent per-realization seeds); the default `nothing`
+draws from the global RNG, so existing seeded callers are unaffected.
 """
-function _gen_powerlaw_y(alpha::Real, N::Int)
+function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
     # White Gaussian noise → fractional-frequency series shaped to f^alpha.
-    w = randn(N)
+    w = rng === nothing ? randn(N) : randn(rng, N)
     W = fft(w)
 
     # Symmetric FFT-bin frequency magnitude. Bin 0 (DC) gets a placeholder
@@ -49,12 +53,12 @@ sequence has power spectral density ∝ `f^alpha`. Mapping:
 | -1 | FLFM       | 1/f³           |
 | -2 | RWFM       | 1/f⁴           |
 
-For deterministic output, seed the global RNG (`Random.seed!`) before calling.
-The DC component is zeroed before the inverse transform so the output has
-zero mean. Calls into `AbstractFFTs.fft`/`ifft` — caller must have an FFT
-backend loaded (e.g. `using FFTW`).
+For deterministic output, seed the global RNG (`Random.seed!`) before calling,
+or pass an `AbstractRNG` as `rng`. The DC component is zeroed before the inverse
+transform so the output has zero mean. Calls into `AbstractFFTs.fft`/`ifft` —
+caller must have an FFT backend loaded (e.g. `using FFTW`).
 """
-function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0)
+function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0, rng=nothing)
     # Phase: x[k] = τ₀ · Σⱼ₌₁ᵏ y[j]
-    return cumsum(_gen_powerlaw_y(alpha, N)) .* tau0
+    return cumsum(_gen_powerlaw_y(alpha, N; rng=rng)) .* tau0
 end

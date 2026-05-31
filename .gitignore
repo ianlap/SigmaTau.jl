@@ -74,3 +74,8 @@ makedir.sh
 # Hand-written tutorials (e.g. `single_clock_holdover.md`) are NOT
 # matched by this pattern — only the numeric-prefix Literate output is.
 docs/src/tutorials/0*_*.md
+
+# Monte Carlo run outputs from tools/mc_mhtotdev.jl. The harness is tracked;
+# its generated CSV/JSON artifacts are not (the authoritative full-sweep
+# artifact is force-added when it lands). Laptop-validation runs stay local.
+tools/artifacts/
