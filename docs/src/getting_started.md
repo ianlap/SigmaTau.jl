@@ -39,7 +39,8 @@ populated with `tau`, `dev`, per-τ `noise_type`, χ²-based confidence bounds
 
 ## Where to next
 
-- [Tutorial 0: Julia for metrologists](tutorials/00_julia_for_metrologists.md) — coming from Stable32? Start here. Covers installation, loading `.DAT` files, your first `adev`, overlaying plots, and saving results to disk.
+- [Migrating from Stable32](migration_from_stable32.md) — coming from Stable32? Start here for the run-type and result-column mapping, then the tutorial below for a longer walkthrough.
+- [Tutorial 0: Julia for metrologists](tutorials/00_julia_for_metrologists.md) — covers installation, loading `.DAT` files, your first `adev`, overlaying plots, and saving results to disk.
 - [Tutorial 1: Phase data](tutorials/01_phase_data.md) — `PhaseData` / `FrequencyData` basics.
 - [Tutorial 2: Computing Allan deviation](tutorials/02_compute_adev.md) — `adev` and the `StabilityResult` it returns (incl. EDF, χ² CI, noise type).
 - [Tutorial 6: Three-cornered hat](tutorials/06_three_cornered_hat.md) — separating clock noise from a three-clock comparison.

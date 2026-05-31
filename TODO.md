@@ -137,9 +137,6 @@ Common machinery for all three:
   articles + Riley papers).
 - **Preprocessing / uncertainty theory page.** Gaps + outliers material
   lives at `legdocs/papers/preprocessing/`.
-- Update the validation page `docs/src/validation/methodology.md` to
-  cross-link the perf benches under `benchmarks/bench/` once long-record
-  runtime numbers are stable.
 
 ---
 

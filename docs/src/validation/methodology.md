@@ -11,4 +11,8 @@ SigmaTau.jl is cross-validated against three independent references:
 Three-way agreement defines the rtol floor; documented disagreements are
 boundary-policy differences (TOTDEV/HTOTDEV/MTOTDEV reflection conventions).
 
+Validation is about *numerical agreement*, not speed. For head-to-head
+timings against allantools — including the ~4,000× speedup on the
+modified-total kernels for long records — see [Performance](../performance.md).
+
 Detailed comparison narrative lands in a follow-up PR.
