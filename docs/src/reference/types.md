@@ -10,4 +10,5 @@ AbstractTimingData
 PhaseData
 FrequencyData
 StabilityResult
+SpectralResult
 ```
