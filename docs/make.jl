@@ -49,6 +49,7 @@ makedocs(
     pages = [
         "Home"            => "index.md",
         "Getting Started" => "getting_started.md",
+        "Performance"     => "performance.md",
         "Theory"          => [
             "theory/overview.md",
             "theory/allan_family.md",
