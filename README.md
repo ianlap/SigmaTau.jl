@@ -79,10 +79,12 @@ suite[:adev].dev    # the ADEV curve
 keys(suite)         # which deviations are present, in order
 ```
 
-Read a Stable32-style data file and choose a τ grid explicitly or by spacing:
+Read a Stable32-style data file and choose a τ grid explicitly or by spacing.
+A single-column `.DAT` needs `time_col=0` (no time column) and an explicit
+`tau0`:
 
 ```julia
-p = read_phase("clock.DAT"; tau0=1.0)
+p = read_phase("clock.DAT"; time_col=0, value_col=1, tau0=1.0)
 adev(p, [1, 2, 4, 8, 16, 32, 64])   # explicit averaging factors
 adev(p, Decade)                     # decade-spaced grid
 ```

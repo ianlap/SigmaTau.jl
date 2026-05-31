@@ -66,11 +66,13 @@ phase values; give the sample interval τ₀ explicitly:
 using SigmaTau
 
 # Single column of phase residuals (seconds), τ₀ = 1 s.
-p = read_phase("clock.DAT"; tau0=1.0)
+# time_col=0 says "no time column"; value_col=1 reads the lone column.
+p = read_phase("clock.DAT"; time_col=0, value_col=1, tau0=1.0)
 ```
 
 If the file has a time column and a value column (the common two-column
-layout), point at the value column:
+layout), point at the value column — this is the default, so `tau0` is inferred
+from the time column if you omit it:
 
 ```julia
 p = read_phase("clock.DAT"; time_col=1, value_col=2)
