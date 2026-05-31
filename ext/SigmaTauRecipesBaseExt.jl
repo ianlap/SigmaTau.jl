@@ -71,7 +71,10 @@ end
         label  --> string(res.spectral_type)
         ylabel --> (res.spectral_type === :Sy ? "S_y(f) (1/Hz)" : "S_x(f) (s²/Hz)")
     end
-    return res.freq, res.psd
+    # Drop the DC bin (f = 0): undefined on a log frequency axis. `Sy`/`Sx`
+    # carry it at index 1; `L` already excludes it in the API.
+    keep = res.freq .> 0
+    return res.freq[keep], res.psd[keep]
 end
 
 end # module
