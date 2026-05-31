@@ -184,16 +184,17 @@ end
 
 function _coeff_mhtot(alpha::Int)
     # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
-    # (tools/mc_mhtotdev.jl); all fits R² ≥ 0.997. MHTOTDEV is novel to SigmaTau,
-    # so these have no external reference — see docs theory/mhtotdev_bias_edf.md.
-    # PROVISIONAL values from a laptop validation run (N ≤ 16384, R=1000);
-    # finalized by the workstation full sweep (N up to 32768, R=3000).
-    # Supersedes the prior unsourced values.
-    alpha == 2  && return (1.9317, 9.4306)
-    alpha == 1  && return (1.2031, 3.2494)
-    alpha == 0  && return (1.1130, 4.7049)
-    alpha == -1 && return (0.9839, 0.1090)
-    alpha == -2 && return (0.8262, 4.0154)
+    # (tools/mc_mhtotdev.jl, full sweep at git d8a7ca7, seed 20260531, R=3000,
+    # N up to 32768); all fits R² ≥ 0.998. MHTOTDEV is novel to SigmaTau, so
+    # these have no external reference — see docs theory/mhtotdev_bias_edf.md.
+    # Both the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
+    # fit; they tie to within ΔR² ≤ 0.0005, so the Mod-Totvar form is used
+    # uniformly. Supersedes the prior unsourced values.
+    alpha == 2  && return (1.8534, 5.4817)
+    alpha == 1  && return (1.2185, 3.6691)
+    alpha == 0  && return (1.0998, 3.5040)
+    alpha == -1 && return (1.0300, 3.3868)
+    alpha == -2 && return (0.8132, 2.5406)
     return (NaN, NaN)
 end
 
@@ -257,9 +258,12 @@ Conventions per variance type:
   matches Stable32).
 - `:mhtot`  — measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
   `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
-  external reference exists. `B ∈ {1.066, 0.985, 1.018, 1.202, 1.797}` for
-  α ∈ {2, 1, 0, -1, -2}: MHTOTDEV is ≈ unbiased for white/flicker noise and
-  reads progressively high for redder FM. See docs `theory/mhtotdev_bias_edf.md`.
+  external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
+  `:totvar`): `b0 ∈ {1.064, 0.984, 1.019, 1.213, 1.943}` and
+  `b1 ∈ {0.017, 0.036, -0.048, -0.321, -3.588}` for α ∈ {2, 1, 0, -1, -2}.
+  MHTOTDEV is ≈ unbiased for white/flicker noise (b1 ≈ 0, B ≈ 1) and reads high
+  for redder FM (RWFM B ≈ 1.9 at small τ, falling toward 1 as τ→T).
+  See docs `theory/mhtotdev_bias_edf.md`.
 
 Anything unrecognised falls through to B = 1.
 """
@@ -285,15 +289,19 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
                            -3=>-0.283, -4=>-0.321)
             B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
         elseif var_type == :mhtot
-            # Measured by Monte Carlo (tools/mc_mhtotdev.jl). B = E[MHTOTVAR] /
-            # E[MHVAR] per noise type, averaged over the τ/τ0 ≥ 16 validity
-            # window (Howe et al. 2000). MHTOTDEV is ≈ unbiased for white/flicker
-            # noise (B ≈ 1) and reads progressively high for redder FM (RWFM
-            # B ≈ 1.8). MHTOTDEV is novel to SigmaTau — no external reference;
-            # see docs theory/mhtotdev_bias_edf.md. PROVISIONAL (laptop run,
-            # N ≤ 16384, R=1000); finalized by the workstation full sweep.
-            table = Dict(2=>1.0655, 1=>0.9847, 0=>1.0182, -1=>1.2017, -2=>1.7973)
-            B[k] = get(table, clamp(alpha, -2, 2), 1.0)
+            # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl,
+            # full sweep at git d8a7ca7) over the τ/τ0 ≥ 16 validity window
+            # (Howe et al. 2000). Modeled as B = b0 + b1·(τ/T) — the same τ/T-linear
+            # form as :totvar — because the redder FM noises carry strong τ/T
+            # structure (the b1 term cuts the fit residual by ~46 % at FLFM and
+            # ~97 % at RWFM); for white/flicker noise b1 ≈ 0, so B ≈ constant.
+            # MHTOTDEV is ≈ unbiased for white/flicker (B ≈ 1) and reads high for
+            # redder FM (RWFM B ≈ 1.9 at small τ). MHTOTDEV is novel to SigmaTau —
+            # no external reference; see docs theory/mhtotdev_bias_edf.md.
+            b0_t = Dict(2=>1.0644, 1=>0.9837, 0=>1.0193, -1=>1.2131, -2=>1.9432)
+            b1_t = Dict(2=>0.0165, 1=>0.0362, 0=>-0.0477, -1=>-0.3211, -2=>-3.5880)
+            aa = clamp(alpha, -2, 2)
+            B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
         end
     end
 

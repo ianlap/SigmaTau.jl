@@ -67,13 +67,13 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 - `mhtotdev`'s `correct_bias` is now functional and applied by default. Measured
   by Monte Carlo (`tools/mc_mhtotdev.jl`), MHTOTDEV is ≈ unbiased for
-  white/flicker noise but reads progressively high for redder FM (`B ≈ 1.8` for
-  RWFM), so the prior "unbiased by policy" stance (`B = 1` no-op) was wrong. The
-  default deviation now has the measured `√B` unbias correction applied; pass
-  `correct_bias=false` for the raw kernel. The `_coeff_mhtot` EDF coefficients,
-  previously unsourced, are now the Monte-Carlo fit (R² ≥ 0.997, fit over
-  `τ/τ0 ≥ 16`). Current values are provisional from a laptop run; the full
-  workstation sweep finalizes them.
+  white/flicker noise but reads progressively high for redder FM (`B ≈ 1.9` for
+  RWFM at small τ), so the prior "unbiased by policy" stance (`B = 1` no-op) was
+  wrong. The bias is modeled τ/T-linearly (`B = b0 + b1·(τ/T)`, as for `:totvar`)
+  since the redder noises carry strong τ/T structure. The default deviation now
+  has the measured `√B` unbias correction applied; pass `correct_bias=false` for
+  the raw kernel. The `_coeff_mhtot` EDF coefficients, previously unsourced, are
+  now the Monte-Carlo fit (R² ≥ 0.998, over `τ/τ0 ≥ 16`).
 - Trimmed the total family to one defined extension form each and removed the
   `detrend` kwarg from `totdev`, `mtotdev`, `ttotdev`, `htotdev`, and `mhtotdev`
   (along with the `TOTDEV_DETREND_DEFAULT` / `TOTAL_FAMILY_DETREND_DEFAULT`

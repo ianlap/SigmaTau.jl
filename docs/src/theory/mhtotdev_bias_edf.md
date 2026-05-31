@@ -127,23 +127,29 @@ produced it.
     the μ(α) slopes and the qualitative bias trend below; the published tables
     use the full-sweep values.
 
-## Result (provisional, laptop validation)
+## Result
 
-From a laptop validation run (N ≤ 16384, R = 1000), aggregating both the bias and
-the EDF over the `τ/τ_0 ≥ 16` window, all EDF fits are excellent (R² ≥ 0.997):
+Full sweep (N = 1024 … 32768, R = 3000, both bias and EDF over `τ/τ_0 ≥ 16`).
+All EDF fits are excellent (R² ≥ 0.998):
 
-| α  | Noise | B(α) | nbias | EDF `b`, `c` |
-|---:|:------|:-----|:------|:-------------|
-|  2 | WHPM  | ≈ 1.07 | +0.07 | 1.93, 9.43 |
-|  1 | FLPM  | ≈ 0.98 | −0.02 | 1.20, 3.25 |
-|  0 | WHFM  | ≈ 1.02 | +0.02 | 1.11, 4.70 |
-| −1 | FLFM  | ≈ 1.20 | +0.20 | 0.98, 0.11 |
-| −2 | RWFM  | ≈ 1.80 | +0.80 | 0.83, 4.02 |
+| α  | Noise | EDF `b`, `c` | bias `b0` | `b1` |
+|---:|:------|:-------------|:----------|:-----|
+|  2 | WHPM  | 1.853, 5.482 | 1.064 |  0.017 |
+|  1 | FLPM  | 1.219, 3.669 | 0.984 |  0.036 |
+|  0 | WHFM  | 1.100, 3.504 | 1.019 | −0.048 |
+| −1 | FLFM  | 1.030, 3.387 | 1.213 | −0.321 |
+| −2 | RWFM  | 0.813, 2.541 | 1.943 | −3.588 |
 
-MHTOTDEV is **≈ unbiased for white/flicker noise** (B ≈ 1) and reads
-**progressively high for redder FM**, up to ≈ 1.8 for random-walk FM — so the
-prior "unbiased by policy" assumption is wrong mainly at the red end. (Restricting
-the bias to the same `τ/τ_0 ≥ 16` window as the EDF is essential: the
-near-degenerate `m = 1` cell otherwise dominates the weighted ratio and pulls the
-apparent bias well below 1.) The authoritative values — full workstation sweep
-(N up to 32768, R = 3000), with bootstrap uncertainties — replace these.
+MHTOTDEV is **≈ unbiased for white/flicker noise** (`b0 ≈ 1`, `b1 ≈ 0`) and
+reads **progressively high for redder FM** — for random-walk FM, `B ≈ 1.9` at
+small τ, falling toward 1 as τ → T. The bias is modeled τ/T-linearly,
+`B = b0 + b1·(τ/T)`: the `b1` term is negligible for the whiter noises but cuts
+the bias-fit residual by ~46 % (FLFM) and ~97 % (RWFM), so the τ/T dependence is
+essential at the red end and a constant would over-correct near large τ.
+
+Two methodology points proved decisive: (1) restricting the bias to the same
+`τ/τ_0 ≥ 16` window as the EDF — the near-degenerate `m = 1` cell otherwise
+dominates the weighted ratio and pulls the apparent bias spuriously below 1; and
+(2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.998 across
+all noise types. The provenance artifact (`tools/artifacts/mhtotdev_mc_full.json`)
+records the git SHA, seed, grid, and per-α fits.

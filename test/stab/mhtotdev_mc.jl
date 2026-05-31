@@ -37,7 +37,6 @@ using SigmaTau: _gen_powerlaw_y, _coeff_mhtot, bias_correction
         end
 
         b, c = _coeff_mhtot(alpha)
-        B_pred = bias_correction([noise_sym[alpha]], :mhtot, [1.0], T)[1]
 
         for k in eachindex(ms)
             τ      = ms[k] * tau0
@@ -45,6 +44,8 @@ using SigmaTau: _gen_powerlaw_y, _coeff_mhtot, bias_correction
             edf    = 2 * meanV^2 / varV
             B      = meanV / mean(@view W[k, :])
             edf_pred = b * (T / τ) - c
+            # B is τ/T-linear, so evaluate the prediction at this cell's τ.
+            B_pred   = bias_correction([noise_sym[alpha]], :mhtot, [τ], T)[1]
 
             @test isfinite(edf) && edf > 0
             @test isapprox(edf, edf_pred; rtol = 0.40)   # ~2σ tripwire at R=60

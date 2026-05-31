@@ -38,8 +38,8 @@ const ALPHAS      = (2, 1, 0, -1, -2)               # WHPM … RWFM
 # Record length N as the number of samples (powers of two). T = (N-1)·τ0.
 const N_GRID      = QUICK ? (1024, 2048) :
                            (1024, 2048, 4096, 8192, 16384, 32768)
-const R           = QUICK ? 200  : 1000             # realizations per cell
-const R_ANCHOR    = QUICK ? 400  : 5000             # anchor cell per α
+const R           = QUICK ? 200  : 3000             # realizations per cell
+const R_ANCHOR    = QUICK ? 400  : 3000             # top-N tier (uniform with R)
 const N_BOOT      = QUICK ? 500  : 2000             # bootstrap resamples
 const MIN_NSUBS   = 16                              # drop tiny-window cells
 # Total-estimator EDF model validity: Howe et al. 2000 (TotHvar, eqn 7) state
