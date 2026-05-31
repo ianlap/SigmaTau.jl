@@ -5,6 +5,7 @@ version = "0.3.0"
 
 [deps]
 AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
@@ -20,6 +21,7 @@ SigmaTauRecipesBaseExt = "RecipesBase"
 
 [compat]
 AbstractFFTs = "1"
+Dates = "1"
 DelimitedFiles = "1"
 Distributions = "0.25.125"
 DocStringExtensions = "0.9"
@@ -33,7 +35,8 @@ julia = "1.11"
 
 [extras]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Random", "Test"]
+test = ["Random", "RecipesBase", "Test"]

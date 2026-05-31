@@ -115,32 +115,35 @@ attribution rules.
   IEEE 1139-2022. Do not invent new χ² formulas or EDF expressions —
   cite the source.
 
-## Development workflow — use Revise.jl
+## Development workflow — the agent verifies autonomously
 
-A persistent Julia REPL is available with Revise.jl loaded. Do not spawn
-fresh `julia -e` invocations for verification when a REPL is available —
-those pay the full JIT compilation cost (~30-60s) every time. Revise
-hot-patches changes in ~100ms.
+The agent runs its own verification by invoking `julia --project=.` directly (e.g.
+via `julia --project=. -e '...'` or by running a test file). Do **not** rely on a
+persistent REPL or ask Ian to run commands and paste output — drive the checks
+yourself and read the results.
 
 After editing a file:
-1. Save the file. Revise picks up the change automatically.
-2. Re-run the relevant function in the REPL to verify.
-3. If you have sandboxed/cloud execution and no persistent REPL,
-   batch your verification: make all related edits, then run a single
-   test command at the end.
+1. Run the relevant test file or testset, e.g.
+   `julia --project=. -e 'include("test/stab/runtests.jl")'`, or a focused
+   `julia --project=. -e 'using SigmaTau; ...'` snippet for a single function.
+2. Read the output and iterate until green.
+3. Run the full suite before committing (see Testing).
 
-Revise CANNOT hot-patch the following — when you make these changes,
-explicitly tell Ian to restart the Julia REPL:
+Every `julia` invocation is a fresh process, so it always picks up the current
+source — including struct field changes, `Project.toml`/`Manifest.toml` edits, and
+new `@eval`'d or macro definitions. There is no hot-patch staleness to manage and
+no REPL to restart. The trade-off is the per-run JIT cost (~30-60s); to keep
+iteration cheap, scope each run to the smallest test file or snippet that exercises
+the change, and only run the full `Pkg.test()` suite before committing.
 
-- Adding/removing/reordering fields in a struct
-- Changing a struct's type parameters
-- Changes to any `Project.toml` or `Manifest.toml`
-- New `@eval`'d definitions or some macro changes
+If a persistent process is worth the speed on a long editing session, the agent may
+keep one Julia process alive as a background job and feed it `include(...)` lines —
+but the source of truth for a green build is always a fresh `Pkg.test()` run.
 
 ## Testing
 
 - Run all tests:              `julia --project=. -e 'using Pkg; Pkg.test()'`
-- Inside the persistent REPL: `pkg> test` (faster, reuses session)
+- Run one sub-suite:          `julia --project=. -e 'include("test/stab/runtests.jl")'`
 - `Random` is in `[extras]` — do not remove.
 
 ## Quality checks (run periodically, not every change)

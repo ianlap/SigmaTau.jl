@@ -6,12 +6,14 @@ using Distributions
 using StaticArrays
 using DelimitedFiles
 using FFTW
+using Dates
 
 # ── Shared types ────────────────────────────────────────────────────────
 include("types/abstract.jl")
 include("types/phase_data.jl")
 include("types/frequency_data.jl")
 include("types/stability_result.jl")
+include("types/stability_suite.jl")
 
 # ── IO: file readers, detrend, gap fill, result round-trip ──────────────
 # IO functions return top-level types (PhaseData / FrequencyData /
@@ -47,26 +49,31 @@ include("stab/noise/gen.jl")
 include("stab/stats/edf.jl")
 
 include("stab/utils.jl")
+include("stab/taus.jl")
 
 include("stab/api/allan.jl")
 include("stab/api/hadamard.jl")
 include("stab/api/total.jl")
 include("stab/api/mtie.jl")
 include("stab/api/pdev.jl")
+include("stab/api/suite.jl")
 
 # ── Flat exports ────────────────────────────────────────────────────────
-export AbstractTimingData, PhaseData, FrequencyData, StabilityResult
+export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
 
-export save_result, load_result
+export save_result, load_result, save_suite, load_suite
 export read_phase, read_frequency
 export detrend, fillgaps
 
 export DEFAULT_CONFIDENCE
+export TOTDEV_DETREND_DEFAULT, TOTAL_FAMILY_DETREND_DEFAULT
 
-export _adev_core, _mdev_core, _tdev_core
-export _hdev_core, _mhdev_core
-export _totdev_core, _mtotdev_core, _htotdev_core, _mhtotdev_core
-export _mtie_core, _pdev_core
+export TauMode, AllTaus, Octave, HalfOctave, QuarterOctave, Decade, HalfDecade
+export tau_values
+
+# Internal deviation kernels (`_*_core`) are intentionally NOT exported — they
+# are reachable as `SigmaTau._adev_core` etc. for power users, but the leading
+# underscore marks them unsupported and they are kept out of the bare namespace.
 
 export identify_noise, calculate_edf, confidence_intervals, bias_correction
 
@@ -75,6 +82,7 @@ export hdev, mhdev, htdev
 export ldev   # deprecated alias for htdev — remove in a future release
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, pdev
+export stability, DEFAULT_DEVIATIONS
 
 export noise_gen
 

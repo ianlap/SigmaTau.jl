@@ -3,6 +3,11 @@ using Random
 using FFTW                                  # AbstractFFTs backend for noise synth
 using SigmaTau
 using SigmaTau: NEFF_RELIABLE, _gen_powerlaw_phase
+# Core kernels are no longer exported; bring them in explicitly for the
+# unqualified uses in the parity testsets below.
+using SigmaTau: _adev_core, _mdev_core, _tdev_core, _hdev_core, _mhdev_core,
+                _totdev_core, _mtotdev_core, _htotdev_core, _mhtotdev_core,
+                _mtie_core, _pdev_core
 
 include("legacy_kernels.jl")
 const LK = LegacyKernels
@@ -979,45 +984,6 @@ const LK = LegacyKernels
         end
     end
 
-    @testset "StabilityResult I/O round-trip" begin
-        import Random
-        tmpdir = mktempdir()
-        path   = joinpath(tmpdir, "test_result.tsv")
-
-        Random.seed!(20260510)
-        pd = PhaseData(randn(128) .* 1e-9, 1.0)
-        ms = [1, 2, 4, 8]
-
-        # Round-trip with CI
-        r  = adev(pd, ms; calc_ci=true)
-        save_result(path, r)
-        r2 = load_result(path)
-
-        @test r2.deviation_type === r.deviation_type
-        @test r2.tau       ≈ r.tau
-        @test r2.dev       ≈ r.dev
-        @test r2.noise_type == r.noise_type
-        @test r2.ci_lower  ≈ r.ci_lower
-        @test r2.ci_upper  ≈ r.ci_upper
-        @test r2.edf       ≈ r.edf
-
-        # Round-trip without CI — empty vectors must survive the cycle
-        r_nci = adev(pd, ms; calc_ci=false)
-        save_result(path, r_nci)
-        r3 = load_result(path)
-
-        @test r3.deviation_type === :adev
-        @test r3.tau ≈ r_nci.tau
-        @test r3.dev ≈ r_nci.dev
-        @test isempty(r3.noise_type)
-        @test isempty(r3.ci_lower)
-        @test isempty(r3.ci_upper)
-        @test isempty(r3.edf)
-
-        # save_result returns the path
-        @test save_result(path, r) == path
-    end
-
     @testset "Zero-arg convenience: default octave m-grid per deviation" begin
         # Octave grid shape: 1, 2, 4, ..., 2^floor(log2(m_max)).
         # m_max per kernel matches each `_*_core`'s L-check.
@@ -1269,3 +1235,6 @@ const LK = LegacyKernels
         end
     end
 end
+
+include("taus.jl")
+include("suite.jl")
