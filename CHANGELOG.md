@@ -25,8 +25,8 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   that runs a suite of deviations in one call and returns a new `StabilitySuite`
   (ordered, indexable by deviation symbol, iterable, carrying session metadata).
   The batch analog of calling each deviation by hand; `devs` defaults to
-  `DEFAULT_DEVIATIONS` (`:adev, :mdev, :hdev, :tdev`). Extra kwargs (`detrend`,
-  `correct_bias`) are forwarded only to the total family.
+  `DEFAULT_DEVIATIONS` (`:adev, :mdev, :hdev, :tdev`). The extra kwarg
+  `correct_bias` is forwarded only to the total family.
 - `save_suite` / `load_suite` — round-trip a whole `StabilitySuite` to a
   self-describing tab-delimited file (format v2) that also records session
   metadata (package version, ISO-8601 timestamp, source file, data kind, τ₀, N,
@@ -38,9 +38,6 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   helper. Every deviation now accepts a `TauMode` in place of an explicit
   `m_values` array — e.g. `adev(pd, Decade)`. The default octave grid is
   unchanged (`tau_values(Octave, N, kernel) == _default_m_values(N, kernel)`).
-- `TOTDEV_DETREND_DEFAULT` (`:howe`) and `TOTAL_FAMILY_DETREND_DEFAULT`
-  (`:greenhall`) constants, exported so the active total-family detrend
-  default can be read rather than hardcoded. The default values are unchanged.
 - Plot recipes for `StabilitySuite` and `Vector{StabilityResult}` overlays (one
   curve per result on shared log-log axes), plus an opt-in `ci_band` plot
   attribute that renders a result's confidence interval as a filled band instead
@@ -56,6 +53,16 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed (BREAKING)
 
+- Trimmed the total family to one defined extension form each and removed the
+  `detrend` kwarg from `totdev`, `mtotdev`, `ttotdev`, `htotdev`, and `mhtotdev`
+  (along with the `TOTDEV_DETREND_DEFAULT` / `TOTAL_FAMILY_DETREND_DEFAULT`
+  constants). Each estimator now always uses its canonical recipe — TOTDEV the
+  Howe/SP1065 eqn 25 form, and the modified/Hadamard total family the Greenhall
+  2003 half-mean extension. MHTOTDEV (which has no canonical published form)
+  adopts the same Greenhall extension as MTOTDEV/HTOTDEV for consistency. The
+  alternative `:linear` / `:legacy` recipes are gone. Default output is
+  unchanged — every estimator already defaulted to the kept form. The IO-level
+  `detrend(::PhaseData)` preprocessing function is unrelated and unaffected.
 - Removed the no-op `confidence` kwarg from `mtie` and `pdev`. Neither has a
   published EDF/χ² model, so the kwarg never affected the result; passing it
   now errors. `calc_ci` is retained (a documented no-op) so the batch

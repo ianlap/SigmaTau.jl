@@ -1,86 +1,14 @@
 # core/total.jl — Core Total Stability Kernels
 
 """
-    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:howe) → Vector{Float64}
+    _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`.
-
-TOTDEV uses the Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension.
-`detrend` selects the detrending applied before the extension:
-
-- `:howe` — no detrend (canonical SP1065 eqn 25, matches allantools).
-  Default.
-- `:linear` — global least-squares detrend over the whole vector; alias
-  for `:legacy` on this kernel.
-- `:legacy` — pre-1.0 SigmaTau behavior; identical to `:linear` here.
+Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`,
+using the Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension with no
+per-window detrend — the canonical TOTDEV form (matches allantools).
 """
-function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:howe)
-    detrend === :howe && return _totdev_howe(x, m_values, tau0)
-    if detrend === :legacy || detrend === :linear
-        return _totdev_legacy(x, m_values, tau0)
-    end
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid for TOTDEV: :howe, :linear, :legacy"))
-end
-
-function _totdev_legacy(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    N = length(x)
-    devs = Vector{Float64}(undef, length(m_values))
-
-    # Linear detrend of the whole vector (analytic LS sums)
-    N_float = Float64(N)
-    sum_i = (N_float * (N_float + 1.0)) / 2.0
-    sum_i2 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0)) / 6.0
-    delta = N_float * sum_i2 - sum_i^2
-
-    sum_x = sum(x)
-    sum_ix = 0.0
-    @inbounds @simd for i in 1:N
-        sum_ix += i * x[i]
-    end
-
-    a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
-    b = (N_float * sum_ix - sum_x * sum_i) / delta
-
-    xd = Vector{Float64}(undef, N)
-    @inbounds @simd for i in 1:N
-        xd[i] = x[i] - (a + b * i)
-    end
-
-    # Mean-flip endpoint reflection: x_star of length 3N-4
-    x_star = Vector{Float64}(undef, 3N - 4)
-    @inbounds for i in 1:N-2
-        x_star[i] = 2.0*xd[1] - xd[i+1]
-    end
-    @inbounds for i in 1:N
-        x_star[N-2+i] = xd[i]
-    end
-    @inbounds for i in 1:N-2
-        x_star[2N-2+i] = 2.0*xd[N] - xd[N-i]
-    end
-
-    off = N - 2
-    Threads.@threads :dynamic for k in eachindex(m_values)
-        m = m_values[k]
-        D = 0.0
-        count = 0
-        @inbounds @simd for i in 1:N
-            lo = off + i
-            hi = off + i + 2m
-            if hi <= length(x_star)
-                d2 = x_star[hi] - 2.0*x_star[off + i + m] + x_star[lo]
-                D += d2^2
-                count += 1
-            end
-        end
-
-        if count == 0
-            devs[k] = NaN
-        else
-            devs[k] = sqrt(D / (2.0 * (N - 2) * Float64(m)^2 * tau0^2))
-        end
-    end
-
-    return devs
+function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    return _totdev_howe(x, m_values, tau0)
 end
 
 function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
@@ -153,24 +81,14 @@ function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 """
-    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
+    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Modified Total Deviation (MTOTDEV).
-
-MTOTDEV uses Greenhall 2003's per-window time-reverse extension. `detrend`
-selects the per-window detrending applied before the extension:
-
-- `:greenhall` — half-mean slope removal (Greenhall 2003 canonical).
-- `:linear` — full least-squares (slope + intercept) per window; tighter
-  detrend at the cost of slightly higher per-window variance.
-- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:greenhall` here.
+Computes the Modified Total Deviation (MTOTDEV), using Greenhall 2003's
+per-window time-reverse extension with half-mean slope removal — the canonical
+MTOTDEV form.
 """
-function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
-    if detrend === :greenhall || detrend === :legacy
-        return _mtotdev_greenhall(x, m_values, tau0)
-    end
-    detrend === :linear && return _mtotdev_linear(x, m_values, tau0)
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid for MTOTDEV: :greenhall, :linear, :legacy"))
+function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    return _mtotdev_greenhall(x, m_values, tau0)
 end
 
 function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
@@ -299,114 +217,15 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
     return devs
 end
 
-function _mtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Per-window full LS detrend (analytic slope+intercept) + per-window
-    # time-reverse extension + modified 2nd-difference operator. Same
-    # extension/operator shape as `_mtotdev_greenhall`; only the slope
-    # estimate differs (full LS instead of half-mean).
-    N = length(x)
-    devs = Vector{Float64}(undef, length(m_values))
-
-    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
-    # rationale, sliding-window inner reduction, and ext-buffer pool.
-    nthreads = Threads.nthreads()
-    max_m = maximum(m_values; init=0)
-    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
-
-    for k in eachindex(m_values)
-        m = m_values[k]
-        nsubs = N - 3m + 1
-        if nsubs < 1
-            devs[k] = NaN
-            continue
-        end
-
-        seg_len = 3m
-        L_float = Float64(seg_len)
-        sum_i = (L_float * (L_float + 1.0)) / 2.0
-        sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
-        delta = L_float * sum_i2 - sum_i^2
-
-        nchunks = max(1, min(nthreads, nsubs))
-        chunk_size = cld(nsubs, nchunks)
-        chunk_sums = zeros(nchunks)
-
-        Threads.@threads :dynamic for c in 1:nchunks
-            n_lo = (c - 1) * chunk_size + 1
-            n_hi = min(c * chunk_size, nsubs)
-            ext = ext_pool[c]
-            local_sum = 0.0
-            for n in n_lo:n_hi
-                sum_x = 0.0
-                sum_ix = 0.0
-                @inbounds @simd for j in 1:seg_len
-                    v = x[n-1+j]
-                    sum_x += v
-                    sum_ix += j * v
-                end
-
-                a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
-                b = (L_float * sum_ix - sum_x * sum_i) / delta
-
-                @inbounds for j in 1:seg_len
-                    val = x[n-1+j] - (a + b * j)
-                    rev_val = x[n-1 + seg_len - j + 1] - (a + b * (seg_len - j + 1))
-
-                    ext[j] = rev_val
-                    ext[seg_len + j] = val
-                    ext[2seg_len + j] = rev_val
-                end
-
-                a1 = 0.0
-                a2 = 0.0
-                a3 = 0.0
-                @inbounds @simd for i in 1:m
-                    a1 += ext[i]
-                    a2 += ext[i+m]
-                    a3 += ext[i+2m]
-                end
-
-                d2 = (a3 - 2.0*a2 + a1) / m
-                block_sum = d2^2
-
-                @inbounds for j in 1:(6m - 1)
-                    a1 += ext[j+m]  - ext[j]
-                    a2 += ext[j+2m] - ext[j+m]
-                    a3 += ext[j+3m] - ext[j+2m]
-                    d2 = (a3 - 2.0*a2 + a1) / m
-                    block_sum += d2^2
-                end
-                local_sum += block_sum / (6.0 * m)
-            end
-            chunk_sums[c] = local_sum
-        end
-
-        outer_sum = sum(chunk_sums)
-        devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
-    end
-
-    return devs
-end
-
 """
-    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
+    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
 Computes the Hadamard Total Deviation (HTOTDEV) on the frequency series
-`y = diff(x) / tau0`.
-
-HTOTDEV uses Greenhall 2003's per-window time-reverse extension. `detrend`
-selects the per-window detrending applied to `y` before the extension:
-
-- `:greenhall` — half-mean slope removal on `y` (Greenhall 2003 canonical).
-- `:linear` — full least-squares (slope + intercept) per window on `y`.
-- `:legacy` — pre-1.0 SigmaTau behavior; alias for `:greenhall` here.
+`y = diff(x) / tau0`, using Greenhall 2003's per-window time-reverse extension
+with half-mean slope removal on `y` — the canonical HTOTDEV form.
 """
-function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
-    if detrend === :greenhall || detrend === :legacy
-        return _htotdev_greenhall(x, m_values, tau0)
-    end
-    detrend === :linear && return _htotdev_linear(x, m_values, tau0)
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid for HTOTDEV: :greenhall, :linear, :legacy"))
+function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    return _htotdev_greenhall(x, m_values, tau0)
 end
 
 function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
@@ -517,243 +336,22 @@ function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
     return devs
 end
 
-function _htotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Per-window full LS detrend on the frequency series y = diff(x)/tau0
-    # + per-window time-reverse extension + third-difference operator.
-    # Same extension/operator shape as `_htotdev_greenhall`; only the slope
-    # estimate differs (full LS slope + intercept instead of half-mean slope).
-    N = length(x)
-    devs = Vector{Float64}(undef, length(m_values))
-
-    y = Vector{Float64}(undef, N-1)
-    @inbounds @simd for i in 1:N-1
-        y[i] = (x[i+1] - x[i]) / tau0
-    end
-    Ny = length(y)
-
-    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
-    # rationale, sliding-window inner reduction, and ext-buffer pool.
-    nthreads = Threads.nthreads()
-    max_m = maximum(m_values; init=0)
-    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
-
-    for k in eachindex(m_values)
-        m = m_values[k]
-        if m == 1
-            L = N - 3
-            if L <= 0
-                devs[k] = NaN
-                continue
-            end
-            sum_sq = 0.0
-            @inbounds @simd for i in 1:L
-                d3 = x[i+3] - 3.0*x[i+2] + 3.0*x[i+1] - x[i]
-                sum_sq += d3^2
-            end
-            devs[k] = sqrt(sum_sq / (6.0 * L * tau0^2))
-            continue
-        end
-
-        n_iter = Ny - 3m + 1
-        if n_iter < 1
-            devs[k] = NaN
-            continue
-        end
-
-        seg_len = 3m
-        L_float = Float64(seg_len)
-        sum_i = (L_float * (L_float + 1.0)) / 2.0
-        sum_i2 = (L_float * (L_float + 1.0) * (2.0*L_float + 1.0)) / 6.0
-        delta = L_float * sum_i2 - sum_i^2
-
-        nchunks = max(1, min(nthreads, n_iter))
-        chunk_size = cld(n_iter, nchunks)
-        chunk_sums = zeros(nchunks)
-
-        Threads.@threads :dynamic for c in 1:nchunks
-            i_lo = (c - 1) * chunk_size
-            i_hi = min(c * chunk_size, n_iter) - 1
-            ext = ext_pool[c]
-            local_sum = 0.0
-            for i in i_lo:i_hi
-                sum_y = 0.0
-                sum_iy = 0.0
-                @inbounds @simd for j in 1:seg_len
-                    v = y[i+j]
-                    sum_y += v
-                    sum_iy += j * v
-                end
-
-                a = (sum_y * sum_i2 - sum_iy * sum_i) / delta
-                b = (L_float * sum_iy - sum_y * sum_i) / delta
-
-                @inbounds for j in 1:seg_len
-                    val = y[i+j] - (a + b * j)
-                    rev_val = y[i + seg_len - j + 1] - (a + b * (seg_len - j + 1))
-
-                    ext[j] = rev_val
-                    ext[seg_len + j] = val
-                    ext[2seg_len + j] = rev_val
-                end
-
-                a1 = 0.0
-                a2 = 0.0
-                a3 = 0.0
-                @inbounds @simd for j in 1:m
-                    a1 += ext[j]
-                    a2 += ext[j+m]
-                    a3 += ext[j+2m]
-                end
-
-                d3 = (a3 - 2.0*a2 + a1) / m
-                sq = d3^2
-
-                @inbounds for j in 1:(6m - 1)
-                    a1 += ext[j+m]  - ext[j]
-                    a2 += ext[j+2m] - ext[j+m]
-                    a3 += ext[j+3m] - ext[j+2m]
-                    d3 = (a3 - 2.0*a2 + a1) / m
-                    sq += d3^2
-                end
-                local_sum += sq / (6.0 * m)
-            end
-            chunk_sums[c] = local_sum
-        end
-
-        dev_sum = sum(chunk_sums)
-        devs[k] = sqrt(dev_sum / (6.0 * n_iter))
-    end
-
-    return devs
-end
-
 """
-    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall) → Vector{Float64}
+    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
 
-MHTOTDEV is novel to SigmaTau and uses a per-window time-reverse extension
-on phase. `detrend` selects the per-window detrending applied before the
-extension:
-
-- `:greenhall` — half-mean slope removal (matches the MTOTDEV/HTOTDEV
-  Greenhall convention). Default.
-- `:linear` — full least-squares (slope + intercept) per window. Alias
-  for `:legacy` on this kernel.
-- `:legacy` — pre-1.0 SigmaTau behavior; identical to `:linear` here.
+MHTOTDEV is novel to SigmaTau; no canonical/published form exists. SigmaTau
+adopts the Greenhall methodology — per-window half-mean slope removal + a 3×
+time-reverse extension on phase — by consistency with MTOTDEV and HTOTDEV.
 """
-function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; detrend::Symbol=:greenhall)
-    detrend === :greenhall && return _mhtotdev_greenhall(x, m_values, tau0)
-    if detrend === :linear || detrend === :legacy
-        return _mhtotdev_linear(x, m_values, tau0)
-    end
-    throw(ArgumentError("unknown detrend recipe: $detrend; valid for MHTOTDEV: :greenhall, :linear, :legacy"))
-end
-
-function _mhtotdev_linear(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    N = length(x)
-    devs = Vector{Float64}(undef, length(m_values))
-
-    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
-    # rationale, sliding-window inner reduction, and buffer pool.
-    nthreads = Threads.nthreads()
-    max_m = maximum(m_values; init=0)
-    max_Lp = 3 * max(max_m, 1) + 1
-    max_L3 = 3 * max_Lp - 3 * max(max_m, 1)
-    ext_pool = [Vector{Float64}(undef, 3 * max_Lp) for _ in 1:nthreads]
-    d3_pool  = [Vector{Float64}(undef, max_L3)     for _ in 1:nthreads]
-
-    for k in eachindex(m_values)
-        m = m_values[k]
-        if m < 1
-            devs[k] = NaN
-            continue
-        end
-        nsubs = N - 4m + 1
-        if nsubs < 1
-            devs[k] = NaN
-            continue
-        end
-
-        Lp = 3m + 1
-        L3 = 3Lp - 3m
-        Lp_float = Float64(Lp)
-        sum_i = (Lp_float * (Lp_float + 1.0)) / 2.0
-        sum_i2 = (Lp_float * (Lp_float + 1.0) * (2.0*Lp_float + 1.0)) / 6.0
-        delta = Lp_float * sum_i2 - sum_i^2
-
-        nchunks = max(1, min(nthreads, nsubs))
-        chunk_size = cld(nsubs, nchunks)
-        chunk_sums = zeros(nchunks)
-
-        Threads.@threads :dynamic for c in 1:nchunks
-            n_lo = (c - 1) * chunk_size + 1
-            n_hi = min(c * chunk_size, nsubs)
-            ext = ext_pool[c]
-            d3_vec = d3_pool[c]
-            local_sum = 0.0
-            for n in n_lo:n_hi
-                sum_x = 0.0
-                sum_ix = 0.0
-                @inbounds @simd for j in 1:Lp
-                    val = x[n-1+j]
-                    sum_x += val
-                    sum_ix += j * val
-                end
-
-                a = (sum_x * sum_i2 - sum_ix * sum_i) / delta
-                b = (Lp_float * sum_ix - sum_x * sum_i) / delta
-
-                @inbounds for j in 1:Lp
-                    val = x[n-1+j] - (a + b * j)
-                    rev_val = x[n-1 + Lp - j + 1] - (a + b * (Lp - j + 1))
-
-                    ext[j] = rev_val
-                    ext[Lp + j] = val
-                    ext[2Lp + j] = rev_val
-                end
-
-                @inbounds for j in 1:L3
-                    d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
-                end
-
-                n_avg = L3 + 1 - m
-                if n_avg > 0
-                    # Sliding-window sum over m-windows of d3_vec, replacing
-                    # the cumulative-sum buffer S used previously. A_j is
-                    # the running m-window sum starting at index j.
-                    A = 0.0
-                    @inbounds @simd for j in 1:m
-                        A += d3_vec[j]
-                    end
-                    block_var = A^2
-
-                    @inbounds for j in 1:(n_avg - 1)
-                        A += d3_vec[j+m] - d3_vec[j]
-                        block_var += A^2
-                    end
-                    block_var /= (n_avg * 6.0 * Float64(m)^2)
-                else
-                    block_var = 0.0
-                end
-
-                local_sum += block_var
-            end
-            chunk_sums[c] = local_sum
-        end
-
-        total_sum = sum(chunk_sums)
-        devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
-    end
-
-    return devs
+function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    return _mhtotdev_greenhall(x, m_values, tau0)
 end
 
 function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     # Per-window half-mean slope removal + per-window time-reverse extension
-    # + averaged third-difference operator. Same window/operator structure as
-    # `_mhtotdev_linear`; only the slope estimate differs (half-mean instead
-    # of full LS).
+    # + averaged third-difference operator.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
