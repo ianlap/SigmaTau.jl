@@ -41,4 +41,18 @@ using RecipesBase
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), [r, r0])
         @test length(rd) == 2
     end
+
+    @testset "spectral results" begin
+        big = PhaseData(cumsum(randn(4096)) .* 1e-9, 1.0)
+        # S_y / S_x render log-log.
+        for res in (Sy(big; nperseg=512), Sx(big; nperseg=512))
+            rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), res)
+            @test length(rd) == 1
+            @test rd[1].plotattributes[:yscale] === :log10
+        end
+        # ℒ(f) renders with a linear (dB) ordinate.
+        rl = RecipesBase.apply_recipe(Dict{Symbol,Any}(), L(big; f_carrier=1e7, nperseg=512))
+        @test length(rl) == 1
+        @test !haskey(rl[1].plotattributes, :yscale)
+    end
 end
