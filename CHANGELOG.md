@@ -13,13 +13,13 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   specific stream — e.g. independent per-realization seeds in a Monte Carlo.
   Defaults to the global RNG, so existing seeded callers are unaffected.
 - `tools/mc_mhtotdev.jl` — a reproducible Monte Carlo harness that measures
-  MHTOTDEV's bias `B(α) = E[MHTOTVAR]/E[MHVAR]` and its EDF
-  (`2·E[V̂]²/Var[V̂]`) against synthesized known-α noise, with an analytic
-  μ(α) slope cross-check and a provenance artifact (git SHA, seed, fits). The
-  methodology is documented in the new Theory page "MHTOTDEV bias and EDF". The
-  measured coefficient tables (replacing the unsourced `_coeff_mhtot` and the
-  "unbiased by policy" `bias_correction(:mhtot)` stance) land from the full
-  workstation sweep.
+  MHTOTDEV's bias `B(α) = E[MHTOTVAR]/E[MHVAR]` (vs the overlapped MHDEV
+  reference) and its EDF (`2·E[V̂]²/Var[V̂]`) against synthesized known-α noise,
+  following the NIST total-variance methodology (Howe et al. 2000 for the bias /
+  EDF definitions and the `τ/τ0 ≥ 16` validity window; Vernotte & Howe for the
+  Monte Carlo EDF estimator). Includes an analytic μ(α) slope cross-check, both
+  literature EDF parameterizations, and a provenance artifact (git SHA, seed,
+  fits). Methodology documented in the new Theory page "MHTOTDEV bias and EDF".
 - Spectral-density estimators `Sy`, `Sx`, and `L`, returning a new
   `SpectralResult` type. `Sy` is the one-sided fractional-frequency PSD
   `S_y(f)` (1/Hz, IEEE 1139-2022 §3.4); `Sx` is the phase PSD `S_x(f)`
@@ -65,6 +65,15 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed (BREAKING)
 
+- `mhtotdev`'s `correct_bias` is now functional and applied by default. Measured
+  by Monte Carlo (`tools/mc_mhtotdev.jl`), MHTOTDEV is ≈ unbiased for
+  white/flicker noise but reads progressively high for redder FM (`B ≈ 1.8` for
+  RWFM), so the prior "unbiased by policy" stance (`B = 1` no-op) was wrong. The
+  default deviation now has the measured `√B` unbias correction applied; pass
+  `correct_bias=false` for the raw kernel. The `_coeff_mhtot` EDF coefficients,
+  previously unsourced, are now the Monte-Carlo fit (R² ≥ 0.997, fit over
+  `τ/τ0 ≥ 16`). Current values are provisional from a laptop run; the full
+  workstation sweep finalizes them.
 - Trimmed the total family to one defined extension form each and removed the
   `detrend` kwarg from `totdev`, `mtotdev`, `ttotdev`, `htotdev`, and `mhtotdev`
   (along with the `TOTDEV_DETREND_DEFAULT` / `TOTAL_FAMILY_DETREND_DEFAULT`
