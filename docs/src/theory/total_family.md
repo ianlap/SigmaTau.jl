@@ -113,10 +113,10 @@ ttotdev(PhaseData(x, τ₀), τs)
 ```
 
 [`ttotdev`](@ref) wraps [`mtotdev`](@ref) and rescales the centerline
-and CI bounds by `τ / √3`. The `detrend`, `correct_bias`, `calc_ci`,
-and `confidence` kwargs pass through unchanged; the `edf` and
-`noise_type` columns are reused as-is since a time rescaling does not
-change the degrees of freedom.
+and CI bounds by `τ / √3`. The `correct_bias`, `calc_ci`, and
+`confidence` kwargs pass through unchanged; the `edf` and `noise_type`
+columns are reused as-is since a time rescaling does not change the
+degrees of freedom.
 
 ---
 
@@ -160,16 +160,16 @@ htotdev(PhaseData(x, τ₀), τs)
 
 ## MHTOTDEV — modified Hadamard total deviation
 
-**Extension method.** *Per-subsegment, with linear detrending.* This
-is the only total estimator that uses linear (not half-average)
-detrending. Walks `N − 4m + 1` subsegments of phase length `3m + 1`
-along `x`. For each:
+**Extension method.** *Per-subsegment, half-average detrending* — the
+same Greenhall extension MTOTDEV and HTOTDEV use. (MHTOTDEV has no
+canonical/published form; SigmaTau adopts the Greenhall methodology for
+consistency across the modified-total family.) Walks `N − 4m + 1`
+subsegments of phase length `3m + 1` along `x`. For each:
 
-1. **Linear detrend** the subsegment — fit and subtract a degree-1
-   polynomial. This is a stronger detrend than the MTOTDEV / HTOTDEV
-   half-average step and is necessary because the third-difference
-   kernel that follows would otherwise pick up residual quadratic
-   curvature in the segment.
+1. **Half-average slope removal** — subtract a linear trend whose slope
+   is the difference of the two half-segment means (the Greenhall slope
+   estimate shared with MTOTDEV / HTOTDEV), removing per-segment linear
+   frequency drift before the third-difference kernel.
 2. Symmetric reflection.
 3. Cumulative third differences plus an `m`-point moving average
    (the modified-style inner averaging, parallel to how MDEV relates
@@ -237,7 +237,7 @@ confidence — all four concerns at once.
 | TOTDEV    | whole record | none           | phase     | no  |
 | MTOTDEV   | per subsegment | half-average | phase     | no  |
 | HTOTDEV   | per subsegment | half-average | frequency | yes — falls back to HDEV |
-| MHTOTDEV  | per subsegment | linear         | phase     | no  |
+| MHTOTDEV  | per subsegment | half-average   | phase     | no  |
 
 ---
 

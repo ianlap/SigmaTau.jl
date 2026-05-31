@@ -27,7 +27,6 @@ end
                 :stability, :DEFAULT_DEVIATIONS,
                 :identify_noise, :calculate_edf, :confidence_intervals,
                 :bias_correction, :DEFAULT_CONFIDENCE,
-                :TOTDEV_DETREND_DEFAULT, :TOTAL_FAMILY_DETREND_DEFAULT,
                 :TauMode, :AllTaus, :Octave, :HalfOctave,
                 :QuarterOctave, :Decade, :HalfDecade, :tau_values,
                 :save_result, :load_result, :save_suite, :load_suite,

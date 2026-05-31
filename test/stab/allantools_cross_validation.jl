@@ -80,12 +80,12 @@
                 got = (m * tau0) * mdev_v / sqrt(3.0)
             elseif kind == "Total"
                 # allantools' raw `totdev` follows SP1065 eqn 25 verbatim
-                # (no detrend), which is what our `:howe` recipe implements.
-                # Apples-to-apples: agreement is ~7 sig figs across all m
-                # on this fixture (no need for the m=512 skip Stable32 needs
-                # — allantools doesn't apply Stable32's alpha-aware
-                # correction).
-                got = SigmaTau._totdev_core(x, [m], tau0; detrend=:howe)[1]
+                # (no detrend), which is exactly what `_totdev_core` (the
+                # canonical Howe form) implements. Apples-to-apples: agreement
+                # is ~7 sig figs across all m on this fixture (no need for the
+                # m=512 skip Stable32 needs — allantools doesn't apply
+                # Stable32's alpha-aware correction).
+                got = SigmaTau._totdev_core(x, [m], tau0)[1]
                 rtol = 1e-7
             elseif kind == "Hadamard Total"
                 got = sqrt(LK.htotdev_var(x, m, tau0))

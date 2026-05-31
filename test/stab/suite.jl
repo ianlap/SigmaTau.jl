@@ -43,14 +43,18 @@ using SigmaTau
         @test isempty(s0[:adev].ci_lower)
     end
 
-    @testset "kwarg filtering: detrend reaches total family, not adev" begin
-        s = stability(pd; devs=(:adev, :totdev), taus=Octave, calc_ci=false, detrend=:linear)
-        @test s[:adev].dev   == adev(pd, tau_values(Octave, 1024, :adev); calc_ci=false).dev
-        @test s[:totdev].dev == totdev(pd, tau_values(Octave, 1024, :totdev);
-                                       calc_ci=false, detrend=:linear).dev
-        # totdev with :linear differs from its :howe default — confirms the
-        # kwarg actually reached the total family.
-        @test s[:totdev].dev != totdev(pd, tau_values(Octave, 1024, :totdev); calc_ci=false).dev
+    @testset "kwarg filtering: correct_bias reaches total family, not adev" begin
+        # RWFM phase so the TOTVAR bias correction (B = 1 − 0.75·τ/T) actually
+        # bites, making correct_bias=false vs =true numerically distinguishable.
+        Random.seed!(2026)
+        rw = PhaseData(cumsum(cumsum(randn(1024))) .* 1e-12, 1.0)
+        ms = tau_values(Octave, 1024, :totdev)
+        s = stability(rw; devs=(:adev, :totdev), taus=Octave, calc_ci=false, correct_bias=false)
+        @test s[:adev].dev   == adev(rw, tau_values(Octave, 1024, :adev); calc_ci=false).dev
+        @test s[:totdev].dev == totdev(rw, ms; calc_ci=false, correct_bias=false).dev
+        # correct_bias=false differs from the corrected default — confirms the
+        # kwarg actually reached the total family (and adev silently ignores it).
+        @test s[:totdev].dev != totdev(rw, ms; calc_ci=false, correct_bias=true).dev
     end
 
     @testset "default devs, explicit Vector{Int}, and TauMode taus" begin

@@ -70,7 +70,6 @@ export read_phase, read_frequency
 export detrend, fillgaps
 
 export DEFAULT_CONFIDENCE
-export TOTDEV_DETREND_DEFAULT, TOTAL_FAMILY_DETREND_DEFAULT
 
 export TauMode, AllTaus, Octave, HalfOctave, QuarterOctave, Decade, HalfDecade
 export tau_values
