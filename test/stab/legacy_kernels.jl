@@ -93,6 +93,24 @@ function totdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     return D / (2 * (N - 2) * (m * tau0)^2)
 end
 
+# Canonical TOTDEV (Howe 1995 / SP1065 eqn 25): no detrend, mean-flip endpoint
+# reflection. Independent reference for the kept `_totdev_core` (`:howe`) form.
+# Sums the three-point second difference over centers n = 2 … N-1 with the
+# SP1065 eq 2 reflection x*_k = 2x[1] − x[2−k] (k<1), 2x[N] − x[2N−k] (k>N).
+function totdev_var_howe(x::AbstractVector{<:Real}, m::Int, tau0::Real)
+    N = length(x)
+    N <= 2 && return NaN
+    x1 = x[1]; xN = x[N]
+    star(k) = k < 1 ? 2x1 - x[2 - k] : (k > N ? 2xN - x[2N - k] : Float64(x[k]))
+
+    D = 0.0
+    for n in 2:N-1
+        d2 = star(n + m) - 2.0 * x[n] + star(n - m)
+        D += d2^2
+    end
+    return D / (2 * (N - 2) * (m * tau0)^2)
+end
+
 # ── MTOTDEV (total.jl) ────────────────────────────────────────────────────────
 
 function mtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
@@ -227,6 +245,65 @@ function mhtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     for n in 1:nsubs
         copyto!(pd, 1, x, n, Lp)
         detrend_linear!(pd)
+
+        for j in 1:Lp
+            ext[j]        = pd[Lp - j + 1]
+            ext[Lp + j]   = pd[j]
+            ext[2Lp + j]  = pd[Lp - j + 1]
+        end
+
+        for j in 1:L3
+            d3_vec[j] = ext[j] - 3ext[j+m] + 3ext[j+2m] - ext[j+3m]
+        end
+
+        S[1] = 0.0
+        for j in 1:L3
+            S[j+1] = S[j] + d3_vec[j]
+        end
+
+        n_avg = L3 + 1 - m
+        block_var = 0.0
+        if n_avg > 0
+            for j in 1:n_avg
+                a = S[j+m] - S[j]
+                block_var += a^2
+            end
+            block_var /= (n_avg * 6.0 * Float64(m)^2)
+        end
+
+        total_sum += block_var
+    end
+
+    return total_sum / (nsubs * (m * tau0)^2)
+end
+
+# Canonical MHTOTDEV (Greenhall half-mean slope removal). Independent reference
+# for the kept `_mhtotdev_core` form. Identical to `mhtotdev_var` except the
+# per-window detrend is the half-mean slope (matching MTOTDEV/HTOTDEV), not a
+# full least-squares fit.
+function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
+    m >= 1 || throw(ArgumentError("averaging factor m must be >= 1"))
+    N = length(x); nsubs = N - 4m + 1
+    nsubs < 1 && return NaN
+
+    Lp = 3m + 1; ext_len = 3Lp; L3 = ext_len - 3m
+    pd     = Vector{Float64}(undef, Lp)
+    ext    = Vector{Float64}(undef, ext_len)
+    d3_vec = Vector{Float64}(undef, L3)
+    S      = Vector{Float64}(undef, L3 + 1)
+
+    total_sum = 0.0
+    for n in 1:nsubs
+        copyto!(pd, 1, x, n, Lp)
+
+        # Half-mean slope removal (matches `_mhtotdev_greenhall`).
+        half = floor(Int, Lp / 2)
+        s1 = sum(@view(pd[1:half])) / half
+        s2 = sum(@view(pd[half+1:Lp])) / (Lp - half)
+        slope = (s2 - s1) / ((Lp / 2.0) * tau0)
+        for j in 1:Lp
+            pd[j] -= slope * tau0 * (j - 1)
+        end
 
         for j in 1:Lp
             ext[j]        = pd[Lp - j + 1]

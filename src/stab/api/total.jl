@@ -9,18 +9,11 @@
 # producing a NaN row for just that τ.
 _unbias_divisor(B::Vector{Float64}) = [b > 0 ? sqrt(b) : NaN for b in B]
 
-# Detrend-recipe defaults, exported so callers (and a future settings UI) can read
-# the active default instead of hardcoding the symbol. The split is intentional:
-# TOTDEV follows Howe 1995 (SP1065 eqn 25); the modified/Hadamard total family
-# follows Greenhall 2003. See the "Detrend default" note on each function below.
-const TOTDEV_DETREND_DEFAULT = :howe
-const TOTAL_FAMILY_DETREND_DEFAULT = :greenhall
-
 """
-    totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:howe, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
-Computes the Total Deviation for the given PhaseData. See `_totdev_core` for
-the meaning of `detrend`.
+Computes the Total Deviation for the given PhaseData, using the canonical
+Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension (see `_totdev_core`).
 
 `correct_bias=true` (default) applies the SP1065 noise-type-dependent
 unbias correction `σ_unbiased = σ_raw / √B`, where `B = E[TOTVAR]/AVAR`
@@ -29,19 +22,10 @@ is biased low for FFM and RWFM as τ approaches T, so the correction
 increases σ at long τ. Set `correct_bias=false` to return the raw
 kernel value (Stable32 actually applies the correction by default,
 contrary to older notes — verify against the build you compare with).
-
-!!! note "Detrend default"
-    `totdev` defaults to `detrend=:howe` (Howe 1995 / SP1065 eqn 25),
-    whereas the modified/Hadamard total family (`mtotdev`, `ttotdev`,
-    `htotdev`, `mhtotdev`) defaults to `:greenhall` (Greenhall 2003). The
-    split is intentional and matches the literature; pass `detrend=`
-    explicitly when comparing total variants on the same record. The
-    defaults are exposed as `TOTDEV_DETREND_DEFAULT` /
-    `TOTAL_FAMILY_DETREND_DEFAULT`.
 """
-function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTDEV_DETREND_DEFAULT, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
-    raw_devs = _totdev_core(x, m_values, data.tau0; detrend=detrend)
+    raw_devs = _totdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
@@ -62,10 +46,10 @@ function totdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTDEV_D
 end
 
 """
-    mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
-Computes the Modified Total Deviation for the given PhaseData. See `_mtotdev_core` for
-the meaning of `detrend`.
+Computes the Modified Total Deviation for the given PhaseData, using the
+canonical Greenhall 2003 per-window time-reverse extension (see `_mtotdev_core`).
 
 `correct_bias=true` (default) applies the SP1065 Table 11 unbias
 correction `σ_unbiased = σ_raw / √B`, where `B ∈ {1.06, 1.17, 1.27,
@@ -73,15 +57,10 @@ correction `σ_unbiased = σ_raw / √B`, where `B ∈ {1.06, 1.17, 1.27,
 correction drops σ by roughly 3 – 13 %. Pass `correct_bias=false` to
 return the raw kernel — matches Stable32 and allantools, which do not
 apply this correction.
-
-!!! note "Detrend default"
-    Defaults to `detrend=:greenhall` (Greenhall 2003); `totdev` instead
-    defaults to `:howe`. Pass `detrend=` explicitly when comparing total
-    variants on the same record.
 """
-function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTAL_FAMILY_DETREND_DEFAULT, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
-    raw_devs = _mtotdev_core(x, m_values, data.tau0; detrend=detrend)
+    raw_devs = _mtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
@@ -101,10 +80,10 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTAL_F
 end
 
 """
-    htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
-Computes the Hadamard Total Deviation for the given PhaseData. See `_htotdev_core` for
-the meaning of `detrend`.
+Computes the Hadamard Total Deviation for the given PhaseData, using the
+canonical Greenhall 2003 per-window time-reverse extension (see `_htotdev_core`).
 
 `correct_bias=true` (default) applies the FCS 2001 (Howe & Tasset)
 Table I unbias correction `σ_unbiased = σ_raw / √B`, where
@@ -115,15 +94,10 @@ correction raises σ — substantially for divergent FM. PM noises
 `correct_bias=false` to return the raw kernel value (Stable32 actually
 applies the correction by default — see TOTDEV docstring for the same
 caveat).
-
-!!! note "Detrend default"
-    Defaults to `detrend=:greenhall` (Greenhall 2003); `totdev` instead
-    defaults to `:howe`. Pass `detrend=` explicitly when comparing total
-    variants on the same record.
 """
-function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTAL_FAMILY_DETREND_DEFAULT, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
-    raw_devs = _htotdev_core(x, m_values, data.tau0; detrend=detrend)
+    raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
@@ -143,7 +117,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTAL_F
 end
 
 """
-    ttotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    ttotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Time-Total Deviation. Wraps [`mtotdev`](@ref) and rescales by `τ/√3`,
 analogous to [`tdev`](@ref) wrapping [`mdev`](@ref). TTOTDEV has units
@@ -152,19 +126,14 @@ time-deviation summary of long-τ stability with MTOTDEV's
 per-subsegment extended window — useful for telecom / time-transfer
 analyses on records too short for ordinary TDEV at the τ of interest.
 
-The `detrend`, `correct_bias`, `calc_ci`, and `confidence` kwargs flow
-through to the underlying `mtotdev` call unchanged. Confidence-interval
-bounds inherit MTOTDEV's χ²/Gaussian limits scaled by the same
-`τ / √3` factor; the EDF column is reused as-is (a time rescaling does
-not change the degrees of freedom).
-
-!!! note "Detrend default"
-    Defaults to `detrend=:greenhall` (Greenhall 2003); `totdev` instead
-    defaults to `:howe`. Pass `detrend=` explicitly when comparing total
-    variants on the same record.
+The `correct_bias`, `calc_ci`, and `confidence` kwargs flow through to
+the underlying `mtotdev` call unchanged. Confidence-interval bounds
+inherit MTOTDEV's χ²/Gaussian limits scaled by the same `τ / √3` factor;
+the EDF column is reused as-is (a time rescaling does not change the
+degrees of freedom).
 """
-function ttotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTAL_FAMILY_DETREND_DEFAULT, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mtotdev(data, m_values; detrend=detrend, calc_ci=calc_ci, correct_bias=correct_bias, confidence=confidence)
+function ttotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mtotdev(data, m_values; calc_ci=calc_ci, correct_bias=correct_bias, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 
     if !calc_ci
@@ -176,28 +145,20 @@ function ttotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTAL_F
 end
 
 """
-    mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=:greenhall, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
-Modified Hadamard Total Deviation. See `_mhtotdev_core` for
-the meaning of `detrend`.
+Modified Hadamard Total Deviation, using the Greenhall methodology SigmaTau
+adopts for this novel estimator (see `_mhtotdev_core`).
 
 No bias correction is applied for any value of `correct_bias` — the
 kwarg is accepted for API symmetry with the other total-family
-functions but is a documented no-op. FCS 2001 and NIST SP1065 publish
-no bias-correction model for MHTOTDEV; the estimator is treated as
-unbiased (B = 1) by policy, matching Stable32 and AllanLab.
-`bias_correction(:mhtot, …)` returns ones for the same reason. EDF
-uses the empirical SP1065 fit coefficients (`_coeff_mhtot`).
-
-!!! note "Detrend default"
-    Defaults to `detrend=:greenhall` (Greenhall 2003); `totdev` instead
-    defaults to `:howe`. Pass `detrend=` explicitly when comparing total
-    variants on the same record.
+functions but is currently a documented no-op. `bias_correction(:mhtot, …)`
+returns ones. EDF uses the `_coeff_mhtot` fit coefficients.
 """
-function mhtotdev(data::PhaseData, m_values::Vector{Int}; detrend::Symbol=TOTAL_FAMILY_DETREND_DEFAULT, calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _ = correct_bias  # accepted for API symmetry; B = 1 by FCS 2001 / SP1065 policy. See docstring.
+function mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _ = correct_bias  # accepted for API symmetry; B = 1 (no-op) pending the bias study.
     x = _f64(data.x)
-    raw_devs = _mhtotdev_core(x, m_values, data.tau0; detrend=detrend)
+    raw_devs = _mhtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 

@@ -9,8 +9,8 @@ const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :tdev)
 
 # Per-symbol routing with keyword filtering. The Allan/Hadamard families forward
 # only `calc_ci`/`confidence`; the total family also forwards any extra kwargs
-# (`detrend`, `correct_bias`), letting each total function apply its own default;
-# `mtie`/`pdev` forward only `calc_ci`. The fallback rejects unknown symbols.
+# (`correct_bias`), letting each total function apply it; `mtie`/`pdev` forward
+# only `calc_ci`. The fallback rejects unknown symbols.
 _dispatch_dev(::Val{:adev},  data, m; calc_ci, confidence, kwargs...) = adev(data, m;  calc_ci, confidence)
 _dispatch_dev(::Val{:mdev},  data, m; calc_ci, confidence, kwargs...) = mdev(data, m;  calc_ci, confidence)
 _dispatch_dev(::Val{:tdev},  data, m; calc_ci, confidence, kwargs...) = tdev(data, m;  calc_ci, confidence)
@@ -56,9 +56,9 @@ Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 `devs` is any iterable of deviation symbols drawn from `(:adev, :mdev, :tdev,
 :hdev, :mhdev, :htdev, :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev, :mtie,
 :pdev)`. `taus` is a [`TauMode`](@ref) (e.g. `Octave`, `Decade`) or an explicit
-`Vector{Int}` of averaging factors applied to every deviation. Extra keyword
-arguments (`detrend`, `correct_bias`) are forwarded only to the deviations that
-accept them (the total family); `mtie`/`pdev` receive only `calc_ci`.
+`Vector{Int}` of averaging factors applied to every deviation. The extra keyword
+argument `correct_bias` is forwarded only to the deviations that accept it (the
+total family); `mtie`/`pdev` receive only `calc_ci`.
 
 # Examples
 
