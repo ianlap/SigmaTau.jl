@@ -151,11 +151,11 @@ Modified Hadamard Total Deviation, using the Greenhall methodology SigmaTau
 adopts for this novel estimator (see `_mhtotdev_core`).
 
 `correct_bias=true` (default) applies the Monte-Carlo-measured unbias
-correction `σ_unbiased = σ_raw / √B`, where `B ∈ {1.066, 0.985, 1.018,
-1.202, 1.797}` for α ∈ {2, 1, 0, -1, -2} (from `bias_correction(:mhtot, …)`).
-MHTOTDEV is ≈ unbiased for white/flicker noise (B ≈ 1) and reads
-progressively high for redder FM (RWFM B ≈ 1.8, where the correction lowers
-σ); it is *not* exactly unbiased, contrary to the earlier assumption. Pass
+correction `σ_unbiased = σ_raw / √B`, where `B = b0 + b1·(τ/T)` is the
+τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)`. MHTOTDEV is
+≈ unbiased for white/flicker noise (B ≈ 1) and reads progressively high for
+redder FM (RWFM B ≈ 1.9 at small τ, where the correction lowers σ); it is
+*not* exactly unbiased, contrary to the earlier assumption. Pass
 `correct_bias=false` for the raw kernel value. EDF uses the measured
 `_coeff_mhtot` fit. See the "MHTOTDEV bias and EDF" theory page for the
 measurement methodology.
