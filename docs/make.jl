@@ -59,6 +59,7 @@ makedocs(
             "theory/noise_id.md",
             "theory/spectral.md",
             "theory/mhtotdev_bias_edf.md",
+            "theory/pdev_confidence.md",
             "theory/validation.md",
         ],
         "Tutorials"       => [
