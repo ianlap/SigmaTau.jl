@@ -1,9 +1,10 @@
 # SigmaTau.jl — Project Overview
 
-> **Last Updated**: 2026-05-21 (v0.3.0 cut).
+> **Last Updated**: 2026-05-30.
 > **Scope**: Single registerable Julia 1.11 package, flat module —
-> deviation kernels, noise identification, EDF/CI, calibrated noise
-> generation, and file IO for time-and-frequency stability analysis.
+> deviation kernels, noise identification, EDF/CI, spectral densities
+> (S_y / S_x / ℒ), calibrated noise generation, and file IO for
+> time-and-frequency stability analysis.
 
 For clock state-space estimation and Kalman steering, see the sister
 package [ClockEnsemble.jl](https://github.com/ianlap/ClockEnsemble.jl)
@@ -44,6 +45,7 @@ so user code is just `using SigmaTau; adev(...)`.
 | `FrequencyData{T}` | [src/types/frequency_data.jl](src/types/frequency_data.jl) | Parametric; wired into every Stab dispatch; ctor validates `tau0 > 0` and length ≥ 2 |
 | `StabilityResult` | [src/types/stability_result.jl](src/types/stability_result.jl) | Non-parametric `Vector{Float64}` fields; includes `edf` (empty when `calc_ci=false`) |
 | `StabilitySuite` | [src/types/stability_suite.jl](src/types/stability_suite.jl) | Ordered, symbol-indexable collection of `StabilityResult`s + session metadata; produced by `stability` |
+| `SpectralResult` | [src/types/spectral_result.jl](src/types/spectral_result.jl) | Non-parametric; `freq`/`psd` + `units` + Welch params; produced by `Sy`/`Sx`/`L` |
 | `AbstractTimingData` | [src/types/abstract.jl](src/types/abstract.jl) | Abstract supertype |
 
 ### 2.2 Stability Surface
@@ -98,6 +100,8 @@ raw `Vector{Float64}`.
 | `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | No CI fields (EDF port tracked in TODO); `calc_ci` is a no-op, no `confidence` kwarg |
 | `stability` | [src/stab/api/suite.jl](src/stab/api/suite.jl) | Compute-all entry point → `StabilitySuite`; `devs`/`taus` select the deviation set and grid; `DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :tdev)` |
 | `noise_gen` | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | Calibrated power-law clock-noise generator; returns `PhaseData` or `FrequencyData` |
+| `Sy`, `Sx`, `L` | [src/stab/api/spectral.jl](src/stab/api/spectral.jl) | Welch PSD: fractional-frequency `S_y(f)` (1/Hz), phase `S_x(f)` (s²/Hz), single-sideband phase noise `ℒ(f)` (dBc/Hz, required `f_carrier`); IEEE 1139-2022 §3.3–3.5. Both `PhaseData` and `FrequencyData` entry points → `SpectralResult` |
+| `_welch_psd` (internal) | [src/stab/spectral.jl](src/stab/spectral.jl) | One-sided "density" Welch core (hann/hamming/rectangular window, per-segment mean detrend); variance-preserving normalization |
 | `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
 | `TauMode`, `tau_values` | [src/stab/taus.jl](src/stab/taus.jl) | Grid selector `AllTaus`/`Octave`/`HalfOctave`/`QuarterOctave`/`Decade`/`HalfDecade`; every deviation accepts a `TauMode` in place of `m_values`; `_default_m_values` is `tau_values(Octave, …)` so the octave default is unchanged |
 | `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for a single `StabilityResult` (format v1) |
@@ -110,9 +114,9 @@ raw `Vector{Float64}`.
 
 | Component | Notes |
 |-----------|-------|
-| Single flat export block | `src/SigmaTau.jl` exports types, IO, deviations, noise-ID, EDF/CI, MTIE, PDEV, and `noise_gen` directly |
+| Single flat export block | `src/SigmaTau.jl` exports types, IO, deviations, noise-ID, EDF/CI, MTIE, PDEV, `noise_gen`, and the spectral `Sy`/`Sx`/`L` directly |
 | Root `Project.toml` deps | Single-package manifest; `AbstractFFTs`, `Dates`, `DelimitedFiles`, `Distributions`, `DocStringExtensions`, `FFTW`, `StaticArrays`, `Statistics` |
-| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots`. Single-result curve (opt-in `ci_band` ribbon), plus `StabilitySuite` and `Vector{StabilityResult}` overlays |
+| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots`. Single-result curve (opt-in `ci_band` ribbon), `StabilitySuite` and `Vector{StabilityResult}` overlays, and `SpectralResult` (log-log for `Sy`/`Sx`, dB-vs-log-f for `ℒ`) |
 | Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) — verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; `ldev` ≡ `htdev`; pins the absence of the old `Stab`/`Est` submodules |
 | `examples/` | Four Literate-driven tutorials (`00_julia_for_metrologists`, `01_phase_data`, `02_compute_adev`, `06_three_cornered_hat`) |
 
@@ -130,13 +134,14 @@ project_overview.md                      This file (per-component audit)
 Project.toml                             Single-package manifest + extension
 src/
 ├── SigmaTau.jl                          Flat umbrella module + export block
-├── types/{abstract,phase_data,frequency_data,stability_result,stability_suite}.jl
+├── types/{abstract,phase_data,frequency_data,stability_result,stability_suite,spectral_result}.jl
 ├── io/{results,detrend,fillgaps,read}.jl
 └── stab/
     ├── core/{allan,hadamard,total,mtie,pdev}.jl
     ├── noise/{lag1,synth,gen}.jl
     ├── stats/edf.jl
-    ├── api/{allan,hadamard,total,mtie,pdev,suite}.jl
+    ├── api/{allan,hadamard,total,mtie,pdev,suite,spectral}.jl
+    ├── spectral.jl                      (Welch PSD core: _welch_psd + windows)
     ├── taus.jl                          (TauMode grid selector + tau_values)
     └── utils.jl                         (FrequencyData → PhaseData helper)
 
@@ -145,7 +150,7 @@ ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plot
 test/
 ├── runtests.jl                          Aggregator (5 sub-suites)
 ├── types/runtests.jl
-├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl + taus.jl + suite.jl
+├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl + taus.jl + suite.jl + spectral.jl
 ├── io/{detrend,fillgaps,read,results,runtests}.jl
 ├── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
 └── recipes.jl                           RecipesBase extension smoke (overlays + ci_band)

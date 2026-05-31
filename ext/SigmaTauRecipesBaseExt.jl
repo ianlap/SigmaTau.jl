@@ -1,6 +1,6 @@
 module SigmaTauRecipesBaseExt
 
-using SigmaTau: StabilityResult, StabilitySuite
+using SigmaTau: StabilityResult, StabilitySuite, SpectralResult
 using RecipesBase
 
 # Single deviation curve on log-log axes. When CI bounds are present they render
@@ -55,6 +55,26 @@ end
             r
         end
     end
+end
+
+# Spectral density on frequency axes. S_y / S_x are power densities → log-log;
+# ℒ(f) is already in dBc/Hz → log frequency axis with a linear (dB) ordinate.
+@recipe function f(res::SpectralResult)
+    xscale --> :log10
+    xlabel --> "Frequency f (Hz)"
+    seriestype := :path
+    if res.spectral_type === :L
+        label  --> "ℒ(f)"
+        ylabel --> "ℒ(f) (dBc/Hz)"
+    else
+        yscale --> :log10
+        label  --> string(res.spectral_type)
+        ylabel --> (res.spectral_type === :Sy ? "S_y(f) (1/Hz)" : "S_x(f) (s²/Hz)")
+    end
+    # Drop the DC bin (f = 0): undefined on a log frequency axis. `Sy`/`Sx`
+    # carry it at index 1; `L` already excludes it in the API.
+    keep = res.freq .> 0
+    return res.freq[keep], res.psd[keep]
 end
 
 end # module

@@ -57,6 +57,7 @@ makedocs(
             "theory/total_family.md",
             "theory/confidence.md",
             "theory/noise_id.md",
+            "theory/spectral.md",
             "theory/validation.md",
         ],
         "Tutorials"       => [
