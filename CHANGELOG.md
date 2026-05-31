@@ -8,6 +8,18 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Optional `rng::AbstractRNG` keyword on `noise_gen` (and the internal
+  `_gen_powerlaw_y` / `_gen_powerlaw_phase`), so a caller can draw from a
+  specific stream — e.g. independent per-realization seeds in a Monte Carlo.
+  Defaults to the global RNG, so existing seeded callers are unaffected.
+- `tools/mc_mhtotdev.jl` — a reproducible Monte Carlo harness that measures
+  MHTOTDEV's bias `B(α) = E[MHTOTVAR]/E[MHVAR]` and its EDF
+  (`2·E[V̂]²/Var[V̂]`) against synthesized known-α noise, with an analytic
+  μ(α) slope cross-check and a provenance artifact (git SHA, seed, fits). The
+  methodology is documented in the new Theory page "MHTOTDEV bias and EDF". The
+  measured coefficient tables (replacing the unsourced `_coeff_mhtot` and the
+  "unbiased by policy" `bias_correction(:mhtot)` stance) land from the full
+  workstation sweep.
 - Spectral-density estimators `Sy`, `Sx`, and `L`, returning a new
   `SpectralResult` type. `Sy` is the one-sided fractional-frequency PSD
   `S_y(f)` (1/Hz, IEEE 1139-2022 §3.4); `Sx` is the phase PSD `S_x(f)`
