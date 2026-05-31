@@ -102,10 +102,6 @@ Common machinery for all three:
     dominant power law at each τ.
   - A spectral / Welch-PSD example once the `Sy` / `Sx` / `L`
     metrics ship (see TODO above).
-- [ ] **`taus` enum API** (`AllTaus`, `Octave`, `HalfOctave`,
-  `QuarterOctave`, `Decade`, `HalfDecade`) à la `AllanDeviations.jl` —
-  cleaner than passing arrays. Backwards-compatible if added as an
-  alternative to the current array form.
 - [ ] **Compat upper bounds** in the root `Project.toml`. The merged
   manifest already pins `Distributions = "0.25.125"` and lists `compat`
   for AbstractFFTs, DocStringExtensions, RecipesBase, StaticArrays,

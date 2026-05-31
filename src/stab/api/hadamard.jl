@@ -82,6 +82,14 @@ hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = hdev(_freq_to_pha
 mhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhdev(_freq_to_phase(data), m_values; kwargs...)
 htdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = htdev(_freq_to_phase(data), m_values; kwargs...)
 
+# TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
+hdev(data::PhaseData,      taus::TauMode; kwargs...) = hdev(data,  tau_values(taus, length(data.x), :hdev);  kwargs...)
+hdev(data::FrequencyData,  taus::TauMode; kwargs...) = hdev(data,  tau_values(taus, length(data.y), :hdev);  kwargs...)
+mhdev(data::PhaseData,     taus::TauMode; kwargs...) = mhdev(data, tau_values(taus, length(data.x), :mhdev); kwargs...)
+mhdev(data::FrequencyData, taus::TauMode; kwargs...) = mhdev(data, tau_values(taus, length(data.y), :mhdev); kwargs...)
+htdev(data::PhaseData,     taus::TauMode; kwargs...) = htdev(data, tau_values(taus, length(data.x), :htdev); kwargs...)
+htdev(data::FrequencyData, taus::TauMode; kwargs...) = htdev(data, tau_values(taus, length(data.y), :htdev); kwargs...)
+
 # Zero-arg convenience: octave-spaced m_values up to each kernel's
 # algorithmic m-max (see `_default_m_values`). All kwargs pass through.
 hdev(data::PhaseData;      kwargs...) = hdev(data,  _default_m_values(length(data.x), :hdev);  kwargs...)

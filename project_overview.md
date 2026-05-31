@@ -40,14 +40,19 @@ so user code is just `using SigmaTau; adev(...)`.
 
 | Component | File | Notes |
 |-----------|------|-------|
-| `PhaseData{T}` | [src/types/phase_data.jl](src/types/phase_data.jl) | Parametric on `T<:AbstractFloat` |
-| `FrequencyData{T}` | [src/types/frequency_data.jl](src/types/frequency_data.jl) | Parametric; wired into every Stab dispatch |
+| `PhaseData{T}` | [src/types/phase_data.jl](src/types/phase_data.jl) | Parametric on `T<:AbstractFloat`; ctor validates `tau0 > 0` and length ≥ 2 |
+| `FrequencyData{T}` | [src/types/frequency_data.jl](src/types/frequency_data.jl) | Parametric; wired into every Stab dispatch; ctor validates `tau0 > 0` and length ≥ 2 |
 | `StabilityResult` | [src/types/stability_result.jl](src/types/stability_result.jl) | Non-parametric `Vector{Float64}` fields; includes `edf` (empty when `calc_ci=false`) |
+| `StabilitySuite` | [src/types/stability_suite.jl](src/types/stability_suite.jl) | Ordered, symbol-indexable collection of `StabilityResult`s + session metadata; produced by `stability` |
 | `AbstractTimingData` | [src/types/abstract.jl](src/types/abstract.jl) | Abstract supertype |
 
 ### 2.2 Stability Surface
 
 #### Core Kernels
+
+Internal — **not exported** (reach via `SigmaTau._adev_core`); the leading
+underscore marks them unsupported. Each takes `Vector{Float64}` and returns a
+raw `Vector{Float64}`.
 
 | Kernel | File | Notes |
 |--------|------|-------|
@@ -88,12 +93,15 @@ so user code is just `using SigmaTau; adev(...)`.
 | `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid capped at each kernel's algorithmic m-max |
 | `tdev` | same | Wraps `mdev` and scales by `τ/√3` |
 | `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; deprecated `ldev` alias forwards to `htdev` |
-| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling |
-| `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | No CI fields (no published EDF model) |
-| `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | No CI fields (EDF port tracked in TODO) |
+| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling; detrend defaults exported as `TOTDEV_DETREND_DEFAULT=:howe` / `TOTAL_FAMILY_DETREND_DEFAULT=:greenhall` |
+| `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | No CI fields (no published EDF model); `calc_ci` is a no-op, no `confidence` kwarg |
+| `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | No CI fields (EDF port tracked in TODO); `calc_ci` is a no-op, no `confidence` kwarg |
+| `stability` | [src/stab/api/suite.jl](src/stab/api/suite.jl) | Compute-all entry point → `StabilitySuite`; `devs`/`taus` select the deviation set and grid; `DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :tdev)` |
 | `noise_gen` | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | Calibrated power-law clock-noise generator; returns `PhaseData` or `FrequencyData` |
 | `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
-| `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for `StabilityResult` |
+| `TauMode`, `tau_values` | [src/stab/taus.jl](src/stab/taus.jl) | Grid selector `AllTaus`/`Octave`/`HalfOctave`/`QuarterOctave`/`Decade`/`HalfDecade`; every deviation accepts a `TauMode` in place of `m_values`; `_default_m_values` is `tau_values(Octave, …)` so the octave default is unchanged |
+| `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for a single `StabilityResult` (format v1) |
+| `save_suite`, `load_suite` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for a `StabilitySuite` + session metadata (format v2); cross-format guards vs `save_result` |
 | `read_phase`, `read_frequency` | [src/io/read.jl](src/io/read.jl) | stdlib `readdlm` with `scaling` / `detrend` / `fillgaps` kwargs |
 | `detrend(::PhaseData/::FrequencyData)` | [src/io/detrend.jl](src/io/detrend.jl) | `:linear` / `:endpoint` / `:mean` / `:none` |
 | `fillgaps(::PhaseData/::FrequencyData)` | [src/io/fillgaps.jl](src/io/fillgaps.jl) | Howe & Schlossberger 2009 reflect-and-FFT-filter imputation, FFTW backend |
@@ -103,8 +111,8 @@ so user code is just `using SigmaTau; adev(...)`.
 | Component | Notes |
 |-----------|-------|
 | Single flat export block | `src/SigmaTau.jl` exports types, IO, deviations, noise-ID, EDF/CI, MTIE, PDEV, and `noise_gen` directly |
-| Root `Project.toml` deps | Single-package manifest; `AbstractFFTs`, `DelimitedFiles`, `Distributions`, `DocStringExtensions`, `FFTW`, `StaticArrays`, `Statistics` |
-| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots` |
+| Root `Project.toml` deps | Single-package manifest; `AbstractFFTs`, `Dates`, `DelimitedFiles`, `Distributions`, `DocStringExtensions`, `FFTW`, `StaticArrays`, `Statistics` |
+| Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots`. Single-result curve (opt-in `ci_band` ribbon), plus `StabilitySuite` and `Vector{StabilityResult}` overlays |
 | Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) — verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; `ldev` ≡ `htdev`; pins the absence of the old `Stab`/`Est` submodules |
 | `examples/` | Four Literate-driven tutorials (`00_julia_for_metrologists`, `01_phase_data`, `02_compute_adev`, `06_three_cornered_hat`) |
 
@@ -122,23 +130,25 @@ project_overview.md                      This file (per-component audit)
 Project.toml                             Single-package manifest + extension
 src/
 ├── SigmaTau.jl                          Flat umbrella module + export block
-├── types/{abstract,phase_data,frequency_data,stability_result}.jl
+├── types/{abstract,phase_data,frequency_data,stability_result,stability_suite}.jl
 ├── io/{results,detrend,fillgaps,read}.jl
 └── stab/
     ├── core/{allan,hadamard,total,mtie,pdev}.jl
     ├── noise/{lag1,synth,gen}.jl
     ├── stats/edf.jl
-    ├── api/{allan,hadamard,total,mtie,pdev}.jl
+    ├── api/{allan,hadamard,total,mtie,pdev,suite}.jl
+    ├── taus.jl                          (TauMode grid selector + tau_values)
     └── utils.jl                         (FrequencyData → PhaseData helper)
 
 ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
 
 test/
-├── runtests.jl                          Aggregator (4 sub-suites)
+├── runtests.jl                          Aggregator (5 sub-suites)
 ├── types/runtests.jl
-├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl
-├── io/{detrend,fillgaps,read,runtests}.jl
-└── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
+├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl + taus.jl + suite.jl
+├── io/{detrend,fillgaps,read,results,runtests}.jl
+├── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
+└── recipes.jl                           RecipesBase extension smoke (overlays + ci_band)
 
 docs/                                    Documenter.jl subproject
 benchmarks/                              Long-record perf runs (gitignored outputs)

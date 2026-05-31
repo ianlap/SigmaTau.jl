@@ -23,23 +23,37 @@ end
     for sym in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
                 :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
                 :mtie, :pdev,
+                :stability, :DEFAULT_DEVIATIONS,
                 :identify_noise, :calculate_edf, :confidence_intervals,
                 :bias_correction, :DEFAULT_CONFIDENCE,
-                :save_result, :load_result,
+                :TOTDEV_DETREND_DEFAULT, :TOTAL_FAMILY_DETREND_DEFAULT,
+                :TauMode, :AllTaus, :Octave, :HalfOctave,
+                :QuarterOctave, :Decade, :HalfDecade, :tau_values,
+                :save_result, :load_result, :save_suite, :load_suite,
                 :read_phase, :read_frequency,
                 :detrend, :fillgaps,
                 :noise_gen,
-                :_adev_core, :_mdev_core, :_tdev_core,
-                :_hdev_core, :_mhdev_core,
-                :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,
-                :_mtie_core, :_pdev_core,
                 :ldev)        # deprecated alias, still re-exported
         @test isdefined(@__MODULE__, sym)
     end
 end
 
+@testset "Internal core kernels are not exported" begin
+    # Check export-ness against `names(SigmaTau)` rather than the caller's
+    # namespace: other test files (`test/stab/runtests.jl`) import the cores
+    # explicitly for unqualified use, which would pollute `@__MODULE__`.
+    exported = names(SigmaTau)
+    cores = (:_adev_core, :_mdev_core, :_tdev_core, :_hdev_core, :_mhdev_core,
+             :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,
+             :_mtie_core, :_pdev_core)
+    for sym in cores
+        @test isdefined(SigmaTau, sym)   # reachable as `SigmaTau._adev_core`
+        @test sym ∉ exported             # but not part of the exported surface
+    end
+end
+
 @testset "Shared types re-exported" begin
-    for sym in (:AbstractTimingData, :PhaseData, :FrequencyData, :StabilityResult)
+    for sym in (:AbstractTimingData, :PhaseData, :FrequencyData, :StabilityResult, :StabilitySuite)
         @test isdefined(@__MODULE__, sym)
     end
 end

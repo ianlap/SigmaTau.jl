@@ -6,6 +6,52 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `stability(data; devs, taus, calc_ci, confidence, …)` compute-all entry point
+  that runs a suite of deviations in one call and returns a new `StabilitySuite`
+  (ordered, indexable by deviation symbol, iterable, carrying session metadata).
+  The batch analog of calling each deviation by hand; `devs` defaults to
+  `DEFAULT_DEVIATIONS` (`:adev, :mdev, :hdev, :tdev`). Extra kwargs (`detrend`,
+  `correct_bias`) are forwarded only to the total family.
+- `save_suite` / `load_suite` — round-trip a whole `StabilitySuite` to a
+  self-describing tab-delimited file (format v2) that also records session
+  metadata (package version, ISO-8601 timestamp, source file, data kind, τ₀, N,
+  confidence, tau mode, deviation set). `save_result` / `load_result` are
+  unchanged for single results and reject the other format with a clear error;
+  v1 files still load. Adds the `Dates` stdlib dependency for the timestamp.
+- `TauMode` averaging-factor grid selector (`AllTaus`, `Octave`, `HalfOctave`,
+  `QuarterOctave`, `Decade`, `HalfDecade`) and the `tau_values(mode, N, kernel)`
+  helper. Every deviation now accepts a `TauMode` in place of an explicit
+  `m_values` array — e.g. `adev(pd, Decade)`. The default octave grid is
+  unchanged (`tau_values(Octave, N, kernel) == _default_m_values(N, kernel)`).
+- `TOTDEV_DETREND_DEFAULT` (`:howe`) and `TOTAL_FAMILY_DETREND_DEFAULT`
+  (`:greenhall`) constants, exported so the active total-family detrend
+  default can be read rather than hardcoded. The default values are unchanged.
+- Plot recipes for `StabilitySuite` and `Vector{StabilityResult}` overlays (one
+  curve per result on shared log-log axes), plus an opt-in `ci_band` plot
+  attribute that renders a result's confidence interval as a filled band instead
+  of error bars. The default single-result rendering is unchanged.
+
+### Changed
+
+- `PhaseData` and `FrequencyData` now validate their arguments at construction:
+  `tau0` must be positive and the sample vector must have at least two elements,
+  otherwise an `ArgumentError` is thrown (previously invalid input surfaced as a
+  cryptic downstream error or `NaN`). Integer `tau0` is still accepted and stored
+  as `Float64`.
+
+### Changed (BREAKING)
+
+- Removed the no-op `confidence` kwarg from `mtie` and `pdev`. Neither has a
+  published EDF/χ² model, so the kwarg never affected the result; passing it
+  now errors. `calc_ci` is retained (a documented no-op) so the batch
+  `stability` API can forward it uniformly and `pdev` is future-proofed for a
+  real CI model.
+- Un-exported the internal `_*_core` deviation kernels. They were never part of
+  the supported API (the leading underscore marks them internal); reach them as
+  `SigmaTau._adev_core` etc. if needed.
+
 ### Fixed
 
 - **Out-of-bounds write in `_make_equispaced`.** When a record's time span
@@ -34,6 +80,9 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   from the rendered manual.
 - Corrected the stale `ldev` deprecation note (it referenced a version that
   has already shipped).
+- Documented the intentional split between `totdev`'s `:howe` detrend default
+  and the modified/Hadamard total family's `:greenhall` default, via a
+  "Detrend default" admonition on each total-family function.
 
 ## [0.3.0] — 2026-05-21
 
