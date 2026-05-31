@@ -146,8 +146,11 @@ function main()
     csv_path  = joinpath(outdir, "mhtotdev_mc_$(tag).csv")
     json_path = joinpath(outdir, "mhtotdev_mc_$(tag).json")
 
+    total_reals = length(ALPHAS) * ((length(N_GRID) - 1) * R + R_ANCHOR)
     println("MHTOTDEV Monte Carlo  [$(tag)]  threads=$(Threads.nthreads())  ",
-            "R=$R  N=$(N_GRID)  seed=$MASTER_SEED")
+            "R=$R  R_anchor=$R_ANCHOR  N=$(N_GRID)  seed=$MASTER_SEED")
+    println("Total realizations: $total_reals (each = 1 MHTOTDEV + 1 MHDEV over the m-grid)")
+    flush(stdout)
 
     # Accumulate per-cell rows and per-α pooled fit inputs.
     rows = NamedTuple[]
@@ -164,7 +167,11 @@ function main()
             ms = filter(m -> (N - 4m + 1) >= MIN_NSUBS, ms)
             isempty(ms) && continue
             nreal = (N == N_GRID[end]) ? R_ANCHOR : R   # anchor at the top N
-            meanV, varV, meanW, edf, B, edf_se, B_se = cell_stats(alpha, N, ms, nreal)
+            @printf("  → α=%+d  N=%5d  R=%d  cells=%d  …\n", alpha, N, nreal, length(ms))
+            flush(stdout)
+            local stats
+            elapsed = @elapsed stats = cell_stats(alpha, N, ms, nreal)
+            meanV, varV, meanW, edf, B, edf_se, B_se = stats
 
             # μ(α) cross-check on the MHVAR estimate (interior m only).
             if length(ms) >= 5
@@ -189,7 +196,9 @@ function main()
                     push!(fit_w[alpha], 1 / edf_se[k]^2)
                 end
             end
-            @printf("  α=%+d  N=%5d  cells=%2d  R=%d\n", alpha, N, length(ms), nreal)
+            @printf("  ✓ α=%+d  N=%5d  cells=%2d  R=%d  (%.1f s)\n",
+                    alpha, N, length(ms), nreal, elapsed)
+            flush(stdout)
         end
     end
 
