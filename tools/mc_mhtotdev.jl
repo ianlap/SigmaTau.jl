@@ -41,7 +41,10 @@ const R           = QUICK ? 200  : 1000             # realizations per cell
 const R_ANCHOR    = QUICK ? 400  : 5000             # anchor cell per α
 const N_BOOT      = QUICK ? 500  : 2000             # bootstrap resamples
 const MIN_NSUBS   = 16                              # drop tiny-window cells
-const TAU_CEIL    = 10.0                            # fit only τ ≤ T/TAU_CEIL
+# Total-estimator EDF model validity: Howe et al. 2000 (TotHvar, eqn 7) state
+# the fit "should be used only if … τ/τ0 ≥ 16" — below that the data-extension
+# gives no advantage over the plain estimator. Fit only m ≥ FIT_M_MIN.
+const FIT_M_MIN   = 16
 
 # Analytic MHVAR variance slope σ²_MH(τ) ∝ τ^μ for each α (modified family).
 _mu(alpha::Int) = alpha <= 0 ? -alpha - 1 : (alpha == 1 ? -2 : -3)
@@ -118,6 +121,25 @@ function wls_edf(x::Vector{Float64}, y::Vector{Float64}, w::Vector{Float64})
     return b, c, R2
 end
 
+# TotHvar EDF form (Howe et al. 2000 eqn 7): edf = (T/τ) / (b0 + b1·u), u = τ/T.
+# Linearize as 1/edf = b0·u + b1·u² (no intercept) and fit by WLS in edf-space:
+# a point with edf y and SE σ_y maps to z = 1/y with σ_z ≈ σ_y/y², so its weight
+# is y⁴/σ_y². Returns (b0, b1, R²) with R² measured back in edf-space.
+function wls_htot(u::Vector{Float64}, y::Vector{Float64}, se::Vector{Float64})
+    z  = 1.0 ./ y
+    w  = (y .^ 4) ./ (se .^ 2)
+    Su2 = sum(w .* u .^ 2);  Su3 = sum(w .* u .^ 3);  Su4 = sum(w .* u .^ 4)
+    Suz = sum(w .* u .* z);  Su2z = sum(w .* u .^ 2 .* z)
+    Δ   = Su2 * Su4 - Su3^2
+    b0  = (Suz * Su4 - Su2z * Su3) / Δ
+    b1  = (Su2 * Su2z - Su3 * Suz) / Δ
+    ŷ   = 1.0 ./ (b0 .* u .+ b1 .* u .^ 2)   # back to edf
+    wy  = 1.0 ./ se .^ 2
+    ss_res = sum(wy .* (y .- ŷ) .^ 2)
+    ss_tot = sum(wy .* (y .- sum(wy .* y) / sum(wy)) .^ 2)
+    return b0, b1, 1 - ss_res / ss_tot
+end
+
 # Log-log slope of y vs x (unweighted), interior points already selected.
 function loglog_slope(x::Vector{Float64}, y::Vector{Float64})
     lx = log.(x); ly = log.(y); n = length(lx)
@@ -154,9 +176,10 @@ function main()
 
     # Accumulate per-cell rows and per-α pooled fit inputs.
     rows = NamedTuple[]
-    fit_x = Dict(a => Float64[] for a in ALPHAS)   # T/τ (fit window)
-    fit_y = Dict(a => Float64[] for a in ALPHAS)   # edf
-    fit_w = Dict(a => Float64[] for a in ALPHAS)   # 1/SE²
+    fit_x  = Dict(a => Float64[] for a in ALPHAS)  # T/τ (fit window, m ≥ FIT_M_MIN)
+    fit_y  = Dict(a => Float64[] for a in ALPHAS)  # edf
+    fit_w  = Dict(a => Float64[] for a in ALPHAS)  # 1/SE²
+    fit_se = Dict(a => Float64[] for a in ALPHAS)  # SE(edf)
     B_by_alpha   = Dict(a => Tuple{Float64,Float64,Float64}[] for a in ALPHAS)  # (τ/T, B, B_se)
     slope_ok = true
 
@@ -190,10 +213,11 @@ function main()
                              edf=edf[k], edf_se=edf_se[k],
                              meanW=meanW[k], B=B[k], B_se=B_se[k]))
                 push!(B_by_alpha[alpha], (τ / T, B[k], B_se[k]))
-                if τ <= T / TAU_CEIL && isfinite(edf[k]) && edf_se[k] > 0
-                    push!(fit_x[alpha], tot)
-                    push!(fit_y[alpha], edf[k])
-                    push!(fit_w[alpha], 1 / edf_se[k]^2)
+                if m >= FIT_M_MIN && isfinite(edf[k]) && edf_se[k] > 0
+                    push!(fit_x[alpha],  tot)
+                    push!(fit_y[alpha],  edf[k])
+                    push!(fit_w[alpha],  1 / edf_se[k]^2)
+                    push!(fit_se[alpha], edf_se[k])
                 end
             end
             @printf("  ✓ α=%+d  N=%5d  cells=%2d  R=%d  (%.1f s)\n",
@@ -213,14 +237,21 @@ function main()
     end
 
     # ── Per-α fits ─────────────────────────────────────────────────────────────
-    edf_fit = Dict{Int,NTuple{3,Float64}}()
+    # Two EDF parameterizations from the literature, fit over the τ/τ0 ≥ 16
+    # validity window and selected by R² in edf-space:
+    #   form A (Mod-Totvar, Vernotte–Howe eqn 2):  edf = b·(T/τ) − c
+    #   form B (TotHvar, Howe et al. 2000 eqn 7):   edf = (T/τ)/(b0 + b1·τ/T)
+    edf_fit = Dict{Int,NamedTuple}()
     B_fit   = Dict{Int,NamedTuple}()
     for alpha in ALPHAS
         if length(fit_x[alpha]) >= 3
-            b, c, R2 = wls_edf(fit_x[alpha], fit_y[alpha], fit_w[alpha])
-            edf_fit[alpha] = (b, c, R2)
+            x = fit_x[alpha]; y = fit_y[alpha]; w = fit_w[alpha]; se = fit_se[alpha]
+            b, c, R2a = wls_edf(x, y, w)
+            b0, b1, R2b = wls_htot(1.0 ./ x, y, se)   # u = τ/T = 1/(T/τ)
+            best = R2b > R2a ? "tothvar" : "modtot"
+            edf_fit[alpha] = (; b, c, R2a, b0, b1, R2b, best)
         else
-            edf_fit[alpha] = (NaN, NaN, NaN)
+            edf_fit[alpha] = (; b=NaN, c=NaN, R2a=NaN, b0=NaN, b1=NaN, R2b=NaN, best="none")
         end
 
         # Bias: weighted-mean (α-only) and linear-in-τ/T fit; compare RSS.
@@ -235,7 +266,7 @@ function main()
         b1, negint, _ = wls_edf(tt, bb, ww)
         b0 = -negint
         rss_lin = sum(ww .* (bb .- (b1 .* tt .+ b0)) .^ 2)
-        B_fit[alpha] = (; Bmean, b0, b1, rss_const, rss_lin,
+        B_fit[alpha] = (; Bmean, nbias = Bmean - 1, b0, b1, rss_const, rss_lin,
                         improve = 1 - rss_lin / rss_const)
     end
 
@@ -252,15 +283,17 @@ function main()
         println(io, "    \"N_grid\": ", _jval(collect(N_GRID)), ",")
         println(io, "    \"R\": ", R, ", \"R_anchor\": ", R_ANCHOR, ",")
         println(io, "    \"n_boot\": ", N_BOOT, ", \"min_nsubs\": ", MIN_NSUBS, ",")
-        println(io, "    \"tau_ceiling\": ", _jval(TAU_CEIL), ",")
+        println(io, "    \"fit_m_min\": ", FIT_M_MIN, ",")
         println(io, "    \"mhvar_slope_check_passed\": ", slope_ok)
         println(io, "  },")
         println(io, "  \"edf_fit\": {")
         for (i, a) in enumerate(ALPHAS)
-            b, c, R2 = edf_fit[a]
+            f = edf_fit[a]
             comma = i < length(ALPHAS) ? "," : ""
-            println(io, "    \"$a\": {\"b\": ", _jval(b), ", \"c\": ", _jval(c),
-                    ", \"R2\": ", _jval(R2), "}", comma)
+            println(io, "    \"$a\": {",
+                    "\"modtot\": {\"b\": ", _jval(f.b), ", \"c\": ", _jval(f.c), ", \"R2\": ", _jval(f.R2a), "}, ",
+                    "\"tothvar\": {\"b0\": ", _jval(f.b0), ", \"b1\": ", _jval(f.b1), ", \"R2\": ", _jval(f.R2b), "}, ",
+                    "\"best\": ", _jval(f.best), "}", comma)
         end
         println(io, "  },")
         println(io, "  \"bias_fit\": {")
@@ -268,6 +301,7 @@ function main()
             f = B_fit[a]
             comma = i < length(ALPHAS) ? "," : ""
             println(io, "    \"$a\": {\"B_mean\": ", _jval(f.Bmean),
+                    ", \"nbias\": ", _jval(f.nbias),
                     ", \"b0\": ", _jval(f.b0), ", \"b1\": ", _jval(f.b1),
                     ", \"linear_improve\": ", _jval(f.improve), "}", comma)
         end
@@ -276,13 +310,14 @@ function main()
     end
 
     # ── Console summary (the numbers that go into edf.jl) ─────────────────────
-    println("\n── Fitted MHTOTDEV coefficients ──")
-    println("edf = b·(T/τ) − c   (τ ≤ T/$(Int(TAU_CEIL)))")
+    println("\n── Fitted MHTOTDEV coefficients ──  (fit window m ≥ $FIT_M_MIN, i.e. τ/τ0 ≥ 16)")
+    println("EDF form A (Mod-Totvar): edf = b·(T/τ) − c   |   form B (TotHvar): edf = (T/τ)/(b0 + b1·τ/T)")
     for a in ALPHAS
-        b, c, R2 = edf_fit[a]
-        f = B_fit[a]
-        @printf("  α=%+d:  b=%7.4f  c=%8.4f  (R²=%.4f)   B=%.4f  [lin τ/T improve %.1f%%]\n",
-                a, b, c, R2, f.Bmean, 100 * f.improve)
+        e = edf_fit[a]; f = B_fit[a]
+        @printf("  α=%+d:  A b=%7.4f c=%8.4f (R²=%.4f)   B b0=%.4f b1=%.4f (R²=%.4f)  → best=%s\n",
+                a, e.b, e.c, e.R2a, e.b0, e.b1, e.R2b, e.best)
+        @printf("          bias B=%.4f  (nbias=%+.4f)  [lin τ/T improve %.1f%%]\n",
+                f.Bmean, f.nbias, 100 * f.improve)
     end
     println("\nWrote:\n  $csv_path\n  $json_path")
     slope_ok || @warn "MHVAR μ(α) slope check FAILED for ≥1 cell — inspect before trusting fits."

@@ -11,6 +11,13 @@ This page documents the methodology; it is the reproducible basis for the
 shipped `_coeff_mhtot` EDF coefficients and the `bias_correction(:mhtot, …)`
 table. The harness is [`tools/mc_mhtotdev.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/mc_mhtotdev.jl).
 
+The procedure follows the NIST total-variance literature: Howe, Beard,
+Greenhall, Vernotte & Riley, *A Total Estimator of the Hadamard Function Used
+for GPS Operations* (32nd PTTI, 2000) — for the bias and EDF definitions and the
+`τ/τ0 ≥ 16` validity window — and Vernotte & Howe, *Generalization of the Total
+Variance Approach to the Different Classes of Structure Functions* — for the
+Monte Carlo EDF estimator and the extension methodology.
+
 ## The reference: MHDEV
 
 MHTOTDEV is the *total* (boundary-extended) form of the modified-Hadamard
@@ -41,26 +48,36 @@ A nonparametric bootstrap over the `R` realizations gives the standard error.
 The relative precision scales as `SE/edf ≈ √(2/R)`, so `R = 1000` gives ≈4.5 %
 and the per-α anchor cell uses `R = 5000`.
 
-**Bias.** The variance-scale bias factor is the ratio of means
+**Bias.** Following the normalized-bias definition of Howe et al. 2000 (eqn 6),
+`nbias = E[\hat V]/E[\hat W] - 1`, the variance-scale bias factor is the ratio
+of means
 
 ```math
-B(\alpha) \;=\; \frac{E[\hat V]}{E[\hat W]} \;\approx\; \frac{\bar V}{\bar W},
+B(\alpha) \;=\; \frac{E[\hat V]}{E[\hat W]} \;=\; 1 + \mathrm{nbias} \;\approx\; \frac{\bar V}{\bar W},
 ```
 
 matching the `bias_correction` convention `σ_unbiased = σ_raw / √B` used across
 the total family. `B > 1` means MHTOTDEV reads high (correction lowers σ),
 `B < 1` means it reads low.
 
-**EDF model.** Per noise type the EDF is fit to the same functional form the
-other total estimators use,
+**EDF model.** The total-variance literature offers two empirical EDF forms:
+the Mod-Totvar form (Vernotte & Howe, eqn 2) and the TotHvar form
+(Howe et al. 2000, eqn 7),
 
 ```math
-\mathrm{edf}(\tau) \;=\; b\,\frac{T}{\tau} - c ,
+\mathrm{edf}(\tau) = b\,\frac{T}{\tau} - c
+\qquad\text{vs.}\qquad
+\mathrm{edf}(\tau) = \frac{T/\tau}{b_0 + b_1\,\tau/T},
 ```
 
-by weighted least squares (weights `1/\mathrm{SE}^2`) over the validity window
-`τ ≤ T/10`, where `T = (N-1)\,τ_0`. Coefficients, their standard errors, and
-`R²` are reported per α.
+with `T = (N-1)\,τ_0`. MHTOTDEV is the modified-*Hadamard* total — a hybrid of
+the two — so the harness fits **both** by weighted least squares
+(weights `1/\mathrm{SE}^2`) and selects the higher-R² form per α. Critically,
+the fit is restricted to the validity window `τ/τ_0 ≥ 16`: Howe et al. 2000
+note their EDF model "should be used only if … `τ/τ_0 ≥ 16`," below which the
+data-extension confers no advantage over the plain estimator and the fit
+degrades. Coefficients, standard errors, and `R²` are reported per α for both
+forms.
 
 ## Analytic cross-check
 
@@ -109,18 +126,22 @@ produced it.
 
 ## Result (preliminary, laptop validation)
 
-From the reduced validation run (N ≤ 2049), the measured bias already departs
-clearly from the previously-assumed `B = 1`:
+From the reduced validation run (N ≤ 2049, R = 200–400, fit over `τ/τ_0 ≥ 16`),
+the measured bias already departs clearly from the previously-assumed `B = 1`,
+and both EDF forms fit well (R² ≈ 0.97–0.99):
 
-| α  | Noise | B(α) | EDF fit `b` | `c` | R² |
-|---:|:------|:-----|:------------|:----|:---|
-|  2 | WHPM  | ≈ 0.68 | 0.67 | −16.3 | 0.61 |
-|  1 | FLPM  | ≈ 0.74 | 0.78 | −6.3  | 0.80 |
-|  0 | WHFM  | ≈ 0.81 | 0.94 | −0.24 | 0.91 |
-| −1 | FLFM  | ≈ 0.93 | 0.97 |  3.16 | 0.98 |
-| −2 | RWFM  | ≈ 1.34 | 0.81 |  3.77 | 0.98 |
+| α  | Noise | B(α) | nbias | EDF (Mod-Totvar) `b`, `c` | R² |
+|---:|:------|:-----|:------|:--------------------------|:---|
+|  2 | WHPM  | ≈ 0.68 | −0.32 | 1.82, 6.75 | 0.98 |
+|  1 | FLPM  | ≈ 0.74 | −0.26 | 1.23, 3.14 | 0.99 |
+|  0 | WHFM  | ≈ 0.81 | −0.19 | 1.15, 4.06 | 0.99 |
+| −1 | FLFM  | ≈ 0.93 | −0.07 | 1.03, 4.22 | 0.99 |
+| −2 | RWFM  | ≈ 1.34 | +0.34 | 0.79, 2.79 | 0.98 |
 
 MHTOTDEV reads **low** for phase-modulation noise (B < 1) and **high** for
 random-walk FM (B > 1) — so treating it as unbiased systematically misstates the
-deviation at both ends of the noise range. The full-sweep values, with bootstrap
-uncertainties, replace these once the workstation run lands.
+deviation at both ends of the noise range. (Applying the `τ/τ_0 ≥ 16` validity
+floor lifted the WHPM EDF R² from ~0.6 to ~0.98, confirming the Howe et al. 2000
+guidance that the total-estimator EDF model only holds above that floor.) The
+full-sweep values, with bootstrap uncertainties and the per-α form selection,
+replace these once the workstation run lands.
