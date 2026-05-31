@@ -75,6 +75,9 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Documentation
 
+- Added a "Migrating from Stable32" page mapping Stable32 run-types to
+  SigmaTau functions and `StabilityResult` fields, with a complete
+  load → run → suite → save/plot session and a quick API-equivalence table.
 - Added a Performance page with head-to-head timings against allantools
   2024.06 (synthetic N=25 000 and a real N=406 763 record), and cross-linked
   it from the validation methodology page. The framing is explicit that the
