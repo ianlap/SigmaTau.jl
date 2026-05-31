@@ -50,6 +50,21 @@ const FIT_M_MIN   = 16
 # Analytic MHVAR variance slope σ²_MH(τ) ∝ τ^μ for each α (modified family).
 _mu(alpha::Int) = alpha <= 0 ? -alpha - 1 : (alpha == 1 ? -2 : -3)
 
+# Process-stable seed derivation (splitmix64 finalizer). Base `hash` is NOT
+# guaranteed stable across Julia versions/processes, so it cannot anchor a
+# reproducible artifact; this mixes the integer components deterministically.
+# `reinterpret` handles negative α via two's-complement bits.
+function _seed(parts::Integer...)
+    h = 0x243f6a8885a308d3
+    for p in parts
+        h ⊻= reinterpret(UInt64, Int64(p))
+        h = (h ⊻ (h >> 30)) * 0xbf58476d1ce4e5b9
+        h = (h ⊻ (h >> 27)) * 0x94d049bb133111eb
+        h ⊻= (h >> 31)
+    end
+    return h
+end
+
 # ── Per-cell Monte Carlo ──────────────────────────────────────────────────────
 
 """
@@ -64,7 +79,7 @@ function cell_stats(alpha::Int, N::Int, ms::Vector{Int}, nreal::Int)
     V = Matrix{Float64}(undef, nc, nreal)   # MHTOTVAR samples
     W = Matrix{Float64}(undef, nc, nreal)   # MHVAR samples
     Threads.@threads :dynamic for r in 1:nreal
-        rng = Xoshiro(hash((MASTER_SEED, alpha, N, r)))
+        rng = Xoshiro(_seed(MASTER_SEED, alpha, N, r))
         y  = _gen_powerlaw_y(float(alpha), N; rng=rng)
         pd = PhaseData(cumsum(y), 1.0)
         # correct_bias=false: measure the RAW MHTOTVAR — the bias B we are
@@ -87,7 +102,7 @@ function cell_stats(alpha::Int, N::Int, ms::Vector{Int}, nreal::Int)
     edf_se = zeros(nc);  B_se = zeros(nc)
     boot_edf = Vector{Float64}(undef, N_BOOT)
     boot_B   = Vector{Float64}(undef, N_BOOT)
-    brng = Xoshiro(hash((MASTER_SEED, :boot, alpha, N)))
+    brng = Xoshiro(_seed(MASTER_SEED, 0x_b001, alpha, N))   # 0xb001 = "boot" tag
     idx = Vector{Int}(undef, nreal)
     for k in 1:nc
         Vk = @view V[k, :];  Wk = @view W[k, :]
@@ -287,7 +302,7 @@ function main()
         println(io, "    \"julia_version\": ", _jval(string(VERSION)), ",")
         println(io, "    \"nthreads\": ", Threads.nthreads(), ",")
         println(io, "    \"master_seed\": ", MASTER_SEED, ",")
-        println(io, "    \"seed_scheme\": ", _jval("Xoshiro(hash((seed, alpha, N, r)))"), ",")
+        println(io, "    \"seed_scheme\": ", _jval("Xoshiro(splitmix64(seed, alpha, N, r))"), ",")
         println(io, "    \"N_grid\": ", _jval(collect(N_GRID)), ",")
         println(io, "    \"R\": ", R, ", \"R_anchor\": ", R_ANCHOR, ",")
         println(io, "    \"n_boot\": ", N_BOOT, ", \"min_nsubs\": ", MIN_NSUBS, ",")
@@ -328,7 +343,11 @@ function main()
                 f.Bmean, f.nbias, 100 * f.improve)
     end
     println("\nWrote:\n  $csv_path\n  $json_path")
-    slope_ok || @warn "MHVAR μ(α) slope check FAILED for ≥1 cell — inspect before trusting fits."
+    # Artifacts are written first (diagnostics available), but fail loudly so a
+    # failed-slope run cannot be silently consumed by a coefficient update.
+    slope_ok || error("MHVAR μ(α) slope check FAILED for ≥1 cell — the synthesis " *
+                      "is miscalibrated and the bias/EDF fits are NOT trustworthy. " *
+                      "Artifacts were written for inspection but must not be used.")
     return nothing
 end
 
