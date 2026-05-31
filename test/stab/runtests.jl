@@ -1112,6 +1112,20 @@ const LK = LegacyKernels
             @test a.x == b.x
         end
 
+        @testset "rng kwarg: independent reproducible streams" begin
+            # Equal-seed streams reproduce; different seeds differ; the rng
+            # path does not disturb the global RNG (so parallel MC realizations
+            # can each carry their own stream).
+            a = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12), rng = Xoshiro(123))
+            b = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12), rng = Xoshiro(123))
+            c = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12), rng = Xoshiro(999))
+            @test a.x == b.x
+            @test a.x != c.x
+            y1 = SigmaTau._gen_powerlaw_y(0.0, 256; rng = Xoshiro(7))
+            y2 = SigmaTau._gen_powerlaw_y(0.0, 256; rng = Xoshiro(7))
+            @test y1 == y2
+        end
+
         @testset "argument validation" begin
             @test_throws ArgumentError noise_gen(PhaseData, 4096, 1.0)
             @test_throws ArgumentError noise_gen(PhaseData, 4096, 1.0;
@@ -1139,3 +1153,4 @@ end
 include("taus.jl")
 include("suite.jl")
 include("spectral.jl")
+include("mhtotdev_mc.jl")

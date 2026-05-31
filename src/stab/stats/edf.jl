@@ -183,11 +183,18 @@ function _coeff_mtot(alpha::Int)
 end
 
 function _coeff_mhtot(alpha::Int)
-    alpha == 2  && return (3.904,  9.640)
-    alpha == 1  && return (2.656, 11.093)
-    alpha == 0  && return (2.275,  8.701)
-    alpha == -1 && return (1.964,  4.908)
-    alpha == -2 && return (1.572,  4.534)
+    # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
+    # (tools/mc_mhtotdev.jl, full sweep at git d8a7ca7, seed 20260531, R=3000,
+    # N up to 32768); all fits R² ≥ 0.998. MHTOTDEV is novel to SigmaTau, so
+    # these have no external reference — see docs theory/mhtotdev_bias_edf.md.
+    # Both the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
+    # fit; they tie to within ΔR² ≤ 0.0005, so the Mod-Totvar form is used
+    # uniformly. Supersedes the prior unsourced values.
+    alpha == 2  && return (1.8534, 5.4817)
+    alpha == 1  && return (1.2185, 3.6691)
+    alpha == 0  && return (1.0998, 3.5040)
+    alpha == -1 && return (1.0300, 3.3868)
+    alpha == -2 && return (0.8132, 2.5406)
     return (NaN, NaN)
 end
 
@@ -249,15 +256,19 @@ Conventions per variance type:
   for α ∈ {0, -1, -2, -3, -4}. Biased low (B < 1) — HTOT understates
   the divergent-FM variance. B = 1 for α > 0 (no published model;
   matches Stable32).
-- `:mhtot`  — treated as unbiased (B = 1) by policy; FCS 2001 and
-  NIST SP1065 publish no model. Stable32 and AllanLab agree.
+- `:mhtot`  — measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
+  `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
+  external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
+  `:totvar`): `b0 ∈ {1.064, 0.984, 1.019, 1.213, 1.943}` and
+  `b1 ∈ {0.017, 0.036, -0.048, -0.321, -3.588}` for α ∈ {2, 1, 0, -1, -2}.
+  MHTOTDEV is ≈ unbiased for white/flicker noise (b1 ≈ 0, B ≈ 1) and reads high
+  for redder FM (RWFM B ≈ 1.9 at small τ, falling toward 1 as τ→T).
+  See docs `theory/mhtotdev_bias_edf.md`.
 
 Anything unrecognised falls through to B = 1.
 """
 function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64)
     B = ones(Float64, length(noises))
-
-    var_type == :mhtot && return B
 
     for k in 1:length(noises)
         alpha = _alpha_from_noise(noises[k])
@@ -277,6 +288,20 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             a_table = Dict(0=>-0.005, -1=>-0.149, -2=>-0.229,
                            -3=>-0.283, -4=>-0.321)
             B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
+        elseif var_type == :mhtot
+            # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl,
+            # full sweep at git d8a7ca7) over the τ/τ0 ≥ 16 validity window
+            # (Howe et al. 2000). Modeled as B = b0 + b1·(τ/T) — the same τ/T-linear
+            # form as :totvar — because the redder FM noises carry strong τ/T
+            # structure (the b1 term cuts the fit residual by ~46 % at FLFM and
+            # ~97 % at RWFM); for white/flicker noise b1 ≈ 0, so B ≈ constant.
+            # MHTOTDEV is ≈ unbiased for white/flicker (B ≈ 1) and reads high for
+            # redder FM (RWFM B ≈ 1.9 at small τ). MHTOTDEV is novel to SigmaTau —
+            # no external reference; see docs theory/mhtotdev_bias_edf.md.
+            b0_t = Dict(2=>1.0644, 1=>0.9837, 0=>1.0193, -1=>1.2131, -2=>1.9432)
+            b1_t = Dict(2=>0.0165, 1=>0.0362, 0=>-0.0477, -1=>-0.3211, -2=>-3.5880)
+            aa = clamp(alpha, -2, 2)
+            B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
         end
     end
 
