@@ -21,16 +21,19 @@ using SigmaTau: _gen_powerlaw_y, _coeff_mhtot, bias_correction
     N    = 513
     tau0 = 1.0
     T    = (N - 1) * tau0
-    R    = 60
+    R    = 100
     ms   = [16, 32]                          # both ≥ 16 (the τ/τ0 ≥ 16 fit window)
     seed = 20260531
     noise_sym = Dict(0 => :WHFM, -2 => :RWFM)
+    # Process-stable seed (plain integer arithmetic, unlike Base `hash`), so the
+    # tripwire is deterministic across Julia versions. α+3 maps {-2..2}→{1..5}.
+    sd(alpha, r) = seed + 1_000_003 * r + 7919 * (alpha + 3) + N
 
     for alpha in (0, -2)
         V = Matrix{Float64}(undef, length(ms), R)   # raw MHTOTVAR
         W = Matrix{Float64}(undef, length(ms), R)    # MHVAR (mhdev²)
         for r in 1:R
-            rng = Xoshiro(hash((seed, alpha, N, r)))
+            rng = Xoshiro(sd(alpha, r))
             pd  = PhaseData(cumsum(_gen_powerlaw_y(float(alpha), N; rng=rng)), tau0)
             V[:, r] = mhtotdev(pd, ms; calc_ci=false, correct_bias=false).dev .^ 2
             W[:, r] = mhdev(pd,    ms; calc_ci=false).dev .^ 2
