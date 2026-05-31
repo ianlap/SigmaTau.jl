@@ -35,8 +35,9 @@ const QUICK = "quick" in ARGS
 
 const MASTER_SEED = 20260531
 const ALPHAS      = (2, 1, 0, -1, -2)               # WHPM … RWFM
-const N_GRID      = QUICK ? (1025, 2049) :
-                           (1025, 2049, 4097, 8193, 16385, 32769)
+# Record length N as the number of samples (powers of two). T = (N-1)·τ0.
+const N_GRID      = QUICK ? (1024, 2048) :
+                           (1024, 2048, 4096, 8192, 16384, 32768)
 const R           = QUICK ? 200  : 1000             # realizations per cell
 const R_ANCHOR    = QUICK ? 400  : 5000             # anchor cell per α
 const N_BOOT      = QUICK ? 500  : 2000             # bootstrap resamples
@@ -66,7 +67,10 @@ function cell_stats(alpha::Int, N::Int, ms::Vector{Int}, nreal::Int)
         rng = Xoshiro(hash((MASTER_SEED, alpha, N, r)))
         y  = _gen_powerlaw_y(float(alpha), N; rng=rng)
         pd = PhaseData(cumsum(y), 1.0)
-        v  = mhtotdev(pd, ms; calc_ci=false).dev
+        # correct_bias=false: measure the RAW MHTOTVAR — the bias B we are
+        # estimating must not be pre-applied (it would make this circular now
+        # that mhtotdev applies the measured B by default).
+        v  = mhtotdev(pd, ms; calc_ci=false, correct_bias=false).dev
         w  = mhdev(pd,    ms; calc_ci=false).dev
         @inbounds for k in 1:nc
             V[k, r] = v[k]^2
@@ -212,8 +216,12 @@ function main()
                              R=nreal, meanV=meanV[k], varV=varV[k],
                              edf=edf[k], edf_se=edf_se[k],
                              meanW=meanW[k], B=B[k], B_se=B_se[k]))
-                push!(B_by_alpha[alpha], (τ / T, B[k], B_se[k]))
+                # Both the bias and the EDF fit use the τ/τ0 ≥ 16 validity window
+                # (Howe et al. 2000). The small-m cells — especially m=1, which is
+                # near-degenerate and carries the tightest SE (largest weight) —
+                # otherwise skew the bias toward a non-physical value.
                 if m >= FIT_M_MIN && isfinite(edf[k]) && edf_se[k] > 0
+                    push!(B_by_alpha[alpha], (τ / T, B[k], B_se[k]))
                     push!(fit_x[alpha],  tot)
                     push!(fit_y[alpha],  edf[k])
                     push!(fit_w[alpha],  1 / edf_se[k]^2)

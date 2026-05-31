@@ -150,27 +150,35 @@ end
 Modified Hadamard Total Deviation, using the Greenhall methodology SigmaTau
 adopts for this novel estimator (see `_mhtotdev_core`).
 
-No bias correction is applied for any value of `correct_bias` — the
-kwarg is accepted for API symmetry with the other total-family
-functions but is currently a documented no-op. `bias_correction(:mhtot, …)`
-returns ones. EDF uses the `_coeff_mhtot` fit coefficients.
+`correct_bias=true` (default) applies the Monte-Carlo-measured unbias
+correction `σ_unbiased = σ_raw / √B`, where `B ∈ {1.066, 0.985, 1.018,
+1.202, 1.797}` for α ∈ {2, 1, 0, -1, -2} (from `bias_correction(:mhtot, …)`).
+MHTOTDEV is ≈ unbiased for white/flicker noise (B ≈ 1) and reads
+progressively high for redder FM (RWFM B ≈ 1.8, where the correction lowers
+σ); it is *not* exactly unbiased, contrary to the earlier assumption. Pass
+`correct_bias=false` for the raw kernel value. EDF uses the measured
+`_coeff_mhtot` fit. See the "MHTOTDEV bias and EDF" theory page for the
+measurement methodology.
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _ = correct_bias  # accepted for API symmetry; B = 1 (no-op) pending the bias study.
     x = _f64(data.x)
     raw_devs = _mhtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
+    need_noise = correct_bias || calc_ci
+    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
+
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mhtot, taus, T)) : raw_devs
+
     if !calc_ci
-        return StabilityResult(:mhtotdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:mhtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=3)
-    edfs = calculate_edf(:mhtotdev, raw_devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    edfs = calculate_edf(:mhtotdev, devs, noises, m_values, taus, length(x), T)
+    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mhtotdev, taus, raw_devs, noises, lower, upper, edfs)
+    return StabilityResult(:mhtotdev, taus, devs, noises, lower, upper, edfs)
 end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.

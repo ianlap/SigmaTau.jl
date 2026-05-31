@@ -102,10 +102,13 @@ reference.
 
 - **α** ∈ {2, 1, 0, −1, −2}, using the *known* injected α (never `identify_noise`,
   to avoid noise-ID misclassification contaminating the per-α bins).
-- **N** ∈ {1025, 2049, 4097, 8193, 16385, 32769} (`2^k + 1`, so `T = 2^k` and
-  `T/τ` lands on round values); octave `m`-grid `1 … N÷4`, dropping cells with
-  `nsubs = N − 4m + 1 < 16`. Pooling across N gives ≥30 `(T/τ, edf)` points per
-  α for the fit.
+- **N** (record length, frequency samples) ∈ {1024, 2048, 4096, 8192, 16384,
+  32768}; octave `m`-grid `1 … N÷4`, dropping cells with `nsubs = N − 4m + 1 < 16`.
+  Pooling across N gives ≥30 `(T/τ, edf)` points per α for the fit.
+- **Both the bias and the EDF use the `τ/τ_0 ≥ 16` window.** The small-`m` cells
+  (especially `m = 1`, which is near-degenerate yet carries the tightest standard
+  error, hence the largest weight) otherwise skew the bias ratio away from its
+  physical value.
 - **Reproducibility.** Each realization draws from an independent stream
   `Xoshiro(hash((seed, α, N, r)))`, so results are identical regardless of
   thread count. Synthesis takes an `rng` keyword for exactly this purpose.
@@ -124,24 +127,23 @@ produced it.
     the μ(α) slopes and the qualitative bias trend below; the published tables
     use the full-sweep values.
 
-## Result (preliminary, laptop validation)
+## Result (provisional, laptop validation)
 
-From the reduced validation run (N ≤ 2049, R = 200–400, fit over `τ/τ_0 ≥ 16`),
-the measured bias already departs clearly from the previously-assumed `B = 1`,
-and both EDF forms fit well (R² ≈ 0.97–0.99):
+From a laptop validation run (N ≤ 16384, R = 1000), aggregating both the bias and
+the EDF over the `τ/τ_0 ≥ 16` window, all EDF fits are excellent (R² ≥ 0.997):
 
-| α  | Noise | B(α) | nbias | EDF (Mod-Totvar) `b`, `c` | R² |
-|---:|:------|:-----|:------|:--------------------------|:---|
-|  2 | WHPM  | ≈ 0.68 | −0.32 | 1.82, 6.75 | 0.98 |
-|  1 | FLPM  | ≈ 0.74 | −0.26 | 1.23, 3.14 | 0.99 |
-|  0 | WHFM  | ≈ 0.81 | −0.19 | 1.15, 4.06 | 0.99 |
-| −1 | FLFM  | ≈ 0.93 | −0.07 | 1.03, 4.22 | 0.99 |
-| −2 | RWFM  | ≈ 1.34 | +0.34 | 0.79, 2.79 | 0.98 |
+| α  | Noise | B(α) | nbias | EDF `b`, `c` |
+|---:|:------|:-----|:------|:-------------|
+|  2 | WHPM  | ≈ 1.07 | +0.07 | 1.93, 9.43 |
+|  1 | FLPM  | ≈ 0.98 | −0.02 | 1.20, 3.25 |
+|  0 | WHFM  | ≈ 1.02 | +0.02 | 1.11, 4.70 |
+| −1 | FLFM  | ≈ 1.20 | +0.20 | 0.98, 0.11 |
+| −2 | RWFM  | ≈ 1.80 | +0.80 | 0.83, 4.02 |
 
-MHTOTDEV reads **low** for phase-modulation noise (B < 1) and **high** for
-random-walk FM (B > 1) — so treating it as unbiased systematically misstates the
-deviation at both ends of the noise range. (Applying the `τ/τ_0 ≥ 16` validity
-floor lifted the WHPM EDF R² from ~0.6 to ~0.98, confirming the Howe et al. 2000
-guidance that the total-estimator EDF model only holds above that floor.) The
-full-sweep values, with bootstrap uncertainties and the per-α form selection,
-replace these once the workstation run lands.
+MHTOTDEV is **≈ unbiased for white/flicker noise** (B ≈ 1) and reads
+**progressively high for redder FM**, up to ≈ 1.8 for random-walk FM — so the
+prior "unbiased by policy" assumption is wrong mainly at the red end. (Restricting
+the bias to the same `τ/τ_0 ≥ 16` window as the EDF is essential: the
+near-degenerate `m = 1` cell otherwise dominates the weighted ratio and pulls the
+apparent bias well below 1.) The authoritative values — full workstation sweep
+(N up to 32768, R = 3000), with bootstrap uncertainties — replace these.
