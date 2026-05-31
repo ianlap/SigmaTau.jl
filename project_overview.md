@@ -95,7 +95,7 @@ raw `Vector{Float64}`.
 | `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid capped at each kernel's algorithmic m-max |
 | `tdev` | same | Wraps `mdev` and scales by `τ/√3` |
 | `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; deprecated `ldev` alias forwards to `htdev` |
-| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling; detrend defaults exported as `TOTDEV_DETREND_DEFAULT=:howe` / `TOTAL_FAMILY_DETREND_DEFAULT=:greenhall` |
+| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling. One canonical extension form each (no `detrend` kwarg): TOTDEV uses Howe/SP1065 eqn 25, the modified/Hadamard total family uses the Greenhall 2003 half-mean extension (MHTOTDEV adopts the same by consistency) |
 | `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | No CI fields (no published EDF model); `calc_ci` is a no-op, no `confidence` kwarg |
 | `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | No CI fields (EDF port tracked in TODO); `calc_ci` is a no-op, no `confidence` kwarg |
 | `stability` | [src/stab/api/suite.jl](src/stab/api/suite.jl) | Compute-all entry point → `StabilitySuite`; `devs`/`taus` select the deviation set and grid; `DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :tdev)` |

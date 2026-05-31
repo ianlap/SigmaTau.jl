@@ -185,12 +185,11 @@ const LK = LegacyKernels
         end
 
         # TOTDEV. (Smaller grid — kernel is O(N) per m but allocates an extended
-        # 3N-4 array each call.) Pass detrend=:legacy explicitly: the new
-        # _totdev_core default is :howe (SP1065 eqn 25), which differs from
-        # the LK reference by O(few %) at short τ.
+        # 3N-4 array each call.) Canonical :howe form (SP1065 eqn 25, no detrend)
+        # against the independent Howe reference.
         for m in [1, 2, 4, 8, 16, 32]
-            new_dev = sqrt(LK.totdev_var(x, m, tau0))
-            @test SigmaTau._totdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
+            new_dev = sqrt(LK.totdev_var_howe(x, m, tau0))
+            @test SigmaTau._totdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
         # MTOTDEV.
@@ -205,12 +204,13 @@ const LK = LegacyKernels
             @test SigmaTau._htotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
-        # MHTOTDEV. Pass detrend=:legacy explicitly: the new _mhtotdev_core
-        # default is :greenhall (per-window half-mean), which differs from
-        # the LK reference's per-window full-LS detrend.
+        # MHTOTDEV. Canonical Greenhall form (per-window half-mean slope removal)
+        # against the independent half-mean reference. MHTOTDEV is novel to
+        # SigmaTau with no external reference, so this internal machine-precision
+        # anchor is the kernel's primary correctness contract.
         for m in [1, 2, 4, 8]
-            new_dev = sqrt(LK.mhtotdev_var(x, m, tau0))
-            @test SigmaTau._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈ new_dev atol=at rtol=rt
+            new_dev = sqrt(LK.mhtotdev_var_greenhall(x, m, tau0))
+            @test SigmaTau._mhtotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
     end
 
@@ -363,37 +363,12 @@ const LK = LegacyKernels
                 m == 512 && continue                 # Stable32-only quirk; see comment above
                 sigma_ref = parse(Float64, row[7])
 
-                got = SigmaTau._totdev_core(x, [m], tau0; detrend=:howe)[1]
+                got = SigmaTau._totdev_core(x, [m], tau0)[1]
                 @test got ≈ sigma_ref rtol=1e-4
                 n_checked += 1
             end
             @test n_checked >= 5
         end
-    end
-
-    @testset "TOTDEV :linear ≡ :legacy" begin
-        # For TOTDEV, :linear (global LS detrend + endpoint mean-flip) is
-        # numerically identical to :legacy by construction. Lock the alias.
-        using Random
-        Random.seed!(20260508)
-        N    = 1024
-        tau0 = 1.0
-        ms   = [1, 2, 4, 8, 16]
-        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
-
-        devs_linear = SigmaTau._totdev_core(x, ms, tau0; detrend=:linear)
-        devs_legacy = SigmaTau._totdev_core(x, ms, tau0; detrend=:legacy)
-
-        @test length(devs_linear) == length(ms)
-        @test all(isfinite, devs_linear)
-        @test all(>(0), devs_linear)
-        for k in eachindex(ms)
-            @test devs_linear[k] ≈ devs_legacy[k] atol=0.0 rtol=1e-15
-        end
-
-        # Unsupported recipes (:greenhall on TOTDEV) raise ArgumentError.
-        @test_throws ArgumentError SigmaTau._totdev_core(x, [1], tau0; detrend=:greenhall)
-        @test_throws ArgumentError SigmaTau._totdev_core(x, [1], tau0; detrend=:nonsense)
     end
 
     include("allantools_cross_validation.jl")
@@ -437,27 +412,6 @@ const LK = LegacyKernels
         end
     end
 
-    @testset "MTOTDEV :linear smoke" begin
-        # Per-window full-LS detrend (vs :greenhall's half-mean) on the same
-        # time-reverse extension. Same kernel operator, same magnitude band.
-        using Random
-        Random.seed!(20260508)
-        N    = 1024
-        tau0 = 1.0
-        ms   = [1, 2, 4, 8, 16]
-        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
-
-        devs = SigmaTau._mtotdev_core(x, ms, tau0; detrend=:linear)
-        @test length(devs) == length(ms)
-        @test all(isfinite, devs)
-        @test all(>(0), devs)
-        devs_legacy = SigmaTau._mtotdev_core(x, ms, tau0; detrend=:legacy)
-        @test all(0.1 .<= devs ./ devs_legacy .<= 10.0)
-
-        # :howe is no longer a recipe for MTOTDEV.
-        @test_throws ArgumentError SigmaTau._mtotdev_core(x, [1], tau0; detrend=:howe)
-    end
-
     @testset "TTOTDEV = MTOTDEV · τ/√3 identity" begin
         # ttotdev wraps mtotdev with a τ/√3 rescaling (analogous to tdev
         # over mdev). Verifies the wrapper produces the documented
@@ -497,33 +451,9 @@ const LK = LegacyKernels
         @test isapprox(rt_fd.dev, rt.dev; rtol=5e-3)
     end
 
-    @testset "HTOTDEV :linear smoke" begin
-        # Per-window full-LS detrend on the frequency series (vs :greenhall's
-        # half-mean) + same time-reverse extension and third-diff operator.
-        using Random
-        Random.seed!(20260508)
-        N    = 1024
-        tau0 = 1.0
-        ms   = [1, 2, 4, 8, 16]
-        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
-
-        devs = SigmaTau._htotdev_core(x, ms, tau0; detrend=:linear)
-        @test length(devs) == length(ms)
-        @test all(isfinite, devs)
-        @test all(>(0), devs)
-        devs_legacy = SigmaTau._htotdev_core(x, ms, tau0; detrend=:legacy)
-        @test all(0.1 .<= devs ./ devs_legacy .<= 10.0)
-
-        # :howe is no longer a recipe for HTOTDEV.
-        @test_throws ArgumentError SigmaTau._htotdev_core(x, [1], tau0; detrend=:howe)
-    end
-
-    @testset "MHTOTDEV :greenhall smoke" begin
-        # Per-window half-mean slope detrend (vs :linear's full-LS) on the
-        # same time-reverse extension and averaged third-diff operator.
-        # MHTOTDEV is novel to SigmaTau; this is the new default after
-        # the Phase 4 default switch — exercise it on a mid-spectrum noise
-        # plus all five SP1065 power-law types.
+    @testset "MHTOTDEV finite-output smoke" begin
+        # MHTOTDEV is novel to SigmaTau (single Greenhall form). Exercise the
+        # kernel on a mid-spectrum noise plus all five SP1065 power-law types.
         using Random
         N    = 1024
         tau0 = 1.0
@@ -532,49 +462,19 @@ const LK = LegacyKernels
         # Mid-spectrum WHFM check
         Random.seed!(20260508)
         x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
-        devs = SigmaTau._mhtotdev_core(x, ms, tau0; detrend=:greenhall)
+        devs = SigmaTau._mhtotdev_core(x, ms, tau0)
         @test length(devs) == length(ms)
         @test all(isfinite, devs)
         @test all(>(0), devs)
 
-        # 5-noise-type finite-output smoke (the new default needs basic coverage)
+        # 5-noise-type finite-output smoke
         for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
             Random.seed!(20260508)
             xa = _gen_powerlaw_phase(alpha, N; tau0=tau0)
-            d = SigmaTau._mhtotdev_core(xa, ms, tau0; detrend=:greenhall)
+            d = SigmaTau._mhtotdev_core(xa, ms, tau0)
             @test length(d) == length(ms)
             @test all(isfinite, d)
             @test all(>(0), d)
-        end
-
-        # :howe is no longer a recipe for MHTOTDEV.
-        @test_throws ArgumentError SigmaTau._mhtotdev_core(x, [1], tau0; detrend=:howe)
-    end
-
-    @testset "Cross-recipe equivalence (:legacy aliases)" begin
-        # Each kernel exposes :legacy as an alias for the recipe matching its
-        # pre-1.0 default. The dispatcher routes both to the same helper, so
-        # the outputs agree at machine precision. Lock the alias on a
-        # WPM+RWFM mix at rtol=1e-15 so silent drift in either branch breaks
-        # the test immediately.
-        using Random
-        Random.seed!(20260507)
-        N    = 4096
-        tau0 = 1.0
-        wpm  = randn(N) .* 1e-9
-        rwfm = cumsum(cumsum(randn(N) .* 1e-12))
-        x    = wpm .+ rwfm
-
-        for m in [1, 2, 4, 8, 16]
-            @test SigmaTau._mtotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
-                  SigmaTau._mtotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
-            @test SigmaTau._htotdev_core(x, [m], tau0; detrend=:legacy)[1]    ≈
-                  SigmaTau._htotdev_core(x, [m], tau0; detrend=:greenhall)[1] atol=0.0 rtol=1e-15
-        end
-
-        for m in [1, 2, 4, 8]
-            @test SigmaTau._mhtotdev_core(x, [m], tau0; detrend=:legacy)[1] ≈
-                  SigmaTau._mhtotdev_core(x, [m], tau0; detrend=:linear)[1] atol=0.0 rtol=1e-15
         end
     end
 
@@ -1063,7 +963,7 @@ const LK = LegacyKernels
             end
         end
 
-        @testset "kwargs pass through (calc_ci, confidence, detrend)" begin
+        @testset "kwargs pass through (calc_ci, confidence)" begin
             Random.seed!(7)
             p = PhaseData(_gen_powerlaw_phase(0.0, 512; tau0=1.0), 1.0)
             # calc_ci=true populates CI; calc_ci=false leaves them empty.
@@ -1073,10 +973,10 @@ const LK = LegacyKernels
             r_no = adev(p; calc_ci = false)
             @test isempty(r_no.ci_lower)
             @test isempty(r_no.edf)
-            # totdev's `detrend` kwarg passes through.
-            r_howe   = totdev(p; calc_ci = false, detrend = :howe)
-            r_linear = totdev(p; calc_ci = false, detrend = :linear)
-            @test r_howe.tau == r_linear.tau
+            # totdev's `correct_bias` kwarg passes through.
+            r_raw  = totdev(p; calc_ci = false, correct_bias = false)
+            r_corr = totdev(p; calc_ci = false, correct_bias = true)
+            @test r_raw.tau == r_corr.tau
         end
     end
 
