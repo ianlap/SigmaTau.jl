@@ -16,11 +16,15 @@ the changelog in the same commit.
   power-law noises; port the table into `_coeff_pdev` and wire CI into
   the `pdev` API (currently returns empty `noise_type` / CI / EDF
   vectors).
-- [ ] **MHTOTDEV bias / EDF Monte Carlo per detrend recipe.** Synthesize
-  known-noise via `_gen_powerlaw_phase` for each α; compute MHTOT and
-  MHDEV; the ratio yields the bias factor `B(α)`. Re-fit `_coeff_mhtot`
-  empirically per detrend recipe (`:greenhall`, `:linear`). Track
-  per-recipe — EDF is recipe-specific.
+- [ ] **MHTOTDEV bias / EDF Monte Carlo (paper-grade).** Synthesize
+  known-α noise via `_gen_powerlaw_y`; compute MHTOTVAR and MHVAR on the
+  same realizations; the ratio `B(α) = E[MHTOTVAR]/E[MHVAR]` measures the
+  bias (replacing the current "unbiased by policy" stance), and
+  `2·E[V̂]²/Var[V̂]` measures the EDF. Re-fit `_coeff_mhtot` and wire a
+  measured `bias_correction(:mhtot, …)`. Only the single canonical
+  Greenhall form exists now (the `:linear` recipe was removed), so no
+  per-recipe split is needed. Reproducible harness in `tools/`, heavy
+  sweep on the workstation. (Wave 4 Phase B.)
 - [ ] **TOTDEV m=512 Stable32 quirk follow-up.** The Stable32
   cross-validation testset skips the m=512 row because Stable32 reports
   a value ~1.5 % larger than the raw SP1065 result (allantools agrees
