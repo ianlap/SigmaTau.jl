@@ -329,30 +329,31 @@ const LK = LegacyKernels
         end
     end
 
-    @testset "TOTDEV :howe matches Stable32 tightly" begin
-        # SP1065 eqn 25 reference: no detrend, mean-flip endpoint reflection.
-        # Matches Stable32's TOTDEV output at rtol=1e-4 (vs the rtol=0.15
-        # boundary-policy floor seen with the :legacy global-LS detrend), and
-        # tracks allantools' raw TOTDEV output to ~7 significant figures
-        # (allantools follows SP1065 verbatim).
+    @testset "TOTDEV matches Stable32 tightly (bias-corrected)" begin
+        # Stable32's reported TOTDEV is bias-corrected: it applies the
+        # Howe/Walter TOTVAR bias `B = 1 − a·τ/T` (nonzero only for the
+        # divergent FM noises — FLFM and RWFM), which the public `totdev`
+        # reproduces by default (`correct_bias=true`). With that, SigmaTau
+        # matches Stable32 to rtol=1e-4 across *every* row, including the
+        # m=512 FLFM row (Stable32 3.1028e-03 vs ours 3.10283e-03) that was
+        # formerly skipped as an unexplained "quirk" — it was just the FLFM
+        # bias factor `B = 1 − τ/(3·ln2·T)`.
         #
-        # Exception: the m=512 row in this fixture is identified as FLFM
-        # (alpha=-1) and Stable32's reported sigma is ~1.5% larger than the
-        # raw SP1065 value (allantools 3.055835e-03 vs Stable32 3.1028e-03);
-        # Stable32 appears to apply alpha-aware correction opaquely at that
-        # one point. Skipped here, tracked in TODO.md for follow-up against
-        # the allantools cross-validation fixture.
+        # The raw SP1065 eqn-25 kernel (`_totdev_core`, no bias) is checked
+        # separately against allantools' raw TOTDEV to ~7 sig figs in
+        # allantools_cross_validation.jl; allantools does not apply the bias.
         ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
         dat_path = joinpath(ref_dir, "stable32gen.DAT")
         csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
 
         if !isfile(dat_path) || !isfile(csv_path)
-            @warn "Stable32 fixtures not present, skipping :howe TOTDEV tightness test"
+            @warn "Stable32 fixtures not present, skipping TOTDEV tightness test"
         else
             lines = readlines(dat_path)
             x = parse.(Float64, strip.(lines[11:end]))
             @test length(x) == 8192
             tau0 = 1.0
+            pd = PhaseData(x, tau0)
 
             rows = [split(line, ',') for line in readlines(csv_path)[2:end]]
             n_checked = 0
@@ -360,14 +361,13 @@ const LK = LegacyKernels
                 length(row) < 7 && continue
                 row[1] == "Total" || continue
                 m = parse(Int, row[2])
-                m == 512 && continue                 # Stable32-only quirk; see comment above
                 sigma_ref = parse(Float64, row[7])
 
-                got = SigmaTau._totdev_core(x, [m], tau0)[1]
+                got = totdev(pd, [m]).dev[1]   # default: correct_bias=true
                 @test got ≈ sigma_ref rtol=1e-4
                 n_checked += 1
             end
-            @test n_checked >= 5
+            @test n_checked >= 10
         end
     end
 
