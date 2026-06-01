@@ -11,23 +11,6 @@ the changelog in the same commit.
 
 ## 🟡 Correctness / completeness
 
-- [ ] **MHTOTDEV bias / EDF Monte Carlo (paper-grade).** Synthesize
-  known-α noise via `_gen_powerlaw_y`; compute MHTOTVAR and MHVAR on the
-  same realizations; the ratio `B(α) = E[MHTOTVAR]/E[MHVAR]` measures the
-  bias (replacing the current "unbiased by policy" stance), and
-  `2·E[V̂]²/Var[V̂]` measures the EDF. Re-fit `_coeff_mhtot` and wire a
-  measured `bias_correction(:mhtot, …)`. Only the single canonical
-  Greenhall form exists now (the `:linear` recipe was removed), so no
-  per-recipe split is needed. Reproducible harness in `tools/`, heavy
-  sweep on the workstation. (Wave 4 Phase B.)
-- [ ] **TOTDEV m=512 Stable32 quirk follow-up.** The Stable32
-  cross-validation testset skips the m=512 row because Stable32 reports
-  a value ~1.5 % larger than the raw SP1065 result (allantools agrees
-  with our `:howe`). Stable32 identifies that row as FLFM (α=−1) and
-  appears to apply an α-aware correction. Either confirm via
-  `legdocs/vendor/` how Stable32 derives the reported σ at FLFM-tagged
-  rows and apply the matching correction in the test, or document the
-  divergence as an irreducible Stable32-vs-SP1065 policy gap.
 - [ ] **MTOTDEV EDF coefficients for α=−1 and α=−2 verification.**
   Current `_coeff_mtot` values for those two α are single-point fits
   against Stable32's `s32_5_12_26` fixture (with `c` assumed from
