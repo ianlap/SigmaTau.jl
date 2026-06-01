@@ -11,14 +11,6 @@ the changelog in the same commit.
 
 ## 🟡 Correctness / completeness
 
-- [ ] **MTOTDEV EDF coefficients for α=−1 and α=−2 verification.**
-  Current `_coeff_mtot` values for those two α are single-point fits
-  against Stable32's `s32_5_12_26` fixture (with `c` assumed from
-  SP1065). To pin both `b` and `c` independently, capture Stable32
-  EDF dumps at one additional AF per α — AF=200 or AF=400 for α=−1,
-  and any record dominated by RWFM at a second AF for α=−2 (the
-  current fixture only has α=−2 at AF=1000). Replace the single-point
-  fits with two-point fits in `src/stab/stats/edf.jl::_coeff_mtot`.
 - [ ] **Modified-total kernel parity rtol under multi-thread runs.**
   Per the threading note in the v0.2.0 changelog, the inner `@threads`
   reduction reorders summation, so kernel-vs-legacy parity tests at
