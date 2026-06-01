@@ -170,17 +170,16 @@ function _coeff_totvar(alpha::Int)
 end
 
 function _coeff_mtot(alpha::Int)
-    # Coefficients for edf = b·(T/τ) − c. The values published in the
-    # Stable32 manual / SP1065 give EDFs ~5–20 % below what Stable32
-    # actually computes. The values below are reverse-engineered from
-    # Stable32 (s32_5_12_26 fixture) and match its output to 1e-3 at the
-    # tested AFs. α=0 is well-determined (two AFs); α=-1 and α=-2 are
-    # single-point fits with c assumed from the manual.
-    alpha == 2  && return (1.90, 2.10)   # manual; not yet verified
-    alpha == 1  && return (1.20, 1.40)   # manual; not yet verified
-    alpha == 0  && return (1.330, 1.890) # fitted, AF=10 and AF=4000
-    alpha == -1 && return (0.919, 0.50)  # fitted, AF=100 (c assumed)
-    alpha == -2 && return (0.788, 0.31)  # fitted, AF=1000 (c assumed)
+    # edf = b·(T/τ) − c, coefficients per noise type from NIST SP1065
+    # (Riley 2008) §5.4.3 Table 8 — the published standard, traceable to
+    # Greenhall's degrees-of-freedom recipes (Greenhall 1991 / Greenhall &
+    # Riley 2003). Used verbatim for all five noise types, matching how
+    # `_coeff_totvar` follows SP1065 Table 7.
+    alpha == 2  && return (1.90, 2.10)
+    alpha == 1  && return (1.20, 1.40)
+    alpha == 0  && return (1.10, 1.20)
+    alpha == -1 && return (0.85, 0.50)
+    alpha == -2 && return (0.75, 0.31)
     return (NaN, NaN)
 end
 

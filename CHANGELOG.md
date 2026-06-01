@@ -69,6 +69,14 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- MTOT (modified total) EDF coefficients now follow NIST SP1065 Table 8
+  verbatim for all five noise types. The α ∈ {0, −1, −2} entries were
+  previously fitted to a single Stable32 fixture (overriding the published
+  values); they now cite SP1065 §5.4.3 (after Greenhall's degrees-of-freedom
+  recipes), matching how `_coeff_totvar` already sources SP1065 Table 7. This
+  shifts MTOT confidence intervals slightly — e.g. the white-FM coefficient
+  `b` changes 1.33 → 1.10, widening that CI by ~10 % — in exchange for a
+  single, citable provenance.
 - `PhaseData` and `FrequencyData` now validate their arguments at construction:
   `tau0` must be positive and the sample vector must have at least two elements,
   otherwise an `ArgumentError` is thrown (previously invalid input surfaced as a
