@@ -53,8 +53,17 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 edfs[k] = b * (T / tau) - c
             end
         elseif method == :mtotdev
-            b, c = _coeff_mtot(alpha)
-            edfs[k] = b * (T / tau) - c
+            # The SP1065 Table 8 coefficient formula is valid only for
+            # τ ≥ 16τ0. Below that floor MTOT reduces to MDEV, so it inherits
+            # the modified-Allan EDF (Greenhall–Riley, d=2, F=1) — verified to
+            # match Stable32's reported Chi Square DF to ~5 sig figs at small m
+            # (and avoids the b·(T/τ) form returning an unphysical EDF > N).
+            if m < 16
+                edfs[k] = _calc_edf_core(alpha, 2, m, 1, m, N)
+            else
+                b, c = _coeff_mtot(alpha)
+                edfs[k] = b * (T / tau) - c
+            end
         elseif method == :htotdev
             # Same logic as :totdev: for WPM/FLPM, fall back to HDEV-style EDF
             # (third-difference, F=m, S=m — overlapped convention) since the
