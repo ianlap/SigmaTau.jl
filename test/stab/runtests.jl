@@ -708,12 +708,19 @@ const LK = LegacyKernels
         got = SigmaTau._pdev_core(x_noise, ms, 1.0)
         @test got ≈ ref atol=1e-25 rtol=1e-12
 
-        # API wrapper: empty CI fields, FrequencyData dispatch.
+        # API wrapper: raw devs unchanged; CI populated by default (Vernotte
+        # PVAR EDF model), empty when calc_ci=false. FrequencyData dispatch below.
         pd = PhaseData(x_noise, 1.0)
         res = pdev(pd, ms)
         @test res.deviation_type == :pdev
         @test res.dev ≈ ref
-        @test isempty(res.ci_lower) && isempty(res.ci_upper) && isempty(res.edf)
+        @test length(res.edf) == length(ms) && all(isfinite, res.edf)
+        @test !isempty(res.noise_type)
+        @test all(res.ci_lower .<= res.dev .+ 1e-12) && all(res.dev .<= res.ci_upper .+ 1e-12)
+
+        res_noci = pdev(pd, ms; calc_ci=false)
+        @test res_noci.dev ≈ ref
+        @test isempty(res_noci.ci_lower) && isempty(res_noci.ci_upper) && isempty(res_noci.edf)
 
         Random.seed!(20260509)
         y = randn(200) .* 1e-9
@@ -1154,3 +1161,4 @@ include("taus.jl")
 include("suite.jl")
 include("spectral.jl")
 include("mhtotdev_mc.jl")
+include("pdev_edf_mc.jl")
