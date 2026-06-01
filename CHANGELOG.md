@@ -69,6 +69,17 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- MTOT (modified total) EDF is now computed piecewise. Below the
+  `τ ≥ 16τ₀` validity floor of the total-variance coefficient table, MTOT
+  reduces to MDEV and inherits the modified-Allan EDF (Greenhall–Riley,
+  `_calc_edf_core`) — which matches Stable32's reported degrees of freedom to
+  ~5 significant figures at small τ, where the coefficient formula otherwise
+  returned an unphysical EDF exceeding the data-point count. At and above the
+  floor the coefficients now follow NIST SP1065 §5.4.3 Table 8 verbatim for
+  all five noise types; the α ∈ {0, −1, −2} entries were previously fitted to
+  a single Stable32 fixture (overriding the published values), and now match
+  how `_coeff_totvar` sources SP1065 Table 7. The net change to the confidence
+  interval is small and slightly conservative at long τ.
 - `PhaseData` and `FrequencyData` now validate their arguments at construction:
   `tau0` must be positive and the sample vector must have at least two elements,
   otherwise an `ArgumentError` is thrown (previously invalid input surfaced as a
