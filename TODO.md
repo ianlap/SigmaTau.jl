@@ -11,11 +11,6 @@ the changelog in the same commit.
 
 ## 🟡 Correctness / completeness
 
-- [ ] **PDEV EDF / χ² confidence model.** Vernotte 2015 / 2020 derive
-  the parabolic-variance EDF in closed form for the five canonical
-  power-law noises; port the table into `_coeff_pdev` and wire CI into
-  the `pdev` API (currently returns empty `noise_type` / CI / EDF
-  vectors).
 - [ ] **MHTOTDEV bias / EDF Monte Carlo (paper-grade).** Synthesize
   known-α noise via `_gen_powerlaw_y`; compute MHTOTVAR and MHVAR on the
   same realizations; the ratio `B(α) = E[MHTOTVAR]/E[MHVAR]` measures the

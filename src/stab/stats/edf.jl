@@ -68,6 +68,8 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mhtotdev
             b, c = _coeff_mhtot(alpha)
             edfs[k] = b * (T / tau) - c
+        elseif method == :pdev
+            edfs[k] = _pvar_edf(alpha, m, N)
         else
             edfs[k] = NaN
         end
@@ -196,6 +198,78 @@ function _coeff_mhtot(alpha::Int)
     alpha == -1 && return (1.0300, 3.3868)
     alpha == -2 && return (0.8132, 2.5406)
     return (NaN, NaN)
+end
+
+# A(α) coefficient of the PVAR EDF approximation, Vernotte–Chen–Rubiola 2020
+# (arXiv:2005.13631) Eq. (18): the 3rd-order polynomial
+#   A(α) = 27 + (1/4)α + (5/14)α² − (3/4)α³
+# fit to massive Monte-Carlo, with A(+2)=23 fixed by the white-PM closed form of
+# Vernotte et al. 2016 (arXiv:1506.00687) Eq. (24). Stored as the integer-α values
+# the paper reports (the cubic rounded), since noise identification only yields
+# integer α. The companion coefficient B(α) = 12 is constant for all α (Eq. 18).
+function _pvar_A(alpha::Int)
+    alpha == 2  && return 23.0   # cubic 22.93; fixed exact by 2016 Eq. (24)
+    alpha == 1  && return 27.0   # cubic 26.86
+    alpha == 0  && return 27.0
+    alpha == -1 && return 28.0   # cubic 27.86
+    alpha == -2 && return 34.0   # cubic 33.93
+    return NaN
+end
+
+"""
+    _pvar_edf(alpha::Int, m::Int, N::Int) → Float64
+
+Equivalent degrees of freedom of PVAR (parabolic variance) for a record of `N`
+phase samples at averaging factor `m`, per Vernotte–Chen–Rubiola 2020
+(arXiv:2005.13631). The EDF feeds the χ² confidence interval the same way as the
+overlapped families (`ν = 2·E[σ²]²/V[σ²]`, their Eq. 19 ≡ the Wave-4 estimator).
+
+Three regimes:
+
+- `m = 1`: PVAR(τ₀) ≡ AVAR(τ₀) (`_pdev_core` returns ADEV at m=1), so the EDF is
+  ADEV's Greenhall–Riley value `_calc_edf_core(α, 2, 1, 1, 1, N)`. This also
+  sidesteps the paper's note that the closed-form approximation is poor at m=1,2.
+- `1 < m ≤ m₁`: the Eq. (16)+(18) approximation
+  `ν = 35 / (A(α)·(m/M) − 12·(m/M)²)` with `M = N − 2m`, valid for `m ≲ N/4`.
+- `m₁ < m`: the Eq. (22)–(23) semi-log interpolation `ν = a·ln(m) + b` between
+  `m₁ = round(1.11·N/4)` (anchored at the Eq.-16 value) and `m₂ = round(0.901·N/2)`
+  (anchored at `ν = 1`, the single-estimate limit at `m = N/2`).
+
+`A(α) = 27 + α/4 + 5α²/14 − 3α³/4` (`_pvar_A`); `B = 12`. PVAR is an unbiased
+wavelet variance, so no bias correction is applied.
+"""
+function _pvar_edf(alpha::Int, m::Int, N::Int)
+    m <= 0 && return NaN
+    m == 1 && return _calc_edf_core(alpha, 2, 1, 1, 1, N)
+
+    A = _pvar_A(alpha)
+    isnan(A) && return NaN
+
+    # Eq. (16): closed form, valid for m ≲ N/4.
+    edf16(mm) = begin
+        M = N - 2 * mm
+        M < 1 && return NaN
+        r = mm / M
+        denom = A * r - 12.0 * r * r
+        denom > 0 ? 35.0 / denom : NaN
+    end
+
+    m1 = round(Int, 1.11 * N / 4)
+    if m <= m1
+        return edf16(m)
+    end
+
+    # Eqs. (22)–(23): semi-log interpolation across N/4 < m ≤ N/2, with ν=1 at
+    # m₂ ≈ N/2 (one effective estimate). Anchored at the Eq.-16 value at m₁.
+    m2 = round(Int, 0.901 * N / 2)
+    (m1 < 2 || m2 <= m1) && return edf16(m)   # degenerate for tiny N: fall back
+    nu_m1 = edf16(m1)
+    isfinite(nu_m1) || return NaN
+    a = (nu_m1 - 1.0) / (log(m1) - log(m2))
+    b = 1.0 - a * log(m2)
+    # ν falls to 1 at m₂ ≈ N/2 (single estimate) and is held there for any larger
+    # m, rather than extrapolating the line below 1 (Eq. 22–23 / Fig. 2).
+    return max(a * log(m) + b, 1.0)
 end
 
 function _coeff_htot(alpha::Int)

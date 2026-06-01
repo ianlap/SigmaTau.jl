@@ -8,6 +8,18 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- χ²-based confidence intervals for `pdev` (parabolic deviation / PVAR). With
+  `calc_ci=true` (the default) it now reports per-τ noise type, equivalent
+  degrees of freedom, and confidence bounds, using the PVAR EDF model of
+  Vernotte–Chen–Rubiola 2020 (arXiv:2005.13631):
+  `ν ≈ 35 / (A(α)·(m/M) − 12·(m/M)²)` with `M = N − 2m`. At `m = 1` the EDF is
+  ADEV's (the PVAR(τ₀) ≡ AVAR(τ₀) identity); the large-τ region uses the paper's
+  semi-log interpolation down to `ν = 1` at `m = N/2`. PVAR is unbiased, so no
+  bias correction is applied. A `confidence` kwarg is restored on `pdev` (now
+  functional; it was a removed no-op) and is forwarded by `stability`.
+  Methodology documented in the new Theory page "PDEV (PVAR) confidence
+  intervals"; regression tripwire in `test/stab/pdev_edf_mc.jl`.
+
 - Optional `rng::AbstractRNG` keyword on `noise_gen` (and the internal
   `_gen_powerlaw_y` / `_gen_powerlaw_phase`), so a caller can draw from a
   specific stream — e.g. independent per-realization seeds in a Monte Carlo.
