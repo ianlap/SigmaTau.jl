@@ -896,22 +896,31 @@ const LK = LegacyKernels
         # m_max per kernel matches each `_*_core`'s L-check.
         @testset "_default_m_values per kernel" begin
             N = 1024
-            # ADEV / TOTDEV / PDEV: m_max = (N-1)÷2 = 511 → 2^0..2^8 = [1..256]
+            # Ordinary/modified estimators require ≥2 analysis windows at the
+            # largest τ; total estimators extend each subsequence and keep their
+            # ≥1-subsequence reach (see `_kernel_m_max`).
+            # ADEV/PDEV: m_max = (N-2)÷2 = 511 → 2^0..2^8 = [1..256]
             @test SigmaTau._default_m_values(N, :adev)   == 2 .^ (0:8)
-            @test SigmaTau._default_m_values(N, :totdev) == 2 .^ (0:8)
             @test SigmaTau._default_m_values(N, :pdev)   == 2 .^ (0:8)
-            # MDEV/TDEV/MTOTDEV/TTOTDEV: m_max = N÷3 = 341 → 2^0..2^8
+            # TOTDEV: m_max = (N-1)÷2 = 511 → 2^0..2^8
+            @test SigmaTau._default_m_values(N, :totdev) == 2 .^ (0:8)
+            # MDEV/TDEV: m_max = (N-1)÷3 = 341 → 2^0..2^8
             @test SigmaTau._default_m_values(N, :mdev)    == 2 .^ (0:8)
             @test SigmaTau._default_m_values(N, :tdev)    == 2 .^ (0:8)
+            # MTOTDEV/TTOTDEV: m_max = N÷3 = 341 → 2^0..2^8
             @test SigmaTau._default_m_values(N, :mtotdev) == 2 .^ (0:8)
             @test SigmaTau._default_m_values(N, :ttotdev) == 2 .^ (0:8)
-            # HDEV / HTOTDEV: m_max = (N-1)÷3 = 341 → 2^0..2^8
-            # (HTOTDEV operates on y = diff(x); same constraint as HDEV.)
+            # HDEV: m_max = (N-2)÷3 = 340 → 2^0..2^8
             @test SigmaTau._default_m_values(N, :hdev)    == 2 .^ (0:8)
+            # HTOTDEV: m_max = (N-1)÷3 = 341 → 2^0..2^8 (operates on y = diff(x))
             @test SigmaTau._default_m_values(N, :htotdev) == 2 .^ (0:8)
-            # MHDEV/HTDEV/MHTOTDEV: m_max = N÷4 = 256 → 2^0..2^8
-            @test SigmaTau._default_m_values(N, :mhdev)    == 2 .^ (0:8)
-            @test SigmaTau._default_m_values(N, :htdev)    == 2 .^ (0:8)
+            # MHDEV/HTDEV: m_max = (N-1)÷4 = 255 → 2^0..2^7 = [1..128].
+            # The 4m-wide raw difference at m=256 fits only one window (EDF≈1),
+            # so the under-sampled point is dropped.
+            @test SigmaTau._default_m_values(N, :mhdev)    == 2 .^ (0:7)
+            @test SigmaTau._default_m_values(N, :htdev)    == 2 .^ (0:7)
+            # MHTOTDEV: m_max = N÷4 = 256 → 2^0..2^8 — subsequence extension keeps
+            # the single-subsequence long-τ point at m=256.
             @test SigmaTau._default_m_values(N, :mhtotdev) == 2 .^ (0:8)
             # MTIE: m_max = N-1 = 1023 → 2^0..2^9 = [1..512]
             @test SigmaTau._default_m_values(N, :mtie) == 2 .^ (0:9)
