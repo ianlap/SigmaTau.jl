@@ -30,7 +30,7 @@ function _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
         end
 
         M = N - 2m
-        if M < 1
+        if M < 2          # need ≥2 windows
             devs[k] = NaN
             continue
         end

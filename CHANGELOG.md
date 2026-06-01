@@ -136,6 +136,16 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   at zero.
 - Added `[compat]` bounds for `DelimitedFiles`, `Statistics`, `Random`, and
   `Test`.
+- **Under-sampled single-window points at the longest τ.** The ordinary and
+  modified deviations (`adev`/`mdev`/`tdev`/`hdev`/`mhdev`/`htdev`/`pdev`) now
+  require at least two analysis windows: a single window is one raw difference
+  (EDF ≈ 1) whose value is essentially noise. Previously the default octave grid
+  ran to the algorithmic limit, so e.g. `mhdev` on an `N = 4k` record produced a
+  spurious off-trend point at `m = N/4` (`Ne = 1`). The cores now return `NaN`
+  below two windows and `_kernel_m_max` caps the default grid accordingly. The
+  total estimators (`totdev`/`mtotdev`/`ttotdev`/`htotdev`/`mhtotdev`) are
+  unchanged — subsequence extension makes a single subsequence a valid long-τ
+  estimate — so they retain their full reach.
 
 ### Documentation
 

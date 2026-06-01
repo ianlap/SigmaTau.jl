@@ -12,7 +12,7 @@ function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     
     for (k, m) in enumerate(m_values)
         L = N - 2m
-        if L <= 0
+        if L < 2          # need ≥2 analysis windows; one window is a single difference
             devs[k] = NaN
             continue
         end
@@ -50,7 +50,7 @@ function _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 
     for (k, m) in enumerate(m_values)
         Ne = N - 3m + 1
-        if Ne <= 0
+        if Ne < 2          # need ≥2 estimates
             devs[k] = NaN
             continue
         end

@@ -12,7 +12,7 @@ function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     
     for (k, m) in enumerate(m_values)
         L = N - 3m
-        if L <= 0
+        if L < 2          # need ≥2 analysis windows
             devs[k] = NaN
             continue
         end
@@ -50,7 +50,7 @@ function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 
     for (k, m) in enumerate(m_values)
         Ne = N - 4m + 1
-        if Ne <= 0
+        if Ne < 2          # need ≥2 estimates; MHDEV is not a total estimator (raw 4th-difference)
             devs[k] = NaN
             continue
         end

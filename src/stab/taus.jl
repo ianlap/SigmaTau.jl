@@ -50,14 +50,27 @@ Throws `ArgumentError` for an unknown kernel symbol or an `N` too short to admit
 any `m ≥ 1`.
 """
 function _kernel_m_max(N::Int, kernel::Symbol)
-    m_max = if kernel === :adev || kernel === :totdev || kernel === :pdev
+    # Ordinary/modified estimators use raw differences, so the largest τ must
+    # retain ≥2 analysis windows — a single window is one difference (EDF ≈ 1)
+    # and is rejected by the cores. Total estimators extend each subsequence
+    # (reflection / time reversal), so a single subsequence is still a valid
+    # long-τ estimate (the point of the total approach); they keep the natural
+    # ≥1-subsequence reach.
+    m_max = if kernel === :adev || kernel === :pdev
+        (N - 2) ÷ 2
+    elseif kernel === :totdev
         (N - 1) ÷ 2
-    elseif kernel === :mdev || kernel === :tdev ||
-           kernel === :mtotdev || kernel === :ttotdev
-        N ÷ 3
-    elseif kernel === :hdev || kernel === :htotdev
+    elseif kernel === :mdev || kernel === :tdev
         (N - 1) ÷ 3
-    elseif kernel === :mhdev || kernel === :htdev || kernel === :mhtotdev
+    elseif kernel === :mtotdev || kernel === :ttotdev
+        N ÷ 3
+    elseif kernel === :hdev
+        (N - 2) ÷ 3
+    elseif kernel === :htotdev
+        (N - 1) ÷ 3
+    elseif kernel === :mhdev || kernel === :htdev
+        (N - 1) ÷ 4
+    elseif kernel === :mhtotdev
         N ÷ 4
     elseif kernel === :mtie
         N - 1
