@@ -1,6 +1,6 @@
 # SigmaTau.jl — Project Overview
 
-> **Last Updated**: 2026-05-30.
+> **Last Updated**: 2026-06-07.
 > **Scope**: Single registerable Julia 1.11 package, flat module —
 > deviation kernels, noise identification, EDF/CI, spectral densities
 > (S_y / S_x / ℒ), calibrated noise generation, and file IO for
@@ -21,6 +21,7 @@ graph TD
     ST -->|"using"| StaticArrays
     ST -->|"using"| FFTW
     ST -.->|"weakdep / extension"| RecipesBase
+    ST -.->|"weakdep / extension"| Tables
 ```
 
 A `docs/` subproject (Documenter.jl) develops `SigmaTau` as a single
@@ -62,7 +63,7 @@ raw `Vector{Float64}`.
 | `_hdev_core`, `_mhdev_core` | [src/stab/core/hadamard.jl](src/stab/core/hadamard.jl) | Hadamard family |
 | `_totdev_core`, `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core` | [src/stab/core/total.jl](src/stab/core/total.jl) | Boundary-extended; threaded |
 | `_mtie_core` | [src/stab/core/mtie.jl](src/stab/core/mtie.jl) | O(N) monotonic-deque sliding window; ITU-T G.810 |
-| `_pdev_core` | [src/stab/core/pdev.jl](src/stab/core/pdev.jl) | Vernotte 2016/2020; allantools formula parity |
+| `_pdev_core` | [src/stab/core/pdev.jl](src/stab/core/pdev.jl) | Vernotte 2016/2020; allantools formula parity; rolling O(N) recurrence per m |
 
 #### Noise Identification
 
@@ -82,11 +83,11 @@ raw `Vector{Float64}`.
 |-----------|------|-------|
 | `calculate_edf` | [src/stab/stats/edf.jl](src/stab/stats/edf.jl) | Full Greenhall/Riley `_compute_sz/_sx/_sw` |
 | `confidence_intervals` | same | `Distributions.jl` for χ² + Normal |
-| `bias_correction` | same | SP1065 variance-ratio B; callers apply `σ ← σ/√B`. totvar / mtot / htot covered; mhtot has no published model |
+| `bias_correction` | same | Variance-ratio B; callers apply `σ ← σ/√B`. totvar / mtot / htot follow published models; mhtot uses the SigmaTau Monte Carlo fit because no external model exists |
 | `_coeff_totvar` | same | ADEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
 | `_coeff_htot` | same | FCS 2001 / Howe & Tasset 2005 Table I `(b₀, b₁)` for α∈{0,-1,-2,-3,-4}; matches Stable32 EDF to <0.01% for `τ ≥ 16τ₀` |
-| `_coeff_mtot` | same | α=0 two-AF fit to Stable32 `(1.330, 1.890)`; α=−1, α=−2 single-point fits with `c` from SP1065 (interim; see TODO) |
-| `_coeff_mhtot` | same | Cover α∈[−2,2] |
+| `_coeff_mtot` | same | NIST SP1065 §5.4.3 Table 8 coefficients for all five noise types, with MDEV EDF fallback below `τ = 16τ₀` |
+| `_coeff_mhtot` | same | SigmaTau Monte Carlo fit for α∈{2,1,0,-1,-2}; valid over `τ/τ₀ ≥ 16` |
 
 #### User API
 
@@ -94,7 +95,7 @@ raw `Vector{Float64}`.
 |----------|------|-------|
 | `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid capped at each kernel's algorithmic m-max |
 | `tdev` | same | Wraps `mdev` and scales by `τ/√3` |
-| `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | `htdev` wraps `mhdev` and scales by `τ/√(10/3)`; deprecated `ldev` alias forwards to `htdev` |
+| `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | `htdev` wraps `mhdev` and scales by `τ/√(10/3)` |
 | `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling. One canonical extension form each (no `detrend` kwarg): TOTDEV uses Howe/SP1065 eqn 25, the modified/Hadamard total family uses the Greenhall 2003 half-mean extension (MHTOTDEV adopts the same by consistency) |
 | `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | No CI fields (no published EDF model); `calc_ci` is a no-op, no `confidence` kwarg |
 | `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | Full χ² CI via the Vernotte 2020 PVAR EDF model (`_pvar_edf`); honors `calc_ci`/`confidence`; unbiased (no bias correction) |
@@ -115,9 +116,10 @@ raw `Vector{Float64}`.
 | Component | Notes |
 |-----------|-------|
 | Single flat export block | `src/SigmaTau.jl` exports types, IO, deviations, noise-ID, EDF/CI, MTIE, PDEV, `noise_gen`, and the spectral `Sy`/`Sx`/`L` directly |
-| Root `Project.toml` deps | Single-package manifest; `AbstractFFTs`, `Dates`, `DelimitedFiles`, `Distributions`, `DocStringExtensions`, `FFTW`, `StaticArrays`, `Statistics` |
+| Root `Project.toml` deps | Single-package manifest; `AbstractFFTs`, `Dates`, `DelimitedFiles`, `Distributions`, `DocStringExtensions`, `FFTW`, `StaticArrays`, `Statistics`; `RecipesBase` and `Tables` are weakdeps |
 | Plot recipes | [ext/SigmaTauRecipesBaseExt.jl](ext/SigmaTauRecipesBaseExt.jl) — package extension on `RecipesBase`; auto-loads with `Plots`. Single-result curve (opt-in `ci_band` ribbon), `StabilitySuite` and `Vector{StabilityResult}` overlays, and `SpectralResult` (log-log for `Sy`/`Sx`, dB-vs-log-f for `ℒ`) |
-| Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) — verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; `ldev` ≡ `htdev`; pins the absence of the old `Stab`/`Est` submodules |
+| Tables.jl extension | [ext/SigmaTauTablesExt.jl](ext/SigmaTauTablesExt.jl) — optional row-table interface for `StabilityResult` and `StabilitySuite`; absent CI fields appear as `missing` |
+| Umbrella smoke test | [test/umbrella_smoke.jl](test/umbrella_smoke.jl) — verifies `using SigmaTau` exposes every public symbol; FrequencyData dispatch on every deviation; pins the absence of the old `Stab`/`Est` submodules |
 | `examples/` | Four Literate-driven tutorials (`00_julia_for_metrologists`, `01_phase_data`, `02_compute_adev`, `06_three_cornered_hat`) |
 
 ---
@@ -145,7 +147,9 @@ src/
     ├── taus.jl                          (TauMode grid selector + tau_values)
     └── utils.jl                         (FrequencyData → PhaseData helper)
 
-ext/SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
+ext/
+├── SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)
+└── SigmaTauTablesExt.jl                 Tables.jl row-table extension
 
 test/
 ├── runtests.jl                          Aggregator (5 sub-suites)
@@ -153,7 +157,8 @@ test/
 ├── stab/runtests.jl                     + allantools_cross_validation.jl + legacy_kernels.jl + taus.jl + suite.jl + spectral.jl
 ├── io/{detrend,fillgaps,read,results,runtests}.jl
 ├── umbrella_smoke.jl                    using-SigmaTau re-export check + FrequencyData dispatch
-└── recipes.jl                           RecipesBase extension smoke (overlays + ci_band)
+├── recipes.jl                           RecipesBase extension smoke (overlays + ci_band)
+└── tables.jl                            Tables.jl row-table extension smoke
 
 docs/                                    Documenter.jl subproject
 benchmarks/                              Long-record perf runs (gitignored outputs)

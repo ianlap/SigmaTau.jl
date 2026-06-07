@@ -1,10 +1,10 @@
 # benchmarks/bench/bench_sigmatau.jl
 # Wall-clock benchmark for every SigmaTau public deviation on a real
-# clock recording. The total-family kernels are multithreaded across the
-# m-loop (see `Threads.@threads :dynamic` in core/total.jl); start Julia
-# with `--threads auto` (or `-t N`) to see the parallel speedup. BLAS is
-# pinned to a single thread because we don't use linalg in the kernels —
-# this just keeps BLAS from grabbing cores in the background.
+# clock recording. The total-family kernels are multithreaded (TOTDEV across
+# m values; modified-total variants across subsequence chunks); start Julia with
+# `--threads auto` (or `-t N`) to see the parallel speedup. BLAS is pinned to a
+# single thread because we don't use linalg in the kernels — this just keeps
+# BLAS from grabbing cores in the background.
 #
 # Strategy: warm-start each kernel on a tiny (2048-sample) PhaseData
 # first so the JIT/precompile cost is paid out of band. Then time the
@@ -46,11 +46,14 @@ const KERNELS = [
     (:tdev,     tdev),
     (:hdev,     hdev),
     (:mhdev,    mhdev),
-    (:ldev,     ldev),
+    (:htdev,    htdev),
     (:totdev,   totdev),
     (:mtotdev,  mtotdev),
+    (:ttotdev,  ttotdev),
     (:htotdev,  htotdev),
     (:mhtotdev, mhtotdev),
+    (:mtie,     mtie),
+    (:pdev,     pdev),
 ]
 
 const _WARMED = Ref(false)

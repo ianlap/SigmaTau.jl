@@ -10,8 +10,9 @@ import json
 import sys
 from pathlib import Path
 
-KERNEL_ORDER = ["adev", "mdev", "tdev", "hdev", "mhdev", "ldev",
-                "totdev", "mtotdev", "htotdev", "mhtotdev"]
+KERNEL_ORDER = ["adev", "mdev", "tdev", "hdev", "mhdev", "htdev",
+                "totdev", "mtotdev", "ttotdev", "htotdev", "mhtotdev",
+                "mtie", "pdev"]
 
 
 def parse_kernel_filter(argv):

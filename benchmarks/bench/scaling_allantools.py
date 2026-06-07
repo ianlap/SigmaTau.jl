@@ -47,8 +47,11 @@ KERNELS = [
     ("htdev",    None),                          # not implemented in allantools
     ("totdev",   at.totdev),
     ("mtotdev",  at.mtotdev),
+    ("ttotdev",  None),                          # not implemented in allantools
     ("htotdev",  at.htotdev),
     ("mhtotdev", None),                          # not implemented in allantools
+    ("mtie",     getattr(at, "mtie", None)),
+    ("pdev",     getattr(at, "pdev", None)),
 ]
 
 # N grid for the display table. Mirrors `scaling.jl`. The very-slow
@@ -57,8 +60,8 @@ KERNELS = [
 NS = [1 << k for k in range(10, 19, 2)]    # 1 024, 4 096, 16 k, 65 k, 262 k
 VERY_SLOW_MAX = 4096                       # mtotdev, htotdev
 SLOW_MAX = 65_536                          # totdev (allantools' totdev is mild)
-VERY_SLOW_KERNELS = {"mtotdev", "htotdev"}
-SLOW_KERNELS = {"totdev"}
+VERY_SLOW_KERNELS = {"mtotdev", "htotdev", "pdev"}
+SLOW_KERNELS = {"totdev", "mtie"}
 
 
 def _human_n(n: int) -> str:
@@ -67,14 +70,16 @@ def _human_n(n: int) -> str:
 
 def _m_values(n: int, kernel: str) -> np.ndarray:
     """Octave-spaced m grid matching `_default_m_values` on the Julia side."""
-    if kernel in ("adev", "totdev"):
+    if kernel in ("adev", "totdev", "pdev"):
         m_max = (n - 1) // 2
-    elif kernel in ("mdev", "tdev", "mtotdev"):
+    elif kernel in ("mdev", "tdev", "mtotdev", "ttotdev"):
         m_max = n // 3
     elif kernel in ("hdev", "htotdev"):
         m_max = (n - 1) // 3
     elif kernel in ("mhdev",):
         m_max = n // 4
+    elif kernel == "mtie":
+        m_max = n - 1
     else:
         m_max = (n - 1) // 2
     if m_max < 1:

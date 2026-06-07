@@ -2,19 +2,22 @@ using Documenter
 using DocumenterCitations
 using Literate
 using SigmaTau
-# Plot backend: PGFPlotsX renders LaTeX-quality vector PDFs and
-# font-matches the docs body. Loaded here so that any `@example` block
-# that subsequently `using Plots` picks up PGFPlotsX as the default
-# backend automatically (Plots.jl module state is process-global).
-# Requires `pdflatex` / `lualatex` and `pdftocairo` in PATH — see
-# .github/workflows/Documentation.yml for the CI install of texlive
-# packages and poppler-utils.
 using Plots
 using PGFPlotsX
-Plots.pgfplotsx()
-# Enable `\text{…}` (and friends) inside math labels — PGFPlotsX's
-# default preamble ships pgfplots only, not amsmath.
-push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{amsmath}")
+
+# Plot backend: PGFPlotsX renders LaTeX-quality vector PDFs and font-matches the
+# docs body when a TeX engine is available. Local builds without TeX fall back to
+# GR so docs can still be checked without installing the full LaTeX toolchain.
+# CI installs lualatex and pdftocairo in .github/workflows/Documentation.yml.
+if any(cmd -> Sys.which(cmd) !== nothing, ("lualatex", "pdflatex", "xelatex"))
+    Plots.pgfplotsx()
+    # Enable `\text{…}` (and friends) inside math labels — PGFPlotsX's default
+    # preamble ships pgfplots only, not amsmath.
+    push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{amsmath}")
+else
+    @warn "No LaTeX engine found; using GR for local docs plot rendering"
+    Plots.gr()
+end
 
 # ── Literate.jl: render examples/*.jl into docs/src/tutorials/ ──────────────
 # Each top-level `examples/*.jl` is single-source: edit the script,
@@ -46,6 +49,7 @@ makedocs(
         mathengine = Documenter.MathJax3(),
     ),
     plugins = [bib],
+    checkdocs = :exports,
     pages = [
         "Home"            => "index.md",
         "Getting Started" => "getting_started.md",
@@ -79,7 +83,6 @@ makedocs(
         "Bibliography"    => "bibliography.md",
     ],
     doctest  = true,
-    warnonly = [:missing_docs, :cross_references, :docs_block],
 )
 
 deploydocs(

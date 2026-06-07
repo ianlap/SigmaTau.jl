@@ -10,13 +10,13 @@
 # for each clock's individual noise variance — provided the three
 # clock noises are statistically independent. This is the standard
 # noise-separation technique used in time-and-frequency labs to
-# rank a hydrogen maser, a caesium beam, and a rubidium standard
-# from their pairwise comparisons alone.
+# compare several standards of similar class from their pairwise
+# comparisons alone.
 #
 # This tutorial:
 #
-# 1. Synthesises three independent free-running clocks of differing
-#    quality using `_gen_powerlaw_phase`.
+# 1. Synthesises three independent free-running clocks of comparable
+#    precision using `_gen_powerlaw_phase`.
 # 2. Builds the three pairwise difference records.
 # 3. Computes ADEV on each pair.
 # 4. Solves the TCH linear system to recover each clock's individual
@@ -63,22 +63,21 @@ using SigmaTau: _gen_powerlaw_phase
 
 # ## 2. Synthesise three independent clocks
 #
-# We build three records that mimic three different clock grades:
+# We build three records with similar precision:
 #
-# - **Clock 1**: hydrogen-maser-like — dominated by white FM (α=0)
-#   at the lowest level; the best of the three.
-# - **Clock 2**: caesium-beam-like — same WHFM dominant noise but at
-#   a higher floor; representative of a commercial Cs clock.
-# - **Clock 3**: rubidium-like with random-walk-FM (α=−2) bleed-in —
-#   mid-tier short-τ but degrades the fastest at long τ.
+# - **Clock 1**: white-FM noise at the baseline level.
+# - **Clock 2**: the same noise family, 5% higher.
+# - **Clock 3**: the same noise family, 10% higher.
 #
 # Independent random seeds guarantee statistical independence, which
-# is the TCH precondition. Each scale factor sets that clock's σ_y
-# at τ=1 in fractional-frequency units.
+# is the TCH precondition. Keeping the three clocks in the same
+# precision class makes the classical three-cornered hat well
+# conditioned; if one clock dominates, the quieter recoveries become
+# numerically fragile.
 
-const N    = 4096
+const N    = 8192
 const τ₀   = 1.0
-const m_values = unique(round.(Int, exp10.(range(0, log10(N ÷ 4); length = 12))))
+const m_values = unique(round.(Int, exp10.(range(0, log10(N ÷ 128); length = 12))))
 const taus = m_values .* τ₀
 
 function clock_record(α, scale, seed; N = N, τ₀ = τ₀)
@@ -86,10 +85,9 @@ function clock_record(α, scale, seed; N = N, τ₀ = τ₀)
     return scale .* _gen_powerlaw_phase(α, N; tau0 = τ₀)
 end
 
-x1 = clock_record(0.0,  1.0e-12, 11)         # H-maser-like (quietest)
-x2 = clock_record(0.0,  3.0e-12, 22)         # Cs-like (mid)
-x3 = clock_record(0.0,  2.0e-12, 33) .+
-     clock_record(-2.0, 5.0e-14, 333)        # Rb + small RWFM bleed-in
+x1 = clock_record(0.0, 1.00e-12, 51)
+x2 = clock_record(0.0, 1.05e-12, 152)
+x3 = clock_record(0.0, 1.10e-12, 253)
 
 # Verify the three records are equal-length and zero-mean before
 # building differences:
@@ -123,9 +121,9 @@ a23 = adev(pd23, m_values; calc_ci = false).dev
 # Square to get variances, apply the linear inversion, then square-root
 # back to deviations. Track any τ where the solution would go negative
 # — those are the "TCH break points" and a diagnostic that the
-# independence assumption is straining. We clamp at zero so
-# `sqrt` stays defined; downstream consumers can inspect the raw
-# variances if they care.
+# independence assumption is straining. We represent negative recoveries
+# as `NaN` rather than clamping to zero: they are invalid estimates, and
+# zeros poison log-scale plots.
 
 function tch_solve(a12, a13, a23)
     v12 = a12.^2;  v13 = a13.^2;  v23 = a23.^2
@@ -133,14 +131,15 @@ function tch_solve(a12, a13, a23)
     v2  = (v12 .+ v23 .- v13) ./ 2
     v3  = (v13 .+ v23 .- v12) ./ 2
     neg_count = count(<(0), v1) + count(<(0), v2) + count(<(0), v3)
-    σ1 = sqrt.(max.(v1, 0.0))
-    σ2 = sqrt.(max.(v2, 0.0))
-    σ3 = sqrt.(max.(v3, 0.0))
+    positive_sqrt(v) = v > 0 ? sqrt(v) : NaN
+    σ1 = positive_sqrt.(v1)
+    σ2 = positive_sqrt.(v2)
+    σ3 = positive_sqrt.(v3)
     return σ1, σ2, σ3, neg_count
 end
 
 σ1_tch, σ2_tch, σ3_tch, neg = tch_solve(a12, a13, a23)
-neg > 0 && @warn "TCH yielded $neg negative variances (clamped to 0); independence assumption is straining"
+neg > 0 && @warn "TCH yielded $neg negative variances (shown as NaN); independence assumption is straining"
 
 # ## 6. Ground-truth reference
 #
@@ -159,7 +158,7 @@ function readout_idx(target_tau, taus)
     argmin(abs.(taus .- target_tau))
 end
 
-for τt in (1.0, 10.0, 100.0)
+for τt in (1.0, 10.0, 44.0)
     i = readout_idx(τt, taus)
     @info "τ ≈ $(taus[i]) s" tch1=σ1_tch[i]    truth1=σ1_truth[i]    ratio1=σ1_tch[i]/σ1_truth[i]
     @info "                  " tch2=σ2_tch[i]  truth2=σ2_truth[i]    ratio2=σ2_tch[i]/σ2_truth[i]
@@ -180,6 +179,11 @@ end
 
 using Plots
 
+function plot_positive_tch!(τ, σ; kwargs...)
+    keep = isfinite.(σ) .& (σ .> 0)
+    plot!(τ[keep], σ[keep]; marker = :circle, kwargs...)
+end
+
 plot(
     taus, σ1_truth;
     label  = "Clock 1 truth",
@@ -190,11 +194,11 @@ plot(
     legend = :topright,
     lw     = 1.5,
 )
-plot!(taus, σ1_tch;   label = "Clock 1 TCH",   ls = :dash, lw = 1.5)
+plot_positive_tch!(taus, σ1_tch; label = "Clock 1 TCH",   ls = :dash, lw = 1.5)
 plot!(taus, σ2_truth; label = "Clock 2 truth", lw = 1.5)
-plot!(taus, σ2_tch;   label = "Clock 2 TCH",   ls = :dash, lw = 1.5)
+plot_positive_tch!(taus, σ2_tch; label = "Clock 2 TCH",   ls = :dash, lw = 1.5)
 plot!(taus, σ3_truth; label = "Clock 3 truth", lw = 1.5)
-plot!(taus, σ3_tch;   label = "Clock 3 TCH",   ls = :dash, lw = 1.5)
+plot_positive_tch!(taus, σ3_tch; label = "Clock 3 TCH",   ls = :dash, lw = 1.5)
 
 # ## 9. When TCH breaks down
 #
