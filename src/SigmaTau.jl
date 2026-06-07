@@ -82,7 +82,6 @@ export identify_noise, calculate_edf, confidence_intervals, bias_correction
 
 export adev, mdev, tdev
 export hdev, mhdev, htdev
-export ldev   # deprecated alias for htdev — remove in a future release
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, pdev
 export stability, DEFAULT_DEVIATIONS

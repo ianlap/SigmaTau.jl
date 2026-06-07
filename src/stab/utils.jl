@@ -50,17 +50,24 @@ convenience methods on every public deviation API
 
 Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
 
-| `kernel`                                     | m_max          |
-|----------------------------------------------|----------------|
-| `:adev`, `:totdev`, `:pdev`                  | `(N − 1) ÷ 2`  |
-| `:mdev`, `:tdev`, `:mtotdev`, `:ttotdev`     | `N ÷ 3`        |
-| `:hdev`, `:htotdev`                          | `(N − 1) ÷ 3`  |
-| `:mhdev`, `:htdev`, `:mhtotdev`              | `N ÷ 4`        |
-| `:mtie`                                      | `N − 1`        |
+| `kernel`                  | m_max          |
+|---------------------------|----------------|
+| `:adev`, `:pdev`          | `(N − 2) ÷ 2`  |
+| `:totdev`                 | `(N − 1) ÷ 2`  |
+| `:mdev`, `:tdev`          | `(N − 1) ÷ 3`  |
+| `:mtotdev`, `:ttotdev`    | `N ÷ 3`        |
+| `:hdev`                   | `(N − 2) ÷ 3`  |
+| `:htotdev`                | `(N − 1) ÷ 3`  |
+| `:mhdev`, `:htdev`        | `(N − 1) ÷ 4`  |
+| `:mhtotdev`               | `N ÷ 4`        |
+| `:mtie`                   | `N − 1`        |
 
-(HTOTDEV's general branch operates on `y = diff(x)` of length `N−1`,
-so its `n_iter = (N−1) − 3m + 1 ≥ 1` constraint matches HDEV's even
-though MTOTDEV — which runs on phase directly — uses `N ÷ 3`.)
+The ordinary and modified estimators require ≥2 analysis windows at the
+largest τ (a single window is one raw difference, EDF ≈ 1), so their caps
+sit one step below the total family, whose subsequence extension keeps a
+single subsequence a valid long-τ estimate. (HTOTDEV's general branch runs
+on `y = diff(x)` of length `N−1`, giving `(N−1) ÷ 3`; MTOTDEV runs on phase
+directly, giving `N ÷ 3`.)
 
 Throws `ArgumentError` for unknown kernel symbols or `N` too short to
 admit any `m ≥ 1`.

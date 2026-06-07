@@ -6,6 +6,10 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
+No changes yet.
+
+## [0.4.0] — 2026-06-07
+
 ### Added
 
 - χ²-based confidence intervals for `pdev` (parabolic deviation / PVAR). With
@@ -66,9 +70,28 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   curve per result on shared log-log axes), plus an opt-in `ci_band` plot
   attribute that renders a result's confidence interval as a filled band instead
   of error bars. The default single-result rendering is unchanged.
+- Tables.jl weakdep extension for `StabilityResult` and `StabilitySuite`.
+  Loading `Tables` enables the standard row-table interface without making the
+  core package depend on the tabular-data stack. Empty confidence fields from
+  `calc_ci=false` are exposed as `missing` values.
 
 ### Changed
 
+- `_pdev_core` now evaluates the parabolic weighted sum with a rolling two-sum
+  recurrence. Point estimates are unchanged, but each averaging factor drops
+  from O(Nm) to O(N), removing the long-record PDEV bottleneck.
+- Removed the stale roadmap warning about loosening modified-total parity
+  tolerances under multithreaded runs. The current kernels use chunk-local sums
+  reduced in fixed order and retain the existing strict parity contract.
+- Benchmark harnesses now use the current public deviation names (`htdev`
+  after `ldev` removal) and include `ttotdev`, `mtie`, and `pdev`, so PDEV
+  scaling changes are visible in the SigmaTau/allantools comparison scripts.
+- Widened `Distributions` compat from `0.25.125` to `0.25`; no package code
+  requires that patch-level lower bound.
+- CI now includes a Julia 1.11 / Ubuntu threaded test leg
+  (`JULIA_NUM_THREADS=auto`) alongside the single-thread cross-platform matrix.
+- Documenter now checks exported public docstrings directly. Private helper
+  docstrings are no longer treated as canonical manual pages.
 - MTOT (modified total) EDF is now computed piecewise. Below the
   `τ ≥ 16τ₀` validity floor of the total-variance coefficient table, MTOT
   reduces to MDEV and inherits the modified-Allan EDF (Greenhall–Riley,
@@ -107,11 +130,12 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   alternative `:linear` / `:legacy` recipes are gone. Default output is
   unchanged — every estimator already defaulted to the kept form. The IO-level
   `detrend(::PhaseData)` preprocessing function is unrelated and unaffected.
-- Removed the no-op `confidence` kwarg from `mtie` and `pdev`. Neither has a
-  published EDF/χ² model, so the kwarg never affected the result; passing it
-  now errors. `calc_ci` is retained (a documented no-op) so the batch
-  `stability` API can forward it uniformly and `pdev` is future-proofed for a
-  real CI model.
+- Removed the no-op `confidence` kwarg from `mtie`. MTIE has no published
+  EDF/χ² model, so the kwarg never affected the result; passing it now errors.
+  `calc_ci` is retained as a documented no-op so the batch `stability` API can
+  forward it uniformly.
+- Removed the deprecated `ldev` alias. Use `htdev`, which has been the canonical
+  name and result `deviation_type` since the v0.2.0 rename.
 - Un-exported the internal `_*_core` deviation kernels. They were never part of
   the supported API (the leading underscore marks them internal); reach them as
   `SigmaTau._adev_core` etc. if needed.
@@ -134,6 +158,12 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   fallback in `confidence_intervals` is symmetric and could return a lower
   limit below zero for short records at high confidence; it is now floored
   at zero.
+- **Three-cornered-hat tutorial plot rendering.** Negative recovered
+  variances are now represented as `NaN` rather than clamped to zero, and only
+  finite positive estimates are drawn on the log-scale plot. This avoids
+  invalid SVG coordinates in local GR-rendered docs builds. The synthetic
+  fixture now uses three clocks of comparable precision, keeping the classical
+  TCH inversion well-conditioned for the default example.
 - Added `[compat]` bounds for `DelimitedFiles`, `Statistics`, `Random`, and
   `Test`.
 - **Under-sampled single-window points at the longest τ.** The ordinary and
@@ -149,6 +179,8 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Documentation
 
+- Added release and Python-port planning docs covering Julia release hardening,
+  API/UX principles, validation policy, and the Python-port implementation plan.
 - Added a "Migrating from Stable32" page mapping Stable32 run-types to
   SigmaTau functions and `StabilityResult` fields, with a complete
   load → run → suite → save/plot session and a quick API-equivalence table.
@@ -157,11 +189,11 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   it from the validation methodology page. The framing is explicit that the
   comparison is against allantools, not Stable32 (which is parity-verified
   only, not speed-tested).
-- API reference now documents `mtie`, `pdev`, `noise_gen`, `read_phase`,
-  `read_frequency`, `detrend`, and `fillgaps`, which were exported but absent
-  from the rendered manual.
-- Corrected the stale `ldev` deprecation note (it referenced a version that
-  has already shipped).
+- API reference now documents `StabilitySuite`, `TauMode`, `tau_values`,
+  `DEFAULT_DEVIATIONS`, `DEFAULT_CONFIDENCE`, `stability`, `save_suite`,
+  `load_suite`, `mtie`, `pdev`, `noise_gen`, `read_phase`, `read_frequency`,
+  `detrend`, and `fillgaps`, which were exported but absent from the rendered
+  manual.
 - Documented the intentional split between `totdev`'s `:howe` detrend default
   and the modified/Hadamard total family's `:greenhall` default, via a
   "Detrend default" admonition on each total-family function.

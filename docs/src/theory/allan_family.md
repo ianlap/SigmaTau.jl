@@ -301,8 +301,8 @@ contaminated.
     and uses the same `τ`-rescale-of-a-Modified-deviation pattern as
     TDEV (SP1065 §5.2.7 [@cite riley-2008-sp1065]) applied to the
     modified-Hadamard kernel rather than the modified-Allan kernel.
-    The earlier name `ldev` is retained as a deprecated alias for one
-    release.
+    The earlier name `ldev` was retained temporarily as a deprecated alias
+    and removed in the 0.4.0 release line.
 
 ## Slope vs noise table
 

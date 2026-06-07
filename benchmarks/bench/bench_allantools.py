@@ -13,7 +13,7 @@ Run from repo root:
 
 Optional `--kernels adev,mtotdev` to time a subset.
 
-Note: allantools.tdev / ldev derive from mdev / mhdev. We time the
+Note: the tdev / htdev kernels derive from mdev / mhdev. We time the
 public allantools entry points, which on long records may include some
 redundant differencing — that's faithful to "what a user would call".
 """
@@ -87,11 +87,14 @@ KERNELS = [
     ("tdev",     at.tdev,                  True),
     ("hdev",     at.ohdev,                 True),
     ("mhdev",    getattr(at, "mhdev", None), False),
-    ("ldev",     None,                       False),
+    ("htdev",    None,                       False),
     ("totdev",   at.totdev,                True),
     ("mtotdev",  at.mtotdev,               True),
+    ("ttotdev",  None,                       False),
     ("htotdev",  at.htotdev,               True),
     ("mhtotdev", None,                       False),
+    ("mtie",     getattr(at, "mtie", None),  True),
+    ("pdev",     getattr(at, "pdev", None),  True),
 ]
 
 

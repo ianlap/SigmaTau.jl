@@ -12,7 +12,7 @@
 #
 # Fit is plain log-log linear regression: log T = log a + b · log N. The
 # `b` exponent reads cleanly:
-#     b ≈ 1.0   → O(N) or O(N log N) — adev/mdev/totdev family
+#     b ≈ 1.0   → O(N) or O(N log N) — adev/mdev/totdev/mtie/pdev family
 #     b ≈ 2.0   → O(N²)              — mtotdev / htotdev / mhtotdev (per-window)
 #
 # Emits `scaling_sigmatau.json` for combined cross-library rendering against
@@ -52,13 +52,16 @@ const KERNELS = [
     (:htdev,    htdev),
     (:totdev,   totdev),
     (:mtotdev,  mtotdev),
+    (:ttotdev,  ttotdev),
     (:htotdev,  htotdev),
     (:mhtotdev, mhtotdev),
+    (:mtie,     mtie),
+    (:pdev,     pdev),
 ]
 
 # Single N grid for the display table. The O(N²) total-family is capped
 # at `SLOW_MAX` because going further takes many seconds per call.
-const SLOW_KERNELS = Set([:mtotdev, :htotdev, :mhtotdev])
+const SLOW_KERNELS = Set([:mtotdev, :ttotdev, :htotdev, :mhtotdev])
 const NS = [1 << k for k in 10:2:18]   # 1 024, 4 096, 16 k, 65 k, 262 k
 const SLOW_MAX = 65_536                # cap for SLOW_KERNELS
 

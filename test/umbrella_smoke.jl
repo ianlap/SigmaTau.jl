@@ -32,8 +32,7 @@ end
                 :save_result, :load_result, :save_suite, :load_suite,
                 :read_phase, :read_frequency,
                 :detrend, :fillgaps,
-                :noise_gen,
-                :ldev)        # deprecated alias, still re-exported
+                :noise_gen)
         @test isdefined(@__MODULE__, sym)
     end
 end
@@ -77,18 +76,10 @@ end
     ms = [1, 2, 4]
 
     for f in (adev, mdev, tdev, hdev, mhdev, htdev,
-              totdev, mtotdev, htotdev, mhtotdev,
+              totdev, mtotdev, ttotdev, htotdev, mhtotdev,
               mtie, pdev)
         a = f(fd,    ms; calc_ci=false)
         b = f(pd_eq, ms; calc_ci=false)
         @test a.dev ≈ b.dev
     end
-end
-
-@testset "ldev is a forwarding alias for htdev" begin
-    pd = PhaseData(cumsum(randn(64)), 1.0)
-    a = htdev(pd, [1, 2]; calc_ci=false)
-    b = ldev(pd, [1, 2]; calc_ci=false)
-    @test a.dev == b.dev
-    @test a.deviation_type == b.deviation_type == :htdev
 end

@@ -93,10 +93,6 @@ const LK = LegacyKernels
         res_htdev = htdev(pd, m_values)
         @test length(res_htdev.dev) == 3
         @test res_htdev.deviation_type == :htdev
-        # ldev is a deprecated alias and must give bit-identical output for now.
-        res_ldev_alias = ldev(pd, m_values)
-        @test res_ldev_alias.dev == res_htdev.dev
-        @test res_ldev_alias.deviation_type == :htdev
 
         # htdev wraps mhdev with the τ/√(10/3) scaling — point estimates AND
         # CI bounds inherit the same multiplicative factor. Closes R-MED-5
@@ -669,8 +665,9 @@ const LK = LegacyKernels
         lin = collect(1.0:128.0) .* 0.5 .+ 7.0
         @test all(d -> d < 1e-12, SigmaTau._pdev_core(lin, [2, 4, 8, 16], 1.0))
 
-        # NaN guard when M = N - 2m < 1.
+        # NaN guard when M = N - 2m < 2, plus invalid m.
         @test isnan(SigmaTau._pdev_core(collect(1.0:10.0), [6], 1.0)[1])
+        @test isnan(SigmaTau._pdev_core(collect(1.0:10.0), [0], 1.0)[1])
 
         # Reference implementation matching the allantools formula verbatim
         # (Vernotte 2020): asum = Σ_{k=0}^{m-1} ((m-1)/2 - k)·(x[i+k] - x[i+k+m]),
@@ -684,7 +681,7 @@ const LK = LegacyKernels
                     continue
                 end
                 M = N - 2m
-                if M < 1
+                if M < 2
                     out[idx] = NaN
                     continue
                 end
@@ -707,6 +704,19 @@ const LK = LegacyKernels
         ref = _pdev_reference(x_noise, ms, 1.0)
         got = SigmaTau._pdev_core(x_noise, ms, 1.0)
         @test got ≈ ref atol=1e-25 rtol=1e-12
+
+        # Rolling-sum regression: non-octave factors and near-limit large m still
+        # match the direct weighted-sum formula while avoiding O(Nm) runtime.
+        ms_wide = [3, 7, 31, 127, 255, 511]
+        ref_wide = _pdev_reference(x_noise, ms_wide, 1.0)
+        got_wide = SigmaTau._pdev_core(x_noise, ms_wide, 1.0)
+        @test got_wide ≈ ref_wide atol=1e-25 rtol=1e-12
+
+        Random.seed!(20260607)
+        x_refresh = cumsum(randn(10_000))
+        ms_refresh = [2, 5]
+        @test SigmaTau._pdev_core(x_refresh, ms_refresh, 1.0) ≈
+              _pdev_reference(x_refresh, ms_refresh, 1.0) atol=1e-25 rtol=1e-12
 
         # API wrapper: raw devs unchanged; CI populated by default (Vernotte
         # PVAR EDF model), empty when calc_ci=false. FrequencyData dispatch below.
@@ -963,7 +973,8 @@ const LK = LegacyKernels
                     (:adev,    adev),  (:mdev,  mdev),  (:tdev,  tdev),
                     (:hdev,    hdev),  (:mhdev, mhdev), (:htdev, htdev),
                     (:totdev,  totdev),
-                    (:mtotdev, mtotdev), (:htotdev, htotdev),
+                    (:mtotdev, mtotdev), (:ttotdev, ttotdev),
+                    (:htotdev, htotdev), (:mhtotdev, mhtotdev),
                     (:mtie,    mtie),  (:pdev,  pdev),
                 )
                 ms = SigmaTau._default_m_values(N, kernel)

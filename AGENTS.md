@@ -15,7 +15,7 @@ You are working on a Julia 1.11 package authored by Ian Lapinski.
 
 ## Package architecture
 
-SigmaTau.jl v0.3.0 is a single, flat Julia 1.11 package covering
+SigmaTau.jl v0.4.0 is a single, flat Julia 1.11 package covering
 clock-stability analysis: deviation kernels, noise identification,
 EDF/χ² confidence intervals, calibrated noise generation, and file IO.
 No submodules — everything is at the umbrella level.
@@ -54,8 +54,8 @@ Types (`PhaseData`, `FrequencyData`, `StabilityResult`) live in
 - `src/stab/api/` — public API entry points, split by deviation family:
   - `allan.jl`, `hadamard.jl`, `total.jl`, `mtie.jl`, `pdev.jl`
   Each wraps `PhaseData`/`FrequencyData` → `StabilityResult`.
-  `api/hadamard.jl` also exposes `htdev` and the deprecated alias `ldev`
-  (slated for removal in a future release).
+  `api/hadamard.jl` also exposes `htdev` (Hadamard time deviation). The
+  deprecated `ldev` alias was removed in 0.4.0; `htdev` is the canonical name.
   New deviations need a `PhaseData` *and* `FrequencyData` method here.
 - `src/stab/stats/edf.jl` — EDF/CI math (chi-squared, Greenhall–Riley fallbacks).
 - `src/stab/noise/` — noise identification + synthesis.
@@ -77,7 +77,7 @@ Types (`PhaseData`, `FrequencyData`, `StabilityResult`) live in
   - `allantools_out/allantools_data_full.csv` — allantools reference (full Float64, rtol ≈ 1e-11)
   - **Coverage gaps — no external reference exists:**
     - `mhtotdev` — not implemented in Stable32 or allantools. SigmaTau is the only library that computes it.
-    - `htdev` (Hadamard time deviation) — not implemented in Stable32 or allantools. SigmaTau is the only library that computes it. The deprecated alias `ldev` resolves to the same function.
+    - `htdev` (Hadamard time deviation) — not implemented in Stable32 or allantools. SigmaTau is the only library that computes it.
     - `mhdev` — defined in NIST SP1065 but not implemented in Stable32 or allantools. SigmaTau is (to our knowledge) the only library that actually computes it.
     Validate these three via `test/stab/legacy_kernels.jl` (MATLAB-era parity, rtol=1e-12) and internal consistency only.
 - `test/runtests.jl` — root test entry point. Drives four sub-suites:

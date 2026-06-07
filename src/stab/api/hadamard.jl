@@ -66,17 +66,6 @@ function htdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confi
                            res.ci_lower .* factor, res.ci_upper .* factor, res.edf)
 end
 
-"""
-    ldev(args...; kwargs...)
-
-Deprecated alias for [`htdev`](@ref). Scheduled for removal in a future
-0.x release; migrate to `htdev`.
-"""
-function ldev(args...; kwargs...)
-    Base.depwarn("`ldev` is deprecated, use `htdev` instead.", :ldev)
-    return htdev(args...; kwargs...)
-end
-
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
 hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = hdev(_freq_to_phase(data),  m_values; kwargs...)
 mhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhdev(_freq_to_phase(data), m_values; kwargs...)

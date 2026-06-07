@@ -62,7 +62,7 @@ def main():
     p.add_argument("sigmatau_json", type=Path)
     p.add_argument("allantools_json", type=Path)
     p.add_argument("--kernels", type=str,
-                   default="adev,mdev,hdev,tdev,totdev,mtotdev,htotdev")
+                   default="adev,mdev,hdev,tdev,totdev,mtotdev,ttotdev,htotdev,mtie,pdev")
     p.add_argument("--csv-out", type=Path,
                    default=Path(__file__).parent / "per_realization.tsv",
                    help="Long-format TSV: kernel/library/realization/time_s/mem_bytes "
