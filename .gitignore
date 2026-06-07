@@ -27,6 +27,7 @@ LocalPreferences.toml
 .claude/
 .aider*
 .gemini/
+.codegraph/
 # Agent-context briefs — checked in to help AI agents working on this repo
 # CLAUDE.md and AGENTS.md are intentionally tracked
 
@@ -79,3 +80,6 @@ docs/src/tutorials/0*_*.md
 # its generated CSV/JSON artifacts are not (the authoritative full-sweep
 # artifact is force-added when it lands). Laptop-validation runs stay local.
 tools/artifacts/
+
+# Local design asset (kept on disk, not part of the package).
+SigmaTauDesign.zip
