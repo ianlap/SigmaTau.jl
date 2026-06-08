@@ -160,7 +160,6 @@ test/
 └── tables.jl                            Tables.jl row-table extension smoke
 
 docs/                                    Documenter.jl subproject
-benchmarks/                              Long-record perf runs (gitignored outputs)
 examples/                                Literate-driven tutorials 00, 01, 02, 06
 reference/validation/                    Stable32 + allantools cross-check fixtures
 tools/Project.toml                       Dev-tools env

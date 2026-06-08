@@ -74,7 +74,7 @@ function regen_allanlab_fixtures()
     };
 
     p_target = 0.683;  % match the Stable32 fixture's "Confidence Factor = 0.683"
-                        % header (see reference/validation/stable32out/stable32out.txt).
+                        % convention (reference/validation/stable32out/).
                         % AllanLab kernels also default to p = 0.683 internally; we
                         % pass it explicitly so the convention is visible at this
                         % seam rather than implicit.
