@@ -20,7 +20,6 @@ deprecated `ldev` alias.
 | Docs build | Done | The docs env instantiates locally; `docs/make.jl` builds with GR fallback when no TeX engine is installed. |
 | Tables.jl extension | Done | `StabilityResult` and `StabilitySuite` implement row tables via weakdep extension. |
 | Project version bump | Done | `Project.toml` is set to `0.4.0`. |
-| Performance refresh | Optional | Re-render benchmark tables including `ttotdev`, `mtie`, and optimized `pdev`. |
 
 ## Immediate Release Work
 

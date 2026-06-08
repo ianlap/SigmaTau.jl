@@ -79,7 +79,8 @@ factor at 512.
 
 ## Reproducing
 
-The benchmark scripts and their result JSON live under `benchmarks/bench/`
-(`bench_sigmatau.jl`, `bench_allantools.py`, and the `render_*.py` table
-renderers), with full method notes in `benchmarks/bench/RESULTS_synth.md` and
-`benchmarks/bench/RESULTS_6krb25apr.md`.
+The figures above are a recorded snapshot; the dedicated benchmark harness is
+no longer kept in-tree. To reproduce them, time each public deviation through a
+warm-started one-shot call (pass the full τ grid in a single invocation) on
+identical single-column inputs, running SigmaTau with `-t auto` and allantools
+single-threaded — the method described at the top of this page.
