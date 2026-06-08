@@ -29,18 +29,24 @@ const DEVS = (
 
 # The modified-total family is loop-heavy in pure Python, so it is exported only
 # on the small synthetic records (octave grid) — enough to validate parity
-# without making the Python test suite slow. All are raw (correct_bias=false).
+# without making the Python test suite slow.
 const MODTOTAL = (
     ("mtotdev", mtotdev), ("ttotdev", ttotdev),
     ("htotdev", htotdev), ("mhtotdev", mhtotdev),
 )
 
-# Run a deviation in the form the Python milestone matches: raw kernel, no CI.
-# TOTDEV / the total family must be raw (correct_bias=false) — bias correction
-# is not yet ported.
-run_dev(dname, fn, data, m) =
-    dname == "totdev" ? fn(data, m; ci=false, correct_bias=false) :
-                        fn(data, m; ci=false)
+# Emit one CSV row per τ, with the full ci=true output (noise type, EDF, χ² CI
+# bounds). Deviations without a CI model (mtie) leave those columns empty/NaN.
+function write_rows(io, name, kind, dname, gname, m, r)
+    for i in eachindex(m)
+        nt  = isempty(r.noise_type) ? "" : string(r.noise_type[i])
+        edf = isempty(r.edf)        ? NaN : r.edf[i]
+        lo  = isempty(r.ci_lower)   ? NaN : r.ci_lower[i]
+        hi  = isempty(r.ci_upper)   ? NaN : r.ci_upper[i]
+        @printf(io, "%s,%s,%s,%s,%d,%.17e,%.17e,%s,%.17e,%.17e,%.17e\n",
+                name, kind, dname, gname, m[i], r.tau[i], r.dev[i], nt, edf, lo, hi)
+    end
+end
 
 # Write a single-column sample file (full Float64 precision).
 function write_samples(path, v)
@@ -85,7 +91,7 @@ function main()
     recs = build_records()
     csv = joinpath(FIX_DIR, "julia_reference.csv")
     open(csv, "w") do io
-        println(io, "input,data_kind,deviation,grid,m,tau,dev")
+        println(io, "input,data_kind,deviation,grid,m,tau,dev,noise_type,edf,ci_lower,ci_upper")
         for (name, kind, data) in recs
             n = kind === :phase ? length(data.x) : length(data.y)
             # Octave for every record; add the dense all-tau grid for the small
@@ -95,22 +101,16 @@ function main()
             for (gname, gmode) in grids
                 for (dname, fn) in DEVS
                     m = tau_values(gmode, n, Symbol(dname))
-                    r = run_dev(dname, fn, data, m)
-                    for i in eachindex(m)
-                        @printf(io, "%s,%s,%s,%s,%d,%.17e,%.17e\n",
-                                name, kind, dname, gname, m[i], r.tau[i], r.dev[i])
-                    end
+                    r = fn(data, m)  # ci=true defaults (oracle behavior)
+                    write_rows(io, name, kind, dname, gname, m, r)
                 end
 
                 # Modified-total family: synthetic records, octave grid only.
                 if gname == "octave" && n <= 2048
                     for (dname, fn) in MODTOTAL
                         m = tau_values(gmode, n, Symbol(dname))
-                        r = fn(data, m; ci=false, correct_bias=false)
-                        for i in eachindex(m)
-                            @printf(io, "%s,%s,%s,%s,%d,%.17e,%.17e\n",
-                                    name, kind, dname, gname, m[i], r.tau[i], r.dev[i])
-                        end
+                        r = fn(data, m)  # ci=true, correct_bias=true defaults
+                        write_rows(io, name, kind, dname, gname, m, r)
                     end
                 end
             end
