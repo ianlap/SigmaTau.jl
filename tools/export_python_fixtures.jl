@@ -24,7 +24,14 @@ mkpath(IN_DIR)
 const DEVS = (
     ("adev", adev), ("mdev", mdev), ("tdev", tdev),
     ("hdev", hdev), ("mhdev", mhdev), ("htdev", htdev),
+    ("totdev", totdev), ("mtie", mtie), ("pdev", pdev),
 )
+
+# Run a deviation in the form the Python milestone matches: raw kernel, no CI.
+# TOTDEV must be raw (correct_bias=false) since bias correction is not yet ported.
+run_dev(dname, fn, data, m) =
+    dname == "totdev" ? fn(data, m; ci=false, correct_bias=false) :
+                        fn(data, m; ci=false)
 
 # Write a single-column sample file (full Float64 precision).
 function write_samples(path, v)
@@ -79,7 +86,7 @@ function main()
             for (gname, gmode) in grids
                 for (dname, fn) in DEVS
                     m = tau_values(gmode, n, Symbol(dname))
-                    r = fn(data, m; ci=false)
+                    r = run_dev(dname, fn, data, m)
                     for i in eachindex(m)
                         @printf(io, "%s,%s,%s,%s,%d,%.17e,%.17e\n",
                                 name, kind, dname, gname, m[i], r.tau[i], r.dev[i])
