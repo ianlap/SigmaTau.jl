@@ -20,43 +20,32 @@ Positioning:
 
 ## Proposed Package Layout
 
+Mirrors the flattened Julia `src/` — one Python module per Julia source file,
+same names — so the two libraries stay structurally aligned.
+
 ```text
 pyproject.toml
 src/
   sigmatau/
     __init__.py
-    data.py
-    results.py
-    io.py
-    taus.py
-    deviations/
-      __init__.py
-      api.py
-      _allan.py
-      _hadamard.py
-      _total.py
-      _mtie.py
-      _pdev.py
-    stats/
-      __init__.py
-      edf.py
-      ci.py
-      bias.py
-    noise/
-      __init__.py
-      identify.py
-      synth.py
-      gen.py
-    spectral/
-      __init__.py
-      welch.py
-      api.py
-    plotting.py
+    types.py        # <- types.jl       (PhaseData, FrequencyData, StabilityResult, StabilitySuite, SpectralResult)
+    grids.py        # <- grids.jl        (TauMode, tau_values, _freq_to_phase, _f64, _default_m_values)
+    kernels.py      # <- kernels.jl      (internal _*_core array kernels)
+    deviations.py   # <- deviations.jl   (public adev … pdev)
+    suite.py        # <- suite.jl        (stability compute-all entry point)
+    edf.py          # <- edf.jl          (EDF / CI / bias)
+    noise.py        # <- noise.jl        (identify_noise, synthesis, noise_gen)
+    spectral.py     # <- spectral.jl     (Welch core + Sy/Sx/L)
+    io/             # <- io/             (read, detrend, fillgaps, results)
+    plotting.py     # (no Julia analogue; mirrors the RecipesBase extension)
 tests/
-  fixtures/
-benchmarks/
+  fixtures/julia/   # golden outputs + shared input records exported from the oracle
 docs/
 ```
+
+The MVP (milestone 2) ships only `types.py`, `grids.py`, `kernels.py`, and
+`deviations.py`; the remaining modules land as their Julia counterparts get
+ported.
 
 ## API Sketch
 
