@@ -85,7 +85,7 @@ unbiased; Stable32 and AllanLab adopt the same convention.
 ## Implementation contract
 
 The `StabilityResult.edf` field is a `Vector{Float64}` populated only
-when the estimator is called with `calc_ci=true`. When `calc_ci=false`
+when the estimator is called with `ci=true`. When `ci=false`
 (the default), it is empty. This is a deliberate API contract: callers
 that don't need CI pay no χ² evaluation cost.
 
@@ -93,7 +93,7 @@ that don't need CI pay no χ² evaluation cost.
 using SigmaTau, Random
 Random.seed!(1)
 x = randn(2000)
-r = adev(PhaseData(x, 1.0), [10, 100]; calc_ci=true)
+r = adev(PhaseData(x, 1.0), [10, 100]; ci=true)
 (r.edf, round.(r.ci_lower; sigdigits=3), round.(r.ci_upper; sigdigits=3))
 ```
 

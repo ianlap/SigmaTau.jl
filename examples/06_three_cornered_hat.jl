@@ -109,12 +109,12 @@ pd23 = PhaseData(x23, τ₀)
 
 # ## 4. ADEV on each pair
 #
-# `calc_ci=false` keeps the noise-ID / EDF machinery out of the
+# `ci=false` keeps the noise-ID / EDF machinery out of the
 # loop — TCH operates on the raw deviations.
 
-a12 = adev(pd12, m_values; calc_ci = false).dev
-a13 = adev(pd13, m_values; calc_ci = false).dev
-a23 = adev(pd23, m_values; calc_ci = false).dev
+a12 = adev(pd12, m_values; ci = false).dev
+a13 = adev(pd13, m_values; ci = false).dev
+a23 = adev(pd23, m_values; ci = false).dev
 
 # ## 5. Solve the TCH system
 #
@@ -146,9 +146,9 @@ neg > 0 && @warn "TCH yielded $neg negative variances (shown as NaN); independen
 # Because we synthesised the inputs, we can compute each clock's
 # *actual* σ_y(τ) directly and check the recovery:
 
-σ1_truth = adev(PhaseData(x1, τ₀), m_values; calc_ci = false).dev
-σ2_truth = adev(PhaseData(x2, τ₀), m_values; calc_ci = false).dev
-σ3_truth = adev(PhaseData(x3, τ₀), m_values; calc_ci = false).dev
+σ1_truth = adev(PhaseData(x1, τ₀), m_values; ci = false).dev
+σ2_truth = adev(PhaseData(x2, τ₀), m_values; ci = false).dev
+σ3_truth = adev(PhaseData(x3, τ₀), m_values; ci = false).dev
 
 # ## 7. Compare recovered vs ground truth
 #

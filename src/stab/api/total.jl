@@ -10,7 +10,7 @@
 _unbias_divisor(B::Vector{Float64}) = [b > 0 ? sqrt(b) : NaN for b in B]
 
 """
-    totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Total Deviation for the given PhaseData, using the canonical
 Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension (see `_totdev_core`).
@@ -23,19 +23,19 @@ increases σ at long τ. Set `correct_bias=false` to return the raw
 kernel value (Stable32 actually applies the correction by default,
 contrary to older notes — verify against the build you compare with).
 """
-function totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _totdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
     # Noise IDs needed for either path — bias correction reads α, CIs read α.
-    need_noise = correct_bias || calc_ci
+    need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, taus, T)) : raw_devs
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:totdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 
@@ -46,7 +46,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, corr
 end
 
 """
-    mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Modified Total Deviation for the given PhaseData, using the
 canonical Greenhall 2003 per-window time-reverse extension (see `_mtotdev_core`).
@@ -58,18 +58,18 @@ correction drops σ by roughly 3 – 13 %. Pass `correct_bias=false` to
 return the raw kernel — matches Stable32 and allantools, which do not
 apply this correction.
 """
-function mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _mtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
-    need_noise = correct_bias || calc_ci
+    need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, taus, T)) : raw_devs
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:mtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 
@@ -80,7 +80,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, cor
 end
 
 """
-    htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Hadamard Total Deviation for the given PhaseData, using the
 canonical Greenhall 2003 per-window time-reverse extension (see `_htotdev_core`).
@@ -95,18 +95,18 @@ correction raises σ — substantially for divergent FM. PM noises
 applies the correction by default — see TOTDEV docstring for the same
 caveat).
 """
-function htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
-    need_noise = correct_bias || calc_ci
+    need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
 
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, taus, T)) : raw_devs
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:htotdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 
@@ -117,7 +117,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, cor
 end
 
 """
-    ttotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Time-Total Deviation. Wraps [`mtotdev`](@ref) and rescales by `τ/√3`,
 analogous to [`tdev`](@ref) wrapping [`mdev`](@ref). TTOTDEV has units
@@ -126,17 +126,17 @@ time-deviation summary of long-τ stability with MTOTDEV's
 per-subsegment extended window — useful for telecom / time-transfer
 analyses on records too short for ordinary TDEV at the τ of interest.
 
-The `correct_bias`, `calc_ci`, and `confidence` kwargs flow through to
+The `correct_bias`, `ci`, and `confidence` kwargs flow through to
 the underlying `mtotdev` call unchanged. Confidence-interval bounds
 inherit MTOTDEV's χ²/Gaussian limits scaled by the same `τ / √3` factor;
 the EDF column is reused as-is (a time rescaling does not change the
 degrees of freedom).
 """
-function ttotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mtotdev(data, m_values; calc_ci=calc_ci, correct_bias=correct_bias, confidence=confidence)
+function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mtotdev(data, m_values; ci=ci, correct_bias=correct_bias, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:ttotdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
     end
 
@@ -145,7 +145,7 @@ function ttotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, cor
 end
 
 """
-    mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Modified Hadamard Total Deviation, using the Greenhall methodology SigmaTau
 adopts for this novel estimator (see `_mhtotdev_core`).
@@ -160,18 +160,18 @@ redder FM (RWFM B ≈ 1.9 at small τ, where the correction lowers σ); it is
 `_coeff_mhtot` fit. See the "MHTOTDEV bias and EDF" theory page for the
 measurement methodology.
 """
-function mhtotdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _mhtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
-    need_noise = correct_bias || calc_ci
+    need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
 
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mhtot, taus, T)) : raw_devs
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:mhtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
     end
 

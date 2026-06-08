@@ -1,7 +1,7 @@
 """
     PhaseData{T<:AbstractFloat}
 
-Phase residuals `x(t)` sampled at uniform interval `tau0`.
+Phase residuals `x(t)` sampled at uniform interval `tau0` (default `1.0` s).
 
 $(TYPEDFIELDS)
 """
@@ -10,7 +10,7 @@ struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
     x::Vector{T}
     "Base sample interval τ₀ in seconds."
     tau0::Float64
-    function PhaseData(x::Vector{T}, tau0::Real) where {T<:AbstractFloat}
+    function PhaseData(x::Vector{T}, tau0::Real = 1.0) where {T<:AbstractFloat}
         tau0 > 0 || throw(ArgumentError("PhaseData: tau0 must be positive, got $tau0"))
         length(x) >= 2 || throw(ArgumentError(
             "PhaseData: need at least 2 phase samples, got $(length(x))"))

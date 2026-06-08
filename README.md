@@ -68,7 +68,7 @@ result.dev          # σ_y(τ)
 result.noise_type   # :WHPM / :FLPM / :WHFM / :FLFM / :RWFM, per τ
 result.ci_lower     # χ² (or Gaussian fallback) confidence bounds
 result.ci_upper
-result.edf          # equivalent degrees of freedom (empty when calc_ci=false)
+result.edf          # equivalent degrees of freedom (empty when ci=false)
 ```
 
 Compute a whole suite in one call and index it by deviation:

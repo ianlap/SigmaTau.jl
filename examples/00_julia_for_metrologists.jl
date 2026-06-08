@@ -106,7 +106,7 @@ println("ADEV values:  ", result.dev)
 # | `edf` | EDF column | Equivalent degrees of freedom |
 # | `deviation_type` | window title | `:adev`, `:mdev`, `:totdev`, etc. |
 #
-# Confidence intervals are computed by default (set `calc_ci=false` to skip).
+# Confidence intervals are computed by default (set `ci=false` to skip).
 # The noise type is identified automatically by the lag-1 autocorrelation
 # method (NIST SP1065 §4.2).
 
@@ -160,7 +160,7 @@ println("\nRound-trip check — devs match: ", result2.dev ≈ result.dev)
 #   `_freq_to_phase` conversion that all deviation functions use internally.
 #
 # - [Tutorial 02: Computing ADEV and reading the result](02_compute_adev.md) —
-#   full walkthrough of `adev` options, the `calc_ci` and `confidence`
+#   full walkthrough of `adev` options, the `ci` and `confidence`
 #   keyword arguments, and how `StabilityResult` fields map to the Stable32
 #   output window.
 #

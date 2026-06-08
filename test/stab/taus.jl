@@ -53,15 +53,15 @@ using SigmaTau
                        (mhdev, :mhdev), (htdev, :htdev), (totdev, :totdev),
                        (mtotdev, :mtotdev), (ttotdev, :ttotdev), (htotdev, :htotdev),
                        (mhtotdev, :mhtotdev), (mtie, :mtie), (pdev, :pdev))
-            a = f(pd, Decade; calc_ci=false)
-            b = f(pd, tau_values(Decade, length(pd.x), k); calc_ci=false)
+            a = f(pd, Decade; ci=false)
+            b = f(pd, tau_values(Decade, length(pd.x), k); ci=false)
             @test a.tau == b.tau
             @test a.dev == b.dev
         end
         # FrequencyData TauMode path delegates through _freq_to_phase.
         fd = FrequencyData(randn(512) .* 1e-9, 1.0)
-        @test adev(fd, Octave; calc_ci=false).dev ==
-              adev(fd, tau_values(Octave, length(fd.y), :adev); calc_ci=false).dev
+        @test adev(fd, Octave; ci=false).dev ==
+              adev(fd, tau_values(Octave, length(fd.y), :adev); ci=false).dev
     end
 
     @testset "error paths" begin

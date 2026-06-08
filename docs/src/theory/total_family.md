@@ -113,7 +113,7 @@ ttotdev(PhaseData(x, τ₀), τs)
 ```
 
 [`ttotdev`](@ref) wraps [`mtotdev`](@ref) and rescales the centerline
-and CI bounds by `τ / √3`. The `correct_bias`, `calc_ci`, and
+and CI bounds by `τ / √3`. The `correct_bias`, `ci`, and
 `confidence` kwargs pass through unchanged; the `edf` and `noise_type`
 columns are reused as-is since a time rescaling does not change the
 degrees of freedom.
@@ -271,8 +271,8 @@ N = 1024
 x = cumsum(randn(N))   # WFM
 τs = [1, 4, 16, 64, 256]
 
-a = adev(PhaseData(x, 1.0), τs; calc_ci=true)
-t = totdev(PhaseData(x, 1.0), τs; calc_ci=true)
+a = adev(PhaseData(x, 1.0), τs; ci=true)
+t = totdev(PhaseData(x, 1.0), τs; ci=true)
 
 # CI half-width at the largest τ — TOTVAR should be tighter
 ci_half(r, i) = (r.ci_upper[i] - r.ci_lower[i]) / 2

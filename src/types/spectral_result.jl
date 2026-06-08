@@ -25,3 +25,10 @@ struct SpectralResult
     "Window applied to each segment: `:hann`, `:hamming`, or `:rectangular`."
     window::Symbol
 end
+
+function Base.show(io::IO, r::SpectralResult)
+    n = length(r.freq)
+    rng = n == 0 ? "" : ", f∈[$(r.freq[1]), $(r.freq[end])] Hz"
+    print(io, "SpectralResult(:", r.spectral_type, ", ", n, " bins", rng,
+              ", ", r.units, ", nperseg=", r.nperseg, ")")
+end

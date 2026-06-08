@@ -27,7 +27,7 @@ phase = randn(600)
 p = PhaseData(phase, 1.0)
 
 # Compute overlapping Allan deviation at three τ values
-r = adev(p, [1, 4, 16]; calc_ci=true)
+r = adev(p, [1, 4, 16]; ci=true)
 
 # Round for stable display
 round.(r.dev; sigdigits=4)

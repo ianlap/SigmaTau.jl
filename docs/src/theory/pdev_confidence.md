@@ -4,7 +4,7 @@
 parabolic variance PVAR — a wavelet variance built from a least-squares
 straight-line (equivalently, parabolic-weight) fit of the phase over each
 analysis window [Vernotte–Lenczner–Bourgeois–Rubiola 2016](@cite vernotte-2016-pvar).
-Like every other SigmaTau deviation, when `calc_ci=true` it reports a per-τ noise
+Like every other SigmaTau deviation, when `ci=true` it reports a per-τ noise
 type, an equivalent number of degrees of freedom (EDF) `ν`, and a χ²-based
 confidence interval. This page documents the EDF model behind that interval.
 

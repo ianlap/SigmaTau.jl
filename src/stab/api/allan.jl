@@ -7,7 +7,7 @@ Overlapping Allan deviation σ_y(τ) for a phase record, per IEEE 1139-2022 §C.
 EDF for the χ²-based CI uses the closed-form approximation of [Greenhall & Riley 2003](@cite greenhall-2003-edf-stability).
 
 `m_values` selects the analysis-interval factors (τ = m·τ₀). When
-`calc_ci=true`, the result populates per-τ noise type, χ²-based confidence
+`ci=true`, the result populates per-τ noise type, χ²-based confidence
 bounds, and equivalent degrees of freedom.
 
 # Examples
@@ -17,7 +17,7 @@ julia> using SigmaTau
 
 julia> p = PhaseData(collect(1.0:10.0), 1.0);
 
-julia> r = adev(p, [1, 2]; calc_ci=false);
+julia> r = adev(p, [1, 2]; ci=false);
 
 julia> round.(r.dev; sigdigits=4)
 2-element Vector{Float64}:
@@ -25,12 +25,12 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function adev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _adev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:adev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
@@ -56,7 +56,7 @@ julia> using SigmaTau
 
 julia> p = PhaseData(collect(1.0:10.0), 1.0);
 
-julia> r = mdev(p, [1, 2]; calc_ci=false);
+julia> r = mdev(p, [1, 2]; ci=false);
 
 julia> round.(r.dev; sigdigits=4)
 2-element Vector{Float64}:
@@ -64,12 +64,12 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _mdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:mdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
@@ -81,7 +81,7 @@ function mdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confid
 end
 
 """
-    tdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Time Deviation (TDEV) for the given PhaseData.
 
@@ -89,11 +89,11 @@ TDEV has units of seconds (it is a σ_x quantity, not σ_y), defined as
 `σ_x(τ) = (τ/√3) · σ_y,MDEV(τ)`. Confidence-interval bounds inherit
 MDEV's χ²/Gaussian limits scaled by the same `τ/√3` factor.
 """
-function tdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mdev(data, m_values; calc_ci=calc_ci, confidence=confidence)
+function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mdev(data, m_values; ci=ci, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:tdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
     end
 

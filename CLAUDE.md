@@ -102,7 +102,7 @@ attribution rules.
   returns `StabilityResult`. Never collapse these into one function.
 - `StabilityResult` fields are non-parametric `Vector{Float64}`. Do not
   parameterize.
-- `edf` is empty when `calc_ci=false`, populated when `calc_ci=true`.
+- `edf` is empty when `ci=false`, populated when `ci=true`.
   Preserve this contract.
 - Plot recipes live ONLY in `ext/SigmaTauRecipesBaseExt.jl`. Do not add
   plotting code to `src/SigmaTau.jl`.

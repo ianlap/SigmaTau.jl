@@ -7,6 +7,8 @@ using SigmaTau
         @test p.x == [1.0, 2.0, 3.0]
         @test p.tau0 == 1.0
         @test p isa AbstractTimingData
+        # tau0 defaults to 1.0
+        @test PhaseData([1.0, 2.0, 3.0]).tau0 == 1.0
     end
 
     @testset "FrequencyData" begin
@@ -14,6 +16,8 @@ using SigmaTau
         @test f.y == [0.1, 0.2]
         @test f.tau0 == 0.5
         @test f isa AbstractTimingData
+        # tau0 defaults to 1.0
+        @test FrequencyData([0.1, 0.2]).tau0 == 1.0
     end
 
     @testset "StabilityResult fields" begin
@@ -45,5 +49,27 @@ using SigmaTau
         p32 = PhaseData(Float32[1, 2, 3], 1.0)
         @test p32 isa PhaseData{Float32}
         @test p32.tau0 === 1.0
+    end
+
+    @testset "show summaries" begin
+        # Compact one-line summaries, not full-array dumps.
+        r = StabilityResult(:adev, [1.0, 2.0, 4.0], [3e-10, 2e-10, 1e-10],
+                            Symbol[], Float64[], Float64[], Float64[])
+        s = sprint(show, r)
+        @test occursin("StabilityResult", s)
+        @test occursin("adev", s)
+        @test occursin("3 pts", s)
+        @test occursin("no CI", s)
+        # CI-populated result reports "with CI".
+        rci = StabilityResult(:adev, [1.0], [3e-10], [:wpm], [2e-10], [4e-10], [10.0])
+        @test occursin("with CI", sprint(show, rci))
+        # Zero-point result does not error.
+        r0 = StabilityResult(:adev, Float64[], Float64[], Symbol[], Float64[], Float64[], Float64[])
+        @test occursin("0 pts", sprint(show, r0))
+
+        sp = SpectralResult(:Sy, [0.1, 0.2], [1.0, 0.5], :per_Hz, 256, 128, :hann)
+        @test occursin("SpectralResult", sprint(show, sp))
+        @test occursin("Sy", sprint(show, sp))
+        @test occursin("2 bins", sprint(show, sp))
     end
 end

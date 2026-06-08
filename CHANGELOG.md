@@ -6,7 +6,32 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
-No changes yet.
+### Changed
+
+- Renamed the `calc_ci` keyword argument to `ci` across every public deviation
+  API (`adev`, `mdev`, `tdev`, `hdev`, `mhdev`, `htdev`, `totdev`, `mtotdev`,
+  `ttotdev`, `htotdev`, `mhtotdev`, `mtie`, `pdev`) and `stability`. This is a
+  breaking change with no compatibility shim; update `calc_ci=…` call sites to
+  `ci=…`. The on-disk `# calc_ci=` token in saved result files is unchanged, so
+  files written by 0.4.x still load.
+
+### Added
+
+- `tau0` now defaults to `1.0` in the `PhaseData` and `FrequencyData`
+  constructors, so `PhaseData(x)` and `FrequencyData(y)` work without an
+  explicit sampling interval.
+- Compact `Base.show` methods for `StabilityResult`, `StabilitySuite`, and
+  `SpectralResult`. The REPL now prints a one-line summary (deviation type,
+  point count, τ range, CI state) instead of dumping the full field arrays;
+  `StabilitySuite` also gets a multi-line table view.
+- `mtie` accepts a `confidence` keyword for signature uniformity with the other
+  deviations. It is a no-op (MTIE has no published EDF model), so
+  `mtie(pd; confidence=0.9)` no longer errors.
+
+### Fixed
+
+- The `DEFAULT_CONFIDENCE` docstring now lists `ttotdev` and `pdev` among the
+  deviations it governs.
 
 ## [0.4.0] — 2026-06-07
 

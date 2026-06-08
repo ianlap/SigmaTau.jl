@@ -48,9 +48,6 @@ Keep these decisions scoped to `0.4.0`:
 Potential v1 polish, not `0.4.0` blockers:
 
 - Add `analyze(...)` as a friendlier alias for `stability(...)`.
-- Add `ci=true` as an alias for `calc_ci=true`.
-- Add `deviations=` as an alias for `devs=`.
-- Improve result display summaries.
 
 ## Validation Contract
 

@@ -69,8 +69,8 @@ source — NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, IEEE Std
   and return a `StabilityResult`. Never collapse the two layers.
 - **`StabilityResult` fields stay non-parametric `Vector{Float64}`.** Do not
   parameterize them.
-- **The `edf` / CI fields are empty when `calc_ci=false` and populated when
-  `calc_ci=true`.** Preserve this contract.
+- **The `edf` / CI fields are empty when `ci=false` and populated when
+  `ci=true`.** Preserve this contract.
 - **Plot recipes live only in `ext/SigmaTauRecipesBaseExt.jl`** (a `RecipesBase`
   package extension). Do not add plotting code to `src/`.
 - **Every exported function has a docstring.** 4-space indent, no trailing

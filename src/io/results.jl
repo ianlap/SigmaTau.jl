@@ -5,6 +5,9 @@ const _IO_VERSION = "2"
 
 # Shared row writer: the `# calc_ci=` flag, the column header, and one tab-
 # delimited row per τ. Used by both `save_result` (v1) and `save_suite` (v2).
+# The on-disk token stays `# calc_ci=` (not `# ci=`) on purpose: it is the v1/v2
+# file-format key, independent of the public `ci` kwarg, so result files written
+# by earlier versions keep loading. Do not rename it without bumping _IO_VERSION.
 function _write_result_table(io::IO, r::StabilityResult)
     has_ci = !isempty(r.ci_lower)
     println(io, "# calc_ci=", has_ci)

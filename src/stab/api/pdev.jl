@@ -9,7 +9,7 @@ is built from a least-squares parabolic fit and is the recommended estimator whe
 evaluating the uncertainty of an ω-averaged frequency measurement. At `τ = τ₀`
 (i.e. `m = 1`) PDEV reduces to overlapping ADEV.
 
-When `calc_ci=true`, the result populates per-τ noise type, EDF, and χ²-based
+When `ci=true`, the result populates per-τ noise type, EDF, and χ²-based
 confidence bounds using the PVAR EDF model of Vernotte–Chen–Rubiola 2020
 (arXiv:2005.13631), `ν ≈ 35 / (A(α)·(m/M) − 12·(m/M)²)` with `M = N − 2m`. At
 `m = 1` the EDF is ADEV's (the PVAR(τ₀) ≡ AVAR(τ₀) identity); the large-τ region
@@ -24,7 +24,7 @@ julia> using SigmaTau
 
 julia> p = PhaseData(collect(1.0:10.0), 1.0);
 
-julia> r = pdev(p, [1, 2]; calc_ci=false);
+julia> r = pdev(p, [1, 2]; ci=false);
 
 julia> round.(r.dev; sigdigits=4)
 2-element Vector{Float64}:
@@ -32,12 +32,12 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function pdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _pdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:pdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 

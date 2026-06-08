@@ -121,13 +121,13 @@ const LK = LegacyKernels
         @test res_tdev.ci_lower ≈ res_mdev_ref.ci_lower .* factor
         @test res_tdev.ci_upper ≈ res_mdev_ref.ci_upper .* factor
 
-        # calc_ci=false path returns empty CI and EDF vectors.
-        res_tdev_nci = tdev(pd, m_values; calc_ci=false)
+        # ci=false path returns empty CI and EDF vectors.
+        res_tdev_nci = tdev(pd, m_values; ci=false)
         @test isempty(res_tdev_nci.ci_lower)
         @test isempty(res_tdev_nci.ci_upper)
         @test isempty(res_tdev_nci.edf)
 
-        # edf is populated when calc_ci=true.
+        # edf is populated when ci=true.
         @test length(res_adev.edf) == length(m_values)
         @test all(isfinite, res_adev.edf)
         @test all(>=(0.0), res_adev.edf)
@@ -223,11 +223,11 @@ const LK = LegacyKernels
 
         m_values_eq = [1, 2, 4, 8]
 
-        @test adev(fd, m_values_eq; calc_ci=false).dev ≈
-              adev(pd_equiv, m_values_eq; calc_ci=false).dev
+        @test adev(fd, m_values_eq; ci=false).dev ≈
+              adev(pd_equiv, m_values_eq; ci=false).dev
 
-        @test hdev(fd, m_values_eq; calc_ci=false).dev ≈
-              hdev(pd_equiv, m_values_eq; calc_ci=false).dev
+        @test hdev(fd, m_values_eq; ci=false).dev ≈
+              hdev(pd_equiv, m_values_eq; ci=false).dev
     end
 
     @testset "Stable32 cross-validation (reference/validation/)" begin
@@ -420,14 +420,14 @@ const LK = LegacyKernels
         ms   = [1, 2, 4, 8, 16, 32]
 
         # Centerline identity (correct_bias=false isolates the wrapper).
-        rm = mtotdev(pd, ms; calc_ci=false, correct_bias=false)
-        rt = ttotdev(pd, ms; calc_ci=false, correct_bias=false)
+        rm = mtotdev(pd, ms; ci=false, correct_bias=false)
+        rt = ttotdev(pd, ms; ci=false, correct_bias=false)
         @test rt.tau == rm.tau
         @test isapprox(rt.dev, rm.dev .* (rm.tau ./ sqrt(3.0)); rtol=1e-14)
 
         # CI / EDF / α flow through with the same τ/√3 scaling.
-        rm_ci = mtotdev(pd, ms; calc_ci=true, correct_bias=true)
-        rt_ci = ttotdev(pd, ms; calc_ci=true, correct_bias=true)
+        rm_ci = mtotdev(pd, ms; ci=true, correct_bias=true)
+        rt_ci = ttotdev(pd, ms; ci=true, correct_bias=true)
         f = rm_ci.tau ./ sqrt(3.0)
         @test isapprox(rt_ci.dev,      rm_ci.dev      .* f; rtol=1e-14)
         @test isapprox(rt_ci.ci_lower, rm_ci.ci_lower .* f; rtol=1e-14)
@@ -440,7 +440,7 @@ const LK = LegacyKernels
         # from the direct PhaseData call at the percent level — assert the
         # entry point runs and stays in the right ballpark, not bit-identity.
         fd = FrequencyData(diff(x) ./ tau0, tau0)
-        rt_fd = ttotdev(fd, ms; calc_ci=false, correct_bias=false)
+        rt_fd = ttotdev(fd, ms; ci=false, correct_bias=false)
         @test length(rt_fd.dev) == length(ms)
         @test all(isfinite, rt_fd.dev)
         @test all(>(0), rt_fd.dev)
@@ -569,13 +569,13 @@ const LK = LegacyKernels
         for f in (adev, mdev, tdev, hdev, mhdev, htdev,
                   totdev, mtotdev, ttotdev, htotdev, mhtotdev,
                   mtie, pdev)
-            r32 = f(pd32, ms; calc_ci=false)
-            r64 = f(pd64, ms; calc_ci=false)
+            r32 = f(pd32, ms; ci=false)
+            r64 = f(pd64, ms; ci=false)
             # Float32 input carries ~1e-7 relative precision; compare loosely.
             @test isapprox(r32.dev, r64.dev; rtol=1e-4, nans=true)
         end
         # CI path also runs without error on the promoted vector.
-        @test adev(pd32, ms; calc_ci=true).edf == adev(pd64, ms; calc_ci=true).edf
+        @test adev(pd32, ms; ci=true).edf == adev(pd64, ms; ci=true).edf
     end
 
     @testset "confidence_intervals floors the lower bound at zero" begin
@@ -639,6 +639,12 @@ const LK = LegacyKernels
         @test isempty(res.ci_lower)
         @test isempty(res.ci_upper)
         @test isempty(res.edf)
+
+        # `confidence` is accepted for signature uniformity (no-op for MTIE):
+        # passing it must not error and must not populate CI fields.
+        res_conf = mtie(pd, m_grid; confidence=0.9)
+        @test res_conf.dev ≈ ref
+        @test isempty(res_conf.edf)
 
         # FrequencyData entry point: cumsum-equivalence smoke check.
         Random.seed!(20260509)
@@ -719,7 +725,7 @@ const LK = LegacyKernels
               _pdev_reference(x_refresh, ms_refresh, 1.0) atol=1e-25 rtol=1e-12
 
         # API wrapper: raw devs unchanged; CI populated by default (Vernotte
-        # PVAR EDF model), empty when calc_ci=false. FrequencyData dispatch below.
+        # PVAR EDF model), empty when ci=false. FrequencyData dispatch below.
         pd = PhaseData(x_noise, 1.0)
         res = pdev(pd, ms)
         @test res.deviation_type == :pdev
@@ -728,7 +734,7 @@ const LK = LegacyKernels
         @test !isempty(res.noise_type)
         @test all(res.ci_lower .<= res.dev .+ 1e-12) && all(res.dev .<= res.ci_upper .+ 1e-12)
 
-        res_noci = pdev(pd, ms; calc_ci=false)
+        res_noci = pdev(pd, ms; ci=false)
         @test res_noci.dev ≈ ref
         @test isempty(res_noci.ci_lower) && isempty(res_noci.ci_upper) && isempty(res_noci.edf)
 
@@ -954,7 +960,7 @@ const LK = LegacyKernels
             @test 512 ∉ ms
             Random.seed!(2026)
             p = PhaseData(_gen_powerlaw_phase(0.0, 1536; tau0=1.0), 1.0)
-            r = htotdev(p; calc_ci = false)
+            r = htotdev(p; ci = false)
             @test all(isfinite, r.dev)
         end
 
@@ -978,31 +984,31 @@ const LK = LegacyKernels
                     (:mtie,    mtie),  (:pdev,  pdev),
                 )
                 ms = SigmaTau._default_m_values(N, kernel)
-                r_default  = fn(p; calc_ci = false)
-                r_explicit = fn(p, ms; calc_ci = false)
+                r_default  = fn(p; ci = false)
+                r_explicit = fn(p, ms; ci = false)
                 @test r_default.tau == r_explicit.tau
                 @test r_default.dev == r_explicit.dev
                 # FrequencyData entry point resolves to its own default m-grid
                 # (computed from length(f.y) = N-1, not N).
                 ms_f = SigmaTau._default_m_values(length(f.y), kernel)
-                r_default_f = fn(f; calc_ci = false)
+                r_default_f = fn(f; ci = false)
                 @test r_default_f.tau == ms_f .* tau0
             end
         end
 
-        @testset "kwargs pass through (calc_ci, confidence)" begin
+        @testset "kwargs pass through (ci, confidence)" begin
             Random.seed!(7)
             p = PhaseData(_gen_powerlaw_phase(0.0, 512; tau0=1.0), 1.0)
-            # calc_ci=true populates CI; calc_ci=false leaves them empty.
-            r_ci = adev(p; calc_ci = true)
+            # ci=true populates CI; ci=false leaves them empty.
+            r_ci = adev(p; ci = true)
             @test !isempty(r_ci.ci_lower)
             @test !isempty(r_ci.edf)
-            r_no = adev(p; calc_ci = false)
+            r_no = adev(p; ci = false)
             @test isempty(r_no.ci_lower)
             @test isempty(r_no.edf)
             # totdev's `correct_bias` kwarg passes through.
-            r_raw  = totdev(p; calc_ci = false, correct_bias = false)
-            r_corr = totdev(p; calc_ci = false, correct_bias = true)
+            r_raw  = totdev(p; ci = false, correct_bias = false)
+            r_corr = totdev(p; ci = false, correct_bias = true)
             @test r_raw.tau == r_corr.tau
         end
     end
@@ -1050,8 +1056,8 @@ const LK = LegacyKernels
             @test length(f_diff.y) == length(p_full.x) - 1
             ms = [1, 4, 16, 64]
             for fn in (adev, mdev, hdev)
-                r_phase = fn(p_full,  ms; calc_ci = false)
-                r_freq  = fn(f_diff,  ms; calc_ci = false)
+                r_phase = fn(p_full,  ms; ci = false)
+                r_freq  = fn(f_diff,  ms; ci = false)
                 @test r_freq.tau == r_phase.tau
                 @test isapprox(r_freq.dev, r_phase.dev; rtol = 5e-3)
             end
