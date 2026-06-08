@@ -116,6 +116,28 @@ function main()
             end
         end
     end
+
+    # Spectral estimators (Sy / Sx / L) — separate CSV (freq/psd shaped, not
+    # deviation rows). Default Welch params; L at a fixed 10 MHz carrier.
+    const_fc = 1.0e7
+    scsv = joinpath(FIX_DIR, "spectral_reference.csv")
+    open(scsv, "w") do io
+        println(io, "input,estimator,f_carrier,idx,freq,psd")
+        for (name, kind, data) in recs
+            kind === :phase || kind === :frequency || continue
+            (kind === :phase && length(data.x) > 2048) && continue  # synth only
+            (kind === :frequency && length(data.y) > 2048) && continue
+            for (ename, r) in (("Sy", Sy(data)), ("Sx", Sx(data)),
+                               ("L", L(data; f_carrier=const_fc)))
+                fc = ename == "L" ? const_fc : NaN
+                for i in eachindex(r.freq)
+                    @printf(io, "%s,%s,%.6e,%d,%.17e,%.17e\n",
+                            name, ename, fc, i - 1, r.freq[i], r.psd[i])
+                end
+            end
+        end
+    end
+
     println("Wrote fixtures to $FIX_DIR")
 end
 
