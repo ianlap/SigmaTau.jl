@@ -197,9 +197,9 @@ differences with boundary extension.
     with the modified third-difference operator from Greenhall 1997
     [@cite greenhall-1997-third-difference-mvar]. The authoritative
     definition lives in the package source itself; the kernel sits at
-    [`src/stab/core/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/stab/core/total.jl)
+    [`src/kernels.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/kernels.jl)
     and the public wrapper at
-    [`src/stab/api/total.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/stab/api/total.jl).
+    [`src/deviations.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/deviations.jl).
     Equivalently, MHTOTDEV completes the 2×2 matrix of total-family
     estimators along the (Allan/Hadamard) × (modified/un-modified)
     axes — the un-modified Hadamard total is HTOTDEV, the modified
@@ -287,9 +287,9 @@ on this short record — the data-extension is doing its job.
 
 ## Implementation notes
 
-- All four total kernels live in `src/stab/core/total.jl`.
-- Bias correction is applied in `src/stab/api/total.jl` via the
-  `bias_correction` helper from `src/stab/stats/edf.jl`.
+- All four total kernels live in `src/kernels.jl`.
+- Bias correction is applied in `src/deviations.jl` via the
+  `bias_correction` helper from `src/edf.jl`.
 - The MHTOTDEV EDF model uses an HDEV-style approximation (no
   published analytic form for MHTOTDEV); known limitation tracked as
   `R-MED-6`.

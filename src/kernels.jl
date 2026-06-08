@@ -1,3 +1,170 @@
+# kernels.jl — raw deviation kernels (Vector{Float64} in, arrays out).
+#
+# Merged from stab/core/{allan, hadamard, total, mtie, pdev}.jl. These are the
+# internal _*_core functions; the public PhaseData/FrequencyData API lives in
+# deviations.jl.
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/core/allan.jl ──────────────────────────────────────────────────
+
+# core/allan.jl — Core Stability Kernels
+
+"""
+    _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Computes the Overlapping Allan Deviation (ADEV) for a set of averaging factors `m`.
+This is a highly optimized, SIMD-vectorized loop with no allocations in the inner loop.
+"""
+function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    for (k, m) in enumerate(m_values)
+        L = N - 2m
+        if L < 2          # need ≥2 analysis windows; one window is a single difference
+            devs[k] = NaN
+            continue
+        end
+
+        sum_sq = 0.0
+        @inbounds @simd for i in 1:L
+            d2 = x[i+2m] - 2x[i+m] + x[i]
+            sum_sq += d2^2
+        end
+
+        devs[k] = sqrt(sum_sq / (2.0 * L * Float64(m)^2 * tau0^2))
+    end
+
+    return devs
+end
+
+"""
+    _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Computes the Modified Allan Deviation (MDEV) using prefix sums for O(N) performance per `m`.
+"""
+function _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    # Prefix sum x_cs[1] = 0, x_cs[i+1] = Σⱼ₌₁ⁱ x[j]. One length-(N+1)
+    # allocation; the carry chain blocks SIMD, so no @simd here.
+    x_cs = Vector{Float64}(undef, N + 1)
+    x_cs[1] = 0.0
+    acc = 0.0
+    @inbounds for i in 1:N
+        acc += x[i]
+        x_cs[i+1] = acc
+    end
+
+    for (k, m) in enumerate(m_values)
+        Ne = N - 3m + 1
+        if Ne < 2          # need ≥2 estimates
+            devs[k] = NaN
+            continue
+        end
+
+        sum_sq = 0.0
+        @inbounds @simd for i in 1:Ne
+            d = x_cs[i+3m] - 3x_cs[i+2m] + 3x_cs[i+m] - x_cs[i]
+            sum_sq += d^2
+        end
+
+        devs[k] = sqrt(sum_sq / (2.0 * Ne * Float64(m)^4 * tau0^2))
+    end
+
+    return devs
+end
+
+"""
+    _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Computes the Time Deviation (TDEV).
+"""
+function _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    mdevs = _mdev_core(x, m_values, tau0)
+    taus = m_values .* tau0
+    return taus .* mdevs ./ sqrt(3.0)
+end
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/core/hadamard.jl ───────────────────────────────────────────────
+
+# core/hadamard.jl — Core Hadamard Stability Kernels
+
+"""
+    _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Computes the Overlapping Hadamard Deviation (HDEV) for a set of averaging factors `m`.
+This uses a highly optimized, SIMD-vectorized loop with no allocations in the inner loop.
+"""
+function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    for (k, m) in enumerate(m_values)
+        L = N - 3m
+        if L < 2          # need ≥2 analysis windows
+            devs[k] = NaN
+            continue
+        end
+
+        sum_sq = 0.0
+        @inbounds @simd for i in 1:L
+            d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
+            sum_sq += d3^2
+        end
+
+        devs[k] = sqrt(sum_sq / (6.0 * L * Float64(m)^2 * tau0^2))
+    end
+
+    return devs
+end
+
+"""
+    _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Computes the Modified Hadamard Deviation (MHDEV) using prefix sums for O(N) performance per `m`.
+"""
+function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    # Prefix sum x_cs[1] = 0, x_cs[i+1] = Σⱼ₌₁ⁱ x[j]. One length-(N+1)
+    # allocation; the carry chain blocks SIMD, so no @simd here.
+    x_cs = Vector{Float64}(undef, N + 1)
+    x_cs[1] = 0.0
+    acc = 0.0
+    @inbounds for i in 1:N
+        acc += x[i]
+        x_cs[i+1] = acc
+    end
+
+    for (k, m) in enumerate(m_values)
+        Ne = N - 4m + 1
+        if Ne < 2          # need ≥2 estimates; MHDEV is not a total estimator (raw 4th-difference)
+            devs[k] = NaN
+            continue
+        end
+
+        sum_sq = 0.0
+        @inbounds @simd for i in 1:Ne
+            d = x_cs[i+4m] - 4.0 * x_cs[i+3m] + 6.0 * x_cs[i+2m] - 4.0 * x_cs[i+m] + x_cs[i]
+            sum_sq += d^2
+        end
+
+        devs[k] = sqrt(sum_sq / (6.0 * Ne * Float64(m)^4 * tau0^2))
+    end
+
+    return devs
+end
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/core/total.jl ──────────────────────────────────────────────────
+
 # core/total.jl — Core Total Stability Kernels
 
 """
@@ -442,6 +609,191 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
 
         total_sum = sum(chunk_sums)
         devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
+    end
+
+    return devs
+end
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/core/mtie.jl ───────────────────────────────────────────────────
+
+# core/mtie.jl — Maximum Time Interval Error kernel
+
+"""
+    _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Maximum Time Interval Error per ITU-T G.810. For each averaging factor
+`m`, slides a window of `m+1` phase samples (spanning `τ = m·τ₀`) across
+the record and returns the largest peak-to-peak phase excursion observed
+in any window.
+
+Units are seconds (a σ_x quantity, like TDEV) — MTIE is itself a phase
+measure, not a relative-frequency measure, so no τ rescaling is applied.
+
+# Implementation
+
+Monotonic-deque sliding window: each m value runs in O(N) total work via
+two parallel index deques (one tracking the running window maximum, one
+the running minimum). Each phase sample enters and leaves each deque at
+most once, so overall complexity is O(N · |m_values|).
+
+The deque is materialised as a single pre-allocated `Vector{Int}` of
+length N with explicit head/tail cursors per m, avoiding any
+DataStructures.jl dependency or per-step allocation.
+"""
+function _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    # Pre-allocate deque storage once; the deque holds at most `win`
+    # indices but cursors can advance up to N before wrapping considerations.
+    # Sizing to N avoids any modular indexing.
+    max_dq = Vector{Int}(undef, N)
+    min_dq = Vector{Int}(undef, N)
+
+    for (k, m) in enumerate(m_values)
+        L = N - m
+        if L <= 0
+            devs[k] = NaN
+            continue
+        end
+
+        win = m + 1
+        max_h, max_t = 1, 0   # empty when max_t < max_h
+        min_h, min_t = 1, 0
+        max_excursion = 0.0
+
+        @inbounds for j in 1:N
+            # Drop indices that have left the trailing edge of the window.
+            while max_t >= max_h && max_dq[max_h] <= j - win
+                max_h += 1
+            end
+            while min_t >= min_h && min_dq[min_h] <= j - win
+                min_h += 1
+            end
+
+            xj = x[j]
+
+            # Maintain monotonic-decreasing deque (running maximum).
+            while max_t >= max_h && x[max_dq[max_t]] <= xj
+                max_t -= 1
+            end
+            max_t += 1
+            max_dq[max_t] = j
+
+            # Maintain monotonic-increasing deque (running minimum).
+            while min_t >= min_h && x[min_dq[min_t]] >= xj
+                min_t -= 1
+            end
+            min_t += 1
+            min_dq[min_t] = j
+
+            # Once the window is fully populated, record the excursion.
+            if j >= win
+                d = x[max_dq[max_h]] - x[min_dq[min_h]]
+                if d > max_excursion
+                    max_excursion = d
+                end
+            end
+        end
+
+        devs[k] = max_excursion
+    end
+
+    return devs
+end
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/core/pdev.jl ───────────────────────────────────────────────────
+
+# core/pdev.jl — Parabolic deviation (Vernotte 2015 / 2020)
+
+"""
+    _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Parabolic deviation σ_PDEV(τ) per Vernotte–Lenczner–Bourgeois–Rubiola
+(IEEE T-UFFC 63(4), 2016) and Vernotte 2020. Built from a least-squares
+parabolic fit to the phase record over each window:
+
+```math
+\\sigma^2_{\\text{PDEV}}(m\\tau_0) = \\frac{72}{(N-2m) \\, m^4 \\, (m\\tau_0)^2}
+   \\sum_{i=1}^{N-2m} \\left[
+       \\sum_{k=0}^{m-1} \\left(\\frac{m-1}{2} - k\\right)
+       \\bigl(x_{i+k} - x_{i+k+m}\\bigr)
+   \\right]^2
+```
+
+For `m = 1` the parabolic weight collapses to zero, so we fall back to
+overlapping ADEV (the canonical PDEV(τ₀) ≡ ADEV(τ₀) identity from
+Vernotte 2015). For `m > 1` the weighted parabolic sum is evaluated by a
+rolling two-sum recurrence, reducing each averaging factor from O(Nm) to O(N).
+"""
+function _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    for (k, m) in enumerate(m_values)
+        if m < 1
+            devs[k] = NaN
+            continue
+        end
+
+        if m == 1
+            devs[k] = _adev_core(x, [m], tau0)[1]
+            continue
+        end
+
+        M = N - 2m
+        if M < 2          # need ≥2 windows
+            devs[k] = NaN
+            continue
+        end
+
+        half = (m - 1) / 2.0
+        A = 0.0
+        B = 0.0
+        @inbounds for kk in 0:(m - 1)
+            y = x[1 + kk] - x[1 + kk + m]
+            A += y
+            B += kk * y
+        end
+
+        # Periodically rebuild the rolling sums exactly. The interval scales with
+        # m so the refresh work remains amortized O(N) while bounding accumulated
+        # roundoff on very long records.
+        refresh_every = max(4096, m)
+        next_refresh = refresh_every
+
+        Msum = 0.0
+        @inbounds for i in 1:M
+            asum = half * A - B
+            Msum += asum * asum
+
+            if i < M
+                if i == next_refresh
+                    A = 0.0
+                    B = 0.0
+                    i_next = i + 1
+                    @simd for kk in 0:(m - 1)
+                        y = x[i_next + kk] - x[i_next + kk + m]
+                        A += y
+                        B += kk * y
+                    end
+                    next_refresh += refresh_every
+                else
+                    y_old = x[i] - x[i + m]
+                    y_new = x[i + m] - x[i + 2m]
+                    old_A = A
+                    A += y_new - y_old
+                    B += (m - 1) * y_new - old_A + y_old
+                end
+            end
+        end
+
+        var = 72.0 * Msum / (M * Float64(m)^6 * tau0^2)
+        devs[k] = sqrt(var)
     end
 
     return devs

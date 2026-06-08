@@ -25,15 +25,18 @@ For clock state-space, Kalman, and PID steering, see the
 package (formerly the `SigmaTau.Est` submodule).
 
 Types (`PhaseData`, `FrequencyData`, `StabilityResult`) live in
-`src/types/` and are exported directly from `SigmaTau`. Callers write
+`src/types.jl` and are exported directly from `SigmaTau`. Callers write
 `using SigmaTau` and get everything in one flat namespace.
 
 ### File map (most-touched paths)
 
-- `src/SigmaTau.jl` — single flat module. Includes `types/`, `io/`,
-  `DEFAULT_CONFIDENCE`, then `stab/core/`, `stab/noise/`,
-  `stab/stats/edf.jl`, `stab/utils.jl`, and `stab/api/`. One umbrella-
-  level `export` block at the bottom.
+- `src/SigmaTau.jl` — single flat module. Includes `types.jl`, `io/`,
+  `DEFAULT_CONFIDENCE`, then `kernels.jl`, `noise.jl`, `edf.jl`, `grids.jl`,
+  `spectral.jl`, `deviations.jl`, and `suite.jl` (in that dependency order).
+  One umbrella-level `export` block at the bottom.
+- `src/types.jl` — `AbstractTimingData`, `PhaseData`, `FrequencyData`,
+  `StabilityResult`, `StabilitySuite`, `SpectralResult`, plus their compact
+  `Base.show` methods. `PhaseData`/`FrequencyData` default `tau0` to `1.0`.
 - `src/io/` — file readers, detrend, gap fill, result round-trip. All
   files rely on `DelimitedFiles`, `FFTW`, and `Statistics` imported once
   in `SigmaTau.jl`.
@@ -43,32 +46,33 @@ Types (`PhaseData`, `FrequencyData`, `StabilityResult`) live in
     `:none | :mean | :endpoint | :linear`
   - `fillgaps.jl` — `fillgaps` (Howe & Schlossberger PTTI-2009 imputation)
   - `results.jl`  — `save_result`, `load_result` (self-describing
-    tab-delimited round-trip, stdlib only)
-- `src/stab/core/` — `_adev_core`, `_mdev_core`, etc., split by deviation family:
-  - `allan.jl`    — `_adev_core`, `_mdev_core`, `_tdev_core`
-  - `hadamard.jl` — `_hdev_core`, `_mhdev_core`
-  - `total.jl`    — `_totdev_core`, `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core`
-  - `mtie.jl`     — `_mtie_core`
-  - `pdev.jl`     — `_pdev_core`
-  Pure `Vector{Float64}` → array kernels.
-- `src/stab/api/` — public API entry points, split by deviation family:
-  - `allan.jl`, `hadamard.jl`, `total.jl`, `mtie.jl`, `pdev.jl`
-  Each wraps `PhaseData`/`FrequencyData` → `StabilityResult`.
-  `api/hadamard.jl` also exposes `htdev` (Hadamard time deviation). The
-  deprecated `ldev` alias was removed in 0.4.0; `htdev` is the canonical name.
-  New deviations need a `PhaseData` *and* `FrequencyData` method here.
-- `src/stab/stats/edf.jl` — EDF/CI math (chi-squared, Greenhall–Riley fallbacks).
-- `src/stab/noise/` — noise identification + synthesis.
-  - `lag1.jl` — lag-1 ACF / B1 / R(n) noise-type ID.
-  - `synth.jl` — internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`
-    spectral shaper used by the test suite.
-  - `gen.jl` — public `noise_gen(::Type{PhaseData} | ::Type{FrequencyData},
-    N, tau0; sigma1=…, h=…)` calibrated power-law generator.
-- `src/stab/utils.jl` — shared helpers including `_freq_to_phase`.
+    tab-delimited round-trip, stdlib only). The on-disk `# calc_ci=` header
+    is the v1/v2 format key, deliberately kept distinct from the `ci` kwarg.
+- `src/kernels.jl` — pure `Vector{Float64}` → array deviation kernels:
+  `_adev_core`/`_mdev_core`/`_tdev_core`, `_hdev_core`/`_mhdev_core`,
+  `_totdev_core`/`_mtotdev_core`/`_htotdev_core`/`_mhtotdev_core`,
+  `_mtie_core`, `_pdev_core`.
+- `src/deviations.jl` — public API entry points (`adev`, `mdev`, `tdev`,
+  `hdev`, `mhdev`, `htdev`, `totdev`, `mtotdev`, `ttotdev`, `htotdev`,
+  `mhtotdev`, `mtie`, `pdev`), each wrapping `PhaseData`/`FrequencyData` →
+  `StabilityResult`. `htdev` is the canonical Hadamard time deviation; the
+  deprecated `ldev` alias was removed in 0.4.0. New deviations need a
+  `PhaseData` *and* `FrequencyData` method here.
+- `src/suite.jl` — `stability` compute-all entry point → `StabilitySuite`,
+  the `_dispatch_dev` router, and `DEFAULT_DEVIATIONS`.
+- `src/edf.jl` — EDF/CI math (`calculate_edf`, `confidence_intervals`,
+  `bias_correction`; chi-squared, Greenhall–Riley fallbacks).
+- `src/noise.jl` — noise identification + synthesis: lag-1 ACF / B1 / R(n)
+  noise-type ID (`identify_noise`), the internal `_gen_powerlaw_y` /
+  `_gen_powerlaw_phase` spectral shaper, and the public
+  `noise_gen(::Type{PhaseData} | ::Type{FrequencyData}, N, tau0; sigma1=…,
+  h=…)` calibrated power-law generator.
+- `src/grids.jl` — `TauMode`/`tau_values` averaging-factor grids and the
+  `_f64` / `_freq_to_phase` / `_phase_to_freq` / `_default_m_values` helpers.
+- `src/spectral.jl` — Welch PSD core (`_welch_psd`) and the public `Sy` /
+  `Sx` / `L` spectral estimators → `SpectralResult`.
 - `DEFAULT_CONFIDENCE = 0.683` is a top-level const in `src/SigmaTau.jl`;
   it is the default `confidence` argument across every public deviation API.
-- `src/types/` — `abstract.jl`, `phase_data.jl`, `frequency_data.jl`,
-  `stability_result.jl`.
 - `ext/SigmaTauRecipesBaseExt.jl` — all plot recipes (loaded only when
   `RecipesBase` is available; declared in `[weakdeps]`).
 - `reference/validation/` — parity fixtures. **Read-only.**
