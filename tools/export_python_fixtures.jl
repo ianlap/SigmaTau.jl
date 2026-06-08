@@ -138,6 +138,26 @@ function main()
         end
     end
 
+    # IO fixtures: a fillgaps parity case + Julia-saved result/suite TSVs (for
+    # the Python port's cross-language load compatibility).
+    synth = first(d for (nm, _, d) in recs if nm == "synth_phase")
+
+    xgap = copy(synth.x)
+    for r in (101:106, 301:301, 700:710, 1000:1002)
+        xgap[r] .= NaN
+    end
+    filled = fillgaps(PhaseData(xgap, 1.0)).x
+    open(joinpath(FIX_DIR, "fillgaps_reference.csv"), "w") do io
+        println(io, "idx,input,filled")
+        for i in eachindex(xgap)
+            instr = isnan(xgap[i]) ? "NaN" : @sprintf("%.17e", xgap[i])
+            @printf(io, "%d,%s,%.17e\n", i - 1, instr, filled[i])
+        end
+    end
+
+    save_result(joinpath(FIX_DIR, "adev_result.tsv"), adev(synth))
+    save_suite(joinpath(FIX_DIR, "suite.tsv"), stability(synth))
+
     println("Wrote fixtures to $FIX_DIR")
 end
 
