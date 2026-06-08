@@ -27,8 +27,17 @@ const DEVS = (
     ("totdev", totdev), ("mtie", mtie), ("pdev", pdev),
 )
 
+# The modified-total family is loop-heavy in pure Python, so it is exported only
+# on the small synthetic records (octave grid) — enough to validate parity
+# without making the Python test suite slow. All are raw (correct_bias=false).
+const MODTOTAL = (
+    ("mtotdev", mtotdev), ("ttotdev", ttotdev),
+    ("htotdev", htotdev), ("mhtotdev", mhtotdev),
+)
+
 # Run a deviation in the form the Python milestone matches: raw kernel, no CI.
-# TOTDEV must be raw (correct_bias=false) since bias correction is not yet ported.
+# TOTDEV / the total family must be raw (correct_bias=false) — bias correction
+# is not yet ported.
 run_dev(dname, fn, data, m) =
     dname == "totdev" ? fn(data, m; ci=false, correct_bias=false) :
                         fn(data, m; ci=false)
@@ -90,6 +99,18 @@ function main()
                     for i in eachindex(m)
                         @printf(io, "%s,%s,%s,%s,%d,%.17e,%.17e\n",
                                 name, kind, dname, gname, m[i], r.tau[i], r.dev[i])
+                    end
+                end
+
+                # Modified-total family: synthetic records, octave grid only.
+                if gname == "octave" && n <= 2048
+                    for (dname, fn) in MODTOTAL
+                        m = tau_values(gmode, n, Symbol(dname))
+                        r = fn(data, m; ci=false, correct_bias=false)
+                        for i in eachindex(m)
+                            @printf(io, "%s,%s,%s,%s,%d,%.17e,%.17e\n",
+                                    name, kind, dname, gname, m[i], r.tau[i], r.dev[i])
+                        end
                     end
                 end
             end
