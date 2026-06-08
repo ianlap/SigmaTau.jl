@@ -25,13 +25,13 @@ choice rather than a derivation.
 """
 function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64)
     edfs = Vector{Float64}(undef, length(devs))
-    
+
     for k in 1:length(devs)
         m = m_values[k]
         noise = noises[k]
         alpha = _alpha_from_noise(noise)
         tau = taus[k]
-        
+
         if method == :adev
             edfs[k] = _calc_edf_core(alpha, 2, m, m, m, N)
         elseif method == :mdev
@@ -83,7 +83,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             edfs[k] = NaN
         end
     end
-    
+
     return edfs
 end
 
@@ -399,10 +399,10 @@ Uses Distributions.jl for accurate χ² limits.
 function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64)
     lower = Vector{Float64}(undef, length(devs))
     upper = Vector{Float64}(undef, length(devs))
-    
+
     a_half = (1.0 - confidence) / 2.0
     z = quantile(Normal(), 1.0 - a_half)
-    
+
     for k in 1:length(devs)
         d = devs[k]
         if isnan(d)
@@ -410,7 +410,7 @@ function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, nois
             upper[k] = NaN
             continue
         end
-        
+
         ef = edfs[k]
         if isfinite(ef) && ef >= 1.0
             chi_lo = quantile(Chisq(ef), a_half)
@@ -427,6 +427,6 @@ function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, nois
             upper[k] = d + half
         end
     end
-    
+
     return lower, upper
 end

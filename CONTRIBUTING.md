@@ -53,7 +53,7 @@ Deviation kernels are cross-validated against three independent references:
 - **AllanLab** (MATLAB) — third reference, locked-in fixtures.
 
 Fixtures live under `reference/validation/` (read-only). After any change to a
-core kernel (`src/stab/core/*.jl`) run the parity testsets in
+core kernel (in `src/kernels.jl`) run the parity testsets in
 `test/stab/runtests.jl` (Stable32 cross-validation, `allantools_cross_validation.jl`,
 and the rtol = 1e-12 `legacy_kernels.jl` contract) and confirm they still pass.
 
@@ -64,9 +64,9 @@ source — NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, IEEE Std
 ## Code conventions
 
 - **Core / API split is firm.** Core kernels (`_adev_core`, …, in
-  `src/stab/core/`) take `Vector{Float64}` and return raw arrays. Public API
-  functions (`adev`, …, in `src/stab/api/`) take `PhaseData` / `FrequencyData`
-  and return a `StabilityResult`. Never collapse the two layers.
+  `src/kernels.jl`) take `Vector{Float64}` and return raw arrays. Public API
+  functions (`adev`, …, in `src/deviations.jl`) take `PhaseData` /
+  `FrequencyData` and return a `StabilityResult`. Never collapse the two layers.
 - **`StabilityResult` fields stay non-parametric `Vector{Float64}`.** Do not
   parameterize them.
 - **The `edf` / CI fields are empty when `ci=false` and populated when
@@ -78,12 +78,12 @@ source — NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, IEEE Std
 
 ### Adding a new deviation
 
-1. Add the pure kernel to the relevant `src/stab/core/*.jl` as
+1. Add the pure kernel to `src/kernels.jl` as
    `_yourdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)`.
-2. Add **both** a `PhaseData` and a `FrequencyData` public entry point in the
-   matching `src/stab/api/*.jl`; the `FrequencyData` method delegates via
+2. Add **both** a `PhaseData` and a `FrequencyData` public entry point in
+   `src/deviations.jl`; the `FrequencyData` method delegates via
    `_freq_to_phase`. Add the zero-arg and `TauMode` convenience methods too.
-3. Wire it into the `stability` router (`src/stab/api/suite.jl`) if it should be
+3. Wire it into the `stability` router (`src/suite.jl`) if it should be
    reachable from the compute-all entry point.
 4. Add validation tests; if no external reference exists, validate against
    legacy kernels (rtol = 1e-12) and internal consistency.

@@ -31,7 +31,7 @@ monotonically onto the spectral exponent α. Their procedure:
 
 For `r₁` near 0.5 the noise is white; near zero, flicker; near −0.5,
 random-walk. The α-to-`r₁` mapping is implemented in
-`src/stab/noise/lag1.jl`.
+`src/noise.jl`.
 
 ```julia
 identify_noise(x, [1, 2, 4, 8]; dmin=0, dmax=2)

@@ -9,12 +9,7 @@ using FFTW
 using Dates
 
 # ── Shared types ────────────────────────────────────────────────────────
-include("types/abstract.jl")
-include("types/phase_data.jl")
-include("types/frequency_data.jl")
-include("types/stability_result.jl")
-include("types/stability_suite.jl")
-include("types/spectral_result.jl")
+include("types.jl")
 
 # ── IO: file readers, detrend, gap fill, result round-trip ──────────────
 # IO functions return top-level types (PhaseData / FrequencyData /
@@ -38,29 +33,16 @@ Greenhall–Riley uncertainty papers. Override per call by passing
 """
 const DEFAULT_CONFIDENCE = 0.683
 
-# ── Stab: clock-stability analysis ──────────────────────────────────────
-include("stab/core/allan.jl")
-include("stab/core/hadamard.jl")
-include("stab/core/total.jl")
-include("stab/core/mtie.jl")
-include("stab/core/pdev.jl")
-
-include("stab/noise/lag1.jl")
-include("stab/noise/synth.jl")
-include("stab/noise/gen.jl")
-include("stab/stats/edf.jl")
-
-include("stab/utils.jl")
-include("stab/taus.jl")
-include("stab/spectral.jl")
-
-include("stab/api/allan.jl")
-include("stab/api/hadamard.jl")
-include("stab/api/total.jl")
-include("stab/api/mtie.jl")
-include("stab/api/pdev.jl")
-include("stab/api/suite.jl")
-include("stab/api/spectral.jl")
+# ── Clock-stability analysis ────────────────────────────────────────────
+# Dependency order: kernels (raw _*_core) → noise ID / EDF stats → grids and
+# conversion helpers → spectral → public deviation API → compute-all suite.
+include("kernels.jl")
+include("noise.jl")
+include("edf.jl")
+include("grids.jl")
+include("spectral.jl")
+include("deviations.jl")
+include("suite.jl")
 
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite

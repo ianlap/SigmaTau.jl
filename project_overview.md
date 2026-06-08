@@ -42,12 +42,12 @@ so user code is just `using SigmaTau; adev(...)`.
 
 | Component | File | Notes |
 |-----------|------|-------|
-| `PhaseData{T}` | [src/types/phase_data.jl](src/types/phase_data.jl) | Parametric on `T<:AbstractFloat`; ctor validates `tau0 > 0` and length ≥ 2 |
-| `FrequencyData{T}` | [src/types/frequency_data.jl](src/types/frequency_data.jl) | Parametric; wired into every Stab dispatch; ctor validates `tau0 > 0` and length ≥ 2 |
-| `StabilityResult` | [src/types/stability_result.jl](src/types/stability_result.jl) | Non-parametric `Vector{Float64}` fields; includes `edf` (empty when `ci=false`) |
-| `StabilitySuite` | [src/types/stability_suite.jl](src/types/stability_suite.jl) | Ordered, symbol-indexable collection of `StabilityResult`s + session metadata; produced by `stability` |
-| `SpectralResult` | [src/types/spectral_result.jl](src/types/spectral_result.jl) | Non-parametric; `freq`/`psd` + `units` + Welch params; produced by `Sy`/`Sx`/`L` |
-| `AbstractTimingData` | [src/types/abstract.jl](src/types/abstract.jl) | Abstract supertype |
+| `PhaseData{T}` | [src/types.jl](src/types.jl) | Parametric on `T<:AbstractFloat`; ctor validates `tau0 > 0` and length ≥ 2 |
+| `FrequencyData{T}` | [src/types.jl](src/types.jl) | Parametric; wired into every Stab dispatch; ctor validates `tau0 > 0` and length ≥ 2 |
+| `StabilityResult` | [src/types.jl](src/types.jl) | Non-parametric `Vector{Float64}` fields; includes `edf` (empty when `ci=false`) |
+| `StabilitySuite` | [src/types.jl](src/types.jl) | Ordered, symbol-indexable collection of `StabilityResult`s + session metadata; produced by `stability` |
+| `SpectralResult` | [src/types.jl](src/types.jl) | Non-parametric; `freq`/`psd` + `units` + Welch params; produced by `Sy`/`Sx`/`L` |
+| `AbstractTimingData` | [src/types.jl](src/types.jl) | Abstract supertype |
 
 ### 2.2 Stability Surface
 
@@ -59,29 +59,29 @@ raw `Vector{Float64}`.
 
 | Kernel | File | Notes |
 |--------|------|-------|
-| `_adev_core`, `_mdev_core`, `_tdev_core` | [src/stab/core/allan.jl](src/stab/core/allan.jl) | Overlapping ADEV / MDEV / TDEV |
-| `_hdev_core`, `_mhdev_core` | [src/stab/core/hadamard.jl](src/stab/core/hadamard.jl) | Hadamard family |
-| `_totdev_core`, `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core` | [src/stab/core/total.jl](src/stab/core/total.jl) | Boundary-extended; threaded |
-| `_mtie_core` | [src/stab/core/mtie.jl](src/stab/core/mtie.jl) | O(N) monotonic-deque sliding window; ITU-T G.810 |
-| `_pdev_core` | [src/stab/core/pdev.jl](src/stab/core/pdev.jl) | Vernotte 2016/2020; allantools formula parity; rolling O(N) recurrence per m |
+| `_adev_core`, `_mdev_core`, `_tdev_core` | [src/kernels.jl](src/kernels.jl) | Overlapping ADEV / MDEV / TDEV |
+| `_hdev_core`, `_mhdev_core` | [src/kernels.jl](src/kernels.jl) | Hadamard family |
+| `_totdev_core`, `_mtotdev_core`, `_htotdev_core`, `_mhtotdev_core` | [src/kernels.jl](src/kernels.jl) | Boundary-extended; threaded |
+| `_mtie_core` | [src/kernels.jl](src/kernels.jl) | O(N) monotonic-deque sliding window; ITU-T G.810 |
+| `_pdev_core` | [src/kernels.jl](src/kernels.jl) | Vernotte 2016/2020; allantools formula parity; rolling O(N) recurrence per m |
 
 #### Noise Identification
 
 | Component | File | Notes |
 |-----------|------|-------|
-| `identify_noise` | [src/stab/noise/lag1.jl](src/stab/noise/lag1.jl) | lag-1 ACF + B1/R(n) fallback |
+| `identify_noise` | [src/noise.jl](src/noise.jl) | lag-1 ACF + B1/R(n) fallback |
 | `_noise_id_lag1acf` | same | Quadratic detrend, differencing, ρ threshold |
 | `_noise_id_b1rn` | same | B1-ratio with R(n) WPM/FLPM disambiguation |
 | `NEFF_RELIABLE = 30` | same | Per legacy GEMINI.md §2 mandate; boundary test added |
 | Preprocessing | same | 5σ outlier rejection (per-record); per-m quadratic detrend opt-in via `detrend=true` |
-| Power-law synthesis (internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`) | [src/stab/noise/synth.jl](src/stab/noise/synth.jl) | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2}; optional `rng` for independent streams |
-| `noise_gen` (public, calibrated) | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | Composite α-mixture; input mode `sigma1[α]=σ_y(τ₀)` or `h[α]=h_α`; optional `rng` kwarg; returns `PhaseData` or `FrequencyData` |
+| Power-law synthesis (internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`) | [src/noise.jl](src/noise.jl) | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2}; optional `rng` for independent streams |
+| `noise_gen` (public, calibrated) | [src/noise.jl](src/noise.jl) | Composite α-mixture; input mode `sigma1[α]=σ_y(τ₀)` or `h[α]=h_α`; optional `rng` kwarg; returns `PhaseData` or `FrequencyData` |
 
 #### Statistics (EDF / CI / Bias)
 
 | Component | File | Notes |
 |-----------|------|-------|
-| `calculate_edf` | [src/stab/stats/edf.jl](src/stab/stats/edf.jl) | Full Greenhall/Riley `_compute_sz/_sx/_sw` |
+| `calculate_edf` | [src/edf.jl](src/edf.jl) | Full Greenhall/Riley `_compute_sz/_sx/_sw` |
 | `confidence_intervals` | same | `Distributions.jl` for χ² + Normal |
 | `bias_correction` | same | Variance-ratio B; callers apply `σ ← σ/√B`. totvar / mtot / htot follow published models; mhtot uses the SigmaTau Monte Carlo fit because no external model exists |
 | `_coeff_totvar` | same | ADEV-style EDF fallback for α=2,1; published values for α∈{0,-1,-2} |
@@ -93,18 +93,18 @@ raw `Vector{Float64}`.
 
 | Function | File | Notes |
 |----------|------|-------|
-| `adev`, `mdev` | [src/stab/api/allan.jl](src/stab/api/allan.jl) | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid capped at each kernel's algorithmic m-max |
+| `adev`, `mdev` | [src/deviations.jl](src/deviations.jl) | PhaseData → StabilityResult with CI; zero-arg overloads default to octave m-grid capped at each kernel's algorithmic m-max |
 | `tdev` | same | Wraps `mdev` and scales by `τ/√3` |
-| `hdev`, `mhdev`, `htdev` | [src/stab/api/hadamard.jl](src/stab/api/hadamard.jl) | `htdev` wraps `mhdev` and scales by `τ/√(10/3)` |
-| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/stab/api/total.jl](src/stab/api/total.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling. One canonical extension form each (no `detrend` kwarg): TOTDEV uses Howe/SP1065 eqn 25, the modified/Hadamard total family uses the Greenhall 2003 half-mean extension (MHTOTDEV adopts the same by consistency) |
-| `mtie` | [src/stab/api/mtie.jl](src/stab/api/mtie.jl) | No CI fields (no published EDF model); `ci` and `confidence` are accepted but no-ops |
-| `pdev` | [src/stab/api/pdev.jl](src/stab/api/pdev.jl) | Full χ² CI via the Vernotte 2020 PVAR EDF model (`_pvar_edf`); honors `ci`/`confidence`; unbiased (no bias correction) |
-| `stability` | [src/stab/api/suite.jl](src/stab/api/suite.jl) | Compute-all entry point → `StabilitySuite`; `devs`/`taus` select the deviation set and grid; `DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :tdev)` |
-| `noise_gen` | [src/stab/noise/gen.jl](src/stab/noise/gen.jl) | Calibrated power-law clock-noise generator; returns `PhaseData` or `FrequencyData` |
-| `Sy`, `Sx`, `L` | [src/stab/api/spectral.jl](src/stab/api/spectral.jl) | Welch PSD: fractional-frequency `S_y(f)` (1/Hz), phase `S_x(f)` (s²/Hz), single-sideband phase noise `ℒ(f)` (dBc/Hz, required `f_carrier`); IEEE 1139-2022 §3.3–3.5. Both `PhaseData` and `FrequencyData` entry points → `SpectralResult` |
-| `_welch_psd` (internal) | [src/stab/spectral.jl](src/stab/spectral.jl) | One-sided "density" Welch core (hann/hamming/rectangular window, per-segment mean detrend); variance-preserving normalization |
-| `FrequencyData` dispatches | [src/stab/utils.jl](src/stab/utils.jl) | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
-| `TauMode`, `tau_values` | [src/stab/taus.jl](src/stab/taus.jl) | Grid selector `AllTaus`/`Octave`/`HalfOctave`/`QuarterOctave`/`Decade`/`HalfDecade`; every deviation accepts a `TauMode` in place of `m_values`; `_default_m_values` is `tau_values(Octave, …)` so the octave default is unchanged |
+| `hdev`, `mhdev`, `htdev` | [src/deviations.jl](src/deviations.jl) | `htdev` wraps `mhdev` and scales by `τ/√(10/3)` |
+| `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | [src/deviations.jl](src/deviations.jl) | Bias correction applied where defined; `ttotdev` wraps `mtotdev` with `τ/√3` rescaling. One canonical extension form each (no `detrend` kwarg): TOTDEV uses Howe/SP1065 eqn 25, the modified/Hadamard total family uses the Greenhall 2003 half-mean extension (MHTOTDEV adopts the same by consistency) |
+| `mtie` | [src/deviations.jl](src/deviations.jl) | No CI fields (no published EDF model); `ci` and `confidence` are accepted but no-ops |
+| `pdev` | [src/deviations.jl](src/deviations.jl) | Full χ² CI via the Vernotte 2020 PVAR EDF model (`_pvar_edf`); honors `ci`/`confidence`; unbiased (no bias correction) |
+| `stability` | [src/suite.jl](src/suite.jl) | Compute-all entry point → `StabilitySuite`; `devs`/`taus` select the deviation set and grid; `DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :tdev)` |
+| `noise_gen` | [src/noise.jl](src/noise.jl) | Calibrated power-law clock-noise generator; returns `PhaseData` or `FrequencyData` |
+| `Sy`, `Sx`, `L` | [src/spectral.jl](src/spectral.jl) | Welch PSD: fractional-frequency `S_y(f)` (1/Hz), phase `S_x(f)` (s²/Hz), single-sideband phase noise `ℒ(f)` (dBc/Hz, required `f_carrier`); IEEE 1139-2022 §3.3–3.5. Both `PhaseData` and `FrequencyData` entry points → `SpectralResult` |
+| `_welch_psd` (internal) | [src/spectral.jl](src/spectral.jl) | One-sided "density" Welch core (hann/hamming/rectangular window, per-segment mean detrend); variance-preserving normalization |
+| `FrequencyData` dispatches | [src/grids.jl](src/grids.jl) | All 13 deviations accept `FrequencyData`; `_freq_to_phase` converts via `cumsum(y)·τ₀` |
+| `TauMode`, `tau_values` | [src/grids.jl](src/grids.jl) | Grid selector `AllTaus`/`Octave`/`HalfOctave`/`QuarterOctave`/`Decade`/`HalfDecade`; every deviation accepts a `TauMode` in place of `m_values`; `_default_m_values` is `tau_values(Octave, …)` so the octave default is unchanged |
 | `save_result`, `load_result` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for a single `StabilityResult` (format v1) |
 | `save_suite`, `load_suite` | [src/io/results.jl](src/io/results.jl) | TSV round-trip for a `StabilitySuite` + session metadata (format v2); cross-format guards vs `save_result` |
 | `read_phase`, `read_frequency` | [src/io/read.jl](src/io/read.jl) | stdlib `readdlm` with `scaling` / `detrend` / `fillgaps` kwargs |
@@ -136,16 +136,15 @@ project_overview.md                      This file (per-component audit)
 Project.toml                             Single-package manifest + extension
 src/
 ├── SigmaTau.jl                          Flat umbrella module + export block
-├── types/{abstract,phase_data,frequency_data,stability_result,stability_suite,spectral_result}.jl
+├── types.jl                             PhaseData, FrequencyData, StabilityResult, StabilitySuite, SpectralResult + show
 ├── io/{results,detrend,fillgaps,read}.jl
-└── stab/
-    ├── core/{allan,hadamard,total,mtie,pdev}.jl
-    ├── noise/{lag1,synth,gen}.jl
-    ├── stats/edf.jl
-    ├── api/{allan,hadamard,total,mtie,pdev,suite,spectral}.jl
-    ├── spectral.jl                      (Welch PSD core: _welch_psd + windows)
-    ├── taus.jl                          (TauMode grid selector + tau_values)
-    └── utils.jl                         (FrequencyData → PhaseData helper)
+├── kernels.jl                           Raw _*_core deviation kernels (allan/hadamard/total/mtie/pdev)
+├── noise.jl                             Noise-type ID (lag-1 ACF / B1 / R(n)) + synthesis + noise_gen
+├── edf.jl                               EDF / χ² CI / bias-correction math
+├── grids.jl                             TauMode grids + tau_values + FrequencyData↔PhaseData helpers
+├── spectral.jl                          Welch PSD core (_welch_psd) + public Sy / Sx / L
+├── deviations.jl                        Public deviation API (adev … pdev) → StabilityResult
+└── suite.jl                             stability() compute-all entry point → StabilitySuite
 
 ext/
 ├── SigmaTauRecipesBaseExt.jl            RecipesBase extension (loaded with Plots)

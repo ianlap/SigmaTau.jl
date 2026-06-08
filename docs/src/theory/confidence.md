@@ -42,7 +42,7 @@ of optimism in the deep red-noise regime [@cite riley-2008-sp1065].
 GR03 [@cite greenhall-2003-edf-stability] gives closed-form EDF expressions for
 overlapping ADEV/MDEV/HDEV/MHDEV at any α, parameterized by three
 dimensionless variances: `sz`, `sx`, `sw`. SigmaTau implements them in
-`src/stab/stats/edf.jl`. The formulas span several
+`src/edf.jl`. The formulas span several
 pages in the reference; SigmaTau uses the published constants directly
 without rederivation.
 

@@ -1,5 +1,5 @@
 # test/stab/pdev_edf_mc.jl — fast regression tripwire for the PVAR (PDEV) EDF
-# model wired in `src/stab/stats/edf.jl::_pvar_edf`, after Vernotte–Chen–Rubiola
+# model wired in `src/edf.jl::_pvar_edf`, after Vernotte–Chen–Rubiola
 # 2020 (arXiv:2005.13631).
 #
 # This is NOT a precision check — the model is published, not measured here. A

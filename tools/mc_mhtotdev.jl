@@ -3,7 +3,7 @@
 # MHTOTDEV is novel to SigmaTau; no published reference gives its bias factor or
 # its equivalent degrees of freedom. This harness measures both from synthesized
 # known-α power-law noise and fits the coefficient tables that ship in
-# `src/stab/stats/edf.jl` (`_coeff_mhtot`) and `bias_correction(:mhtot, …)`.
+# `src/edf.jl` (`_coeff_mhtot`) and `bias_correction(:mhtot, …)`.
 #
 # Method (see docs/src/theory/mhtotdev_bias_edf.md):
 #   • For each (α, N, m) cell, over R realizations of pure-α noise drawn from
