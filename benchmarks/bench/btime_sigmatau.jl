@@ -46,7 +46,7 @@ function btime_run(; N::Integer = 1 << 15, seed::Integer = 0)
     println("-"^54)
     for (sym, fn) in KERNELS
         @printf("%-6s ", sym)
-        @btime $fn($pd, $ms; calc_ci=false)
+        @btime $fn($pd, $ms; ci=false)
     end
     return nothing
 end

@@ -35,8 +35,8 @@
         @test length(pd_filled.x) == N
 
         ms = [1, 2, 4, 8, 16, 32, 64]
-        r_clean  = adev(PhaseData(x_clean,         tau0), ms; calc_ci=false)
-        r_filled = adev(pd_filled,                       ms; calc_ci=false)
+        r_clean  = adev(PhaseData(x_clean,         tau0), ms; ci=false)
+        r_filled = adev(pd_filled,                       ms; ci=false)
 
         # Howe's claim: filled AVAR is "close" to clean AVAR. Allow a 2x
         # ratio either way at every τ in the test grid.

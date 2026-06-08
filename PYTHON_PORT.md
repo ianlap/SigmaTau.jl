@@ -61,13 +61,18 @@ docs/
 ## API Sketch
 
 ```python
-from sigmatau import PhaseData, Octave, analyze, pdev
+from sigmatau import PhaseData, Octave, stability, pdev
 
 data = PhaseData(x, tau0=1.0)
 result = pdev(data, taus=Octave, ci=True, confidence=0.683)
-suite = analyze(data, deviations=("adev", "mdev", "hdev", "pdev"))
+suite = stability(data, devs=("adev", "mdev", "hdev", "pdev"))
 suite["pdev"].dev
 ```
+
+The port mirrors the Julia oracle's names: `stability`, `devs`, `taus`, `ci`,
+`tau0` (default `1.0`), and `confidence` are identical across both libraries —
+only the surface casing differs (Python keyword args vs Julia's). Result fields
+(`tau`, `dev`, `noise_type`, `ci_lower`, `ci_upper`, `edf`) match one-to-one.
 
 Core result types:
 

@@ -85,8 +85,8 @@ function cell_stats(alpha::Int, N::Int, ms::Vector{Int}, nreal::Int)
         # correct_bias=false: measure the RAW MHTOTVAR — the bias B we are
         # estimating must not be pre-applied (it would make this circular now
         # that mhtotdev applies the measured B by default).
-        v  = mhtotdev(pd, ms; calc_ci=false, correct_bias=false).dev
-        w  = mhdev(pd,    ms; calc_ci=false).dev
+        v  = mhtotdev(pd, ms; ci=false, correct_bias=false).dev
+        w  = mhdev(pd,    ms; ci=false).dev
         @inbounds for k in 1:nc
             V[k, r] = v[k]^2
             W[k, r] = w[k]^2

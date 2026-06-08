@@ -23,10 +23,10 @@ SpectralResult
 ```julia
 using SigmaTau, Tables
 
-rows = Tables.rows(adev(data; calc_ci=true))
+rows = Tables.rows(adev(data; ci=true))
 cols = Tables.columntable(stability(data; devs=(:adev, :mdev)))
 ```
 
 The extension is optional. `Tables` is a weak dependency, so loading
 `SigmaTau` alone does not load the wider tabular-data stack. Empty confidence
-fields from `calc_ci=false` are exposed as `missing` table values.
+fields from `ci=false` are exposed as `missing` table values.

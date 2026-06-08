@@ -60,7 +60,7 @@ end
 @testset "End-to-end deviation call works under bare using" begin
     # Quadratic phase: ADEV(τ) = √2 at m=1 by hand (see test/stab `ADEV Core`).
     p = PhaseData(collect(1.0:100.0) .^ 2, 1.0)
-    r = adev(p, [1, 2]; calc_ci=false)
+    r = adev(p, [1, 2]; ci=false)
     @test r.deviation_type === :adev
     @test r.dev[1] ≈ sqrt(2.0)
     @test length(r.tau) == 2
@@ -78,8 +78,8 @@ end
     for f in (adev, mdev, tdev, hdev, mhdev, htdev,
               totdev, mtotdev, ttotdev, htotdev, mhtotdev,
               mtie, pdev)
-        a = f(fd,    ms; calc_ci=false)
-        b = f(pd_eq, ms; calc_ci=false)
+        a = f(fd,    ms; ci=false)
+        b = f(pd_eq, ms; ci=false)
         @test a.dev ≈ b.dev
     end
 end

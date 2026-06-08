@@ -10,7 +10,7 @@
         ms = [1, 2, 4, 8]
 
         # Round-trip with CI
-        r  = adev(pd, ms; calc_ci=true)
+        r  = adev(pd, ms; ci=true)
         save_result(path, r)
         r2 = load_result(path)
         @test r2.deviation_type === r.deviation_type
@@ -22,7 +22,7 @@
         @test r2.edf       ≈ r.edf
 
         # Round-trip without CI — empty vectors must survive the cycle
-        r_nci = adev(pd, ms; calc_ci=false)
+        r_nci = adev(pd, ms; ci=false)
         save_result(path, r_nci)
         r3 = load_result(path)
         @test r3.deviation_type === :adev
@@ -40,7 +40,7 @@
         path = joinpath(tmpdir, "suite.tsv")
         Random.seed!(20260511)
         pd = PhaseData(cumsum(randn(1024)) .* 1e-9, 1.0)
-        s  = stability(pd; devs=(:adev, :mdev, :hdev), taus=Octave, calc_ci=true, confidence=0.9)
+        s  = stability(pd; devs=(:adev, :mdev, :hdev), taus=Octave, ci=true, confidence=0.9)
 
         @test save_suite(path, s; source_file="clock_a.dat") == path
         s2 = load_suite(path)
@@ -72,7 +72,7 @@
         path = joinpath(tmpdir, "suite_nci.tsv")
         Random.seed!(20260512)
         pd = PhaseData(cumsum(randn(256)) .* 1e-9, 1.0)
-        s  = stability(pd; devs=(:adev, :mtie), taus=Octave, calc_ci=false)
+        s  = stability(pd; devs=(:adev, :mtie), taus=Octave, ci=false)
         save_suite(path, s)
         s2 = load_suite(path)
         @test isnan(s2.confidence)
@@ -86,8 +86,8 @@
         spath = joinpath(tmpdir, "multi.tsv")
         Random.seed!(20260513)
         pd = PhaseData(cumsum(randn(128)) .* 1e-9, 1.0)
-        save_result(rpath, adev(pd, [1, 2, 4]; calc_ci=false))
-        save_suite(spath, stability(pd; devs=(:adev,), calc_ci=false))
+        save_result(rpath, adev(pd, [1, 2, 4]; ci=false))
+        save_suite(spath, stability(pd; devs=(:adev,), ci=false))
         @test_throws ErrorException load_suite(rpath)    # v1 file via load_suite
         @test_throws ErrorException load_result(spath)   # v2 file via load_result
     end

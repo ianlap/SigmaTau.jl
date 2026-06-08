@@ -51,8 +51,8 @@ up with the columns Stable32 prints in a deviation run:
 
 Noise-type symbols follow the SP1065 power-law labels: `:WHPM`, `:FLPM`,
 `:WHFM`, `:FLFM`, `:RWFM` (α = +2, +1, 0, −1, −2). The confidence and EDF fields
-are populated when `calc_ci=true` (the default) and left empty when
-`calc_ci=false`.
+are populated when `ci=true` (the default) and left empty when
+`ci=false`.
 
 ## A complete session
 
@@ -109,9 +109,9 @@ r = adev(p, AllTaus)        # every averaging factor
 r = adev(p, Decade)         # decade-spaced
 ```
 
-Confidence intervals are on by default (`calc_ci=true`) and use the
+Confidence intervals are on by default (`ci=true`) and use the
 Greenhall–Riley EDF with a χ² mapping — the same machinery behind Stable32's
-error bars. Turn them off for a faster bare-σ run with `calc_ci=false`.
+error bars. Turn them off for a faster bare-σ run with `ci=false`.
 
 ### 3. Run a whole suite at once
 
@@ -157,7 +157,7 @@ saved run is self-documenting.
 | Detrend / remove slope        | Edit menu            | `detrend(data; method=:linear)` or `detrend=` kwarg on read |
 | Fill gaps                     | Edit menu            | `fillgaps(data)` or `fillgaps=true` |
 | Overlapping Allan             | OADEV run            | `adev(data, m)`                   |
-| Confidence intervals          | Sigma error bars     | `calc_ci=true` (default)          |
+| Confidence intervals          | Sigma error bars     | `ci=true` (default)          |
 | Noise identification          | automatic            | `r.noise_type` (per τ)            |
 | Run several deviations        | one pass each        | `stability(data; devs=…)`         |
 | Export results table          | Save results         | `save_result` / `save_suite`      |

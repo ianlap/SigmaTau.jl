@@ -35,8 +35,8 @@ using SigmaTau: _gen_powerlaw_y, _coeff_mhtot, bias_correction
         for r in 1:R
             rng = Xoshiro(sd(alpha, r))
             pd  = PhaseData(cumsum(_gen_powerlaw_y(float(alpha), N; rng=rng)), tau0)
-            V[:, r] = mhtotdev(pd, ms; calc_ci=false, correct_bias=false).dev .^ 2
-            W[:, r] = mhdev(pd,    ms; calc_ci=false).dev .^ 2
+            V[:, r] = mhtotdev(pd, ms; ci=false, correct_bias=false).dev .^ 2
+            W[:, r] = mhdev(pd,    ms; ci=false).dev .^ 2
         end
 
         b, c = _coeff_mhtot(alpha)

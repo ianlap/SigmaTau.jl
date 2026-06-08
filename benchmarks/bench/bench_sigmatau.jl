@@ -20,7 +20,7 @@
 # Each call reuses the warm-started kernels, so back-to-back invocations
 # don't re-pay the JIT cost.
 #
-# Optional: `bench(path; kernels=[:adev, :mtotdev], calc_ci=false)` to
+# Optional: `bench(path; kernels=[:adev, :mtotdev], ci=false)` to
 # run a subset, e.g. when you only want MTOTDEV on the long file.
 
 using LinearAlgebra
@@ -66,7 +66,7 @@ function warmup()
     pd = PhaseData(randn(2048), 1.0)
     ms_warm = [1, 2, 4, 8]
     for (sym, fn) in KERNELS
-        t = @elapsed fn(pd, ms_warm; calc_ci=false)
+        t = @elapsed fn(pd, ms_warm; ci=false)
         @printf("  warm %-9s %.3fs\n", sym, t)
     end
     _WARMED[] = true
@@ -75,7 +75,7 @@ end
 
 function bench(path::AbstractString;
                kernels::Vector{Symbol}=Symbol[k for (k, _) in KERNELS],
-               calc_ci::Bool=false,
+               ci::Bool=false,
                m_max::Union{Int, Nothing}=nothing)
     warmup()
     println("\n=== $(basename(path)) ===")
@@ -86,7 +86,7 @@ function bench(path::AbstractString;
     end
     @printf("  N = %d, τ₀ = %.6g s, %d m values (%d … %d)\n",
             N, tau0, length(ms), ms[1], ms[end])
-    @printf("  threads = %d, calc_ci = %s\n", Threads.nthreads(), calc_ci)
+    @printf("  threads = %d, ci = %s\n", Threads.nthreads(), ci)
     println("  ", "-"^46)
 
     results = NamedTuple{(:kernel, :time, :bytes, :gctime), Tuple{Symbol, Float64, Int64, Float64}}[]
@@ -94,7 +94,7 @@ function bench(path::AbstractString;
         sym in kernels || continue
         # Force a GC before timing so we don't attribute prior garbage to this kernel.
         GC.gc()
-        r = @timed fn(pd, ms; calc_ci=calc_ci)
+        r = @timed fn(pd, ms; ci=ci)
         push!(results, (kernel=sym, time=r.time, bytes=r.bytes, gctime=r.gctime))
         @printf("  %-9s  %10.3f s   alloc=%10.1f MiB   gc=%5.2fs\n",
                 sym, r.time, r.bytes/2^20, r.gctime)
@@ -127,7 +127,7 @@ function bench_synth(synth_dir::AbstractString;
                      tau0::Float64=1.0,
                      m_max::Union{Int, Nothing}=nothing,
                      kernels::Vector{Symbol}=Symbol[k for (k, _) in KERNELS],
-                     calc_ci::Bool=false)
+                     ci::Bool=false)
     warmup()
     files = sort([joinpath(synth_dir, f) for f in readdir(synth_dir)
                   if endswith(f, ".txt")])
@@ -142,7 +142,7 @@ function bench_synth(synth_dir::AbstractString;
     @printf("  dir = %s\n  reals = %d, N = %d, τ₀ = %.6g s\n",
             synth_dir, length(files), N, tau0)
     @printf("  %d m values (%d … %d)\n", length(ms), ms[1], ms[end])
-    @printf("  threads = %d, calc_ci = %s\n", Threads.nthreads(), calc_ci)
+    @printf("  threads = %d, ci = %s\n", Threads.nthreads(), ci)
     println("  ", "-"^46)
 
     # Per-kernel: vector of per-realization measurements.
@@ -157,7 +157,7 @@ function bench_synth(synth_dir::AbstractString;
         for (sym, fn) in KERNELS
             sym in kernels || continue
             GC.gc()
-            r = @timed fn(pd, ms; calc_ci=calc_ci)
+            r = @timed fn(pd, ms; ci=ci)
             push!(per_kernel[sym], (
                 realization = i - 1,
                 time_s = r.time,

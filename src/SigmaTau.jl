@@ -27,8 +27,9 @@ include("io/read.jl")
 
 """
 Package-wide default confidence factor used by every public deviation API
-(`adev`, `mdev`, `hdev`, `tdev`, `mhdev`, `htdev`, `totdev`, `mtotdev`,
-`htotdev`, `mhtotdev`) when `confidence` is not supplied.
+with a χ²/EDF confidence model (`adev`, `mdev`, `tdev`, `hdev`, `mhdev`,
+`htdev`, `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev`, `pdev`) when
+`confidence` is not supplied. (`mtie` has no published EDF model and ignores it.)
 
 Set to 0.683 (1-sigma) — the time-and-frequency stability convention used
 by Stable32, AllanLab, allantools' published error bars, and the

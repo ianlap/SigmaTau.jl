@@ -7,7 +7,7 @@ using Tables
     Random.seed!(23)
     pd = PhaseData(cumsum(randn(256)) .* 1e-9, 1.0)
 
-    result = adev(pd; calc_ci=false)
+    result = adev(pd; ci=false)
     @test Tables.istable(typeof(result))
     @test Tables.rowaccess(typeof(result))
     @test Tables.schema(result).names == (
@@ -30,14 +30,14 @@ using Tables
     @test ismissing(rows[1].ci_upper)
     @test ismissing(rows[1].edf)
 
-    result_ci = adev(pd; calc_ci=true)
+    result_ci = adev(pd; ci=true)
     rows_ci = collect(Tables.rows(result_ci))
     @test rows_ci[1].noise_type == result_ci.noise_type[1]
     @test rows_ci[1].ci_lower == result_ci.ci_lower[1]
     @test rows_ci[1].ci_upper == result_ci.ci_upper[1]
     @test rows_ci[1].edf == result_ci.edf[1]
 
-    suite = stability(pd; devs=(:adev, :mdev), taus=Octave, calc_ci=false)
+    suite = stability(pd; devs=(:adev, :mdev), taus=Octave, ci=false)
     @test Tables.istable(typeof(suite))
     @test Tables.rowaccess(typeof(suite))
 
@@ -59,7 +59,7 @@ using Tables
 
     # An empty suite (devs=()) reports zero rows and must not throw — the
     # SuiteRows length reduction seeds init=0 for the empty case.
-    empty_suite = stability(pd; devs=(), calc_ci=false)
+    empty_suite = stability(pd; devs=(), ci=false)
     @test length(Tables.rows(empty_suite)) == 0
     @test length(Tables.columntable(empty_suite).tau) == 0
 end

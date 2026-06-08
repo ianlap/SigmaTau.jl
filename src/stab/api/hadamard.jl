@@ -1,17 +1,17 @@
 # api/hadamard.jl — User wrappers for Hadamard stability calculations
 
 """
-    hdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Overlapping Hadamard Deviation for the given PhaseData.
 """
-function hdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _hdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:hdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
@@ -23,17 +23,17 @@ function hdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confid
 end
 
 """
-    mhdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Modified Hadamard Deviation for the given PhaseData.
 """
-function mhdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
     raw_devs = _mhdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:mhdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
     end
 
@@ -45,7 +45,7 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confi
 end
 
 """
-    htdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Computes the Hadamard time deviation (HTDEV) for the given `PhaseData`
 — a third-difference time deviation, related to MHDEV by
@@ -54,11 +54,11 @@ Computes the Hadamard time deviation (HTDEV) for the given `PhaseData`
 construction is original to this package; SP1065, IEEE 1139-2022,
 and NBS-TN-1337 do not define it.
 """
-function htdev(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mhdev(data, m_values; calc_ci=calc_ci, confidence=confidence)
+function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mhdev(data, m_values; ci=ci, confidence=confidence)
     factor = res.tau ./ sqrt(10.0 / 3.0)
 
-    if !calc_ci
+    if !ci
         return StabilityResult(:htdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
     end
 

@@ -5,7 +5,7 @@
 # actually launching them.
 #
 # Each kernel is benched on synthetic randn input across a range of N using
-# the FULL public API (calc_ci=true, correct_bias=true defaults). The
+# the FULL public API (ci=true, correct_bias=true defaults). The
 # m-grid is the kernel's natural octave default (`_default_m_values`), so
 # both the per-m work AND the number of m's grow with N — matching the
 # wall-time a user actually pays for a typical call.
@@ -104,7 +104,7 @@ function fit_scaling(; seconds::Float64=1.0,
                            joinpath(@__DIR__, "scaling_sigmatau.json"))
     @printf("Julia threads = %d. m_values = octave default per kernel.\n",
             Threads.nthreads())
-    @printf("Full API defaults (calc_ci=true, correct_bias=true).\n")
+    @printf("Full API defaults (ci=true, correct_bias=true).\n")
     @printf("Per-measurement budget = %.1fs.\n\n", seconds)
 
     # `@belapsed` parses `seconds=…` at macro-expansion time, so we set the
@@ -157,7 +157,7 @@ function fit_scaling(; seconds::Float64=1.0,
                 "library" => "sigmatau",
                 "julia_version" => string(VERSION),
                 "threads" => Threads.nthreads(),
-                "kwargs" => "calc_ci=true, correct_bias=true (defaults)",
+                "kwargs" => "ci=true, correct_bias=true (defaults)",
                 "predict_at" => predict_at,
                 "seconds_budget" => seconds,
             ),

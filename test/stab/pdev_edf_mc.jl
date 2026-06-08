@@ -31,7 +31,7 @@ using SigmaTau: _gen_powerlaw_y, _pvar_edf
         for r in 1:R
             rng = Xoshiro(sd(alpha, r))
             pd  = PhaseData(cumsum(_gen_powerlaw_y(float(alpha), N; rng=rng)), tau0)
-            V[:, r] = pdev(pd, ms; calc_ci=false).dev .^ 2
+            V[:, r] = pdev(pd, ms; ci=false).dev .^ 2
         end
 
         for k in eachindex(ms)
@@ -51,7 +51,7 @@ using SigmaTau: _gen_powerlaw_y, _pvar_edf
     pd  = PhaseData(cumsum(_gen_powerlaw_y(0.0, N; rng=rng)), tau0)
     grid = [1, 2, 4, 8, 16, 32, 64, 128]
 
-    r = pdev(pd, grid)                        # calc_ci=true (default)
+    r = pdev(pd, grid)                        # ci=true (default)
     @test length(r.edf) == length(grid)
     @test all(isfinite, r.edf) && all(>(0), r.edf)
     @test all(isfinite, r.ci_lower) && all(isfinite, r.ci_upper)
@@ -60,11 +60,11 @@ using SigmaTau: _gen_powerlaw_y, _pvar_edf
     # EDF decreases with τ across the formula window (m ≤ N/4).
     @test issorted(r.edf[1:6]; rev = true)
 
-    rf = pdev(pd, grid; calc_ci = false)      # empty-CI contract preserved
+    rf = pdev(pd, grid; ci = false)      # empty-CI contract preserved
     @test isempty(rf.edf) && isempty(rf.noise_type)
     @test isempty(rf.ci_lower) && isempty(rf.ci_upper)
 
     # PVAR(τ₀) ≡ AVAR(τ₀): kernel identity at m = 1, and EDF uses ADEV's value.
-    @test pdev(pd, [1]; calc_ci = false).dev[1] == adev(pd, [1]; calc_ci = false).dev[1]
+    @test pdev(pd, [1]; ci = false).dev[1] == adev(pd, [1]; ci = false).dev[1]
     @test _pvar_edf(0, 1, N) == SigmaTau._calc_edf_core(0, 2, 1, 1, 1, N)
 end

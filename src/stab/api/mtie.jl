@@ -12,8 +12,8 @@ MTIE is a σ_x quantity (units of seconds), reported as a single
 deterministic envelope rather than a statistical σ — there is no
 published EDF / χ² confidence model for it, so `noise_type`,
 `ci_lower`, `ci_upper`, and `edf` are returned empty even when
-`calc_ci=true`. `calc_ci` is accepted for API uniformity with the other
-deviations but is a no-op here; there is no `confidence` kwarg.
+`ci=true`. `ci` and `confidence` are accepted for API uniformity with
+the other deviations but are no-ops here.
 
 # Examples
 
@@ -30,7 +30,7 @@ julia> r.dev
  2.0
 ```
 """
-function mtie(data::PhaseData, m_values::Vector{Int}; calc_ci::Bool=true)
+function mtie(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     raw_devs = _mtie_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     return StabilityResult(:mtie, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])

@@ -9,7 +9,7 @@ using RecipesBase
 @testset "Plot recipes" begin
     Random.seed!(99)
     pd = PhaseData(cumsum(randn(512)) .* 1e-9, 1.0)
-    r  = adev(pd, [1, 2, 4, 8]; calc_ci=true)
+    r  = adev(pd, [1, 2, 4, 8]; ci=true)
 
     @testset "single result: error bars vs CI band" begin
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), r)
@@ -24,20 +24,20 @@ using RecipesBase
     end
 
     @testset "no CI ⇒ neither error bars nor ribbon" begin
-        r0 = adev(pd, [1, 2, 4, 8]; calc_ci=false)
+        r0 = adev(pd, [1, 2, 4, 8]; ci=false)
         rd0 = RecipesBase.apply_recipe(Dict{Symbol,Any}(), r0)
         @test !haskey(rd0[1].plotattributes, :yerror)
         @test !haskey(rd0[1].plotattributes, :ribbon)
     end
 
     @testset "suite overlay: one series per result" begin
-        s = stability(pd; devs=(:adev, :hdev, :mdev), taus=Octave, calc_ci=false)
+        s = stability(pd; devs=(:adev, :hdev, :mdev), taus=Octave, ci=false)
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), s)
         @test length(rd) == 3
     end
 
     @testset "vector-of-results overlay" begin
-        r0 = adev(pd, [1, 2, 4, 8]; calc_ci=false)
+        r0 = adev(pd, [1, 2, 4, 8]; ci=false)
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), [r, r0])
         @test length(rd) == 2
     end

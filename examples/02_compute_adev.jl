@@ -84,7 +84,7 @@ result.deviation_type  # which deviation kernel produced this result
 # a single keyword:
 #
 # ```julia
-# adev(pd; calc_ci = false)
+# adev(pd; ci = false)
 # ```
 #
 # `result.ci_lower`, `result.ci_upper`, and `result.edf` come back
@@ -108,7 +108,7 @@ result_m.tau ≈ m_grid .* τ₀
 # `adev` accepts the same kwargs in both forms:
 #
 # ```julia
-# adev(pd; calc_ci = false)                 # default grid, no CI
+# adev(pd; ci = false)                 # default grid, no CI
 # adev(pd, [10, 100]; confidence = 0.95)    # explicit grid, 95 % CI
 # adev(fd)                                  # FrequencyData entry point
 # ```
