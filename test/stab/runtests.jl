@@ -746,10 +746,10 @@ const LK = LegacyKernels
     end
 
     @testset "NEFF_RELIABLE boundary" begin
-        # NEFF_RELIABLE = 30 per legacy GEMINI.md §2 mandate. The boundary
-        # determines whether identify_noise uses lag-1 ACF (N_eff ≥ threshold)
-        # or the B1-ratio fallback. Construct two cases that straddle the
-        # boundary and verify both produce a finite, classified noise type.
+        # The threshold determines whether identify_noise uses lag-1 ACF
+        # (N_eff ≥ threshold) or the B1-ratio fallback. Construct two cases
+        # that straddle the boundary and verify both produce a finite,
+        # classified noise type.
         @test NEFF_RELIABLE == 30
 
         using Random

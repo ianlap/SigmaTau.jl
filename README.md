@@ -6,32 +6,31 @@
 [![Julia ≥ 1.11](https://img.shields.io/badge/julia-%E2%89%A5%201.11-9558B2.svg)](https://julialang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An open-source, scriptable clock-stability toolkit for Julia — the Allan /
-Modified Allan / Hadamard / Total deviation families, MTIE, parabolic
-deviation, lag-1 ACF noise identification, Greenhall–Riley EDF / χ² confidence
-intervals, and a calibrated power-law noise generator, all in one flat
-namespace.
+SigmaTau.jl is a Julia package for time-and-frequency stability analysis. It
+implements the Allan, Modified Allan, Hadamard, and Total deviation families,
+MTIE, parabolic deviation, lag-1 ACF noise identification, Greenhall-Riley
+EDF / chi-squared confidence intervals, and calibrated power-law noise
+generation in one flat namespace.
 
-If you reach for **Stable32** or **allantools**, SigmaTau computes the same
-statistics, cross-validated against both — but as a Julia library you can
-script, embed, and run on any platform. Coming from Stable32? See the
+The stability estimators are cross-checked against Stable32 and allantools.
+Coming from Stable32? See the
 [migration guide](https://ianlap.github.io/SigmaTau.jl/stable/migration_from_stable32/).
 
-## Why SigmaTau
+## Scope
 
-- **Cross-validated numerics.** Deviation kernels are checked against Stable32,
-  allantools, and a MATLAB reference; the agreed value sets the tolerance floor.
-- **Fast on long records.** Against allantools 2024.06 on a real N≈407 000
-  record, the modified-total kernels run **~3,800–4,200× faster**
+- Deviation kernels are checked against Stable32, allantools, and a MATLAB
+  reference where external references exist.
+- Against allantools 2024.06 on a real N≈407 000 record, the modified-total
+  kernels run **~3,800–4,200× faster**
   (`mtotdev` 0.47 s vs ~30 min; `htotdev` 0.46 s vs ~32 min), and the full
   seven-kernel sweep finishes ~4,000× sooner. The cheap kernels
   (`adev`/`mdev`/`hdev`/`tdev`) run 13–40× faster. See
   [Performance](https://ianlap.github.io/SigmaTau.jl/stable/performance/).
   *(Benchmarked against allantools; Stable32 is parity-verified for numerics,
   not speed-tested.)*
-- **One flat API.** `using SigmaTau` brings the shared types (`PhaseData`,
-  `FrequencyData`, `StabilityResult`) and every deviation, noise-ID, EDF/CI,
-  MTIE, PDEV, and IO function into scope — no submodules to navigate.
+- `using SigmaTau` brings the shared types (`PhaseData`, `FrequencyData`,
+  `StabilityResult`) and every public deviation, noise-ID, EDF/CI, MTIE, PDEV,
+  and IO function into scope.
 
 For clock state-space estimation (Kalman filter, PID steering, holdover
 projection) see the sister package
@@ -135,9 +134,9 @@ top-level `test/runtests.jl`.
 
 ## Contributing
 
-Bug reports, new deviations, validation fixtures, and benchmarks are welcome —
-see [`CONTRIBUTING.md`](CONTRIBUTING.md). Notable references for the underlying
-math: NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, IEEE 1139-2022.
+Bug reports, new deviations, validation fixtures, and benchmarks are welcome.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). The main references for the underlying
+math are NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, and IEEE 1139-2022.
 [`project_overview.md`](project_overview.md) has the per-component status matrix
 and [`TODO.md`](TODO.md) lists outstanding work.
 

@@ -1,8 +1,8 @@
 # Performance
 
-SigmaTau.jl is built to be fast on long records. This page reports
-head-to-head timings against [allantools](https://github.com/aewallin/allantools)
-2024.06, the most widely used open-source reference.
+This page records timings against
+[allantools](https://github.com/aewallin/allantools) 2024.06 on the same input
+records and tau grids.
 
 !!! note "What is and isn't benchmarked here"
     The numbers below compare SigmaTau against **allantools** on identical
@@ -35,12 +35,11 @@ kernel call across 30 realizations:
 | mtotdev | 30.3 ms         | 107.3 s           | 3,543×  |
 | htotdev | 31.5 ms         | 114.3 s           | 3,632×  |
 
-The cheap kernels (adev / mdev / hdev / tdev) finish in well under 100 µs —
-near the timer resolution — so read the 13–20× figures as the load-bearing
-result rather than the absolute microsecond counts. The headline gap is in the
-*modified*-total family: `mtotdev` and `htotdev` are roughly **3,500–3,600×**
-faster. `totdev` (the non-modified total) gains a more modest 2.7×, which is
-expected — the optimization work concentrated on the modified-total kernels.
+The cheap kernels (adev / mdev / hdev / tdev) finish in well under 100 µs,
+near the timer resolution. The more reliable comparison is the ratio. The
+largest difference is in the *modified*-total family: `mtotdev` and `htotdev`
+are roughly **3,500–3,600×** faster. `totdev` (the non-modified total) gains a
+more modest 2.7×.
 
 ## Real record, N = 406 763
 

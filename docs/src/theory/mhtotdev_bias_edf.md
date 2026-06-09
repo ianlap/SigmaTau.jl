@@ -115,10 +115,10 @@ reference.
 - **Scale invariance.** `B` and EDF are ratios of like-dimensioned quantities,
   so the arbitrary amplitude of the uncalibrated `_gen_powerlaw_y` draw cancels.
 
-The harness emits a per-cell CSV and a JSON of metadata + fitted coefficients
-(git SHA, seed, thread count, N grid, R, the μ(α) check result) under
-`tools/artifacts/`, so a shipped coefficient is traceable to the run that
-produced it.
+The harness emits a per-cell CSV and a JSON summary of metadata plus fitted
+coefficients (git SHA, seed, thread count, N grid, R, and the μ(α) check
+result). Those outputs are generated artifacts and are not tracked in the
+package repository.
 
 !!! note "Provisional vs. authoritative numbers"
     The coefficient tables in `_coeff_mhtot` and `bias_correction(:mhtot, …)`
@@ -147,9 +147,9 @@ small τ, falling toward 1 as τ → T. The bias is modeled τ/T-linearly,
 the bias-fit residual by ~46 % (FLFM) and ~97 % (RWFM), so the τ/T dependence is
 essential at the red end and a constant would over-correct near large τ.
 
-Two methodology points proved decisive: (1) restricting the bias to the same
+Two methodology points matter for reproducing the table: (1) restricting the
+bias to the same
 `τ/τ_0 ≥ 16` window as the EDF — the near-degenerate `m = 1` cell otherwise
 dominates the weighted ratio and pulls the apparent bias spuriously below 1; and
 (2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.998 across
-all noise types. The provenance artifact (`tools/artifacts/mhtotdev_mc_full.json`)
-records the git SHA, seed, grid, and per-α fits.
+all noise types.

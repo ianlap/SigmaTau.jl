@@ -2,11 +2,8 @@
 
 Last updated: 2026-06-07.
 
-SigmaTau has two active planning tracks:
-
-- [RELEASE.md](RELEASE.md) — the immediate Julia `0.4.0` release checklist.
-- [PYTHON_PORT.md](PYTHON_PORT.md) — the future Python package design, gated on
-  a frozen Julia reference release.
+SigmaTau's active planning track is the Julia `0.4.0` release checklist in
+[RELEASE.md](RELEASE.md).
 
 ## Product Principles
 

@@ -1,11 +1,10 @@
 # Contributing to SigmaTau.jl
 
-Thanks for your interest in contributing. SigmaTau.jl is a single, flat Julia
-package for time-and-frequency stability analysis (Allan / Modified Allan /
-Hadamard / Total deviation families, MTIE, parabolic deviation, lag-1 noise
-identification, Greenhall–Riley EDF/χ² confidence intervals, and calibrated
-power-law noise generation). Bug reports, new deviations, validation fixtures,
-documentation, and benchmarks are all welcome.
+SigmaTau.jl is a single, flat Julia package for time-and-frequency stability
+analysis: Allan / Modified Allan / Hadamard / Total deviation families, MTIE,
+parabolic deviation, lag-1 noise identification, Greenhall-Riley EDF/chi-squared
+confidence intervals, and calibrated power-law noise generation. Bug reports,
+new deviations, validation fixtures, documentation, and benchmarks are welcome.
 
 This guide covers how to get set up, the conventions the codebase follows, and
 how changes are verified. For a per-component map of the package, see
@@ -107,8 +106,8 @@ under `examples/` render via Literate.jl.
 ## Commit and PR style
 
 - Commit messages: imperative mood, ≤ 72-character subject, body explains *why*.
-- CHANGELOG entries and commit messages use a terse, factual voice — past tense,
-  no marketing language, no emoji.
+- CHANGELOG entries and commit messages use a terse, factual voice: past tense,
+  no marketing language.
 - Open a pull request against `main`. The PR template includes a short checklist
   (tests pass, CHANGELOG/TODO updated, docstrings present).
 
