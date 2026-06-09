@@ -23,13 +23,14 @@ LocalPreferences.toml
 *.swo
 *~
 
-# Local agent / tool config
+# Local tool config
 .claude/
+.codex/
 .aider*
 .gemini/
 .codegraph/
-# Agent-context briefs — checked in to help AI agents working on this repo
-# CLAUDE.md and AGENTS.md are intentionally tracked
+[Cc][Ll][Aa][Uu][Dd][Ee].md
+[Aa][Gg][Ee][Nn][Tt][Ss].md
 
 # Environment
 .env
@@ -51,7 +52,7 @@ scratch.py
 scratch/
 
 # Internal planning docs (not for public repo)
-docs/superpowers/
+docs/super*/
 
 # One-off repo-setup script
 makedir.sh
@@ -64,8 +65,7 @@ makedir.sh
 docs/src/tutorials/0*_*.md
 
 # Monte Carlo run outputs from tools/mc_mhtotdev.jl. The harness is tracked;
-# its generated CSV/JSON artifacts are not (the authoritative full-sweep
-# artifact is force-added when it lands). Laptop-validation runs stay local.
+# generated CSV/JSON artifacts stay local.
 tools/artifacts/
 
 # Local design asset (kept on disk, not part of the package).

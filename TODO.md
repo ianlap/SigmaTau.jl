@@ -21,15 +21,6 @@ the changelog in the same commit.
     estimators (synthesize a known `h_α` mixture, recover the PSD slope).
 ---
 
-## 🟢 Housekeeping
-
-- [ ] **Agent-context briefs** (`CLAUDE.md`, `AGENTS.md`) are tracked
-  in the repo. When the package matures and conventions stabilise,
-  decide whether to keep them as-is or to land a sanitised version
-  (without the authorship rules) under `docs/contributing/`.
-
----
-
 ## Docs follow-ups
 
 - Fill tutorial narrative — start with `01_phase_data.md` and

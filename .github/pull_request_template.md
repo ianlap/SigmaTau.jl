@@ -1,6 +1,6 @@
 ## Summary
 
-What this change does and why.
+Describe the change and the reason for it.
 
 ## Checklist
 
@@ -16,5 +16,5 @@ What this change does and why.
 
 ## Notes
 
-Anything reviewers should pay attention to — boundary policies, breaking
-changes, reference citations, etc.
+Call out boundary policies, breaking changes, reference citations, or anything
+that needs extra review.

@@ -21,7 +21,8 @@
 #
 # Reproducible: every realization uses Xoshiro(hash((seed, α, N, r))), so results
 # are independent of thread count. Emits a CSV (per-cell) and a JSON (metadata +
-# fitted coefficients) under tools/artifacts/.
+# fitted coefficients) under tools/artifacts/. Generated artifacts are not
+# tracked in the repository.
 
 using SigmaTau
 using SigmaTau: _gen_powerlaw_y, _default_m_values

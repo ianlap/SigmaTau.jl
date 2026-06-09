@@ -8,7 +8,7 @@ assignees: ""
 
 ## What you'd like
 
-A clear description of the feature or change.
+Describe the feature or change.
 
 ## Motivation
 
@@ -23,4 +23,4 @@ have one — it's required before the math can land.
 
 ## Additional context
 
-Sketch of the API you'd expect, links, or anything else.
+Sketch the API you would expect, include links, or add any other context.

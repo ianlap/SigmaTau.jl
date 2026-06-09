@@ -1,11 +1,10 @@
 # Examples
 
-Each `.jl` file in this directory is a runnable Julia script that
-doubles as a docs page on the published site. They're written in
+Each `.jl` file in this directory is a runnable Julia script and the source for
+a docs page on the published site. The examples are written in
 [Literate.jl](https://github.com/fredrikekre/Literate.jl) format —
 plain Julia code, with prose comments lifted into Markdown headings
-when the docs build. Edit the script, rebuild, and the corresponding
-`docs/src/tutorials/*.md` page regenerates.
+when the docs build.
 
 | Script                              | Topic                                                                |
 |-------------------------------------|----------------------------------------------------------------------|
@@ -26,11 +25,11 @@ From the repo root:
 julia --project=examples examples/01_phase_data.jl
 ```
 
-`examples/Project.toml` is the env that carries `Plots` + `PGFPlotsX`
+`examples/Project.toml` is the environment that carries `Plots` + `PGFPlotsX`
 (the package's runtime `Project.toml` deliberately doesn't depend on
-either — they're only needed for visualisation). On the first run,
+either; they're only needed for visualisation). On the first run,
 `julia --project=examples -e 'using Pkg; Pkg.instantiate()'` will
-resolve and download deps; subsequent runs skip straight to compile.
+resolve and download dependencies.
 A clean checkout under `--project=.` would fail with
 `Package Plots not found` — use `--project=examples`.
 

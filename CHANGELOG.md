@@ -8,6 +8,9 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- Removed repository-local context briefs, internal planning notes, and generated
+  Monte Carlo artifacts from the tracked tree; release-facing docs now describe
+  reproducible validation outputs without tracking run artifacts.
 - Renamed the `calc_ci` keyword argument to `ci` across every public deviation
   API (`adev`, `mdev`, `tdev`, `hdev`, `mhdev`, `htdev`, `totdev`, `mtotdev`,
   `ttotdev`, `htotdev`, `mhtotdev`, `mtie`, `pdev`) and `stability`. This is a
@@ -32,6 +35,11 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
 
 - The `DEFAULT_CONFIDENCE` docstring now lists `ttotdev` and `pdev` among the
   deviations it governs.
+
+### Removed
+
+- Removed stale Python-port planning material and its fixture-export helper from
+  the Julia release tree.
 
 ## [0.4.0] — 2026-06-07
 
@@ -59,8 +67,9 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   following the NIST total-variance methodology (Howe et al. 2000 for the bias /
   EDF definitions and the `τ/τ0 ≥ 16` validity window; Vernotte & Howe for the
   Monte Carlo EDF estimator). Includes an analytic μ(α) slope cross-check, both
-  literature EDF parameterizations, and a provenance artifact (git SHA, seed,
-  fits). Methodology documented in the new Theory page "MHTOTDEV bias and EDF".
+  literature EDF parameterizations, and reproducible run metadata (git SHA,
+  seed, fits). Methodology documented in the new Theory page "MHTOTDEV bias and
+  EDF".
 - Spectral-density estimators `Sy`, `Sx`, and `L`, returning a new
   `SpectralResult` type. `Sy` is the one-sided fractional-frequency PSD
   `S_y(f)` (1/Hz, IEEE 1139-2022 §3.4); `Sx` is the phase PSD `S_x(f)`
@@ -619,14 +628,12 @@ All notable changes to **SigmaTau.jl** are tracked here. Format follows
   extension build + slide-reduction.
 - **Repository housekeeping.** `lib.bak/` (pre-restructure recovery
   snapshot) and `rough_changelog/` (six superseded implementation_plan
-  drafts) deleted from the working tree. Three internal planning logs
-  moved out of Documenter's source root into `docs/superpowers/plans/`.
+  drafts) deleted from the working tree. Internal planning logs were removed
+  from Documenter's source root.
   Top-level `validation/` renamed to `benchmarks/` via `git mv` to
   disambiguate from `reference/validation/` (numerical fixtures) and
   `docs/src/validation/` (doc pages). `scratch.jl` / `scratch.py` added
   to `.gitignore` under a new "Scratchpad files" section.
-  `CLAUDE.md` and `AGENTS.md` agent-context briefs are now intentionally
-  tracked in the repo.
 
 ### Fixed
 

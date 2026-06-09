@@ -72,7 +72,7 @@ raw `Vector{Float64}`.
 | `identify_noise` | [src/noise.jl](src/noise.jl) | lag-1 ACF + B1/R(n) fallback |
 | `_noise_id_lag1acf` | same | Quadratic detrend, differencing, ρ threshold |
 | `_noise_id_b1rn` | same | B1-ratio with R(n) WPM/FLPM disambiguation |
-| `NEFF_RELIABLE = 30` | same | Per legacy GEMINI.md §2 mandate; boundary test added |
+| `NEFF_RELIABLE = 30` | same | Boundary between lag-1 ACF and B1/R(n) fallback; regression test added |
 | Preprocessing | same | 5σ outlier rejection (per-record); per-m quadratic detrend opt-in via `detrend=true` |
 | Power-law synthesis (internal `_gen_powerlaw_y` / `_gen_powerlaw_phase`) | [src/noise.jl](src/noise.jl) | f^(α/2) shaping for α ∈ {2, 1, 0, -1, -2}; optional `rng` for independent streams |
 | `noise_gen` (public, calibrated) | [src/noise.jl](src/noise.jl) | Composite α-mixture; input mode `sigma1[α]=σ_y(τ₀)` or `h[α]=h_α`; optional `rng` kwarg; returns `PhaseData` or `FrequencyData` |
