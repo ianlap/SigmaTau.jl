@@ -1,14 +1,11 @@
 # Contributing to SigmaTau.jl
 
-SigmaTau.jl is a single, flat Julia package for time-and-frequency stability
-analysis: Allan / Modified Allan / Hadamard / Total deviation families, MTIE,
-parabolic deviation, lag-1 noise identification, Greenhall-Riley EDF/chi-squared
-confidence intervals, and calibrated power-law noise generation. Bug reports,
-new deviations, validation fixtures, documentation, and benchmarks are welcome.
+Contributions are welcome: bug reports, examples, documentation fixes,
+benchmarks, validation data, and new stability estimators all help.
 
-This guide covers how to get set up, the conventions the codebase follows, and
-how changes are verified. For a per-component map of the package, see
-[`project_overview.md`](project_overview.md).
+SigmaTau.jl is a Julia package for time-and-frequency stability analysis. The
+main goals are accurate numerical results, clear APIs, and reproducible
+validation against established references.
 
 ## Getting set up
 
@@ -20,102 +17,49 @@ cd SigmaTau.jl
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
-`Manifest.toml` is gitignored; `instantiate` resolves it from `Project.toml`.
+`Manifest.toml` is not tracked; Julia resolves dependencies from
+`Project.toml`.
 
-For interactive development, [Revise.jl](https://github.com/timholy/Revise.jl)
-hot-patches source edits without restarting Julia (struct-field changes,
-`Project.toml` edits, and new `@eval`'d definitions still need a fresh session).
+## Running tests
 
-## Running the tests
+Run the full test suite with:
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-The suite lives under `test/` and runs five sub-suites (`types/`, `stab/`,
-`io/`, `umbrella_smoke.jl`, `recipes.jl`). Please add or update tests for any
-behavior you change, and make sure the full suite passes before opening a PR.
+The tests live under `test/`. The stability tests include Stable32 and
+allantools fixture checks from `test/fixtures/validation/`, plus legacy-kernel
+parity tests for estimators without an external implementation.
 
-Two periodic quality checks (not part of `Pkg.test()`):
+For smaller changes, it is fine to run a focused test file first, then run the
+full suite before opening a PR.
 
-```julia
-using Aqua; Aqua.test_all(SigmaTau)      # method ambiguities, stale deps, piracy
-using JET;  report_package(SigmaTau)     # type instabilities across the package
-```
+## Numerical changes
 
-## Numerical correctness
+For changes to deviation kernels, EDF/confidence intervals, noise
+identification, or bias correction, please include a test or reference that
+shows why the new result is correct. Published formulas should cite the source
+(for example NIST SP1065, Greenhall/Riley, or IEEE 1139).
 
-Deviation kernels are cross-validated against three independent references:
+If you are reporting a numerical discrepancy, please include:
 
-- **Stable32** (W. Riley) — the de facto industry desktop reference.
-- **allantools** (A. Wallin) — Python second reference.
-- **AllanLab** (MATLAB) — third reference, locked-in fixtures.
+- the input data or a small generator;
+- the exact SigmaTau call;
+- the value SigmaTau returned;
+- the reference value and where it came from.
 
-Fixtures live under `reference/validation/` (read-only). After any change to a
-core kernel (in `src/kernels.jl`) run the parity testsets in
-`test/stab/runtests.jl` (Stable32 cross-validation, `allantools_cross_validation.jl`,
-and the rtol = 1e-12 `legacy_kernels.jl` contract) and confirm they still pass.
+## Documentation
 
-Do not invent new χ²/EDF formulas. Confidence-interval and EDF math cites its
-source — NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, IEEE Std
-1139-2022. New statistical expressions need a citation.
+The manual is built with Documenter.jl from `docs/`. Runnable examples live in
+`examples/` and are rendered into tutorials with Literate.jl during the docs
+build.
 
-## Code conventions
+## Pull requests
 
-- **Core / API split is firm.** Core kernels (`_adev_core`, …, in
-  `src/kernels.jl`) take `Vector{Float64}` and return raw arrays. Public API
-  functions (`adev`, …, in `src/deviations.jl`) take `PhaseData` /
-  `FrequencyData` and return a `StabilityResult`. Never collapse the two layers.
-- **`StabilityResult` fields stay non-parametric `Vector{Float64}`.** Do not
-  parameterize them.
-- **The `edf` / CI fields are empty when `ci=false` and populated when
-  `ci=true`.** Preserve this contract.
-- **Plot recipes live only in `ext/SigmaTauRecipesBaseExt.jl`** (a `RecipesBase`
-  package extension). Do not add plotting code to `src/`.
-- **Every exported function has a docstring.** 4-space indent, no trailing
-  whitespace, match the surrounding style.
-
-### Adding a new deviation
-
-1. Add the pure kernel to `src/kernels.jl` as
-   `_yourdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)`.
-2. Add **both** a `PhaseData` and a `FrequencyData` public entry point in
-   `src/deviations.jl`; the `FrequencyData` method delegates via
-   `_freq_to_phase`. Add the zero-arg and `TauMode` convenience methods too.
-3. Wire it into the `stability` router (`src/suite.jl`) if it should be
-   reachable from the compute-all entry point.
-4. Add validation tests; if no external reference exists, validate against
-   legacy kernels (rtol = 1e-12) and internal consistency.
-5. Export it from `src/SigmaTau.jl` and add it to the umbrella smoke test.
-
-## Documentation, CHANGELOG, and TODO
-
-Every shipped code change should, in the same commit:
-
-1. Remove the matching item from [`TODO.md`](TODO.md) if one exists.
-2. Add a terse, past-tense entry under `## [Unreleased]` in
-   [`CHANGELOG.md`](CHANGELOG.md) (Keep-a-Changelog format; tag breaking
-   changes). Mark pure-docs/typo changes as not warranting an entry in the
-   commit body.
-3. Refresh [`project_overview.md`](project_overview.md) if the change alters the
-   public surface (new exported function, new type, new role).
-
-User-facing docs are built with Documenter.jl from `docs/`; runnable tutorials
-under `examples/` render via Literate.jl.
-
-## Commit and PR style
-
-- Commit messages: imperative mood, ≤ 72-character subject, body explains *why*.
-- CHANGELOG entries and commit messages use a terse, factual voice: past tense,
-  no marketing language.
-- Open a pull request against `main`. The PR template includes a short checklist
-  (tests pass, CHANGELOG/TODO updated, docstrings present).
-
-## Reporting bugs and proposing features
-
-Use the [issue templates](https://github.com/ianlap/SigmaTau.jl/issues/new/choose).
-For a numerical discrepancy, please include the input data (or a generator),
-the call you made, the value you got, and the reference value you expected.
+Small, focused PRs are easiest to review. Please include tests or a short note
+about what was checked. If a change affects the public API, update the manual
+and add a brief entry under `## [Unreleased]` in `CHANGELOG.md`.
 
 By contributing, you agree that your contributions are licensed under the
 project's [MIT License](LICENSE).

@@ -12,9 +12,6 @@ pkg> add https://github.com/ianlap/SigmaTau.jl
 `StabilityResult`) and every public deviation, noise-ID, and IO function
 into scope under one flat namespace.
 
-For clock state-space estimation and Kalman steering, see the sister
-package [ClockEnsemble.jl](https://github.com/ianlap/ClockEnsemble.jl).
-
 ## A minimal example
 
 ```@example basic

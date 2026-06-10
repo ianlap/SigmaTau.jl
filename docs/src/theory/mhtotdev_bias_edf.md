@@ -117,8 +117,8 @@ reference.
 
 The harness emits a per-cell CSV and a JSON summary of metadata plus fitted
 coefficients (git SHA, seed, thread count, N grid, R, and the μ(α) check
-result). Those outputs are generated artifacts and are not tracked in the
-package repository.
+result). The authoritative full-sweep JSON is tracked at
+`tools/artifacts/mhtotdev_mc_full.json`; ad-hoc quick-run outputs stay local.
 
 !!! note "Provisional vs. authoritative numbers"
     The coefficient tables in `_coeff_mhtot` and `bias_correction(:mhtot, …)`
@@ -152,4 +152,5 @@ bias to the same
 `τ/τ_0 ≥ 16` window as the EDF — the near-degenerate `m = 1` cell otherwise
 dominates the weighted ratio and pulls the apparent bias spuriously below 1; and
 (2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.998 across
-all noise types.
+all noise types. The tracked full-sweep artifact records the git SHA, seed,
+grid, and per-α fits.

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Regenerate allantools cross-validation fixture for SigmaTau.jl.
 
-Reads the Stable32 phase fixture (`reference/validation/stable32gen.DAT`)
-and the Stable32 row schema (`reference/validation/stable32out/
+Reads the Stable32 phase fixture (`test/fixtures/validation/stable32gen.DAT`)
+and the Stable32 row schema (`test/fixtures/validation/stable32out/
 stable32_data_full.csv`), runs the matching allantools deviation for
 each (Type, AF) pair, and writes the results as
-`reference/validation/allantools_out/allantools_data_full.csv`.
+`test/fixtures/validation/allantools_out/allantools_data_full.csv`.
 
 Schema: Type, AF, Tau, N, Sigma, Err. `Err` is the absolute one-sigma
 error allantools returns alongside each deviation (normal-approximation
@@ -28,9 +28,9 @@ import numpy as np
 import allantools as at  # type: ignore[import-not-found]
 
 REPO = Path(__file__).resolve().parents[1]
-PHASE_FILE = REPO / "reference" / "validation" / "stable32gen.DAT"
-STABLE32_CSV = REPO / "reference" / "validation" / "stable32out" / "stable32_data_full.csv"
-OUT_DIR = REPO / "reference" / "validation" / "allantools_out"
+PHASE_FILE = REPO / "test" / "fixtures" / "validation" / "stable32gen.DAT"
+STABLE32_CSV = REPO / "test" / "fixtures" / "validation" / "stable32out" / "stable32_data_full.csv"
+OUT_DIR = REPO / "test" / "fixtures" / "validation" / "allantools_out"
 OUT_CSV = OUT_DIR / "allantools_data_full.csv"
 
 TAU0 = 1.0

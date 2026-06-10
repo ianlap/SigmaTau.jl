@@ -13,10 +13,6 @@ when the docs build.
 | `02_compute_adev.jl`                | Run `adev`; explore `StabilityResult` (CI, EDF, noise type).         |
 | `06_three_cornered_hat.jl`          | Recover individual clock σ_y(τ) from three pairwise differences.     |
 
-For clock state-space tutorials (Kalman filter, PID steering,
-holdover budgets) see the sister package
-[ClockEnsemble.jl](https://github.com/ianlap/ClockEnsemble.jl).
-
 ## Running
 
 From the repo root:
