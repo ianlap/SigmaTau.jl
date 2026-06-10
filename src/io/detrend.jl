@@ -123,7 +123,7 @@ function detrend(pd::PhaseData; method::Symbol=:linear)
         throw(ArgumentError("detrend: unknown method $method (expected one of $_DETREND_MODES)"))
     x = Vector{Float64}(pd.x)
     _detrend_core!(x, method)
-    return PhaseData(x, pd.tau0)
+    return PhaseData(x, pd.tau0; source=pd.source)
 end
 
 function detrend(fd::FrequencyData; method::Symbol=:linear)
@@ -131,5 +131,5 @@ function detrend(fd::FrequencyData; method::Symbol=:linear)
         throw(ArgumentError("detrend: unknown method $method (expected one of $_DETREND_MODES)"))
     y = Vector{Float64}(fd.y)
     _detrend_core!(y, method)
-    return FrequencyData(y, fd.tau0)
+    return FrequencyData(y, fd.tau0; source=fd.source)
 end

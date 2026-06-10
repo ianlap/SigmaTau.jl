@@ -75,6 +75,14 @@ suite[:adev].dev    # the ADEV curve
 keys(suite)         # which deviations are present, in order
 ```
 
+`nch` separates per-clock noise from pairwise comparisons (the
+three-cornered hat, generalized to N clocks) — see the three-cornered-hat
+tutorial in the docs:
+
+```julia
+clock_a, clock_b, clock_c = nch(r_ab, r_bc, r_ca)
+```
+
 Read a Stable32-style data file and choose a τ grid explicitly or by spacing.
 A single-column `.DAT` needs `time_col=0` (no time column) and an explicit
 `tau0`:
@@ -98,7 +106,8 @@ adev(FrequencyData(y, 1.0), [1, 2, 4])
 adev  mdev  tdev
 hdev  mhdev  htdev
 totdev  mtotdev  ttotdev  htotdev  mhtotdev
-mtie  pdev
+mtie  tierms  pdev
+theo1  theoh
 ```
 
 ### Plotting

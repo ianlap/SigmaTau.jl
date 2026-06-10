@@ -14,12 +14,43 @@ Initial public release.
 
 ### Added
 
+- Thêo1 family per NIST SP1065 §5.2.15–5.2.16: `theo1` (eq. 30 with the
+  Howe & Peppler 0.75 normalization, reported at the effective
+  `τ = 0.75·m·τ0`; `correct_bias=true` default applies the ThêoBR
+  automatic bias removal of eq. 33, `correct_bias=false` gives raw
+  Thêo1) and `theoh` (the eq. 34 ADEV/ThêoBR hybrid with the 20 %-of-T
+  crossover). EDF/CIs use the SP1065 Table 3 per-noise-type Thêo1
+  formulas (ADEV EDF on the ThêoH ADEV segment). Even-m grid handling in
+  `tau_values`/`_default_m_values` (`:theo1` grids round to even and
+  dedupe; `:theoh` grids are τ-grid factors). Raw `theo1` is
+  cross-validated against allantools 2024.06 to machine precision;
+  allantools reports the same values at `τ = m·τ0` (resolved in favor of
+  the SP1065/Stable32 effective-τ convention) and has no ThêoBR/ThêoH
+  counterpart. Both integrate with `stability` (`devs=(:theo1, :theoh)`).
+- `tierms` — RMS Time Interval Error per NIST SP1065 §5.2.18 eq. 37
+  (`√(Σ(x[i+m]−x[i])²/(N−m))`), the estimator Stable32 and allantools
+  (`tierms`) compute. A σ_x quantity reported at `τ = m·τ0` with the
+  `N − m` span count in `neff`; like `mtie` it has no published EDF /
+  χ² model, so `ci`/`edf`/`noise_type` stay empty. Cross-validated
+  against allantools 2024.06 to ≤2e-15 relative on the Stable32
+  fixture. Integrates with `stability` (`devs=(:tierms,)`).
+- `nch` — N-cornered-hat noise separation: recovers each clock's
+  individual deviation from the full set of pairwise comparisons
+  (`σ̂²ᵢ = (Rᵢ − S/(N−1))/(N−2)`), with the classic Gray–Allan
+  three-cornered hat as the `N = 3` case. Takes an upper-triangular
+  matrix of pairwise `StabilityResult`s (or the three results directly
+  in A−B, B−C, C−A order), keeps the input `deviation_type`, reports
+  non-positive variance estimates as NaN, and propagates the
+  elementwise-minimum `neff`; no CI is fabricated. Reproduces the
+  manual solution of the three-cornered-hat tutorial
+  (examples/06) to machine precision.
 - Flat `SigmaTau` API with `PhaseData`, `FrequencyData`, `StabilityResult`,
   `StabilitySuite`, and `SpectralResult`.
 - Stability estimators for Allan, Modified Allan, Hadamard, total-family,
-  MTIE, and parabolic deviation workflows:
+  Thêo, MTIE, TIE rms, and parabolic deviation workflows:
   `adev`, `mdev`, `tdev`, `hdev`, `mhdev`, `htdev`, `totdev`, `mtotdev`,
-  `ttotdev`, `htotdev`, `mhtotdev`, `mtie`, and `pdev`.
+  `ttotdev`, `htotdev`, `mhtotdev`, `theo1`, `theoh`, `mtie`, `tierms`,
+  and `pdev`.
 - `stability` for computing an ordered suite of deviations in one call.
 - Tau-grid selectors: `AllTaus`, `Octave`, `HalfOctave`, `QuarterOctave`,
   `Decade`, `HalfDecade`, and `tau_values`.
@@ -43,6 +74,29 @@ Initial public release.
   bias/EDF coefficients are calibrated with the global removal in the loop.
 - `detrend` gains a `:quadratic` method (least-squares drift removal on
   phase data).
+- `PhaseData` / `FrequencyData` carry a `source` provenance field: `"user"`
+  for directly constructed records (the default — existing constructors are
+  unchanged), the originating file path for records from `read_phase` /
+  `read_frequency`. `detrend`, `fillgaps`, and `remove_outliers` propagate
+  it, and the compact data-record displays show it when it is not `"user"`.
+- `save(path, data)` writes `PhaseData` / `FrequencyData` as a plain
+  two-column text file (sample time `(i-1)·τ₀` in seconds, value) behind a
+  `# SigmaTau <kind> data` / `# source:` / `# tau0:` comment header, e.g. to
+  hand `noise_gen` output to software outside SigmaTau. `read_phase` /
+  `read_frequency` skip leading `#` comment lines automatically and pick up
+  `# tau0:` when the keyword is omitted, so saved files round-trip with no
+  arguments. `save` is also the canonical generic for results and suites —
+  `save(path, r)` / `save(path, suite)` delegate to `save_result` /
+  `save_suite`, which remain available as aliases.
+- `find_outliers` / `remove_outliers`: Stable32-style median-absolute-
+  deviation outlier check (flag samples where
+  `|yᵢ − median| > nsigma·MAD/0.6745`, default `nsigma=5`; phase records are
+  tested on their first differences, flagging the sample each step lands
+  on), with removal imputing the flagged samples through the Howe
+  `fillgaps` machinery.
+- PrecompileTools workload covering every public entry point: the first
+  call in a fresh session runs in milliseconds instead of paying full JIT
+  compilation.
 - `StabilityResult.neff`: the number of analysis windows the kernel averaged
   at each τ (the Stable32 "#" / allantools `ns` analog), derived from each
   kernel's loop bounds and populated even when `ci=false`; 0 where the kernel

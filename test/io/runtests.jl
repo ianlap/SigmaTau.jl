@@ -7,4 +7,6 @@ using SigmaTau
     include("fillgaps.jl")
     include("read.jl")
     include("results.jl")
+    include("save.jl")
+    include("outliers.jl")
 end

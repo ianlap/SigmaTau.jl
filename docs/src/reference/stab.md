@@ -21,11 +21,19 @@ htotdev
 mhtotdev
 ```
 
-## MTIE and PDEV
+## MTIE, TIE rms, and PDEV
 
 ```@docs
 mtie
+tierms
 pdev
+```
+
+## Theo1 and ThêoH
+
+```@docs
+theo1
+theoh
 ```
 
 ## Tau grids and suite API
@@ -39,6 +47,12 @@ stability
 
 The exported [`TauMode`](@ref) instances are `AllTaus`, `Octave`,
 `HalfOctave`, `QuarterOctave`, `Decade`, and `HalfDecade`.
+
+## N-cornered hat
+
+```@docs
+nch
+```
 
 ## Noise identification
 
@@ -71,6 +85,9 @@ read_phase
 read_frequency
 detrend
 fillgaps
+find_outliers
+remove_outliers
+save
 save_result
 load_result
 save_suite
@@ -96,7 +113,10 @@ SigmaTau._mtotdev_core
 SigmaTau._htotdev_core
 SigmaTau._mhtotdev_core
 SigmaTau._mtie_core
+SigmaTau._tierms_core
 SigmaTau._pdev_core
+SigmaTau._theo1_core
+SigmaTau._theobr_ratio
 SigmaTau._kernel_m_max
 SigmaTau._default_m_values
 ```

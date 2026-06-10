@@ -27,6 +27,8 @@ Stable32's run-types map to SigmaTau functions one-to-one:
 | Time Total (TTOT)            | `ttotdev`         |
 | Hadamard Total (HTOT)        | `htotdev`         |
 | MTIE                         | `mtie`            |
+| Thêo1 / ThêoBR               | `theo1` (`correct_bias=false` is the raw Thêo1 run; the default `correct_bias=true` is ThêoBR) |
+| ThêoH                        | `theoh`           |
 
 SigmaTau's Allan and Hadamard deviations are always the overlapping estimators
 (the Stable32 "O…" variants), which is the standard choice for stability

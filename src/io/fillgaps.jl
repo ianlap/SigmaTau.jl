@@ -401,10 +401,10 @@ Returns the input unchanged if there are no `NaN` samples.
 """
 function fillgaps(pd::PhaseData)
     xfilled, _ = _howe_fillgaps_core(pd.x)
-    return PhaseData(xfilled, pd.tau0)
+    return PhaseData(xfilled, pd.tau0; source=pd.source)
 end
 
 function fillgaps(fd::FrequencyData)
     yfilled, _ = _howe_fillgaps_core(fd.y)
-    return FrequencyData(yfilled, fd.tau0)
+    return FrequencyData(yfilled, fd.tau0; source=fd.source)
 end

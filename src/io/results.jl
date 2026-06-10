@@ -70,6 +70,9 @@ columns, written as `""` / `NaN` (along with `noise_type` and `edf`) when
 Returns `path` so the call can be chained. For a whole [`stability`](@ref)
 session (multiple deviations + metadata) use [`save_suite`](@ref).
 
+[`save`](@ref) is the canonical generic entry point — `save(path, r)`
+delegates here, and this name remains as an alias.
+
 # Examples
 
 ```julia
@@ -140,6 +143,9 @@ the (optional) `source_file`, the input kind/τ₀/N, the confidence level, the 
 mode, and the deviation set; each result then follows as a `# --- result <sym>
 ---` block reusing the same seven-column table as [`save_result`](@ref).
 Returns `path`.
+
+[`save`](@ref) is the canonical generic entry point — `save(path, suite)`
+delegates here, and this name remains as an alias.
 """
 function save_suite(path::AbstractString, suite::StabilitySuite; source_file::AbstractString="")
     open(path, "w") do io

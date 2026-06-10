@@ -27,15 +27,19 @@ confidence bounds, and equivalent degrees of freedom.
 | `htotdev`           | `htotdev`         | same |
 | `mtie`              | `mtie`            | |
 | `pdev`              | `pdev`            | |
-| `theo1`             | — none            | not implemented; the [Allan-family theory page](theory/allan_family.md) discusses Theo1 and ThêoH |
-| `tierms`            | — none            | not implemented |
+| `theo1`             | `theo1`           | same eq. 30 values at equal `m` (cross-validated to machine precision), but allantools reports them at `τ = m·τ0` while SigmaTau reports the SP1065/Stable32 effective `τ = 0.75·m·τ0`; SigmaTau also applies ThêoBR bias removal by default — pass `correct_bias=false` to match allantools' raw values. See [Theory: Allan family](theory/allan_family.md) |
+| `tierms`            | `tierms`          | same SP1065 §5.2.18 eq. 37 statistic; cross-validated to machine precision |
 | `gradev`            | — none            | no gap-robust ADEV; the SigmaTau route is `fillgaps` (Howe–Schlossberger imputation), then `adev` |
-| `gcodev`, `three_cornered_hat_phase` | — none | no built-in function; the [three-cornered-hat tutorial](tutorials/06_three_cornered_hat.md) solves the same problem in a few lines |
+| `three_cornered_hat_phase` | `nch` | operates on pairwise `StabilityResult`s rather than raw phase, and generalizes to N ≥ 3 clocks; see the [three-cornered-hat tutorial](tutorials/06_three_cornered_hat.md) |
+| `gcodev`            | — none            | no Groslambert codeviation |
 | `noise.*`, `noise_kasdin` | `noise_gen` | power-law noise synthesis from `sigma1` or `h` coefficient targets |
 | `autocorr_noise_id` | `identify_noise`  | runs automatically inside every `ci=true` deviation call; see below |
 
-Three SigmaTau deviations have **no allantools counterpart**:
+Four SigmaTau deviations have **no allantools counterpart**:
 
+- `theoh` — the SP1065 ThêoH composite (overlapping ADEV below the 20 %-of-T
+  crossover, bias-removed ThêoBR above); allantools has no ThêoBR/ThêoH
+  helper. See [Theory: Allan family](theory/allan_family.md).
 - `mhdev` — modified Hadamard deviation, a phase-averaged third difference:
   drift-insensitive like HDEV while still separating white-PM from
   flicker-PM like MDEV. See [Theory: Allan family](theory/allan_family.md).
@@ -93,9 +97,10 @@ The result also carries `r.noise_type` (the per-τ power-law identification,
 as SP1065 symbols `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`) and
 `r.deviation_type` (which estimator produced it). The `noise_type`, `ci`,
 and `edf` vectors are populated when `ci=true` (the default) and empty when
-`ci=false`; `r.neff` is populated either way. `mtie` is the exception: it
-is a deterministic envelope with no published CI model, so it returns
-`noise_type`, `ci`, and `edf` empty even when `ci=true`.
+`ci=false`; `r.neff` is populated either way. `mtie` and `tierms` are the
+exceptions: they have no published CI model (`mtie` is a deterministic
+envelope), so they return `noise_type`, `ci`, and `edf` empty even when
+`ci=true`.
 
 ## The same analysis in both libraries
 
@@ -156,19 +161,24 @@ too, but only through separate manual calls to `edf_greenhall` and
 
 **Bias correction on the total family.** `totdev`, `mtotdev`, `ttotdev`,
 `htotdev`, and `mhtotdev` apply noise-type-dependent unbias corrections by
-default (`correct_bias=true`), because the raw total estimators are biased —
-MTOT reads high by roughly 3–13 % in σ depending on noise type, HTOT reads
-low. allantools returns the raw estimators (its source marks these
-corrections as to-do). To reproduce allantools' totals, pass
-`correct_bias=false`. See [Theory: Total family](theory/total_family.md)
-and [Validation](validation/methodology.md); residual differences at the
-largest τ trace to documented boundary-extension conventions.
+default (`correct_bias=true`), because the raw total estimators are biased
+relative to their parent statistics — MTOT reads high by roughly 3 – 14 %
+in σ depending on noise type, HTOT reads low. That percentage is the
+estimator's own bias against the parent statistic, not a kernel
+disagreement between libraries: with `correct_bias=false` SigmaTau
+reproduces allantools' totals to machine precision on the validation
+fixture. allantools always returns the raw estimators (its source marks
+the corrections as to-do); Stable32's policy is per-estimator — it
+corrects TOTDEV and HTOTDEV but reports MTOTDEV raw, so
+`correct_bias=false` matches Stable32 only for MTOTDEV. See
+[Theory: Total family](theory/total_family.md) and
+[Validation: Stable32](validation/stable32.md).
 
 **Noise identification is automatic and feeds everything.** Both packages
 use lag-1-autocorrelation noise identification
 [riley-2004-lag1-acf](@cite); allantools exposes it as the separate
 `autocorr_noise_id` function, while SigmaTau runs it per τ inside every
-`ci=true` call except `mtie` (with a B1-ratio fallback) and reports the
+`ci=true` call except `mtie`/`tierms` (with a B1-ratio fallback) and reports the
 result in `r.noise_type`. Because the EDF — and, for the total family, the bias
 factor — depend on the identified α, a different identification at some τ
 moves the confidence interval (and the corrected σ) at that τ. See
