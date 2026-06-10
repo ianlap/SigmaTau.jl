@@ -9,45 +9,50 @@ const _IO_VERSION = "2"
 # file-format key, independent of the public `ci` kwarg, so result files written
 # by earlier versions keep loading. Do not rename it without bumping _IO_VERSION.
 function _write_result_table(io::IO, r::StabilityResult)
-    has_ci = !isempty(r.ci_lower)
+    has_ci = !isempty(r.ci)
     println(io, "# calc_ci=", has_ci)
-    println(io, "tau\tdev\tnoise_type\tci_lower\tci_upper\tedf")
+    println(io, "tau\tdev\tnoise_type\tci_lower\tci_upper\tedf\tneff")
     for k in 1:length(r.tau)
         noise_s = has_ci ? string(r.noise_type[k]) : ""
-        ci_lo_s = has_ci ? string(r.ci_lower[k])   : "NaN"
-        ci_hi_s = has_ci ? string(r.ci_upper[k])   : "NaN"
+        ci_lo_s = has_ci ? string(r.ci[k].lo)      : "NaN"
+        ci_hi_s = has_ci ? string(r.ci[k].hi)      : "NaN"
         edf_s   = has_ci ? string(r.edf[k])        : "NaN"
         println(io, string(r.tau[k]), '\t', string(r.dev[k]), '\t',
-                    noise_s, '\t', ci_lo_s, '\t', ci_hi_s, '\t', edf_s)
+                    noise_s, '\t', ci_lo_s, '\t', ci_hi_s, '\t', edf_s, '\t',
+                    string(r.neff[k]))
     end
 end
 
 # Shared row parser: turn tab-delimited data rows back into a StabilityResult.
+# Accepts 6-column rows (files written before the neff column existed; neff
+# loads as 0) and 7-column rows (current format).
 function _parse_result_rows(deviation_type::Symbol, has_ci::Bool,
                             data_lines::AbstractVector{<:AbstractString})
     N        = length(data_lines)
     tau      = Vector{Float64}(undef, N)
     dev      = Vector{Float64}(undef, N)
     noise_s  = Vector{String}(undef, N)
-    ci_lower = Vector{Float64}(undef, N)
-    ci_upper = Vector{Float64}(undef, N)
+    ci_lo    = Vector{Float64}(undef, N)
+    ci_hi    = Vector{Float64}(undef, N)
     edf_vec  = Vector{Float64}(undef, N)
+    neff     = zeros(Int, N)
 
     for (k, line) in enumerate(data_lines)
         parts = split(line, '\t')
-        length(parts) == 6 || error("malformed row $k (expected 6 columns, got $(length(parts)))")
-        tau[k]      = parse(Float64, parts[1])
-        dev[k]      = parse(Float64, parts[2])
-        noise_s[k]  = parts[3]
-        ci_lower[k] = parse(Float64, parts[4])
-        ci_upper[k] = parse(Float64, parts[5])
-        edf_vec[k]  = parse(Float64, parts[6])
+        length(parts) in (6, 7) || error("malformed row $k (expected 6 or 7 columns, got $(length(parts)))")
+        tau[k]     = parse(Float64, parts[1])
+        dev[k]     = parse(Float64, parts[2])
+        noise_s[k] = parts[3]
+        ci_lo[k]   = parse(Float64, parts[4])
+        ci_hi[k]   = parse(Float64, parts[5])
+        edf_vec[k] = parse(Float64, parts[6])
+        length(parts) == 7 && (neff[k] = parse(Int, parts[7]))
     end
 
     has_ci || return StabilityResult(deviation_type, tau, dev,
-                                     Symbol[], Float64[], Float64[], Float64[])
+                                     Symbol[], _CIBound[], Float64[], neff)
     return StabilityResult(deviation_type, tau, dev,
-                           Symbol.(noise_s), ci_lower, ci_upper, edf_vec)
+                           Symbol.(noise_s), _zip_ci(ci_lo, ci_hi), edf_vec, neff)
 end
 
 """
@@ -57,9 +62,10 @@ Write a single `StabilityResult` to a tab-delimited text file at `path`.
 
 The file is self-describing: comment lines encode the format version, deviation
 type, and whether confidence intervals were computed (`calc_ci`), followed by a
-column-name header and one data row per τ value. All six data columns are always
-present; `noise_type`, `ci_lower`, `ci_upper`, and `edf` are written as `""` /
-`NaN` when `calc_ci=false`.
+column-name header and one data row per τ value. All seven data columns are
+always present; the `ci` tuples flatten to numeric `ci_lower` / `ci_upper`
+columns, written as `""` / `NaN` (along with `noise_type` and `edf`) when
+`calc_ci=false`. `neff` is always written.
 
 Returns `path` so the call can be chained. For a whole [`stability`](@ref)
 session (multiple deviations + metadata) use [`save_suite`](@ref).
@@ -91,9 +97,11 @@ end
 Read a single `StabilityResult` previously written by [`save_result`](@ref).
 
 The `# calc_ci=` header line determines whether confidence-interval fields are
-reconstructed. When `calc_ci=false`, `noise_type`, `ci_lower`, `ci_upper`, and
-`edf` are returned as empty vectors, matching the standard deviation API
-contract. Files written by [`save_suite`](@ref) are rejected — use
+reconstructed; the on-disk `ci_lower` / `ci_upper` columns zip back into the
+`ci` tuple vector. When `calc_ci=false`, `noise_type`, `ci`, and `edf` are
+returned as empty vectors, matching the standard deviation API contract.
+Files written before the `neff` column existed load with `neff` filled with
+zeros. Files written by [`save_suite`](@ref) are rejected — use
 [`load_suite`](@ref) for those.
 
 See also [`save_result`](@ref).
@@ -130,8 +138,8 @@ self-describing tab-delimited text file at `path` (format v2). Round-trips via
 A key=value metadata header records the package version, an ISO-8601 timestamp,
 the (optional) `source_file`, the input kind/τ₀/N, the confidence level, the tau
 mode, and the deviation set; each result then follows as a `# --- result <sym>
----` block reusing the same six-column table as [`save_result`](@ref). Returns
-`path`.
+---` block reusing the same seven-column table as [`save_result`](@ref).
+Returns `path`.
 """
 function save_suite(path::AbstractString, suite::StabilitySuite; source_file::AbstractString="")
     open(path, "w") do io

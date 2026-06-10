@@ -36,6 +36,21 @@ Initial public release.
   legacy-kernel parity tests for estimators without an external implementation.
 - Tracked MHTOTDEV Monte Carlo fit provenance at
   `tools/artifacts/mhtotdev_mc_full.json`.
+- `mhtotdev` removes the record's least-squares frequency drift by default
+  (`remove_drift=true`): the total kernel is not drift-immune (the boundary
+  extension re-admits residual drift), per-window drift removal was measured
+  to damage the statistic in both the phase and frequency domains, and the
+  bias/EDF coefficients are calibrated with the global removal in the loop.
+- `detrend` gains a `:quadratic` method (least-squares drift removal on
+  phase data).
+- `StabilityResult.neff`: the number of analysis windows the kernel averaged
+  at each τ (the Stable32 "#" / allantools `ns` analog), derived from each
+  kernel's loop bounds and populated even when `ci=false`; 0 where the kernel
+  returns NaN. The result/suite TSV format gains a matching `neff` column
+  (files written without it load with zeros), and the Tables.jl extension
+  emits it as a column.
+- Exported `ci_lower(r)` / `ci_upper(r)` accessors returning the confidence
+  bounds as plain `Vector{Float64}`s (empty-in, empty-out).
 - Migration guides for Stable32 and allantools users, a plotting cookbook, and
   an FAQ/troubleshooting page.
 - Tutorials on characterizing a drifting clock with the Hadamard family
@@ -46,6 +61,11 @@ Initial public release.
 
 - Pre-public API cleanup settled on `ci` as the confidence-interval keyword and
   `htdev` as the canonical Hadamard time-deviation name.
+- `StabilityResult` stores confidence bounds as a single `ci` field of
+  `(lo, hi)` named tuples (`r.ci[i].lo` / `r.ci[i].hi`), replacing the
+  separate `ci_lower` / `ci_upper` vector fields; the on-disk TSV format
+  keeps flat numeric `ci_lower` / `ci_upper` columns, as does the Tables.jl
+  extension.
 - `PhaseData` and `FrequencyData` default `tau0` to `1.0`.
 - Result types have compact REPL display methods instead of dumping full field
   arrays.

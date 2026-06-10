@@ -509,23 +509,27 @@ end
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
 
 MHTOTDEV is novel to SigmaTau; no canonical/published form exists. SigmaTau
-adopts the Greenhall methodology — per-window detrend + a 3× time-reverse
-extension on phase — by consistency with MTOTDEV and HTOTDEV. The detrend is
-degree-matched to the third-difference kernel: the window's frequency drift
-(TOTHVAR's half-average estimate on the frequency increments) and frequency
-offset (MTOTDEV's half-mean slope estimate on phase) are both removed, so the
-extension cannot re-admit either polynomial the kernel annihilates. With only
-the degree-1 removal, residual quadratic phase makes the reflected copies
-non-smooth at the boundaries and a drifting record reads several times high
-at long τ.
+adopts the Greenhall methodology — per-window half-mean slope removal + a 3×
+time-reverse extension on phase — by consistency with MTOTDEV and HTOTDEV.
+
+The kernel alone is NOT drift-immune: the per-window detrend removes only the
+local frequency offset, so residual deterministic drift re-enters through the
+reflected window boundaries. Per-window drift removal was evaluated in both
+the phase domain (two-parameter detrend) and the frequency domain (TOTHVAR
+scheme + modified operator) and rejected — both measurably damage the
+statistic at the PM noise types (B(WHPM) ≈ 3.8 with the χ² EDF model
+collapsing, and B(WHPM) growing ∝ m, respectively). The public `mhtotdev`
+wrapper instead removes the record's least-squares frequency drift before
+calling this kernel (`remove_drift=true` default), which is exact for a
+deterministic drift and leaves the kernel's all-α statistics intact.
 """
 function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return _mhtotdev_greenhall(x, m_values, tau0)
 end
 
 function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Per-window drift + half-mean slope removal + per-window time-reverse
-    # extension + averaged third-difference operator.
+    # Per-window half-mean slope removal + per-window time-reverse extension
+    # + averaged third-difference operator.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
@@ -553,20 +557,6 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
         Lp = 3m + 1
         L3 = 3Lp - 3m
 
-        # Per-window drift removal (degree-2 phase detrend). The third
-        # difference annihilates quadratic phase inside each copy of the
-        # window, but the time-reverse extension re-admits it at the copy
-        # boundaries unless it is removed first — the degree-2 analog of the
-        # degree-1 half-mean slope removal MTOTDEV needs for its
-        # second-difference kernel. The drift estimate is TOTHVAR's
-        # half-average of the window's frequency increments (exact for a
-        # deterministic drift), computed O(1) from telescoping phase sums.
-        Ly     = 3m                          # frequency increments per window
-        hy     = fld(Ly, 2)
-        lo0    = cld(Ly, 2) + 1              # skip the middle sample when Ly is odd
-        ddenom = isodd(Ly) ? 0.5 * (Ly - 1) + 1.0 : 0.5 * Ly
-        dmid   = fld(Ly, 2)
-
         nchunks = max(1, min(nthreads, nsubs))
         chunk_size = cld(nsubs, nchunks)
         chunk_sums = zeros(nchunks)
@@ -578,35 +568,24 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
             d3_vec = d3_pool[c]
             local_sum = 0.0
             for n in n_lo:n_hi
-                # τ0·(half-averages of the window's frequency increments);
-                # the increment sums telescope to phase differences.
-                ty1 = (x[n-1+hy+1] - x[n]) / hy
-                ty2 = (x[n-1+Lp] - x[n-1+lo0]) / (Ly - lo0 + 1)
-                sd  = (ty2 - ty1) / ddenom   # τ0 · per-sample drift in y
-                # Quadratic phase implied by that drift, subtracted below:
-                # q(j) = sd · (½(j−1)(j−2) − dmid·(j−1)).
-
                 half = floor(Int, Lp / 2)
                 s1 = 0.0
                 @inbounds @simd for j in 1:half
-                    s1 += x[n-1+j] - sd * (0.5 * (j - 1) * (j - 2) - dmid * (j - 1))
+                    s1 += x[n-1+j]
                 end
                 s1 /= half
 
                 s2 = 0.0
                 @inbounds @simd for j in (half+1):Lp
-                    s2 += x[n-1+j] - sd * (0.5 * (j - 1) * (j - 2) - dmid * (j - 1))
+                    s2 += x[n-1+j]
                 end
                 s2 /= (Lp - half)
 
                 slope = (s2 - s1) / ((Lp / 2.0) * tau0)
 
                 @inbounds for j in 1:Lp
-                    jr = Lp - j + 1
-                    val     = x[n-1+j]  - sd * (0.5 * (j - 1) * (j - 2) - dmid * (j - 1)) -
-                              slope * tau0 * (j - 1)
-                    rev_val = x[n-1+jr] - sd * (0.5 * (jr - 1) * (jr - 2) - dmid * (jr - 1)) -
-                              slope * tau0 * (jr - 1)
+                    val = x[n-1+j] - slope * tau0 * (j - 1)
+                    rev_val = x[n-1 + Lp - j + 1] - slope * tau0 * (Lp - j)
 
                     ext[j] = rev_val
                     ext[Lp + j] = val
@@ -829,4 +808,73 @@ function _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     end
 
     return devs
+end
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── analysis-window counts ──────────────────────────────────────────────
+
+"""
+    _neff_counts(dev_sym::Symbol, N::Int, m_values::Vector{Int}) → Vector{Int}
+
+Number of analysis windows the kernel for `dev_sym` averages at each
+averaging factor `m` — the Stable32 "#" / allantools `ns` count. Mirrors the
+loop bounds and small-`N` guards of the `_*_core` kernels above exactly;
+entries are 0 precisely where the kernel returns NaN. The wrapper-only
+deviations (`tdev`, `htdev`, `ttotdev`) inherit the wrapped estimator's
+counts and never reach here.
+"""
+_neff_counts(dev_sym::Symbol, N::Int, m_values::Vector{Int}) =
+    Int[_neff_count(dev_sym, N, m) for m in m_values]
+
+function _neff_count(dev_sym::Symbol, N::Int, m::Int)
+    if dev_sym === :adev || dev_sym === :pdev
+        # _adev_core: i in 1:N−2m, NaN when N−2m < 2. _pdev_core shares the
+        # bound: m = 1 falls back to _adev_core, m ≥ 2 sums M = N−2m windows
+        # (plus an explicit NaN guard for m < 1).
+        dev_sym === :pdev && m < 1 && return 0
+        L = N - 2m
+        return L >= 2 ? L : 0
+    elseif dev_sym === :mdev
+        # _mdev_core: i in 1:N−3m+1, NaN when < 2.
+        Ne = N - 3m + 1
+        return Ne >= 2 ? Ne : 0
+    elseif dev_sym === :hdev
+        # _hdev_core: i in 1:N−3m, NaN when < 2.
+        L = N - 3m
+        return L >= 2 ? L : 0
+    elseif dev_sym === :mhdev
+        # _mhdev_core: i in 1:N−4m+1, NaN when < 2.
+        Ne = N - 4m + 1
+        return Ne >= 2 ? Ne : 0
+    elseif dev_sym === :totdev
+        # _totdev_howe: n in 2:N−1 for every m (the reflected extension
+        # supplies the tails); NaN only when N ≤ 2.
+        return N > 2 ? N - 2 : 0
+    elseif dev_sym === :mtotdev
+        # _mtotdev_greenhall: nsubs = N−3m+1 subsequences, NaN when < 1.
+        nsubs = N - 3m + 1
+        return nsubs >= 1 ? nsubs : 0
+    elseif dev_sym === :htotdev
+        # _htotdev_greenhall: m = 1 falls back to the HDEV sum over N−3
+        # terms (NaN when ≤ 0); m ≥ 2 iterates n_iter = (N−1)−3m+1
+        # subsequences of y = diff(x)/τ₀ (NaN when < 1).
+        if m == 1
+            L = N - 3
+            return L > 0 ? L : 0
+        end
+        n_iter = (N - 1) - 3m + 1
+        return n_iter >= 1 ? n_iter : 0
+    elseif dev_sym === :mhtotdev
+        # _mhtotdev_greenhall: nsubs = N−4m+1 subsequences, NaN when < 1
+        # (or m < 1). The public wrapper's global drift removal does not
+        # change the record length, so the count is unaffected.
+        nsubs = N - 4m + 1
+        return (m >= 1 && nsubs >= 1) ? nsubs : 0
+    elseif dev_sym === :mtie
+        # _mtie_core: N−m fully-populated windows of m+1 samples, NaN when ≤ 0.
+        L = N - m
+        return L > 0 ? L : 0
+    end
+    throw(ArgumentError("_neff_count: unknown deviation :$dev_sym"))
 end

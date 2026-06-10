@@ -37,10 +37,13 @@ using SigmaTau
 
     @testset "ci / confidence propagate" begin
         s = stability(pd; devs=(:adev,), ci=true, confidence=0.9)
-        @test !isempty(s[:adev].ci_lower)
+        @test !isempty(s[:adev].ci)
         @test s.confidence == 0.9
         s0 = stability(pd; devs=(:adev,), ci=false)
-        @test isempty(s0[:adev].ci_lower)
+        @test isempty(s0[:adev].ci)
+        # neff is populated either way.
+        @test s0[:adev].neff == s[:adev].neff
+        @test all(>(0), s0[:adev].neff)
     end
 
     @testset "kwarg filtering: correct_bias reaches total family, not adev" begin
@@ -59,7 +62,7 @@ using SigmaTau
 
     @testset "default devs, explicit Vector{Int}, and TauMode taus" begin
         sd = stability(pd; ci=false)
-        @test keys(sd) == collect(DEFAULT_DEVIATIONS)   # (:adev, :mdev, :hdev, :tdev)
+        @test keys(sd) == collect(DEFAULT_DEVIATIONS)   # (:adev, :mdev, :hdev, :mhdev)
         se = stability(pd; devs=(:adev,), taus=[1, 2, 4, 8], ci=false)
         @test se[:adev].tau == [1.0, 2.0, 4.0, 8.0]
         @test se.tau_mode === :explicit

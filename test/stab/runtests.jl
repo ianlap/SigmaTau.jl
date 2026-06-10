@@ -79,16 +79,19 @@ const LK = LegacyKernels
         res_adev = adev(pd, m_values)
         @test length(res_adev.dev) == 3
         @test res_adev.noise_type[1] != :unknown
-        @test all(isfinite, res_adev.ci_lower)
-        @test all(isfinite, res_adev.ci_upper)
-        
+        @test all(isfinite, ci_lower(res_adev))
+        @test all(isfinite, ci_upper(res_adev))
+        # Tuple access reads naturally and agrees with the accessors.
+        @test res_adev.ci[1].lo == ci_lower(res_adev)[1]
+        @test res_adev.ci[1].hi == ci_upper(res_adev)[1]
+
         res_hdev = hdev(pd, m_values)
         @test length(res_hdev.dev) == 3
-        @test all(isfinite, res_hdev.ci_upper)
-        
+        @test all(isfinite, ci_upper(res_hdev))
+
         res_tot = totdev(pd, m_values)
         @test length(res_tot.dev) == 3
-        @test all(isfinite, res_tot.ci_upper)
+        @test all(isfinite, ci_upper(res_tot))
         
         res_htdev = htdev(pd, m_values)
         @test length(res_htdev.dev) == 3
@@ -102,13 +105,15 @@ const LK = LegacyKernels
         res_mhdev_ref = mhdev(pd, m_values)
         h_factor = res_htdev.tau ./ sqrt(10.0 / 3.0)
         @test res_htdev.dev      ≈ res_mhdev_ref.dev      .* h_factor
-        @test res_htdev.ci_lower ≈ res_mhdev_ref.ci_lower .* h_factor
-        @test res_htdev.ci_upper ≈ res_mhdev_ref.ci_upper .* h_factor
+        @test ci_lower(res_htdev) ≈ ci_lower(res_mhdev_ref) .* h_factor
+        @test ci_upper(res_htdev) ≈ ci_upper(res_mhdev_ref) .* h_factor
         # χ² invariant: the multiplicative scaling cancels in the ratio
         # CI_bound / dev, so HTDEV's relative CI structure is identical to
         # MHDEV's at every τ.
-        @test res_htdev.ci_lower ./ res_htdev.dev ≈ res_mhdev_ref.ci_lower ./ res_mhdev_ref.dev
-        @test res_htdev.ci_upper ./ res_htdev.dev ≈ res_mhdev_ref.ci_upper ./ res_mhdev_ref.dev
+        @test ci_lower(res_htdev) ./ res_htdev.dev ≈ ci_lower(res_mhdev_ref) ./ res_mhdev_ref.dev
+        @test ci_upper(res_htdev) ./ res_htdev.dev ≈ ci_upper(res_mhdev_ref) ./ res_mhdev_ref.dev
+        # htdev inherits mhdev's window count.
+        @test res_htdev.neff == res_mhdev_ref.neff
 
         # tdev wraps mdev with the τ/√3 scaling — point estimates and CI bounds
         # must be consistent with that identity.
@@ -118,19 +123,59 @@ const LK = LegacyKernels
         @test length(res_tdev.dev) == 3
         @test res_tdev.deviation_type == :tdev
         @test res_tdev.dev ≈ res_mdev_ref.dev .* factor
-        @test res_tdev.ci_lower ≈ res_mdev_ref.ci_lower .* factor
-        @test res_tdev.ci_upper ≈ res_mdev_ref.ci_upper .* factor
+        @test ci_lower(res_tdev) ≈ ci_lower(res_mdev_ref) .* factor
+        @test ci_upper(res_tdev) ≈ ci_upper(res_mdev_ref) .* factor
+        @test res_tdev.neff == res_mdev_ref.neff
 
-        # ci=false path returns empty CI and EDF vectors.
+        # ci=false path returns empty CI and EDF vectors; neff stays populated.
         res_tdev_nci = tdev(pd, m_values; ci=false)
-        @test isempty(res_tdev_nci.ci_lower)
-        @test isempty(res_tdev_nci.ci_upper)
+        @test isempty(res_tdev_nci.ci)
+        @test isempty(ci_lower(res_tdev_nci))
+        @test isempty(ci_upper(res_tdev_nci))
         @test isempty(res_tdev_nci.edf)
+        @test res_tdev_nci.neff == res_tdev.neff
 
         # edf is populated when ci=true.
         @test length(res_adev.edf) == length(m_values)
         @test all(isfinite, res_adev.edf)
         @test all(>=(0.0), res_adev.edf)
+    end
+
+    @testset "neff window counts mirror the kernel loop bounds" begin
+        using Random
+        Random.seed!(20260610)
+        N  = 256
+        pd = PhaseData(cumsum(randn(N)) .* 1e-9, 1.0)
+        ms = [1, 2, 4, 8, 16]
+
+        # adev sums N−2m second differences (_adev_core: i in 1:N−2m).
+        @test adev(pd, ms; ci=false).neff == N .- 2 .* ms
+        # mhdev sums N−4m+1 fourth differences (_mhdev_core: i in 1:N−4m+1).
+        @test mhdev(pd, ms; ci=false).neff == N .- 4 .* ms .+ 1
+        # mhtotdev: same N−4m+1 subsequence count; the wrapper's global drift
+        # removal does not change the record length, so remove_drift=true and
+        # =false agree.
+        @test mhtotdev(pd, ms; ci=false, remove_drift=true).neff == N .- 4 .* ms .+ 1
+        @test mhtotdev(pd, ms; ci=false, remove_drift=false).neff == N .- 4 .* ms .+ 1
+        # htotdev: m=1 falls back to the HDEV sum over N−3 terms; m≥2 runs
+        # (N−1)−3m+1 subsequences of y = diff(x).
+        r_htot = htotdev(pd, ms; ci=false)
+        @test r_htot.neff[1] == N - 3
+        @test r_htot.neff[2:end] == (N - 1) .- 3 .* ms[2:end] .+ 1
+        # Other kernels, per their loop bounds.
+        @test mdev(pd, ms; ci=false).neff    == N .- 3 .* ms .+ 1
+        @test hdev(pd, ms; ci=false).neff    == N .- 3 .* ms
+        @test totdev(pd, ms; ci=false).neff  == fill(N - 2, length(ms))
+        @test mtotdev(pd, ms; ci=false).neff == N .- 3 .* ms .+ 1
+        @test pdev(pd, ms; ci=false).neff    == N .- 2 .* ms
+
+        # neff is populated identically with and without CI.
+        @test adev(pd, ms; ci=true).neff == adev(pd, ms; ci=false).neff
+
+        # NaN grid points (m too large for N) report neff = 0.
+        r_edge = adev(pd, [N ÷ 2 - 1, N ÷ 2]; ci=false)
+        @test isnan(r_edge.dev[2]) && r_edge.neff[2] == 0
+        @test r_edge.neff[1] == 2
     end
 
     @testset "Legacy parity (extracted SP1065 kernels)" begin
@@ -403,8 +448,8 @@ const LK = LegacyKernels
             @test res.deviation_type == :mtotdev
             @test all(isfinite, res.dev)
             @test all(.>(0.0), res.dev)
-            @test all(.<=(0.0), res.ci_lower .- res.dev)
-            @test all(.>=(0.0), res.ci_upper .- res.dev)
+            @test all(.<=(0.0), ci_lower(res) .- res.dev)
+            @test all(.>=(0.0), ci_upper(res) .- res.dev)
         end
     end
 
@@ -429,11 +474,12 @@ const LK = LegacyKernels
         rm_ci = mtotdev(pd, ms; ci=true, correct_bias=true)
         rt_ci = ttotdev(pd, ms; ci=true, correct_bias=true)
         f = rm_ci.tau ./ sqrt(3.0)
-        @test isapprox(rt_ci.dev,      rm_ci.dev      .* f; rtol=1e-14)
-        @test isapprox(rt_ci.ci_lower, rm_ci.ci_lower .* f; rtol=1e-14)
-        @test isapprox(rt_ci.ci_upper, rm_ci.ci_upper .* f; rtol=1e-14)
+        @test isapprox(rt_ci.dev,          rm_ci.dev          .* f; rtol=1e-14)
+        @test isapprox(ci_lower(rt_ci), ci_lower(rm_ci) .* f; rtol=1e-14)
+        @test isapprox(ci_upper(rt_ci), ci_upper(rm_ci) .* f; rtol=1e-14)
         @test rt_ci.edf        == rm_ci.edf
         @test rt_ci.noise_type == rm_ci.noise_type
+        @test rt_ci.neff       == rm_ci.neff
 
         # FrequencyData entry routes via _freq_to_phase (cumsum). Reconstructed
         # phase has one fewer sample than the original x, so values differ
@@ -474,13 +520,14 @@ const LK = LegacyKernels
         end
     end
 
-    @testset "MHTOTDEV deterministic-trend invariance" begin
-        # The per-window detrend is degree-matched to the third-difference
-        # kernel: a pure frequency offset (linear phase) and a pure frequency
-        # drift (quadratic phase) must both be removed exactly, so adding
-        # either to a record cannot change the statistic. The drift estimate
-        # is exact for a deterministic drift (half-averages of an exactly
-        # linear frequency series), so agreement is to roundoff.
+    @testset "MHTOTDEV deterministic-trend invariance (wrapper)" begin
+        # The mhtotdev wrapper removes the record's least-squares quadratic
+        # (frequency drift) before the kernel by default. The fit is a linear
+        # projection, so adding a deterministic offset/frequency-offset/drift
+        # polynomial to a record cannot change the result — exactly, up to
+        # roundoff. The raw kernel itself is NOT drift-immune (its per-window
+        # detrend removes only the local frequency offset), which is the
+        # reason the wrapper-level removal exists; lock in both facts.
         using Random
         N    = 512
         tau0 = 1.0
@@ -488,17 +535,26 @@ const LK = LegacyKernels
 
         Random.seed!(20260509)
         x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
-        t = (0:N-1) .* tau0
+        t = collect(0:N-1) .* tau0
 
-        base = SigmaTau._mhtotdev_core(x, ms, tau0)
-
-        offset = 1e-9                     # frequency offset → linear phase
-        drift  = 1e-12                    # frequency drift  → quadratic phase
+        # The synthetic noise is unit-scale (y has unit variance), so the
+        # trend magnitudes are chosen relative to that — large enough that
+        # the drift dominates the statistic at long τ, which is what makes
+        # the remove_drift=false assertion below bite.
+        offset = 0.1                      # frequency offset → linear phase
+        drift  = 0.1                      # frequency drift  → quadratic phase
         x_trend = x .+ offset .* t .+ 0.5 .* drift .* t .^ 2
-        with_trend = SigmaTau._mhtotdev_core(x_trend, ms, tau0)
 
-        @test all(isfinite, with_trend)
-        @test with_trend ≈ base rtol = 1e-8
+        base       = mhtotdev(PhaseData(x, tau0),       ms; ci=false, correct_bias=false)
+        with_trend = mhtotdev(PhaseData(x_trend, tau0), ms; ci=false, correct_bias=false)
+        @test all(isfinite, with_trend.dev)
+        @test with_trend.dev ≈ base.dev rtol = 1e-8
+
+        # remove_drift=false on the drifting record must differ at long τ —
+        # the kernel alone re-admits drift through the window boundaries.
+        raw = mhtotdev(PhaseData(x_trend, tau0), ms; ci=false, correct_bias=false,
+                       remove_drift=false)
+        @test raw.dev[end] > 2 * base.dev[end]
     end
 
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
@@ -657,15 +713,16 @@ const LK = LegacyKernels
         got = SigmaTau._mtie_core(xn, m_grid, 1.0)
         @test got ≈ ref atol=0.0 rtol=1e-15
 
-        # API wrapper returns a StabilityResult with empty CI fields.
+        # API wrapper returns a StabilityResult with empty CI fields; neff
+        # carries the N−m window count.
         pd = PhaseData(xn, 1.0)
         res = mtie(pd, m_grid)
         @test res.deviation_type == :mtie
         @test res.dev ≈ ref
         @test isempty(res.noise_type)
-        @test isempty(res.ci_lower)
-        @test isempty(res.ci_upper)
+        @test isempty(res.ci)
         @test isempty(res.edf)
+        @test res.neff == length(xn) .- m_grid
 
         # `confidence` is accepted for signature uniformity (no-op for MTIE):
         # passing it must not error and must not populate CI fields.
@@ -759,11 +816,11 @@ const LK = LegacyKernels
         @test res.dev ≈ ref
         @test length(res.edf) == length(ms) && all(isfinite, res.edf)
         @test !isempty(res.noise_type)
-        @test all(res.ci_lower .<= res.dev .+ 1e-12) && all(res.dev .<= res.ci_upper .+ 1e-12)
+        @test all(ci_lower(res) .<= res.dev .+ 1e-12) && all(res.dev .<= ci_upper(res) .+ 1e-12)
 
         res_noci = pdev(pd, ms; ci=false)
         @test res_noci.dev ≈ ref
-        @test isempty(res_noci.ci_lower) && isempty(res_noci.ci_upper) && isempty(res_noci.edf)
+        @test isempty(res_noci.ci) && isempty(res_noci.edf)
 
         Random.seed!(20260509)
         y = randn(200) .* 1e-9
@@ -1026,13 +1083,14 @@ const LK = LegacyKernels
         @testset "kwargs pass through (ci, confidence)" begin
             Random.seed!(7)
             p = PhaseData(_gen_powerlaw_phase(0.0, 512; tau0=1.0), 1.0)
-            # ci=true populates CI; ci=false leaves them empty.
+            # ci=true populates CI; ci=false leaves them empty (neff stays).
             r_ci = adev(p; ci = true)
-            @test !isempty(r_ci.ci_lower)
+            @test !isempty(r_ci.ci)
             @test !isempty(r_ci.edf)
             r_no = adev(p; ci = false)
-            @test isempty(r_no.ci_lower)
+            @test isempty(r_no.ci)
             @test isempty(r_no.edf)
+            @test r_no.neff == r_ci.neff && !isempty(r_no.neff)
             # totdev's `correct_bias` kwarg passes through.
             r_raw  = totdev(p; ci = false, correct_bias = false)
             r_corr = totdev(p; ci = false, correct_bias = true)

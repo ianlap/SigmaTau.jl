@@ -3,6 +3,9 @@ module SigmaTauTablesExt
 using SigmaTau
 import Tables
 
+# `ci_lower` / `ci_upper` stay flat numeric columns (the per-row split of the
+# `ci` tuple field, matching the `ci_lower` / `ci_upper` accessors); `neff` is
+# always populated.
 const RESULT_NAMES = (
     :deviation_type,
     :tau,
@@ -11,6 +14,7 @@ const RESULT_NAMES = (
     :ci_lower,
     :ci_upper,
     :edf,
+    :neff,
 )
 const RESULT_TYPES = (
     Symbol,
@@ -20,6 +24,7 @@ const RESULT_TYPES = (
     Union{Missing,Float64},
     Union{Missing,Float64},
     Union{Missing,Float64},
+    Int,
 )
 const RESULT_SCHEMA = Tables.Schema(RESULT_NAMES, RESULT_TYPES)
 const RESULT_ROW = NamedTuple{
@@ -32,6 +37,7 @@ const RESULT_ROW = NamedTuple{
         Union{Missing,Float64},
         Union{Missing,Float64},
         Union{Missing,Float64},
+        Int,
     },
 }
 
@@ -66,14 +72,16 @@ Base.eltype(::Type{SuiteRows}) = RESULT_ROW
 @inline _maybe(values::Vector, i::Int) = i <= length(values) ? values[i] : missing
 
 @inline function _row(result::SigmaTau.StabilityResult, i::Int)::RESULT_ROW
+    ci = i <= length(result.ci) ? result.ci[i] : missing
     return (
         deviation_type = result.deviation_type,
         tau = result.tau[i],
         dev = result.dev[i],
         noise_type = _maybe(result.noise_type, i),
-        ci_lower = _maybe(result.ci_lower, i),
-        ci_upper = _maybe(result.ci_upper, i),
+        ci_lower = ci === missing ? missing : ci.lo,
+        ci_upper = ci === missing ? missing : ci.hi,
         edf = _maybe(result.edf, i),
+        neff = result.neff[i],
     )
 end
 

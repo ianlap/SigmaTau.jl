@@ -18,6 +18,7 @@ using Tables
         :ci_lower,
         :ci_upper,
         :edf,
+        :neff,
     )
 
     rows = collect(Tables.rows(result))
@@ -29,13 +30,18 @@ using Tables
     @test ismissing(rows[1].ci_lower)
     @test ismissing(rows[1].ci_upper)
     @test ismissing(rows[1].edf)
+    # neff is populated even on a ci=false result.
+    @test rows[1].neff == result.neff[1]
+    @test rows[1].neff isa Int
 
     result_ci = adev(pd; ci=true)
     rows_ci = collect(Tables.rows(result_ci))
     @test rows_ci[1].noise_type == result_ci.noise_type[1]
-    @test rows_ci[1].ci_lower == result_ci.ci_lower[1]
-    @test rows_ci[1].ci_upper == result_ci.ci_upper[1]
+    @test rows_ci[1].ci_lower == result_ci.ci[1].lo
+    @test rows_ci[1].ci_upper == result_ci.ci[1].hi
     @test rows_ci[1].edf == result_ci.edf[1]
+    @test rows_ci[1].neff == result_ci.neff[1]
+    @test [row.neff for row in rows_ci] == result_ci.neff
 
     suite = stability(pd; devs=(:adev, :mdev), taus=Octave, ci=false)
     @test Tables.istable(typeof(suite))
@@ -50,6 +56,7 @@ using Tables
     @test cols.deviation_type == [row.deviation_type for row in suite_rows]
     @test cols.tau == [row.tau for row in suite_rows]
     @test cols.dev == [row.dev for row in suite_rows]
+    @test cols.neff == vcat(suite[:adev].neff, suite[:mdev].neff)
 
     # A bare StabilityResult also round-trips through columntable (rowaccess +
     # schema fallback on ResultRows).

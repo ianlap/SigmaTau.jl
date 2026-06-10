@@ -277,11 +277,10 @@ function mhtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     return total_sum / (nsubs * (m * tau0)^2)
 end
 
-# Canonical MHTOTDEV (Greenhall per-window detrend). Independent reference
-# for the kept `_mhtotdev_core` form. The per-window detrend is degree-matched
-# to the third-difference kernel: TOTHVAR's half-average drift estimate on the
-# window's frequency increments removes the quadratic phase term, then the
-# half-mean slope removal (matching MTOTDEV/HTOTDEV) removes the linear term.
+# Canonical MHTOTDEV (Greenhall half-mean slope removal). Independent reference
+# for the kept `_mhtotdev_core` form. Identical to `mhtotdev_var` except the
+# per-window detrend is the half-mean slope (matching MTOTDEV/HTOTDEV), not a
+# full least-squares fit.
 function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     m >= 1 || throw(ArgumentError("averaging factor m must be >= 1"))
     N = length(x); nsubs = N - 4m + 1
@@ -289,7 +288,6 @@ function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
 
     Lp = 3m + 1; ext_len = 3Lp; L3 = ext_len - 3m
     pd     = Vector{Float64}(undef, Lp)
-    yd     = Vector{Float64}(undef, Lp - 1)
     ext    = Vector{Float64}(undef, ext_len)
     d3_vec = Vector{Float64}(undef, L3)
     S      = Vector{Float64}(undef, L3 + 1)
@@ -297,23 +295,6 @@ function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     total_sum = 0.0
     for n in 1:nsubs
         copyto!(pd, 1, x, n, Lp)
-
-        # Drift removal (matches `_mhtotdev_greenhall`): TOTHVAR half-average
-        # estimate of the window's frequency slope; the implied quadratic
-        # phase is subtracted before the slope step.
-        Ly = Lp - 1
-        for j in 1:Ly
-            yd[j] = (pd[j+1] - pd[j]) / tau0
-        end
-        hy  = fld(Ly, 2)
-        lo0 = cld(Ly, 2) + 1
-        ybar1 = sum(@view(yd[1:hy])) / hy
-        ybar2 = sum(@view(yd[lo0:Ly])) / (Ly - lo0 + 1)
-        sdy = (ybar2 - ybar1) / (isodd(Ly) ? 0.5 * (Ly - 1) + 1.0 : 0.5 * Ly)
-        mid = fld(Ly, 2)
-        for j in 1:Lp
-            pd[j] -= sdy * tau0 * (0.5 * (j - 1) * (j - 2) - mid * (j - 1))
-        end
 
         # Half-mean slope removal (matches `_mhtotdev_greenhall`).
         half = floor(Int, Lp / 2)

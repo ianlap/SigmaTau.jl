@@ -60,15 +60,17 @@ result = adev(data)
 result.tau          # τ values (s)
 result.dev          # σ_y(τ)
 result.noise_type   # :WHPM / :FLPM / :WHFM / :FLFM / :RWFM, per τ
-result.ci_lower     # χ² (or Gaussian fallback) confidence bounds
-result.ci_upper
+result.ci           # χ² (or Gaussian fallback) confidence bounds — one
+                    # (lo, hi) tuple per τ: result.ci[1].lo / result.ci[1].hi;
+                    # ci_lower(result) / ci_upper(result) give plain vectors
 result.edf          # equivalent degrees of freedom (empty when ci=false)
+result.neff         # number of analysis windows per τ (always populated)
 ```
 
 Compute a whole suite in one call and index it by deviation:
 
 ```julia
-suite = stability(data; devs=(:adev, :mdev, :hdev, :tdev))
+suite = stability(data; devs=(:adev, :mdev, :hdev, :mhdev))
 suite[:adev].dev    # the ADEV curve
 keys(suite)         # which deviations are present, in order
 ```

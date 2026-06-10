@@ -7,6 +7,7 @@ using StaticArrays
 using DelimitedFiles
 using FFTW
 using Dates
+using Printf
 
 # ── Shared types ────────────────────────────────────────────────────────
 include("types.jl")
@@ -27,7 +28,7 @@ with a χ²/EDF confidence model (`adev`, `mdev`, `tdev`, `hdev`, `mhdev`,
 `confidence` is not supplied. (`mtie` has no published EDF model and ignores it.)
 
 Set to 0.683 (1-sigma) — the time-and-frequency stability convention used
-by Stable32, AllanLab, allantools' published error bars, and the
+by Stable32, allantools' published error bars, and the
 Greenhall–Riley uncertainty papers. Override per call by passing
 `confidence=0.95` (or any other level) explicitly.
 """
@@ -47,6 +48,7 @@ include("suite.jl")
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
 export SpectralResult
+export ci_lower, ci_upper
 
 export save_result, load_result, save_suite, load_suite
 export read_phase, read_frequency
