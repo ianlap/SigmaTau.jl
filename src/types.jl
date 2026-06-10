@@ -72,8 +72,11 @@ end
 
 Unified return type for every stability calculation.
 
-The `noise_type`, `ci_lower`, `ci_upper`, and `edf` vectors are empty when
-the calculation was invoked with `ci=false`.
+The `noise_type`, `ci`, and `edf` vectors are empty when the calculation was
+invoked with `ci=false` (and always for `mtie`); `neff` is always populated.
+Per-τ confidence bounds read as `r.ci[i].lo` / `r.ci[i].hi`; the
+[`ci_lower`](@ref) / [`ci_upper`](@ref) accessors return them as plain
+vectors.
 
 $(TYPEDFIELDS)
 """
@@ -86,13 +89,45 @@ struct StabilityResult
     dev::Vector{Float64}
     "Noise-type symbol identified at each τ (empty unless `ci=true`)."
     noise_type::Vector{Symbol}
-    "Lower CI bound (empty unless `ci=true`)."
-    ci_lower::Vector{Float64}
-    "Upper CI bound (empty unless `ci=true`)."
-    ci_upper::Vector{Float64}
+    "Confidence interval `(lo, hi)` per τ (empty unless `ci=true`)."
+    ci::Vector{@NamedTuple{lo::Float64, hi::Float64}}
     "Equivalent degrees of freedom (empty unless `ci=true`)."
     edf::Vector{Float64}
+    "Number of analysis windows averaged at each τ (0 where the kernel returns NaN)."
+    neff::Vector{Int}
 end
+
+# Element type of `StabilityResult.ci`.
+const _CIBound = @NamedTuple{lo::Float64, hi::Float64}
+
+# Zip separate lower/upper bound vectors (as returned by
+# `confidence_intervals`) into the tuple form stored in `ci`.
+_zip_ci(lower::Vector{Float64}, upper::Vector{Float64}) =
+    _CIBound[(lo = lo, hi = hi) for (lo, hi) in zip(lower, upper)]
+
+# Multiply each CI bound by a per-τ factor (tdev/htdev/ttotdev rescaling).
+_scale_ci(ci::Vector{_CIBound}, factor::Vector{Float64}) =
+    _CIBound[(lo = c.lo * f, hi = c.hi * f) for (c, f) in zip(ci, factor)]
+
+"""
+    ci_lower(r::StabilityResult) → Vector{Float64}
+
+Lower confidence bounds of `r` as a plain vector (`getfield.(r.ci, :lo)`).
+Empty when the result carries no CIs.
+"""
+ci_lower(r::StabilityResult) = getfield.(r.ci, :lo)
+
+"""
+    ci_upper(r::StabilityResult) → Vector{Float64}
+
+Upper confidence bounds of `r` as a plain vector (`getfield.(r.ci, :hi)`).
+Empty when the result carries no CIs.
+"""
+ci_upper(r::StabilityResult) = getfield.(r.ci, :hi)
+
+# Display rounding for the show methods below: 4 significant digits via %.4g.
+# The stored vectors keep full precision — this is presentation only.
+_show4g(x::Real) = @sprintf("%.4g", x)
 
 function Base.show(io::IO, r::StabilityResult)
     n = length(r.tau)
@@ -101,8 +136,41 @@ function Base.show(io::IO, r::StabilityResult)
         print(io, "StabilityResult(:", r.deviation_type, ", 0 pts, ", ci, ")")
     else
         print(io, "StabilityResult(:", r.deviation_type, ", ", n, " pts, ",
-                  "τ∈[", r.tau[1], ", ", r.tau[end], "] s, ", ci, ")")
+                  "τ∈[", _show4g(r.tau[1]), ", ", _show4g(r.tau[end]), "] s, ", ci, ")")
     end
+end
+
+# Full REPL display: the one-line summary followed by an aligned per-τ table.
+# CI columns appear only when the result carries them. Results longer than
+# 12 rows truncate to 11 plus an ellipsis line.
+function Base.show(io::IO, ::MIME"text/plain", r::StabilityResult)
+    show(io, r)
+    n = length(r.tau)
+    n == 0 && return
+    has_ci = !isempty(r.edf)
+    maxrows = 12
+    nshow = n > maxrows ? maxrows - 1 : n
+    header = has_ci ? ["tau", "dev", "neff", "ci_lo", "ci_hi", "edf", "noise"] :
+                      ["tau", "dev", "neff"]
+    rows = map(1:nshow) do i
+        has_ci ?
+            [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i]),
+             _show4g(r.ci[i].lo), _show4g(r.ci[i].hi), _show4g(r.edf[i]),
+             string(r.noise_type[i])] :
+            [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i])]
+    end
+    widths = map(length, header)
+    for row in rows, j in eachindex(widths)
+        widths[j] = max(widths[j], length(row[j]))
+    end
+    # Numeric columns right-align; the trailing noise column prints as is.
+    pad(s, j) = (has_ci && j == length(header)) ? s : lpad(s, widths[j])
+    print(io, "\n  ", join((pad(header[j], j) for j in eachindex(header)), "  "))
+    for row in rows
+        print(io, "\n  ", join((pad(row[j], j) for j in eachindex(header)), "  "))
+    end
+    n > maxrows && print(io, "\n  … ", n, " rows total")
+    return
 end
 
 
@@ -157,16 +225,16 @@ function Base.show(io::IO, s::StabilitySuite)
     devs = join(("$d" for d in keys(s)), ", ")
     ci = isnan(s.confidence) ? "no CI" : "CI@$(s.confidence)"
     print(io, "StabilitySuite(", length(s), " devs [", devs, "], ",
-              s.data_kind, ", N=", s.n, ", τ₀=", s.tau0, " s, ", ci, ")")
+              s.data_kind, ", N=", s.n, ", τ₀=", _show4g(s.tau0), " s, ", ci, ")")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::StabilitySuite)
     ci = isnan(s.confidence) ? "no CI" : "CI @ $(s.confidence)"
     print(io, "StabilitySuite: ", length(s), " deviation(s), ", s.data_kind,
-              " data, N=", s.n, ", τ₀=", s.tau0, " s, taus=", s.tau_mode, ", ", ci)
+              " data, N=", s.n, ", τ₀=", _show4g(s.tau0), " s, taus=", s.tau_mode, ", ", ci)
     for r in s.results
         n = length(r.tau)
-        rng = n == 0 ? "" : "  τ∈[$(r.tau[1]), $(r.tau[end])] s"
+        rng = n == 0 ? "" : "  τ∈[$(_show4g(r.tau[1])), $(_show4g(r.tau[end]))] s"
         print(io, "\n  ", rpad(string(r.deviation_type), 9), lpad(n, 3), " pts", rng)
     end
 end

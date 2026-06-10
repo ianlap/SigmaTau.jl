@@ -12,7 +12,7 @@
 $(SIGNATURES)
 
 Overlapping Allan deviation σ_y(τ) for a phase record, per IEEE 1139-2022 §C.2.
-EDF for the χ²-based CI uses the closed-form approximation of [Greenhall & Riley 2003](@cite greenhall-2003-edf-stability).
+EDF for the χ²-based CI uses the truncated-sum algorithm of [Greenhall & Riley 2003](@cite greenhall-2003-edf-stability).
 
 `m_values` selects the analysis-interval factors (τ = m·τ₀). When
 `ci=true`, the result populates per-τ noise type, χ²-based confidence
@@ -37,16 +37,17 @@ function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     x = _f64(data.x)
     raw_devs = _adev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
+    neff = _neff_counts(:adev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:adev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:adev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:adev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:adev, taus, raw_devs, noises, lower, upper, edfs)
+    return StabilityResult(:adev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -76,16 +77,17 @@ function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     x = _f64(data.x)
     raw_devs = _mdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
+    neff = _neff_counts(:mdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:mdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:mdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:mdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mdev, taus, raw_devs, noises, lower, upper, edfs)
+    return StabilityResult(:mdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -102,11 +104,11 @@ function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     factor = res.tau ./ sqrt(3.0)
 
     if !ci
-        return StabilityResult(:tdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:tdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
     end
 
     return StabilityResult(:tdev, res.tau, res.dev .* factor, res.noise_type,
-                           res.ci_lower .* factor, res.ci_upper .* factor, res.edf)
+                           _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
@@ -147,16 +149,17 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     raw_devs = _hdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
+    neff = _neff_counts(:hdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:hdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:hdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=3)
     edfs = calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:hdev, taus, raw_devs, noises, lower, upper, edfs)
+    return StabilityResult(:hdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -169,16 +172,17 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     raw_devs = _mhdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
+    neff = _neff_counts(:mhdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:mhdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:mhdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=3)
     edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mhdev, taus, raw_devs, noises, lower, upper, edfs)
+    return StabilityResult(:mhdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -196,11 +200,11 @@ function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     factor = res.tau ./ sqrt(10.0 / 3.0)
 
     if !ci
-        return StabilityResult(:htdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:htdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
     end
 
     return StabilityResult(:htdev, res.tau, res.dev .* factor, res.noise_type,
-                           res.ci_lower .* factor, res.ci_upper .* factor, res.edf)
+                           _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
@@ -259,6 +263,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     raw_devs = _totdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
+    neff = _neff_counts(:totdev, length(x), m_values)
 
     # Noise IDs needed for either path — bias correction reads α, CIs read α.
     need_noise = correct_bias || ci
@@ -267,13 +272,13 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:totdev, taus, devs, noises, Float64[], Float64[], Float64[])
+        return StabilityResult(:totdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:totdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:totdev, taus, devs, noises, lower, upper, edfs)
+    return StabilityResult(:totdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -294,6 +299,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     raw_devs = _mtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
+    neff = _neff_counts(:mtotdev, length(x), m_values)
 
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
@@ -301,13 +307,13 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:mtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
+        return StabilityResult(:mtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:mtotdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mtotdev, taus, devs, noises, lower, upper, edfs)
+    return StabilityResult(:mtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -331,6 +337,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
+    neff = _neff_counts(:htotdev, length(x), m_values)
 
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
@@ -338,13 +345,13 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:htotdev, taus, devs, noises, Float64[], Float64[], Float64[])
+        return StabilityResult(:htotdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:htotdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:htotdev, taus, devs, noises, lower, upper, edfs)
+    return StabilityResult(:htotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -368,34 +375,50 @@ function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     factor = res.tau ./ sqrt(3.0)
 
     if !ci
-        return StabilityResult(:ttotdev, res.tau, res.dev .* factor, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:ttotdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
     end
 
     return StabilityResult(:ttotdev, res.tau, res.dev .* factor, res.noise_type,
-                           res.ci_lower .* factor, res.ci_upper .* factor, res.edf)
+                           _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
 """
-    mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
 Modified Hadamard Total Deviation, using the Greenhall methodology SigmaTau
 adopts for this novel estimator (see `_mhtotdev_core`).
 
+`remove_drift=true` (default) removes the record's least-squares frequency
+drift (the quadratic phase term) before the analysis, and the per-τ noise
+identification runs on the drift-removed record. Unlike MHDEV, the total
+estimator is not drift-immune: its per-window detrend removes only the local
+frequency offset, so residual deterministic drift re-enters through the
+reflected window boundaries and reads several times high at long τ. Removing
+the global least-squares drift is exact for a deterministic drift (the fit
+is a linear projection) and discards no statistical information; it is the
+same practice SP1065 prescribes before TOTVAR / MTOTVAR. Per-window drift
+removal was evaluated and rejected — both the phase-domain and
+frequency-domain variants measurably damage the statistic at the PM noise
+types (see the "MHTOTDEV bias and EDF" theory page). Pass
+`remove_drift=false` for data that is already detrended.
+
 `correct_bias=true` (default) applies the Monte-Carlo-measured unbias
 correction `σ_unbiased = σ_raw / √B`, where `B = b0 + b1·(τ/T)` is the
-τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)`. MHTOTDEV is
-≈ unbiased for white/flicker noise (B ≈ 1) and reads progressively high for
-redder FM (RWFM B ≈ 1.9 at small τ, where the correction lowers σ); it is
-*not* exactly unbiased, contrary to the earlier assumption. Pass
-`correct_bias=false` for the raw kernel value. EDF uses the measured
-`_coeff_mhtot` fit. See the "MHTOTDEV bias and EDF" theory page for the
-measurement methodology.
+τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)`; the
+coefficients are measured with the default drift removal in the loop, so the
+calibration matches what this function computes. Pass `correct_bias=false`
+for the raw kernel value. EDF uses the measured `_coeff_mhtot` fit. See the
+"MHTOTDEV bias and EDF" theory page for the measurement methodology.
 """
-function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
+    if remove_drift
+        x = _remove_quadratic(x)
+    end
     raw_devs = _mhtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
+    neff = _neff_counts(:mhtotdev, length(x), m_values)
 
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
@@ -403,13 +426,13 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mhtot, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:mhtotdev, taus, devs, noises, Float64[], Float64[], Float64[])
+        return StabilityResult(:mhtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:mhtotdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mhtotdev, taus, devs, noises, lower, upper, edfs)
+    return StabilityResult(:mhtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
@@ -460,9 +483,9 @@ excursion observed in any sliding window of `m+1` samples (spanning
 
 MTIE is a σ_x quantity (units of seconds), reported as a single
 deterministic envelope rather than a statistical σ — there is no
-published EDF / χ² confidence model for it, so `noise_type`,
-`ci_lower`, `ci_upper`, and `edf` are returned empty even when
-`ci=true`. `ci` and `confidence` are accepted for API uniformity with
+published EDF / χ² confidence model for it, so `noise_type`, `ci`,
+and `edf` are returned empty even when `ci=true` (`neff` is still
+populated). `ci` and `confidence` are accepted for API uniformity with
 the other deviations but are no-ops here.
 
 # Examples
@@ -483,7 +506,8 @@ julia> r.dev
 function mtie(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     raw_devs = _mtie_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
-    return StabilityResult(:mtie, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
+    neff = _neff_counts(:mtie, length(data.x), m_values)
+    return StabilityResult(:mtie, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
 end
 
 mtie(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mtie(_freq_to_phase(data), m_values; kwargs...)
@@ -539,16 +563,17 @@ function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     x = _f64(data.x)
     raw_devs = _pdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
+    neff = _neff_counts(:pdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:pdev, taus, raw_devs, Symbol[], Float64[], Float64[], Float64[])
+        return StabilityResult(:pdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:pdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:pdev, taus, raw_devs, noises, lower, upper, edfs)
+    return StabilityResult(:pdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 pdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = pdev(_freq_to_phase(data), m_values; kwargs...)

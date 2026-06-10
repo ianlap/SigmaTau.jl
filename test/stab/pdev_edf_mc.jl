@@ -54,15 +54,16 @@ using SigmaTau: _gen_powerlaw_y, _pvar_edf
     r = pdev(pd, grid)                        # ci=true (default)
     @test length(r.edf) == length(grid)
     @test all(isfinite, r.edf) && all(>(0), r.edf)
-    @test all(isfinite, r.ci_lower) && all(isfinite, r.ci_upper)
-    @test all(r.ci_lower .<= r.dev .+ 1e-12) && all(r.dev .<= r.ci_upper .+ 1e-12)
+    @test all(isfinite, ci_lower(r)) && all(isfinite, ci_upper(r))
+    @test all(ci_lower(r) .<= r.dev .+ 1e-12) && all(r.dev .<= ci_upper(r) .+ 1e-12)
     @test !isempty(r.noise_type)
     # EDF decreases with τ across the formula window (m ≤ N/4).
     @test issorted(r.edf[1:6]; rev = true)
 
     rf = pdev(pd, grid; ci = false)      # empty-CI contract preserved
     @test isempty(rf.edf) && isempty(rf.noise_type)
-    @test isempty(rf.ci_lower) && isempty(rf.ci_upper)
+    @test isempty(rf.ci)
+    @test rf.neff == N .- 2 .* grid      # pdev: N − 2m windows, even with ci=false
 
     # PVAR(τ₀) ≡ AVAR(τ₀): kernel identity at m = 1, and EDF uses ADEV's value.
     @test pdev(pd, [1]; ci = false).dev[1] == adev(pd, [1]; ci = false).dev[1]

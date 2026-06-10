@@ -1,11 +1,13 @@
 # api/suite.jl — compute-all entry point.
 
 """
-Default deviation set computed by [`stability`](@ref) when `devs` is not given —
-a Stable32-like core: overlapping Allan, modified Allan, overlapping Hadamard,
-and time deviation.
+Default deviation set computed by [`stability`](@ref) when `devs` is not given:
+overlapping Allan, modified Allan, overlapping Hadamard, and modified Hadamard.
+All four are fractional-frequency (σ_y) quantities, so the default suite
+overlays on one ordinate; time deviations (`tdev`, `htdev`) are σ_x quantities
+in seconds and must be requested explicitly.
 """
-const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :tdev)
+const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 
 # Per-symbol routing with keyword filtering. The Allan/Hadamard families forward
 # only `ci`/`confidence`; the total family also forwards any extra kwargs
