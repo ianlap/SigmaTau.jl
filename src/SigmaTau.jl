@@ -48,9 +48,12 @@ include("spectral.jl")
 include("deviations.jl")
 include("suite.jl")
 
+# ── Real-time streaming accumulators (Dobrogowski–Kasznia scheme) ───────
+include("streaming.jl")
+
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
-export SpectralResult
+export SpectralResult, DynamicStabilityResult
 export ci_lower, ci_upper
 
 export save, save_result, load_result, save_suite, load_suite
@@ -73,9 +76,11 @@ export adev, mdev, tdev
 export hdev, mhdev, htdev
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
+export dadev, dhdev
 export nch
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
+export StreamingStability, snapshot, nsamples
 
 export noise_gen
 export Sy, Sx, L
@@ -118,6 +123,10 @@ using PrecompileTools: @setup_workload, @compile_workload
         _pc_path = joinpath(mktempdir(), "r.tsv")
         save_result(_pc_path, r)
         load_result(_pc_path)
+        _pc_acc = StreamingStability(:adev, 1.0, ms)
+        append!(_pc_acc, _pc_x[1:32])
+        snapshot(_pc_acc)
+        nsamples(_pc_acc)
     end
 end
 

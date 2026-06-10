@@ -34,6 +34,18 @@ Initial public release.
   χ² model, so `ci`/`edf`/`noise_type` stay empty. Cross-validated
   against allantools 2024.06 to ≤2e-15 relative on the Stable32
   fixture. Integrates with `stability` (`devs=(:tierms,)`).
+- `StreamingStability` — real-time streaming accumulators for
+  `adev`/`mdev`/`hdev`/`mhdev` per the Dobrogowski–Kasznia 2007 IEEE FCS
+  scheme (running sums of squared second differences, eqs. 6–9; the
+  inner-sum/overall-sum form for the modified family, eqs. 10–14;
+  generalized to third differences for the Hadamard pair). `push!` feeds
+  one phase sample in O(1) per averaging factor, `append!` feeds chunks,
+  `snapshot` returns a `StabilityResult` (point estimates + `neff`; no
+  CI — on-demand EDF/CI is future work), `nsamples` the stream length.
+  Memory is a ring buffer of ≤ `4·maximum(m_values)+1` samples. At every
+  sample count the streamed estimates match the batch kernels exactly
+  (equivalence locked to rtol 1e-10 in test/stab/streaming.jl). Totals
+  and Thêo cannot stream (whole-record extension/sampling).
 - `nch` — N-cornered-hat noise separation: recovers each clock's
   individual deviation from the full set of pairwise comparisons
   (`σ̂²ᵢ = (Rᵢ − S/(N−1))/(N−2)`), with the classic Gray–Allan
@@ -44,6 +56,19 @@ Initial public release.
   elementwise-minimum `neff`; no CI is fabricated. Reproduces the
   manual solution of the three-cornered-hat tutorial
   (examples/06) to machine precision.
+- `dadev` / `dhdev` — dynamic (time-resolved) Allan and Hadamard
+  deviations (Galleani & Tavella 2009; McKelvy et al. 2025): a window of
+  `window` phase samples slides across the record in `step`-sample
+  increments (default `window ÷ 2`) and the overlapping ADEV / HDEV
+  kernel is evaluated inside each window, giving a 2-D σ(t, τ) map that
+  localizes non-stationary stability events a static deviation averages
+  over. Returns the new `DynamicStabilityResult` (window-center times
+  `t`, `tau`, a `t × τ` `dev` matrix with NaN at unsupported averaging
+  factors, `window`, `tau0`); no CI machinery — the literature gives no
+  EDF model for the time-resolved map. `TauMode` grids clamp to the
+  window length, and a `window = N` map reproduces the static
+  `adev`/`hdev` values exactly. The RecipesBase extension renders the
+  map as a log10(σ) heatmap over (t, τ) with a log-scale τ axis.
 - Flat `SigmaTau` API with `PhaseData`, `FrequencyData`, `StabilityResult`,
   `StabilitySuite`, and `SpectralResult`.
 - Stability estimators for Allan, Modified Allan, Hadamard, total-family,

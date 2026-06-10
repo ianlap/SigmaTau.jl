@@ -108,6 +108,7 @@ hdev  mhdev  htdev
 totdev  mtotdev  ttotdev  htotdev  mhtotdev
 mtie  tierms  pdev
 theo1  theoh
+dadev  dhdev
 ```
 
 ### Plotting
@@ -120,6 +121,18 @@ bars from the result's CI bounds, plus overlays for a whole suite:
 using Plots, SigmaTau
 plot(adev(data))                    # single deviation with CI error bars
 plot(stability(data))              # overlay the default suite
+```
+
+### Streaming
+
+`StreamingStability` computes `adev`/`mdev`/`hdev`/`mhdev` in real time as
+phase samples arrive — O(1) per sample per τ, bounded memory (Dobrogowski &
+Kasznia 2007):
+
+```julia
+acc = StreamingStability(:adev, 1.0, [1, 10, 100])
+push!(acc, x_next)        # feed samples as they are measured
+snapshot(acc)              # running StabilityResult, matches the batch kernel
 ```
 
 ## Documentation
