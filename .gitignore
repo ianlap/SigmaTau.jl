@@ -73,3 +73,8 @@ tools/artifacts/*
 
 # Local design asset (kept on disk, not part of the package).
 SigmaTauDesign.zip
+
+# Local research material (never public)
+example_writings/
+reference_papers/
+paper/
