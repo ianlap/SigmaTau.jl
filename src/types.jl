@@ -307,3 +307,49 @@ function Base.show(io::IO, r::SpectralResult)
     print(io, "SpectralResult(:", r.spectral_type, ", ", n, " bins", rng,
               ", ", r.units, ", nperseg=", r.nperseg, ")")
 end
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── types/dynamic_stability_result.jl ───────────────────────────────────
+
+"""
+    DynamicStabilityResult
+
+Return type of the dynamic (time-resolved) deviations [`dadev`](@ref) and
+[`dhdev`](@ref): a 2-D stability map σ_y(t, τ) computed by sliding an
+analysis window of `window` phase samples across the record and evaluating
+the deviation inside each window.
+
+Rows of `dev` are analysis windows (centered at the times in `t`), columns
+are averaging intervals (the entries of `tau`); `dev[i, j]` is the deviation
+of window `i` at `tau[j]`. Entries are `NaN` wherever the window is too
+short to support the averaging factor.
+
+Unlike [`StabilityResult`](@ref), no noise-ID / EDF / confidence-interval
+machinery is carried: the literature does not provide an EDF model for the
+time-resolved map, so fabricating per-cell χ² bounds would be unfounded.
+
+$(TYPEDFIELDS)
+"""
+struct DynamicStabilityResult
+    "Which dynamic deviation produced this result (`:dadev` or `:dhdev`)."
+    deviation_type::Symbol
+    "Window-center times in seconds, one per analysis window (row of `dev`)."
+    t::Vector{Float64}
+    "Analysis intervals τ in seconds, one per column of `dev`."
+    tau::Vector{Float64}
+    "Deviation map, `length(t) × length(tau)`; `NaN` where the window cannot support the averaging factor."
+    dev::Matrix{Float64}
+    "Analysis-window length N_w in samples."
+    window::Int
+    "Base sample interval τ₀ in seconds."
+    tau0::Float64
+end
+
+function Base.show(io::IO, r::DynamicStabilityResult)
+    nt, nτ = size(r.dev)
+    print(io, "DynamicStabilityResult(:", r.deviation_type, ", ", nt, "×", nτ, " map")
+    nt > 0 && print(io, ", t∈[", _show4g(r.t[1]), ", ", _show4g(r.t[end]), "] s")
+    nτ > 0 && print(io, ", τ∈[", _show4g(r.tau[1]), ", ", _show4g(r.tau[end]), "] s")
+    print(io, ", window=", r.window, ")")
+end

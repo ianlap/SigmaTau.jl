@@ -23,6 +23,7 @@ end
     for sym in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
                 :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
                 :mtie, :tierms, :pdev, :theo1, :theoh,
+                :dadev, :dhdev,
                 :Sy, :Sx, :L,
                 :stability, :DEFAULT_DEVIATIONS, :nch,
                 :identify_noise, :calculate_edf, :confidence_intervals,
@@ -53,7 +54,7 @@ end
 end
 
 @testset "Shared types re-exported" begin
-    for sym in (:AbstractTimingData, :PhaseData, :FrequencyData, :StabilityResult, :StabilitySuite, :SpectralResult)
+    for sym in (:AbstractTimingData, :PhaseData, :FrequencyData, :StabilityResult, :StabilitySuite, :SpectralResult, :DynamicStabilityResult)
         @test isdefined(@__MODULE__, sym)
     end
 end

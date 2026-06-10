@@ -815,3 +815,113 @@ theo1(data::PhaseData;     kwargs...) = theo1(data, _default_m_values(length(dat
 theo1(data::FrequencyData; kwargs...) = theo1(data, _default_m_values(length(data.y), :theo1); kwargs...)
 theoh(data::PhaseData;     kwargs...) = theoh(data, _default_m_values(length(data.x), :theoh); kwargs...)
 theoh(data::FrequencyData; kwargs...) = theoh(data, _default_m_values(length(data.y), :theoh); kwargs...)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/api/dynamic.jl ─────────────────────────────────────────────────
+
+# api/dynamic.jl — Dynamic (time-resolved) deviations: DADEV / DHDEV.
+#
+# Both slide an analysis window of `window` phase samples across the record
+# and evaluate an existing overlapping kernel (`_adev_core` / `_hdev_core`)
+# inside each window, producing the σ_y(t, τ) map of Galleani & Tavella 2009
+# as applied by McKelvy et al. 2025. No new kernel math is introduced — one
+# window buffer is allocated, each window is copied into it, and the core is
+# called per window. Simple and provably consistent with the static
+# estimators; the cost is (number of windows) × (one static-kernel call on
+# `window` samples), so halving `step` doubles the run time.
+
+# Shared driver. `core` is one of the `_*_core` kernels; `min_window` is the
+# smallest window that supports m = 1 for that kernel (window − span·1 ≥ 2).
+function _dynamic_dev(core::F, dev_sym::Symbol, data::PhaseData,
+                      m_values::Vector{Int};
+                      window::Int, step::Int, min_window::Int) where {F}
+    x = _f64(data.x)
+    N = length(x)
+    window <= N || throw(ArgumentError(
+        "$dev_sym: window=$window exceeds the record length N=$N"))
+    window >= min_window || throw(ArgumentError(
+        "$dev_sym: window=$window is too short to support any averaging factor (need ≥ $min_window samples)"))
+    step >= 1 || throw(ArgumentError("$dev_sym: step must be ≥ 1, got $step"))
+
+    starts = 1:step:(N - window + 1)
+    taus = m_values .* data.tau0
+    # Window covering samples s … s+window−1 is centered at coordinate time
+    # t_c = (s − 1 + (window − 1)/2)·τ₀, with sample x[1] at t = 0.
+    centers = Float64[(s - 1 + (window - 1) / 2) * data.tau0 for s in starts]
+
+    dev = Matrix{Float64}(undef, length(starts), length(m_values))
+    buf = Vector{Float64}(undef, window)
+    for (i, s) in enumerate(starts)
+        copyto!(buf, 1, x, s, window)
+        dev[i, :] = core(buf, m_values, data.tau0)
+    end
+
+    return DynamicStabilityResult(dev_sym, centers, taus, dev, window, data.tau0)
+end
+
+"""
+    dadev(data, m_values; window, step=window÷2) → DynamicStabilityResult
+
+Dynamic Allan deviation σ_y(t, τ) — a time-resolved stability map
+(Galleani & Tavella 2009; McKelvy et al. 2025
+[mckelvy-2025-telemetrystability](@cite)). An analysis window `W(t_c)` of
+`window` phase samples slides across the record in increments of `step`
+samples, and the overlapping Allan deviation is computed inside each
+window:
+
+```math
+\\sigma_y^2(t_c, \\tau) = \\frac{1}{2(N_w - 2m)(m\\tau_0)^2}
+    \\sum_{i \\in W(t_c)} (x_{i+2m} - 2x_{i+m} + x_i)^2 .
+```
+
+`m_values` selects the averaging factors (τ = m·τ₀) shared by every
+window; entries the window cannot support (`window − 2m < 2`) yield `NaN`
+columns. Pass a [`TauMode`](@ref) instead to get a grid clamped to the
+*window* length (`tau_values(mode, window, :adev)`), not the record length.
+The result's rows are windows (centered at the times in `t`), columns are τ.
+
+No confidence intervals are produced: the literature gives no EDF model for
+the time-resolved map (each window's value alone is an ordinary ADEV with
+`window` samples — use [`adev`](@ref) on a slice when a CI is needed).
+Each window is evaluated by a full `_adev_core` call on a copied buffer, so
+runtime scales with the window count: halving `step` doubles the cost.
+"""
+function dadev(data::PhaseData, m_values::Vector{Int};
+               window::Int, step::Int = window ÷ 2)
+    # min window: _adev_core needs N_w − 2m ≥ 2 ⇒ window ≥ 4 at m = 1.
+    return _dynamic_dev(_adev_core, :dadev, data, m_values;
+                        window=window, step=step, min_window=4)
+end
+
+"""
+    dhdev(data, m_values; window, step=window÷2) → DynamicStabilityResult
+
+Dynamic Hadamard deviation — the same sliding-window construction as
+[`dadev`](@ref) with the overlapping third-difference (Hadamard) kernel
+inside each window, so the map rejects linear frequency drift *within each
+window* (a drifting clock shows its noise floor, not its drift ramp).
+Entries the window cannot support (`window − 3m < 2`) yield `NaN` columns.
+Pass a [`TauMode`](@ref) for a grid clamped to the window length
+(`tau_values(mode, window, :hdev)`).
+
+Like `dadev`, no confidence intervals are produced — there is no published
+EDF model for the time-resolved map.
+"""
+function dhdev(data::PhaseData, m_values::Vector{Int};
+               window::Int, step::Int = window ÷ 2)
+    # min window: _hdev_core needs N_w − 3m ≥ 2 ⇒ window ≥ 5 at m = 1.
+    return _dynamic_dev(_hdev_core, :dhdev, data, m_values;
+                        window=window, step=step, min_window=5)
+end
+
+# FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
+dadev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = dadev(_freq_to_phase(data), m_values; kwargs...)
+dhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = dhdev(_freq_to_phase(data), m_values; kwargs...)
+
+# TauMode grid selector: resolve against the *window* length (every window
+# computes the same m grid; the record length is irrelevant to the clamp).
+dadev(data::PhaseData,     taus::TauMode; window::Int, kwargs...) = dadev(data, tau_values(taus, window, :adev); window=window, kwargs...)
+dadev(data::FrequencyData, taus::TauMode; window::Int, kwargs...) = dadev(data, tau_values(taus, window, :adev); window=window, kwargs...)
+dhdev(data::PhaseData,     taus::TauMode; window::Int, kwargs...) = dhdev(data, tau_values(taus, window, :hdev); window=window, kwargs...)
+dhdev(data::FrequencyData, taus::TauMode; window::Int, kwargs...) = dhdev(data, tau_values(taus, window, :hdev); window=window, kwargs...)

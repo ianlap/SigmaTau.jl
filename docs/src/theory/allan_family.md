@@ -279,9 +279,40 @@ at coordinate time `t_c`. The window slides across the record to
 produce DADEV at every `t_c` of interest
 [mckelvy-2025-telemetrystability](@cite).
 
-!!! note "Planned implementation"
-    The mathematical definition is documented above. The `dadev`
-    function is not yet implemented in `SigmaTau`.
+!!! note "Implemented"
+    `dadev(data, m_values; window, step=window÷2)`, with the usual
+    `TauMode` / `FrequencyData` dispatch chains (a `TauMode` grid is
+    clamped to the *window* length, not the record length). Each window
+    is evaluated by the same overlapping-ADEV kernel that `adev` uses,
+    so the `window = N` map degenerates to the static estimate exactly.
+    Returns a [`DynamicStabilityResult`](@ref) — a `t × τ` matrix with
+    `NaN` wherever a window cannot support the averaging factor. No
+    confidence intervals are produced: the literature gives no EDF
+    model for the time-resolved map.
+
+## Dynamic Hadamard deviation — DHDEV
+
+The dynamic Hadamard deviation is the same sliding-window construction
+as DADEV with the overlapping third-difference (Hadamard) kernel inside
+each window [mckelvy-2025-telemetrystability](@cite):
+
+```math
+\sigma_{H}^2(t_c,\,\tau) \;=\; \frac{1}{6(N_w - 3m)\,(m\tau_0)^2}
+\sum_{i \in W(t_c)} \bigl(x_{i+3m} - 3 x_{i+2m} + 3 x_{i+m} - x_i\bigr)^2 .
+```
+
+Because the third difference annihilates terms quadratic in `t`, each
+window's estimate rejects linear frequency drift *within that window*
+(the same property HDEV adds over ADEV; SP1065 §5
+[riley-2008-sp1065](@cite)) — a drifting clock's stability map shows
+its noise floor rather than the drift ramp, without pre-detrending.
+
+!!! note "Implemented"
+    `dhdev(data, m_values; window, step=window÷2)`, parallel to
+    `dadev` in every respect (dispatch chains, window-clamped `TauMode`
+    grids, `DynamicStabilityResult` return, no CI machinery). The
+    window must keep `N_w − 3m ≥ 2`, so the supported τ range at a
+    given window is 2/3 of DADEV's.
 
 ## HTDEV — Hadamard time deviation
 

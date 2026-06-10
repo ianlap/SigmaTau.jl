@@ -36,6 +36,45 @@ theo1
 theoh
 ```
 
+## Dynamic (time-resolved) deviations
+
+DADEV and DHDEV slide an analysis window across the record and return a
+2-D σ(t, τ) map as a [`DynamicStabilityResult`](@ref) rather than a
+`StabilityResult` curve. They are therefore not available through
+[`stability`](@ref).
+
+```@docs
+dadev
+dhdev
+```
+
+## Streaming accumulators
+
+[`StreamingStability`](@ref) computes `adev`/`mdev`/`hdev`/`mhdev` in real
+time as phase samples arrive, using the Dobrogowski–Kasznia running-sum
+scheme [dobrogowski-2007-realtime-adev](@cite): O(1) work per new sample
+per averaging factor, memory bounded by a ring buffer of at most
+`4·maximum(m_values) + 1` samples. At every sample count the streamed
+estimate matches the batch call on the samples seen so far. The
+total-family and Thêo estimators cannot stream — their whole-record
+extension/sampling schemes have no O(1) per-sample update.
+
+```julia
+acc = StreamingStability(:adev, 1.0, [1, 10, 100])
+push!(acc, x_next)        # one phase sample, O(length(m_values))
+append!(acc, xs)          # a chunk, in order
+snapshot(acc)              # StabilityResult over everything seen so far
+nsamples(acc)             # samples streamed so far
+```
+
+```@docs
+StreamingStability
+Base.push!(::StreamingStability, ::Real)
+Base.append!(::StreamingStability, ::AbstractVector{<:Real})
+snapshot
+nsamples
+```
+
 ## Tau grids and suite API
 
 ```@docs

@@ -12,6 +12,7 @@ FrequencyData
 StabilityResult
 StabilitySuite
 SpectralResult
+DynamicStabilityResult
 ```
 
 ## Accessors

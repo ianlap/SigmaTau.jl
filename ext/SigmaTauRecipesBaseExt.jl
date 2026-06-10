@@ -1,6 +1,7 @@
 module SigmaTauRecipesBaseExt
 
-using SigmaTau: StabilityResult, StabilitySuite, SpectralResult, ci_lower, ci_upper
+using SigmaTau: StabilityResult, StabilitySuite, SpectralResult,
+                DynamicStabilityResult, ci_lower, ci_upper
 using RecipesBase
 
 # Tick positions at integer powers of 10 spanning the positive finite values
@@ -94,6 +95,22 @@ end
             r
         end
     end
+end
+
+# Dynamic deviation map (DADEV / DHDEV): heatmap of log10(σ) over (t, τ) with
+# a log-scale τ axis. The map is stored windows × taus; heatmap z is
+# rows-along-y, so it is transposed here. Non-positive and NaN cells (windows
+# that cannot support the averaging factor) map to NaN and render blank.
+@recipe function f(res::DynamicStabilityResult)
+    xlabel --> "Time t (s)"
+    ylabel --> "Averaging Time τ (s)"
+    yscale --> :log10
+    yticks --> _decade_ticks(res.tau)
+    title  --> uppercase(string(res.deviation_type))
+    colorbar_title --> "log10 σ"
+    seriestype := :heatmap
+    z = map(v -> (isfinite(v) && v > 0) ? log10(v) : NaN, res.dev)
+    return res.t, res.tau, permutedims(z)
 end
 
 # Spectral density on frequency axes. S_y / S_x are power densities → log-log;

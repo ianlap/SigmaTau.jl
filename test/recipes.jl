@@ -65,6 +65,26 @@ using RecipesBase
         @test length(rd) == 2
     end
 
+    @testset "dynamic deviation map: log10 heatmap" begin
+        big = PhaseData(cumsum(randn(2048)) .* 1e-9, 1.0)
+        res = dadev(big, [1, 2, 4, 100]; window=128)   # m=100 ⇒ NaN column
+        rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), res)
+        @test length(rd) == 1
+        pa = rd[1].plotattributes
+        @test pa[:seriestype] === :heatmap
+        @test pa[:yscale] === :log10                  # τ axis is log
+        @test haskey(pa, :colorbar_title)             # log10 σ legend
+        @test occursin("log10", string(pa[:colorbar_title]))
+        # Decade ticks on the τ axis span the grid.
+        @test all(t -> t ≈ 10.0^round(log10(t)), pa[:yticks])
+        # Heatmap args: x = t, y = τ, z = log10(dev) transposed to τ × t.
+        x, y, z = rd[1].args
+        @test x == res.t && y == res.tau
+        @test size(z) == (length(res.tau), length(res.t))
+        @test z[1, 1] ≈ log10(res.dev[1, 1])
+        @test all(isnan, z[end, :])                   # unsupported m stays NaN
+    end
+
     @testset "spectral results" begin
         big = PhaseData(cumsum(randn(4096)) .* 1e-9, 1.0)
         # S_y / S_x render log-log with the DC bin (f = 0) dropped.
