@@ -224,10 +224,10 @@ plot(r_manual;
      label  = "manual mix (randn + cumsum)",
      xlabel = raw"Averaging time \(\tau\) (s)",
      ylabel = raw"\(\sigma_y(\tau)\)",
-     title  = "Manual synthesis vs noise_gen: same mixture, same bathtub",
+     title  = raw"Manual synthesis vs noise\_gen: same mixture, same bathtub",
      legend = :topright,
      lw     = 1.5)
-plot!(r_gen; label = "noise_gen mix", lw = 1.5)
+plot!(r_gen; label = raw"noise\_gen mix", lw = 1.5)
 
 #-
 

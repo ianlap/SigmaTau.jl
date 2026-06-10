@@ -142,7 +142,8 @@ replaces the default tick positions — here, labelling every other decade:
 
 ```@example plotting
 plot(r; xticks = 10.0 .^ (0:2:4),
-     xlabel = "τ (s)", ylabel = "σ_y(τ)", legend = :bottomleft)
+     xlabel = raw"\(\tau\) (s)", ylabel = raw"\(\sigma_y(\tau)\)",
+     legend = :bottomleft)
 ```
 
 On log-log axes the slope of σ_y(τ) encodes the dominant noise type
@@ -168,7 +169,8 @@ curve. For the τ^(−1/2) guide of white FM, anchored at the first point:
 guide = r.dev[1] .* (r.tau ./ r.tau[1]) .^ (-1/2)
 
 plot(r; legend = :bottomleft)
-plot!(r.tau, guide; ls = :dash, color = :gray, label = "τ^(-1/2) (WHFM)")
+plot!(r.tau, guide; ls = :dash, color = :gray,
+      label = raw"\(\tau^{-1/2}\) (WHFM)")
 ```
 
 The synthetic record above follows the guide at short τ (the white-FM

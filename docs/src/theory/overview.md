@@ -140,15 +140,15 @@ r_rwfm = adev(PhaseData(rwfm, 1.0), τs; ci=false)
 
 plot(r_wpm.tau, r_wpm.dev;
      xscale=:log10, yscale=:log10, marker=:circle,
-     xlabel="τ (s)", ylabel="σ_y(τ)", label="WPM (α = +2)",
-     legend=:bottomleft)
-plot!(r_rwfm.tau, r_rwfm.dev; marker=:diamond, label="RWFM (α = −2)")
+     xlabel=raw"\(\tau\) (s)", ylabel=raw"\(\sigma_y(\tau)\)",
+     label=raw"WPM (\(\alpha = +2\))", legend=:bottomleft)
+plot!(r_rwfm.tau, r_rwfm.dev; marker=:diamond, label=raw"RWFM (\(\alpha = -2\))")
 
 # Reference slope guides, anchored at each curve's first point.
 plot!(r_wpm.tau, r_wpm.dev[1] .* (r_wpm.tau ./ r_wpm.tau[1]) .^ -1;
-      ls=:dash, color=:gray, label="τ⁻¹ guide")
+      ls=:dash, color=:gray, label=raw"\(\tau^{-1}\) guide")
 plot!(r_rwfm.tau, r_rwfm.dev[1] .* (r_rwfm.tau ./ r_rwfm.tau[1]) .^ (1/2);
-      ls=:dot, color=:gray, label="τ^(+1/2) guide")
+      ls=:dot, color=:gray, label=raw"\(\tau^{+1/2}\) guide")
 ```
 
 The WPM record falls along the `τ⁻¹` guide (μ = −1); the RWFM record
