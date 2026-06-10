@@ -169,13 +169,30 @@ subsegments of phase length `3m + 1` along `x`. For each:
 1. **Half-average slope removal** — subtract a linear trend whose slope
    is the difference of the two half-segment means (the Greenhall slope
    estimate shared with MTOTDEV / HTOTDEV), removing the subsegment's
-   mean frequency offset before the third-difference kernel. (On phase
-   data a linear trend is a frequency offset — *not* frequency drift;
-   see the drift warning below.)
+   mean frequency offset before the third-difference kernel.
 2. Symmetric reflection.
 3. Cumulative third differences plus an `m`-point moving average
    (the modified-style inner averaging, parallel to how MDEV relates
    to ADEV).
+
+**Drift handling.** The kernel above is *not* drift-immune, unlike its
+parent MHDEV: the per-window detrend removes only the local frequency
+offset, so residual deterministic drift makes the reflected copies
+non-smooth at the window boundaries and the differences that span a
+boundary pick it back up — a record drifting at `2e-10`/day over a
+`1e-11` WHFM floor read 6× high at `T/τ ≈ 10` and 30× high at
+`T/τ ≈ 5`. Removing the drift *per window* does not work: the
+phase-domain two-parameter detrend inflates the WHPM bias to
+`B ≈ 3.8` and collapses the χ² EDF model (R² = 0.32), and the
+frequency-domain TOTHVAR scheme gives `B(WHPM)` growing with `m` —
+both were measured and rejected. Instead, [`mhtotdev`](@ref) removes
+the record's **global least-squares frequency drift** before the
+kernel (`remove_drift=true` by default; the per-τ noise identification
+also runs on the drift-removed record). The least-squares fit is a
+linear projection, so a deterministic drift is removed exactly, and
+the bias/EDF coefficients below are measured with this removal in the
+loop — the calibration matches what the function computes. Pass
+`remove_drift=false` for data that is already detrended.
 
 ```math
 \mathrm{MHTOTVAR}(\tau) \;=\; \frac{1}{(m\tau_0)^2 \,(N - 4m + 1)}
@@ -185,8 +202,9 @@ subsegments of phase length `3m + 1` along `x`. For each:
 
 with the per-subsegment inner sum running over `n_{\text{avg}}`
 valid `m`-point average windows of the cumulated third-difference
-sequence on the extended segment. Full algebraic detail is in
-`legdocs/equations/total.md`.
+sequence on the extended segment. The exact normalization and window
+counts are pinned against a direct reference implementation in
+`test/stab/legacy_kernels.jl`.
 
 MHTOTDEV is the long-τ extension of MHDEV: phase-averaged third
 differences with boundary extension.
@@ -202,11 +220,10 @@ differences with boundary extension.
     [`src/kernels.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/kernels.jl)
     and the public wrapper at
     [`src/deviations.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/deviations.jl).
-    Equivalently, MHTOTDEV completes the 2×2 matrix of total-family
-    estimators along the (Allan/Hadamard) × (modified/un-modified)
-    axes — the un-modified Hadamard total is HTOTDEV, the modified
-    Allan total is MTOTDEV, the un-modified Allan total is TOTDEV,
-    and the modified-Hadamard-total corner is filled by MHTOTDEV.
+    Put differently: total forms were published for the Allan
+    deviation (TOTDEV), the modified Allan deviation (MTOTDEV), and
+    the Hadamard deviation (HTOTDEV). The modified Hadamard deviation
+    had none — MHTOTDEV is that missing total form.
 
 ```julia
 mhtotdev(PhaseData(x, τ₀), τs)
@@ -220,29 +237,28 @@ cube formed by three independent design axes:
 - **Inner averaging** — none (standard) vs phase-averaged (modified).
 - **Boundary handling** — none vs total-style extension.
 
-MHTOTDEV is Hadamard × modified × total, so it carries
-`α ∈ {−4, −3}` convergence from Hadamard, WPM/FPM disambiguation
-from the phase-averaged inner kernel, and tight long-τ confidence
-from the per-subsegment extension. It is the right tool when a
-record has divergent low-frequency noise, ambiguity between WPM and
-FPM, *and* a record length too short to let any of the simpler
-estimators reach long τ with usable confidence.
+MHTOTDEV is Hadamard × modified × total, so it carries every
+property that distinguishes the family: drift rejection (by the
+automatic least-squares drift removal above) and `α ∈ {−4, −3}`
+convergence from Hadamard, WPM/FPM disambiguation from the
+phase-averaged inner kernel, and tight long-τ confidence from the
+per-subsegment extension. It is the right tool when a record has
+linear frequency drift, divergent low-frequency noise, ambiguity
+between WPM and FPM, *and* a record length too short to let any of
+the simpler estimators reach long τ with usable confidence.
 
-!!! warning "Drift does not cancel through the extension"
-    MHDEV is exactly drift-immune, but MHTOTDEV is not. The third
-    differences that lie inside one copy of the subsegment annihilate
-    drift, but the half-average detrend removes only the subsegment's
-    mean frequency offset; the residual quadratic phase makes the
-    reflected extension non-smooth at the copy boundaries, and
-    differences spanning a boundary pick the drift back up. On a
-    strongly drifting record MHTOTDEV reads several times high at
-    long τ where MHDEV stays clean. Remove deterministic drift first
-    (`detrend(fd)` on the frequency record) — the same standard
-    practice the literature prescribes for TOTVAR and MTOTVAR; only
-    HTOTDEV escapes it, because its detrend operates on fractional
-    frequency, where drift itself is the linear term. See
-    [the drifting-clock tutorial](../tutorials/03_drifting_clock_hadamard.md)
-    for a demonstration.
+!!! note "Noise identification and drift on the other estimators"
+    `mhtotdev` feeds its noise identification the drift-removed
+    record, so its bias correction and χ² intervals classify the
+    underlying noise. Every *other* estimator's CI machinery runs on
+    the record as given — on a strongly drifting record the
+    identification can classify long-τ points as redder than the true
+    noise even for drift-immune deviations like `hdev`/`mhdev`. For
+    confidence intervals on a drifting record, remove the
+    deterministic drift first (`detrend(fd)` on the frequency record,
+    or `detrend(pd; method=:quadratic)` on phase), the same hygiene
+    SP1065 recommends generally. See
+    [the drifting-clock tutorial](../tutorials/03_drifting_clock_hadamard.md).
 
 ---
 
@@ -251,9 +267,12 @@ estimators reach long τ with usable confidence.
 | Estimator | Where | Pre-extension detrend | Domain | m=1 special case |
 |-----------|-------|-----------------------|--------|------------------|
 | TOTDEV    | whole record | none           | phase     | no  |
-| MTOTDEV   | per subsegment | half-average | phase     | no  |
-| HTOTDEV   | per subsegment | half-average | frequency | yes — falls back to HDEV |
-| MHTOTDEV  | per subsegment | half-average   | phase     | no  |
+| MTOTDEV   | per subsegment | half-average (offset) | phase     | no  |
+| HTOTDEV   | per subsegment | half-average (drift, on `y`) | frequency | yes — falls back to HDEV |
+| MHTOTDEV  | per subsegment | half-average (offset)¹ | phase     | no  |
+
+¹ Plus a record-level least-squares drift removal in the public wrapper
+(`remove_drift=true` default) — see the drift-handling note above.
 
 ---
 
@@ -291,7 +310,7 @@ a = adev(PhaseData(x, 1.0), τs; ci=true)
 t = totdev(PhaseData(x, 1.0), τs; ci=true)
 
 # CI half-width at the largest τ — TOTVAR should be tighter
-ci_half(r, i) = (r.ci_upper[i] - r.ci_lower[i]) / 2
+ci_half(r, i) = (r.ci[i].hi - r.ci[i].lo) / 2
 last_τ = length(τs)
 round.((ci_half(a, last_τ), ci_half(t, last_τ)); sigdigits=3)
 ```
@@ -306,9 +325,10 @@ on this short record — the data-extension is doing its job.
 - All four total kernels live in `src/kernels.jl`.
 - Bias correction is applied in `src/deviations.jl` via the
   `bias_correction` helper from `src/edf.jl`.
-- The MHTOTDEV EDF model uses an HDEV-style approximation (no
-  published analytic form for MHTOTDEV); known limitation tracked as
-  `R-MED-6`.
+- The MHTOTDEV EDF model `edf = b·(T/τ) − c` and the bias
+  `B = b₀ + b₁·(τ/T)` are Monte-Carlo-measured (no published form
+  exists for MHTOTDEV); see
+  [Theory: MHTOTDEV bias and EDF](mhtotdev_bias_edf.md).
 
 ---
 

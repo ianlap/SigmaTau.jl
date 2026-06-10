@@ -22,19 +22,28 @@ Stable32's run-types map to SigmaTau functions one-to-one:
 | Time (TDEV)                  | `tdev`            |
 | Hadamard (HDEV)              | `hdev`            |
 | Overlapping Hadamard (OHDEV) | `hdev` (always overlapping) |
-| Modified Hadamard            | `mhdev`           |
-| Hadamard Time                | `htdev`           |
 | Total (TOTDEV)               | `totdev`          |
 | Modified Total (MTOT)        | `mtotdev`         |
 | Time Total (TTOT)            | `ttotdev`         |
 | Hadamard Total (HTOT)        | `htotdev`         |
-| Modified Hadamard Total      | `mhtotdev`        |
 | MTIE                         | `mtie`            |
-| Parabolic (PDEV)             | `pdev`            |
 
 SigmaTau's Allan and Hadamard deviations are always the overlapping estimators
 (the Stable32 "O…" variants), which is the standard choice for stability
 analysis. There is no separate non-overlapping call.
+
+Four SigmaTau deviations have **no Stable32 run type**:
+
+- `mhdev` — the modified Hadamard deviation (phase-averaged third
+  difference); see [Theory: Allan family](theory/allan_family.md).
+- `htdev` — the Hadamard time deviation, the σ_x form of `mhdev`;
+  original to this package. Same theory page.
+- `mhtotdev` — the modified Hadamard total deviation, the
+  boundary-extended form of `mhdev`; original to this package, with
+  Monte-Carlo-calibrated bias and EDF
+  ([Theory: MHTOTDEV bias and EDF](theory/mhtotdev_bias_edf.md)).
+- `pdev` — the parabolic deviation (PVAR); see
+  [Theory: Allan family](theory/allan_family.md).
 
 ## Result-field mapping
 
@@ -45,14 +54,15 @@ up with the columns Stable32 prints in a deviation run:
 |---------------------|-------------------------|
 | Tau                 | `r.tau` (seconds)       |
 | Sigma / Dev         | `r.dev`                 |
-| Min Sigma / Max Sigma (CI) | `r.ci_lower` / `r.ci_upper` |
-| (#) — points / EDF  | `r.edf`                 |
+| Min Sigma / Max Sigma (CI) | `r.ci` — one `(lo, hi)` tuple per τ (`r.ci[1].lo`); `ci_lower(r)` / `ci_upper(r)` give plain vectors |
+| # (analysis points) | `r.neff`                |
+| EDF                 | `r.edf`                 |
 | Noise type (α)      | `r.noise_type`          |
 
 Noise-type symbols follow the SP1065 power-law labels: `:WHPM`, `:FLPM`,
 `:WHFM`, `:FLFM`, `:RWFM` (α = +2, +1, 0, −1, −2). The confidence and EDF fields
 are populated when `ci=true` (the default) and left empty when
-`ci=false`.
+`ci=false`; `r.neff` is populated either way.
 
 ## A complete session
 

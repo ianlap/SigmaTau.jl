@@ -8,9 +8,9 @@
 #
 # This tutorial:
 #
-# 1. Runs `adev` on the WPM + RWFM fixture from
-#    [Phase data and frequency data](01_phase_data.md) with the default
-#    octave τ-grid (no `m_values` argument needed).
+# 1. Runs `adev` on a compact two-noise record (WPM + RWFM — the two
+#    ends of the slope table) with the default octave τ-grid (no
+#    `m_values` argument needed).
 # 2. Repeats the call with an explicit `m_values` to show how to take
 #    control of which τ values get sampled.
 # 3. Walks through every field of the returned `StabilityResult`.
@@ -22,8 +22,10 @@ using Random
 
 # ## Fixture
 #
-# Same deterministic seed as the previous tutorial so the figures
-# line up.
+# A deliberately small two-noise record: white PM falling as τ⁻¹ and
+# random-walk FM rising as τ^(+1/2), so the curve has a clean knee. For
+# a realistic three-noise clock record, see
+# [Phase data and frequency data](01_phase_data.md).
 
 Random.seed!(20260509)
 
@@ -37,11 +39,11 @@ pd   = PhaseData(x, τ₀)
 # ## Run `adev` with no `m_values` argument
 #
 # The shortest path: pass the data and nothing else. `adev` defaults to
-# an octave-spaced τ-grid (`m = 1, 2, 4, 8, …`) up to the largest
+# an octave-spaced τ-grid, `m = 1, 2, 4, 8, …`, up to the largest
 # averaging factor the ADEV kernel can compute on a record of this
-# length (`m_max = ⌊(N−1)/2⌋` for ADEV; smaller for MDEV / HDEV /
-# MHDEV — see `SigmaTau._default_m_values` for the per-kernel
-# table). This matches the convention in NIST SP1065 and is the right
+# length — `m_max = ⌊(N−1)/2⌋` for ADEV, smaller for MDEV / HDEV /
+# MHDEV; see `SigmaTau._default_m_values` for the per-kernel table.
+# This matches the convention in NIST SP1065 and is the right
 # default for a first look at a clock record.
 
 result = adev(pd)
@@ -70,11 +72,18 @@ result.edf          # equivalent degrees of freedom
 
 #-
 
-result.ci_lower     # lower χ² confidence bound (default 68.3%, 1σ)
+result.ci           # χ² confidence bounds (default 68.3%, 1σ) — one
+                    # `(lo, hi)` named tuple per τ: `result.ci[1].lo`
 
 #-
 
-result.ci_upper     # upper χ² confidence bound
+ci_lower(result)    # the bounds as plain vectors, via the exported
+                    # `ci_lower` / `ci_upper` accessor functions
+
+#-
+
+result.neff         # number of analysis windows averaged per τ
+                    # (the Stable32 "#" column; N − 2m for adev)
 
 #-
 
@@ -87,8 +96,8 @@ result.deviation_type  # which deviation kernel produced this result
 # adev(pd; ci = false)
 # ```
 #
-# `result.ci_lower`, `result.ci_upper`, and `result.edf` come back
-# empty in that mode.
+# `result.ci` and `result.edf` come back empty in that mode;
+# `result.neff` is always populated.
 
 # ## Run `adev` with an explicit `m_values`
 #
@@ -118,7 +127,7 @@ result_m.tau ≈ m_grid .* τ₀
 # `SigmaTau` ships a `RecipesBase` extension
 # (`ext/SigmaTauRecipesBaseExt.jl`); loading any `Plots`-compatible
 # backend brings in a log-log τ–σ recipe with χ² error bars sourced
-# from `result.ci_lower / ci_upper`.
+# from `result.ci`.
 
 using Plots
 

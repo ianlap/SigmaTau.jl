@@ -9,7 +9,17 @@ of these estimators along with their confidence intervals.
 
 ## Phase residuals and fractional frequency
 
-Two equivalent representations of the same data:
+The fractional frequency of an oscillator is its frequency error
+normalized by its nominal frequency,
+
+```math
+y(t) \;=\; \frac{f(t) - f_{\mathrm{nom}}}{f_{\mathrm{nom}}},
+```
+
+where `f(t)` is the instantaneous output frequency and `f_nom` the
+nominal (nameplate) frequency; `y` is dimensionless. Sampled at interval
+`τ₀`, phase and fractional frequency are two equivalent representations
+of the same data:
 
 ```math
 y_i \;=\; \frac{x_{i+1} - x_i}{\tau_0}, \qquad
@@ -17,10 +27,9 @@ x_n \;=\; x_0 + \tau_0 \sum_{i=0}^{n-1} y_i
 ```
 
 `x(t)` (seconds) is the time-error of the clock relative to a reference;
-`y(t)` (dimensionless) is the fractional frequency offset, sampled at
-interval `τ₀`. SigmaTau stores phase as `PhaseData` and frequency as
-`FrequencyData`; the deviation API accepts either, converting via
-prefix-sum where needed.
+`y_i` is the mean fractional frequency over the i-th interval. SigmaTau
+stores phase as `PhaseData` and frequency as `FrequencyData`; the
+deviation API accepts either, converting via prefix-sum where needed.
 
 (Cite [banerjee-2023-timekeeping](@cite) for modern presentation; SP1065 §4
 [riley-2008-sp1065](@cite) for the conventions.)
@@ -40,14 +49,16 @@ by `α`, the spectral exponent of the one-sided PSD `S_y(f) ∝ f^α`:
 | −3 | Flicker walk FM  | FWFM    | (Allan diverges)¹  | (diverges)¹ |
 | −4 | Random run FM    | RRFM    | (Allan diverges)¹  | (diverges)¹ |
 
-¹ The Allan family's variance integral diverges for `α ≤ −3`. The
-Hadamard family (HDEV / MHDEV / HTOTDEV / MHTOTDEV) replaces the
-second difference with a third difference and remains finite down to
-`α = −4`, so records with very-low-frequency power-law content should
-be analyzed with the Hadamard family rather than ADEV / MDEV
-[greenhall-1997-third-difference-mvar](@cite). SigmaTau's three-state
-clock SDE additionally models random-run FM via the σ₃ Wiener channel
-[zucca-2005-clock-model-allan](@cite).
+¹ The Allan family's variance integral converges only for `α > −3`:
+its transfer function rolls off as `f²` toward zero frequency, so the
+integrand behaves as `f^(α+2)` there and the integral is finite exactly
+when `α + 2 > −1`. The Hadamard family (HDEV / MHDEV / HTOTDEV /
+MHTOTDEV) replaces the second difference with a third difference,
+gaining another factor of `f²`, and converges for `α > −5` — in
+practice, down through random-run FM at `α = −4` — so records with
+very-low-frequency power-law content should be analyzed with the
+Hadamard family rather than ADEV / MDEV
+[greenhall-1997-third-difference-mvar](@cite).
 
 ADEV's degeneracy on WPM/FPM is the historical motivation for MDEV.
 HDEV adds drift insensitivity by going to a third difference.
@@ -111,8 +122,11 @@ canonical time-distribution-network metric
 
 ## Slope demonstration
 
+On log-log axes the slope of `σ_y(τ)` identifies the dominant noise
+type. Pure white PM and pure random-walk FM bracket the table above:
+
 ```@example overview
-using SigmaTau, Random
+using SigmaTau, Plots, Random
 Random.seed!(42)
 
 # Synth: 4096 samples WPM (α=2) and RWFM (α=−2) at τ₀ = 1 s
@@ -120,15 +134,27 @@ N = 4096
 wpm  = randn(N)
 rwfm = cumsum(cumsum(randn(N)))    # double integration of white noise
 
-τs = [1, 4, 16, 64, 256]
-σ_wpm  = adev(PhaseData(wpm,  1.0), τs).dev
-σ_rwfm = adev(PhaseData(rwfm, 1.0), τs).dev
+τs = [2^k for k in 0:9]
+r_wpm  = adev(PhaseData(wpm,  1.0), τs; ci=false)
+r_rwfm = adev(PhaseData(rwfm, 1.0), τs; ci=false)
 
-round.(σ_wpm; sigdigits=3), round.(σ_rwfm; sigdigits=3)
+plot(r_wpm.tau, r_wpm.dev;
+     xscale=:log10, yscale=:log10, marker=:circle,
+     xlabel="τ (s)", ylabel="σ_y(τ)", label="WPM (α = +2)",
+     legend=:bottomleft)
+plot!(r_rwfm.tau, r_rwfm.dev; marker=:diamond, label="RWFM (α = −2)")
+
+# Reference slope guides, anchored at each curve's first point.
+plot!(r_wpm.tau, r_wpm.dev[1] .* (r_wpm.tau ./ r_wpm.tau[1]) .^ -1;
+      ls=:dash, color=:gray, label="τ⁻¹ guide")
+plot!(r_rwfm.tau, r_rwfm.dev[1] .* (r_rwfm.tau ./ r_rwfm.tau[1]) .^ (1/2);
+      ls=:dot, color=:gray, label="τ^(+1/2) guide")
 ```
 
-The first vector should fall roughly as `τ⁻¹` (μ = −1, WPM); the second
-should rise roughly as `τ⁺¹/²` (μ = +1/2, RWFM).
+The WPM record falls along the `τ⁻¹` guide (μ = −1); the RWFM record
+rises along `τ^(+1/2)` (μ = +1/2). Read slopes against the guide lines,
+not the tick spacing — the τ grid here is octave-spaced while the
+ordinate ticks are decades.
 
 ## Where to next
 

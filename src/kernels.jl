@@ -509,16 +509,23 @@ end
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
 
 MHTOTDEV is novel to SigmaTau; no canonical/published form exists. SigmaTau
-adopts the Greenhall methodology — per-window half-mean slope removal + a 3×
-time-reverse extension on phase — by consistency with MTOTDEV and HTOTDEV.
+adopts the Greenhall methodology — per-window detrend + a 3× time-reverse
+extension on phase — by consistency with MTOTDEV and HTOTDEV. The detrend is
+degree-matched to the third-difference kernel: the window's frequency drift
+(TOTHVAR's half-average estimate on the frequency increments) and frequency
+offset (MTOTDEV's half-mean slope estimate on phase) are both removed, so the
+extension cannot re-admit either polynomial the kernel annihilates. With only
+the degree-1 removal, residual quadratic phase makes the reflected copies
+non-smooth at the boundaries and a drifting record reads several times high
+at long τ.
 """
 function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return _mhtotdev_greenhall(x, m_values, tau0)
 end
 
 function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Per-window half-mean slope removal + per-window time-reverse extension
-    # + averaged third-difference operator.
+    # Per-window drift + half-mean slope removal + per-window time-reverse
+    # extension + averaged third-difference operator.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
@@ -546,6 +553,20 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
         Lp = 3m + 1
         L3 = 3Lp - 3m
 
+        # Per-window drift removal (degree-2 phase detrend). The third
+        # difference annihilates quadratic phase inside each copy of the
+        # window, but the time-reverse extension re-admits it at the copy
+        # boundaries unless it is removed first — the degree-2 analog of the
+        # degree-1 half-mean slope removal MTOTDEV needs for its
+        # second-difference kernel. The drift estimate is TOTHVAR's
+        # half-average of the window's frequency increments (exact for a
+        # deterministic drift), computed O(1) from telescoping phase sums.
+        Ly     = 3m                          # frequency increments per window
+        hy     = fld(Ly, 2)
+        lo0    = cld(Ly, 2) + 1              # skip the middle sample when Ly is odd
+        ddenom = isodd(Ly) ? 0.5 * (Ly - 1) + 1.0 : 0.5 * Ly
+        dmid   = fld(Ly, 2)
+
         nchunks = max(1, min(nthreads, nsubs))
         chunk_size = cld(nsubs, nchunks)
         chunk_sums = zeros(nchunks)
@@ -557,24 +578,35 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
             d3_vec = d3_pool[c]
             local_sum = 0.0
             for n in n_lo:n_hi
+                # τ0·(half-averages of the window's frequency increments);
+                # the increment sums telescope to phase differences.
+                ty1 = (x[n-1+hy+1] - x[n]) / hy
+                ty2 = (x[n-1+Lp] - x[n-1+lo0]) / (Ly - lo0 + 1)
+                sd  = (ty2 - ty1) / ddenom   # τ0 · per-sample drift in y
+                # Quadratic phase implied by that drift, subtracted below:
+                # q(j) = sd · (½(j−1)(j−2) − dmid·(j−1)).
+
                 half = floor(Int, Lp / 2)
                 s1 = 0.0
                 @inbounds @simd for j in 1:half
-                    s1 += x[n-1+j]
+                    s1 += x[n-1+j] - sd * (0.5 * (j - 1) * (j - 2) - dmid * (j - 1))
                 end
                 s1 /= half
 
                 s2 = 0.0
                 @inbounds @simd for j in (half+1):Lp
-                    s2 += x[n-1+j]
+                    s2 += x[n-1+j] - sd * (0.5 * (j - 1) * (j - 2) - dmid * (j - 1))
                 end
                 s2 /= (Lp - half)
 
                 slope = (s2 - s1) / ((Lp / 2.0) * tau0)
 
                 @inbounds for j in 1:Lp
-                    val = x[n-1+j] - slope * tau0 * (j - 1)
-                    rev_val = x[n-1 + Lp - j + 1] - slope * tau0 * (Lp - j)
+                    jr = Lp - j + 1
+                    val     = x[n-1+j]  - sd * (0.5 * (j - 1) * (j - 2) - dmid * (j - 1)) -
+                              slope * tau0 * (j - 1)
+                    rev_val = x[n-1+jr] - sd * (0.5 * (jr - 1) * (jr - 2) - dmid * (jr - 1)) -
+                              slope * tau0 * (jr - 1)
 
                     ext[j] = rev_val
                     ext[Lp + j] = val

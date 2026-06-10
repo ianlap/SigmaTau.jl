@@ -63,6 +63,21 @@
 # documentation are all runnable scripts; everything here can also be pasted
 # directly into a Pluto cell.
 
+# ## Typing τ, σ, and friends
+#
+# Julia identifiers can be Greek letters, and this documentation uses them
+# the way the field does: `τ` for averaging time, `σ` for a deviation,
+# `τ₀` for the sample interval. You type them with LaTeX-style
+# abbreviations followed by Tab. In the REPL and in VS Code (with the
+# Julia extension), `\tau` + Tab gives `τ`, `\sigma` + Tab gives `σ`,
+# and a subscript follows the same pattern: `\tau` + Tab, then `\_0` +
+# Tab gives `τ₀`. Pluto notebooks support the same completion.
+#
+# None of this is required — every Greek identifier in SigmaTau's API has
+# a plain-ASCII spelling (`tau0`, `dev`, …), and your own variables can be
+# named however you like. The completion is just how you read and write
+# the symbols comfortably when you want them.
+
 # ## Loading phase data from a file
 #
 # Stable32 exports phase records as plain-text `.DAT` files: a 10-line header
@@ -102,18 +117,22 @@ println("ADEV values:  ", result.dev)
 # | `tau` | τ column | Averaging times in seconds |
 # | `dev` | σ_y(τ) column | Allan deviation values |
 # | `noise_type` | noise ID column | e.g. `:WHFM`, `:RWFM` |
-# | `ci_lower` / `ci_upper` | error bars | Lower / upper 1σ confidence bounds |
+# | `ci` | error bars | `(lo, hi)` 1σ confidence bounds per τ |
 # | `edf` | EDF column | Equivalent degrees of freedom |
+# | `neff` | # column | Number of analysis windows averaged |
 # | `deviation_type` | window title | `:adev`, `:mdev`, `:totdev`, etc. |
 #
 # Confidence intervals are computed by default (set `ci=false` to skip).
 # The noise type is identified automatically by the lag-1 autocorrelation
-# method (NIST SP1065 §4.2).
+# method (NIST SP1065 §4.2). Each `ci` entry is a named tuple — read one
+# bound as `result.ci[1].lo`, or get whole vectors with the `ci_lower` /
+# `ci_upper` accessor functions.
 
 println("\nNoise types:  ", result.noise_type)
-println("CI lower:     ", result.ci_lower)
-println("CI upper:     ", result.ci_upper)
+println("CI lower:     ", ci_lower(result))
+println("CI upper:     ", ci_upper(result))
 println("EDF:          ", result.edf)
+println("neff:         ", result.neff)
 
 # ## Overlaying multiple deviations on one plot
 #
@@ -133,7 +152,7 @@ println("EDF:          ", result.edf)
 # ```
 #
 # `plot(result)` automatically uses a log-log axis and draws shaded error bars
-# from `ci_lower` / `ci_upper`. Every additional `plot!(...)` call overlays on
+# from the `ci` bounds. Every additional `plot!(...)` call overlays on
 # the same figure.
 
 # ## Saving your result to disk

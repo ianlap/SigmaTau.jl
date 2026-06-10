@@ -14,6 +14,13 @@ StabilitySuite
 SpectralResult
 ```
 
+## Accessors
+
+```@docs
+ci_lower
+ci_upper
+```
+
 ## Tables.jl
 
 `StabilityResult` and `StabilitySuite` implement the
