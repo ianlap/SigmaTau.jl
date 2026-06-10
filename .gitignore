@@ -44,7 +44,7 @@ legdocs/
 .bench-venv/
 
 # Proprietary / large clock recordings used for off-repo validation
-reference/clock_data/
+clock_data/
 
 # Scratchpad files (Ian's REPL throwaways, never checked in)
 scratch.jl
@@ -65,8 +65,11 @@ makedir.sh
 docs/src/tutorials/0*_*.md
 
 # Monte Carlo run outputs from tools/mc_mhtotdev.jl. The harness is tracked;
-# generated CSV/JSON artifacts stay local.
-tools/artifacts/
+# the full-sweep fit JSON is tracked as research provenance, while ad-hoc
+# laptop/quick-run outputs stay local.
+tools/artifacts/*
+!tools/artifacts/
+!tools/artifacts/mhtotdev_mc_full.json
 
 # Local design asset (kept on disk, not part of the package).
 SigmaTauDesign.zip

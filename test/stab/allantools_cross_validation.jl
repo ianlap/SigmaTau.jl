@@ -1,7 +1,7 @@
 # allantools_cross_validation.jl — Compares the SigmaTau raw
 # kernels against Anders Wallin's `allantools` (Python) on the same
 # Stable32 phase fixture. Skipped silently when the fixture has not
-# been regenerated locally (`reference/validation/allantools_out/
+# been regenerated locally (`test/fixtures/validation/allantools_out/
 # allantools_data_full.csv`); regenerate with
 # `python3 tools/regen_allantools_fixtures.py`.
 #
@@ -16,7 +16,7 @@
 # allantools and Stable32 on totals are documented and small.
 
 @testset "allantools cross-validation" begin
-    ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
+    ref_dir = joinpath(@__DIR__, "..", "fixtures", "validation")
     dat_path = joinpath(ref_dir, "stable32gen.DAT")
     at_csv   = joinpath(ref_dir, "allantools_out", "allantools_data_full.csv")
 

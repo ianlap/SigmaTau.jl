@@ -2,9 +2,9 @@
 #
 # Verifies that every public symbol the package promises lands in the caller's
 # namespace under a bare `using SigmaTau`, and that the FrequencyData
-# dispatches all round-trip through `_freq_to_phase` correctly. As of v0.3.0
-# the `Stab` submodule is flattened into the umbrella and the `Est` surface
-# has moved to ClockEnsemble.jl; both assertions are pinned negative below.
+# dispatches all round-trip through `_freq_to_phase` correctly. The old `Stab`
+# submodule is flattened into the umbrella, and `Est` is not part of the public
+# SigmaTau surface; both assertions are pinned negative below.
 
 using Test
 using SigmaTau
@@ -12,7 +12,7 @@ using SigmaTau
 @testset "Flattened — no Stab/Est submodules" begin
     # Stab is no longer a submodule (flattened into the umbrella).
     @test !isdefined(SigmaTau, :Stab)
-    # Est moved to ClockEnsemble.jl.
+    # Est is not part of the public SigmaTau surface.
     @test !isdefined(SigmaTau, :Est)
     # Internal kernels still reachable through `SigmaTau.` directly.
     @test isdefined(SigmaTau, :_adev_core)

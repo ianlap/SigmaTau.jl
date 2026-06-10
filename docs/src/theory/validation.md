@@ -1,9 +1,9 @@
 # Validation
 
 Numerical validation is part of the methodological foundation: a deviation
-estimator is only as useful as its agreement with the established
-references the time-and-frequency community already trusts. SigmaTau is
-cross-validated three ways against:
+estimator is only as useful as its agreement with the established references
+the time-and-frequency community already trusts. SigmaTau is cross-validated
+against:
 
 1. **Stable32** ([Riley & Howe 2008](@cite riley-2008-sp1065)) — desktop
    application, the de facto industry reference for time-and-frequency
@@ -11,14 +11,14 @@ cross-validated three ways against:
    five significant figures.
 2. **allantools** (A. Wallin) — open-source Python library, second
    independent numerical reference. Output precision is full Float64.
-3. **SigmaTau.jl** itself — implementations are pinned to the
-   [Riley & Howe 2008](@cite riley-2008-sp1065) and
+3. **Inlined legacy kernels and internal identities** — implementations are
+   pinned to the [Riley & Howe 2008](@cite riley-2008-sp1065) and
    [IEEE 1139-2022](@cite ieee1139-2022-definitions) definitions; bias
    corrections and EDF expressions follow
    [Greenhall & Riley 2003](@cite greenhall-2003-edf-stability).
 
-Three-way agreement at the precision floor of the tightest reference is
-the bar. Where the three disagree, the disagreement is documented and
+Agreement at the precision floor of the tightest reference is
+the bar. Where references disagree, the disagreement is documented and
 attributed to a specific definitional choice (boundary handling, bias
 correction policy), not a defect.
 
@@ -33,7 +33,7 @@ implementations are O(N) prefix-sum forms, exact-by-construction up to
 floating-point round-off; against allantools, agreement holds to
 rtol ≈ 1e-11 (full Float64 precision).
 
-Representative comparison from `reference/validation/stable32out/`:
+Representative comparison from `test/fixtures/validation/stable32out/`:
 
 | Estimator | τ (s) | Stable32 | allantools | SigmaTau |
 |---|---|---|---|---|

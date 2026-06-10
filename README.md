@@ -32,11 +32,6 @@ Coming from Stable32? See the
   `StabilityResult`) and every public deviation, noise-ID, EDF/CI, MTIE, PDEV,
   and IO function into scope.
 
-For clock state-space estimation (Kalman filter, PID steering, holdover
-projection) see the sister package
-[ClockEnsemble.jl](https://github.com/ianlap/ClockEnsemble.jl) (formerly the
-`SigmaTau.Est` submodule, split out at v0.3.0).
-
 ## Install
 
 ```julia
@@ -137,8 +132,6 @@ top-level `test/runtests.jl`.
 Bug reports, new deviations, validation fixtures, and benchmarks are welcome.
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). The main references for the underlying
 math are NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, and IEEE 1139-2022.
-[`project_overview.md`](project_overview.md) has the per-component status matrix
-and [`TODO.md`](TODO.md) lists outstanding work.
 
 ## License
 

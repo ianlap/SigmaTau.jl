@@ -230,15 +230,15 @@ const LK = LegacyKernels
               hdev(pd_equiv, m_values_eq; ci=false).dev
     end
 
-    @testset "Stable32 cross-validation (reference/validation/)" begin
+    @testset "Stable32 cross-validation (test/fixtures/validation/)" begin
         # Phase fixture and Stable32 reference outputs live in
-        # reference/validation/. Stable32 reports sigma values with 4-5
+        # test/fixtures/validation/. Stable32 reports sigma values with 4-5
         # significant figures, so the agreement floor is rtol≈1e-4. The new
         # raw _*_core kernels match Stable32's reported sigmas tightly for
         # ADEV/MDEV/HDEV/MHDEV/TDEV/TOTDEV; HTOTDEV and MTOTDEV agree with
         # Stable32 only after removing our SP1065 bias correction (Stable32
         # reports unbiased values per `comparison_report.md`).
-        ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
+        ref_dir = joinpath(@__DIR__, "..", "fixtures", "validation")
         dat_path = joinpath(ref_dir, "stable32gen.DAT")
         csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
 
@@ -263,7 +263,7 @@ const LK = LegacyKernels
             # Tolerance per kernel family. Tight (1e-4) for kernels the legacy
             # comparison report flagged as <1e-5 agreement; looser for kernels
             # where there is a documented bias-correction mismatch with
-            # Stable32 (htot, mtot — see reference/.../comparison_report.md).
+            # Stable32 (htot, mtot — see test/fixtures/.../comparison_report.md).
             tight = 1e-4
 
             n_checked = 0
@@ -338,7 +338,7 @@ const LK = LegacyKernels
         # The raw SP1065 eqn-25 kernel (`_totdev_core`, no bias) is checked
         # separately against allantools' raw TOTDEV to ~7 sig figs in
         # allantools_cross_validation.jl; allantools does not apply the bias.
-        ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
+        ref_dir = joinpath(@__DIR__, "..", "fixtures", "validation")
         dat_path = joinpath(ref_dir, "stable32gen.DAT")
         csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
 
@@ -797,12 +797,12 @@ const LK = LegacyKernels
     @testset "noise-ID Stable32-fixture cross-check vs allantools" begin
         # Reference table generated with allantools 2024.06's
         # `autocorr_noise_id(x, m, data_type='phase', dmin=0, dmax=2)`
-        # on `reference/validation/stable32gen.DAT` (the same Stable32
+        # on `test/fixtures/validation/stable32gen.DAT` (the same Stable32
         # fixture the deviation cross-validation testset above uses).
         # Allantools errors out at m=512 (time-series too short after
         # differencing) — SigmaTau's B1/R(n) fallback handles it, so
         # we cross-check only m where allantools can compute.
-        ref_dir = joinpath(@__DIR__, "..", "..", "reference", "validation")
+        ref_dir = joinpath(@__DIR__, "..", "fixtures", "validation")
         dat_path = joinpath(ref_dir, "stable32gen.DAT")
         if !isfile(dat_path)
             @info "Stable32 fixture not present; skipping noise-ID cross-check"

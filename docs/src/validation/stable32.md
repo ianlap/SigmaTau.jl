@@ -1,7 +1,7 @@
 # Validation: Stable32
 
 This page documents agreement between SigmaTau.jl outputs and Stable32
-fixtures generated from `reference/validation/stable32gen.DAT`.
+fixtures generated from `test/fixtures/validation/stable32gen.DAT`.
 
 ## Summary
 
@@ -147,5 +147,4 @@ Hadamard Total), both biased and unbiased SigmaTau values are shown.
 
 ## Methodology
 
-See [Validation Methodology](methodology.md) for the three-way reference
-strategy (Stable32 + allantools + AllanLab).
+See [Validation Methodology](methodology.md) for the shipped fixture strategy.

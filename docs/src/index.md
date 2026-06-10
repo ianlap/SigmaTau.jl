@@ -5,9 +5,6 @@ Allan / Hadamard / Total deviations, χ²-based confidence intervals, lag-1
 ACF noise identification, MTIE, parabolic deviation, and calibrated
 power-law noise generation.
 
-For clock state-space estimation and Kalman steering, see the sister
-package [ClockEnsemble.jl](https://github.com/ianlap/ClockEnsemble.jl).
-
 ## Package layout
 
 SigmaTau.jl is a single, flat Julia 1.11 package. Shared types,

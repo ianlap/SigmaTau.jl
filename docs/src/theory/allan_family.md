@@ -76,7 +76,7 @@ curvature in `x(t)` [@cite banerjee-2023-timekeeping].
     pins the kernel. CI / EDF bounds are not yet populated — the
     `StabilityResult.ci_lower` / `ci_upper` / `edf` fields are empty
     until the Vernotte 2015 / 2020 closed-form EDF coefficients are
-    ported (tracked in `TODO.md`).
+    ported.
 
 ## TDEV — time deviation
 
@@ -302,7 +302,7 @@ contaminated.
     TDEV (SP1065 §5.2.7 [@cite riley-2008-sp1065]) applied to the
     modified-Hadamard kernel rather than the modified-Allan kernel.
     The earlier name `ldev` was retained temporarily as a deprecated alias
-    and removed in the 0.4.0 release line.
+    and removed before the public release.
 
 ## Slope vs noise table
 

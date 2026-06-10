@@ -220,5 +220,5 @@ plot_positive_tch!(taus, σ3_tch; label = "Clock 3 TCH",   ls = :dash, lw = 1.5)
 #
 # For larger ensembles, the natural extension is to estimate every
 # clock's σ from the full N(N−1)/2 pairwise differences via
-# weighted least squares — see Riley's GTCH and the
-# `EnsembleKalmanProcesses.jl` calibration pattern flagged in TODO.
+# weighted least squares; Riley's generalized TCH papers are the
+# usual starting point.
