@@ -70,7 +70,7 @@ result.edf          # equivalent degrees of freedom
 
 #-
 
-result.ci_lower     # lower χ² confidence bound (default 95%)
+result.ci_lower     # lower χ² confidence bound (default 68.3%, 1σ)
 
 #-
 

@@ -21,7 +21,7 @@ frequency modulation (WHFM, α=0), flicker frequency modulation
 
 ## Lag-1 ACF on differenced phase
 
-Riley & Greenhall 2004 [@cite riley-2004-lag1-acf] show that the lag-1
+Riley & Greenhall 2004 [riley-2004-lag1-acf](@cite) show that the lag-1
 autocorrelation `r₁` of an appropriately differenced phase series maps
 monotonically onto the spectral exponent α. Their procedure:
 
@@ -53,7 +53,7 @@ between adjacent power-law families.
 
 For short records or borderline cases, SigmaTau falls back to the
 Allan-variance B1 ratio with the R(n) factor for WPM/FPM
-disambiguation, per SP1065 §6 [@cite riley-2008-sp1065]. This path is
+disambiguation, per SP1065 §6 [riley-2008-sp1065](@cite). This path is
 triggered automatically when the lag-1 method's confidence is low.
 
 B1 compares the classical (standard) variance of the averaged
@@ -69,7 +69,7 @@ The lag-1 method needs a minimum effective sample count for `r₁` to
 be a reliable estimator. SigmaTau uses `NEFF_RELIABLE = 30` as the
 threshold; below this, classification falls back to B1/R(n) regardless
 of `r₁`. The threshold tracks the Riley R 2020 recommendation
-[@cite riley-2020-r-frequency-stability] and the historical SigmaTau policy mandate.
+[riley-2020-r-frequency-stability](@cite) and the historical SigmaTau policy mandate.
 
 ## The `noise_type` field
 
@@ -104,7 +104,7 @@ last reliable classification rather than emitting `:unknown` mid-run.
 ## References
 
 - Riley & Greenhall, *Power-law noise identification using the lag-1
-  autocorrelation*, PTTI 2004 [@cite riley-2004-lag1-acf].
-- SP1065 §6 [@cite riley-2008-sp1065].
+  autocorrelation*, PTTI 2004 [riley-2004-lag1-acf](@cite).
+- SP1065 §6 [riley-2008-sp1065](@cite).
 - Riley, *Frequency Stability Analysis Using R*, 2020
-  [@cite riley-2020-r-frequency-stability].
+  [riley-2020-r-frequency-stability](@cite).

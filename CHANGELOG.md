@@ -36,6 +36,11 @@ Initial public release.
   legacy-kernel parity tests for estimators without an external implementation.
 - Tracked MHTOTDEV Monte Carlo fit provenance at
   `tools/artifacts/mhtotdev_mc_full.json`.
+- Migration guides for Stable32 and allantools users, a plotting cookbook, and
+  an FAQ/troubleshooting page.
+- Tutorials on characterizing a drifting clock with the Hadamard family
+  (`hdev`/`mhdev`/`htdev`/`mhtotdev`) and on importing real-world data files.
+- `CITATION.cff` and a README citation section.
 
 ### Changed
 

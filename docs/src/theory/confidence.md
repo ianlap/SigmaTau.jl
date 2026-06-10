@@ -26,7 +26,7 @@ bounds on `σ²_y(τ)` are:
 ```
 
 `StabilityResult.ci_lower` and `ci_upper` are the deviations
-`√σ²_{lo,hi}`. (Cite SP1065 §5 [@cite riley-2008-sp1065].)
+`√σ²_{lo,hi}`. (Cite SP1065 §5 [riley-2008-sp1065](@cite).)
 
 The χ² approximation is asymptotic in EDF: it tightens as `N/m` grows
 and as the noise type approaches white FM. At small EDF (long τ, short
@@ -35,11 +35,11 @@ upper bound stretches much further than the lower bound, reflecting
 the long right tail of χ² at low degrees of freedom. SigmaTau falls
 back to a normal-approximation envelope `d ± Kₙ·d·z/√N` when EDF is
 non-finite or below 1, which keeps reported bounds finite at the cost
-of optimism in the deep red-noise regime [@cite riley-2008-sp1065].
+of optimism in the deep red-noise regime [riley-2008-sp1065](@cite).
 
 ## Greenhall–Riley 2003 (GR03)
 
-GR03 [@cite greenhall-2003-edf-stability] gives closed-form EDF expressions for
+GR03 [greenhall-2003-edf-stability](@cite) gives closed-form EDF expressions for
 overlapping ADEV/MDEV/HDEV/MHDEV at any α, parameterized by three
 dimensionless variances: `sz`, `sx`, `sw`. SigmaTau implements them in
 `src/edf.jl`. The formulas span several
@@ -57,7 +57,7 @@ TOTDEV and HTOTDEV when no total-specific table value is published.
 The total-family estimators do not have published GR03-style EDF
 formulas in general. SigmaTau falls back to ADEV/HDEV-style EDF for
 WPM/FPM (α = 2, 1) and uses published `a(α)` values
-[@cite howe-2001-tothvar-steering] for α ∈ {0, −1, −2, −3, −4} (FCS 2001
+[howe-2001-tothvar-steering](@cite) for α ∈ {0, −1, −2, −3, −4} (FCS 2001
 Table I covers the full Hadamard FM range).
 
 ## Bias correction summary
@@ -73,13 +73,13 @@ Table I covers the full Hadamard FM range).
 Bias factors are applied to the *variance* before the square root and
 before EDF lookup — i.e., the API divides the raw deviation by `√B`,
 not `B`. The SP1065 TOTDEV factor `B = 1 − a(α)·(τ/T)` shrinks toward 1
-as τ/T → 0 [@cite riley-2008-sp1065]. MTOTDEV uses a τ-independent
+as τ/T → 0 [riley-2008-sp1065](@cite). MTOTDEV uses a τ-independent
 table `{1.06, 1.17, 1.27, 1.30, 1.31}` for α ∈ {2, 1, 0, −1, −2}
-[@cite riley-2020-r-frequency-stability]. HTOTDEV uses the FCS 2001
+[riley-2020-r-frequency-stability](@cite). HTOTDEV uses the FCS 2001
 form `B = 1 + a(α)` with `a` from Table I of Howe & Tasset 2001
 (`a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}` for α ∈ {0,−1,−2,−3,−4};
 all `a < 0`, so `B < 1`, reflecting that HTOT is biased *low* for FM
-noises) [@cite howe-2001-tothvar-steering]. MHTOTDEV is treated as
+noises) [howe-2001-tothvar-steering](@cite). MHTOTDEV is treated as
 unbiased; Stable32 and AllanLab adopt the same convention.
 
 ## Implementation contract
@@ -106,8 +106,8 @@ r = adev(PhaseData(x, 1.0), [10, 100]; ci=true)
 ## References
 
 - Greenhall & Riley, *Uncertainty of Stability Variances*, PTTI 2003
-  [@cite greenhall-2003-edf-stability].
-- Howe et al., *Total Hadamard Variance*, FCS 2001 [@cite howe-2001-tothvar-steering].
-- SP1065 §5 [@cite riley-2008-sp1065].
+  [greenhall-2003-edf-stability](@cite).
+- Howe et al., *Total Hadamard Variance*, FCS 2001 [howe-2001-tothvar-steering](@cite).
+- SP1065 §5 [riley-2008-sp1065](@cite).
 - Riley, *Frequency Stability Analysis Using R*, 2020
-  [@cite riley-2020-r-frequency-stability].
+  [riley-2020-r-frequency-stability](@cite).

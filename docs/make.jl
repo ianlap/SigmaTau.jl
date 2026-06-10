@@ -54,7 +54,10 @@ makedocs(
         "Home"            => "index.md",
         "Getting Started" => "getting_started.md",
         "From Stable32"   => "migration_from_stable32.md",
+        "From allantools" => "migration_from_allantools.md",
         "Performance"     => "performance.md",
+        "Plotting"        => "plotting.md",
+        "FAQ"             => "faq.md",
         "Theory"          => [
             "theory/overview.md",
             "theory/allan_family.md",
@@ -70,6 +73,8 @@ makedocs(
             "tutorials/00_julia_for_metrologists.md",
             "tutorials/01_phase_data.md",
             "tutorials/02_compute_adev.md",
+            "tutorials/03_drifting_clock_hadamard.md",
+            "tutorials/04_reading_your_data.md",
             "tutorials/06_three_cornered_hat.md",
         ],
         "API Reference"   => [
