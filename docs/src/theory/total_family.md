@@ -17,7 +17,7 @@ phase or fractional-frequency. Every section below names the specific
 scheme for that estimator.
 
 The cost of extension is a small noise-type-dependent bias `B(α)`,
-quantified per estimator in SP1065 §5 [@cite riley-2008-sp1065]. SigmaTau
+quantified per estimator in SP1065 §5 [riley-2008-sp1065](@cite). SigmaTau
 applies it by default; see the bias-correction policy section below.
 
 ---
@@ -31,8 +31,8 @@ record, with no per-τ subsegmentation and no detrending. The
 overlapping ADEV second-difference operator then runs on `x*` exactly
 as it would on the original record.
 
-**Definition** (SP1065 §5 Eq. 25 [@cite riley-2008-sp1065];
-GHP99 [@cite greenhall-1999-totvar]):
+**Definition** (SP1065 §5 Eq. 25 [riley-2008-sp1065](@cite);
+GHP99 [greenhall-1999-totvar](@cite)):
 
 ```math
 \mathrm{TOTVAR}(\tau) \;=\; \frac{1}{2\,(m\tau_0)^2 \,(N-2)}
@@ -68,7 +68,7 @@ phase record. For each subsegment the algorithm:
    valid window positions inside the extension.
 
 The outer sum is over the `N − 3m + 1` subsegments. This is HV99's
-construction [@cite howe-1999-modtotvar]; SP1065 §5 reproduces the algorithm.
+construction [howe-1999-modtotvar](@cite); SP1065 §5 reproduces the algorithm.
 
 ```math
 \mathrm{MTOTVAR}(\tau) \;=\; \frac{1}{2\,(m\tau_0)^2 \,(N - 3m + 1)}
@@ -92,11 +92,11 @@ mtotdev(PhaseData(x, τ₀), τs)
 ## TTOT — time-total deviation
 
 TTOT (Time-Total Deviation) is the time-deviation rescaling of MTOTDEV,
-analogous to how TDEV rescales MDEV [@cite riley-2008-sp1065]. It
+analogous to how TDEV rescales MDEV [riley-2008-sp1065](@cite). It
 gives a `σ_x`-units summary (seconds) of long-τ stability for a record
 with WPM-dominated noise, leveraging MTOTDEV's per-subsegment extension
 to extend the usable τ range beyond TDEV's reach on short records
-[@cite banerjee-2023-timekeeping].
+[banerjee-2023-timekeeping](@cite).
 
 ```math
 \sigma_{x,\text{TTOT}}(\tau) \;=\; \frac{\tau}{\sqrt{3}}\,
@@ -104,7 +104,7 @@ to extend the usable τ range beyond TDEV's reach on short records
 ```
 
 The `√3` factor matches TDEV's exactly because TTOT inherits MTOTDEV's
-modified second-difference operator [@cite riley-2008-sp1065].
+modified second-difference operator [riley-2008-sp1065](@cite).
 
 In SigmaTau:
 
@@ -140,11 +140,11 @@ there is no useful reflection (the third-difference window is `3m + 1 = 4`
 samples; reflection would produce trivially-correlated extensions).
 SigmaTau falls back to ordinary HDEV at `m = 1`. This matches the
 reference HTOTDEV implementations and is not a numerical defect — it
-is the design of the FCS01 algorithm [@cite howe-2001-tothvar-steering].
+is the design of the FCS01 algorithm [howe-2001-tothvar-steering](@cite).
 
-The construction originates in Howe 2000 [@cite howe-2000-tothvar-ptti] with bias
-coefficients `a(α)` introduced in the FCS01 paper [@cite howe-2001-tothvar-steering];
-Howe 2005 [@cite howe-2005-tothvar-ieee] contributed long-τ refinements.
+The construction originates in Howe 2000 [howe-2000-tothvar-ptti](@cite) with bias
+coefficients `a(α)` introduced in the FCS01 paper [howe-2001-tothvar-steering](@cite);
+Howe 2005 [howe-2005-tothvar-ieee](@cite) contributed long-τ refinements.
 
 HTOTDEV inherits HDEV's drift insensitivity (the third-difference
 kernel annihilates linear-in-`t` terms) so a record with significant
@@ -168,8 +168,10 @@ subsegments of phase length `3m + 1` along `x`. For each:
 
 1. **Half-average slope removal** — subtract a linear trend whose slope
    is the difference of the two half-segment means (the Greenhall slope
-   estimate shared with MTOTDEV / HTOTDEV), removing per-segment linear
-   frequency drift before the third-difference kernel.
+   estimate shared with MTOTDEV / HTOTDEV), removing the subsegment's
+   mean frequency offset before the third-difference kernel. (On phase
+   data a linear trend is a frequency offset — *not* frequency drift;
+   see the drift warning below.)
 2. Symmetric reflection.
 3. Cumulative third differences plus an `m`-point moving average
    (the modified-style inner averaging, parallel to how MDEV relates
@@ -192,10 +194,10 @@ differences with boundary extension.
 !!! info "Original contribution"
     MHTOTDEV is original to SigmaTau. There is no
     canonical paper for it; the construction follows HV99's
-    modified-total methodology [@cite howe-1999-modtotvar] applied
-    to the FCS01 Hadamard total [@cite howe-2001-tothvar-steering],
+    modified-total methodology [howe-1999-modtotvar](@cite) applied
+    to the FCS01 Hadamard total [howe-2001-tothvar-steering](@cite),
     with the modified third-difference operator from Greenhall 1997
-    [@cite greenhall-1997-third-difference-mvar]. The authoritative
+    [greenhall-1997-third-difference-mvar](@cite). The authoritative
     definition lives in the package source itself; the kernel sits at
     [`src/kernels.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/kernels.jl)
     and the public wrapper at
@@ -218,15 +220,29 @@ cube formed by three independent design axes:
 - **Inner averaging** — none (standard) vs phase-averaged (modified).
 - **Boundary handling** — none vs total-style extension.
 
-MHTOTDEV is Hadamard × modified × total, so it carries every
-property that distinguishes the family: drift rejection and
+MHTOTDEV is Hadamard × modified × total, so it carries
 `α ∈ {−4, −3}` convergence from Hadamard, WPM/FPM disambiguation
 from the phase-averaged inner kernel, and tight long-τ confidence
 from the per-subsegment extension. It is the right tool when a
-record has linear frequency drift, divergent low-frequency noise,
-ambiguity between WPM and FPM, *and* a record length too short to
-let any of the simpler estimators reach long τ with usable
-confidence — all four concerns at once.
+record has divergent low-frequency noise, ambiguity between WPM and
+FPM, *and* a record length too short to let any of the simpler
+estimators reach long τ with usable confidence.
+
+!!! warning "Drift does not cancel through the extension"
+    MHDEV is exactly drift-immune, but MHTOTDEV is not. The third
+    differences that lie inside one copy of the subsegment annihilate
+    drift, but the half-average detrend removes only the subsegment's
+    mean frequency offset; the residual quadratic phase makes the
+    reflected extension non-smooth at the copy boundaries, and
+    differences spanning a boundary pick the drift back up. On a
+    strongly drifting record MHTOTDEV reads several times high at
+    long τ where MHDEV stays clean. Remove deterministic drift first
+    (`detrend(fd)` on the frequency record) — the same standard
+    practice the literature prescribes for TOTVAR and MTOTVAR; only
+    HTOTDEV escapes it, because its detrend operates on fractional
+    frequency, where drift itself is the linear term. See
+    [the drifting-clock tutorial](../tutorials/03_drifting_clock_hadamard.md)
+    for a demonstration.
 
 ---
 
@@ -255,7 +271,7 @@ confidence — all four concerns at once.
     [Validation: Stable32](../validation/stable32.md). To reproduce
     Stable32's output exactly, pass `correct_bias=false`.
 
-(Cite SP1065 §5 [@cite riley-2008-sp1065] and FCS01 [@cite howe-2001-tothvar-steering] for
+(Cite SP1065 §5 [riley-2008-sp1065](@cite) and FCS01 [howe-2001-tothvar-steering](@cite) for
 the `a(α)` / `B(α)` tables.)
 
 ---
@@ -308,8 +324,8 @@ on this short record — the data-extension is doing its job.
 
 ## References
 
-- TOTVAR: Greenhall, Howe & Percival 1999 [@cite greenhall-1999-totvar].
-- MTOT: Howe & Vernotte 1999 [@cite howe-1999-modtotvar].
-- HTOT: Howe 2000 [@cite howe-2000-tothvar-ptti]; FCS01 [@cite howe-2001-tothvar-steering];
-  Howe 2005 [@cite howe-2005-tothvar-ieee].
-- SP1065 §5 [@cite riley-2008-sp1065].
+- TOTVAR: Greenhall, Howe & Percival 1999 [greenhall-1999-totvar](@cite).
+- MTOT: Howe & Vernotte 1999 [howe-1999-modtotvar](@cite).
+- HTOT: Howe 2000 [howe-2000-tothvar-ptti](@cite); FCS01 [howe-2001-tothvar-steering](@cite);
+  Howe 2005 [howe-2005-tothvar-ieee](@cite).
+- SP1065 §5 [riley-2008-sp1065](@cite).

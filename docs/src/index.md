@@ -20,10 +20,13 @@ under one namespace:
 
 - **First time?** See [Getting Started](getting_started.md).
 - **Coming from Stable32?** See [Migrating from Stable32](migration_from_stable32.md).
+- **Coming from allantools?** See [Migrating from allantools](migration_from_allantools.md).
 - **Need theory?** Start with [Theory: Overview](theory/overview.md).
 - **Want a worked example?** Pick a [Tutorial](tutorials/01_phase_data.md).
+- **Making figures?** See [Plotting](plotting.md).
 - **Looking up an API?** Browse the [API Reference](reference/types.md).
 - **Verifying numerics?** See [Validation](validation/methodology.md).
+- **Something not working?** Check the [FAQ](faq.md).
 
 ## Reference math
 

@@ -11,6 +11,8 @@ when the docs build.
 | `00_julia_for_metrologists.jl`      | Stable32-to-Julia primer: install, load, plot, save.                |
 | `01_phase_data.jl`                  | Build a `PhaseData` / `FrequencyData` record; phase ↔ frequency.    |
 | `02_compute_adev.jl`                | Run `adev`; explore `StabilityResult` (CI, EDF, noise type).         |
+| `03_drifting_clock_hadamard.jl`     | Characterize a drifting clock with `hdev`/`mhdev`/`htdev`/`mhtotdev`. |
+| `04_reading_your_data.jl`           | Import `.DAT` files, counter CSVs; gaps, detrending, exporting results. |
 | `06_three_cornered_hat.jl`          | Recover individual clock σ_y(τ) from three pairwise differences.     |
 
 ## Running

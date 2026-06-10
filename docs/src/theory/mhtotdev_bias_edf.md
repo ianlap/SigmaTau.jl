@@ -3,8 +3,8 @@
 MHTOTDEV (modified Hadamard total deviation) is novel to SigmaTau — no other
 library computes it, and no published reference gives its bias factor or its
 equivalent degrees of freedom (EDF). Every other total-family estimator inherits
-a coefficient table from the literature (TOTVAR and HTOT from SP1065 / FCS 2001)
-or one reverse-engineered from Stable32 (MTOT). MHTOTDEV has neither, so SigmaTau
+a published coefficient table (TOTVAR and MTOT from SP1065 Tables 7–8; HTOT from
+the FCS 2001 paper). MHTOTDEV has none, so SigmaTau
 **measures** both by Monte Carlo against synthesized known-noise.
 
 This page documents the methodology; it is the reproducible basis for the
@@ -154,3 +154,12 @@ dominates the weighted ratio and pulls the apparent bias spuriously below 1; and
 (2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.998 across
 all noise types. The tracked full-sweep artifact records the git SHA, seed,
 grid, and per-α fits.
+
+!!! warning "Edge zone at the reach limit"
+    The kernel needs `N − 4m + 1 ≥ 1`, so MHTOTDEV's reach limit is `τ = T/4`
+    (`T/τ ≥ 4`). The fitted linear form crosses `ν = 1` near
+    `T/τ ≈ 4.1–4.4` depending on α, and a χ² interval computed from `ν < 1`
+    is degenerate (the bounds collapse). Treat confidence intervals as valid
+    for `T/τ ≳ 5` and indicative only in the final fraction of an octave
+    before the reach limit; the σ values themselves are valid all the way to
+    `τ = T/4`.

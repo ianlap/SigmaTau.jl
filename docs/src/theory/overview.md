@@ -22,8 +22,8 @@ interval `τ₀`. SigmaTau stores phase as `PhaseData` and frequency as
 `FrequencyData`; the deviation API accepts either, converting via
 prefix-sum where needed.
 
-(Cite [@cite banerjee-2023-timekeeping] for modern presentation; SP1065 §4
-[@cite riley-2008-sp1065] for the conventions.)
+(Cite [banerjee-2023-timekeeping](@cite) for modern presentation; SP1065 §4
+[riley-2008-sp1065](@cite) for the conventions.)
 
 ## Power-law noise model
 
@@ -45,15 +45,15 @@ Hadamard family (HDEV / MHDEV / HTOTDEV / MHTOTDEV) replaces the
 second difference with a third difference and remains finite down to
 `α = −4`, so records with very-low-frequency power-law content should
 be analyzed with the Hadamard family rather than ADEV / MDEV
-[@cite greenhall-1997-third-difference-mvar]. SigmaTau's three-state
+[greenhall-1997-third-difference-mvar](@cite). SigmaTau's three-state
 clock SDE additionally models random-run FM via the σ₃ Wiener channel
-[@cite zucca-2005-clock-model-allan].
+[zucca-2005-clock-model-allan](@cite).
 
 ADEV's degeneracy on WPM/FPM is the historical motivation for MDEV.
 HDEV adds drift insensitivity by going to a third difference.
 
-(Cite SP1065 §4–5 [@cite riley-2008-sp1065]; IEEE 1139-2022
-[@cite ieee1139-2022-definitions].)
+(Cite SP1065 §4–5 [riley-2008-sp1065](@cite); IEEE 1139-2022
+[ieee1139-2022-definitions](@cite).)
 
 ## Estimator family map
 
@@ -75,14 +75,14 @@ HDEV adds drift insensitivity by going to a third difference.
 MTIE complements the variance estimator family with a **peak-to-peak**
 phase metric: at each averaging interval `τ`, MTIE reports the largest
 phase excursion observed in any window of length `τ` across the entire
-record [@cite riley-2008-sp1065]. Where the Allan family characterizes
+record [riley-2008-sp1065](@cite). Where the Allan family characterizes
 the *spread* of the phase residual, MTIE characterizes the worst-case
 *excursion* — the relevant figure of merit for synchronization
 applications where a single large transient is operationally
 significant (telecom synchronization masks, GNSS holdover budgets,
 financial-trading timestamping). Banerjee & Matsakis frame it as the
 canonical time-distribution-network metric
-[@cite banerjee-2023-timekeeping].
+[banerjee-2023-timekeeping](@cite).
 
 ```math
 \mathrm{MTIE}(\tau) \;=\; \max_{1 \le i \le N-m}\;
@@ -140,8 +140,8 @@ should rise roughly as `τ⁺¹/²` (μ = +1/2, RWFM).
 ## References
 
 - NIST SP1065, *Handbook of Frequency Stability Analysis*, Riley & Howe
-  2008. [@cite riley-2008-sp1065]
+  2008. [riley-2008-sp1065](@cite)
 - *IEEE Standard Definitions of Physical Quantities for Fundamental
-  Frequency and Time Metrology*, IEEE 1139-2022. [@cite ieee1139-2022-definitions]
+  Frequency and Time Metrology*, IEEE 1139-2022. [ieee1139-2022-definitions](@cite)
 - Banerjee & Matsakis, *An Introduction to Modern Timekeeping and Time
-  Transfer*, Springer 2023. [@cite banerjee-2023-timekeeping]
+  Transfer*, Springer 2023. [banerjee-2023-timekeeping](@cite)

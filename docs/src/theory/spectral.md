@@ -4,7 +4,7 @@ The deviation families ([Allan](allan_family.md), [Total](total_family.md))
 describe stability in the *time* domain, as a function of averaging time `τ`.
 The same noise is equivalently described in the *frequency* domain by a power
 spectral density (PSD). SigmaTau provides the three standard frequency-domain
-measures of IEEE Std 1139-2022 [@cite ieee1139-2022-definitions]: the
+measures of IEEE Std 1139-2022 [ieee1139-2022-definitions](@cite): the
 fractional-frequency PSD `S_y(f)`, the phase PSD `S_x(f)`, and single-sideband
 phase noise `ℒ(f)`.
 
@@ -31,7 +31,7 @@ S_\phi(f) = (2\pi \nu_0)^2\, S_x(f) \quad [\mathrm{rad^2/Hz}], \qquad
 ## Power-law model
 
 Oscillator noise is a sum of power laws. In the fractional-frequency PSD the
-exponent is the SP1065 [@cite riley-2008-sp1065] index `α`:
+exponent is the SP1065 [riley-2008-sp1065](@cite) index `α`:
 
 ```math
 S_y(f) = \sum_{\alpha=-2}^{2} h_\alpha\, f^{\alpha}.
