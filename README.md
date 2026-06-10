@@ -133,6 +133,22 @@ Bug reports, new deviations, validation fixtures, and benchmarks are welcome.
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). The main references for the underlying
 math are NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, and IEEE 1139-2022.
 
+## Citing
+
+If you use SigmaTau.jl in published work, cite it as:
+
+```bibtex
+@software{lapinski-sigmatau,
+  author  = {Lapinski, Ian},
+  title   = {{SigmaTau.jl}: time-and-frequency stability analysis in {Julia}},
+  url     = {https://github.com/ianlap/SigmaTau.jl},
+  version = {0.5.0},
+  year    = {2026},
+}
+```
+
+Machine-readable citation metadata is in [`CITATION.cff`](CITATION.cff).
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).

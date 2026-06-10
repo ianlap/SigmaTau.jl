@@ -45,8 +45,8 @@ satisfies `Var[\hat V] = 2\,E[\hat V]^2/ν`, so from `R` realizations
 
 with `\bar V` the sample mean and `s_V^2` the Bessel-corrected sample variance.
 A nonparametric bootstrap over the `R` realizations gives the standard error.
-The relative precision scales as `SE/edf ≈ √(2/R)`, so `R = 1000` gives ≈4.5 %
-and the per-α anchor cell uses `R = 5000`.
+The relative precision scales as `SE/edf ≈ √(2/R)`; the full sweep uses
+`R = 3000` per cell, giving ≈2.6 %.
 
 **Bias.** Following the normalized-bias definition of Howe et al. 2000 (eqn 6),
 `nbias = E[\hat V]/E[\hat W] - 1`, the variance-scale bias factor is the ratio
@@ -122,10 +122,10 @@ result). The authoritative full-sweep JSON is tracked at
 
 !!! note "Provisional vs. authoritative numbers"
     The coefficient tables in `_coeff_mhtot` and `bias_correction(:mhtot, …)`
-    are populated from the full sweep (N up to 32769, R = 1000 / 5000), run on a
-    workstation. A reduced laptop validation (N ≤ 2049, R = 200–400) reproduces
-    the μ(α) slopes and the qualitative bias trend below; the published tables
-    use the full-sweep values.
+    are populated from the full sweep (N up to 32768, R = 3000), run on a
+    workstation. The harness's reduced `quick` mode (N ≤ 2048, R = 200–400)
+    reproduces the μ(α) slopes and the qualitative bias trend below; the
+    published tables use the full-sweep values.
 
 ## Result
 
