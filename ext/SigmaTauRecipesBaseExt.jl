@@ -97,20 +97,55 @@ end
     end
 end
 
-# Dynamic deviation map (DADEV / DHDEV): heatmap of log10(σ) over (t, τ) with
-# a log-scale τ axis. The map is stored windows × taus; heatmap z is
-# rows-along-y, so it is transposed here. Non-positive and NaN cells (windows
-# that cannot support the averaging factor) map to NaN and render blank.
+# Dynamic deviation map (DADEV / DHDEV): log10(σ) over (t, τ). Default
+# rendering is a heatmap with a log-scale τ axis; pass
+# `seriestype = :path3d` for the SP1065-style dynamic-deviation view — one
+# σ(τ) curve per window time, stacked along the time axis as 3-D lines.
+# Plots' 3-D axes do not support log scales, so the 3-D branch plots
+# log10(τ) and log10(σ) as the coordinates and labels the decade ticks in
+# plain-text `1e<k>` form — safe under both GR and the PGFPlotsX/lualatex
+# docs build. The map is stored windows × taus; the heatmap z matrix is
+# rows-along-y, so it is transposed there. Non-positive and NaN cells
+# (windows that cannot support the averaging factor) map to NaN and render
+# blank (heatmap) or terminate the curve (3-D lines).
 @recipe function f(res::DynamicStabilityResult)
-    xlabel --> "Time t (s)"
-    ylabel --> "Averaging Time τ (s)"
-    yscale --> :log10
-    yticks --> _decade_ticks(res.tau)
-    title  --> uppercase(string(res.deviation_type))
-    colorbar_title --> "log10 σ"
-    seriestype := :heatmap
+    title --> uppercase(string(res.deviation_type))
     z = map(v -> (isfinite(v) && v > 0) ? log10(v) : NaN, res.dev)
-    return res.t, res.tau, permutedims(z)
+
+    st = get(plotattributes, :seriestype, :heatmap)
+    if st === :path3d || st === :path3D
+        logτ = log10.(res.tau)
+        kx = floor(Int, minimum(logτ)):ceil(Int, maximum(logτ))
+        zfin = filter(isfinite, z)
+        kz = isempty(zfin) ? (0:0) :
+             (floor(Int, minimum(zfin)):ceil(Int, maximum(zfin)))
+        xlabel --> "Averaging Time τ (s)"
+        ylabel --> "Time t (s)"
+        xticks --> (Float64.(kx), ["1e$k" for k in kx])
+        zticks --> (Float64.(kz), ["1e$k" for k in kz])
+        zguide --> "σ"
+        # Legend gets noisy past a handful of windows; label only small maps.
+        labelled = length(res.t) <= 8
+        for (i, tc) in enumerate(res.t)
+            @series begin
+                seriestype := :path3d
+                label := labelled ? "t = $(round(tc; sigdigits=4)) s" : ""
+                logτ, fill(tc, length(logτ)), z[i, :]
+            end
+        end
+    else
+        xlabel --> "Time t (s)"
+        ylabel --> "Averaging Time τ (s)"
+        colorbar_title --> "log10 σ"
+        yscale --> :log10
+        yticks --> _decade_ticks(res.tau)
+        @series begin
+            seriestype := :heatmap
+            label := ""
+            res.t, res.tau, permutedims(z)
+        end
+    end
+    return nothing
 end
 
 # Spectral density on frequency axes. S_y / S_x are power densities → log-log;

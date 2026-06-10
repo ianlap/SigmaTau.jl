@@ -192,6 +192,39 @@ plot(Sy(p))
 `L` needs the carrier frequency to convert from S_x: pass `f_carrier`
 (in Hz) to the `L` call itself, e.g. `plot(L(p; f_carrier = 10e6))`.
 
+## Dynamic deviation maps
+
+[`dadev`](@ref) and [`dhdev`](@ref) return a time-resolved σ(t, τ) map
+rather than a curve, and the recipe renders it two ways. The fixture here
+has a deliberate mid-record event — the white-FM level steps up 10× halfway
+through — which a static deviation would average over:
+
+```@example plotting
+using Random # hide
+Random.seed!(7) # hide
+y_step = [randn(4096) .* 1e-11; randn(4096) .* 1e-10]
+d = dadev(FrequencyData(y_step, 1.0), Octave; window = 2048, step = 1024)
+
+plot(d)
+```
+
+The default is a heatmap of log₁₀ σ over (t, τ); the step shows up as the
+color change at the right window-center times. Pass
+`seriestype = :path3d` for the dynamic-deviation presentation the
+literature uses: one σ(τ) curve per window time, stacked along the time
+axis as 3-D lines, so the event reads as the later curves lifting off the
+earlier ones:
+
+```@example plotting
+plot(d; seriestype = :path3d, camera = (60, 25), legend = :topleft)
+```
+
+Three-dimensional axes in `Plots` do not support log scales, so the curves
+plot log₁₀(τ) and log₁₀(σ) as coordinates with the decade ticks labelled in
+plain `1e<k>` form. Maps with more than eight windows suppress the
+per-curve legend (each curve is labelled by its window-center time);
+`camera = (azimuth, elevation)` rotates the view.
+
 ## Publication export
 
 `size` (pixels) and `dpi` are standard `Plots` attributes; `savefig` picks

@@ -68,7 +68,11 @@ Initial public release.
   EDF model for the time-resolved map. `TauMode` grids clamp to the
   window length, and a `window = N` map reproduces the static
   `adev`/`hdev` values exactly. The RecipesBase extension renders the
-  map as a log10(σ) heatmap over (t, τ) with a log-scale τ axis.
+  map as a log10(σ) heatmap over (t, τ) with a log-scale τ axis, or — via
+  `seriestype = :path3d` — as the SP1065-style dynamic-deviation view:
+  one σ(τ) curve per window time stacked along the time axis as 3-D
+  lines (log10(τ) and log10(σ) plotted as coordinates, since 3-D axes
+  have no log scales).
 - Flat `SigmaTau` API with `PhaseData`, `FrequencyData`, `StabilityResult`,
   `StabilitySuite`, and `SpectralResult`.
 - Stability estimators for Allan, Modified Allan, Hadamard, total-family,
