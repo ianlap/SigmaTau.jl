@@ -40,10 +40,12 @@ Three SigmaTau deviations have **no allantools counterpart**:
   drift-insensitive like HDEV while still separating white-PM from
   flicker-PM like MDEV. See [Theory: Allan family](theory/allan_family.md).
 - `htdev` — Hadamard time deviation, the σ_x form of `mhdev` (scaled by
-  τ/√(10/3)); it is to MHDEV what TDEV is to MDEV. Same theory page.
+  τ/√(10/3)); it is to MHDEV what TDEV is to MDEV. Original to this
+  package. Same theory page.
 - `mhtotdev` — modified Hadamard total deviation, the boundary-extended
-  (total) form of `mhdev` for long-τ estimates; its bias and EDF have no
-  published model and are measured by Monte Carlo, documented in
+  (total) form of `mhdev` for long-τ estimates. Original to this
+  package; its bias and EDF have no published model and are measured by
+  Monte Carlo, documented in
   [MHTOTDEV bias and EDF](theory/mhtotdev_bias_edf.md).
 
 ## Calling-convention mapping
@@ -77,23 +79,23 @@ allantools string equivalent.
 
 ### Return values
 
-Every allantools deviation returns a tuple `(taus2, ad, ade, ns)`. Every
+Every allantools deviation returns a tuple `(taus, ad, ade, ns)`. Every
 SigmaTau deviation returns a [`StabilityResult`](reference/types.md):
 
 | allantools tuple element | `StabilityResult` field |
 |--------------------------|-------------------------|
-| `taus2`                  | `r.tau` (seconds)       |
+| `taus`                   | `r.tau` (seconds)       |
 | `ad`                     | `r.dev`                 |
-| `ade` (= `ad/√ns`)       | `r.ci_lower` / `r.ci_upper` — χ²-based absolute bounds, not a ± half-width |
-| `ns`                     | no direct field; `r.edf` carries the equivalent degrees of freedom instead |
+| `ade` (= `ad/√ns`)       | `r.ci` — χ²-based absolute `(lo, hi)` bounds per τ, not a ± half-width; `ci_lower(r)` / `ci_upper(r)` give plain vectors |
+| `ns`                     | `r.neff` — the number of analysis windows; `r.edf` separately carries the equivalent degrees of freedom |
 
 The result also carries `r.noise_type` (the per-τ power-law identification,
 as SP1065 symbols `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`) and
-`r.deviation_type` (which estimator produced it). The `noise_type`,
-`ci_lower`, `ci_upper`, and `edf` vectors are populated when `ci=true` (the
-default) and empty when `ci=false`. `mtie` is the exception: it is a
-deterministic envelope with no published CI model, so it returns those four
-fields empty even when `ci=true`.
+`r.deviation_type` (which estimator produced it). The `noise_type`, `ci`,
+and `edf` vectors are populated when `ci=true` (the default) and empty when
+`ci=false`; `r.neff` is populated either way. `mtie` is the exception: it
+is a deterministic envelope with no published CI model, so it returns
+`noise_type`, `ci`, and `edf` empty even when `ci=true`.
 
 ## The same analysis in both libraries
 
@@ -120,10 +122,11 @@ p = read_phase("clock.dat"; time_col=0, value_col=1, tau0=1.0)
 r  = adev(p)        # octave grid by default, like taus="octave"
 rm = mdev(p)
 
-r.tau               # τ in seconds            (allantools taus2)
+r.tau               # τ in seconds            (allantools taus)
 r.dev               # σ_y(τ)                  (allantools ad)
-r.ci_lower          # χ² lower bound, 68.3 %  (no allantools analog in the tuple)
-r.ci_upper          # χ² upper bound
+ci_lower(r)         # χ² lower bounds, 68.3 % (no allantools analog in the tuple)
+ci_upper(r)         # χ² upper bounds — or per-τ tuples via r.ci[i].lo / r.ci[i].hi
+r.neff              # number of analysis windows (allantools ns)
 r.noise_type        # identified power-law type at each τ
 r.edf               # equivalent degrees of freedom
 ```
@@ -140,11 +143,12 @@ For the same input and the same τ grid, the σ values agree to the
 documented validation tolerance. Three things legitimately differ:
 
 **Error bars.** allantools' deviation functions return the simple estimate
-`ade = ad/√ns`, where `ns` is the number of analysis windows. SigmaTau
-instead identifies the noise type at each τ, computes the Greenhall–Riley
-equivalent degrees of freedom [greenhall-2003-edf-stability](@cite), and
-maps the deviation through the χ² distribution into asymmetric `ci_lower` /
-`ci_upper` bounds at the 68.3 % level (`DEFAULT_CONFIDENCE = 0.683`;
+`ade = ad/√ns`, where `ns` is the number of analysis windows (SigmaTau's
+`r.neff`). SigmaTau instead identifies the noise type at each τ, computes
+the Greenhall–Riley equivalent degrees of freedom
+[greenhall-2003-edf-stability](@cite), and maps the deviation through the
+χ² distribution into asymmetric `(lo, hi)` bounds in `r.ci` at the 68.3 %
+level (`DEFAULT_CONFIDENCE = 0.683`;
 override per call with `confidence=0.95`). The two are different statistics
 and will not match numerically — allantools can produce the χ² interval
 too, but only through separate manual calls to `edf_greenhall` and

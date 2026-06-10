@@ -474,6 +474,33 @@ const LK = LegacyKernels
         end
     end
 
+    @testset "MHTOTDEV deterministic-trend invariance" begin
+        # The per-window detrend is degree-matched to the third-difference
+        # kernel: a pure frequency offset (linear phase) and a pure frequency
+        # drift (quadratic phase) must both be removed exactly, so adding
+        # either to a record cannot change the statistic. The drift estimate
+        # is exact for a deterministic drift (half-averages of an exactly
+        # linear frequency series), so agreement is to roundoff.
+        using Random
+        N    = 512
+        tau0 = 1.0
+        ms   = [1, 2, 4, 8, 16, 32]
+
+        Random.seed!(20260509)
+        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+        t = (0:N-1) .* tau0
+
+        base = SigmaTau._mhtotdev_core(x, ms, tau0)
+
+        offset = 1e-9                     # frequency offset → linear phase
+        drift  = 1e-12                    # frequency drift  → quadratic phase
+        x_trend = x .+ offset .* t .+ 0.5 .* drift .* t .^ 2
+        with_trend = SigmaTau._mhtotdev_core(x_trend, ms, tau0)
+
+        @test all(isfinite, with_trend)
+        @test with_trend ≈ base rtol = 1e-8
+    end
+
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
         # Bonus: kernel parity for the more common ADEV/HDEV across all 5
         # noise types, locking in that the synthesizer + kernels survive the

@@ -10,6 +10,10 @@ the FCS 2001 paper). MHTOTDEV has none, so SigmaTau
 This page documents the methodology; it is the reproducible basis for the
 shipped `_coeff_mhtot` EDF coefficients and the `bias_correction(:mhtot, …)`
 table. The harness is [`tools/mc_mhtotdev.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/mc_mhtotdev.jl).
+The estimator under test is the shipped `mhtotdev` pipeline, including its
+default global least-squares drift removal (`remove_drift=true`; see
+[Theory: Total family](total_family.md)), so the coefficients calibrate
+exactly the statistic users compute.
 
 The procedure follows the NIST total-variance literature: Howe, Beard,
 Greenhall, Vernotte & Riley, *A Total Estimator of the Hadamard Function Used

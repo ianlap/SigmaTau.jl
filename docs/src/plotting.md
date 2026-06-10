@@ -42,21 +42,29 @@ The recipe sets, as overridable defaults:
 - `xscale = :log10`, `yscale = :log10`,
 - `xlabel = "Averaging Time τ (s)"`,
 - `ylabel` and legend `label` equal to the deviation name (`"ADEV"` here,
-  taken from `result.deviation_type`).
+  taken from `result.deviation_type`),
+- circle markers at each computed τ (`markershape = :circle`,
+  `markersize = 3`),
+- ticks at integer powers of 10 spanning the data range on both axes, with
+  major gridlines at the decades and fainter minor gridlines between
+  (`minorgrid = true`). Computing the tick positions from the data keeps a
+  narrow-range axis on integer-decade labels instead of fractional powers
+  like 10^2.5.
 
 When the result carries confidence bounds (`ci=true`, the default), the
 recipe attaches asymmetric error bars: the lower offset is
-`dev .- ci_lower` and the upper offset is `ci_upper .- dev`, so each bar
-spans exactly `[ci_lower, ci_upper]`. The bars are asymmetric because the
-χ² confidence interval is asymmetric about the point estimate.
+`dev .- ci_lower(r)` and the upper offset is `ci_upper(r) .- dev`, so each
+bar spans exactly `[r.ci[i].lo, r.ci[i].hi]`. The bars are asymmetric
+because the χ² confidence interval is asymmetric about the point estimate.
 
 Every default yields to a standard `Plots` attribute passed at the call
-site. The one exception is the series type, which the recipe fixes to a
-line path — add markers with `marker = :circle` rather than
-`seriestype = :scatter`:
+site — `marker = :square` changes the marker, `marker = :none` removes it,
+`xticks = :auto` restores backend tick selection. The one exception is the
+series type, which the recipe fixes to a line path — restyle with marker
+and line attributes rather than `seriestype = :scatter`:
 
 ```@example plotting
-plot(r; lw = 1.5, marker = :circle, ms = 3,
+plot(r; lw = 1.5, marker = :diamond, ms = 4,
      title = "Overlapping Allan deviation", legend = :bottomleft)
 ```
 
@@ -68,25 +76,26 @@ The recipe supports one custom attribute, `ci_band`:
 |-------------------------------|------------------------------------|
 | `plot(r)`                     | error bars (default)               |
 | `plot(r; ci_band = true)`     | filled band (ribbon)               |
-| `plot(adev(p; ci = false))`   | none — the CI vectors are empty    |
+| `plot(adev(p; ci = false))`   | none — the `ci` vector is empty    |
 
 ```@example plotting
 plot(r; ci_band = true, fillalpha = 0.3)
 ```
 
 `ci_band` is consumed by the recipe, so it never reaches the backend as an
-unknown attribute. The band edges are `ci_lower` and `ci_upper`, the same
-bounds the error bars span; only the rendering changes.
+unknown attribute. The band edges are `ci_lower(r)` and `ci_upper(r)`, the
+same bounds the error bars span; only the rendering changes.
 
-The bounds are plain vectors on the result, so you can also draw them
-yourself when you want full control over the style:
+The result stores the bounds as one `(lo, hi)` tuple per τ in `r.ci`; the
+`ci_lower` / `ci_upper` accessor functions return them as plain vectors, so
+you can also draw them yourself when you want full control over the style:
 
 ```@example plotting
 plot(r.tau, r.dev;
      xscale = :log10, yscale = :log10,
      xlabel = "Averaging Time τ (s)", label = "ADEV")
-plot!(r.tau, r.ci_lower; ls = :dot, color = :gray, label = "68.3 % CI")
-plot!(r.tau, r.ci_upper; ls = :dot, color = :gray, label = "")
+plot!(r.tau, ci_lower(r); ls = :dot, color = :gray, label = "68.3 % CI")
+plot!(r.tau, ci_upper(r); ls = :dot, color = :gray, label = "")
 ```
 
 The default confidence level is `DEFAULT_CONFIDENCE = 0.683` (1σ); pass
@@ -101,16 +110,14 @@ result on one set of axes, one labelled series per deviation, with the
 generic y-label `"Deviation"`:
 
 ```@example plotting
-suite = stability(p)          # :adev, :mdev, :hdev, :tdev by default
+suite = stability(p)          # :adev, :mdev, :hdev, :mhdev by default
 plot(suite; legend = :bottomleft)
 ```
 
-!!! note "Mixed units in the default suite"
-    The default suite includes `tdev`, which is a *time* deviation in
-    seconds, while ADEV/MDEV/HDEV are dimensionless fractional-frequency
-    deviations. The overlay is still useful for shape comparison, but the
-    ordinate mixes units. Index the suite (`suite[:tdev]`) to plot it on its
-    own axes.
+The default suite is all σ_y quantities (dimensionless fractional-frequency
+deviations), so the shared ordinate is unit-consistent. Time deviations such
+as `tdev` and `htdev` are σ_x quantities in seconds — request them
+explicitly and plot them on their own axes, e.g. `plot(tdev(p))`.
 
 A `Vector{StabilityResult}` overlays the same way — useful for comparing
 clocks rather than deviations: `plot([adev(p1), adev(p2)])`. Both series
@@ -129,11 +136,12 @@ overrides the recipe's default.
 
 ## Log-log conventions and slope guides
 
-Because the log scales are recipe *defaults*, the usual `Plots` attributes
-restyle the axes. Decade ticks come from powers of ten:
+Because the log scales and the integer-decade ticks are recipe *defaults*,
+the usual `Plots` attributes restyle the axes. An explicit `xticks` vector
+replaces the default tick positions — here, labelling every other decade:
 
 ```@example plotting
-plot(r; xticks = 10.0 .^ (0:3),
+plot(r; xticks = 10.0 .^ (0:2:4),
      xlabel = "τ (s)", ylabel = "σ_y(τ)", legend = :bottomleft)
 ```
 

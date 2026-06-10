@@ -126,18 +126,3 @@ underlying integer grid. All grids are clamped to the kernel's algorithmic
 m-max for the record length. Octave spacing is the usual choice: denser grids
 (`AllTaus`) look smoother but adjacent points are strongly correlated, so they
 add little independent information.
-
-## My deviation curve bends up at long τ — is that a bug?
-
-Usually not. Three things to check, in order. First, statistics: at large `m`
-only a few analysis windows fit in the record, the EDF is small, and the point
-estimate scatters — look at `r.edf` and `r.ci_lower` / `r.ci_upper`, and if
-the confidence interval spans the bend, the bend is not significant. Second,
-drift: linear frequency drift adds a `+τ` slope to ADEV at long τ
-[riley-2008-sp1065](@cite); run `hdev` (drift-insensitive) or
-`detrend(data; method=:linear)` and compare — if the bend disappears, it was
-drift, not noise. Third, the bend may be real: random-walk FM produces a
-genuine `+1/2` ADEV slope. For better long-τ confidence on a fixed-length
-record, the total estimators (`totdev`, `mtotdev`, `htotdev`) extend the
-record — or each analysis window — at its boundaries to recover degrees of
-freedom at long τ.

@@ -25,7 +25,7 @@ In SigmaTau:
 adev(PhaseData(x, τ₀), [1, 2, 4, 8, 16])
 ```
 
-(Cite [sullivan-1990-tn1337](@cite) for origin; SP1065 §5
+(Definition and overlapping form per SP1065 §5
 [riley-2008-sp1065](@cite).)
 
 ## MDEV — modified Allan deviation
@@ -41,42 +41,42 @@ A phase-averaged second difference. SP1065 Eq. 16:
 
 The inner phase-averaging step decouples WPM (μ_dev = −3/2) from FPM
 (μ_dev = −1). In `src/kernels.jl` this is
-implemented in third-difference form via prefix sums (Greenhall 1997
-[greenhall-1997-third-difference-mvar](@cite)) — algebraically identical to the SP1065 form
-above; see `legdocs/equations/allan.md` for the equivalence proof.
+implemented in third-difference form via prefix sums — algebraically
+identical to the SP1065 form above; the equivalence is Greenhall's
+third-difference construction [greenhall-1997-third-difference-mvar](@cite).
 
 ```julia
 mdev(PhaseData(x, τ₀), τs)
 ```
 
-## PVAR — parabolic variance
+## PDEV — parabolic deviation
 
-The parabolic variance is an unbiased estimator of frequency drift
-that uses a quadratic (parabolic) weighting kernel rather than the
-finite-difference kernels of the Allan family
-[banerjee-2023-timekeeping](@cite). PVAR's defining feature is its
-specific design for **detecting and quantifying frequency drift** in
-records that also contain stochastic power-law noise; it gives a
-clean separation of drift from white/flicker FM components that ADEV
-and HDEV cannot achieve via finite-difference cancellation alone.
+The parabolic variance PVAR (with `PDEV = √PVAR`) is Vernotte,
+Lenczner, Bourgeois & Rubiola's wavelet variance built on a
+least-squares fit: instead of the finite-difference kernels of the
+Allan family, the estimator weights the phase with a quadratic
+(parabolic) window [vernotte-2016-pvar](@cite). The least-squares
+construction gives it better long-τ noise-type discrimination than
+MVAR at comparable confidence, which is the property that motivated it
+[vernotte-2016-pvar](@cite).
 
 ```math
 \mathrm{PVAR}(\tau) \;=\; \frac{2}{N_e\,m^2\,\tau_0^2}
 \sum_{i} \biggl[\sum_{k=0}^{m} c_k\,x_{i+k}\biggr]^2 ,
 ```
 
-with `c_k` a quadratic weighting kernel (parabolic shape over the
+with `c_k` the quadratic weighting kernel (parabolic shape over the
 window) constructed so that the operator integrates to zero against
 both constants and linear ramps but responds nonzero to quadratic
-curvature in `x(t)` [banerjee-2023-timekeeping](@cite).
+curvature in `x(t)` [vernotte-2016-pvar](@cite).
 
 !!! note "Implementation status"
     Implemented as [`pdev`](@ref) (parabolic deviation σ = √PVAR);
     `m=1` reproduces ADEV exactly and a linear-trend annihilation test
-    pins the kernel. CI / EDF bounds are not yet populated — the
-    `StabilityResult.ci_lower` / `ci_upper` / `edf` fields are empty
-    until the Vernotte 2015 / 2020 closed-form EDF coefficients are
-    ported.
+    pins the kernel. χ² confidence intervals use the
+    Vernotte–Chen–Rubiola closed-form EDF
+    [vernotte-2020-pvar-noninteger](@cite); see
+    [Theory: PDEV confidence](pdev_confidence.md).
 
 ## TDEV — time deviation
 
@@ -165,8 +165,9 @@ FPM), while the third-difference kernel preserves HDEV's drift
 insensitivity. MHDEV is the right choice when a record contains
 linear frequency drift *and* phase noise that ADEV / MDEV cannot
 disambiguate. SigmaTau's kernel uses the prefix-sum form for
-performance; the equivalence to the textbook expression above is in
-`legdocs/equations/hadamard.md`.
+performance; it is algebraically identical to the textbook expression
+above (the same telescoping identity as the MDEV case, one difference
+order higher).
 
 ```julia
 mhdev(PhaseData(x, τ₀), τs)
@@ -317,7 +318,8 @@ exponent `α` of `S_y(f)`:
 | −1 (FFM)  |  0     |  0   |  0     |  0   | +1    | +1   |
 | −2 (RWFM) | +1/2   | +1/2 | +1/2   | +1/2 | +3/2  | +3/2 |
 
-(*) ADEV/HDEV at FPM include a `log(2π·m)` factor (see SP1065 §5).
+(*) ADEV/HDEV's response to flicker PM includes a `log(2π·m)` factor
+(see SP1065 §5).
 
 ## Demonstration
 
@@ -347,7 +349,10 @@ characteristic split that makes MDEV able to disambiguate WPM from FPM.
   `Vector{Float64}` and return raw arrays; the public API in
   `src/deviations.jl` wraps them and returns `StabilityResult`.
 - `MDEV/MHDEV` use a prefix-sum form algebraically equivalent to the
-  textbook `1/m⁴` form; see `legdocs/equations/allan.md` for the proof.
+  textbook `1/m⁴` form (Greenhall's third-difference construction
+  [greenhall-1997-third-difference-mvar](@cite)); the kernels are
+  pinned against direct textbook-form reference implementations in
+  `test/stab/legacy_kernels.jl`.
 - `tdev` and `htdev` are scaling wrappers; they do no extra kernel work.
 
 ## See also

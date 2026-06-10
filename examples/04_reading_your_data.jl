@@ -1,21 +1,27 @@
-# # Reading your data
+# # Reading and saving your data
 #
 # Measurement records arrive as plain text: Stable32 `.DAT` exports, counter
-# logs, CSV dumps from a data-acquisition system. This tutorial is a cookbook
-# for getting each of those into a [`PhaseData`](@ref) or
-# [`FrequencyData`](@ref) record. Once the data is in one of those two
-# containers, everything downstream — `adev`, `mdev`, the total family — is
-# identical.
+# logs, CSV dumps from a data-acquisition system. SigmaTau's IO surface for
+# all of them is small: [`read_phase`](@ref) and [`read_frequency`](@ref)
+# bring raw records into a [`PhaseData`](@ref) or [`FrequencyData`](@ref)
+# container, [`fillgaps`](@ref) and [`detrend`](@ref) clean them up, and
+# [`save_result`](@ref) / [`save_suite`](@ref) write finished analyses to
+# plain tab-separated files that [`load_result`](@ref) / [`load_suite`](@ref)
+# read back. This tutorial walks that whole path.
 #
 # Covered here:
 #
-# 1. Phase versus frequency records, and which one your instrument produces.
-# 2. Two-column files (time, phase) with `read_phase` defaults.
-# 3. Single-column files: `time_col = 0` and an explicit `tau0`.
-# 4. A counter CSV with MJD time tags, parsed by hand.
-# 5. Gaps and outliers: `NaN`, `fillgaps`, and the MAD test.
-# 6. Removing offsets and drift with `detrend`.
-# 7. Writing results out for plotting elsewhere.
+# 1. Phase versus frequency records, and which reader to call.
+# 2. Two-column files with the `read_phase` defaults.
+# 3. Single-column Stable32 `.DAT` files: `header`, `time_col = 0`,
+#    `value_col = 1`, and an explicit `tau0`.
+# 4. A counter CSV in engineering units: `scaling`, and the `tau0` units trap.
+# 5. The escape hatch: constructing a `PhaseData` by hand when no reader
+#    keyword fits.
+# 6. Data preparation: `fillgaps` for dropouts and outliers, `detrend` for
+#    offsets and drift.
+# 7. Saving and sharing: `save_result` / `load_result` for one deviation,
+#    `save_suite` / `load_suite` for a whole session.
 #
 # Everything below writes only to a temporary directory and runs as-is with
 # `julia --project=examples examples/04_reading_your_data.jl`.
@@ -31,22 +37,15 @@ Random.seed!(20260609)
 # A phase record ``x[k]`` is the time difference between the device under test
 # and the reference, in seconds, sampled every ``\tau_0`` seconds. A
 # fractional-frequency record ``y[k]`` is the dimensionless frequency offset
-# averaged over each interval, ``y[k] = (x[k+1] - x[k]) / \tau_0``. Which one
-# you have depends on the instrument: time-interval counters and dual-mixer
-# time-difference systems measure phase; most frequency counters report
-# averaged fractional frequency.
+# averaged over each interval. Which one you have depends on the instrument:
+# time-interval counters and dual-mixer time-difference systems measure phase;
+# most frequency counters report averaged fractional frequency.
 #
-# Every deviation function in `SigmaTau` accepts either container and converts
-# internally, so you rarely convert by hand. When you do need the conversion
-# explicitly, it is one line each way:
-#
-# ```julia
-# y = diff(x) ./ τ₀       # phase → fractional frequency
-# x = cumsum(y) .* τ₀     # fractional frequency → phase (absolute offset lost)
-# ```
-#
-# The absolute offset is lost in the round trip because differencing destroys
-# the constant term; none of the deviations depend on it.
+# Call the reader that matches the file: `read_phase` returns a `PhaseData`,
+# `read_frequency` a `FrequencyData`, and the two take identical keyword
+# arguments. Every deviation function accepts either container and converts
+# internally — see [the phase-data tutorial](01_phase_data.md) for the
+# conversion identity.
 
 # ## A two-column file: `read_phase` with defaults
 #
@@ -111,9 +110,9 @@ length(pd_dat.x), pd_dat.tau0
 # `value_col = 2` points past the only column and the reader raises an error
 # instead of silently reading the wrong thing.
 
-# ## A counter CSV with MJD time tags: no special reader needed
+# ## A counter CSV in engineering units
 #
-# Counter logs often carry Modified Julian Date time tags and phase in
+# Counter logs often carry Modified Julian Date (MJD) time tags and phase in
 # engineering units (nanoseconds, picoseconds). We synthesise a 600-row log
 # sampled every 10 s, with phase in nanoseconds:
 
@@ -130,40 +129,53 @@ open(csvpath, "w") do io
     end
 end
 
-# You do not need a special reader for this — plain Julia is enough. Parse
-# the two columns, convert MJD days to seconds, nanoseconds to seconds, and
-# construct the `PhaseData` directly:
-
-rows = split.(readlines(csvpath)[2:end], ',')
-mjd  = parse.(Float64, first.(rows))
-xs   = parse.(Float64, last.(rows)) .* 1e-9     # ns → s
-t    = (mjd .- mjd[1]) .* 86400.0               # days → s
-
-pd_csv = PhaseData(xs, round(t[2] - t[1]; digits = 3))
-
-length(pd_csv.x), pd_csv.tau0
-
-# The `round` absorbs floating-point jitter in the time tags: a `Float64` MJD
-# near 60800 resolves only ~0.6 µs (`eps(60800.0) * 86400` seconds), so the
-# sample spacings recovered from raw MJD tags are not exactly 10.0 s.
-#
-# `read_phase` can read the same file — but mind the units. If you let it
-# infer `tau0` from the MJD column, you get the cadence in *days*:
+# `read_phase` handles this directly: `header = 1` skips the column-name row,
+# and `scaling = 1e-9` multiplies the values into seconds. The one thing the
+# reader cannot do for you is convert *time* units. The MJD column is in
+# days, so the inferred cadence comes out in days too:
 
 read_phase(csvpath; header = 1, scaling = 1e-9).tau0   # ≈ 1.157e-4 — days!
 
-# That call succeeds silently and every τ in your results would be wrong by a
-# factor of 86400. Pass `tau0` in seconds explicitly (and `scaling = 1e-9`
-# for the ns → s conversion):
+# That call succeeds silently, and every τ in your results would be wrong by
+# a factor of 86400. Whenever the time column is not in seconds, pass `tau0`
+# in seconds explicitly — it overrides the inference:
 
-pd_csv2 = read_phase(csvpath; header = 1, scaling = 1e-9, tau0 = 10.0)
-pd_csv2.x ≈ pd_csv.x
+pd_csv = read_phase(csvpath; header = 1, scaling = 1e-9, tau0 = 10.0)
 
-# ## Gaps and outliers
+length(pd_csv.x), pd_csv.tau0
+
+# ## The escape hatch: constructing the container by hand
 #
-# The deviation estimators expect an equispaced, gap-free record. The kernels
-# do not skip `NaN` samples — a single `NaN` propagates into every σ_y(τ)
-# estimate whose sums touch it:
+# `read_phase` requires the whole table to parse as numbers. A log with a
+# text column — a lock-status flag, say — defeats it, and no keyword
+# combination will help:
+
+logpath = joinpath(dir, "counter_status.log")
+open(logpath, "w") do io
+    for k in 1:M
+        println(io, mjd0 + (k - 1) * τ_csv / 86400, "  OK  ", xns[k])
+    end
+end
+
+# For a genuinely foreign format like this, parse it with plain Julia and
+# construct the `PhaseData` directly — the containers are ordinary structs,
+# and everything downstream is identical no matter how the record got in:
+
+rows   = split.(readlines(logpath))
+xs     = [parse(Float64, r[3]) * 1e-9 for r in rows if r[2] == "OK"]
+pd_log = PhaseData(xs, τ_csv)
+
+pd_log.x ≈ pd_csv.x
+
+# Three lines is typical. Reach for this only when the file truly fits no
+# `read_phase` keyword combination; for anything column-shaped the reader is
+# shorter and validates as it goes.
+
+# ## Gaps and outliers: `fillgaps`
+#
+# The deviation estimators expect an equispaced, gap-free record, and the
+# kernels do not skip `NaN` samples — a single `NaN` propagates into every
+# σ_y(τ) estimate whose sums touch it:
 
 xg = copy(x)                  # the 2048-point record from above
 xg[1001:1012] .= NaN          # a 12-sample dropout
@@ -187,37 +199,33 @@ adev(pd_filled, [8]; ci = false).dev
 # absent samples become `NaN`, and the same fill runs. This requires a time
 # column.
 #
-# `SigmaTau` has no automatic outlier detector. Standard practice
-# [riley-2008-sp1065](@cite) is the median-absolute-deviation test on the
-# frequency record: flag samples far from the median, set them to `NaN`, and
-# treat them as gaps. Here we inject a counter glitch and remove it:
+# The same idiom handles outliers. `SigmaTau` has no automatic outlier
+# detector; standard practice [riley-2008-sp1065](@cite) is the
+# median-absolute-deviation test on the frequency record — flag samples far
+# from the median, set them to `NaN`, and fill:
 
 y      = diff(pd_filled.x) ./ τ₀
-y[700] = 3e-9                          # a 30σ glitch
+y[700] = 3e-9                          # inject a counter glitch
 
 med = median(y)
-mad = median(abs.(y .- med))
-bad = abs.(y .- med) .> 5 * mad / 0.6745
-count(bad)
-
-#-
-
+bad = abs.(y .- med) .> 5 * median(abs.(y .- med)) / 0.6745
 y[bad] .= NaN
 fd_clean = fillgaps(FrequencyData(y, τ₀))
-adev(fd_clean, [8]; ci = false).dev
 
-# where `mad / 0.6745` rescales the median absolute deviation to be an
-# estimate of the standard deviation for normally distributed data, and 5 is
-# the deglitching threshold in those units (Stable32's default for its
-# outlier check).
+count(bad), adev(fd_clean, [8]; ci = false).dev[1]
 
-# ## Removing offsets and drift with `detrend`
+# The factor 0.6745 rescales the median absolute deviation into an estimate
+# of the standard deviation for normally distributed data, and 5 is the
+# deglitching threshold in those units (Stable32's default for its outlier
+# check).
+
+# ## Removing offsets and drift: `detrend`
 #
 # A constant frequency offset appears as a linear trend in phase; a linear
-# frequency drift appears as a linear trend in ``y[k]`` (quadratic in
-# ``x[k]``). Deterministic drift inflates the long-τ end of the σ_y(τ) curve,
-# masking the random-walk noise floor underneath, so the convention is to
-# remove the drift first and characterise the residual noise.
+# frequency drift appears as a linear trend in ``y[k]``. Deterministic drift
+# inflates the long-τ end of the σ_y(τ) curve, masking the random-walk noise
+# floor underneath, so the convention is to remove the drift first and
+# characterise the residual noise.
 #
 # [`detrend`](@ref) does this on either container and returns a new record,
 # leaving the original untouched. `method` is one of `:linear` (least-squares
@@ -232,47 +240,70 @@ adev(fd_drift, [512]; ci = false).dev[1],
 adev(fd_flat,  [512]; ci = false).dev[1]
 
 # The drift contribution dominated σ_y(512 s) before detrending and is gone
-# after. The same operation is available at load time through the `detrend`
-# keyword of `read_phase` / `read_frequency`, e.g.
-# `read_frequency(path; detrend = :linear)`.
-#
+# after. The same operation is available at read time through the `detrend`
+# keyword — here via `read_frequency`, which takes the same keywords as
+# `read_phase` and returns a `FrequencyData`:
+
+driftpath = joinpath(dir, "drift.txt")
+write(driftpath, join(ydrift, '\n'))
+
+fd_flat2 = read_frequency(driftpath; time_col = 0, value_col = 1, tau0 = 1.0,
+                          detrend = :linear)
+fd_flat2.y ≈ fd_flat.y
+
 # One caution: the detrend modes fit at most a straight line. Applied to
 # *phase* data, `:linear` removes a constant frequency offset — not a
 # frequency drift. To remove a linear frequency drift, detrend the frequency
 # representation (`detrend(FrequencyData(diff(pd.x) ./ pd.tau0, pd.tau0))`).
 
-# ## Writing results out
+# ## Saving one result: `save_result` and `load_result`
 #
-# A [`StabilityResult`](@ref) is a plain struct — the vectors `tau`, `dev`,
-# `noise_type`, `ci_lower`, `ci_upper`, `edf`, plus a `deviation_type` tag —
-# so exporting it for a colleague's plotting tool is a short loop. We run `adev` on the Stable32 fixture from earlier
-# and write a tab-separated table:
+# A finished analysis should leave the session as a file, not a screenshot.
+# [`save_result`](@ref) writes a [`StabilityResult`](@ref) to a
+# self-describing tab-delimited text file; [`load_result`](@ref) reads it
+# back into an identical record. We run `adev` on the Stable32 fixture from
+# earlier and save it:
 
-result  = adev(pd_dat)        # default octave τ-grid, CI included
-outpath = joinpath(dir, "adev_results.tsv")
+result     = adev(pd_dat)        # default octave τ-grid, CI included
+resultpath = joinpath(dir, "adev_results.tsv")
+save_result(resultpath, result)
 
-open(outpath, "w") do io
-    println(io, "tau_s\tadev\tci_lower\tci_upper\tnoise")
-    for k in eachindex(result.tau)
-        println(io, result.tau[k], '\t', result.dev[k], '\t',
-                result.ci_lower[k], '\t', result.ci_upper[k], '\t',
-                result.noise_type[k])
-    end
-end
+foreach(println, readlines(resultpath)[1:8])
 
-foreach(println, readlines(outpath)[1:5])
-
-# Any spreadsheet, gnuplot script, or Stable32 user can take it from there.
+# The file is a plain table: two comment lines record the deviation type and
+# whether confidence intervals were computed, then a header row and one row
+# per τ with `tau`, `dev`, `noise_type`, `ci_lower`, `ci_upper`, `edf`, and
+# `neff`. Any spreadsheet, gnuplot script, or Stable32 user can take it
+# as-is; there is no binary format to escape from.
 #
-# For round-tripping *within* `SigmaTau`, prefer the native format:
-# [`save_result`](@ref) writes a self-describing tab-delimited file that
-# [`load_result`](@ref) reads back into an identical `StabilityResult`
-# (and [`save_suite`](@ref) / [`load_suite`](@ref) do the same for a whole
-# [`stability`](@ref) session):
+# `load_result` reconstructs the `StabilityResult`, confidence intervals and
+# all:
 
-nativepath = joinpath(dir, "adev_native.tsv")
-save_result(nativepath, result)
-load_result(nativepath).dev ≈ result.dev
+result2 = load_result(resultpath)
+result2.dev ≈ result.dev, result2.edf ≈ result.edf
+
+# ## Saving a whole session: `save_suite` and `load_suite`
+#
+# [`stability`](@ref) computes several deviations from one record in a single
+# call and returns a [`StabilitySuite`](@ref). [`save_suite`](@ref) writes
+# the whole session — every result plus the metadata needed to reproduce it —
+# to one file, and [`load_suite`](@ref) reads it back. `source_file` is
+# optional provenance, recorded in the header:
+
+suite     = stability(pd_dat)    # adev, mdev, hdev, mhdev by default
+suitepath = joinpath(dir, "session.tsv")
+save_suite(suitepath, suite; source_file = "stable32gen.DAT")
+
+foreach(println, readlines(suitepath)[1:14])
+
+# The metadata header records the package version, a timestamp, the input
+# kind, τ₀, the number of samples, the confidence level, and the deviation
+# set; each deviation then follows as its own block in the same six-column
+# table that `save_result` writes. Loading it back returns a suite you can
+# index by deviation symbol:
+
+suite2 = load_suite(suitepath)
+suite2[:hdev].dev ≈ suite[:hdev].dev
 
 # ## Where to go next
 #

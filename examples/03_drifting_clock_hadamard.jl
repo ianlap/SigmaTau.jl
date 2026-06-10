@@ -170,20 +170,23 @@ end
 # [MHTOTDEV bias and EDF](../theory/mhtotdev_bias_edf.md) for the
 # methodology.
 #
-# One caveat before using it on this record. Inside each subsegment the
-# third difference still annihilates drift, but the extension reflects
-# a *detrended copy* of the subsegment, and the half-average detrend
-# removes the subsegment's mean frequency — not its drift. The residual
-# quadratic phase re-enters through the reflected boundary, so on a
-# record drifting this strongly MHTOTDEV picks the drift back up at
-# long τ where MHDEV stays clean. The fix costs one line: [`detrend`](@ref)
-# removes the least-squares drift line from the frequency series before
-# the analysis. Drift is deterministic, so removing it discards no
-# statistical information; `mhdev` itself does not need the step, and
-# detrending changes its output only negligibly.
+# Unlike its parent `mhdev`, the total kernel is not drift-immune on
+# its own — the boundary extension re-admits residual drift — so
+# `mhtotdev` removes the record's least-squares frequency drift itself
+# before analyzing (`remove_drift = true`, the default; per-window
+# drift removal was evaluated in both the phase and frequency domains
+# and measurably damages the statistic, so the global removal is the
+# design). Since drift is deterministic, removing it discards no
+# statistical information; it is the same practice SP1065 recommends
+# before any total estimator. One piece of hygiene remains for the
+# *comparison* below: `mhdev`'s noise identification runs on the
+# record as given and would classify the longest-τ points as redder
+# than the true noise on a record drifting this strongly. Detrending
+# the record once lets both estimators' χ² intervals classify the
+# underlying noise:
 
 N_short  = 10_800   # three hours at 1 Hz
-fd_short = detrend(FrequencyData(y[1:N_short], τ₀))   # remove the drift line from y
+fd_short = detrend(FrequencyData(y[1:N_short], τ₀))   # noise-ID hygiene for the mhdev comparison
 m_short  = [16, 32, 64, 128, 256, 512, 1024, 2048]   # all ≥ the τ/τ₀ ≥ 16 floor
 
 r_mh  = mhdev(fd_short, m_short)
@@ -192,7 +195,7 @@ r_mht = mhtotdev(fd_short, m_short)
 # The octave-by-octave comparison, with the default 68.3% (1σ)
 # confidence level:
 
-ci_width(r, i) = (r.ci_upper[i] - r.ci_lower[i]) / r.dev[i]
+ci_width(r, i) = (r.ci[i].hi - r.ci[i].lo) / r.dev[i]
 
 println("τ (s)    T/τ    edf mhdev  edf mhtotdev  rel CI mhdev  rel CI mhtotdev")
 for i in eachindex(m_short)
@@ -230,9 +233,8 @@ plot!(r_mht; label = "MHTOTDEV (3 h record)", ci_band = true, lw = 1.5)
 
 # ## Which estimator, when
 #
-# `hdev`, `mhdev`, and `htdev` reject linear frequency drift outright;
-# `mhtotdev` needs the one-line `detrend` first (the reflection caveat
-# above). Within the family:
+# All four Hadamard-family estimators reject linear frequency drift.
+# Within the family:
 
 println("""
 Symptom                                              Reach for
@@ -240,7 +242,7 @@ Symptom                                              Reach for
 drift contaminates ADEV at long τ                    hdev
 drift + ambiguous PM noise (WPM vs FPM) at short τ   mhdev
 time-error budget (σ_x) for a drifting clock         htdev
-drifting clock, record too short for long-τ CI       detrend, then mhtotdev
+drifting clock, record too short for long-τ CI       mhtotdev
 """)
 
 # | Symptom | Reach for |
@@ -248,7 +250,7 @@ drifting clock, record too short for long-τ CI       detrend, then mhtotdev
 # | Drift contaminates ADEV at long τ | `hdev` |
 # | Drift plus ambiguous PM noise (WPM vs FPM) at short τ | `mhdev` |
 # | Time-error budget (σ_x) for a drifting clock | `htdev` |
-# | Drifting clock on a record too short for long-τ confidence | `detrend`, then `mhtotdev` |
+# | Drifting clock on a record too short for long-τ confidence | `mhtotdev` |
 #
 # For records without drift the Allan-family counterparts (`adev`,
 # `mdev`, `tdev`, `mtotdev`) are slightly more efficient — tighter CI
