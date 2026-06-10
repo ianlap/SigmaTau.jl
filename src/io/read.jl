@@ -41,6 +41,28 @@ function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,No
 end
 
 """
+    _scan_comment_header(path) → (ncomment::Int, header_tau0::Union{Float64,Nothing})
+
+Count the contiguous block of leading `#` comment lines in `path` (the header
+that [`save`](@ref) writes) and extract the `# tau0: <value>` entry when one
+is present. Scanning stops at the first non-comment line, so files whose
+header does not start with `#` (e.g. Stable32 `.DAT` exports) are untouched.
+"""
+function _scan_comment_header(path::AbstractString)
+    ncomment    = 0
+    header_tau0 = nothing
+    open(path, "r") do io
+        for line in eachline(io)
+            startswith(line, '#') || break
+            ncomment += 1
+            m = match(r"^#\s*tau0:\s*(\S+)", line)
+            m === nothing || (header_tau0 = tryparse(Float64, m.captures[1]))
+        end
+    end
+    return ncomment, header_tau0
+end
+
+"""
     _ingest(path; tau0, time_col, value_col, header, delim, scaling, detrend, fillgaps)
         → (values::Vector{Float64}, tau0::Float64)
 
@@ -56,7 +78,9 @@ function _ingest(path::AbstractString;
                  scaling::Real,
                  detrend::Symbol,
                  fillgaps::Bool)
-    M = _read_columns(path; header=header, delim=delim)
+    isfile(path) || throw(ArgumentError("read: file not found: $path"))
+    ncomment, header_tau0 = _scan_comment_header(path)
+    M = _read_columns(path; header=header + ncomment, delim=delim)
     ncols = size(M, 2)
     value_col >= 1 || throw(ArgumentError("read: value_col must be ≥ 1"))
     value_col <= ncols ||
@@ -74,9 +98,11 @@ function _ingest(path::AbstractString;
         v .*= scaling
     end
 
-    # Resolve tau0
+    # Resolve tau0: explicit kwarg > `# tau0:` comment header > time column.
     resolved_tau0 = if tau0 !== nothing
         Float64(tau0)
+    elseif header_tau0 !== nothing
+        header_tau0
     elseif have_time && length(t) > 1
         Float64(median(diff(t)))
     else
@@ -104,15 +130,23 @@ end
                      detrend=:none, fillgaps=false) → PhaseData
 
 Read a phase-data file and return a [`PhaseData`](@ref) ready for stability
-analysis.
+analysis. The returned record carries `path` in its `source` field.
+
+Leading `#` comment lines (the header that [`save`](@ref) writes) are skipped
+automatically, and a `# tau0: <value>` entry in that header supplies the
+sample interval when the `tau0` keyword is omitted, so files written by
+`save(path, data)` round-trip with no keywords at all.
 
 # Keyword arguments
 
-- `tau0`     — sample interval in seconds. Auto-inferred from the time column
-               (median of `diff(t)`) when omitted; required when `time_col=0`.
+- `tau0`     — sample interval in seconds. When omitted, taken from a
+               `# tau0:` comment header if present, else auto-inferred from
+               the time column (median of `diff(t)`); required when
+               `time_col=0` and neither fallback applies.
 - `time_col` — 1-based column index for timestamps (`0` = no time column).
 - `value_col` — 1-based column index for phase samples.
-- `header`   — number of header lines to skip.
+- `header`   — number of non-comment header lines to skip (counted after any
+               leading `#` comment lines).
 - `delim`    — field delimiter (`Char`). Auto-detected from extension when
                `nothing` (`,` for `.csv`, tab for `.tsv`, whitespace otherwise).
 - `scaling`  — multiply phase samples by this factor (e.g. `1e-12` for ps→s).
@@ -143,7 +177,7 @@ function read_phase(path::AbstractString;
                     tau0=tau0, time_col=time_col, value_col=value_col,
                     header=header, delim=delim,
                     scaling=scaling, detrend=detrend, fillgaps=fillgaps)
-    return PhaseData(v, t0)
+    return PhaseData(v, t0; source=String(path))
 end
 
 """
@@ -151,8 +185,9 @@ end
                          delim=nothing, scaling=1.0,
                          detrend=:none, fillgaps=false) → FrequencyData
 
-Read a fractional-frequency file. Same keyword arguments as
-[`read_phase`](@ref); only the return type differs.
+Read a fractional-frequency file. Same keyword arguments and comment-header
+handling as [`read_phase`](@ref); only the return type differs. The returned
+record carries `path` in its `source` field.
 """
 function read_frequency(path::AbstractString;
                         tau0::Union{Real,Nothing}=nothing,
@@ -167,5 +202,5 @@ function read_frequency(path::AbstractString;
                     tau0=tau0, time_col=time_col, value_col=value_col,
                     header=header, delim=delim,
                     scaling=scaling, detrend=detrend, fillgaps=fillgaps)
-    return FrequencyData(v, t0)
+    return FrequencyData(v, t0; source=String(path))
 end

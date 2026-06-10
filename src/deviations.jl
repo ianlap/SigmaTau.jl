@@ -523,6 +523,70 @@ mtie(data::FrequencyData; kwargs...) = mtie(data, _default_m_values(length(data.
 
 
 # ──────────────────────────────────────────────────────────────────────
+# ── stab/api/tierms.jl ──────────────────────────────────────────────────
+
+# api/tierms.jl — User wrapper for RMS Time Interval Error
+
+"""
+$(SIGNATURES)
+
+RMS Time Interval Error (TIE rms) for a phase record, per NIST SP1065
+§5.2.18 eq. 37 [riley-2008-sp1065](@cite). For each averaging factor `m`,
+returns the root-mean-square phase change over all `N − m` spans of
+`τ = m·τ₀`:
+
+```math
+\\mathrm{TIE\\,rms}(m\\tau_0) = \\sqrt{\\frac{1}{N-m}
+    \\sum_{i=1}^{N-m} \\bigl(x_{i+m} - x_i\\bigr)^2}
+```
+
+This is the estimator Stable32 and allantools (`tierms`) compute. TIE rms
+is a σ_x quantity (units of seconds) used by the telecommunications
+industry alongside MTIE; for a record with no frequency offset it
+approaches the standard deviation of the fractional-frequency
+fluctuations multiplied by τ, similar in behavior to TDEV.
+
+Like `mtie`, TIE rms has no published EDF / χ² confidence model, so
+`noise_type`, `ci`, and `edf` are returned empty even when `ci=true`
+(`neff` carries the `N − m` span count). `ci` and `confidence` are
+accepted for API uniformity with the other deviations but are no-ops
+here.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> p = PhaseData([0.0, 1.0, 0.5, 2.0, 1.5], 1.0);
+
+julia> r = tierms(p, [1, 3]);
+
+julia> round.(r.dev; sigdigits=4)
+2-element Vector{Float64}:
+ 0.9682
+ 1.458
+```
+"""
+function tierms(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    raw_devs = _tierms_core(_f64(data.x), m_values, data.tau0)
+    taus = m_values .* data.tau0
+    neff = _neff_counts(:tierms, length(data.x), m_values)
+    return StabilityResult(:tierms, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+end
+
+tierms(data::FrequencyData, m_values::Vector{Int}; kwargs...) = tierms(_freq_to_phase(data), m_values; kwargs...)
+
+# TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
+tierms(data::PhaseData,     taus::TauMode; kwargs...) = tierms(data, tau_values(taus, length(data.x), :tierms); kwargs...)
+tierms(data::FrequencyData, taus::TauMode; kwargs...) = tierms(data, tau_values(taus, length(data.y), :tierms); kwargs...)
+
+# Zero-arg convenience: octave-spaced m_values up to TIE rms' algorithmic
+# m-max (`N − 1`, see `_default_m_values`).
+tierms(data::PhaseData;     kwargs...) = tierms(data, _default_m_values(length(data.x), :tierms); kwargs...)
+tierms(data::FrequencyData; kwargs...) = tierms(data, _default_m_values(length(data.y), :tierms); kwargs...)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # ── stab/api/pdev.jl ────────────────────────────────────────────────────
 
 # api/pdev.jl — User wrapper for parabolic deviation
@@ -586,3 +650,168 @@ pdev(data::FrequencyData, taus::TauMode; kwargs...) = pdev(data, tau_values(taus
 # m-max (`(N − 1) ÷ 2`, see `_default_m_values`).
 pdev(data::PhaseData;     kwargs...) = pdev(data, _default_m_values(length(data.x), :pdev); kwargs...)
 pdev(data::FrequencyData; kwargs...) = pdev(data, _default_m_values(length(data.y), :pdev); kwargs...)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/api/theo.jl ────────────────────────────────────────────────────
+
+# api/theo.jl — User wrappers for Thêo1 / ThêoBR / ThêoH
+
+"""
+    theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+
+Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15 eq. 30 — a
+two-sample variance that mimics the Allan variance while extending the
+usable averaging-time range to 75 % of the record span (see
+`_theo1_core` for the kernel).
+
+Conventions (SP1065 / Stable32):
+
+- `m_values` are Thêo1 averaging factors and must be **even** with
+  `2 ≤ m ≤ N − 1`; other entries produce NaN rows. SP1065 states the
+  statistic for `m ≥ 10`. Use `tau_values(mode, N, :theo1)` for an
+  even-rounded grid.
+- The reported `r.tau` is the **effective** averaging time
+  `τ = 0.75·m·τ0` (SP1065 §5.2.15), as plotted by Stable32. allantools'
+  `theo1` computes the same deviation values (eq. 30 with the
+  Howe & Peppler 0.75 normalization, which SP1065's printed eq. 30
+  omits — its own Table 2 requires it) but reports them at `τ = m·τ0`;
+  SigmaTau resolves that definitional offset in favor of
+  SP1065/Stable32, so `r.dev` matches allantools at the same `m` while
+  `r.tau` is allantools' τ scaled by 0.75.
+- `correct_bias=true` (default) applies the ThêoBR automatic bias
+  removal of SP1065 §5.2.16 eq. 33: the Thêo1 variance is multiplied by
+  the average of the `AVAR(m=9+3i)/Theo1(m=12+4i)` ratios over
+  `i = 0…⌊N/6 − 3⌋` (matched-τ ladders spanning the long-τ ADEV overlap
+  region), removing the noise-dependent Thêo1 bias without explicit
+  noise identification. ThêoBR needs `N ≥ 19` samples; shorter records
+  yield NaN rows (pass `correct_bias=false` for raw Thêo1, which
+  Stable32 reports as its "Theo1" run).
+
+The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
+formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
+and bias-removed forms. The kernel's double sum is O(N·m) per τ — far
+costlier than the O(N) Allan kernels at large m.
+"""
+function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    x = _f64(data.x)
+    N = length(x)
+    raw_devs = _theo1_core(x, m_values, data.tau0)
+    taus = 0.75 .* m_values .* data.tau0
+    T = (N - 1) * data.tau0
+    neff = _neff_counts(:theo1, N, m_values)
+
+    devs = correct_bias ? raw_devs .* sqrt(_theobr_ratio(x, data.tau0)) : raw_devs
+
+    if !ci
+        return StabilityResult(:theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)
+    end
+
+    noises = identify_noise(x, m_values, dmin=0, dmax=2)
+    edfs = calculate_edf(:theo1, devs, noises, m_values, taus, N, T)
+    lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
+
+    return StabilityResult(:theo1, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+end
+
+"""
+    theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+
+ThêoH ("hybrid-ThêoBR") per NIST SP1065 (Riley 2008) §5.2.16 eq. 34: a
+composite σ_y(τ) curve that is overlapping ADEV at short averaging
+times and the bias-removed Thêo1 (ThêoBR, eq. 33) beyond, extending a
+single continuous stability plot from `τ0` out to 75 % of the record
+span.
+
+`m_values` are **τ-grid factors** (target `τ = m·τ0`, any positive
+integers — unlike [`theo1`](@ref) they need not be even). Each point is
+assigned per eq. 34's crossover `k = 20 %` of the record span
+`T = (N−1)·τ0`:
+
+- `m·τ0 ≤ k` — overlapping ADEV at factor `m`; reported at `τ = m·τ0`.
+- `m·τ0 > k` — ThêoBR at the even Thêo1 factor nearest `4m/3`
+  (exact whenever `m` is divisible by 3); reported at its true
+  effective `τ = 0.75·m_theo·τ0`.
+
+`r.tau` therefore always holds the realized τ of each point, which on
+the Thêo1 segment can differ from the requested `m·τ0` by up to one
+even-factor rounding step. The ThêoBR scaling needs `N ≥ 19`; shorter
+records yield NaN on the Thêo1 segment. CIs use the ADEV
+(Greenhall–Riley) EDF on the ADEV segment and the SP1065 Table 3 Thêo1
+EDF on the Thêo1 segment. ThêoBR/ThêoH always carry the eq. 33 bias
+removal — there is no `correct_bias` switch (raw Thêo1 is available via
+`theo1(...; correct_bias=false)`).
+"""
+function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    x = _f64(data.x)
+    N = length(x)
+    tau0 = data.tau0
+    T = (N - 1) * tau0
+    n_pts = length(m_values)
+
+    # Split the requested τ grid at the eq. 34 crossover (20 % of T).
+    adev_idx = Int[]
+    theo_idx = Int[]
+    for (j, m) in enumerate(m_values)
+        push!(_theoh_is_adev(m, N) ? adev_idx : theo_idx, j)
+    end
+    adev_ms = m_values[adev_idx]
+    theo_ms = Int[_theoh_theo_m(m) for m in m_values[theo_idx]]
+
+    taus = Float64[m * tau0 for m in m_values]
+    devs = fill(NaN, n_pts)
+
+    adev_devs = _adev_core(x, adev_ms, tau0)
+    devs[adev_idx] = adev_devs
+
+    # Skip the ThêoBR ratio (itself a Thêo1 ladder, O(N²)) when no point
+    # falls on the Thêo1 segment.
+    theo_devs = isempty(theo_idx) ? Float64[] :
+                _theo1_core(x, theo_ms, tau0) .* sqrt(_theobr_ratio(x, tau0))
+    devs[theo_idx] = theo_devs
+    taus[theo_idx] = 0.75 .* theo_ms .* tau0
+
+    neff = _neff_counts(:theoh, N, m_values)
+
+    if !ci
+        return StabilityResult(:theoh, taus, devs, Symbol[], _CIBound[], Float64[], neff)
+    end
+
+    # Per-segment noise ID and EDF: ADEV EDF below the crossover, Thêo1
+    # EDF above, merged back into request order.
+    noises = fill(:WHFM, n_pts)
+    edfs = fill(NaN, n_pts)
+    if !isempty(adev_idx)
+        noises_a = identify_noise(x, adev_ms, dmin=0, dmax=2)
+        noises[adev_idx] = noises_a
+        edfs[adev_idx] = calculate_edf(:adev, adev_devs, noises_a, adev_ms,
+                                       taus[adev_idx], N, T)
+    end
+    if !isempty(theo_idx)
+        noises_t = identify_noise(x, theo_ms, dmin=0, dmax=2)
+        noises[theo_idx] = noises_t
+        edfs[theo_idx] = calculate_edf(:theo1, theo_devs, noises_t, theo_ms,
+                                       taus[theo_idx], N, T)
+    end
+    lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
+
+    return StabilityResult(:theoh, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+end
+
+# FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
+theo1(data::FrequencyData, m_values::Vector{Int}; kwargs...) = theo1(_freq_to_phase(data), m_values; kwargs...)
+theoh(data::FrequencyData, m_values::Vector{Int}; kwargs...) = theoh(_freq_to_phase(data), m_values; kwargs...)
+
+# TauMode grid selector: resolve to the explicit m_values form via `tau_values`
+# (the :theo1 grid is rounded to even averaging factors there).
+theo1(data::PhaseData,     taus::TauMode; kwargs...) = theo1(data, tau_values(taus, length(data.x), :theo1); kwargs...)
+theo1(data::FrequencyData, taus::TauMode; kwargs...) = theo1(data, tau_values(taus, length(data.y), :theo1); kwargs...)
+theoh(data::PhaseData,     taus::TauMode; kwargs...) = theoh(data, tau_values(taus, length(data.x), :theoh); kwargs...)
+theoh(data::FrequencyData, taus::TauMode; kwargs...) = theoh(data, tau_values(taus, length(data.y), :theoh); kwargs...)
+
+# Zero-arg convenience: octave-spaced m_values up to each kernel's
+# algorithmic m-max (see `_default_m_values`). All kwargs pass through.
+theo1(data::PhaseData;     kwargs...) = theo1(data, _default_m_values(length(data.x), :theo1); kwargs...)
+theo1(data::FrequencyData; kwargs...) = theo1(data, _default_m_values(length(data.y), :theo1); kwargs...)
+theoh(data::PhaseData;     kwargs...) = theoh(data, _default_m_values(length(data.x), :theoh); kwargs...)
+theoh(data::FrequencyData; kwargs...) = theoh(data, _default_m_values(length(data.y), :theoh); kwargs...)

@@ -4,10 +4,11 @@
 # logs, CSV dumps from a data-acquisition system. SigmaTau's IO surface for
 # all of them is small: [`read_phase`](@ref) and [`read_frequency`](@ref)
 # bring raw records into a [`PhaseData`](@ref) or [`FrequencyData`](@ref)
-# container, [`fillgaps`](@ref) and [`detrend`](@ref) clean them up, and
-# [`save_result`](@ref) / [`save_suite`](@ref) write finished analyses to
-# plain tab-separated files that [`load_result`](@ref) / [`load_suite`](@ref)
-# read back. This tutorial walks that whole path.
+# container, [`fillgaps`](@ref), [`remove_outliers`](@ref), and
+# [`detrend`](@ref) clean them up, and [`save`](@ref) writes data records and
+# finished analyses to plain text files that `read_phase` /
+# [`load_result`](@ref) / [`load_suite`](@ref) read back. This tutorial walks
+# that whole path.
 #
 # Covered here:
 #
@@ -18,17 +19,16 @@
 # 4. A counter CSV in engineering units: `scaling`, and the `tau0` units trap.
 # 5. The escape hatch: constructing a `PhaseData` by hand when no reader
 #    keyword fits.
-# 6. Data preparation: `fillgaps` for dropouts and outliers, `detrend` for
-#    offsets and drift.
-# 7. Saving and sharing: `save_result` / `load_result` for one deviation,
-#    `save_suite` / `load_suite` for a whole session.
+# 6. Data preparation: `fillgaps` for dropouts, `find_outliers` /
+#    `remove_outliers` for glitches, `detrend` for offsets and drift.
+# 7. Saving and sharing: `save` for data records, `save_result` /
+#    `save_suite` for one deviation or a whole session, and the loaders.
 #
 # Everything below writes only to a temporary directory and runs as-is with
 # `julia --project=examples examples/04_reading_your_data.jl`.
 
 using SigmaTau
 using Random
-using Statistics
 
 Random.seed!(20260609)
 
@@ -199,25 +199,31 @@ adev(pd_filled, [8]; ci = false).dev
 # absent samples become `NaN`, and the same fill runs. This requires a time
 # column.
 #
-# The same idiom handles outliers. `SigmaTau` has no automatic outlier
-# detector; standard practice [riley-2008-sp1065](@cite) is the
-# median-absolute-deviation test on the frequency record — flag samples far
-# from the median, set them to `NaN`, and fill:
+# The same machinery handles outliers. [`find_outliers`](@ref) implements
+# standard practice [riley-2008-sp1065](@cite) — the median-absolute-deviation
+# test on the frequency record, flagging samples more than `nsigma` scaled
+# MADs from the median:
 
 y      = diff(pd_filled.x) ./ τ₀
 y[700] = 3e-9                          # inject a counter glitch
+fd_glitchy = FrequencyData(y, τ₀)
 
-med = median(y)
-bad = abs.(y .- med) .> 5 * median(abs.(y .- med)) / 0.6745
-y[bad] .= NaN
-fd_clean = fillgaps(FrequencyData(y, τ₀))
+find_outliers(fd_glitchy)
 
-count(bad), adev(fd_clean, [8]; ci = false).dev[1]
+# The scale factor 0.6745 inside the test rescales the median absolute
+# deviation into an estimate of the standard deviation for normally
+# distributed data, and the default `nsigma = 5` is the deglitching threshold
+# in those units (Stable32's default for its outlier check). On a `PhaseData`
+# the same call tests the *first differences* — a phase glitch appears as a
+# step in frequency — and flags the phase sample(s) where each step lands.
+#
+# [`remove_outliers`](@ref) completes the idiom: flag, set `NaN`, and impute
+# with the same Howe fill as `fillgaps`, so the replacement preserves the
+# noise character:
 
-# The factor 0.6745 rescales the median absolute deviation into an estimate
-# of the standard deviation for normally distributed data, and 5 is the
-# deglitching threshold in those units (Stable32's default for its outlier
-# check).
+fd_clean = remove_outliers(fd_glitchy)
+
+adev(fd_clean, [8]; ci = false).dev[1]
 
 # ## Removing offsets and drift: `detrend`
 #
@@ -255,6 +261,32 @@ fd_flat2.y ≈ fd_flat.y
 # *phase* data, `:linear` removes a constant frequency offset — not a
 # frequency drift. To remove a linear frequency drift, detrend the frequency
 # representation (`detrend(FrequencyData(diff(pd.x) ./ pd.tau0, pd.tau0))`).
+
+# ## Saving a data record: `save`
+#
+# The trip out of SigmaTau matters too: generate a reference record with
+# [`noise_gen`](@ref) — or clean up a measured one — and hand the samples to
+# software outside SigmaTau. [`save`](@ref) writes any `PhaseData` /
+# `FrequencyData` as a plain two-column text file (sample time in seconds,
+# value) behind a short comment header recording the provenance and the
+# sample interval:
+
+wfm      = noise_gen(PhaseData, 1024, τ₀; sigma1 = Dict(0 => 1e-12))
+datafile = joinpath(dir, "white_fm.txt")
+save(datafile, wfm)
+
+foreach(println, readlines(datafile)[1:5])
+
+# The `source` line reads `user` for records constructed in the session and
+# the originating path for records that came from `read_phase` /
+# `read_frequency` — every record carries that provenance in its `source`
+# field, and `detrend`, `fillgaps`, and `remove_outliers` preserve it. On the
+# way back in, `read_phase` skips the comment header automatically and picks
+# `tau0` up from it, so the file round-trips with no keyword arguments at
+# all:
+
+wfm2 = read_phase(datafile)
+wfm2.x ≈ wfm.x, wfm2.tau0 == wfm.tau0, wfm2.source == datafile
 
 # ## Saving one result: `save_result` and `load_result`
 #

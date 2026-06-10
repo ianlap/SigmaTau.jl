@@ -717,6 +717,50 @@ end
 
 
 # ──────────────────────────────────────────────────────────────────────
+# ── stab/core/tierms.jl ─────────────────────────────────────────────────
+
+# core/tierms.jl — RMS Time Interval Error kernel
+
+"""
+    _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+RMS Time Interval Error per NIST SP1065 §5.2.18 eq. 37. For each
+averaging factor `m`, the root-mean-square of the phase change over all
+`N − m` spans of `τ = m·τ₀`:
+
+```math
+\\mathrm{TIE\\,rms}(m\\tau_0) = \\sqrt{\\frac{1}{N-m}
+    \\sum_{i=1}^{N-m} \\bigl(x_{i+m} - x_i\\bigr)^2}
+```
+
+Units are seconds (a σ_x quantity, like MTIE/TDEV) — TIE rms is a phase
+measure, so no τ rescaling is applied. Matches allantools' `tierms`
+(its per-window max−min of the two samples `x[i]`, `x[i+m]` is exactly
+`|x[i+m] − x[i]|`). Returns NaN where `m ≥ N`.
+"""
+function _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    N = length(x)
+    devs = Vector{Float64}(undef, length(m_values))
+
+    for (k, m) in enumerate(m_values)
+        L = N - m
+        if L <= 0 || m < 1
+            devs[k] = NaN
+            continue
+        end
+        s = 0.0
+        @inbounds for i in 1:L
+            d = x[i + m] - x[i]
+            s += d * d
+        end
+        devs[k] = sqrt(s / L)
+    end
+
+    return devs
+end
+
+
+# ──────────────────────────────────────────────────────────────────────
 # ── stab/core/pdev.jl ───────────────────────────────────────────────────
 
 # core/pdev.jl — Parabolic deviation (Vernotte 2015 / 2020)
@@ -812,6 +856,131 @@ end
 
 
 # ──────────────────────────────────────────────────────────────────────
+# ── stab/core/theo.jl ───────────────────────────────────────────────────
+
+# core/theo.jl — Thêo1 / ThêoBR kernels (NIST SP1065 §5.2.15–5.2.16)
+
+"""
+    _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Computes the raw Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15
+eq. 30, with the 0.75 normalization of the original Howe & Peppler 2003
+definition (used by Stable32 and allantools; SP1065's printed eq. 30
+omits the 0.75, but its own Table 2 bias value a = 1.00 for white FM
+only holds with the factor included):
+
+```math
+\\mathrm{Theo1}(m, \\tau_0, N) = \\frac{1}{0.75\\,(N-m)\\,(m\\tau_0)^2}
+   \\sum_{i=1}^{N-m} \\sum_{\\delta=0}^{m/2-1} \\frac{1}{m/2-\\delta}
+   \\bigl[(x_i - x_{i-\\delta+m/2}) + (x_{i+m} - x_{i+\\delta+m/2})\\bigr]^2
+```
+
+Defined for even `m` with `2 ≤ m ≤ N − 1` (SP1065 states the statistic
+for `m ≥ 10`; smaller even factors are computed but carry little Theo1
+benefit over ADEV). Odd or out-of-range `m` yield NaN. The effective
+averaging time of a Thêo1 value is `τ = 0.75·m·τ0` (SP1065 §5.2.15).
+
+The double sum is O((N−m)·m/2) per averaging factor — O(N·m) — unlike
+the O(N) Allan kernels; the largest factors dominate, so a full even-m
+sweep on a long record costs O(N³) overall. The loop is δ-major with a
+SIMD inner i-loop and no allocations; entries of `m_values` are
+processed in parallel across threads.
+"""
+function _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    devs = Vector{Float64}(undef, length(m_values))
+    Threads.@threads :dynamic for k in eachindex(m_values)
+        devs[k] = _theo1_dev_at(x, m_values[k], tau0)
+    end
+    return devs
+end
+
+# Single-m Thêo1 deviation; NaN for odd m or m outside [2, N−1].
+function _theo1_dev_at(x::Vector{Float64}, m::Int, tau0::Float64)
+    N = length(x)
+    (m < 2 || isodd(m) || m > N - 1) && return NaN
+
+    half = m ÷ 2
+    L = N - m
+    total = 0.0
+    @inbounds for delta in 0:(half - 1)
+        w = 1.0 / (half - delta)
+        s = 0.0
+        @simd for i in 1:L
+            d = x[i] - x[i - delta + half] + x[i + m] - x[i + delta + half]
+            s += d * d
+        end
+        total += w * s
+    end
+
+    return sqrt(total / (0.75 * L * (m * tau0)^2))
+end
+
+# Overlapping Allan *variance* at a single averaging factor, allowing a
+# single analysis window (L ≥ 1). Used only for the ThêoBR ratio terms,
+# where SP1065 eq. 33 reaches AVAR factors as large as m ≈ N/2 — one
+# window is acceptable inside an average over many ratio terms, while
+# the public `_adev_core` keeps its stricter L ≥ 2 guard.
+function _avar_var_at(x::Vector{Float64}, m::Int, tau0::Float64)
+    N = length(x)
+    L = N - 2m
+    (m < 1 || L < 1) && return NaN
+    s = 0.0
+    @inbounds @simd for i in 1:L
+        d2 = x[i + 2m] - 2.0 * x[i + m] + x[i]
+        s += d2 * d2
+    end
+    return s / (2.0 * L * (m * tau0)^2)
+end
+
+"""
+    _theobr_ratio(x::Vector{Float64}, tau0::Float64) → Float64
+
+ThêoBR automatic bias-removal factor per NIST SP1065 (Riley 2008)
+§5.2.16 eq. 33: the average over `i = 0…n`, `n = ⌊N/6 − 3⌋`, of the
+variance ratios `AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor
+ladders sample the same effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`),
+so each term is an AVAR/Theo1 comparison at matched averaging time.
+Multiply a Thêo1 *variance* by this factor (a deviation by its square
+root) to get the bias-removed ThêoBR estimate.
+
+Ratio terms whose AVAR has no analysis window (eq. 33's ladder reaches
+m ≈ N/2, where `N − 2m < 1` for some record lengths) or whose Thêo1 is
+not finite/positive are skipped and the average is taken over the
+computable terms. Returns NaN when no term is computable (`N < 19`).
+"""
+function _theobr_ratio(x::Vector{Float64}, tau0::Float64)
+    N = length(x)
+    n = N ÷ 6 - 3
+    n < 0 && return NaN
+
+    theo_devs = _theo1_core(x, [12 + 4i for i in 0:n], tau0)
+
+    total = 0.0
+    cnt = 0
+    for i in 0:n
+        avar = _avar_var_at(x, 9 + 3i, tau0)
+        tvar = theo_devs[i + 1]^2
+        if isfinite(avar) && isfinite(tvar) && tvar > 0
+            total += avar / tvar
+            cnt += 1
+        end
+    end
+
+    return cnt == 0 ? NaN : total / cnt
+end
+
+# ThêoH segment rule (SP1065 §5.2.16 eq. 34): requested grid points are
+# τ-grid factors (target τ = m·τ0). Points at or below the crossover
+# k = 20 % of the record span T = (N−1)·τ0 come from overlapping ADEV at
+# that m; points above come from ThêoBR at the even Thêo1 factor whose
+# effective τ = 0.75·m_theo·τ0 best matches m·τ0.
+_theoh_is_adev(m::Int, N::Int) = m <= 0.2 * (N - 1)
+
+# Even Thêo1 factor nearest to m/0.75 = 4m/3 (exact whenever 3 | m).
+_theoh_theo_m(m::Int) = 2 * max(1, round(Int, m / 1.5))
+
+
+# ──────────────────────────────────────────────────────────────────────
 # ── analysis-window counts ──────────────────────────────────────────────
 
 """
@@ -871,10 +1040,30 @@ function _neff_count(dev_sym::Symbol, N::Int, m::Int)
         # change the record length, so the count is unaffected.
         nsubs = N - 4m + 1
         return (m >= 1 && nsubs >= 1) ? nsubs : 0
-    elseif dev_sym === :mtie
+    elseif dev_sym === :mtie || dev_sym === :tierms
         # _mtie_core: N−m fully-populated windows of m+1 samples, NaN when ≤ 0.
+        # _tierms_core: the same N−m spans of m·τ₀ (one squared difference
+        # each), NaN when ≤ 0 (or m < 1).
+        (dev_sym === :tierms && m < 1) && return 0
         L = N - m
         return L > 0 ? L : 0
+    elseif dev_sym === :theo1
+        # _theo1_dev_at: i in 1:N−m outer windows; NaN for odd m or m
+        # outside [2, N−1]. (allantools reports the total inner-term count
+        # (N−m)·m/2 instead; we count outer analysis windows, matching the
+        # deverr normalization √(N−m) both use.)
+        (m < 2 || isodd(m) || m > N - 1) && return 0
+        return N - m
+    elseif dev_sym === :theoh
+        # theoh: ADEV count below/at the 0.2·T crossover, Thêo1 count at the
+        # mapped even factor above it. Mirrors the branch rule in the public
+        # `theoh` wrapper exactly.
+        if _theoh_is_adev(m, N)
+            L = N - 2m
+            return L >= 2 ? L : 0
+        end
+        mt = _theoh_theo_m(m)
+        return (mt >= 2 && mt <= N - 1) ? N - mt : 0
     end
     throw(ArgumentError("_neff_count: unknown deviation :$dev_sym"))
 end

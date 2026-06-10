@@ -188,17 +188,34 @@ table.
 
 ```math
 \mathrm{Theo1}(m, \tau_0, N) \;=\;
-\frac{1}{(N - m)\,(0.75\,m\,\tau_0)^2}\,
+\frac{1}{0.75\,(N - m)\,(m\,\tau_0)^2}\,
 \sum_{i=1}^{N-m}\,\sum_{\delta=0}^{m/2-1}
 \frac{1}{m/2 - \delta}\,
-\bigl(x_i - x_{i-\delta+m/2} + x_{i+m} - x_{i+\delta+m/2}\bigr)^2.
+\bigl[(x_i - x_{i-\delta+m/2}) + (x_{i+m} - x_{i+\delta+m/2})\bigr]^2 ,
 ```
 
-[riley-2008-sp1065](@cite)
+for even `m` with `2 ≤ m ≤ N − 1` (SP1065 eq. 30; the printed equation
+omits the 0.75 normalization of the original Howe & Peppler definition,
+but SP1065's own Table 2 bias value of 1.00 for white FM, Stable32, and
+allantools all require it) [riley-2008-sp1065](@cite). The effective
+averaging time of a Theo1 value is `τ = 0.75·m·τ₀`, and that is the τ
+SigmaTau reports.
 
-!!! note "Planned implementation"
-    The mathematical definition is documented above. The `theo1`
-    function is not yet implemented in `SigmaTau`.
+!!! note "Implemented"
+    `theo1(data, m_values; ci=true, correct_bias=true, confidence=…)`,
+    with the usual `TauMode` / zero-argument / `FrequencyData` dispatch
+    chains. `m_values` are even Theo1 averaging factors
+    (`tau_values(mode, N, :theo1)` rounds a grid to even and dedupes);
+    `r.tau` holds the effective `0.75·m·τ₀`. `correct_bias=true`
+    (default) applies the ThêoBR automatic bias removal of SP1065
+    eq. 33 — the average of the matched-τ `AVAR(9+3i)/Theo1(12+4i)`
+    variance ratios over `i = 0…⌊N/6−3⌋` — so the default output is the
+    bias-removed ThêoBR; `correct_bias=false` gives raw eq. 30 Theo1.
+    EDF/CIs use the per-noise-type empirical formulas of SP1065 §5.2.15
+    Table 3 with `r = 0.75m`. The raw kernel is cross-validated against
+    allantools 2024.06 to machine precision (`test/stab/theo.jl`);
+    allantools reports the same values at `τ = m·τ₀`, a definitional
+    offset resolved here in favor of SP1065/Stable32.
 
 ## ThêoH — composite Theo1 + ADEV estimator
 
@@ -213,9 +230,30 @@ record. Banerjee & Matsakis recommend ThêoH as the default
 long-record stability summary in modern timekeeping practice
 [banerjee-2023-timekeeping](@cite).
 
-!!! note "Planned implementation"
-    The mathematical definition is documented above. The `theoh`
-    function is not yet implemented in `SigmaTau`.
+Per SP1065 eq. 34 the composite is
+
+```math
+\mathrm{ThêoH}(m, \tau_0, N) \;=\;
+\begin{cases}
+\mathrm{AVAR}(m, \tau_0, N) & \text{for } \tau = m\tau_0 \le k,\\[2pt]
+\mathrm{ThêoBR}(m_\theta, \tau_0, N) & \text{for } \tau = 0.75\,m_\theta\tau_0 > k,\ m_\theta \text{ even},
+\end{cases}
+```
+
+with crossover `k` = 20 % of the record span `T = (N−1)·τ₀`
+[riley-2008-sp1065](@cite).
+
+!!! note "Implemented"
+    `theoh(data, m_values; ci=true, confidence=…)`, with the usual
+    `TauMode` / zero-argument / `FrequencyData` dispatch chains.
+    `m_values` are τ-grid factors (target `τ = m·τ₀`, not necessarily
+    even): points with `m·τ₀ ≤ k` come from overlapping ADEV at `m`,
+    points above from ThêoBR at the even Theo1 factor nearest `4m/3`
+    (exact whenever `3 | m`), each reported at its realized τ. CIs use
+    the Greenhall–Riley ADEV EDF on the ADEV segment and the SP1065
+    Table 3 Theo1 EDF on the ThêoBR segment. ThêoH always carries the
+    eq. 33 bias removal; raw Theo1 is available via
+    `theo1(…; correct_bias=false)`.
 
 ## Dynamic Allan deviation — DADEV
 

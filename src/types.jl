@@ -31,11 +31,17 @@ struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
     x::Vector{T}
     "Base sample interval τ₀ in seconds."
     tau0::Float64
-    function PhaseData(x::Vector{T}, tau0::Real = 1.0) where {T<:AbstractFloat}
+    """Provenance: `"user"` for directly constructed records, the originating
+    file path for records returned by [`read_phase`](@ref). Preserved by
+    [`detrend`](@ref), [`fillgaps`](@ref), and [`remove_outliers`](@ref), and
+    recorded in the header written by [`save`](@ref)."""
+    source::String
+    function PhaseData(x::Vector{T}, tau0::Real = 1.0;
+                       source::AbstractString = "user") where {T<:AbstractFloat}
         tau0 > 0 || throw(ArgumentError("PhaseData: tau0 must be positive, got $tau0"))
         length(x) >= 2 || throw(ArgumentError(
             "PhaseData: need at least 2 phase samples, got $(length(x))"))
-        return new{T}(x, Float64(tau0))
+        return new{T}(x, Float64(tau0), String(source))
     end
 end
 
@@ -55,12 +61,35 @@ struct FrequencyData{T<:AbstractFloat} <: AbstractTimingData
     y::Vector{T}
     "Base sample interval τ₀ in seconds."
     tau0::Float64
-    function FrequencyData(y::Vector{T}, tau0::Real = 1.0) where {T<:AbstractFloat}
+    """Provenance: `"user"` for directly constructed records, the originating
+    file path for records returned by [`read_frequency`](@ref). Preserved by
+    [`detrend`](@ref), [`fillgaps`](@ref), and [`remove_outliers`](@ref), and
+    recorded in the header written by [`save`](@ref)."""
+    source::String
+    function FrequencyData(y::Vector{T}, tau0::Real = 1.0;
+                           source::AbstractString = "user") where {T<:AbstractFloat}
         tau0 > 0 || throw(ArgumentError("FrequencyData: tau0 must be positive, got $tau0"))
         length(y) >= 2 || throw(ArgumentError(
             "FrequencyData: need at least 2 frequency samples, got $(length(y))"))
-        return new{T}(y, Float64(tau0))
+        return new{T}(y, Float64(tau0), String(source))
     end
+end
+
+# Compact one-line displays for the data records — sample count, τ₀, and the
+# provenance only when it is not the "user" default. Full-vector dumps would
+# swamp the REPL for realistic record lengths.
+function Base.show(io::IO, p::PhaseData)
+    print(io, "PhaseData{", eltype(p.x), "}(", length(p.x), " samples, τ₀=",
+              _show4g(p.tau0), " s")
+    p.source == "user" || print(io, ", source=", repr(p.source))
+    print(io, ")")
+end
+
+function Base.show(io::IO, f::FrequencyData)
+    print(io, "FrequencyData{", eltype(f.y), "}(", length(f.y), " samples, τ₀=",
+              _show4g(f.tau0), " s")
+    f.source == "user" || print(io, ", source=", repr(f.source))
+    print(io, ")")
 end
 
 
@@ -73,7 +102,8 @@ end
 Unified return type for every stability calculation.
 
 The `noise_type`, `ci`, and `edf` vectors are empty when the calculation was
-invoked with `ci=false` (and always for `mtie`); `neff` is always populated.
+invoked with `ci=false` (and always for `mtie`/`tierms`); `neff` is always
+populated.
 Per-τ confidence bounds read as `r.ci[i].lo` / `r.ci[i].hi`; the
 [`ci_lower`](@ref) / [`ci_upper`](@ref) accessors return them as plain
 vectors.

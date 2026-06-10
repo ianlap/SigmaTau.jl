@@ -278,11 +278,17 @@ const LK = LegacyKernels
     @testset "Stable32 cross-validation (test/fixtures/validation/)" begin
         # Phase fixture and Stable32 reference outputs live in
         # test/fixtures/validation/. Stable32 reports sigma values with 4-5
-        # significant figures, so the agreement floor is rtol≈1e-4. The new
-        # raw _*_core kernels match Stable32's reported sigmas tightly for
-        # ADEV/MDEV/HDEV/MHDEV/TDEV/TOTDEV; HTOTDEV and MTOTDEV agree with
-        # Stable32 only after removing our SP1065 bias correction (Stable32
-        # reports unbiased values per `comparison_report.md`).
+        # significant figures, so the agreement floor is rtol≈1e-4. The raw
+        # _*_core kernels match Stable32's reported sigmas at that floor for
+        # ADEV/MDEV/HDEV/TDEV and for MTOTDEV (Stable32 reports MTOT
+        # *uncorrected*; measured max relerr 3.4e-5 on this fixture).
+        # TOTDEV and HTOTDEV are the opposite case: Stable32 bias-corrects
+        # them by default (Howe/Walter B = 1 − a·τ/T for TOTDEV's divergent
+        # FM rows; Howe 2005 1/sqrt(1+a) for HTOTDEV), so the raw kernels
+        # checked here differ from Stable32 at the corrected rows by exactly
+        # those factors. The bias-corrected public API matches Stable32 to
+        # ~1e-4 (see the dedicated TOTDEV testset below and
+        # docs/src/validation/stable32.md for the full comparison).
         ref_dir = joinpath(@__DIR__, "..", "fixtures", "validation")
         dat_path = joinpath(ref_dir, "stable32gen.DAT")
         csv_path = joinpath(ref_dir, "stable32out", "stable32_data_full.csv")
@@ -305,10 +311,11 @@ const LK = LegacyKernels
             # Pre-compute prefix sums for modified kernels.
             x_cs = pushfirst!(cumsum(x), 0.0)
 
-            # Tolerance per kernel family. Tight (1e-4) for kernels the legacy
-            # comparison report flagged as <1e-5 agreement; looser for kernels
-            # where there is a documented bias-correction mismatch with
-            # Stable32 (htot, mtot — see test/fixtures/.../comparison_report.md).
+            # Tolerance per kernel family. Tight (1e-4, the 5-sig-fig fixture
+            # floor) where the raw kernel is the statistic Stable32 reports;
+            # looser only where Stable32 applies a bias correction that the
+            # raw kernel deliberately omits (totdev/htotdev — see the testset
+            # header comment).
             tight = 1e-4
 
             n_checked = 0
@@ -335,25 +342,34 @@ const LK = LegacyKernels
                     got = (m * tau0) * mdev_v / sqrt(3.0)
                     @test got ≈ sigma_ref rtol=tight
                 elseif kind == "Total"
-                    # Per `comparison_report.md`: agrees closely at short τ;
-                    # diverges to O(10%) at longest τ due to boundary-reflection
-                    # convention differences. The new kernel inherits the
-                    # legacy SigmaTau reflection — this is a Stable32 vs
-                    # SigmaTau policy choice, not a bug.
-                    got = sqrt(LK.totdev_var(x, m, tau0))
-                    @test got ≈ sigma_ref rtol=0.15
+                    # The canonical Howe/SP1065 eq-25 raw kernel (what
+                    # `_totdev_core` implements) matches Stable32 at the
+                    # fixture floor except the rows where Stable32 applies
+                    # the Howe/Walter B = 1 − a·τ/T correction (FLFM/RWFM;
+                    # 1.5% at the m=512 FLFM row here). The bias-corrected
+                    # API matches every row to 1e-4 — see the dedicated
+                    # TOTDEV testset below. (`LK.totdev_var`, the retired
+                    # detrend+reflect variant, is deliberately NOT compared
+                    # against Stable32: its boundary convention diverges at
+                    # long τ and it exists only for kernel archaeology.)
+                    got = sqrt(LK.totdev_var_howe(x, m, tau0))
+                    @test got ≈ sigma_ref rtol=0.02
                 elseif kind == "Hadamard Total"
-                    # Stable32 reports unbiased; our API applies B(α) for HTOT.
-                    # `comparison_report.md` documents a ~0.5% offset for α=0
-                    # plus larger boundary-driven differences at long τ.
+                    # Stable32 bias-corrects HTOT by default (Howe 2005,
+                    # factors exactly 1/sqrt(1+a)); this raw kernel omits the
+                    # correction, so corrected rows differ by up to ~8.4%
+                    # (FLFM, m=512). The corrected API (`correct_bias=true`)
+                    # matches Stable32 to ≤3e-5 at every matching-alpha tau.
                     got = sqrt(LK.htotdev_var(x, m, tau0))
                     @test got ≈ sigma_ref rtol=0.10
                 elseif kind == "Modified Total"
-                    # comparison_report shows ~3% match between Stable32 and
-                    # our raw kernel (the 30% discrepancy at the API level is
-                    # the SP1065 bias factor B≈1.27 we apply on top).
+                    # Stable32 reports MTOT *uncorrected*, so the raw kernel
+                    # matches it directly at the 5-sig-fig fixture floor
+                    # (measured max relerr 3.4e-5). The 3–14% difference seen
+                    # at the API level is the deliberate sqrt(B) SP1065
+                    # unbias policy applied on top (`correct_bias=true`).
                     got = sqrt(LK.mtotdev_var(x, m, tau0))
-                    @test got ≈ sigma_ref rtol=0.05
+                    @test got ≈ sigma_ref rtol=5e-4
                 else
                     continue   # ThêoH / Time Total / non-overlapping not implemented
                 end
@@ -1273,3 +1289,6 @@ include("suite.jl")
 include("spectral.jl")
 include("mhtotdev_mc.jl")
 include("pdev_edf_mc.jl")
+include("theo.jl")
+include("tierms.jl")
+include("nch.jl")

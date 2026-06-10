@@ -222,3 +222,30 @@ plot_positive_tch!(taus, σ3_tch; label = "Clock 3 TCH",   ls = :dash, lw = 1.5)
 # clock's σ from the full N(N−1)/2 pairwise differences via
 # weighted least squares; Riley's generalized TCH papers are the
 # usual starting point.
+
+# ## 10. The one-call version: `nch`
+#
+# Everything above is what `SigmaTau.nch` does internally — and it
+# generalizes to any number of clocks N ≥ 3 via the standard
+# N-cornered-hat inversion (this three-clock case is exactly the
+# classic formula). Feed it the pairwise `StabilityResult`s in the
+# cyclic order A−B, B−C, C−A (orientation of each difference record
+# doesn't matter) and get one separated result per clock:
+
+r12 = adev(pd12, m_values; ci = false)
+r13 = adev(pd13, m_values; ci = false)
+r23 = adev(pd23, m_values; ci = false)
+
+clock1, clock2, clock3 = nch(r12, r23, r13)   # (A−B, B−C, C−A)
+
+# The one-call results match the manual derivation above (NaN where
+# the inversion went negative, exactly like `tch_solve`):
+
+@assert isapprox(clock1.dev, σ1_tch; rtol = 1e-12, nans = true)
+@assert isapprox(clock2.dev, σ2_tch; rtol = 1e-12, nans = true)
+@assert isapprox(clock3.dev, σ3_tch; rtol = 1e-12, nans = true)
+@info "nch reproduces the manual TCH solution" clock1 clock2 clock3
+
+# For N > 3 clocks, build an upper-triangular matrix of pairwise
+# results instead — `pairwise[i, j]` for `i < j` — and call
+# `nch(pairwise)` to get a `Vector{StabilityResult}`, one per clock.

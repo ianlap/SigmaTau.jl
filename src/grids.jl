@@ -53,13 +53,17 @@ Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
 | `:htotdev`                | `(N − 1) ÷ 3`  |
 | `:mhdev`, `:htdev`        | `(N − 1) ÷ 4`  |
 | `:mhtotdev`               | `N ÷ 4`        |
-| `:mtie`                   | `N − 1`        |
+| `:mtie`, `:tierms`        | `N − 1`        |
+| `:theo1`                  | `2·((N − 1) ÷ 2)` (largest even ≤ N − 1) |
+| `:theoh`                  | `⌊0.75 · 2·((N − 1) ÷ 2)⌋` (τ-grid units) |
 
 The ordinary and modified estimators require ≥2 analysis windows at the largest
 τ — a single window is one raw difference (EDF ≈ 1) — so their caps sit one step
 below the total family, whose subsequence extension keeps a single subsequence a
 valid long-τ estimate. (HTOTDEV's general branch runs on `y = diff(x)` of length
 `N−1`, giving `(N−1) ÷ 3`; MTOTDEV runs on phase directly, giving `N ÷ 3`.)
+Thêo1 is defined at even `m ≤ N − 1` (SP1065 eq. 30); ThêoH's grid is in τ
+units (`τ = m·τ0`), reaching Thêo1's effective-τ limit `0.75·(N−1)·τ0`.
 
 Throws `ArgumentError` for an unknown kernel symbol or an `N` too short to admit
 any `m ≥ 1`.
@@ -87,8 +91,12 @@ function _kernel_m_max(N::Int, kernel::Symbol)
         (N - 1) ÷ 4
     elseif kernel === :mhtotdev
         N ÷ 4
-    elseif kernel === :mtie
+    elseif kernel === :mtie || kernel === :tierms
         N - 1
+    elseif kernel === :theo1
+        2 * ((N - 1) ÷ 2)
+    elseif kernel === :theoh
+        floor(Int, 0.75 * (2 * ((N - 1) ÷ 2)))
     else
         throw(ArgumentError("tau_values: unknown kernel symbol :$kernel"))
     end
@@ -137,9 +145,20 @@ Note the name reads like seconds, but the returned values are averaging factors,
 matching the existing `m_values` convention. `kernel` is the deviation symbol
 (`:adev`, `:mdev`, …) that determines the m-max clamp; see [`_kernel_m_max`](@ref).
 
+For `:theo1` (defined at even averaging factors only, SP1065 eq. 30) odd grid
+entries are rounded up to the next even value, deduplicated, and clamped to the
+even m-max. `:theoh` grids are plain integers — its m-values are τ-grid factors
+(target `τ = m·τ0`) and the even-factor conversion for the Thêo1 segment
+happens inside [`theoh`](@ref).
+
 `tau_values(Octave, N, kernel)` equals [`_default_m_values`](@ref)`(N, kernel)`.
 """
-tau_values(mode::TauMode, N::Int, kernel::Symbol) = _grid(mode, _kernel_m_max(N, kernel))
+function tau_values(mode::TauMode, N::Int, kernel::Symbol)
+    m_max = _kernel_m_max(N, kernel)
+    ms = _grid(mode, m_max)
+    kernel === :theo1 && return unique!([min(2 * ((m + 1) ÷ 2), m_max) for m in ms])
+    return ms
+end
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -207,16 +226,19 @@ Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
 | `:htotdev`                | `(N − 1) ÷ 3`  |
 | `:mhdev`, `:htdev`        | `(N − 1) ÷ 4`  |
 | `:mhtotdev`               | `N ÷ 4`        |
-| `:mtie`                   | `N − 1`        |
+| `:mtie`, `:tierms`        | `N − 1`        |
+| `:theo1`                  | `2·((N − 1) ÷ 2)` (largest even ≤ N − 1) |
+| `:theoh`                  | `⌊0.75 · 2·((N − 1) ÷ 2)⌋` (τ-grid units) |
 
 The ordinary and modified estimators require ≥2 analysis windows at the
 largest τ (a single window is one raw difference, EDF ≈ 1), so their caps
 sit one step below the total family, whose subsequence extension keeps a
 single subsequence a valid long-τ estimate. (HTOTDEV's general branch runs
 on `y = diff(x)` of length `N−1`, giving `(N−1) ÷ 3`; MTOTDEV runs on phase
-directly, giving `N ÷ 3`.)
+directly, giving `N ÷ 3`.) `:theo1` grids are rounded to even averaging
+factors and deduplicated (see [`tau_values`](@ref)).
 
 Throws `ArgumentError` for unknown kernel symbols or `N` too short to
 admit any `m ≥ 1`.
 """
-_default_m_values(N::Int, kernel::Symbol) = _grid(Octave, _kernel_m_max(N, kernel))
+_default_m_values(N::Int, kernel::Symbol) = tau_values(Octave, N, kernel)

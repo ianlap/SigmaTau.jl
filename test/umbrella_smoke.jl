@@ -22,16 +22,17 @@ end
     # Must be accessible bare under `using SigmaTau`.
     for sym in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
                 :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
-                :mtie, :pdev,
+                :mtie, :tierms, :pdev, :theo1, :theoh,
                 :Sy, :Sx, :L,
-                :stability, :DEFAULT_DEVIATIONS,
+                :stability, :DEFAULT_DEVIATIONS, :nch,
                 :identify_noise, :calculate_edf, :confidence_intervals,
                 :bias_correction, :DEFAULT_CONFIDENCE,
                 :TauMode, :AllTaus, :Octave, :HalfOctave,
                 :QuarterOctave, :Decade, :HalfDecade, :tau_values,
-                :save_result, :load_result, :save_suite, :load_suite,
+                :save, :save_result, :load_result, :save_suite, :load_suite,
                 :read_phase, :read_frequency,
                 :detrend, :fillgaps,
+                :find_outliers, :remove_outliers,
                 :noise_gen)
         @test isdefined(@__MODULE__, sym)
     end
@@ -44,7 +45,7 @@ end
     exported = names(SigmaTau)
     cores = (:_adev_core, :_mdev_core, :_tdev_core, :_hdev_core, :_mhdev_core,
              :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,
-             :_mtie_core, :_pdev_core)
+             :_mtie_core, :_tierms_core, :_pdev_core, :_theo1_core)
     for sym in cores
         @test isdefined(SigmaTau, sym)   # reachable as `SigmaTau._adev_core`
         @test sym ∉ exported             # but not part of the exported surface
@@ -77,7 +78,7 @@ end
 
     for f in (adev, mdev, tdev, hdev, mhdev, htdev,
               totdev, mtotdev, ttotdev, htotdev, mhtotdev,
-              mtie, pdev)
+              mtie, tierms, pdev)
         a = f(fd,    ms; ci=false)
         b = f(pd_eq, ms; ci=false)
         @test a.dev ≈ b.dev

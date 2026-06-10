@@ -9,6 +9,9 @@ using SigmaTau
         @test p isa AbstractTimingData
         # tau0 defaults to 1.0
         @test PhaseData([1.0, 2.0, 3.0]).tau0 == 1.0
+        # source defaults to "user"; explicit source is recorded
+        @test p.source == "user"
+        @test PhaseData([1.0, 2.0, 3.0]; source="a/b.dat").source == "a/b.dat"
     end
 
     @testset "FrequencyData" begin
@@ -18,6 +21,29 @@ using SigmaTau
         @test f isa AbstractTimingData
         # tau0 defaults to 1.0
         @test FrequencyData([0.1, 0.2]).tau0 == 1.0
+        # source defaults to "user"; explicit source is recorded
+        @test f.source == "user"
+        @test FrequencyData([0.1, 0.2]; source="y.csv").source == "y.csv"
+    end
+
+    @testset "data record show" begin
+        # Compact one-line summaries; the source appears only when not "user".
+        p = PhaseData([1.0, 2.0, 3.0], 2.0)
+        sp = sprint(show, p)
+        @test occursin("PhaseData", sp)
+        @test occursin("3 samples", sp)
+        @test occursin("2", sp)                  # τ₀
+        @test !occursin("source", sp)            # "user" stays silent
+        pf = PhaseData([1.0, 2.0, 3.0], 2.0; source="phase.dat")
+        @test occursin("source=\"phase.dat\"", sprint(show, pf))
+
+        f = FrequencyData([0.1, 0.2], 0.5)
+        sf = sprint(show, f)
+        @test occursin("FrequencyData", sf)
+        @test occursin("2 samples", sf)
+        @test !occursin("source", sf)
+        ff = FrequencyData([0.1, 0.2], 0.5; source="freq.csv")
+        @test occursin("source=\"freq.csv\"", sprint(show, ff))
     end
 
     @testset "StabilityResult fields" begin
