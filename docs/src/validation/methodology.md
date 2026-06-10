@@ -8,9 +8,12 @@ references exist:
 2. **allantools** (A. Wallin) — Python library, second independent
    numerical reference.
 
-Agreement with the shipped fixtures defines the rtol floor; documented
-disagreements are boundary-policy differences (TOTDEV/HTOTDEV/MTOTDEV
-reflection conventions). Estimators without an external implementation are
+Agreement with the shipped fixtures defines the rtol floor; the documented
+residuals are bias-correction policy (Stable32 corrects HTOTDEV by default
+but not MTOTDEV; SigmaTau corrects both) and the per-τ noise-identification
+convention (`identify_noise(…; detrend=false)` reproduces Stable32's
+assignments on the fixture). The raw total kernels match allantools to
+machine precision. Estimators without an external implementation are
 checked against inlined legacy kernels and internal identities.
 
 Validation is about *numerical agreement*, not speed. For head-to-head

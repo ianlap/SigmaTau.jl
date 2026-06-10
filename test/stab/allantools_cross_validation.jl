@@ -5,15 +5,15 @@
 # allantools_data_full.csv`); regenerate with
 # `python3 tools/regen_allantools_fixtures.py`.
 #
-# Why a third reference? Stable32 reports unbiased totals while our API
-# applies the SP1065 bias factor; allantools (default settings) sits
-# closer to Stable32 for raw-kernel comparison and lets us isolate
-# bias-policy disagreement from boundary-policy disagreement.
+# Why a third reference? allantools reports the *raw* total estimators
+# (no bias correction), while Stable32's policy is per-estimator (it
+# corrects TOTDEV and HTOTDEV but reports MTOTDEV raw). Comparing our
+# raw kernels against allantools therefore isolates pure kernel
+# agreement from bias-correction policy — and the raw kernels match
+# allantools to machine precision (≤4.4e-15 measured on this fixture).
 #
 # Comparison contract: raw legacy kernels (LK.* — bias-free) vs
-# allantools' default output. Tolerances mirror the existing Stable32
-# testset (`runtests.jl`), since the policy disagreements between
-# allantools and Stable32 on totals are documented and small.
+# allantools' default output, at the shared 1e-11 cross-platform floor.
 
 @testset "allantools cross-validation" begin
     ref_dir = joinpath(@__DIR__, "..", "fixtures", "validation")
@@ -36,20 +36,16 @@
         # Allantools CSV columns: Type, AF, Tau, N, Sigma.
         rows = [split(line, ',') for line in readlines(at_csv)[2:end]]
 
-        # Per-kernel rtol. ADEV/MDEV/HDEV/TDEV agree tightly between
-        # SigmaTau and allantools (same kernel definition, same
-        # boundary handling). TOTDEV / HTOTDEV / MTOTDEV agree less
-        # tightly — different boundary-extension conventions.
+        # Single shared rtol: every raw kernel — including HTOTDEV and
+        # MTOTDEV — matches allantools at machine precision (measured
+        # worst case 4.4e-15 on this fixture, macOS x86_64 2026-06-10).
         #
-        # `tight = 1e-11` (was 1e-4): the regen script now writes the
-        # CSV at %.17e (round-trip-exact Float64) instead of %.6e
+        # `tight = 1e-11` (was 1e-4): the regen script writes the CSV
+        # at %.17e (round-trip-exact Float64) instead of %.6e
         # (~7 sig figs), so the fixture itself preserves machine
-        # precision. Three-way verification on macOS x86_64 (2026-05-08)
-        # shows ours/legacy/allantools agree to ≤ 8.5e-14 worst case
-        # on this fixture, so 1e-11 is comfortable headroom for the
+        # precision; 1e-11 is comfortable headroom for the
         # ~10,000-ULP cross-platform LLVM codegen drift we see on
-        # Linux x86_64. TOTDEV/HTOTDEV/MTOTDEV stay at their original
-        # boundary-policy floors below.
+        # Linux x86_64.
         tight = 1e-11
 
         n_checked = Dict{String,Int}()
@@ -88,11 +84,13 @@
                 got = SigmaTau._totdev_core(x, [m], tau0)[1]
                 rtol = 1e-7
             elseif kind == "Hadamard Total"
+                # Raw kernel, apples-to-apples with allantools' raw
+                # htotdev: machine precision (≤4.4e-15 measured).
                 got = sqrt(LK.htotdev_var(x, m, tau0))
-                rtol = 0.10   # ~0.5% bias + boundary effects
             elseif kind == "Modified Total"
+                # Raw kernel, apples-to-apples with allantools' raw
+                # mtotdev: machine precision (≤1.1e-15 measured).
                 got = sqrt(LK.mtotdev_var(x, m, tau0))
-                rtol = 0.05   # raw-kernel match per comparison_report.md
             else
                 continue
             end

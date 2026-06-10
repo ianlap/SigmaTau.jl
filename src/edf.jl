@@ -7,8 +7,9 @@ using Distributions
 
 Equivalent degrees of freedom for the chosen `method`. Uses the
 Greenhall–Riley spectral integrals for ADEV / MDEV / HDEV / MHDEV (via
-`_calc_edf_core`) and the published EDF coefficient tables for the
-total-family estimators.
+`_calc_edf_core`), the published EDF coefficient tables for the
+total-family estimators, and the SP1065 Table 3 empirical formulas for
+`:theo1` (via `_theo1_edf`).
 
 WPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 9 and
 FCS 2001 publish coefficients for α ∈ {0, -1, -2} only. For α ∈ {1, 2}
@@ -77,6 +78,8 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mhtotdev
             b, c = _coeff_mhtot(alpha)
             edfs[k] = b * (T / tau) - c
+        elseif method == :theo1
+            edfs[k] = _theo1_edf(alpha, m, N)
         elseif method == :pdev
             edfs[k] = _pvar_edf(alpha, m, N)
         else
@@ -194,17 +197,20 @@ end
 
 function _coeff_mhtot(alpha::Int)
     # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
-    # (tools/mc_mhtotdev.jl, full sweep at git d8a7ca7, seed 20260531, R=3000,
-    # N up to 32768); all fits R² ≥ 0.998. MHTOTDEV is novel to SigmaTau, so
-    # these have no external reference — see docs theory/mhtotdev_bias_edf.md.
-    # Both the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
-    # fit; they tie to within ΔR² ≤ 0.0005, so the Mod-Totvar form is used
-    # uniformly. Supersedes the prior unsourced values.
-    alpha == 2  && return (1.8534, 5.4817)
-    alpha == 1  && return (1.2185, 3.6691)
-    alpha == 0  && return (1.0998, 3.5040)
-    alpha == -1 && return (1.0300, 3.3868)
-    alpha == -2 && return (0.8132, 2.5406)
+    # (tools/mc_mhtotdev.jl, full sweep at git e9d209d, seed 20260531, R=3000,
+    # N up to 32768) against the shipped mhtotdev pipeline INCLUDING its
+    # default global least-squares drift removal (remove_drift=true), so the
+    # calibration matches what users compute; all fits R² ≥ 0.9983. MHTOTDEV
+    # is novel to SigmaTau, so these have no external reference — see docs
+    # theory/mhtotdev_bias_edf.md. Both the Mod-Totvar form below and the
+    # TotHvar form (T/τ)/(b0+b1·τ/T) were fit; they tie at the α = ±2 ends
+    # (|ΔR²| ≤ 7e-5) and Mod-Totvar fits better elsewhere (up to ΔR² = 2e-3),
+    # so the Mod-Totvar form is used uniformly.
+    alpha == 2  && return (1.8432, 5.5387)
+    alpha == 1  && return (1.2263, 3.9300)
+    alpha == 0  && return (1.1129, 3.9205)
+    alpha == -1 && return (1.0312, 3.9211)
+    alpha == -2 && return (0.8034, 3.0889)
     return (NaN, NaN)
 end
 
@@ -278,6 +284,41 @@ function _pvar_edf(alpha::Int, m::Int, N::Int)
     # ν falls to 1 at m₂ ≈ N/2 (single estimate) and is held there for any larger
     # m, rather than extrapolating the line below 1 (Eq. 22–23 / Fig. 2).
     return max(a * log(m) + b, 1.0)
+end
+
+"""
+    _theo1_edf(alpha::Int, m::Int, N::Int) → Float64
+
+Equivalent χ² degrees of freedom of the Thêo1 statistic at averaging factor
+`m` (even) on `N` phase samples, per the empirical formulas of NIST SP1065
+(Riley 2008) §5.2.15 Table 3 (Howe & Peppler 2003), with `r = 0.75·m` and the
+stated validity condition `τ0 ≤ T/10`. One closed form per power-law noise
+type; α outside {−2…2} returns NaN. Also used for ThêoBR / the Thêo1 segment
+of ThêoH — the bias-removal ratio is a scalar rescaling, which standard
+practice (Stable32) treats as not changing the degrees of freedom.
+"""
+function _theo1_edf(alpha::Int, m::Int, N::Int)
+    m < 2 && return NaN
+    r = 0.75 * m
+    Nf = Float64(N)
+    if alpha == 2        # W PM
+        return (0.86 * (Nf + 1.0) * (Nf - 4.0 * r / 3.0) / (Nf - r)) *
+               (r / (r + 1.14))
+    elseif alpha == 1    # F PM
+        return ((4.798 * Nf^2 - 6.374 * Nf * r + 12.387 * r) /
+                (sqrt(r + 36.6) * (Nf - r))) * (r / (r + 0.3))
+    elseif alpha == 0    # W FM
+        return ((4.1 * Nf + 0.8) / r - (3.1 * Nf + 6.5) / Nf) *
+               (r^1.5 / (r^1.5 + 5.2))
+    elseif alpha == -1   # F FM
+        return ((2.0 * Nf^2 - 1.3 * Nf * r - 3.5 * r) / (Nf * r)) *
+               (r^3 / (r^3 + 2.3))
+    elseif alpha == -2   # RW FM
+        return ((4.4 * Nf - 2.0) / (2.9 * r)) *
+               (((4.4 * Nf - 1.0)^2 - 8.6 * r * (4.4 * Nf - 1.0) + 11.4 * r^2) /
+                (4.4 * Nf - 3.0)^2)
+    end
+    return NaN
 end
 
 function _coeff_htot(alpha::Int)
@@ -372,16 +413,18 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
         elseif var_type == :mhtot
             # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl,
-            # full sweep at git d8a7ca7) over the τ/τ0 ≥ 16 validity window
-            # (Howe et al. 2000). Modeled as B = b0 + b1·(τ/T) — the same τ/T-linear
-            # form as :totvar — because the redder FM noises carry strong τ/T
-            # structure (the b1 term cuts the fit residual by ~46 % at FLFM and
-            # ~97 % at RWFM); for white/flicker noise b1 ≈ 0, so B ≈ constant.
-            # MHTOTDEV is ≈ unbiased for white/flicker (B ≈ 1) and reads high for
-            # redder FM (RWFM B ≈ 1.9 at small τ). MHTOTDEV is novel to SigmaTau —
+            # full sweep at git e9d209d) over the τ/τ0 ≥ 16 validity window
+            # (Howe et al. 2000), with the wrapper's default global drift removal
+            # (remove_drift=true) in the loop. Modeled as B = b0 + b1·(τ/T) — the
+            # same τ/T-linear form as :totvar. For the PM noises b1 ≈ 0 (B is
+            # constant); for the FM noises the b1 term carries both the boundary
+            # bias and the drift-removal suppression near τ → T and cuts the fit
+            # residual by ~53 % (WHFM) to ~97 % (RWFM). MHTOTDEV is ≈ unbiased
+            # for white/flicker PM (B ≈ 1) and reads high for redder FM
+            # (RWFM B ≈ 1.9 at small τ). MHTOTDEV is novel to SigmaTau —
             # no external reference; see docs theory/mhtotdev_bias_edf.md.
-            b0_t = Dict(2=>1.0644, 1=>0.9837, 0=>1.0193, -1=>1.2131, -2=>1.9432)
-            b1_t = Dict(2=>0.0165, 1=>0.0362, 0=>-0.0477, -1=>-0.3211, -2=>-3.5880)
+            b0_t = Dict(2=>1.0645, 1=>0.9839, 0=>1.0197, -1=>1.2142, -2=>1.9499)
+            b1_t = Dict(2=>-0.0034, 1=>-0.0048, 0=>-0.1772, -1=>-0.7024, -2=>-4.9096)
             aa = clamp(alpha, -2, 2)
             B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
         end

@@ -280,15 +280,27 @@ the simpler estimators reach long τ with usable confidence.
 
 !!! note "Bias correction default"
 
-    SigmaTau applies the SP1065 `B(α)` bias correction by default for
-    MTOTDEV and HTOTDEV. Stable32 reports the *uncorrected* values for
-    these estimators. This means SigmaTau's MTOTDEV is approximately
-    1.27× higher than Stable32's MTOTDEV under white FM (α = 0). The
-    underlying SigmaTau kernel without `B(α)` matches Stable32 to ~3%.
+    SigmaTau applies the published bias corrections by default
+    (`correct_bias=true`) for the whole total family. Stable32's policy
+    is per-estimator:
 
-    Per-α bias factors and a side-by-side numerical comparison are on
-    [Validation: Stable32](../validation/stable32.md). To reproduce
-    Stable32's output exactly, pass `correct_bias=false`.
+    - **TOTDEV**: Stable32 applies the Howe/Walter `B = 1 − a·τ/T`
+      correction (FLFM/RWFM only). SigmaTau's default matches it;
+      `correct_bias=false` reproduces allantools' raw kernel.
+    - **HTOTDEV**: Stable32 applies the Howe 2005 correction (factors
+      exactly `1/√(1+a)`). SigmaTau's default matches Stable32 to
+      ≤ 0.003 % on the validation fixture; `correct_bias=false`
+      reproduces allantools instead.
+    - **MTOTDEV**: Stable32 reports the *uncorrected* estimator.
+      SigmaTau's raw kernel matches it to ≤ 0.004 %; the default `√B(α)`
+      correction (SP1065 Table 11) places SigmaTau's output 3 – 14 %
+      below Stable32 depending on noise type. Pass `correct_bias=false`
+      to reproduce Stable32 (and allantools).
+
+    In short: `correct_bias=false` reproduces Stable32 for MTOTDEV but
+    *not* for TOTDEV or HTOTDEV, where the default already matches
+    Stable32 and `correct_bias=false` matches allantools. Side-by-side
+    numbers are on [Validation: Stable32](../validation/stable32.md).
 
 (Cite SP1065 §5 [riley-2008-sp1065](@cite) and FCS01 [howe-2001-tothvar-steering](@cite) for
 the `a(α)` / `B(α)` tables.)
