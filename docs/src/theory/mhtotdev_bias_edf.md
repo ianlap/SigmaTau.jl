@@ -133,23 +133,28 @@ result). The authoritative full-sweep JSON is tracked at
 
 ## Result
 
-Full sweep (N = 1024 … 32768, R = 3000, both bias and EDF over `τ/τ_0 ≥ 16`).
-All EDF fits are excellent (R² ≥ 0.998):
+Full sweep (N = 1024 … 32768, R = 3000, both bias and EDF over `τ/τ_0 ≥ 16`,
+with the wrapper's default `remove_drift=true` global drift removal in the
+loop). All EDF fits are excellent (R² ≥ 0.9983):
 
 | α  | Noise | EDF `b`, `c` | bias `b0` | `b1` |
 |---:|:------|:-------------|:----------|:-----|
-|  2 | WHPM  | 1.853, 5.482 | 1.064 |  0.017 |
-|  1 | FLPM  | 1.219, 3.669 | 0.984 |  0.036 |
-|  0 | WHFM  | 1.100, 3.504 | 1.019 | −0.048 |
-| −1 | FLFM  | 1.030, 3.387 | 1.213 | −0.321 |
-| −2 | RWFM  | 0.813, 2.541 | 1.943 | −3.588 |
+|  2 | WHPM  | 1.843, 5.539 | 1.064 | −0.003 |
+|  1 | FLPM  | 1.226, 3.930 | 0.984 | −0.005 |
+|  0 | WHFM  | 1.113, 3.921 | 1.020 | −0.177 |
+| −1 | FLFM  | 1.031, 3.921 | 1.214 | −0.702 |
+| −2 | RWFM  | 0.803, 3.089 | 1.950 | −4.910 |
 
-MHTOTDEV is **≈ unbiased for white/flicker noise** (`b0 ≈ 1`, `b1 ≈ 0`) and
-reads **progressively high for redder FM** — for random-walk FM, `B ≈ 1.9` at
-small τ, falling toward 1 as τ → T. The bias is modeled τ/T-linearly,
-`B = b0 + b1·(τ/T)`: the `b1` term is negligible for the whiter noises but cuts
-the bias-fit residual by ~46 % (FLFM) and ~97 % (RWFM), so the τ/T dependence is
-essential at the red end and a constant would over-correct near large τ.
+MHTOTDEV is **≈ unbiased for the PM noises** (`b0 ≈ 1`, `b1 ≈ 0`) and reads
+**progressively high for redder FM** at small τ — for random-walk FM,
+`B ≈ 1.9`. The bias is modeled τ/T-linearly, `B = b0 + b1·(τ/T)`. The `b1`
+term now carries two physical effects with the same sign: the
+boundary-extension bias falling off toward the record length, and the
+suppression of totalized low-frequency power by the global least-squares
+drift removal as τ → T (the well-known effect of drift removal on red
+noise). Together they cut the bias-fit residual by ~53 % (WHFM), ~68 %
+(FLFM), and ~97 % (RWFM); for the PM noises `b1 ≈ 0` and the bias is
+constant in τ/T.
 
 Two methodology points matter for reproducing the table: (1) restricting the
 bias to the same
@@ -162,8 +167,8 @@ grid, and per-α fits.
 !!! warning "Edge zone at the reach limit"
     The kernel needs `N − 4m + 1 ≥ 1`, so MHTOTDEV's reach limit is `τ = T/4`
     (`T/τ ≥ 4`). The fitted linear form crosses `ν = 1` near
-    `T/τ ≈ 4.1–4.4` depending on α, and a χ² interval computed from `ν < 1`
-    is degenerate (the bounds collapse). Treat confidence intervals as valid
-    for `T/τ ≳ 5` and indicative only in the final fraction of an octave
-    before the reach limit; the σ values themselves are valid all the way to
-    `τ = T/4`.
+    `T/τ ≈ 3.6–5.1` depending on α (highest at the red end), and a χ²
+    interval computed from `ν < 1` is degenerate (the bounds collapse).
+    Treat confidence intervals as valid for `T/τ ≳ 6` and indicative only
+    in the final octave before the reach limit; the σ values themselves are
+    valid all the way to `τ = T/4`.

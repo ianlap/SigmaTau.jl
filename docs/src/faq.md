@@ -39,7 +39,7 @@ it. `read_frequency` takes the same keywords.
 ## Why do my confidence intervals differ slightly from Stable32?
 
 The deviation values themselves agree — the core kernels are validated against
-Stable32 to relative error below `1e-5` (see
+Stable32 to the 5-significant-figure precision of its published outputs (see
 [Validation](validation/methodology.md) and the
 [Stable32 comparison tables](validation/stable32.md)). The intervals around
 them can differ for two reasons.
@@ -52,11 +52,13 @@ the EDF and hence the interval.
 (`identify_noise(x, m_values; detrend=false)` reproduces Stable32's
 no-detrend convention point-for-point.)
 
-Second, the EDF model differs: SigmaTau uses the Greenhall–Riley spectral-sum
-formulas [greenhall-2003-edf-stability](@cite), which are slightly more
-conservative than Stable32's legacy approximation, so SigmaTau's χ² intervals
-come out a little wider — most visibly at long τ where the degrees of freedom
-are few.
+Second, for the total family above α = 0 the published EDF coefficient
+tables run out, and the two programs substitute different EDF models there.
+For the core estimators the EDF model is the same: SigmaTau uses the
+Greenhall–Riley spectral-sum formulas [greenhall-2003-edf-stability](@cite),
+which Stable32 has also used since v1.41 — wherever the two programs agree
+on the noise type, the interval bounds agree to within 0.05 % (see
+[Validation: Stable32](validation/stable32.md)).
 
 ## When should I use the Hadamard family instead of Allan?
 
