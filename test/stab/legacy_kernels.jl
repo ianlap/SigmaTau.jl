@@ -235,7 +235,7 @@ function mhtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     N = length(x); nsubs = N - 4m + 1
     nsubs < 1 && return NaN
 
-    Lp = 3m + 1; ext_len = 3Lp; L3 = ext_len - 3m
+    Lp = 4m; ext_len = 3Lp; L3 = ext_len - 3m
     pd     = Vector{Float64}(undef, Lp)
     ext    = Vector{Float64}(undef, ext_len)
     d3_vec = Vector{Float64}(undef, L3)
@@ -286,7 +286,7 @@ function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     N = length(x); nsubs = N - 4m + 1
     nsubs < 1 && return NaN
 
-    Lp = 3m + 1; ext_len = 3Lp; L3 = ext_len - 3m
+    Lp = 4m; ext_len = 3Lp; L3 = ext_len - 3m
     pd     = Vector{Float64}(undef, Lp)
     ext    = Vector{Float64}(undef, ext_len)
     d3_vec = Vector{Float64}(undef, L3)

@@ -537,7 +537,7 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
     # rationale, sliding-window inner reduction, and buffer pool.
     nthreads = Threads.nthreads()
     max_m = maximum(m_values; init=0)
-    max_Lp = 3 * max(max_m, 1) + 1
+    max_Lp = 4 * max(max_m, 1)
     max_L3 = 3 * max_Lp - 3 * max(max_m, 1)
     ext_pool = [Vector{Float64}(undef, 3 * max_Lp) for _ in 1:nthreads]
     d3_pool  = [Vector{Float64}(undef, max_L3)     for _ in 1:nthreads]
@@ -554,7 +554,7 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
             continue
         end
 
-        Lp = 3m + 1
+        Lp = 4m
         L3 = 3Lp - 3m
 
         nchunks = max(1, min(nthreads, nsubs))
