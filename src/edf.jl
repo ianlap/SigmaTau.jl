@@ -197,20 +197,21 @@ end
 
 function _coeff_mhtot(alpha::Int)
     # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
-    # (tools/mc_mhtotdev.jl, full sweep at git e9d209d, seed 20260531, R=3000,
-    # N up to 32768) against the shipped mhtotdev pipeline INCLUDING its
-    # default global least-squares drift removal (remove_drift=true), so the
-    # calibration matches what users compute; all fits R² ≥ 0.9983. MHTOTDEV
-    # is novel to SigmaTau, so these have no external reference — see docs
-    # theory/mhtotdev_bias_edf.md. Both the Mod-Totvar form below and the
-    # TotHvar form (T/τ)/(b0+b1·τ/T) were fit; they tie at the α = ±2 ends
-    # (|ΔR²| ≤ 7e-5) and Mod-Totvar fits better elsewhere (up to ΔR² = 2e-3),
-    # so the Mod-Totvar form is used uniformly.
-    alpha == 2  && return (1.8432, 5.5387)
-    alpha == 1  && return (1.2263, 3.9300)
-    alpha == 0  && return (1.1129, 3.9205)
-    alpha == -1 && return (1.0312, 3.9211)
-    alpha == -2 && return (0.8034, 3.0889)
+    # (tools/mc_mhtotdev.jl, full sweep at git 3806ccb — the L = 4m subsegment
+    # kernel — seed 20260531, R=3000, N up to 32768) against the shipped
+    # mhtotdev pipeline INCLUDING its default global least-squares drift
+    # removal (remove_drift=true), so the calibration matches what users
+    # compute; all fits R² ≥ 0.9982. MHTOTDEV is novel to SigmaTau, so these
+    # have no external reference — see docs theory/mhtotdev_bias_edf.md. Both
+    # the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
+    # fit; TotHvar edges ahead at α = ±2 (ΔR² ≤ 8e-4) and Mod-Totvar fits
+    # better elsewhere, so the Mod-Totvar form is kept uniformly as in the
+    # original calibration.
+    alpha == 2  && return (1.6869, 4.3166)
+    alpha == 1  && return (1.1671, 3.2107)
+    alpha == 0  && return (1.0861, 3.3451)
+    alpha == -1 && return (1.0095, 3.3254)
+    alpha == -2 && return (0.7631, 2.4490)
     return (NaN, NaN)
 end
 
@@ -383,10 +384,10 @@ Conventions per variance type:
 - `:mhtot`  — measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
   `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
   external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
-  `:totvar`): `b0 ∈ {1.064, 0.984, 1.019, 1.213, 1.943}` and
-  `b1 ∈ {0.017, 0.036, -0.048, -0.321, -3.588}` for α ∈ {2, 1, 0, -1, -2}.
-  MHTOTDEV is ≈ unbiased for white/flicker noise (b1 ≈ 0, B ≈ 1) and reads high
-  for redder FM (RWFM B ≈ 1.9 at small τ, falling toward 1 as τ→T).
+  `:totvar`): `b0 ∈ {1.031, 0.988, 1.054, 1.295, 2.169}` and
+  `b1 ∈ {-0.120, -0.069, -0.171, -0.719, -5.588}` for α ∈ {2, 1, 0, -1, -2}.
+  MHTOTDEV is ≈ unbiased for white/flicker noise (B ≈ 1) and reads high
+  for redder FM (RWFM B ≈ 2.2 at small τ, falling toward 1 as τ→T).
   See docs `theory/mhtotdev_bias_edf.md`.
 
 Anything unrecognised falls through to B = 1.
@@ -414,18 +415,19 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
         elseif var_type == :mhtot
             # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl,
-            # full sweep at git e9d209d) over the τ/τ0 ≥ 16 validity window
-            # (Howe et al. 2000), with the wrapper's default global drift removal
-            # (remove_drift=true) in the loop. Modeled as B = b0 + b1·(τ/T) — the
-            # same τ/T-linear form as :totvar. For the PM noises b1 ≈ 0 (B is
-            # constant); for the FM noises the b1 term carries both the boundary
-            # bias and the drift-removal suppression near τ → T and cuts the fit
-            # residual by ~53 % (WHFM) to ~97 % (RWFM). MHTOTDEV is ≈ unbiased
-            # for white/flicker PM (B ≈ 1) and reads high for redder FM
-            # (RWFM B ≈ 1.9 at small τ). MHTOTDEV is novel to SigmaTau —
+            # full sweep at git 3806ccb, the L = 4m subsegment kernel) over the
+            # τ/τ0 ≥ 16 validity window (Howe et al. 2000), with the wrapper's
+            # default global drift removal (remove_drift=true) in the loop.
+            # Modeled as B = b0 + b1·(τ/T) — the same τ/T-linear form as
+            # :totvar. For the PM noises b1 is small (B ≈ constant); for the FM
+            # noises the b1 term carries both the boundary bias and the
+            # drift-removal suppression near τ → T and cuts the fit residual by
+            # ~45 % (WHFM) to ~96 % (RWFM). MHTOTDEV is ≈ unbiased for
+            # white/flicker PM (B ≈ 1) and reads high for redder FM
+            # (RWFM B ≈ 2.2 at small τ). MHTOTDEV is novel to SigmaTau —
             # no external reference; see docs theory/mhtotdev_bias_edf.md.
-            b0_t = Dict(2=>1.0645, 1=>0.9839, 0=>1.0197, -1=>1.2142, -2=>1.9499)
-            b1_t = Dict(2=>-0.0034, 1=>-0.0048, 0=>-0.1772, -1=>-0.7024, -2=>-4.9096)
+            b0_t = Dict(2=>1.0308, 1=>0.9883, 0=>1.0545, -1=>1.2947, -2=>2.1686)
+            b1_t = Dict(2=>-0.1197, 1=>-0.0686, 0=>-0.1706, -1=>-0.7193, -2=>-5.5884)
             aa = clamp(alpha, -2, 2)
             B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
         end

@@ -6,7 +6,19 @@ All notable public changes to **SigmaTau.jl** are tracked here. Format follows
 
 ## [Unreleased]
 
-No changes yet.
+### Changed
+
+- **Breaking — `mhtotdev` computed values change for all `m ≥ 2`.**
+  The subsegment phase length was corrected from `3m + 1` to `4m`
+  (one full MHVAR span — the degree-3 analog of MTOTDEV's `L = 3m`).
+  All `N` samples now participate in every subsegment walk; the
+  subsegment count `N − 4m + 1` is unchanged. At `m = 1` both forms
+  are identical and the result is bit-for-bit the same.
+  Bias and EDF coefficients (`ν = b·(T/τ) − c`, `B = b₀ + b₁·(τ/T)`)
+  were re-measured by the full Monte-Carlo sweep
+  (`tools/mc_mhtotdev.jl`, seed 20260531, R = 3000, N up to 32768);
+  confidence intervals change accordingly.
+  Provenance is tracked at `tools/artifacts/mhtotdev_mc_full.json`.
 
 ## [0.5.0] - 2026-06-09
 
