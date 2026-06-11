@@ -796,7 +796,17 @@ function _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
         end
 
         if m == 1
-            devs[k] = _adev_core(x, [m], tau0)[1]
+            L1 = N - 2
+            if L1 < 2
+                devs[k] = NaN
+                continue
+            end
+            sum_sq1 = 0.0
+            @inbounds @simd for i in 1:L1
+                d2 = x[i+2] - 2x[i+1] + x[i]
+                sum_sq1 += d2^2
+            end
+            devs[k] = sqrt(sum_sq1 / (2.0 * L1 * tau0^2))
             continue
         end
 
