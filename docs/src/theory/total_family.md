@@ -164,7 +164,7 @@ htotdev(PhaseData(x, τ₀), τs)
 same Greenhall extension MTOTDEV and HTOTDEV use. (MHTOTDEV has no
 canonical/published form; SigmaTau adopts the Greenhall methodology for
 consistency across the modified-total family.) Walks `N − 4m + 1`
-subsegments of phase length `3m + 1` along `x`. For each:
+subsegments of phase length `4m` along `x`. For each:
 
 1. **Half-average slope removal** — subtract a linear trend whose slope
    is the difference of the two half-segment means (the Greenhall slope

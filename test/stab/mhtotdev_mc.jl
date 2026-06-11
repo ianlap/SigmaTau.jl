@@ -51,10 +51,8 @@ using SigmaTau: _gen_powerlaw_y, _coeff_mhtot, bias_correction
             B_pred   = bias_correction([noise_sym[alpha]], :mhtot, [τ], T)[1]
 
             @test isfinite(edf) && edf > 0
-            # TODO(mhtotdev-l4m): re-enable once the L=4m recalibration sweep
-            # lands in src/edf.jl — shipped coefficients are stale until then.
-            @test_skip isapprox(edf, edf_pred; rtol = 0.40)   # ~2σ tripwire at R=60
-            @test_skip isapprox(B,   B_pred;   rtol = 0.15)
+            @test isapprox(edf, edf_pred; rtol = 0.40)   # ~2σ tripwire at R=60
+            @test isapprox(B,   B_pred;   rtol = 0.15)
         end
     end
 end
