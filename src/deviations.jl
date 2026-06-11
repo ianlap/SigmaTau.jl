@@ -242,7 +242,7 @@ htdev(data::FrequencyData; kwargs...) = htdev(data, _default_m_values(length(dat
 # positive. Without this guard a single out-of-range τ would throw
 # DomainError from sqrt and abort the whole deviation call instead of
 # producing a NaN row for just that τ.
-_unbias_divisor(B::Vector{Float64}) = [b > 0 ? sqrt(b) : NaN for b in B]
+_unbias_divisor(B::AbstractVector{<:Real}) = [b > 0 ? sqrt(b) : NaN for b in B]
 
 """
     totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
@@ -647,7 +647,7 @@ pdev(data::PhaseData,     taus::TauMode; kwargs...) = pdev(data, tau_values(taus
 pdev(data::FrequencyData, taus::TauMode; kwargs...) = pdev(data, tau_values(taus, length(data.y), :pdev); kwargs...)
 
 # Zero-arg convenience: octave-spaced m_values up to PDEV's algorithmic
-# m-max (`(N − 1) ÷ 2`, see `_default_m_values`).
+# m-max (`(N − 2) ÷ 2`, see `_default_m_values`).
 pdev(data::PhaseData;     kwargs...) = pdev(data, _default_m_values(length(data.x), :pdev); kwargs...)
 pdev(data::FrequencyData; kwargs...) = pdev(data, _default_m_values(length(data.y), :pdev); kwargs...)
 

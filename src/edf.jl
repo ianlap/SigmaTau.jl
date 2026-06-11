@@ -222,6 +222,7 @@ end
 # the paper reports (the cubic rounded), since noise identification only yields
 # integer α. The companion coefficient B(α) = 12 is constant for all α (Eq. 18).
 function _pvar_A(alpha::Int)
+    # Values are the cubic A(α) deliberately rounded to the integers published in Vernotte et al. 2020.
     alpha == 2  && return 23.0   # cubic 22.93; fixed exact by 2016 Eq. (24)
     alpha == 1  && return 27.0   # cubic 26.86
     alpha == 0  && return 27.0
