@@ -135,6 +135,51 @@ push!(acc, x_next)        # feed samples as they are measured
 snapshot(acc)              # running StabilityResult, matches the batch kernel
 ```
 
+## Command-line interface
+
+A non-interactive CLI wraps the same kernels for use from bash, PowerShell,
+Python, MATLAB, CI, or a future desktop frontend. Run it through the launcher in
+`bin/`:
+
+```bash
+julia --project=. bin/sigmatau.jl --help
+julia --project=. bin/sigmatau.jl version
+julia --project=. bin/sigmatau.jl analyze clock.DAT --phase --tau0 1 \
+      --devs adev,mdev,hdev --tau octave --format csv --out results.csv
+```
+
+`analyze` reads a phase (`--phase`, default) or frequency (`--freq`) table and
+writes one row per (deviation, τ). `--tau` picks a named grid (`octave`,
+`decade`, …); `--taus 1,2,4,8` gives explicit integer **averaging factors** m
+(τ = m·τ₀). Output is `--format csv` (columns
+`source,quantity,deviation,tau,dev,ci_lower,ci_upper,edf,neff,noise_type`;
+empty cells for missing values) or `--format json` (stable
+`schema_version`/`source`/`analysis`/`results` schema). Reader pass-throughs
+`--time-col`, `--value-col`, `--header`, `--delim`, `--scaling`, `--detrend`
+mirror `read_phase`. Confidence intervals are on by default (`--ci false` to
+skip; `--confidence 0.95` to set the level). Errors print to stderr (no stack
+trace unless `--debug`) with exit codes **0** ok · **1** usage · **2**
+input/read · **3** analysis · **4** output/write.
+
+Shell completion (subcommands, options, deviation names, and known values, while
+preserving native file-path completion) is emitted by `completion SHELL`:
+
+```bash
+# bash
+sigmatau completion bash > /usr/local/etc/bash_completion.d/sigmatau   # or: source <(sigmatau completion bash)
+# zsh   (a dir on $fpath)
+sigmatau completion zsh > "${fpath[1]}/_sigmatau"
+# fish
+sigmatau completion fish > ~/.config/fish/completions/sigmatau.fish
+# PowerShell (add to $PROFILE)
+sigmatau completion powershell | Out-String | Invoke-Expression
+```
+
+Until an installed `sigmatau` shim exists, substitute
+`julia --project=. bin/sigmatau.jl` for `sigmatau` above. See the
+[CLI docs page](https://ianlap.github.io/SigmaTau.jl/stable/cli/) for the full
+reference.
+
 ## Documentation
 
 Full docs — tutorials, theory, the migration guide, performance numbers, and

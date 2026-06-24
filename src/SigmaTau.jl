@@ -8,6 +8,8 @@ using DelimitedFiles
 using FFTW
 using Dates
 using Printf
+import JSON
+using OrderedCollections: OrderedDict
 
 # ── Shared types ────────────────────────────────────────────────────────
 include("types.jl")
@@ -50,6 +52,9 @@ include("suite.jl")
 
 # ── Real-time streaming accumulators (Dobrogowski–Kasznia scheme) ───────
 include("streaming.jl")
+
+# ── Command-line interface (SigmaTau.cli_main; bin/sigmatau.jl wraps it) ─
+include("cli.jl")
 
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite

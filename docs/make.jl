@@ -57,6 +57,7 @@ makedocs(
         "From allantools" => "migration_from_allantools.md",
         "Performance"     => "performance.md",
         "Plotting"        => "plotting.md",
+        "CLI"             => "cli.md",
         "FAQ"             => "faq.md",
         "Theory"          => [
             "theory/overview.md",
