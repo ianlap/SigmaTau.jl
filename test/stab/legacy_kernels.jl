@@ -277,10 +277,11 @@ function mhtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     return total_sum / (nsubs * (m * tau0)^2)
 end
 
-# Canonical MHTOTDEV (Greenhall half-mean slope removal). Independent reference
-# for the kept `_mhtotdev_core` form. Identical to `mhtotdev_var` except the
-# per-window detrend is the half-mean slope (matching MTOTDEV/HTOTDEV), not a
-# full least-squares fit.
+# Canonical MHTOTDEV (per-window quadratic LS detrend, matched to the third
+# difference's annihilation order). Independent reference for the kept
+# `_mhtotdev_core` form: the fit here is a raw Vandermonde least-squares
+# solve, deliberately a different formulation from the shipped kernel's
+# orthogonal-polynomial dot products, so agreement is a genuine cross-check.
 function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     m >= 1 || throw(ArgumentError("averaging factor m must be >= 1"))
     N = length(x); nsubs = N - 4m + 1
@@ -291,18 +292,18 @@ function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     ext    = Vector{Float64}(undef, ext_len)
     d3_vec = Vector{Float64}(undef, L3)
     S      = Vector{Float64}(undef, L3 + 1)
+    tj = collect(0.0:(Lp - 1))
+    A  = hcat(ones(Lp), tj, tj .^ 2)
 
     total_sum = 0.0
     for n in 1:nsubs
         copyto!(pd, 1, x, n, Lp)
 
-        # Half-mean slope removal (matches `_mhtotdev_greenhall`).
-        half = floor(Int, Lp / 2)
-        s1 = sum(@view(pd[1:half])) / half
-        s2 = sum(@view(pd[half+1:Lp])) / (Lp - half)
-        slope = (s2 - s1) / ((Lp / 2.0) * tau0)
+        # Quadratic LS detrend (matches `_mhtotdev_greenhall`); τ0 cancels in
+        # the fitted values, so the fit runs on the sample index directly.
+        coef = A \ pd
         for j in 1:Lp
-            pd[j] -= slope * tau0 * (j - 1)
+            pd[j] -= coef[1] + coef[2] * tj[j] + coef[3] * tj[j]^2
         end
 
         for j in 1:Lp

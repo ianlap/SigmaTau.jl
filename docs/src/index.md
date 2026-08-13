@@ -1,20 +1,15 @@
 # SigmaTau.jl
 
-A Julia package for time-and-frequency stability analysis: Allan / Modified
-Allan / Hadamard / Total deviations, χ²-based confidence intervals, lag-1
-ACF noise identification, MTIE, parabolic deviation, and calibrated
-power-law noise generation.
+A Julia package for time-and-frequency stability analysis: Allan, Modified Allan, Hadamard, and Total deviations, χ²-based confidence intervals, lag-1 ACF noise identification, MTIE, parabolic deviation, and calibrated power-law noise generation.
 
-## Package layout
+## Package Layout
 
-SigmaTau.jl is a single, flat Julia 1.11 package. Shared types,
-file IO, deviation kernels, noise identification, and EDF/CI all live
-under one namespace:
+SigmaTau.jl is a single Julia package. Shared types, file IO, deviation kernels, noise identification, and EDF/CI are provided under one namespace:
 
 | Surface | Responsibility |
 |---|---|
 | [Shared types](reference/types.md) | `PhaseData`, `FrequencyData`, `StabilityResult`. |
-| [Stability API](reference/stab.md) | Deviation kernels, EDF / CI, noise identification, MTIE, PDEV, `noise_gen`. |
+| [Stability API](reference/stab.md) | Deviation kernels, EDF/CI calculations, noise identification, MTIE, PDEV, and `noise_gen`. |
 
 ## Where to next
 
@@ -28,7 +23,7 @@ under one namespace:
 - **Verifying numerics?** See [Validation](validation/methodology.md).
 - **Something not working?** Check the [FAQ](faq.md).
 
-## Reference math
+## Reference Mathematics
 
 Numerical conventions and confidence-interval formulas follow:
 

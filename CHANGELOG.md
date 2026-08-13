@@ -8,6 +8,65 @@ All notable public changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Changed
 
+- **MHTOTDEV redefined: the per-window detrend is now a quadratic
+  least-squares fit** (was: half-average slope removal). The detrend degree
+  now matches the third difference's annihilation degree — the same rule
+  MTOTDEV (2nd difference + linear detrend) and TOTHVAR (3rd difference +
+  per-window frequency-drift removal) satisfy. Consequences, all verified by
+  two independent implementations on controlled ensembles: the kernel now
+  converges over the full Hadamard range α > −5 (previously it inherited
+  MVAR's divergence for α ≤ −3 through the reflection seam); the kernel is
+  drift-immune on its own (`remove_drift` remains defaulted on for
+  noise-identification hygiene only); the red-noise bias flattens to
+  near-constant per α. **All `mhtotdev` values change** (every m), and the
+  bias/EDF coefficient tables are re-measured — the shipped tables are
+  provisional quick-mode values pending the full calibration sweep.
+  `noise_id_nnls(:mhtotdev)` now carries the full modified-Hadamard basis
+  including α = −3, −4.
+
+### Fixed
+
+- `bias_correction(:mtot)` shipped inverted values (B up to 1.31, the wrong
+  side of 1): with the default `correct_bias=true`, `mtotdev` overstated the
+  correction by up to ~1.39× in σ at RWFM. The table now carries Riley's
+  published Stable32 CI values B = {0.94, 0.83, 0.73, 0.70, 0.69} for
+  α ∈ {2, 1, 0, −1, −2} (MTOT is biased *low* for red noise — the
+  half-average detrend strips genuine low-frequency power), confirmed by
+  direct Monte Carlo with the same harness that reproduces the published
+  TOTHVAR bias to 0.1%. `correct_bias=false` output is unchanged.
+- `calculate_edf(:mhtotdev)` now floors the fitted EDF model at ν = 1. The
+  model is calibrated for T/τ ≥ 8 but the default grid reaches T/τ = 4,
+  where the linear form crossed ν = 1 and silently switched the confidence
+  interval to a Gaussian fallback ~13× narrower than the neighboring point.
+  Measured ν in the extrapolated zone is ≈1.6–2.1, so the χ² interval at
+  ν = 1 is conservative; an extended calibration sweep covering the zone is
+  staged in `tools/mc_mhtotdev.jl`.
+
+### Added
+
+- `noise_id_nnls` — weighted nonnegative least-squares decomposition of a
+  record's σ̂²(τ) profile into per-α power-law components. One fit to the
+  whole τ range returns the amplitude of every α in the basis plus the
+  dominant noise type at each τ, complementing the per-τ lag-1 ACF
+  classification of `identify_noise`. The NNLS problem is solved exactly by
+  exhaustive active-set enumeration rather than by an iterative active-set
+  approximation. Bases default to the estimator's convergent, non-degenerate
+  α set: α ≥ -2 for the Allan family, down to α = -4 for `:mhdev`/`:hdev`,
+  and one PM column only for the unmodified family. See
+  `docs/src/theory/noise_id.md`.
+- `noise_gen` reaches α = -4 (RRFM, random-run FM) through the `h` path:
+  `h = Dict(-4 => h₋₄)` synthesizes by double discrete integration of white
+  noise with driver variance `q = 8π⁴τ₀³h₋₄`, which realizes
+  `S_y(f) → h₋₄f⁻⁴` down to the record's own fundamental. `sigma1[-4]` raises
+  an `ArgumentError` — the Allan-variance σ_y(τ₀) convention diverges for
+  α ≤ -3, so there is no level to target.
+- `tools/nnls_noise_id.jl` — Monte Carlo study of NNLS noise identification
+  across MDEV / MHDEV / HDEV / MHTOTDEV with an empirical (ensemble-mean)
+  basis, quantifying amplitude recovery, conditioning, and RRFM
+  discrimination. Artifacts under `tools/artifacts/`.
+
+### Changed
+
 - **Breaking — `mhtotdev` computed values change for all `m ≥ 2`.**
   The subsegment phase length was corrected from `3m + 1` to `4m`
   (one full MHVAR span — the degree-3 analog of MTOTDEV's `L = 3m`).

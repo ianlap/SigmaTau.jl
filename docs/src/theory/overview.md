@@ -9,62 +9,17 @@ of these estimators along with their confidence intervals.
 
 ## Phase residuals and fractional frequency
 
-The fractional frequency of an oscillator is its frequency error
-normalized by its nominal frequency,
+The fractional frequency of an oscillator is its instantaneous frequency error normalized by its nominal frequency. Sampled at an interval $\tau_0$, phase error (in seconds, `PhaseData`) and average fractional frequency (dimensionless, `FrequencyData`) are mathematically equivalent representations of the same data.
 
-```math
-y(t) \;=\; \frac{f(t) - f_{\mathrm{nom}}}{f_{\mathrm{nom}}},
-```
-
-where `f(t)` is the instantaneous output frequency and `f_nom` the
-nominal (nameplate) frequency; `y` is dimensionless. Sampled at interval
-`τ₀`, phase and fractional frequency are two equivalent representations
-of the same data:
-
-```math
-y_i \;=\; \frac{x_{i+1} - x_i}{\tau_0}, \qquad
-x_n \;=\; x_0 + \tau_0 \sum_{i=0}^{n-1} y_i
-```
-
-`x(t)` (seconds) is the time-error of the clock relative to a reference;
-`y_i` is the mean fractional frequency over the i-th interval. SigmaTau
-stores phase as `PhaseData` and frequency as `FrequencyData`; the
-deviation API accepts either, converting via prefix-sum where needed.
-
-(Cite [banerjee-2023-timekeeping](@cite) for modern presentation; SP1065 §4
-[riley-2008-sp1065](@cite) for the conventions.)
+For the equations relating phase and frequency, please read NIST SP1065 §4 [riley-2008-sp1065](@cite) and Banerjee & Matsakis [banerjee-2023-timekeeping](@cite) for more details.
 
 ## Power-law noise model
 
-Oscillator noise is modeled as a sum of power-law processes indexed
-by `α`, the spectral exponent of the one-sided PSD `S_y(f) ∝ f^α`:
+Oscillator noise is modeled as a sum of power-law processes indexed by the spectral exponent $\alpha$ of the one-sided PSD ($S_y(f) \propto f^\alpha$). The dominant noise types span from White Phase Modulation ($\alpha = +2$) down to Random Run Frequency Modulation ($\alpha = -4$).
 
-| α  | Noise type | Symbol | ADEV slope (μ_dev) | MDEV slope |
-|----|------------|--------|--------------------|------------|
-| +2 | White PM         | WPM     | −1                 | −3/2       |
-| +1 | Flicker PM       | FPM     | −1 (with log term) | −1         |
-|  0 | White FM         | WFM     | −1/2               | −1/2       |
-| −1 | Flicker FM       | FFM     | 0                  | 0          |
-| −2 | Random-walk FM   | RWFM    | +1/2               | +1/2       |
-| −3 | Flicker walk FM  | FWFM    | (Allan diverges)¹  | (diverges)¹ |
-| −4 | Random run FM    | RRFM    | (Allan diverges)¹  | (diverges)¹ |
+Different estimators handle different subsets of these noise types. For example, the Allan family diverges for $\alpha \le -3$, requiring the Hadamard family (which uses a third difference to converge down to $\alpha = -5$) for records with low-frequency power-law content.
 
-¹ The Allan family's variance integral converges only for `α > −3`:
-its transfer function rolls off as `f²` toward zero frequency, so the
-integrand behaves as `f^(α+2)` there and the integral is finite exactly
-when `α + 2 > −1`. The Hadamard family (HDEV / MHDEV / HTOTDEV /
-MHTOTDEV) replaces the second difference with a third difference,
-gaining another factor of `f²`, and converges for `α > −5` — in
-practice, down through random-run FM at `α = −4` — so records with
-very-low-frequency power-law content should be analyzed with the
-Hadamard family rather than ADEV / MDEV
-[greenhall-1997-third-difference-mvar](@cite).
-
-ADEV's degeneracy on WPM/FPM is the historical motivation for MDEV.
-HDEV adds drift insensitivity by going to a third difference.
-
-(Cite SP1065 §4–5 [riley-2008-sp1065](@cite); IEEE 1139-2022
-[ieee1139-2022-definitions](@cite).)
+For tables detailing these noise types, variance slopes ($\mu$), and convergence properties, please read NIST SP1065 §4–5 [riley-2008-sp1065](@cite) and IEEE 1139-2022 [ieee1139-2022-definitions](@cite) for more details.
 
 ## Estimator family map
 
@@ -83,29 +38,14 @@ HDEV adds drift insensitivity by going to a third difference.
 
 ## MTIE — Maximum Time Interval Error
 
-MTIE complements the variance estimator family with a **peak-to-peak**
-phase metric: at each averaging interval `τ`, MTIE reports the largest
-phase excursion observed in any window of length `τ` across the entire
-record [riley-2008-sp1065](@cite). Where the Allan family characterizes
-the *spread* of the phase residual, MTIE characterizes the worst-case
-*excursion* — the relevant figure of merit for synchronization
-applications where a single large transient is operationally
-significant (telecom synchronization masks, GNSS holdover budgets,
-financial-trading timestamping). Banerjee & Matsakis frame it as the
-canonical time-distribution-network metric
-[banerjee-2023-timekeeping](@cite).
+MTIE complements variance estimators by providing a peak-to-peak phase metric. It characterizes the worst-case maximum phase excursion in any window of length $\tau$ across the record, which is the operative metric for synchronization applications where a single large transient matters (telecom synchronization masks, GNSS holdover budgets).
 
-```math
-\mathrm{MTIE}(\tau) \;=\; \max_{1 \le i \le N-m}\;
-\Bigl[\max_{0 \le k \le m} x_{i+k} \;-\; \min_{0 \le k \le m} x_{i+k}\Bigr],
-\qquad m = \tau / \tau_0.
-```
+SigmaTau uses a block-windowed `_mtie_core` kernel for an allocation-free peak/trough scan.
+
+For the MTIE definition, please read NIST SP1065 [riley-2008-sp1065](@cite) and Banerjee & Matsakis [banerjee-2023-timekeeping](@cite) for more details.
 
 !!! note "Implementation status"
-    Implemented as [`mtie`](@ref) in `SigmaTau` (block-windowed
-    `_mtie_core` kernel with allocation-free per-window peak/trough
-    scan). Returns a `StabilityResult` with `mtie` units of seconds;
-    no CI bounds — no published EDF model for the peak statistic.
+    Implemented as [`mtie`](@ref) in `SigmaTau`. It returns a `StabilityResult` with `mtie` units of seconds. There is no published EDF model for this peak statistic, so confidence bounds are not provided.
 
 ## Notation used throughout these pages
 

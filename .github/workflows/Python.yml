@@ -1,0 +1,42 @@
+name: Python
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'python/**'
+      - 'src/**'
+      - 'Project.toml'
+      - '.github/workflows/Python.yml'
+  pull_request:
+    paths:
+      - 'python/**'
+      - 'src/**'
+      - 'Project.toml'
+      - '.github/workflows/Python.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: Python 3.11 / ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install sigmatau (editable, with dev extras)
+        run: pip install -e "python/[dev]"
+      - name: Warm import (juliapkg resolve + precompile)
+        timeout-minutes: 20
+        run: python -c "import sigmatau"
+      - name: Run tests
+        run: pytest python/tests -q

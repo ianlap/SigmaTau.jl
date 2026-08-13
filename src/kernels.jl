@@ -509,26 +509,38 @@ end
 Computes the Modified Hadamard Total Deviation (MHTOTDEV).
 
 MHTOTDEV is novel to SigmaTau; no canonical/published form exists. SigmaTau
-adopts the Greenhall methodology — per-window half-mean slope removal + a 3×
-time-reverse extension on phase — by consistency with MTOTDEV and HTOTDEV.
+adopts the Greenhall methodology — per-window detrend + a 3× time-reverse
+extension on phase — by consistency with MTOTDEV and HTOTDEV, with one
+deliberate departure: the per-window detrend is a QUADRATIC least-squares
+fit, not the half-mean slope removal the second-difference totals use.
 
-The kernel alone is NOT drift-immune: the per-window detrend removes only the
-local frequency offset, so residual deterministic drift re-enters through the
-reflected window boundaries. Per-window drift removal was evaluated in both
-the phase domain (two-parameter detrend) and the frequency domain (TOTHVAR
-scheme + modified operator) and rejected — both measurably damage the
-statistic at the PM noise types (B(WHPM) ≈ 3.8 with the χ² EDF model
-collapsing, and B(WHPM) growing ∝ m, respectively). The public `mhtotdev`
-wrapper instead removes the record's least-squares frequency drift before
-calling this kernel (`remove_drift=true` default), which is exact for a
-deterministic drift and leaves the kernel's all-α statistics intact.
+The detrend degree must match the kernel's annihilation degree (the third
+difference annihilates phase polynomials of degree ≤ 2, as MTOT's second
+difference annihilates degree ≤ 1 and its linear detrend matches). With
+only a slope removal, the stochastic quadratic carried by noise at
+α ≤ −3 survives into the time-reverse extension, the seam kink feeds the
+boundary-spanning third differences, and the estimator inherits MVAR's
+divergence (measured: log-log slope 2 instead of 3 at α = −4, level ∝ T).
+The matched quadratic detrend restores convergence over the full Hadamard
+range α > −5 (slope 3.00, level N-stable) while leaving the PM statistics
+healthy (B(WHPM) ≈ 0.91, flat in m and N) — verified by two independent
+implementations. It also removes any deterministic frequency offset and
+drift exactly within each window, so this kernel IS drift-immune on its
+own; the wrapper's record-level removal (`remove_drift=true` default)
+remains for noise-identification hygiene, not for the statistic.
+
+Historical note: earlier per-window schemes were rejected on measurements
+of B(WHPM) ≈ 3.8 growing ∝ m and χ² EDF collapse. A controlled 2×2 study
+(detrend order × reflection parity, identical noise realizations) showed
+those signatures belong to ODD (point) reflection variants; the quadratic
+detrend with the unchanged even (mirror) reflection shows neither.
 """
 function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return _mhtotdev_greenhall(x, m_values, tau0)
 end
 
 function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Per-window half-mean slope removal + per-window time-reverse extension
+    # Per-window quadratic LS detrend + per-window time-reverse extension
     # + averaged third-difference operator.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
@@ -541,6 +553,7 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
     max_L3 = 3 * max_Lp - 3 * max(max_m, 1)
     ext_pool = [Vector{Float64}(undef, 3 * max_Lp) for _ in 1:nthreads]
     d3_pool  = [Vector{Float64}(undef, max_L3)     for _ in 1:nthreads]
+    det_pool = [Vector{Float64}(undef, max_Lp)     for _ in 1:nthreads]
 
     for k in eachindex(m_values)
         m = m_values[k]
@@ -557,39 +570,67 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
         Lp = 4m
         L3 = 3Lp - 3m
 
+        # Orthogonal quadratic basis on the fixed grid t = 0..Lp−1, computed
+        # once per m: p0 = 1, p1 = t − t̄, p2 = p1² − ⟨p1²⟩/Lp. Orthogonality
+        # (⟨p1,p2⟩ = 0 by grid symmetry) turns the per-window LS fit into
+        # three independent dot products — no normal-equations solve, and no
+        # conditioning loss at large Lp. τ0 cancels in the fitted values.
+        tbar = (Lp - 1) / 2.0
+        p1 = Vector{Float64}(undef, Lp)
+        p2 = Vector{Float64}(undef, Lp)
+        s11 = 0.0
+        @inbounds for j in 1:Lp
+            p1[j] = (j - 1) - tbar
+            s11 += p1[j]^2
+        end
+        c2 = s11 / Lp
+        s22 = 0.0
+        @inbounds for j in 1:Lp
+            p2[j] = p1[j]^2 - c2
+            s22 += p2[j]^2
+        end
+
         nchunks = max(1, min(nthreads, nsubs))
         chunk_size = cld(nsubs, nchunks)
         chunk_sums = zeros(nchunks)
 
+        # `let`-rebind everything the threaded closure reads. These names are
+        # reassigned on each `m` iteration, so capturing them directly makes
+        # Julia box them — and `p1`/`p2`/`s11`/`s22` are read in the innermost
+        # loop, where a boxed access costs a dynamic dispatch per element (~55×
+        # on the whole kernel, measured at N = 8192). The fresh bindings below
+        # are never reassigned, so they are captured by value and stay typed.
+        # Arithmetic is untouched: results are bit-identical.
+        let p1 = p1, p2 = p2, s11 = s11, s22 = s22, m = m, Lp = Lp, L3 = L3,
+            nsubs = nsubs, chunk_size = chunk_size, x = x,
+            ext_pool = ext_pool, d3_pool = d3_pool, det_pool = det_pool,
+            chunk_sums = chunk_sums
         Threads.@threads :dynamic for c in 1:nchunks
             n_lo = (c - 1) * chunk_size + 1
             n_hi = min(c * chunk_size, nsubs)
             ext = ext_pool[c]
             d3_vec = d3_pool[c]
+            det = det_pool[c]
             local_sum = 0.0
             for n in n_lo:n_hi
-                half = floor(Int, Lp / 2)
-                s1 = 0.0
-                @inbounds @simd for j in 1:half
-                    s1 += x[n-1+j]
+                s0 = 0.0; s1p = 0.0; s2p = 0.0
+                @inbounds @simd for j in 1:Lp
+                    w = x[n-1+j]
+                    s0  += w
+                    s1p += w * p1[j]
+                    s2p += w * p2[j]
                 end
-                s1 /= half
-
-                s2 = 0.0
-                @inbounds @simd for j in (half+1):Lp
-                    s2 += x[n-1+j]
-                end
-                s2 /= (Lp - half)
-
-                slope = (s2 - s1) / ((Lp / 2.0) * tau0)
+                a0 = s0 / Lp
+                a1 = s1p / s11
+                a2 = s2p / s22
 
                 @inbounds for j in 1:Lp
-                    val = x[n-1+j] - slope * tau0 * (j - 1)
-                    rev_val = x[n-1 + Lp - j + 1] - slope * tau0 * (Lp - j)
-
-                    ext[j] = rev_val
-                    ext[Lp + j] = val
-                    ext[2Lp + j] = rev_val
+                    det[j] = x[n-1+j] - (a0 + a1 * p1[j] + a2 * p2[j])
+                end
+                @inbounds for j in 1:Lp
+                    ext[j]       = det[Lp - j + 1]
+                    ext[Lp + j]  = det[j]
+                    ext[2Lp + j] = det[Lp - j + 1]
                 end
 
                 @inbounds for j in 1:L3
@@ -617,6 +658,7 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
             end
             chunk_sums[c] = local_sum
         end
+        end     # let
 
         total_sum = sum(chunk_sums)
         devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))

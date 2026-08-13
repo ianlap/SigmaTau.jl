@@ -43,6 +43,14 @@ legdocs/
 # Local Python venv used by ad-hoc analysis scripts.
 .bench-venv/
 
+# Python bindings (python/): build/test artifacts
+__pycache__/
+*.egg-info/
+python/.venv/
+python/dist/
+.pytest_cache/
+.ruff_cache/
+
 # Proprietary / large clock recordings used for off-repo validation
 clock_data/
 
@@ -70,6 +78,14 @@ docs/src/tutorials/0*_*.md
 tools/artifacts/*
 !tools/artifacts/
 !tools/artifacts/mhtotdev_mc_full.json
+# tools/nnls_noise_id.jl: the full-study JSON is provenance, and all three full
+# CSVs are tracked because paper/scripts/make_figures.jl reads every one of them
+# for Fig 4 (basis → panel a, trials → panel b, summary → panel c). Quick-run
+# outputs stay local. The trials dump is the bulky one (~1 MB at R_trial=1000).
+!tools/artifacts/nnls_noise_id_full.json
+!tools/artifacts/nnls_noise_id_basis_full.csv
+!tools/artifacts/nnls_noise_id_trials_full.csv
+!tools/artifacts/nnls_noise_id_summary_full.csv
 
 # Local design asset (kept on disk, not part of the package).
 SigmaTauDesign.zip
@@ -80,3 +96,4 @@ reference_papers/
 paper/
 .superpowers/
 tui/
+gui/

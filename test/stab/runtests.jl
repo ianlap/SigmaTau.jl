@@ -245,8 +245,8 @@ const LK = LegacyKernels
             @test SigmaTau._htotdev_core(x, [m], tau0)[1] ≈ new_dev atol=at rtol=rt
         end
 
-        # MHTOTDEV. Canonical Greenhall form (per-window half-mean slope removal)
-        # against the independent half-mean reference. MHTOTDEV is novel to
+        # MHTOTDEV. Per-window quadratic-LS detrend form against the
+        # independent Vandermonde-solve reference. MHTOTDEV is novel to
         # SigmaTau with no external reference, so this internal machine-precision
         # anchor is the kernel's primary correctness contract.
         for m in [1, 2, 4, 8]
@@ -566,11 +566,16 @@ const LK = LegacyKernels
         @test all(isfinite, with_trend.dev)
         @test with_trend.dev ≈ base.dev rtol = 1e-8
 
-        # remove_drift=false on the drifting record must differ at long τ —
-        # the kernel alone re-admits drift through the window boundaries.
-        raw = mhtotdev(PhaseData(x_trend, tau0), ms; ci=false, correct_bias=false,
-                       remove_drift=false)
-        @test raw.dev[end] > 2 * base.dev[end]
+        # The per-window quadratic detrend annihilates offset and drift inside
+        # every window, so the KERNEL ALONE is drift-immune — invariance must
+        # hold even with the wrapper's record-level removal disabled. (The
+        # pre-quadratic kernel re-admitted drift through the window boundaries
+        # and this assertion was reversed.)
+        raw_base  = mhtotdev(PhaseData(x, tau0),       ms; ci=false,
+                             correct_bias=false, remove_drift=false)
+        raw_trend = mhtotdev(PhaseData(x_trend, tau0), ms; ci=false,
+                             correct_bias=false, remove_drift=false)
+        @test raw_trend.dev ≈ raw_base.dev rtol = 1e-8
     end
 
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
@@ -1285,6 +1290,7 @@ const LK = LegacyKernels
 end
 
 include("taus.jl")
+include("nnls_noise_id.jl")
 include("suite.jl")
 include("spectral.jl")
 include("mhtotdev_mc.jl")

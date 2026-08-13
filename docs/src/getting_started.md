@@ -8,9 +8,7 @@ SigmaTau.jl is a single registerable package. From the Pkg REPL:
 pkg> add https://github.com/ianlap/SigmaTau.jl
 ```
 
-`using SigmaTau` brings the shared types (`PhaseData`, `FrequencyData`,
-`StabilityResult`) and every public deviation, noise-ID, and IO function
-into scope under one flat namespace.
+`using SigmaTau` brings the shared types (`PhaseData`, `FrequencyData`, `StabilityResult`) and every public deviation, noise-ID, and IO function into scope under one namespace.
 
 ## A minimal example
 
@@ -30,11 +28,7 @@ r = adev(p, [1, 4, 16]; ci=true)
 round.(r.dev; sigdigits=4)
 ```
 
-The result is a [`StabilityResult`](reference/types.md#SigmaTau.StabilityResult)
-populated with `tau`, `dev`, per-τ `noise_type`, χ²-based confidence bounds
-`ci` (one `(lo, hi)` tuple per τ — `r.ci[1].lo`, or plain vectors via the
-`ci_lower` / `ci_upper` accessors), `edf` per Greenhall–Riley, and `neff`,
-the number of analysis windows averaged at each τ.
+The result is a [`StabilityResult`](reference/types.md#SigmaTau.StabilityResult) populated with `tau`, `dev`, per-τ `noise_type`, χ²-based confidence bounds `ci` (one `(lo, hi)` tuple per τ — `r.ci[1].lo`, or plain vectors via the `ci_lower` / `ci_upper` accessors), `edf` per Greenhall–Riley, and `neff`, the number of analysis windows averaged at each τ.
 
 ## Where to next
 

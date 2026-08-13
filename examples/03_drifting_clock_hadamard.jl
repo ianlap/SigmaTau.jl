@@ -170,15 +170,19 @@ end
 # [MHTOTDEV bias and EDF](../theory/mhtotdev_bias_edf.md) for the
 # methodology.
 #
-# Unlike its parent `mhdev`, the total kernel is not drift-immune on
-# its own — the boundary extension re-admits residual drift — so
-# `mhtotdev` removes the record's least-squares frequency drift itself
-# before analyzing (`remove_drift = true`, the default; per-window
-# drift removal was evaluated in both the phase and frequency domains
-# and measurably damages the statistic, so the global removal is the
-# design). Since drift is deterministic, removing it discards no
-# statistical information; it is the same practice SP1065 recommends
-# before any total estimator. One piece of hygiene remains for the
+# Like its parent `mhdev`, the total kernel is drift-immune on its
+# own: each analysis subsegment is detrended by a quadratic
+# least-squares fit — matched to the third difference's annihilation
+# degree — which removes any deterministic frequency offset and drift
+# exactly inside the window before the reflection. `mhtotdev` still
+# removes the record's least-squares frequency drift by default
+# (`remove_drift = true`), but that is noise-identification hygiene,
+# not a requirement of the statistic: a strongly drifting record would
+# otherwise have its long-τ points classified as redder than the true
+# noise, which would then pick the wrong bias and EDF coefficients.
+# Since drift is deterministic, removing it discards no statistical
+# information; it is the same practice SP1065 recommends
+# before any total estimator. The same hygiene matters for the
 # *comparison* below: `mhdev`'s noise identification runs on the
 # record as given and would classify the longest-τ points as redder
 # than the true noise on a record drifting this strongly. Detrending

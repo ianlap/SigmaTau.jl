@@ -24,26 +24,9 @@ applies it by default; see the bias-correction policy section below.
 
 ## TOTDEV — total deviation
 
-**Extension method.** Whole-record symmetric reflection at both ends
-of the phase series `x` of length `N`, producing an extended sequence
-`x*` of length `3N − 4`. The reflection is applied **once** to the full
-record, with no per-τ subsegmentation and no detrending. The
-overlapping ADEV second-difference operator then runs on `x*` exactly
-as it would on the original record.
+The Total deviation (TOTDEV) employs a whole-record symmetric reflection at both ends of the original phase series, producing an extended sequence. This reflection is applied exactly once to the full record without prior detrending or subsegmentation. The standard overlapping ADEV second-difference operator is subsequently run over this extended sequence. The primary advantage of this boundary extension is a substantial improvement in long-τ statistical confidence, as the second-difference operator is never starved for data near the record boundaries.
 
-**Definition** (SP1065 §5 Eq. 25 [riley-2008-sp1065](@cite);
-GHP99 [greenhall-1999-totvar](@cite)):
-
-```math
-\mathrm{TOTVAR}(\tau) \;=\; \frac{1}{2\,(m\tau_0)^2 \,(N-2)}
-\sum_{i=2}^{N-1} \bigl(x_{i-m}^{*} - 2\,x_{i}^{*} + x_{i+m}^{*}\bigr)^2 .
-```
-
-The sum index runs over the original interior positions; the `x_{i±m}^*`
-terms reach into the reflected ends when `i ± m` would otherwise leave
-the original record. Long-τ confidence improves substantially over ADEV
-because the second difference always has data to operate on, regardless
-of how close `i` sits to a boundary.
+For the formal mathematical definition of the TOTDEV estimator, please read NIST SP1065 §5.2.10 [riley-2008-sp1065](@cite) for more details.
 
 ```julia
 totdev(PhaseData(x, τ₀), τs)
@@ -53,35 +36,9 @@ totdev(PhaseData(x, τ₀), τs)
 
 ## MTOTDEV — modified total deviation
 
-**Extension method.** *Per-subsegment*, not whole-record. The estimator
-walks `N − 3m + 1` overlapping subsegments of length `3m` along the
-phase record. For each subsegment the algorithm:
+The Modified total deviation (MTOTDEV) utilizes a per-subsegment extension strategy rather than a whole-record reflection. The estimator iterates over overlapping subsegments of the phase record. Within each subsegment, it performs half-average detrending followed by symmetric boundary reflection, subsequently forming cumulative second differences over the extended segment. This methodology effectively inherits MDEV's capacity to separate WPM and FPM noise via phase-averaging, while providing the long-τ confidence benefits of a total estimator.
 
-1. **Half-average detrends** the subsegment (subtract the mean of the
-   first half from the first half, the mean of the second half from
-   the second half — preserves the offset between halves so the inner
-   averaging step still sees real phase information).
-2. **Symmetrically reflects** the detrended segment at both ends to
-   build an extended segment of length `9m` (three copies — reversed,
-   original, reversed).
-3. Forms cumulative second differences and averages over the `6m`
-   valid window positions inside the extension.
-
-The outer sum is over the `N − 3m + 1` subsegments. This is HV99's
-construction [howe-1999-modtotvar](@cite); SP1065 §5 reproduces the algorithm.
-
-```math
-\mathrm{MTOTVAR}(\tau) \;=\; \frac{1}{2\,(m\tau_0)^2 \,(N - 3m + 1)}
-\sum_{n} \frac{1}{6m} \sum_{j} \bigl(a_{j+2} - 2\,a_{j+1} + a_{j}\bigr)^2 ,
-```
-
-where `a_j` are the `m`-point averages of the cumsum-reflected extended
-segment for subsegment `n`, and the inner sum runs over `6m` valid
-positions inside that extended segment.
-
-MTOTDEV inherits MDEV's WPM/FPM separation (slope `−3/2` vs `−1`
-under deviation) — phase-averaging the inner second-difference
-window splits the degeneracy that ADEV / TOTDEV cannot.
+For the formal mathematical definition of the MTOTDEV estimator and a complete algorithmic breakdown of the per-subsegment extension, please read NIST SP1065 §5.2.11 [riley-2008-sp1065](@cite) for more details.
 
 ```julia
 mtotdev(PhaseData(x, τ₀), τs)
@@ -122,35 +79,11 @@ degrees of freedom.
 
 ## HTOTDEV — Hadamard total deviation
 
-**Extension method.** *Per-subsegment in the frequency domain.* This
-is the first total estimator that does not operate directly on the
-phase record. Two-stage:
+The Hadamard total deviation (HTOTDEV) diverges from the preceding total estimators by operating in the frequency domain rather than the phase domain. The estimator converts the phase record to fractional frequency before walking over overlapping subsegments. Each subsegment undergoes half-average detrending (which effectively absorbs linear frequency drift) and symmetric reflection, followed by the application of cumulative third differences. This configuration successfully preserves HDEV's intrinsic insensitivity to linear frequency drift while delivering the enhanced long-τ confidence characteristic of total estimators.
 
-1. **Phase → frequency.** Convert `x` to fractional frequency
-   `y[i] = (x[i+1] − x[i]) / τ₀`, length `N_y = N − 1`.
-2. **Per-subsegment processing.** Walk `N_y − 3m + 1` subsegments of
-   length `3m` along `y`. For each:
-   - Half-average detrend the segment.
-   - Symmetric reflection to length `9m` (`[reverse; segment; reverse]`).
-   - Cumulative third differences (Hadamard kernel) summed over `6m`
-     positions.
+Note that at the shortest averaging factor ($m=1$), symmetric reflection fails to produce a statistically useful extension. Consequently, SigmaTau falls back to the ordinary HDEV at $m=1$, strictly adhering to the FCS01 algorithm design. 
 
-**Documented exception at `m = 1`:** at the shortest averaging factor
-there is no useful reflection (the third-difference window is `3m + 1 = 4`
-samples; reflection would produce trivially-correlated extensions).
-SigmaTau falls back to ordinary HDEV at `m = 1`. This matches the
-reference HTOTDEV implementations and is not a numerical defect — it
-is the design of the FCS01 algorithm [howe-2001-tothvar-steering](@cite).
-
-The construction originates in Howe 2000 [howe-2000-tothvar-ptti](@cite) with bias
-coefficients `a(α)` introduced in the FCS01 paper [howe-2001-tothvar-steering](@cite);
-Howe 2005 [howe-2005-tothvar-ieee](@cite) contributed long-τ refinements.
-
-HTOTDEV inherits HDEV's drift insensitivity (the third-difference
-kernel annihilates linear-in-`t` terms) so a record with significant
-linear frequency drift can be totalized without first detrending the
-whole record — drift is absorbed into the per-subsegment half-average
-step.
+For the comprehensive mathematical formulation of the HTOTDEV estimator, its specific drift-handling mechanics, and its documented bias coefficients, please read NIST SP1065 §5.2.12 [riley-2008-sp1065](@cite) for more details.
 
 ```julia
 htotdev(PhaseData(x, τ₀), τs)
@@ -160,39 +93,15 @@ htotdev(PhaseData(x, τ₀), τs)
 
 ## MHTOTDEV — modified Hadamard total deviation
 
-**Extension method.** *Per-subsegment, half-average detrending* — the
-same Greenhall extension MTOTDEV and HTOTDEV use. (MHTOTDEV has no
-canonical/published form; SigmaTau adopts the Greenhall methodology for
-consistency across the modified-total family.) Walks `N − 4m + 1`
-subsegments of phase length `4m` along `x`. For each:
+The Modified Hadamard total deviation (MHTOTDEV) is an original contribution to SigmaTau. It is the long-τ extension of MHDEV, combining phase-averaged third differences with boundary extension. Because there is no canonical publication defining MHTOTDEV, its construction adapts the modified-total methodology to the Hadamard total framework, integrating the modified third-difference operator.
 
-1. **Half-average slope removal** — subtract a linear trend whose slope
-   is the difference of the two half-segment means (the Greenhall slope
-   estimate shared with MTOTDEV / HTOTDEV), removing the subsegment's
-   mean frequency offset before the third-difference kernel.
-2. Symmetric reflection.
-3. Cumulative third differences plus an `m`-point moving average
-   (the modified-style inner averaging, parallel to how MDEV relates
-   to ADEV).
+The estimator uses a per-subsegment **quadratic least-squares** detrend on the phase record. It processes overlapping subsegments by fitting and removing a quadratic in phase (offset + frequency offset + drift), applying symmetric reflection, and computing cumulative third differences with an internal moving average.
 
-**Drift handling.** The kernel above is *not* drift-immune, unlike its
-parent MHDEV: the per-window detrend removes only the local frequency
-offset, so residual deterministic drift makes the reflected copies
-non-smooth at the window boundaries and the differences that span a
-boundary pick it back up — a record drifting at `2e-10`/day over a
-`1e-11` WHFM floor read 6× high at `T/τ ≈ 10` and 30× high at
-`T/τ ≈ 5`. Removing the drift *per window* does not work: the
-phase-domain two-parameter detrend inflates the WHPM bias to
-`B ≈ 3.8` and collapses the χ² EDF model (R² = 0.32), and the
-frequency-domain TOTHVAR scheme gives `B(WHPM)` growing with `m` —
-both were measured and rejected. Instead, [`mhtotdev`](@ref) removes
-the record's **global least-squares frequency drift** before the
-kernel (`remove_drift=true` by default; the per-τ noise identification
-also runs on the drift-removed record). The least-squares fit is a
-linear projection, so a deterministic drift is removed exactly, and
-the bias/EDF coefficients below are measured with this removal in the
-loop — the calibration matches what the function computes. Pass
-`remove_drift=false` for data that is already detrended.
+The detrend degree matches the kernel's annihilation degree: the third difference annihilates phase polynomials of degree ≤ 2, just as MTOTDEV's second difference annihilates degree ≤ 1 and its linear (half-average) detrend matches. A simple slope removal would leave the stochastic quadratic from α ≤ −3 noise in the window, and the seam kink at the reflection boundary would feed the boundary-spanning third differences, collapsing the kernel's low-frequency response. With the matched quadratic detrend, the estimator converges over the full Hadamard range α > −5.
+
+Because the quadratic fit exactly removes any deterministic frequency offset and drift inside every window, **this kernel is drift-immune on its own**. The [`mhtotdev`](@ref) wrapper still removes the record's least-squares frequency drift (`remove_drift=true` by default) so that the per-τ *noise identification* sees the underlying noise rather than the ramp. The statistic itself does not need it.
+
+The formal definition computed by the kernel is:
 
 ```math
 \mathrm{MHTOTVAR}(\tau) \;=\; \frac{1}{(m\tau_0)^2 \,(N - 4m + 1)}
@@ -200,30 +109,10 @@ loop — the calibration matches what the function computes. Pass
 \sum_{\text{window}} \bigl(\text{third-diff avg}\bigr)^2 ,
 ```
 
-with the per-subsegment inner sum running over `n_{\text{avg}}`
-valid `m`-point average windows of the cumulated third-difference
-sequence on the extended segment. The exact normalization and window
-counts are pinned against a direct reference implementation in
-`test/stab/legacy_kernels.jl`.
-
-MHTOTDEV is the long-τ extension of MHDEV: phase-averaged third
-differences with boundary extension.
+where the inner sum runs over $n_{\text{avg}}$ valid $m$-point average windows of the cumulated third-difference sequence on the extended segment.
 
 !!! info "Original contribution"
-    MHTOTDEV is original to SigmaTau. There is no
-    canonical paper for it; the construction follows HV99's
-    modified-total methodology [howe-1999-modtotvar](@cite) applied
-    to the FCS01 Hadamard total [howe-2001-tothvar-steering](@cite),
-    with the modified third-difference operator from Greenhall 1997
-    [greenhall-1997-third-difference-mvar](@cite). The authoritative
-    definition lives in the package source itself; the kernel sits at
-    [`src/kernels.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/kernels.jl)
-    and the public wrapper at
-    [`src/deviations.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/src/deviations.jl).
-    Put differently: total forms were published for the Allan
-    deviation (TOTDEV), the modified Allan deviation (MTOTDEV), and
-    the Hadamard deviation (HTOTDEV). The modified Hadamard deviation
-    had none — MHTOTDEV is that missing total form.
+    MHTOTDEV is original to SigmaTau, completing the total estimator family. The authoritative definition lives in the package source (`src/kernels.jl` and `src/deviations.jl`), providing the missing link alongside TOTDEV, MTOTDEV, and HTOTDEV.
 
 ```julia
 mhtotdev(PhaseData(x, τ₀), τs)
@@ -239,7 +128,7 @@ cube formed by three independent design axes:
 
 MHTOTDEV is Hadamard × modified × total, so it carries every
 property that distinguishes the family: drift rejection (by the
-automatic least-squares drift removal above) and `α ∈ {−4, −3}`
+per-window quadratic detrend, in the kernel itself) and `α ∈ {−4, −3}`
 convergence from Hadamard, WPM/FPM disambiguation from the
 phase-averaged inner kernel, and tight long-τ confidence from the
 per-subsegment extension. It is the right tool when a record has
@@ -269,10 +158,12 @@ the simpler estimators reach long τ with usable confidence.
 | TOTDEV    | whole record | none           | phase     | no  |
 | MTOTDEV   | per subsegment | half-average (offset) | phase     | no  |
 | HTOTDEV   | per subsegment | half-average (drift, on `y`) | frequency | yes — falls back to HDEV |
-| MHTOTDEV  | per subsegment | half-average (offset)¹ | phase     | no  |
+| MHTOTDEV  | per subsegment | quadratic LS (offset + drift)¹ | phase     | no  |
 
-¹ Plus a record-level least-squares drift removal in the public wrapper
-(`remove_drift=true` default) — see the drift-handling note above.
+¹ Matched to the third difference's annihilation degree, which makes the
+kernel drift-immune on its own. The public wrapper additionally removes the
+record's least-squares drift (`remove_drift=true` default) purely as
+noise-identification hygiene — see the drift-handling note above.
 
 ---
 
@@ -339,7 +230,8 @@ on this short record — the data-extension is doing its job.
   `bias_correction` helper from `src/edf.jl`.
 - The MHTOTDEV EDF model `edf = b·(T/τ) − c` and the bias
   `B = b₀ + b₁·(τ/T)` are Monte-Carlo-measured (no published form
-  exists for MHTOTDEV); see
+  exists for MHTOTDEV); the currently shipped coefficients are
+  provisional quick-mode values for the quadratic-detrend kernel. See
   [Theory: MHTOTDEV bias and EDF](mhtotdev_bias_edf.md).
 
 ---

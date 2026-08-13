@@ -7,43 +7,19 @@ differ in difference order, phase-averaging, and final scaling.
 
 ## ADEV — overlapping Allan deviation
 
-The original two-sample variance, in its overlapping estimator form
-(SP1065 Eq. 14):
+The Allan deviation (ADEV) is the classical two-sample variance. It is degenerate for White and Flicker Phase Modulation (both yield a variance slope $\mu = -1$), so it cannot independently disambiguate between these two noise types. 
 
-```math
-\sigma^2_y(\tau) \;=\; \frac{1}{2(N - 2m)\,(m\tau_0)^2}
-\sum_{i=1}^{N-2m} \bigl(x_{i+2m} - 2\,x_{i+m} + x_i\bigr)^2
-```
-
-with `τ = m·τ₀` and `N` phase samples. ADEV slope versus α:
-WPM/FPM both give μ_dev = −1 (degeneracy), WFM gives μ_dev = −1/2, FFM
-gives μ_dev = 0, RWFM gives μ_dev = +1/2.
-
-In SigmaTau:
+For the mathematical definition and the overlapping estimator form, please read NIST SP1065 §5 [riley-2008-sp1065](@cite) for more details.
 
 ```julia
 adev(PhaseData(x, τ₀), [1, 2, 4, 8, 16])
 ```
 
-(Definition and overlapping form per SP1065 §5
-[riley-2008-sp1065](@cite).)
-
 ## MDEV — modified Allan deviation
 
-A phase-averaged second difference. SP1065 Eq. 16:
+The Modified Allan deviation (MDEV) adds an inner phase-averaging step to the standard ADEV calculation, which decouples WPM ($\mu = -3/2$) from FPM ($\mu = -1$).
 
-```math
-\mathrm{MVAR}(\tau) \;=\; \frac{1}{2 m^4 \tau_0^2 \, N_e}
-\sum_{j=1}^{N_e} \biggl[\sum_{k=0}^{m-1}
-\bigl(x_{j+k+2m} - 2\,x_{j+k+m} + x_{j+k}\bigr)\biggr]^2,
-\qquad N_e = N - 3m + 1.
-```
-
-The inner phase-averaging step decouples WPM (μ_dev = −3/2) from FPM
-(μ_dev = −1). In `src/kernels.jl` this is
-implemented in third-difference form via prefix sums — algebraically
-identical to the SP1065 form above; the equivalence is Greenhall's
-third-difference construction [greenhall-1997-third-difference-mvar](@cite).
+Internally, SigmaTau computes MDEV using Greenhall's third-difference construction via prefix sums [greenhall-1997-third-difference-mvar](@cite). For the canonical definition, please read NIST SP1065 §5.2 [riley-2008-sp1065](@cite) for more details.
 
 ```julia
 mdev(PhaseData(x, τ₀), τs)
@@ -80,66 +56,19 @@ curvature in `x(t)` [vernotte-2016-pvar](@cite).
 
 ## TDEV — time deviation
 
-Time deviation. TDEV measures time-error stability, so its units are
-seconds (it is a `\sigma_x` quantity, not `\sigma_y`). SP1065 Eq. 17
-defines it as a scaled MDEV:
+The Time deviation (TDEV) measures time-error stability in units of seconds (a $\sigma_x$ quantity, not $\sigma_y$). It is a scaled version of MDEV.
 
-```math
-\sigma_x^2(\tau) \;=\; \mathrm{TVAR}(\tau) \;=\; \frac{\tau^2}{3}\,\mathrm{MVAR}(\tau).
+TDEV is the standard tool for characterizing the time error of a clock or time-distribution system (e.g., telecommunications synchronization networks, GNSS time transfer, atomic-clock comparison links). For a detailed definition, please read NIST SP1065 §5.2.7 [riley-2008-sp1065](@cite) for more details.
+
+```julia
+tdev(PhaseData(x, τ₀), τs)
 ```
-
-`tdev(...)` wraps `mdev(...)` and applies the `\tau / \sqrt{3}` scaling.
-The factor of `\sqrt{3}` comes from the integral of the second-difference
-sampling function squared against the fractional-frequency-to-time-error
-kernel.
-
-**Use case.** TDEV is the standard tool for characterizing the time
-error of a clock or a time-distribution system — telecommunications
-synchronization networks (PTP / SyncE / Recommendation G.810), GNSS
-time transfer, atomic-clock comparison links, and any infrastructure
-where the operative question is "how badly will a downstream
-consumer's clock drift away from the reference over τ seconds?"
-SP1065 §5 [riley-2008-sp1065](@cite) frames it as the way to characterize
-"the time error of a time source (clock) or distribution system." For
-records dominated by white PM noise, TVAR reduces to the standard
-variance of the time deviations themselves; for the other power-law
-noises it remains a convergent estimator and inherits MDEV's WPM/FPM
-disambiguation.
 
 ## HDEV — overlapping Hadamard deviation
 
-A third-difference variant with two advantages over ADEV: linear
-frequency drift is filtered out automatically, and the variance
-integral converges over a wider range of low-frequency noise. SP1065
-§5.4:
+The Hadamard deviation (HDEV) uses a third-difference kernel with two advantages over ADEV: it automatically filters out linear frequency drift, and its variance integral converges down to $\alpha = -4$. It is the preferred estimator for clocks with known frequency drift (e.g., Cesium, Rubidium) and for characterizing long power-law tails.
 
-```math
-\sigma^2_{H,y}(\tau) \;=\; \frac{1}{6\,(N - 3m)\,(m\tau_0)^2}
-\sum_{i=1}^{N-3m} \bigl(x_{i+3m} - 3\,x_{i+2m} + 3\,x_{i+m} - x_i\bigr)^2 .
-```
-
-The `1/6` prefactor arises from the third-difference variance
-normalization.
-
-**Drift insensitivity.** A linear-in-`t` term in `y(t)` (constant
-frequency drift) is annihilated by the third difference, so HDEV is
-not contaminated by drift the way ADEV is. SP1065 demonstrates this
-on a simulated rubidium record: ADEV picks up a `+τ` slope at long τ
-without prior detrending, while HDEV gives essentially the same
-answer as drift-removed ADEV [riley-2008-sp1065](@cite).
-
-**Noise-type convergence.** ADEV's variance integral diverges for
-`α ≤ −3` (flicker walk FM, random run FM) at the low-frequency end.
-HDEV remains finite down to `α = −4`, because the third difference
-adds an extra factor of `f²` to the kernel that suppresses the
-`f → 0` singularity [greenhall-1997-third-difference-mvar](@cite). In practice this matters
-only for records with very-low-frequency power-law content; most
-laboratory clocks are well-described in `−2 ≤ α ≤ +2` and ADEV
-suffices.
-
-HDEV is the preferred Allan-family estimator for clocks with known
-drift (Cs, Rb, H-maser) and for any analysis that needs to
-characterize the longest power-law tails.
+For the overlapping Hadamard estimator definition and a demonstration of its drift-insensitivity, please read NIST SP1065 §5.4 [riley-2008-sp1065](@cite) for more details.
 
 ```julia
 hdev(PhaseData(x, τ₀), τs)
@@ -147,27 +76,9 @@ hdev(PhaseData(x, τ₀), τs)
 
 ## MHDEV — modified Hadamard deviation
 
-A phase-averaged third difference. Combining the SP1065 form with the
-prefix-sum / third-difference equivalence from Greenhall 1997
-[greenhall-1997-third-difference-mvar](@cite):
+The Modified Hadamard deviation (MHDEV) is a phase-averaged third difference. The relationship between MHDEV and HDEV mirrors MDEV and ADEV: the phase-averaging window splits the WPM and FPM degeneracy, while the third-difference kernel preserves drift insensitivity. MHDEV is the right choice when a record contains linear frequency drift and phase noise that ADEV or MDEV cannot disambiguate.
 
-```math
-\mathrm{MHVAR}(\tau) \;=\; \frac{1}{6\,m^4 \tau_0^2 \, N_e}
-\sum_{j=1}^{N_e} \biggl[\sum_{k=0}^{m-1}
-\bigl(x_{j+k+3m} - 3\,x_{j+k+2m} + 3\,x_{j+k+m} - x_{j+k}\bigr)\biggr]^2,
-\qquad N_e = N - 4m + 1.
-```
-
-The relationship between MHDEV and HDEV mirrors the MDEV / ADEV
-relationship: phase-averaging the inner third-difference window splits
-the WPM/FPM degeneracy (slope `μ_dev` is `−3/2` under WPM, `−1` under
-FPM), while the third-difference kernel preserves HDEV's drift
-insensitivity. MHDEV is the right choice when a record contains
-linear frequency drift *and* phase noise that ADEV / MDEV cannot
-disambiguate. SigmaTau's kernel uses the prefix-sum form for
-performance; it is algebraically identical to the textbook expression
-above (the same telescoping identity as the MDEV case, one difference
-order higher).
+For the exact formulation, please read NIST SP1065 §5.4 [riley-2008-sp1065](@cite) for more details.
 
 ```julia
 mhdev(PhaseData(x, τ₀), τs)
@@ -175,31 +86,9 @@ mhdev(PhaseData(x, τ₀), τs)
 
 ## Theo1 — theoretical variance #1
 
-Theo1 (Theoretical Variance #1) extends the usable averaging-time
-range of a stability estimator by sampling longer windows than ADEV
-permits on the same record [riley-2008-sp1065](@cite). Where overlapping
-ADEV uses pairs separated by `mτ₀` with a maximum `m ≤ N/2`, Theo1
-operates over windows of length `(N − 1)·τ₀` regardless of `m` and
-extracts stability information from internal cross-products inside
-that long window. The estimator's headline benefit is **factor-of-3
-extension of the long-τ reach** at fixed record length, with a
-noise-type-dependent bias that is corrected via the Theo1 bias
-table.
+Theo1 (Theoretical Variance #1) extends the usable averaging-time range of a stability estimator by sampling longer windows than ADEV permits. It extracts stability information from internal cross-products over windows of length `(N − 1)·τ₀`, yielding a factor-of-3 extension in the long-τ reach for a fixed record length. It has a noise-type-dependent bias that is corrected via the Theo1 bias table.
 
-```math
-\mathrm{Theo1}(m, \tau_0, N) \;=\;
-\frac{1}{0.75\,(N - m)\,(m\,\tau_0)^2}\,
-\sum_{i=1}^{N-m}\,\sum_{\delta=0}^{m/2-1}
-\frac{1}{m/2 - \delta}\,
-\bigl[(x_i - x_{i-\delta+m/2}) + (x_{i+m} - x_{i+\delta+m/2})\bigr]^2 ,
-```
-
-for even `m` with `2 ≤ m ≤ N − 1` (SP1065 eq. 30; the printed equation
-omits the 0.75 normalization of the original Howe & Peppler definition,
-but SP1065's own Table 2 bias value of 1.00 for white FM, Stable32, and
-allantools all require it) [riley-2008-sp1065](@cite). The effective
-averaging time of a Theo1 value is `τ = 0.75·m·τ₀`, and that is the τ
-SigmaTau reports.
+For the Theo1 definition, its bias-correction procedures, and EDF, please read NIST SP1065 §5.2.14 [riley-2008-sp1065](@cite) for more details.
 
 !!! note "Implemented"
     `theo1(data, m_values; ci=true, correct_bias=true, confidence=…)`,
@@ -207,53 +96,25 @@ SigmaTau reports.
     chains. `m_values` are even Theo1 averaging factors
     (`tau_values(mode, N, :theo1)` rounds a grid to even and dedupes);
     `r.tau` holds the effective `0.75·m·τ₀`. `correct_bias=true`
-    (default) applies the ThêoBR automatic bias removal of SP1065
-    eq. 33 — the average of the matched-τ `AVAR(9+3i)/Theo1(12+4i)`
-    variance ratios over `i = 0…⌊N/6−3⌋` — so the default output is the
-    bias-removed ThêoBR; `correct_bias=false` gives raw eq. 30 Theo1.
-    EDF/CIs use the per-noise-type empirical formulas of SP1065 §5.2.15
-    Table 3 with `r = 0.75m`. The raw kernel is cross-validated against
-    allantools 2024.06 to machine precision (`test/stab/theo.jl`);
-    allantools reports the same values at `τ = m·τ₀`, a definitional
-    offset resolved here in favor of SP1065/Stable32.
+    (default) applies the ThêoBR automatic bias removal — the average of 
+    the matched-τ `AVAR/Theo1` variance ratios. EDF/CIs use the 
+    per-noise-type empirical formulas of SP1065 §5.2.15. The raw kernel 
+    is cross-validated against allantools 2024.06 to machine precision.
 
 ## ThêoH — composite Theo1 + ADEV estimator
 
-ThêoH (pronounced "theo-H") is a composite estimator that uses
-overlapping ADEV at short averaging factors and switches to the
-bias-corrected Theo1 (TheoBR) at longer averaging factors, producing
-a single continuous σ_y(τ) curve from `m = 1` out to the Theo1
-long-τ limit [riley-2008-sp1065](@cite). The crossover point is chosen
-so that the resulting curve has tight CIs across the entire τ range
-that neither ADEV nor Theo1 alone could provide on a fixed-length
-record. Banerjee & Matsakis recommend ThêoH as the default
-long-record stability summary in modern timekeeping practice
-[banerjee-2023-timekeeping](@cite).
+ThêoH (pronounced "theo-H") is a composite estimator combining overlapping ADEV at short averaging factors with bias-corrected Theo1 (ThêoBR) at longer averaging factors. It produces a single continuous curve from `m = 1` out to the Theo1 long-τ limit. The crossover point ensures tight confidence intervals across the entire range that neither ADEV nor Theo1 alone could provide. Banerjee & Matsakis recommend ThêoH as the default long-record stability summary [banerjee-2023-timekeeping](@cite).
 
-Per SP1065 eq. 34 the composite is
-
-```math
-\mathrm{ThêoH}(m, \tau_0, N) \;=\;
-\begin{cases}
-\mathrm{AVAR}(m, \tau_0, N) & \text{for } \tau = m\tau_0 \le k,\\[2pt]
-\mathrm{ThêoBR}(m_\theta, \tau_0, N) & \text{for } \tau = 0.75\,m_\theta\tau_0 > k,\ m_\theta \text{ even},
-\end{cases}
-```
-
-with crossover `k` = 20 % of the record span `T = (N−1)·τ₀`
-[riley-2008-sp1065](@cite).
+For the construction of the composite estimator and the calculation of the crossover point, please read NIST SP1065 §5.2.16 [riley-2008-sp1065](@cite) for more details.
 
 !!! note "Implemented"
     `theoh(data, m_values; ci=true, confidence=…)`, with the usual
     `TauMode` / zero-argument / `FrequencyData` dispatch chains.
     `m_values` are τ-grid factors (target `τ = m·τ₀`, not necessarily
     even): points with `m·τ₀ ≤ k` come from overlapping ADEV at `m`,
-    points above from ThêoBR at the even Theo1 factor nearest `4m/3`
-    (exact whenever `3 | m`), each reported at its realized τ. CIs use
-    the Greenhall–Riley ADEV EDF on the ADEV segment and the SP1065
-    Table 3 Theo1 EDF on the ThêoBR segment. ThêoH always carries the
-    eq. 33 bias removal; raw Theo1 is available via
-    `theo1(…; correct_bias=false)`.
+    points above from ThêoBR at the even Theo1 factor nearest `4m/3`.
+    CIs use the Greenhall–Riley ADEV EDF on the ADEV segment and the 
+    SP1065 Table 3 Theo1 EDF on the ThêoBR segment.
 
 ## Dynamic Allan deviation — DADEV
 

@@ -390,16 +390,13 @@ adopts for this novel estimator (see `_mhtotdev_core`).
 
 `remove_drift=true` (default) removes the record's least-squares frequency
 drift (the quadratic phase term) before the analysis, and the per-τ noise
-identification runs on the drift-removed record. Unlike MHDEV, the total
-estimator is not drift-immune: its per-window detrend removes only the local
-frequency offset, so residual deterministic drift re-enters through the
-reflected window boundaries and reads several times high at long τ. Removing
-the global least-squares drift is exact for a deterministic drift (the fit
-is a linear projection) and discards no statistical information; it is the
-same practice SP1065 prescribes before TOTVAR / MTOTVAR. Per-window drift
-removal was evaluated and rejected — both the phase-domain and
-frequency-domain variants measurably damage the statistic at the PM noise
-types (see the "MHTOTDEV bias and EDF" theory page). Pass
+identification runs on the drift-removed record. The kernel itself is
+drift-immune — its per-window quadratic detrend annihilates any deterministic
+frequency offset and drift exactly inside every window — so the record-level
+removal exists for noise-identification hygiene (a drifting record otherwise
+misclassifies long-τ points), not for the statistic. It is the same practice
+SP1065 prescribes before the phase-domain totals, is exact for a
+deterministic drift, and discards no statistical information. Pass
 `remove_drift=false` for data that is already detrended.
 
 `correct_bias=true` (default) applies the Monte-Carlo-measured unbias

@@ -97,6 +97,7 @@ nch
 
 ```@docs
 identify_noise
+noise_id_nnls
 noise_gen
 ```
 

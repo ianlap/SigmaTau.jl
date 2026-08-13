@@ -141,7 +141,7 @@ tables where they exist and documented fallbacks elsewhere:
 | TOTDEV   | per SP1065 | `B = 1 − a(α)·τ/T` — biased low for FFM/RWFM |
 | MTOTDEV / TTOTDEV | per SP1065 | τ-independent; B ≈ 1.27 (variance) under WHFM |
 | HTOTDEV  | per FCS 2001 | `B = 1 + a(α)`, `α ∈ {0, …, −4}` — biased low |
-| MHTOTDEV | Monte Carlo (SigmaTau) | `B = b₀ + b₁·τ/T`; ≈ 1 for white/flicker noise |
+| MHTOTDEV | Monte Carlo (SigmaTau) | `B = b₀ + b₁·τ/T`; near-constant per α, `B ≈ 0.78–0.91` — biased low |
 
 The bias factor `B(α) = E[estimator²] / true variance` is defined on
 the variance; the API divides the raw *deviation* by `√B`, which is
@@ -162,9 +162,12 @@ with `a ∈ {−0.005, −0.149, −0.229, −0.283, −0.321}` for
 HTOT is biased *low* for the FM noises, while PM noises (`α > 0`) have
 no published model and keep `B = 1` [howe-2001-tothvar-steering](@cite).
 MHTOTDEV is *not* treated as unbiased: SigmaTau applies a
-Monte-Carlo-measured `B = b₀(α) + b₁(α)·(τ/T)` that is ≈ 1 for white
-and flicker noise but reads high for redder FM (RWFM `B ≈ 1.9` at small
-τ) — see [Theory: MHTOTDEV bias and EDF](mhtotdev_bias_edf.md).
+Monte-Carlo-measured `B = b₀(α) + b₁(α)·(τ/T)`. With the per-window
+quadratic detrend the measured bias reads **low** and is nearly a per-α
+constant, `B ≈ 0.78–0.91` with `|b₁| ≤ 0.14` — the same sign as its MTOT
+and HTOT siblings, so the correction raises σ slightly. The shipped
+coefficients are provisional quick-mode values; see
+[Theory: MHTOTDEV bias and EDF](mhtotdev_bias_edf.md).
 
 ## Implementation contract
 

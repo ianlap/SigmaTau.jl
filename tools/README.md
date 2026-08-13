@@ -19,6 +19,37 @@ julia --project=. --threads=auto tools/mc_mhtotdev.jl quick      # laptop check 
 Outputs a per-cell CSV and a JSON summary (metadata plus fitted coefficients)
 under `artifacts/`.
 
+## `nnls_noise_id.jl`
+
+Monte Carlo study of weighted-NNLS power-law noise identification across MDEV,
+MHDEV, HDEV and MHTOTDEV. A composite record carrying WPM + WFM + RWFM + RRFM
+at known amplitudes is fitted against an *empirical* basis — the ensemble-mean
+σ̂²(τ) of synthesized unit noises, one basis per estimator — and the study
+reports amplitude recovery, conditioning (κ₂), across-trial spread, a
+parametric χ²(ν) bootstrap that isolates the EDF contribution, and per-noise-type
+misidentification rates — each type scored over the τ where the analytic
+crossover design (with family-correct response exponents) makes it dominant by a
+clear margin, so an estimator cannot score well on a type that owns a single
+uncontested octave. The exact solver it exercises is the shipped
+`SigmaTau._nnls_exact`; a local Lawson–Hanson implementation cross-checks every
+solve.
+
+```bash
+julia --project=. --threads=auto tools/nnls_noise_id.jl            # full study (hours)
+julia --project=. --threads=auto tools/nnls_noise_id.jl quick      # laptop check (~2 min)
+```
+
+Hard gates (nonzero exit on failure): the pure-noise MHDEV slopes must be
+(−3/2, −1/2, +1/2, +3/2) ± 0.15 for α = (+2, 0, −2, −4); the two solvers must
+agree; and MHDEV / HDEV / MHTOTDEV must each recover a single-type record with
+≥ 90 % of the fitted variance on the correct column. MDEV's failure on RRFM is
+expected and documented, not gated: MVAR does not converge for α ≤ −3, so its
+α = −4 column grows with the record length instead of following τ³.
+
+Writes basis / trials / summary CSVs and a JSON (metadata, gate outcomes,
+per-estimator metrics) under `artifacts/`; `paper/scripts/make_figures.jl`
+reads them for Fig 4.
+
 ## `artifacts/mhtotdev_mc_full.json`
 
 Tracked provenance for the shipped MHTOTDEV coefficients: the authoritative

@@ -4,6 +4,7 @@ using DocStringExtensions
 using Statistics
 using Distributions
 using StaticArrays
+using LinearAlgebra
 using DelimitedFiles
 using FFTW
 using Dates
@@ -75,7 +76,7 @@ export tau_values
 # are reachable as `SigmaTau._adev_core` etc. for power users, but the leading
 # underscore marks them unsupported and they are kept out of the bare namespace.
 
-export identify_noise, calculate_edf, confidence_intervals, bias_correction
+export identify_noise, noise_id_nnls, calculate_edf, confidence_intervals, bias_correction
 
 export adev, mdev, tdev
 export hdev, mhdev, htdev

@@ -38,55 +38,19 @@ it. `read_frequency` takes the same keywords.
 
 ## Why do my confidence intervals differ slightly from Stable32?
 
-The deviation values themselves agree — the core kernels are validated against
-Stable32 to the 5-significant-figure precision of its published outputs (see
-[Validation](validation/methodology.md) and the
-[Stable32 comparison tables](validation/stable32.md)). The intervals around
-them can differ for two reasons.
+The deviation values themselves agree — the core kernels are validated against Stable32 to the 5-significant-figure precision of its published outputs (see [Validation](validation/methodology.md) and the [Stable32 comparison tables](validation/stable32.md)). The intervals around them can differ for two reasons.
 
-First, SigmaTau identifies the dominant noise type independently at every τ
-(lag-1 ACF with a B1/R(n) fallback), and by default it quadratically detrends
-each decimated subseries before classifying; on a borderline record a τ point
-can land in a different power-law family than Stable32 assigns, which changes
-the EDF and hence the interval.
-(`identify_noise(x, m_values; detrend=false)` reproduces Stable32's
-no-detrend convention point-for-point.)
+First, SigmaTau identifies the dominant noise type independently at every τ (lag-1 ACF with a B1/R(n) fallback), and by default it quadratically detrends each decimated subseries before classifying. On a borderline record a τ point can land in a different power-law family than Stable32 assigns, which changes the EDF and hence the interval. (`identify_noise(x, m_values; detrend=false)` reproduces Stable32's no-detrend convention point-for-point.)
 
-Second, for the total family above α = 0 the published EDF coefficient
-tables run out, and the two programs substitute different EDF models there.
-For the core estimators the EDF model is the same: SigmaTau uses the
-Greenhall–Riley spectral-sum formulas [greenhall-2003-edf-stability](@cite),
-which Stable32 has also used since v1.41 — wherever the two programs agree
-on the noise type, the interval bounds agree to within 0.05 % (see
-[Validation: Stable32](validation/stable32.md)).
+Second, for the total family above α = 0 the published EDF coefficient tables run out, and the two programs substitute different EDF models there. For the core estimators the EDF model is the same: SigmaTau uses the Greenhall–Riley spectral-sum formulas [greenhall-2003-edf-stability](@cite), which Stable32 has also used since v1.41 — wherever the two programs agree on the noise type, the interval bounds agree to within 0.05 % (see [Validation: Stable32](validation/stable32.md)).
 
 ## When should I use the Hadamard family instead of Allan?
 
-Use `hdev` / `mhdev` / `htdev` when the record contains linear frequency
-drift, or noise redder than random-walk FM. The Hadamard kernel is a third
-difference of phase rather than a second difference, and the third difference
-annihilates a linear-in-`t` term in `y(t)` — so constant frequency drift drops
-out of the statistic instead of adding a spurious `+τ` slope, which is exactly
-what happens to ADEV on a drifting rubidium or cesium record
-[riley-2008-sp1065](@cite). The same extra difference order keeps the variance
-integral convergent down to `α = −4`, where the Allan family diverges for
-`α ≤ −3`. For a drift-free record in the usual `−2 ≤ α ≤ +2` range, ADEV
-suffices and has slightly tighter intervals. See
-[Theory: Allan family](theory/allan_family.md).
+Use `hdev` / `mhdev` / `htdev` when the record contains linear frequency drift, or noise redder than random-walk FM. The Hadamard kernel is a third difference of phase rather than a second difference, and the third difference annihilates a linear-in-`t` term in `y(t)` — so constant frequency drift drops out of the statistic instead of adding a spurious `+τ` slope, which is exactly what happens to ADEV on a drifting rubidium or cesium record [riley-2008-sp1065](@cite). The same extra difference order keeps the variance integral convergent down to `α = −4`, where the Allan family diverges for `α ≤ −3`. For a drift-free record in the usual `−2 ≤ α ≤ +2` range, ADEV suffices and has slightly tighter intervals. See [Theory: Allan family](theory/allan_family.md).
 
 ## Why are MHTOTDEV's confidence intervals "Monte-Carlo-calibrated"?
 
-MHTOTDEV is novel to SigmaTau: no other library computes it and no published
-reference gives its bias factor or its EDF. Every other total estimator
-inherits a published coefficient table; MHTOTDEV has none, so SigmaTau
-measured both quantities by Monte Carlo against synthesized known-α noise,
-following the methodology of the NIST total-variance papers
-[howe-2000-tothvar-ptti](@cite). The fitted coefficients ship in the package
-(the EDF table and the `bias_correction(…, :mhtot, …)` entries), and the full
-procedure — estimators, fit forms, validity window, and the resulting
-coefficient table — is documented in
-[Theory: MHTOTDEV bias and EDF](theory/mhtotdev_bias_edf.md) so the
-calibration is reproducible.
+MHTOTDEV is novel to SigmaTau: no other library computes it and no published reference gives its bias factor or its EDF. Every other total estimator inherits a published coefficient table; MHTOTDEV has none, so SigmaTau measured both quantities by Monte Carlo against synthesized known-α noise, following the methodology of the NIST total-variance papers [howe-2000-tothvar-ptti](@cite). The fitted coefficients ship in the package (the EDF table and the `bias_correction(…, :mhtot, …)` entries), and the full procedure — estimators, fit forms, validity window, and the resulting coefficient table — is documented in [Theory: MHTOTDEV bias and EDF](theory/mhtotdev_bias_edf.md) so the calibration is reproducible.
 
 ## What does the τ/τ₀ ≥ 16 note on the total estimators mean?
 

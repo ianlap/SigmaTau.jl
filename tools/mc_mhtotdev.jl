@@ -35,21 +35,31 @@ using Dates
 const QUICK = "quick" in ARGS
 
 const MASTER_SEED = 20260531
-const ALPHAS      = (2, 1, 0, -1, -2)               # WHPM … RWFM
+const ALPHAS      = (2, 1, 0, -1, -2, -3, -4)       # WHPM … RWFM, FWFM, RRFM
 # Record length N as the number of samples (powers of two). T = (N-1)·τ0.
 const N_GRID      = QUICK ? (1024, 2048) :
                            (1024, 2048, 4096, 8192, 16384, 32768)
 const R           = QUICK ? 200  : 3000             # realizations per cell
 const R_ANCHOR    = QUICK ? 400  : 3000             # top-N tier (uniform with R)
 const N_BOOT      = QUICK ? 500  : 2000             # bootstrap resamples
-const MIN_NSUBS   = 16                              # drop tiny-window cells
+# The shipped default grid reaches m = N÷4 (τ/T ≈ 0.25), so the calibration
+# must measure that far. MHTOTVAR is defined down to a single subsegment, and
+# its EDF comes from the ensemble variance across realizations, so EDF cells
+# need only nsubs ≥ 1. The BIAS ratio needs the MHVAR reference to exist and
+# be well-conditioned, so bias cells keep the original floor and additionally
+# require m ≤ (N−1)÷4 (MHVAR's reach).
+const MIN_NSUBS      = 1                            # EDF-cell floor
+const MIN_NSUBS_BIAS = 16                           # bias-cell floor
 # Total-estimator EDF model validity: Howe et al. 2000 (TotHvar, eqn 7) state
 # the fit "should be used only if … τ/τ0 ≥ 16" — below that the data-extension
 # gives no advantage over the plain estimator. Fit only m ≥ FIT_M_MIN.
 const FIT_M_MIN   = 16
 
 # Analytic MHVAR variance slope σ²_MH(τ) ∝ τ^μ for each α (modified family).
-_mu(alpha::Int) = alpha <= 0 ? -alpha - 1 : (alpha == 1 ? -2 : -3)
+# The modified family separates the PM noises (unlike Allan, where α=1,2 are
+# degenerate), so the slope is the single relation μ = −α−1 across the whole
+# WHPM…RRFM range: α=2→−3, α=1→−2, α=0→−1, α=−1→0, α=−2→1, α=−3→2, α=−4→3.
+_mu(alpha::Int) = -alpha - 1
 
 # Process-stable seed derivation (splitmix64 finalizer). Base `hash` is NOT
 # guaranteed stable across Julia versions/processes, so it cannot anchor a
@@ -207,7 +217,12 @@ function main()
         for N in N_GRID
             T = float(N - 1)
             ms = _default_m_values(N, :mhtotdev)
-            ms = filter(m -> (N - 4m + 1) >= MIN_NSUBS, ms)
+            # The octave grid jumps from τ/T = 0.125 straight to 0.25; without
+            # intermediate cells the extrapolation zone the default grid
+            # reaches would be fitted through a gap instead of measured.
+            edge = [3N ÷ 16, 7N ÷ 32, 15N ÷ 64, N ÷ 4]
+            ms = sort(unique(vcat(ms, edge)))
+            ms = filter(m -> (N - 4m + 1) >= MIN_NSUBS && m <= N ÷ 4, ms)
             isempty(ms) && continue
             nreal = (N == N_GRID[end]) ? R_ANCHOR : R   # anchor at the top N
             @printf("  → α=%+d  N=%5d  R=%d  cells=%d  …\n", alpha, N, nreal, length(ms))
@@ -237,7 +252,17 @@ function main()
                 # near-degenerate and carries the tightest SE (largest weight) —
                 # otherwise skew the bias toward a non-physical value.
                 if m >= FIT_M_MIN && isfinite(edf[k]) && edf_se[k] > 0
-                    push!(B_by_alpha[alpha], (τ / T, B[k], B_se[k]))
+                    # Bias cells need a well-conditioned MHVAR reference; EDF
+                    # cells run all the way to m = N÷4, where MHVAR does not
+                    # exist and B is unmeasurable (NaN).
+                    if (N - 4m + 1) >= MIN_NSUBS_BIAS && m <= (N - 1) ÷ 4 &&
+                       isfinite(B[k]) && B_se[k] > 0
+                        push!(B_by_alpha[alpha], (τ / T, B[k], B_se[k]))
+                    end
+                    # NOTE for the refit: measured ν in τ/T ∈ (0.125, 0.25] is
+                    # not linear in T/τ (ν ≈ 2.1 at T/τ = 4 vs the linear form's
+                    # 1.0); expect the TotHvar form to win there, or state the
+                    # linear form's validity as T/τ ≥ 8 explicitly.
                     push!(fit_x[alpha],  tot)
                     push!(fit_y[alpha],  edf[k])
                     push!(fit_w[alpha],  1 / edf_se[k]^2)
@@ -306,7 +331,8 @@ function main()
         println(io, "    \"seed_scheme\": ", _jval("Xoshiro(splitmix64(seed, alpha, N, r))"), ",")
         println(io, "    \"N_grid\": ", _jval(collect(N_GRID)), ",")
         println(io, "    \"R\": ", R, ", \"R_anchor\": ", R_ANCHOR, ",")
-        println(io, "    \"n_boot\": ", N_BOOT, ", \"min_nsubs\": ", MIN_NSUBS, ",")
+        println(io, "    \"n_boot\": ", N_BOOT, ", \"min_nsubs\": ", MIN_NSUBS,
+                ", \"min_nsubs_bias\": ", MIN_NSUBS_BIAS, ",")
         println(io, "    \"fit_m_min\": ", FIT_M_MIN, ",")
         println(io, "    \"mhvar_slope_check_passed\": ", slope_ok)
         println(io, "  },")

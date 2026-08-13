@@ -77,7 +77,13 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             end
         elseif method == :mhtotdev
             b, c = _coeff_mhtot(alpha)
-            edfs[k] = b * (T / tau) - c
+            # The calibration now measures the edge cells out to the reach
+            # limit, so the fitted model stays above ν = 1 over the whole
+            # default grid; the floor is a dormant guard against a future
+            # coefficient regression re-crossing ν = 1 and silently tripping
+            # the Gaussian fallback in confidence_intervals (which once
+            # collapsed the last-τ CI ~13×).
+            edfs[k] = max(b * (T / tau) - c, 1.0)
         elseif method == :theo1
             edfs[k] = _theo1_edf(alpha, m, N)
         elseif method == :pdev
@@ -196,22 +202,21 @@ function _coeff_mtot(alpha::Int)
 end
 
 function _coeff_mhtot(alpha::Int)
-    # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
-    # (tools/mc_mhtotdev.jl, full sweep at git 3806ccb — the L = 4m subsegment
-    # kernel — seed 20260531, R=3000, N up to 32768) against the shipped
-    # mhtotdev pipeline INCLUDING its default global least-squares drift
-    # removal (remove_drift=true), so the calibration matches what users
-    # compute; all fits R² ≥ 0.9982. MHTOTDEV is novel to SigmaTau, so these
-    # have no external reference — see docs theory/mhtotdev_bias_edf.md. Both
-    # the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
-    # fit; TotHvar edges ahead at α = ±2 (ΔR² ≤ 8e-4) and Mod-Totvar fits
-    # better elsewhere, so the Mod-Totvar form is kept uniformly as in the
-    # original calibration.
-    alpha == 2  && return (1.6869, 4.3166)
-    alpha == 1  && return (1.1671, 3.2107)
-    alpha == 0  && return (1.0861, 3.3451)
-    alpha == -1 && return (1.0095, 3.3254)
-    alpha == -2 && return (0.7631, 2.4490)
+    # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. PROVISIONAL quick-mode values
+    # for the quadratic-detrend kernel (tools/mc_mhtotdev.jl quick, seed
+    # 20260531, R=200/400, N ∈ {1024, 2048}, edge cells included, fits
+    # R² ≥ 0.965): the kernel redefinition (per-window quadratic LS detrend,
+    # matched to the third difference's annihilation order) invalidated the
+    # previous full-sweep tables, and the replacement full sweep (R=3000,
+    # N up to 32768) has not yet run — replace these from its artifacts.
+    # Measured against the shipped pipeline INCLUDING the default global
+    # drift removal. Mod-Totvar form kept uniformly (house convention; the
+    # form choice is re-decided at the full refit).
+    alpha == 2  && return (1.4449, 1.5717)
+    alpha == 1  && return (0.9951, 1.3987)
+    alpha == 0  && return (0.8929, 1.5941)
+    alpha == -1 && return (0.8298, 1.7928)
+    alpha == -2 && return (0.7722, 1.7331)
     return (NaN, NaN)
 end
 
@@ -361,20 +366,19 @@ Conventions per variance type:
 - `:totvar` — Howe/Walter (1994). `B = 1 − a·τ/T` with `a = 1/(3·ln 2)`
   for FFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
   divergent FM noises only.
-- `:mtot`   — SP1065 Table 11 / Greenhall 1999. Independent of τ.
-  Biased high (B > 1); MTOT overstates MVAR. Corroborated by Howe &
-  Vernotte 2003 "Generalization of the Total variance approach to the
-  modified Allan variance", Table 1 — 100-trial Monte Carlo with
-  N_xmax = 16384 gives `Bias = (1 − √(MTOTVAR/MVAR))·100%` ranging from
-  ~−2% (WHPM) to ~−18% (RWFM), i.e. √(MTOTVAR/MVAR) ∈ [1.02, 1.18],
-  implying B ∈ [1.04, 1.39] — consistent with the table values below.
-
-  The Riley document "Confidence Intervals and Bias Corrections for the
-  Stable32 Variance Functions" lists B values (0.94, 0.83, 0.73, 0.70,
-  0.69) that contradict both SP1065 and Howe & Vernotte 2003 in
-  direction; treated as a doc typo and ignored. Stable32 empirically
-  does NOT apply MTOT bias to its default output regardless of doc
-  claims, so `correct_bias=false` on `mtotdev` matches Stable32;
+- `:mtot`   — Riley, "Confidence Intervals and Bias Corrections for the
+  Stable32 Variance Functions": B = (0.94, 0.83, 0.73, 0.70, 0.69) for
+  α ∈ {2, 1, 0, −1, −2}, independent of τ. Biased LOW (B < 1): the
+  per-window half-average detrend strips genuine low-frequency power, so
+  MTOT understates MVAR for the red noises. Confirmed by direct MC with
+  the same harness that reproduces the published TOTHVAR bias to 0.1%
+  (measured {1.00, 0.85, 0.77, 0.72, 0.68}, flat in τ, ≤6% from Riley).
+  An earlier version of this table shipped the values on the wrong side
+  of 1 (B ∈ [1.06, 1.31]) from a sign misreading of Howe & Vernotte
+  2003 Table 1 — `Bias = (1 − √(MTOTVAR/MVAR))·100%` evaluates to
+  +17.5% at RWFM with the measured ratio, not −18%. Stable32 empirically
+  does NOT apply MTOT bias to its default output, so
+  `correct_bias=false` on `mtotdev` matches Stable32;
   `correct_bias=true` applies the textbook-correct unbias `σ ← σ/√B`.
 - `:htot`   — FCS 2001 (Howe & Tasset) Table I `a` column. `B = 1 + a`
   with the published `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}`
@@ -384,11 +388,13 @@ Conventions per variance type:
 - `:mhtot`  — measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
   `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
   external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
-  `:totvar`): `b0 ∈ {1.031, 0.988, 1.054, 1.295, 2.169}` and
-  `b1 ∈ {-0.120, -0.069, -0.171, -0.719, -5.588}` for α ∈ {2, 1, 0, -1, -2}.
-  MHTOTDEV is ≈ unbiased for white/flicker noise (B ≈ 1) and reads high
-  for redder FM (RWFM B ≈ 2.2 at small τ, falling toward 1 as τ→T).
-  See docs `theory/mhtotdev_bias_edf.md`.
+  `:totvar`), though B is nearly a per-α constant for the quadratic-detrend
+  kernel: `b0 ∈ {0.910, 0.825, 0.794, 0.784, 0.788}` and
+  `b1 ∈ {-0.134, -0.021, -0.018, -0.020, -0.016}` for α ∈ {2, 1, 0, -1, -2}
+  (PROVISIONAL quick-mode values, see `_coeff_mhtot`). MHTOTDEV reads
+  uniformly LOW (B ≈ 0.78–0.91) — the per-window fit strips a little genuine
+  noise power at every window length, the same sign as the MTOT and HTOT
+  tables. See docs `theory/mhtotdev_bias_edf.md`.
 
 Anything unrecognised falls through to B = 1.
 """
@@ -403,7 +409,17 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
             B[k] = 1 - a * (tau / T)
         elseif var_type == :mtot
-            table = Dict(2=>1.06, 1=>1.17, 0=>1.27, -1=>1.30, -2=>1.31)
+            # Riley, "Confidence Intervals and Bias Corrections for the
+            # Stable32 Variance Functions" — B = E[MTOTVAR]/E[MVAR] < 1:
+            # the half-average detrend strips genuine low-frequency power,
+            # so MTOT understates MVAR for the red noises. Confirmed by
+            # direct MC (harness validated against the published TOTHVAR
+            # bias to 0.1%): measured {1.00, 0.85, 0.77, 0.72, 0.68}, flat
+            # in τ. The previous table {1.06 … 1.31} came from reading the
+            # Howe & Vernotte 2003 Table 1 bias percentages with the wrong
+            # sign; the same formula on our MC gives +17.5% at RWFM, not
+            # −18%.
+            table = Dict(2=>0.94, 1=>0.83, 0=>0.73, -1=>0.70, -2=>0.69)
             B[k] = get(table, clamp(alpha, -2, 2), 1.0)
         elseif var_type == :htot
             # FCS 2001 (Howe & Tasset) Table I, column `a`: normalized bias
@@ -419,15 +435,16 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             # τ/τ0 ≥ 16 validity window (Howe et al. 2000), with the wrapper's
             # default global drift removal (remove_drift=true) in the loop.
             # Modeled as B = b0 + b1·(τ/T) — the same τ/T-linear form as
-            # :totvar. For the PM noises b1 is small (B ≈ constant); for the FM
-            # noises the b1 term carries both the boundary bias and the
-            # drift-removal suppression near τ → T and cuts the fit residual by
-            # ~45 % (WHFM) to ~96 % (RWFM). MHTOTDEV is ≈ unbiased for
-            # white/flicker PM (B ≈ 1) and reads high for redder FM
-            # (RWFM B ≈ 2.2 at small τ). MHTOTDEV is novel to SigmaTau —
-            # no external reference; see docs theory/mhtotdev_bias_edf.md.
-            b0_t = Dict(2=>1.0308, 1=>0.9883, 0=>1.0545, -1=>1.2947, -2=>2.1686)
-            b1_t = Dict(2=>-0.1197, 1=>-0.0686, 0=>-0.1706, -1=>-0.7193, -2=>-5.5884)
+            # :totvar, though for the quadratic-detrend kernel B is nearly a
+            # per-α constant (b1 ∈ [−0.13, −0.02]): the per-window fit strips
+            # a little genuine noise power at every window length, so MHTOTDEV
+            # reads uniformly LOW (B ≈ 0.78–0.91), the same sign as its MTOT
+            # and TOTH siblings. PROVISIONAL quick-mode values (see
+            # _coeff_mhtot provenance) pending the full recalibration sweep.
+            # MHTOTDEV is novel to SigmaTau — no external reference; see docs
+            # theory/mhtotdev_bias_edf.md.
+            b0_t = Dict(2=>0.9101, 1=>0.8252, 0=>0.7935, -1=>0.7842, -2=>0.7880)
+            b1_t = Dict(2=>-0.1341, 1=>-0.0210, 0=>-0.0177, -1=>-0.0196, -2=>-0.0159)
             aa = clamp(alpha, -2, 2)
             B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
         end
