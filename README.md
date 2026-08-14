@@ -180,6 +180,16 @@ Until an installed `sigmatau` shim exists, substitute
 [CLI docs page](https://ianlap.github.io/SigmaTau.jl/stable/cli/) for the full
 reference.
 
+## Python bindings
+
+SigmaTau ships an official Python package, `sigmatau`, in [`python/`](python/). It
+wraps this package via juliacall: every computation runs in the same embedded Julia
+runtime, so results are bit-identical to the Julia API above, not a reimplementation.
+It supersedes the earlier pure-Python/NumPy port
+([sigmatau.py](https://github.com/ianlap/sigmatau.py)). See
+[`python/README.md`](python/README.md) for installation and a 30-second example, and
+the [Python bindings docs page](https://ianlap.github.io/SigmaTau.jl/stable/python/).
+
 ## Documentation
 
 Full docs — tutorials, theory, the migration guide, performance numbers, and

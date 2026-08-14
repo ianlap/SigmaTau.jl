@@ -14,9 +14,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ._convert import resolve_taus, result_from_jl, to_jl_data
 from ._julia import _map_errors, jl
 from .grids import Octave, TauMode
-from ._convert import resolve_taus, result_from_jl, to_jl_data
 from .types import FrequencyData, PhaseData, StabilityResult
 
 DEFAULT_CONFIDENCE = float(jl.DEFAULT_CONFIDENCE)

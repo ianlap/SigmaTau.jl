@@ -58,6 +58,7 @@ makedocs(
         "Performance"     => "performance.md",
         "Plotting"        => "plotting.md",
         "CLI"             => "cli.md",
+        "Python bindings" => "python.md",
         "FAQ"             => "faq.md",
         "Theory"          => [
             "theory/overview.md",

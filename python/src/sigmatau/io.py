@@ -97,7 +97,9 @@ def read_frequency(
 
 
 @_map_errors
-def detrend(data: PhaseData | FrequencyData, *, method: str = "linear") -> PhaseData | FrequencyData:
+def detrend(
+    data: PhaseData | FrequencyData, *, method: str = "linear"
+) -> PhaseData | FrequencyData:
     """Return a new record with a detrended sample vector (the original is untouched).
 
     ``method`` ∈ {``linear`` (default), ``endpoint``, ``mean``, ``quadratic``, ``none``}.

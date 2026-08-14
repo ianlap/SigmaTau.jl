@@ -56,9 +56,8 @@ def L(
     window: str = "hann",
 ) -> SpectralResult:
     """Single-sideband phase noise ℒ(f) [dBc/Hz] at carrier ``f_carrier`` (IEEE 1139)."""
-    return spectral_from_jl(
-        jl.L(to_jl_data(data), f_carrier=float(f_carrier), **_welch_kwargs(nperseg, noverlap, window))
-    )
+    kwargs = _welch_kwargs(nperseg, noverlap, window)
+    return spectral_from_jl(jl.L(to_jl_data(data), f_carrier=float(f_carrier), **kwargs))
 
 
 __all__ = ["Sy", "Sx", "L"]

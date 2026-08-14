@@ -44,6 +44,14 @@ All notable public changes to **SigmaTau.jl** are tracked here. Format follows
 
 ### Added
 
+- Official Python bindings (`python/`): a juliacall-based `sigmatau` package
+  mirroring the full public API — all 18 deviations, the `stability` suite,
+  spectral estimators, noise generation/identification, `nch`, and file IO —
+  with every computation executed in the same embedded Julia runtime, so
+  results are bit-identical to the Julia package. Supersedes the earlier
+  pure-Python/NumPy port (`sigmatau.py`), now deprecated, whose public API it
+  mirrors and extends. Ships a pytest parity suite (`python/tests`) and a
+  dedicated Python CI workflow. See `python/README.md`.
 - `noise_id_nnls` — weighted nonnegative least-squares decomposition of a
   record's σ̂²(τ) profile into per-α power-law components. One fit to the
   whole τ range returns the amplitude of every α in the basis plus the

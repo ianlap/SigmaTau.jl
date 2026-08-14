@@ -100,8 +100,12 @@ def suite_to_jl(s: StabilitySuite) -> Any:
     results = juliacall.convert(VecResult, [result_to_jl(r) for r in s.results])
     confidence = float("nan") if s.confidence is None else float(s.confidence)
     return jl.StabilitySuite(
-        results, jl.Symbol(s.data_kind), float(s.tau0), int(s.n),
-        confidence, jl.Symbol(s.tau_mode),
+        results,
+        jl.Symbol(s.data_kind),
+        float(s.tau0),
+        int(s.n),
+        confidence,
+        jl.Symbol(s.tau_mode),
     )
 
 

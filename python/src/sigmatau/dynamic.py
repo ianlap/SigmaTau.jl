@@ -12,9 +12,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ._convert import dynamic_from_jl, resolve_taus, to_jl_data
 from ._julia import _map_errors, jl
 from .grids import Octave, TauMode
-from ._convert import dynamic_from_jl, resolve_taus, to_jl_data
 from .types import DynamicStabilityResult, FrequencyData, PhaseData
 
 

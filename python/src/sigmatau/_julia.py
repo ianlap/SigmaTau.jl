@@ -12,24 +12,29 @@ import os
 import sys
 import warnings
 
-# juliacall reads its configuration from the environment at import time; signal
-# handling must be Julia's, or Ctrl-C during a long kernel can crash the process.
+# juliacall reads its configuration from the environment at import time: signal
+# handling must be Julia's (or Ctrl-C during a long kernel can crash the
+# process), and the thread count must be >1 or the threaded total-family
+# kernels (mtotdev/htotdev/mhtotdev) run serial, ~3-4x slower. Explicit user
+# settings are respected.
 if "juliacall" in sys.modules:
     warnings.warn(
-        "juliacall was imported before sigmatau, so sigmatau could not set "
-        "PYTHON_JULIACALL_HANDLE_SIGNALS=yes; Ctrl-C during a Julia call may "
-        "crash the process.",
-        stacklevel=2,
-    )
-elif os.environ.get("PYTHON_JULIACALL_HANDLE_SIGNALS", "yes") != "yes":
-    warnings.warn(
-        "PYTHON_JULIACALL_HANDLE_SIGNALS="
-        f"{os.environ['PYTHON_JULIACALL_HANDLE_SIGNALS']!r}; sigmatau expects "
-        "'yes' — Ctrl-C during a Julia call may crash the process.",
+        "juliacall was imported before sigmatau, so sigmatau could not "
+        "configure it (PYTHON_JULIACALL_HANDLE_SIGNALS=yes, "
+        "PYTHON_JULIACALL_THREADS=auto); Ctrl-C during a Julia call may crash "
+        "the process, and the threaded kernels may run serial.",
         stacklevel=2,
     )
 else:
-    os.environ["PYTHON_JULIACALL_HANDLE_SIGNALS"] = "yes"
+    if os.environ.get("PYTHON_JULIACALL_HANDLE_SIGNALS", "yes") != "yes":
+        warnings.warn(
+            "PYTHON_JULIACALL_HANDLE_SIGNALS="
+            f"{os.environ['PYTHON_JULIACALL_HANDLE_SIGNALS']!r}; sigmatau "
+            "expects 'yes' — Ctrl-C during a Julia call may crash the process.",
+            stacklevel=2,
+        )
+    os.environ.setdefault("PYTHON_JULIACALL_HANDLE_SIGNALS", "yes")
+    os.environ.setdefault("PYTHON_JULIACALL_THREADS", "auto")
 
 import juliacall
 from juliacall import JuliaError

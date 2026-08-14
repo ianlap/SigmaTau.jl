@@ -62,7 +62,9 @@ def stability(
 
 
 @_map_errors
-def nch(*results: StabilityResult | Sequence[Sequence[StabilityResult | None]]) -> list[StabilityResult]:
+def nch(
+    *results: StabilityResult | Sequence[Sequence[StabilityResult | None]],
+) -> list[StabilityResult]:
     """N-cornered-hat noise separation (Gray–Allan three-cornered hat at N=3).
 
     Two call forms, mirroring the Julia oracle:
@@ -101,8 +103,7 @@ def nch(*results: StabilityResult | Sequence[Sequence[StabilityResult | None]]) 
         return [result_from_jl(r) for r in jl.nch(jl_matrix)]
 
     raise TypeError(
-        "nch: pass three pairwise results (r_ab, r_bc, r_ca) or one square "
-        "matrix of results"
+        "nch: pass three pairwise results (r_ab, r_bc, r_ca) or one square matrix of results"
     )
 
 
