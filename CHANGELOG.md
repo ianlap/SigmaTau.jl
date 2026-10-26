@@ -19,8 +19,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
-- `app/StabilityExplorer.jl`: a Pluto notebook GUI covering file import,
-  preprocessing, the deviation suite, plotting and export.
+- `app/StabilityExplorer.jl`: a GLMakie desktop application covering file
+  import, synthesis, preprocessing, the deviation suite with χ² intervals,
+  the per-τ table, spectra, dynamic maps, and figure, table and record export.
 
 ## [0.5.0] - 2026-06-09
 
