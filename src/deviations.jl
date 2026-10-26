@@ -234,9 +234,8 @@ Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension (see `_totdev_core`)
 unbias correction `σ_unbiased = σ_raw / √B`, where `B = E[TOTVAR]/AVAR`
 is the variance-scale bias factor from [`bias_correction`](@ref). TOTVAR
 is biased low for FFM and RWFM as τ approaches T, so the correction
-increases σ at long τ. Set `correct_bias=false` to return the raw
-kernel value (Stable32 actually applies the correction by default,
-contrary to older notes — verify against the build you compare with).
+increases σ at long τ. Stable32 applies the same correction by default; `correct_bias=false`
+returns the raw kernel value, which is what allantools reports.
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -307,10 +306,8 @@ Table I unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
 α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0), so the
 correction raises σ — substantially for divergent FM. PM noises
-(α > 0) get B = 1 (no published model). Pass
-`correct_bias=false` to return the raw kernel value (Stable32 actually
-applies the correction by default — see TOTDEV docstring for the same
-caveat).
+(α > 0) get B = 1 (no published model). Stable32 applies the same correction by default; `correct_bias=false`
+returns the raw kernel value, which is what allantools reports.
 """
 function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -371,24 +368,18 @@ adopts for this novel estimator (see `_mhtotdev_core`).
 `remove_drift=true` (default) removes the record's least-squares frequency
 drift (the quadratic phase term) before the analysis, and the per-τ noise
 identification runs on the drift-removed record. Unlike MHDEV, the total
-estimator is not drift-immune: its per-window detrend removes only the local
-frequency offset, so residual deterministic drift re-enters through the
-reflected window boundaries and reads several times high at long τ. Removing
-the global least-squares drift is exact for a deterministic drift (the fit
-is a linear projection) and discards no statistical information; it is the
-same practice SP1065 prescribes before TOTVAR / MTOTVAR. Per-window drift
-removal was evaluated and rejected — both the phase-domain and
-frequency-domain variants measurably damage the statistic at the PM noise
-types (see the "MHTOTDEV bias and EDF" theory page). Pass
-`remove_drift=false` for data that is already detrended.
+estimator is not drift-immune: residual drift re-enters through the
+reflected window boundaries and reads high at long τ. Removing a
+deterministic drift discards no statistical information and is the practice
+SP1065 prescribes before any total estimator. Pass `remove_drift=false` for
+data that is already detrended.
 
 `correct_bias=true` (default) applies the Monte-Carlo-measured unbias
 correction `σ_unbiased = σ_raw / √B`, where `B = b0 + b1·(τ/T)` is the
 τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)`; the
-coefficients are measured with the default drift removal in the loop, so the
-calibration matches what this function computes. Pass `correct_bias=false`
-for the raw kernel value. EDF uses the measured `_coeff_mhtot` fit. See the
-"MHTOTDEV bias and EDF" theory page for the measurement methodology.
+coefficients were measured with the default drift removal in the loop. Pass
+`correct_bias=false` for the raw kernel value. The EDF uses the same Monte
+Carlo fit; see the "MHTOTDEV bias and EDF" page for the method.
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)

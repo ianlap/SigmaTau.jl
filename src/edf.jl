@@ -361,20 +361,9 @@ Conventions per variance type:
   for FFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
   divergent FM noises only.
 - `:mtot`   — SP1065 Table 11 / Greenhall 1999. Independent of τ.
-  Biased high (B > 1); MTOT overstates MVAR. Corroborated by Howe &
-  Vernotte 2003 "Generalization of the Total variance approach to the
-  modified Allan variance", Table 1 — 100-trial Monte Carlo with
-  N_xmax = 16384 gives `Bias = (1 − √(MTOTVAR/MVAR))·100%` ranging from
-  ~−2% (WHPM) to ~−18% (RWFM), i.e. √(MTOTVAR/MVAR) ∈ [1.02, 1.18],
-  implying B ∈ [1.04, 1.39] — consistent with the table values below.
-
-  The Riley document "Confidence Intervals and Bias Corrections for the
-  Stable32 Variance Functions" lists B values (0.94, 0.83, 0.73, 0.70,
-  0.69) that contradict both SP1065 and Howe & Vernotte 2003 in
-  direction; treated as a doc typo and ignored. Stable32 empirically
-  does NOT apply MTOT bias to its default output regardless of doc
-  claims, so `correct_bias=false` on `mtotdev` matches Stable32;
-  `correct_bias=true` applies the textbook-correct unbias `σ ← σ/√B`.
+  Biased high (B > 1); MTOT overstates MVAR, consistent with the Monte
+  Carlo of Howe & Vernotte 2003 (Table 1). Stable32 reports MTOT raw, so
+  `correct_bias=false` on `mtotdev` matches Stable32.
 - `:htot`   — FCS 2001 (Howe & Tasset) Table I `a` column. `B = 1 + a`
   with the published `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}`
   for α ∈ {0, -1, -2, -3, -4}. Biased low (B < 1) — HTOT understates

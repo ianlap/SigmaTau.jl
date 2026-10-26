@@ -15,7 +15,7 @@ using SigmaTau
 
 @testset "Streaming accumulators (Dobrogowski–Kasznia)" begin
     # Fixed-seed mixed power-law fixture (WPM + RWFM), same recipe as the
-    # legacy-parity testset. tau0 ≠ 1 so normalization errors can't hide.
+    # reference-parity testset. tau0 ≠ 1 so normalization errors can't hide.
     Random.seed!(20260610)
     N    = 600
     tau0 = 0.5

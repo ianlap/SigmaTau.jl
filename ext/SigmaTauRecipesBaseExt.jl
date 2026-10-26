@@ -103,8 +103,7 @@ end
 # σ(τ) curve per window time, stacked along the time axis as 3-D lines.
 # Plots' 3-D axes do not support log scales, so the 3-D branch plots
 # log10(τ) and log10(σ) as the coordinates and labels the decade ticks in
-# plain-text `1e<k>` form — safe under both GR and the PGFPlotsX/lualatex
-# docs build. The map is stored windows × taus; the heatmap z matrix is
+# plain-text `1e<k>` form. The map is stored windows × taus; the heatmap z matrix is
 # rows-along-y, so it is transposed there. Non-positive and NaN cells
 # (windows that cannot support the averaging factor) map to NaN and render
 # blank (heatmap) or terminate the curve (3-D lines).

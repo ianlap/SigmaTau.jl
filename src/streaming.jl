@@ -37,24 +37,11 @@ is the sample interval in seconds and `m_values` the averaging factors
 estimate equals the corresponding batch call on the samples seen so far
 (`adev(PhaseData(x[1:k], tau0), m_values; ci=false)`, etc.).
 
-Implements the real-time computation scheme of Dobrogowski & Kasznia
-[dobrogowski-2007-realtime-adev](@cite). For `:adev`/`:hdev` each new
-sample updates a per-m running sum of squared second/third differences
-(their eqs. 6–9); for the modified family `:mdev`/`:mhdev` a per-m sliding
-inner sum ``S_i(m)`` is maintained alongside the cumulative sum of its
-squares (their eqs. 10–14, generalized to third differences for `:mhdev`).
-Every update is O(1) per new sample per m — the per-sample cost is
-O(`length(m_values)`) regardless of how long the stream runs.
-
-Memory is bounded: only a ring buffer of the most recent samples is held,
-sized to the selected kernel's deepest lag — `2·maximum(m_values) + 1`
-samples for `:adev`, `3·maximum(m_values) + 1` for `:mdev`/`:hdev`, and
-`4·maximum(m_values) + 1` for `:mhdev` (the deepest lag any kernel needs).
-
-The total-family estimators (`totdev`, `mtotdev`, `ttotdev`, `htotdev`,
-`mhtotdev`) and the Thêo family cannot stream: their extension/sampling
-schemes re-read the *whole* record on every update, so they have no O(1)
-per-sample form.
+Implements the running-sum scheme of Dobrogowski & Kasznia
+[dobrogowski-2007-realtime-adev](@cite), generalized to third differences
+for the Hadamard pair. Each sample costs O(`length(m_values)`), and memory
+is a ring buffer of at most `4·maximum(m_values) + 1` samples. The total
+and Thêo families cannot stream: they re-read the whole record.
 
 # Example
 

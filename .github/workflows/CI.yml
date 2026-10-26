@@ -22,9 +22,6 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         threads: ['1']
         include:
-          - version: 'nightly'
-            os: ubuntu-latest
-            threads: '1'
           - version: '1.11'
             os: ubuntu-latest
             threads: 'auto'
