@@ -42,7 +42,7 @@ const HELP_SECTIONS = [
      "1. Record page: synthesize a power-law record or load a file (Browse…, then Load file). " *
      "The time series and its summary appear below the controls.\n" *
      "2. Choose deviations, τ grid, confidence level and preprocessing in the left column.\n" *
-     "3. Press Run analysis, or Enter in any field. The Deviations, Spectrum and Dynamic deviation pages " *
+     "3. Press Run analysis, or Enter in a field (on the Record page Enter also reloads the record). The Deviations, Spectrum and Dynamic deviation pages " *
      "fill in and the status line at the bottom reports what was computed.\n" *
      "4. Export figure… writes the current page as PNG, PDF or SVG. Export table… writes the suite " *
      "as a tab-separated file. Export record… writes the preprocessed record as text.\n" *
@@ -406,7 +406,7 @@ function build(; size=(1500, 940), fontsize=12)
                      labelcolor=:white, buttoncolor_hover=RGBf(0.4, 0.55, 0.8),
                      font=:bold, height=const_h + 6)
     controls[nextrow(), 1:2] = run_btn
-    Label(controls[nextrow(), 1:2], "Enter in any field also runs the analysis.";
+    Label(controls[nextrow(), 1:2], "Enter in a field also runs the analysis.";
           halign=:center, tellwidth=false, color=:gray35, fontsize=hint)
 
     status = Label(fig[2, 1:2], "Ready."; halign=:left, tellwidth=false, color=:gray30,
@@ -430,8 +430,7 @@ function build(; size=(1500, 940), fontsize=12)
     path_box = textbox(; placeholder="no file chosen", tellwidth=false, halign=:left)
     open_btn = Button(fig; label="Browse…", height=const_h)
     src[2, 1] = Label(fig, "File"; halign=:right, color=:gray25)
-    src[2, 2] = path_box
-    src[2, 3] = open_btn
+    src[2, 2:3] = path_box
     kind = menu(; options=["phase", "frequency"], default="phase", width=110, tellwidth=false, halign=:left)
     src[3, 1] = Label(fig, "Record type"; halign=:right, color=:gray25)
     src[3, 2] = kind
@@ -445,8 +444,8 @@ function build(; size=(1500, 940), fontsize=12)
     src[6, 2] = header
     Label(src[7, 1:3], "Stable32 .DAT: header rows 10, time column 0, value column 1.";
           halign=:left, tellwidth=false, color=:gray35, fontsize=hint)
-    load_btn = Button(fig; label="Load file", height=const_h, tellwidth=false, halign=:right)
-    src[8, 2:3] = load_btn
+    load_btn = Button(fig; label="Load file", height=const_h)
+    let g = GridLayout(src[8, 2:3]; halign=:right, tellwidth=false); g[1, 1] = open_btn; g[1, 2] = load_btn; end
 
     syn = GridLayout(rec_page[1, 2]; valign=:top)
     Box(syn[1, 1:2]; color=:gray88, strokevisible=false, cornerradius=4)
@@ -565,7 +564,8 @@ function build(; size=(1500, 940), fontsize=12)
              spectra=Ref{Any}(nothing), dynamic=Ref{Any}(nothing), last_dir=Ref(pwd()))
 
     say(msg; error=false) = (status.text = msg; status.color = error ? :firebrick : :gray30)
-    text(tb) = something(tb.stored_string[], "")
+    # What the field shows counts, Enter or not (Makie only commits on Enter).
+    text(tb) = something(tb.displayed_string[], "")
     parse_int(tb, what) = (v = tryparse(Int, text(tb)); v === nothing ? error("$what must be an integer, got \"$(text(tb))\".") : v)
     parse_float(tb, what) = (v = tryparse(Float64, text(tb)); v === nothing ? error("$what must be a number, got \"$(text(tb))\".") : v)
 
@@ -649,6 +649,7 @@ function build(; size=(1500, 940), fontsize=12)
     end
 
     on(run_btn.clicks) do _; run(); end
+    from_file = Ref(false)        # how the current record was produced
     # Keyboard: Tab / Shift+Tab move between the fields of the current page,
     # F5 runs, Page Up / Page Down switch pages, F1 opens Help.
     page_fields = Dict("Record" => [path_box, tau0_box, time_col, value_col, header, seed_box],
@@ -676,11 +677,12 @@ function build(; size=(1500, 940), fontsize=12)
         end
         return Consume(false)
     end
-    on(load_btn.clicks) do _; reload(true); end
-    on(synth_btn.clicks) do _; reload(false); end
-    for tb in (tau0_box, time_col, value_col, header, seed_box, carrier_box)
-        on(tb.stored_string) do _; run(); end
+    on(load_btn.clicks) do _; from_file[] = true; reload(true); end
+    on(synth_btn.clicks) do _; from_file[] = false; reload(false); end
+    for tb in (tau0_box, time_col, value_col, header, seed_box)
+        on(tb.stored_string) do _; reload(from_file[]); state.record[] === nothing || run(); end
     end
+    on(carrier_box.stored_string) do _; run(); end
     on(table_menu.selection) do name
         s = state.suite[]
         (s === nothing || name === nothing) && return
@@ -691,6 +693,7 @@ function build(; size=(1500, 940), fontsize=12)
         isempty(p) && return
         state.last_dir[] = dirname(p)
         path_box.displayed_string[] = p; path_box.stored_string[] = p
+        from_file[] = true
         reload(true)
     end
     function export_to(default_name, filterlist, writer)
@@ -747,7 +750,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         c = app.controls
         # Load path: the Stable32 fixture through the Record-page fields.
         fixture = joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation", "stable32gen.DAT")
-        c.path_box.stored_string[] = fixture; c.header.stored_string[] = "10"
+        c.path_box.displayed_string[] = fixture; c.header.displayed_string[] = "10"   # typed, no Enter
         app.reload(true)
         n_fixture = nsamples(app.state.record[])
         n_fixture == 8192 || error("smoke test: Stable32 fixture read $n_fixture samples")
@@ -760,14 +763,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
         app.write_table(joinpath(dir, "suite.tsv"))
         length(load_suite(joinpath(dir, "suite.tsv")).results) == length(s.results) || error("smoke test: suite round trip")
         app.write_record(joinpath(dir, "record.txt"))
-        c.path_box.stored_string[] = joinpath(dir, "record.txt"); c.header.stored_string[] = "0"
+        c.path_box.displayed_string[] = joinpath(dir, "record.txt"); c.header.displayed_string[] = "0"
         app.reload(true)
         nsamples(app.state.record[]) == 8192 || error("smoke test: record round trip")
         # Error path: a bad field reports in the status line and keeps the record.
-        c.tau0_box.stored_string[] = "abc"
+        c.tau0_box.displayed_string[] = "abc"
         app.reload(false)
         startswith(app.status(), "Error:") || error("smoke test: bad τ₀ not reported")
-        c.tau0_box.stored_string[] = "1.0"
+        c.tau0_box.displayed_string[] = "1.0"
         app.reload(false); app.run()
         s = app.state.suite[]
         for page in PAGES
