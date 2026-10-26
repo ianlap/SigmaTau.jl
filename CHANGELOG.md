@@ -20,7 +20,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   FFT bins by `f^(α/2)`. The old shaper left white-PM phase slightly blue
   (lag-1 autocorrelation −0.2 instead of 0), which the noise identifier read
   as α ≈ 3 at τ₀ and reported as `:unknown`. Realizations for a given seed
-  change; levels are still calibrated to σ_y(τ₀).
+  change. `sigma1` components are still calibrated empirically to σ_y(τ₀);
+  `h` components are now scaled on the filter's low-frequency PSD so the
+  generated spectrum is `h_α f^α` (before, h was converted to σ_y(τ₀) with the
+  continuous-time formulas, which do not hold for sampled discrete processes).
 - `mdev`, `tdev`, `mhdev` and `htdev` remove the least-squares phase line
   before forming their prefix sums (an exact invariance of the modified
   estimators). On a record with an uncorrected 1e-9 frequency offset the

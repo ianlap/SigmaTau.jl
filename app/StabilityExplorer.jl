@@ -655,7 +655,7 @@ function build(; size=(1500, 940), fontsize=12)
         page = page_menu.selection[]
         if ev.key == Keyboard.tab
             fields = get(page_fields, page, Textbox[])
-            isempty(fields) && return Consume(true)
+            isempty(fields) && return Consume(false)   # no custom order here; leave Tab to Makie
             i = findfirst(tb -> tb.focused[], fields)
             back = ispressed(fig, Keyboard.left_shift | Keyboard.right_shift)
             nxt = i === nothing ? (back ? length(fields) : 1) : mod1(i + (back ? -1 : 1), length(fields))
