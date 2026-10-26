@@ -105,7 +105,11 @@ def speedup(a, s):
 
 
 if opt.report_only:
-    res = json.loads((OUT / f"allantools_{key}.json").read_text())["seconds"]
+    saved = json.loads((OUT / f"allantools_{key}.json").read_text())
+    for field in ("N", "tau0", "m_values"):
+        assert saved.get(field) == sig.get(field), \
+            f"saved allantools run has {field} = {saved.get(field)}, SigmaTau run has {sig.get(field)}; re-time"
+    res = saved["seconds"]
 else:
     print(f"allantools {allantools.__version__}, numpy {np.__version__}, "
           f"Python {platform.python_version()}, N = {len(x)}, tau0 = {opt.tau0} s")
