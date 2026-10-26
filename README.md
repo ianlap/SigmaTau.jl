@@ -104,7 +104,7 @@ The first launch compiles GLMakie and takes a minute or two.
 A browser edition with the same analysis and plots serves on
 `http://127.0.0.1:9384`; its controls are native HTML (labelled inputs, a
 real table, a live status region, Tab order), so it works with screen
-readers and browser zoom:
+readers and browser zoom; it passes an axe-core WCAG 2.1 AA audit:
 
 ```bash
 julia --project=app app/StabilityWeb.jl            # --port=N to change the port
