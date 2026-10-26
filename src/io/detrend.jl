@@ -105,8 +105,11 @@ Return a new `PhaseData` / `FrequencyData` with a detrended sample vector.
 The original is left untouched.
 
 `method` is one of `:linear` (least-squares straight line, default),
+`:quadratic` (least-squares parabola; on phase data this removes a frequency
+drift, the preprocessing SP1065 prescribes before the total estimators),
 `:endpoint` (line through first and last samples), `:mean` (zero-mean), or
-`:none` (returns a copy unchanged).
+`:none` (returns a copy unchanged). On phase data `:linear` removes a
+frequency offset, not a drift.
 
 # Examples
 
