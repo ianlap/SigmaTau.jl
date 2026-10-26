@@ -547,6 +547,7 @@ function build(; size=(1500, 940), fontsize=12)
     pages = Dict("Record" => (rec_page, 2), "Deviations" => (dev_page, 3), "Spectrum" => (spec_page, 4),
                  "Dynamic deviation" => (dyn_page, 5), "Help" => (help_page, 6))
     legends = Dict{String,Vector{Makie.Block}}(p => Makie.Block[] for p in PAGES)
+    sx_shown = Ref(true)          # whether the σ_x axis currently has content
     function show_page(name)
         for (p, (gl, r)) in pages
             on_page = p == name
@@ -556,6 +557,7 @@ function build(; size=(1500, 940), fontsize=12)
             rowgap!(plots, r - 1, on_page ? 16 : 0)
         end
         cb_d[] === nothing || set_visible!([cb_d[]], name == "Dynamic deviation")
+        sx_shown[] || set_visible!([ax_x], false)     # keep the empty σ_x axis collapsed
     end
     on(page_menu.selection) do name; name === nothing || show_page(name); end
 
@@ -614,8 +616,9 @@ function build(; size=(1500, 940), fontsize=12)
                 leg = draw_results!(ax, rs; band=band_toggle.active[], legend_position=pos)
                 leg === nothing || push!(legends["Deviations"], leg)
             end
-            rowsize!(dev_page, 2, isempty(sx) ? Fixed(0) : Auto(1))
-            set_visible!([ax_x], !isempty(sx) && page_menu.selection[] == "Deviations")
+            sx_shown[] = !isempty(sx)
+            rowsize!(dev_page, 2, sx_shown[] ? Auto(1) : Fixed(0))
+            rowgap!(dev_page, 1, sx_shown[] ? 16 : 0)
             names = string.(keys(suite))
             table_menu.options = names
             table_menu.i_selected = 1
