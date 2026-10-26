@@ -34,8 +34,8 @@ plot(suite)                 # log-log σ(τ) with CI error bars
 pkg> add https://github.com/ianlap/SigmaTau.jl
 ```
 
-Julia 1.11 or later. Optional: `Plots` for the plot recipes, `Pluto` for the
-interactive explorer in `app/`.
+Julia 1.11 or later. `Plots` is optional and enables the plot recipes; the
+desktop explorer in `app/` has its own environment.
 
 ## Estimators
 
@@ -61,7 +61,7 @@ round-trip results as plain text.
 
 | | Stable32 | allantools | SigmaTau |
 |---|---|---|---|
-| Platform | Windows GUI, closed source | Python library | Julia library + Pluto GUI |
+| Platform | Windows GUI, closed source | Python library | Julia library + desktop GUI |
 | χ² confidence intervals with per-τ noise ID | yes | manual (`edf_greenhall` + `confidence_interval`) | every call |
 | Total-family bias correction | TOTDEV, HTOTDEV | none | all five, switchable |
 | MDEV-class Hadamard (`mhdev`, `htdev`, `mhtotdev`) | no | no | yes |
@@ -85,15 +85,21 @@ on 4 cores to 4,200 times faster on 12 (0.47 s vs 30 min on a 407,000-sample
 record). The harness, method and both measurements are in
 [`bench/`](bench/README.md).
 
-## Interactive explorer
+## Desktop explorer
 
-`app/StabilityExplorer.jl` is a Pluto notebook: load a file or synthesize a
-record, pick deviations, τ grid, confidence level and preprocessing, and get
-the plot, the table and a TSV export.
+`app/StabilityExplorer.jl` opens a window for the whole workflow without
+writing code: load a file or synthesize a power-law record, choose
+preprocessing, estimators, τ grid and confidence level, and read the σ_y and
+σ_x curves with χ² intervals, the per-τ table, the S_y, S_x and ℒ(f) spectra,
+and a dynamic σ(t, τ) map. Export writes publication figures (PNG, PDF, SVG),
+the suite as TSV, and the record as text.
 
 ```bash
-julia --project=app -e 'using Pkg; Pkg.instantiate(); using Pluto; Pluto.run(notebook="app/StabilityExplorer.jl")'
+julia --project=app -e 'using Pkg; Pkg.instantiate()'   # first run only
+julia --project=app app/StabilityExplorer.jl
 ```
+
+The first launch compiles GLMakie and takes a minute or two.
 
 ## Tests
 
