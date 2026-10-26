@@ -1,0 +1,222 @@
+# # Characterizing a drifting clock with the Hadamard family
+#
+# A rubidium standard or GPSDO in its first weeks after power-on has
+# linear frequency drift on top of its white-FM noise floor while the
+# physics package settles toward thermal equilibrium; drift at the
+# 1e-10-per-day level is common. On such a record ADEV reports the
+# drift, not the clock: the deterministic ramp dominates the random
+# noise at long τ. The Hadamard family is designed for this case.
+#
+# This tutorial synthesizes one day of 1 Hz data (calibrated WHFM noise
+# plus a linear frequency drift), shows the drift ramp in `adev` and its
+# removal in `hdev`, introduces `mhdev` and `htdev`, and compares `mhdev`
+# with `mhtotdev` on a three-hour record.
+
+using SigmaTau
+using Random
+
+# ## One day of a drifting clock
+#
+# [`noise_gen`](@ref) synthesizes a calibrated power-law mixture; here a
+# single component, white frequency modulation (α = 0) at
+# σ_y(1 s) = 1e-11, a typical rubidium / GPSDO level. `noise_gen` has
+# no drift parameter, because deterministic drift is not noise; the term
+# ``D \, t`` is added to the fractional-frequency series directly.
+
+Random.seed!(20260609)
+
+τ₀ = 1.0                    # 1 Hz sampling
+N  = 86_400                 # one day of data
+σ1 = 1.0e-11                # WHFM level: σ_y(τ = 1 s)
+D  = 2.0e-10 / 86_400       # drift rate, 2e-10 per day, in 1/s
+
+fd_noise = noise_gen(FrequencyData, N, τ₀; sigma1 = Dict(0 => σ1))
+
+t  = (0:N-1) .* τ₀
+y  = fd_noise.y .+ D .* t   # drift injected explicitly
+fd = FrequencyData(y, τ₀)
+
+# We use one octave-spaced τ grid, 1 s to 8192 s (about 2.3 h), for every
+# estimator in this tutorial, so the curves can be compared point for point.
+# (With no grid argument each function picks its own octave grid up to its
+# algorithmic τ_max, which differs between kernels.)
+
+m_values = [2^k for k in 0:13]
+taus     = m_values .* τ₀
+
+# ## ADEV: the drift ramp
+#
+# For a pure linear frequency drift, the Allan deviation is
+#
+# ```math
+# \sigma_y(\tau) \;=\; \frac{D\,\tau}{\sqrt{2}},
+# ```
+#
+# where ``D`` is the drift rate in fractional frequency per second and
+# ``\tau`` the averaging time. The second difference of phase does not
+# annihilate a term linear in ``t`` in ``y(t)``; it passes it through
+# as a residual proportional to ``\tau``, so the drift appears as a
+# rising τ⁺¹ ramp. The ramp crosses the WHFM floor
+# ``\sigma_1 \tau^{-1/2}`` where the two terms are equal:
+
+τ_cross = (sqrt(2) * σ1 / D)^(2 / 3)
+println("drift overtakes the WHFM floor near τ ≈ ", round(τ_cross; digits = 1), " s")
+
+#-
+
+r_adev = adev(fd, m_values)
+
+using Plots
+
+plot(r_adev;
+     label  = "ADEV",
+     xlabel = "Averaging time τ (s)",
+     ylabel = "σ_y(τ)",
+     title  = "ADEV of a drifting clock: the ramp masks the floor",
+     legend = :bottomleft,
+     lw     = 1.5)
+plot!(taus, σ1 ./ sqrt.(taus); ls = :dash, label = "WHFM floor σ₁ τ^(-1/2)")
+plot!(taus, D .* taus ./ sqrt(2); ls = :dot, label = "drift ramp Dτ/√2")
+
+# Past the crossover the curve tracks the drift line, not the clock's
+# noise. Stable32 users handle this by detrending first (the Drift
+# function) and re-running; the Hadamard family makes that step
+# unnecessary.
+
+# ## HDEV: the third difference removes the drift
+#
+# `hdev` replaces ADEV's second difference of phase with a third
+# difference. A linear term in ``y(t)`` is quadratic in phase, and a
+# third difference annihilates any quadratic, so constant frequency
+# drift contributes exactly zero without a detrending pass over the
+# data.
+
+r_hdev = hdev(fd, m_values)
+
+plot(r_adev;
+     label  = "ADEV",
+     xlabel = "Averaging time τ (s)",
+     ylabel = "σ_y(τ)",
+     title  = "ADEV vs HDEV on the same drifting record",
+     legend = :bottomleft,
+     lw     = 1.5)
+plot!(r_hdev; label = "HDEV", lw = 1.5)
+plot!(taus, σ1 ./ sqrt.(taus); ls = :dash, label = "WHFM floor σ₁ τ^(-1/2)")
+
+# HDEV follows the τ⁻¹/² noise floor across the whole grid; the clock's
+# noise is recovered without modifying the data.
+
+# ## MHDEV and HTDEV
+#
+# `mhdev` adds an m-point phase average inside the third-difference
+# window, as MDEV does inside ADEV's. The averaging changes the WHPM
+# slope from −1 to −3/2 while leaving FLPM at −1, so MHDEV
+# distinguishes white PM from flicker PM where HDEV (like ADEV)
+# cannot, and it keeps the third difference's drift immunity. On this
+# WHFM-dominated record MHDEV parallels HDEV; it matters on records
+# where a drifting clock also has short-τ PM noise of either type.
+
+r_mhdev = mhdev(fd, m_values)
+
+# `htdev` is the time-deviation analog: it rescales MHDEV by
+#
+# ```math
+# \sigma_{x,\mathrm{HT}}(\tau) \;=\; \frac{\tau}{\sqrt{10/3}}\,\sigma_{y,\mathrm{MH}}(\tau),
+# ```
+#
+# where ``\sigma_{y,\mathrm{MH}}`` is MHDEV. HTDEV has units of seconds
+# (a σ_x quantity) and is to MHDEV what TDEV is to MDEV: a time-error
+# summary built on the drift-immune third-difference kernel. It is
+# original to this package; SP1065, IEEE 1139-2022 and NBS TN-1337 do
+# not define it.
+
+r_htdev = htdev(fd, m_values)
+
+println("max |HTDEV − τ/√(10/3) · MHDEV| = ",
+        maximum(abs.(r_htdev.dev .- r_mhdev.dev .* r_mhdev.tau ./ sqrt(10 / 3))))
+
+# A few rows of the time-error budget for this clock, drift excluded
+# by construction:
+
+for i in (1, 5, 9, 13)
+    println("τ = ", lpad(round(Int, r_htdev.tau[i]), 5), " s   σ_x = ",
+            round(r_htdev.dev[i]; sigdigits = 3), " s")
+end
+
+# ## Short records: MHTOTDEV
+#
+# Suppose the record stops after three hours, a warm-up check before a
+# deployment. At the longest reachable τ, `mhdev` has few independent
+# third differences left and its χ² interval is wide. `mhtotdev` extends
+# each analysis subsegment by detrended reflection, keeping every
+# subsegment in play at long τ and raising the equivalent degrees of
+# freedom. MHTOTDEV is original to this package, so its bias correction and
+# EDF model were measured by Monte Carlo (valid for `τ/τ₀ ≥ 16`); see
+# [MHTOTDEV bias and EDF](../mhtotdev.md).
+#
+# The total kernel is not drift-immune by itself (the boundary extension
+# re-admits residual drift), so `mhtotdev` removes the record's
+# least-squares frequency drift first (`remove_drift = true`). For a fair
+# comparison the record is detrended once here, so that `mhdev`'s noise
+# identification also sees the underlying noise rather than the drift:
+
+N_short  = 10_800   # three hours at 1 Hz
+fd_short = detrend(FrequencyData(y[1:N_short], τ₀))   # detrended once, for the mhdev comparison
+m_short  = [16, 32, 64, 128, 256, 512, 1024, 2048]   # all ≥ the τ/τ₀ ≥ 16 floor
+
+r_mh  = mhdev(fd_short, m_short)
+r_mht = mhtotdev(fd_short, m_short)
+
+# The octave-by-octave comparison, with the default 68.3% (1σ)
+# confidence level:
+
+ci_width(r, i) = (r.ci[i].hi - r.ci[i].lo) / r.dev[i]
+
+println("τ (s)    T/τ    edf mhdev  edf mhtotdev  rel CI mhdev  rel CI mhtotdev")
+for i in eachindex(m_short)
+    Ttau = (N_short - 1) * τ₀ / r_mh.tau[i]
+    println(lpad(round(Int, r_mh.tau[i]), 5), "  ",
+            lpad(round(Ttau; digits = 1), 6), "  ",
+            lpad(round(r_mh.edf[i];  digits = 1), 9), "  ",
+            lpad(round(r_mht.edf[i]; digits = 1), 12), "  ",
+            lpad(round(ci_width(r_mh,  i); digits = 2), 12), "  ",
+            lpad(round(ci_width(r_mht, i); digits = 2), 15))
+end
+
+# From τ = 16 s through τ = 1024 s the extension raises the equivalent
+# degrees of freedom by about 30 % and tightens the relative confidence
+# interval accordingly. The gain vanishes at the kernel's reach limit
+# (`mhtotdev` needs at least one subsegment, `N − 4m + 1 ≥ 1`, so τ
+# cannot exceed T/4 for a record of duration `T`): at the last octave
+# both estimators are down to an EDF of 2 to 3, and no extension
+# recovers much independent information that close to the record
+# length. The relative gain is uniform, so it matters most where the
+# unextended interval is widest, the last usable decade. Plotted with
+# CI bands:
+
+plot(r_mh;
+     label   = "MHDEV (3 h record)",
+     ci_band = true,
+     xlabel  = "Averaging time τ (s)",
+     ylabel  = "σ_y(τ)",
+     title   = "MHDEV vs MHTOTDEV confidence on a short record",
+     legend  = :bottomleft,
+     lw      = 1.5)
+plot!(r_mht; label = "MHTOTDEV (3 h record)", ci_band = true, lw = 1.5)
+
+# ## Which estimator, when
+#
+# All four Hadamard-family estimators reject linear frequency drift.
+# Within the family:
+#
+# | Symptom | Reach for |
+# |---|---|
+# | Drift contaminates ADEV at long τ | `hdev` |
+# | Drift plus PM noise of unknown type (WHPM or FLPM) at short τ | `mhdev` |
+# | Time-error budget (σ_x) for a drifting clock | `htdev` |
+# | Drifting clock on a record too short for long-τ confidence | `mhtotdev` |
+#
+# For records without drift the Allan-family counterparts (`adev`,
+# `mdev`, `tdev`, `mtotdev`) are slightly more efficient (tighter CI
+# per τ on the same record), so the Hadamard family is the tool for
+# the drifting clock, not the default for every clock.

@@ -1,6 +1,6 @@
-# Theory: MHTOTDEV bias and EDF
+# MHTOTDEV bias and EDF
 
-MHTOTDEV (modified Hadamard total deviation) is novel to SigmaTau — no other
+MHTOTDEV (modified Hadamard total deviation) is original to SigmaTau: no other
 library computes it, and no published reference gives its bias factor or its
 equivalent degrees of freedom (EDF). Every other total-family estimator inherits
 a published coefficient table (TOTVAR and MTOT from SP1065 Tables 7–8; HTOT from
@@ -11,15 +11,14 @@ This page documents the methodology; it is the reproducible basis for the
 shipped `_coeff_mhtot` EDF coefficients and the `bias_correction(:mhtot, …)`
 table. The harness is [`tools/mc_mhtotdev.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/mc_mhtotdev.jl).
 The estimator under test is the shipped `mhtotdev` pipeline, including its
-default global least-squares drift removal (`remove_drift=true`; see
-[Theory: Total family](total_family.md)), so the coefficients calibrate
+default global least-squares drift removal (`remove_drift=true`), so the coefficients calibrate
 exactly the statistic users compute.
 
 The procedure follows the NIST total-variance literature: Howe, Beard,
 Greenhall, Vernotte & Riley, *A Total Estimator of the Hadamard Function Used
-for GPS Operations* (32nd PTTI, 2000) — for the bias and EDF definitions and the
-`τ/τ0 ≥ 16` validity window — and Vernotte & Howe, *Generalization of the Total
-Variance Approach to the Different Classes of Structure Functions* — for the
+for GPS Operations* (32nd PTTI, 2000), for the bias and EDF definitions and the
+`τ/τ0 ≥ 16` validity window, and Vernotte & Howe, *Generalization of the Total
+Variance Approach to the Different Classes of Structure Functions*, for the
 Monte Carlo EDF estimator and the extension methodology.
 
 ## The reference: MHDEV
@@ -74,8 +73,8 @@ the Mod-Totvar form (Vernotte & Howe, eqn 2) and the TotHvar form
 \mathrm{edf}(\tau) = \frac{T/\tau}{b_0 + b_1\,\tau/T},
 ```
 
-with `T = (N-1)\,τ_0`. MHTOTDEV is the modified-*Hadamard* total — a hybrid of
-the two — so the harness fits **both** by weighted least squares
+with `T = (N-1)\,τ_0`. MHTOTDEV is the modified-*Hadamard* total, a hybrid of
+the two, so the harness fits **both** by weighted least squares
 (weights `1/\mathrm{SE}^2`) and selects the higher-R² form per α. Critically,
 the fit is restricted to the validity window `τ/τ_0 ≥ 16`: Howe et al. 2000
 note their EDF model "should be used only if … `τ/τ_0 ≥ 16`," below which the
@@ -124,13 +123,6 @@ coefficients (git SHA, seed, thread count, N grid, R, and the μ(α) check
 result). The authoritative full-sweep JSON is tracked at
 `tools/artifacts/mhtotdev_mc_full.json`; ad-hoc quick-run outputs stay local.
 
-!!! note "Provisional vs. authoritative numbers"
-    The coefficient tables in `_coeff_mhtot` and `bias_correction(:mhtot, …)`
-    are populated from the full sweep (N up to 32768, R = 3000), run on a
-    workstation. The harness's reduced `quick` mode (N ≤ 2048, R = 200–400)
-    reproduces the μ(α) slopes and the qualitative bias trend below; the
-    published tables use the full-sweep values.
-
 ## Result
 
 Full sweep (N = 1024 … 32768, R = 3000, both bias and EDF over `τ/τ_0 ≥ 16`,
@@ -146,7 +138,7 @@ loop). All EDF fits are excellent (R² ≥ 0.9982):
 | −2 | RWFM  | 0.7631, 2.4490 | 2.1686 | −5.5884 |
 
 MHTOTDEV is **≈ unbiased for the PM noises** (`b0 ≈ 1`, `b1` small) and reads
-**progressively high for redder FM** at small τ — for random-walk FM,
+**progressively high for redder FM** at small τ; for random-walk FM,
 `B ≈ 2.2`. The bias is modeled τ/T-linearly, `B = b0 + b1·(τ/T)`. The `b1`
 term now carries two physical effects with the same sign: the
 boundary-extension bias falling off toward the record length, and the
@@ -158,7 +150,7 @@ noises now show a small but nonzero `b1`.
 
 Two methodology points matter for reproducing the table: (1) restricting the
 bias to the same
-`τ/τ_0 ≥ 16` window as the EDF — the near-degenerate `m = 1` cell otherwise
+`τ/τ_0 ≥ 16` window as the EDF, since the near-degenerate `m = 1` cell otherwise
 dominates the weighted ratio and pulls the apparent bias spuriously below 1; and
 (2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.9982 across
 all noise types. The tracked full-sweep artifact records the git SHA, seed,

@@ -24,16 +24,9 @@ include("io/save.jl")
 include("io/outliers.jl")
 
 """
-Package-wide default confidence factor used by every public deviation API
-with a χ²/EDF confidence model (`adev`, `mdev`, `tdev`, `hdev`, `mhdev`,
-`htdev`, `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev`, `pdev`,
-`theo1`, `theoh`) when `confidence` is not supplied. (`mtie` and `tierms`
-have no published EDF model and ignore it.)
-
-Set to 0.683 (1-sigma) — the time-and-frequency stability convention used
-by Stable32, allantools' published error bars, and the
-Greenhall–Riley uncertainty papers. Override per call by passing
-`confidence=0.95` (or any other level) explicitly.
+Default confidence level (0.683, one sigma, the Stable32 convention) for
+every deviation with a χ² confidence model. Override per call with
+`confidence=0.95`. `mtie` and `tierms` have no interval model and ignore it.
 """
 const DEFAULT_CONFIDENCE = 0.683
 
@@ -66,9 +59,8 @@ export DEFAULT_CONFIDENCE
 export TauMode, AllTaus, Octave, HalfOctave, QuarterOctave, Decade, HalfDecade
 export tau_values
 
-# Internal deviation kernels (`_*_core`) are intentionally NOT exported — they
-# are reachable as `SigmaTau._adev_core` etc. for power users, but the leading
-# underscore marks them unsupported and they are kept out of the bare namespace.
+# The deviation kernels (`_*_core`) are not exported. They are reachable as
+# `SigmaTau._adev_core` etc.; the leading underscore marks them unsupported.
 
 export identify_noise, calculate_edf, confidence_intervals, bias_correction
 

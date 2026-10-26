@@ -1,5 +1,5 @@
-# io/read.jl — Read raw phase / frequency data files into PhaseData /
-# FrequencyData with optional preprocessing (scaling, detrend, gap fill).
+# Readers for phase / frequency data files, with optional scaling, detrending
+# and gap filling.
 
 """
     _read_columns(path; header=0, delim=nothing) → Matrix{Float64}
@@ -139,19 +139,19 @@ sample interval when the `tau0` keyword is omitted, so files written by
 
 # Keyword arguments
 
-- `tau0`     — sample interval in seconds. When omitted, taken from a
+- `tau0`: sample interval in seconds. When omitted, taken from a
                `# tau0:` comment header if present, else auto-inferred from
                the time column (median of `diff(t)`); required when
                `time_col=0` and neither fallback applies.
-- `time_col` — 1-based column index for timestamps (`0` = no time column).
-- `value_col` — 1-based column index for phase samples.
-- `header`   — number of non-comment header lines to skip (counted after any
+- `time_col`: 1-based column index for timestamps (`0` = no time column).
+- `value_col`: 1-based column index for phase samples.
+- `header`: number of non-comment header lines to skip (counted after any
                leading `#` comment lines).
-- `delim`    — field delimiter (`Char`). Auto-detected from extension when
+- `delim`: field delimiter (`Char`). Auto-detected from extension when
                `nothing` (`,` for `.csv`, tab for `.tsv`, whitespace otherwise).
-- `scaling`  — multiply phase samples by this factor (e.g. `1e-12` for ps→s).
-- `detrend`  — one of `:none`, `:mean`, `:endpoint`, `:linear`. See [`detrend`](@ref).
-- `fillgaps` — when `true`, equispace the record on the minimum time spacing
+- `scaling`: multiply phase samples by this factor (e.g. `1e-12` for ps→s).
+- `detrend`: one of `:none`, `:mean`, `:endpoint`, `:linear`. See [`detrend`](@ref).
+- `fillgaps`: when `true`, equispace the record on the minimum time spacing
                and impute `NaN`s with [`fillgaps`](@ref) (Howe's algorithm).
                Requires a time column.
 

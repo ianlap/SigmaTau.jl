@@ -1,8 +1,6 @@
-# io/detrend.jl — Linear / endpoint / mean detrending for PhaseData and FrequencyData.
-#
-# Multiple dispatch on our timing-data types lets us export the bare name
-# `detrend` without colliding with `detrend(::Vector)` from other packages —
-# they're different methods on different types.
+# Mean, endpoint, linear and quadratic detrending of PhaseData / FrequencyData.
+# Dispatching on the record types lets the bare name `detrend` coexist with
+# `detrend(::Vector)` from other packages.
 
 const _DETREND_MODES = (:none, :mean, :endpoint, :linear, :quadratic)
 
@@ -13,11 +11,11 @@ In-place detrend of a real vector. `mode` is one of `:none`, `:mean`,
 `:endpoint`, `:linear`, `:quadratic`. Internal helper for
 `detrend(::PhaseData)` and `detrend(::FrequencyData)`.
 
-- `:none`      — no-op.
-- `:mean`      — subtract the sample mean.
-- `:endpoint`  — subtract the line connecting the first and last samples.
-- `:linear`    — subtract the least-squares-fit straight line in index `n=0..N-1`.
-- `:quadratic` — subtract the least-squares-fit quadratic in index `n=0..N-1`.
+- `:none`: no-op.
+- `:mean`: subtract the sample mean.
+- `:endpoint`: subtract the line connecting the first and last samples.
+- `:linear`: subtract the least-squares straight line in index `n=0..N-1`.
+- `:quadratic`: subtract the least-squares quadratic in index `n=0..N-1`.
   On phase data the quadratic term is frequency drift, so this is the drift
   removal SP1065 prescribes before the total estimators.
 """

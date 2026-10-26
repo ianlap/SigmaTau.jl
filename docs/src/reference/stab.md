@@ -1,4 +1,4 @@
-# SigmaTau — Stability analysis
+# Stability functions
 
 ## Allan family deviations
 
@@ -38,10 +38,8 @@ theoh
 
 ## Dynamic (time-resolved) deviations
 
-DADEV and DHDEV slide an analysis window across the record and return a
-2-D σ(t, τ) map as a [`DynamicStabilityResult`](@ref) rather than a
-`StabilityResult` curve. They are therefore not available through
-[`stability`](@ref).
+`dadev` and `dhdev` slide a window across the record and return a σ(t, τ)
+map as a [`DynamicStabilityResult`](@ref).
 
 ```@docs
 dadev
@@ -50,14 +48,10 @@ dhdev
 
 ## Streaming accumulators
 
-[`StreamingStability`](@ref) computes `adev`/`mdev`/`hdev`/`mhdev` in real
-time as phase samples arrive, using the Dobrogowski–Kasznia running-sum
-scheme [dobrogowski-2007-realtime-adev](@cite): O(1) work per new sample
-per averaging factor, memory bounded by a ring buffer of at most
-`4·maximum(m_values) + 1` samples. At every sample count the streamed
-estimate matches the batch call on the samples seen so far. The
-total-family and Thêo estimators cannot stream — their whole-record
-extension/sampling schemes have no O(1) per-sample update.
+[`StreamingStability`](@ref) computes `adev`/`mdev`/`hdev`/`mhdev` as phase
+samples arrive, at O(1) cost per sample per averaging factor; at every
+sample count the streamed estimate equals the batch call on the samples
+seen so far.
 
 ```julia
 acc = StreamingStability(:adev, 1.0, [1, 10, 100])
@@ -131,31 +125,4 @@ save_result
 load_result
 save_suite
 load_suite
-```
-
-## Advanced / research kernels
-
-These are not exported, but remain reachable as `SigmaTau._adev_core` and
-friends for benchmarking, parity validation against reference implementations,
-and research use. The underscore prefix signals that the calling convention is
-not stability-guaranteed across minor versions; prefer the wrappers above for
-application code.
-
-```@docs
-SigmaTau._adev_core
-SigmaTau._mdev_core
-SigmaTau._tdev_core
-SigmaTau._hdev_core
-SigmaTau._mhdev_core
-SigmaTau._totdev_core
-SigmaTau._mtotdev_core
-SigmaTau._htotdev_core
-SigmaTau._mhtotdev_core
-SigmaTau._mtie_core
-SigmaTau._tierms_core
-SigmaTau._pdev_core
-SigmaTau._theo1_core
-SigmaTau._theobr_ratio
-SigmaTau._kernel_m_max
-SigmaTau._default_m_values
 ```

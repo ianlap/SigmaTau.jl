@@ -1,20 +1,11 @@
-# kernels.jl — raw deviation kernels (Vector{Float64} in, arrays out).
-#
-# Merged from stab/core/{allan, hadamard, total, mtie, pdev}.jl. These are the
-# internal _*_core functions; the public PhaseData/FrequencyData API lives in
-# deviations.jl.
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/allan.jl ──────────────────────────────────────────────────
-
-# core/allan.jl — Core Stability Kernels
+# Deviation kernels: Vector{Float64} in, deviations out. The public API in
+# deviations.jl wraps these.
 
 """
     _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Overlapping Allan Deviation (ADEV) for a set of averaging factors `m`.
-This is a highly optimized, SIMD-vectorized loop with no allocations in the inner loop.
+Overlapping Allan deviation at each averaging factor `m`. Allocation-free
+SIMD inner loop.
 """
 function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -42,7 +33,8 @@ end
 """
     _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Modified Allan Deviation (MDEV) using prefix sums for O(N) performance per `m`.
+Modified Allan deviation at each `m`, as a third difference of prefix sums
+(O(N) per `m`).
 """
 function _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -80,7 +72,7 @@ end
 """
     _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Time Deviation (TDEV).
+Time deviation (τ/√3) · MDEV.
 """
 function _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     mdevs = _mdev_core(x, m_values, tau0)
@@ -89,16 +81,11 @@ function _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/hadamard.jl ───────────────────────────────────────────────
-
-# core/hadamard.jl — Core Hadamard Stability Kernels
-
 """
     _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Overlapping Hadamard Deviation (HDEV) for a set of averaging factors `m`.
-This uses a highly optimized, SIMD-vectorized loop with no allocations in the inner loop.
+Overlapping Hadamard deviation at each averaging factor `m`. Allocation-free
+SIMD inner loop.
 """
 function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -126,7 +113,8 @@ end
 """
     _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Modified Hadamard Deviation (MHDEV) using prefix sums for O(N) performance per `m`.
+Modified Hadamard deviation at each `m`, as a fourth difference of prefix
+sums (O(N) per `m`).
 """
 function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -162,17 +150,12 @@ function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/total.jl ──────────────────────────────────────────────────
-
-# core/total.jl — Core Total Stability Kernels
-
 """
     _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Total Deviation (TOTDEV) for a set of averaging factors `m`,
-using the Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension with no
-per-window detrend — the canonical TOTDEV form (matches allantools).
+Total deviation at each averaging factor `m`, with the Howe 1995 / NIST SP1065
+eq. 25 endpoint mean-flip extension and no per-window detrend (the canonical
+form; matches allantools).
 """
 function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return _totdev_howe(x, m_values, tau0)
@@ -250,8 +233,8 @@ end
 """
     _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Modified Total Deviation (MTOTDEV), using Greenhall 2003's
-per-window time-reverse extension with half-mean slope removal — the canonical
+Modified total deviation, using Greenhall 2003's
+per-window time-reverse extension with half-mean slope removal, the canonical
 MTOTDEV form.
 """
 function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
@@ -264,10 +247,9 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
 
     # Sequential m-loop, parallel over subsequences. The subsequence list
     # (length nsubs ≈ N − 3m) is long and uniform; chunking it across
-    # threads gives near-perfect speedup per m. Per-m parallelism was
-    # tried and lost — uneven m-work + nested @threads overhead outweighed
-    # the gain. Reduction order changes vs sequential: a few-ULP drift is
-    # documented in CHANGELOG.
+    # threads gives near-linear speedup per m; parallelism over m instead
+    # gives uneven work per thread and nested @threads overhead. The
+    # reduction order differs from the sequential loop by a few ULP.
     #
     # ext-buffer pool: one buffer per chunk slot, sized once for the
     # largest m. Reused across all m's; cheap m's only touch the first
@@ -303,10 +285,9 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
             ext = ext_pool[c]
             local_sum = 0.0
 
-            # Seed the running half-window sums for the chunk's first window.
-            # For m ≥ 2 we then update s1/s2 in O(1) per n inside the loop
-            # rather than re-summing hi/lo_half_len samples each window.
-            # Seed the running half-sums for the chunk's first window (m ≥ 2).
+            # Seed the running half-window sums for the chunk's first window;
+            # for m ≥ 2 they are then updated in O(1) per n inside the loop
+            # rather than re-summed over each window.
             s1 = 0.0
             s2 = 0.0
             if m >= 2
@@ -387,9 +368,9 @@ end
 """
     _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Hadamard Total Deviation (HTOTDEV) on the frequency series
+Hadamard total deviation on the frequency series
 `y = diff(x) / tau0`, using Greenhall 2003's per-window time-reverse extension
-with half-mean slope removal on `y` — the canonical HTOTDEV form.
+with half-mean slope removal on `y`, the canonical HTOTDEV form.
 """
 function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return _htotdev_greenhall(x, m_values, tau0)
@@ -506,17 +487,18 @@ end
 """
     _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the Modified Hadamard Total Deviation (MHTOTDEV).
+Modified Hadamard total deviation.
 
-MHTOTDEV is novel to SigmaTau; no canonical/published form exists. SigmaTau
-adopts the Greenhall methodology — per-window half-mean slope removal + a 3×
-time-reverse extension on phase — by consistency with MTOTDEV and HTOTDEV.
+MHTOTDEV is original to SigmaTau; no published form exists. The kernel adopts
+the Greenhall construction of MTOTDEV and HTOTDEV: per-window half-mean slope
+removal and a 3× time-reverse extension on phase, with the modified Hadamard
+operator.
 
 The kernel alone is NOT drift-immune: the per-window detrend removes only the
 local frequency offset, so residual deterministic drift re-enters through the
 reflected window boundaries. Per-window drift removal was evaluated in both
 the phase domain (two-parameter detrend) and the frequency domain (TOTHVAR
-scheme + modified operator) and rejected — both measurably damage the
+scheme with the modified operator) and rejected; both measurably damage the
 statistic at the PM noise types (B(WHPM) ≈ 3.8 with the χ² EDF model
 collapsing, and B(WHPM) growing ∝ m, respectively). The public `mhtotdev`
 wrapper instead removes the record's least-squares frequency drift before
@@ -626,11 +608,6 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/mtie.jl ───────────────────────────────────────────────────
-
-# core/mtie.jl — Maximum Time Interval Error kernel
-
 """
     _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
@@ -639,7 +616,7 @@ Maximum Time Interval Error per ITU-T G.810. For each averaging factor
 the record and returns the largest peak-to-peak phase excursion observed
 in any window.
 
-Units are seconds (a σ_x quantity, like TDEV) — MTIE is itself a phase
+Units are seconds (a σ_x quantity, like TDEV); MTIE is itself a phase
 measure, not a relative-frequency measure, so no τ rescaling is applied.
 
 # Implementation
@@ -716,11 +693,6 @@ function _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/tierms.jl ─────────────────────────────────────────────────
-
-# core/tierms.jl — RMS Time Interval Error kernel
-
 """
     _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
@@ -733,7 +705,7 @@ averaging factor `m`, the root-mean-square of the phase change over all
     \\sum_{i=1}^{N-m} \\bigl(x_{i+m} - x_i\\bigr)^2}
 ```
 
-Units are seconds (a σ_x quantity, like MTIE/TDEV) — TIE rms is a phase
+Units are seconds (a σ_x quantity, like MTIE/TDEV); TIE rms is a phase
 measure, so no τ rescaling is applied. Matches allantools' `tierms`
 (its per-window max−min of the two samples `x[i]`, `x[i+m]` is exactly
 `|x[i+m] − x[i]|`). Returns NaN where `m ≥ N`.
@@ -760,11 +732,6 @@ function _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/pdev.jl ───────────────────────────────────────────────────
-
-# core/pdev.jl — Parabolic deviation (Vernotte 2015 / 2020)
-
 """
     _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
@@ -780,8 +747,8 @@ parabolic fit to the phase record over each window:
    \\right]^2
 ```
 
-For `m = 1` the parabolic weight collapses to zero, so we fall back to
-overlapping ADEV (the canonical PDEV(τ₀) ≡ ADEV(τ₀) identity from
+For `m = 1` the parabolic weight collapses to zero, so the kernel falls back
+to overlapping ADEV (the canonical PDEV(τ₀) ≡ ADEV(τ₀) identity from
 Vernotte 2015). For `m > 1` the weighted parabolic sum is evaluated by a
 rolling two-sum recurrence, reducing each averaging factor from O(Nm) to O(N).
 """
@@ -865,15 +832,10 @@ function _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/theo.jl ───────────────────────────────────────────────────
-
-# core/theo.jl — Thêo1 / ThêoBR kernels (NIST SP1065 §5.2.15–5.2.16)
-
 """
     _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Computes the raw Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15
+Raw Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15
 eq. 30, with the 0.75 normalization of the original Howe & Peppler 2003
 definition (used by Stable32 and allantools; SP1065's printed eq. 30
 omits the 0.75, but its own Table 2 bias value a = 1.00 for white FM
@@ -890,7 +852,7 @@ for `m ≥ 10`; smaller even factors are computed but carry little Theo1
 benefit over ADEV). Odd or out-of-range `m` yield NaN. The effective
 averaging time of a Thêo1 value is `τ = 0.75·m·τ0` (SP1065 §5.2.15).
 
-The double sum is O((N−m)·m/2) per averaging factor — O(N·m) — unlike
+The double sum is O((N−m)·m/2) per averaging factor, that is O(N·m), unlike
 the O(N) Allan kernels; the largest factors dominate, so a full even-m
 sweep on a long record costs O(N³) overall. The loop is δ-major with a
 SIMD inner i-loop and no allocations; entries of `m_values` are
@@ -927,7 +889,7 @@ end
 
 # Overlapping Allan *variance* at a single averaging factor, allowing a
 # single analysis window (L ≥ 1). Used only for the ThêoBR ratio terms,
-# where SP1065 eq. 33 reaches AVAR factors as large as m ≈ N/2 — one
+# where SP1065 eq. 33 reaches AVAR factors as large as m ≈ N/2, one
 # window is acceptable inside an average over many ratio terms, while
 # the public `_adev_core` keeps its stricter L ≥ 2 guard.
 function _avar_var_at(x::Vector{Float64}, m::Int, tau0::Float64)
@@ -990,14 +952,11 @@ _theoh_is_adev(m::Int, N::Int) = m <= 0.2 * (N - 1)
 _theoh_theo_m(m::Int) = 2 * max(1, round(Int, m / 1.5))
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── analysis-window counts ──────────────────────────────────────────────
-
 """
     _neff_counts(dev_sym::Symbol, N::Int, m_values::Vector{Int}) → Vector{Int}
 
 Number of analysis windows the kernel for `dev_sym` averages at each
-averaging factor `m` — the Stable32 "#" / allantools `ns` count. Mirrors the
+averaging factor `m`, the Stable32 "#" / allantools `ns` count. Mirrors the
 loop bounds and small-`N` guards of the `_*_core` kernels above exactly;
 entries are 0 precisely where the kernel returns NaN. The wrapper-only
 deviations (`tdev`, `htdev`, `ttotdev`) inherit the wrapped estimator's
@@ -1060,7 +1019,7 @@ function _neff_count(dev_sym::Symbol, N::Int, m::Int)
     elseif dev_sym === :theo1
         # _theo1_dev_at: i in 1:N−m outer windows; NaN for odd m or m
         # outside [2, N−1]. (allantools reports the total inner-term count
-        # (N−m)·m/2 instead; we count outer analysis windows, matching the
+        # (N−m)·m/2 instead; this counts outer analysis windows, matching the
         # deverr normalization √(N−m) both use.)
         (m < 2 || isodd(m) || m > N - 1) && return 0
         return N - m
