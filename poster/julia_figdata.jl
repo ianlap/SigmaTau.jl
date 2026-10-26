@@ -20,7 +20,7 @@ open(joinpath(out, "suite_fixture.csv"), "w") do io
         @printf(io, "%s,%.17g,%.17g,%.17g,%.17g,%s,%.17g,%d\n", r.deviation_type, r.tau[i], r.dev[i], lo, hi, nt, edf, r.neff[i])
     end
 end
-println("suite: ", join(string.(d.deviation_type) for d in s.results), ", "))
+println("suite: ", join([string(d.deviation_type) for d in s.results], ", "))
 
 # 2) dynamic map: white FM at 1e-12 for 4096 s, then 3e-12 plus flicker FM for 4096 s, tau0 = 1 s --
 rng = Xoshiro(20261026)

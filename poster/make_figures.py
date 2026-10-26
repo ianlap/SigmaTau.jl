@@ -153,7 +153,67 @@ def fig_mhtot_edf():
     ax.legend(loc='lower right', fontsize=14, handlelength=1.6, labelspacing=0.3)
     save(fig, 'F5_mhtot_edf')
 
+
+# =====================================================================
+# F1 (package output)  Suite on the fixture from poster/data/suite_fixture.csv (julia_figdata.jl)
+# =====================================================================
+import csv
+def _suite_rows():
+    f = os.path.join(HERE, 'data', 'suite_fixture.csv')
+    return list(csv.DictReader(open(f))) if os.path.exists(f) else None
+NOISE_LABEL = {'WHPM': 'white PM', 'FLPM': 'flicker PM', 'WHFM': 'white FM', 'FLFM': 'flicker FM', 'RWFM': 'random-walk FM'}
+def fig_suite_pkg():
+    rows = _suite_rows()
+    if rows is None:
+        print('no suite_fixture.csv; run julia_figdata.jl'); return
+    fig, ax = plt.subplots(figsize=(9.0, 6.4))
+    order = [('adev', 'ADEV'), ('mdev', 'MDEV'), ('hdev', 'HDEV'), ('totdev', 'TOTDEV'), ('mhtotdev', 'MHTOTDEV (new)')]
+    for k, (key, label) in enumerate(order):
+        rr = [r for r in rows if r['dev'] == key]
+        tau = np.array([float(r['tau']) for r in rr]); dev = np.array([float(r['sigma']) for r in rr])
+        lo = np.array([float(r['lo']) for r in rr]); hi = np.array([float(r['hi']) for r in rr])
+        ax.errorbar(tau, dev, yerr=[dev - lo, hi - dev], fmt=MARKERS[k] + '-', color=SERIES[k], capsize=4, capthick=1.5, elinewidth=1.5, label=label, zorder=5 - k * 0.1)
+    # noise type identified per tau (ADEV row), as a strip of labels above the curves
+    rr = [r for r in rows if r['dev'] == 'adev']
+    taus = [float(r['tau']) for r in rr]; nts = [r['noise_type'] for r in rr]
+    runs_ = []; start = 0
+    for i in range(1, len(nts) + 1):
+        if i == len(nts) or nts[i] != nts[start]:
+            runs_.append((taus[start], taus[i - 1], nts[start])); start = i
+    ytop = 2.6
+    for (a, b, nt) in runs_:
+        ax.text(np.sqrt(a * b), ytop, nt, ha='center', va='bottom', fontsize=15, color=INK2, rotation=0)
+        ax.plot([a / 1.3, b * 1.3], [ytop * 0.93, ytop * 0.93], color=GRID, lw=2)
+    ax.text(0.75, ytop * 1.9, 'noise type identified per τ (SP1065 codes):', ha='left', va='bottom', fontsize=15, color=INK2)
+    ax.set_xscale('log'); ax.set_yscale('log'); ax.set_xlim(0.7, 6000); ax.set_ylim(1.2e-3, 9)
+    ax.set_xlabel(r'averaging time $\tau$ (s)'); ax.set_ylabel(r'$\sigma_y(\tau)$')
+    ax.legend(loc='lower left', ncol=1, handlelength=2.2, fontsize=17)
+    save(fig, 'F1_suite')
+
+# =====================================================================
+# F7  Dynamic Allan deviation map from poster/data/dynamic_map.csv (julia_figdata.jl)
+# =====================================================================
+from matplotlib.colors import LinearSegmentedColormap, LogNorm
+CRIMSON_RAMP = LinearSegmentedColormap.from_list('crimson_seq', ['#FBEEF0', '#E9A3AE', '#C9566C', '#9E1B32', '#5A0F1D'])
+def fig_dynamic():
+    f = os.path.join(HERE, 'data', 'dynamic_map.csv')
+    if not os.path.exists(f):
+        print('no dynamic_map.csv; run julia_figdata.jl'); return
+    m = list(csv.reader(open(f)))
+    taus = np.array([float(h.split('=')[1]) for h in m[0][1:]])
+    t = np.array([float(r[0]) for r in m[1:]]); Z = np.array([[float(v) for v in r[1:]] for r in m[1:]])
+    fig, ax = plt.subplots(figsize=(6.4, 4.6))
+    # cell edges: windows are centred on t with constant step; taus are octave spaced
+    dt = t[1] - t[0]; te = np.concatenate(([t[0] - dt / 2], t + dt / 2))
+    tau_e = np.concatenate(([taus[0] / np.sqrt(2)], taus * np.sqrt(2)))
+    pm = ax.pcolormesh(te, tau_e, Z.T, cmap=CRIMSON_RAMP, norm=LogNorm(vmin=np.nanmin(Z), vmax=np.nanmax(Z)), shading='flat', edgecolors='white', linewidth=0.6)
+    ax.set_yscale('log'); ax.set_xlabel('window centre $t$ (s)'); ax.set_ylabel(r'$\tau$ (s)')
+    ax.axvline(4096, color=INK, lw=2, ls='--'); ax.text(4096 + 60, taus[-1] * 1.0, 'noise level\nchanges', fontsize=14, color=INK, va='center', ha='left')
+    cb = fig.colorbar(pm, ax=ax, pad=0.02); cb.set_label(r'$\sigma_y(t,\tau)$', fontsize=18); cb.ax.tick_params(labelsize=14)
+    ax.grid(False)
+    save(fig, 'F7_dynamic')
+
 if __name__ == '__main__':
-    which = sys.argv[1:] or ['suite', 'validation', 'speed', 'mhtot_bias', 'mhtot_edf']
+    which = sys.argv[1:] or ['suite_pkg', 'validation', 'speed', 'mhtot_bias', 'mhtot_edf', 'dynamic']
     for w in which:
         globals()['fig_' + w]()
