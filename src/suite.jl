@@ -128,11 +128,8 @@ With `Rᵢ = Σ_{j≠i} s²ᵢⱼ` (clock `i`'s row sum) and `S = Σ_{j<k} s²�
 \\hat\\sigma^2_i(\\tau) = \\frac{1}{N-2}\\left( R_i - \\frac{S}{N-1} \\right)
 ```
 
-Derivation: each σ²ᵢ appears in `N − 1` pairs, so `S = (N−1)·Σᵢσ²ᵢ`; and
-`Rᵢ = (N−1)σ²ᵢ + Σ_{j≠i}σ²ⱼ = (N−2)σ²ᵢ + Σⱼσ²ⱼ = (N−2)σ²ᵢ + S/(N−1)`.
-Solving for σ²ᵢ gives the formula above. At `N = 3` it reduces to the
-classic three-cornered hat: `R_A = s²_AB + s²_AC`, `S = s²_AB + s²_AC +
-s²_BC`, so `σ̂²_A = R_A − S/2 = ½(s²_AB + s²_AC − s²_BC)`.
+At `N = 3` this is the classic three-cornered hat,
+`σ̂²_A = ½(s²_AB + s²_AC − s²_BC)`.
 
 `pairwise[i, j]` (for `i < j`; the transposed entry is also accepted —
 fill either triangle, or both) is the deviation computed on the

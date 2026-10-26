@@ -12,7 +12,7 @@
 # agreement from bias-correction policy — and the raw kernels match
 # allantools to machine precision (≤4.4e-15 measured on this fixture).
 #
-# Comparison contract: raw legacy kernels (LK.* — bias-free) vs
+# Comparison contract: raw reference kernels (LK.*, bias-free) vs
 # allantools' default output, at the shared 1e-11 cross-platform floor.
 
 @testset "allantools cross-validation" begin

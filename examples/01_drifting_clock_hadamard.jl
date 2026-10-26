@@ -155,34 +155,20 @@ end
 
 # ## Short records: MHTOTDEV
 #
-# One day was generous. Suppose the record stops after three hours —
-# a warm-up check before a deployment, say. At the longest reachable
-# τ, `mhdev` has very few independent third differences left, so its
-# χ² confidence interval is wide. `mhtotdev` extends each analysis
-# subsegment by detrended reflection (the Greenhall total-variance
-# methodology), keeping every subsegment in play at long τ and
-# raising the equivalent degrees of freedom. Both its bias correction
-# (`correct_bias = true` by default) and its EDF model are
-# Monte-Carlo-calibrated against synthesized known-noise — MHTOTDEV is
-# original to this package and has no published coefficient tables —
-# and that calibration is valid only for `τ/τ₀ ≥ 16`, the same floor
-# the Hadamard-total literature quotes. See
-# [MHTOTDEV bias and EDF](../mhtotdev.md) for the methodology.
+# Suppose the record stops after three hours, a warm-up check before a
+# deployment. At the longest reachable τ, `mhdev` has few independent
+# third differences left and its χ² interval is wide. `mhtotdev` extends
+# each analysis subsegment by detrended reflection, keeping every
+# subsegment in play at long τ and raising the equivalent degrees of
+# freedom. MHTOTDEV is original to this package, so its bias correction and
+# EDF model were measured by Monte Carlo (valid for `τ/τ₀ ≥ 16`); see
+# [MHTOTDEV bias and EDF](../mhtotdev.md).
 #
-# Unlike its parent `mhdev`, the total kernel is not drift-immune on
-# its own — the boundary extension re-admits residual drift — so
-# `mhtotdev` removes the record's least-squares frequency drift itself
-# before analyzing (`remove_drift = true`, the default; per-window
-# drift removal was evaluated in both the phase and frequency domains
-# and measurably damages the statistic, so the global removal is the
-# design). Since drift is deterministic, removing it discards no
-# statistical information; it is the same practice SP1065 recommends
-# before any total estimator. One piece of hygiene remains for the
-# *comparison* below: `mhdev`'s noise identification runs on the
-# record as given and would classify the longest-τ points as redder
-# than the true noise on a record drifting this strongly. Detrending
-# the record once lets both estimators' χ² intervals classify the
-# underlying noise:
+# The total kernel is not drift-immune by itself (the boundary extension
+# re-admits residual drift), so `mhtotdev` removes the record's
+# least-squares frequency drift first (`remove_drift = true`). For a fair
+# comparison the record is detrended once here, so that `mhdev`'s noise
+# identification also sees the underlying noise rather than the drift:
 
 N_short  = 10_800   # three hours at 1 Hz
 fd_short = detrend(FrequencyData(y[1:N_short], τ₀))   # noise-ID hygiene for the mhdev comparison
@@ -234,16 +220,7 @@ plot!(r_mht; label = "MHTOTDEV (3 h record)", ci_band = true, lw = 1.5)
 #
 # All four Hadamard-family estimators reject linear frequency drift.
 # Within the family:
-
-println("""
-Symptom                                              Reach for
----------------------------------------------------  ---------
-drift contaminates ADEV at long τ                    hdev
-drift + ambiguous PM noise (WPM vs FPM) at short τ   mhdev
-time-error budget (σ_x) for a drifting clock         htdev
-drifting clock, record too short for long-τ CI       mhtotdev
-""")
-
+#
 # | Symptom | Reach for |
 # |---|---|
 # | Drift contaminates ADEV at long τ | `hdev` |

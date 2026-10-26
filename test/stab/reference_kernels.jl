@@ -1,18 +1,11 @@
-# test/legacy_kernels.jl — Extracted reference kernels from the legacy
-# SigmaTau Julia codebase (gitignored under `legacy/julia/src/deviations/`).
-# These are inlined verbatim and depend only on Base — no heavy externals —
-# so the parity testset can run on CI where the legacy tree is absent.
-#
-# Each function returns the *variance* (legacy convention); take sqrt to
-# compare against the new `_*_core` deviation outputs.
-#
-# Source: legacy/julia/src/{types.jl,deviations/{allan,hadamard,total}.jl}.
-# If the legacy code drifts, regenerate this file; otherwise these are the
-# canonical numerical reference for SP1065-equivalent point estimates.
+# Reference kernels: straightforward textbook (SP1065) implementations of the
+# deviation variances, depending only on Base. The parity testset checks the
+# optimized `_*_core` kernels against these. Each function returns the
+# *variance*; take sqrt to compare with the deviation outputs.
 
-module LegacyKernels
+module ReferenceKernels
 
-# ── detrend_linear! (legacy/types.jl) ─────────────────────────────────────────
+# ── detrend_linear! ──
 
 function detrend_linear!(x::AbstractVector{T}) where T<:Real
     n = length(x)

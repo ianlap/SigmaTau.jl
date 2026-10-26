@@ -9,8 +9,8 @@ using SigmaTau: _adev_core, _mdev_core, _tdev_core, _hdev_core, _mhdev_core,
                 _totdev_core, _mtotdev_core, _htotdev_core, _mhtotdev_core,
                 _mtie_core, _pdev_core
 
-include("legacy_kernels.jl")
-const LK = LegacyKernels
+include("reference_kernels.jl")
+const LK = ReferenceKernels
 
 @testset "SigmaTau Math Core Parity" begin
     # Mock data equivalent to NIST SP1065 sample
@@ -177,9 +177,9 @@ const LK = LegacyKernels
         @test r_edge.neff[1] == 2
     end
 
-    @testset "Legacy parity (extracted SP1065 kernels)" begin
-        # Strict numerical parity against the legacy SigmaTau Julia reference
-        # kernels, inlined verbatim under test/legacy_kernels.jl. Uses a seeded
+    @testset "Reference-kernel parity" begin
+        # Strict numerical parity against the textbook reference kernels in
+        # test/stab/reference_kernels.jl. Uses a seeded
         # power-law-flavoured fixture and a wide m-grid.
         using Random
         Random.seed!(20260507)
@@ -374,7 +374,7 @@ const LK = LegacyKernels
                 end
 
                 # Bonus: the new SigmaTau core matches the reference
-                # kernel exactly (already covered by "Legacy parity" testset),
+                # kernel exactly (already covered by "Reference-kernel parity" testset),
                 # so we don't repeat the assertion here.
                 n_checked += 1
             end
