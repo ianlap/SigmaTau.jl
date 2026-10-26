@@ -64,8 +64,8 @@ def fig_suite():
     ax.set_xlabel(r'averaging time $\tau$ (s)'); ax.set_ylabel(r'$\sigma_y(\tau)$')
     ax.set_xlim(0.7, 6000); ax.set_ylim(1.2e-3, 1.6)
     # noise regimes identified per tau (Stable32 column alpha; SigmaTau agrees except tau = 256 s)
-    ax.text(3.2, 0.62, 'white PM\n(slope -1)', color=INK2, fontsize=18, ha='left', va='bottom')
-    ax.text(1300, 0.013, 'flicker FM /\nrandom-walk FM', color=INK2, fontsize=18, ha='center', va='bottom')
+    ax.text(3.2, 0.62, 'white / flicker PM\n(slope -1)', color=INK2, fontsize=18, ha='left', va='bottom')
+    ax.text(1300, 0.013, 'flicker FM', color=INK2, fontsize=18, ha='center', va='bottom')
     ax.legend(loc='lower left', ncol=1, handlelength=2.2)
     save(fig, 'F1_suite')
 
