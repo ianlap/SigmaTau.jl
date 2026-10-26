@@ -15,12 +15,34 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Repository trimmed for the public release: the extended theory pages, FAQ,
   plotting cookbook and migration guides moved to the `dev` branch; the docs
   build no longer needs a TeX install.
+- `noise_gen` (and the internal `_gen_powerlaw_y`) now synthesizes power-law
+  noise with the Kasdin–Walter discrete fractional filter instead of shaping
+  FFT bins by `f^(α/2)`. The old shaper left white-PM phase slightly blue
+  (lag-1 autocorrelation −0.2 instead of 0), which the noise identifier read
+  as α ≈ 3 at τ₀ and reported as `:unknown`. Realizations for a given seed
+  change. `sigma1` components are still calibrated empirically to σ_y(τ₀);
+  `h` components are now scaled on the filter's low-frequency PSD so the
+  generated spectrum is `h_α f^α` (before, h was converted to σ_y(τ₀) with the
+  continuous-time formulas, which do not hold for sampled discrete processes).
+- MHTOTDEV bias and EDF coefficients re-measured with the Kasdin–Walter
+  synthesis (full sweep at `e3ba9da`, seed 20260531, R = 3000, N ≤ 32768;
+  `tools/artifacts/mhtotdev_mc_full.json`). White FM is unchanged; the
+  largest shifts are the white-PM EDF (`b, c` 1.687, 4.317 → 1.634, 3.833)
+  and bias slope, and the random-walk EDF intercept (2.449 → 2.415).
+- `mdev`, `tdev`, `mhdev` and `htdev` remove the least-squares phase line
+  before forming their prefix sums (an exact invariance of the modified
+  estimators). On a record with an uncorrected 1e-9 frequency offset the
+  kernels previously lost about seven significant digits to cancellation;
+  they now agree with BigFloat arithmetic to 1e-12.
 - `plot(::DynamicStabilityResult)` draws the SP1065 waterfall (one σ(τ)
   curve per window, stacked along t) and no longer offers a heatmap.
 
 ### Added
 
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
+- `app/StabilityWeb.jl`: a browser edition of the explorer (Bonito + WGLMakie)
+  with native HTML controls for screen readers and keyboard use; shares
+  `app/ExplorerCore.jl` with the window.
 - `app/StabilityExplorer.jl`: a GLMakie desktop application covering file
   import, synthesis, preprocessing, the deviation suite with χ² intervals,
   the per-τ table, spectra, dynamic deviation waterfalls, and figure, table

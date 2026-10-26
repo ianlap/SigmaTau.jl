@@ -11,320 +11,11 @@
 # text files `load_suite` and `read_phase` read back. Every number shown comes
 # from the public SigmaTau API.
 
-using SigmaTau
 using GLMakie
-using CairoMakie
 using NativeFileDialog
-using Random
-using Printf
-using Statistics
+include("ExplorerCore.jl")
 
 GLMakie.activate!()
-
-const VERSION_STRING = string(pkgversion(SigmaTau))
-const DEVIATIONS = [:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
-                    :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
-                    :theo1, :theoh, :pdev, :mtie, :tierms]
-const DEFAULT_ON = Set([:adev, :mdev, :hdev, :mhdev])
-const SIGMA_X    = Set([:tdev, :htdev, :ttotdev, :mtie, :tierms])
-const TAU_MODES  = ["Octave" => Octave, "Half octave" => HalfOctave,
-                    "Quarter octave" => QuarterOctave, "Decade" => Decade,
-                    "Half decade" => HalfDecade, "All τ" => AllTaus]
-const NOISES     = [(2, "White PM", -11), (1, "Flicker PM", -16),
-                    (0, "White FM", -12), (-1, "Flicker FM", -16),
-                    (-2, "Random-walk FM", -14)]
-const PAGES      = ["Record", "Deviations", "Spectrum", "Dynamic deviation", "Help"]
-const MAX_TABLE_ROWS = 40
-const MAX_SERIES_POINTS = 20_000
-
-const HELP_SECTIONS = [
-    ("Workflow",
-     "1. Record page: synthesize a power-law record or load a file (Browse…, then Load file). " *
-     "The time series and its summary appear below the controls.\n" *
-     "2. Choose deviations, τ grid, confidence level and preprocessing in the left column.\n" *
-     "3. Press Run analysis, or Enter in any field. The Deviations, Spectrum and Dynamic deviation pages " *
-     "fill in and the status line at the bottom reports what was computed.\n" *
-     "4. Export figure… writes the current page as PNG, PDF or SVG. Export table… writes the suite " *
-     "as a tab-separated file. Export record… writes the preprocessed record as text."),
-    ("Deviations",
-     "Frequency deviations are dimensionless; time deviations (tdev, htdev, ttotdev, mtie, tierms) are in " *
-     "seconds and plot on their own axes. Hadamard estimators remove linear frequency drift; modified " *
-     "estimators separate white PM from flicker PM."),
-    ("Confidence intervals",
-     "χ² bounds from the Greenhall–Riley equivalent degrees of freedom, with the noise type identified " *
-     "at each τ by the lag-1 autocorrelation test. Bias correction applies the NIST SP1065 / Howe " *
-     "unbias factors to the total family and ThêoBR removal to Thêo1; switch it off to reproduce " *
-     "allantools (totals) or raw Thêo1. mtie and tierms have no interval model."),
-    ("File formats",
-     "Stable32 .DAT exports: header rows 10, time column 0, value column 1, τ₀ from the header's Tau " *
-     "line. Two-column time/value text or CSV: τ₀ is inferred from the time column. Files written by " *
-     "Export record… need no settings."),
-    ("Synthetic records",
-     "Each term is a power-law noise specified by its deviation at the sample interval, σ(τ₀); the " *
-     "slider sets the exponent of 10. Terms are independent and the seed makes the record reproducible."),
-    ("Links",
-     "Documentation: https://ianlap.github.io/SigmaTau.jl\nSource: https://github.com/ianlap/SigmaTau.jl"),
-]
-const GLOSSARY = [
-    ("adev", "overlapping Allan"), ("tdev", "time deviation, τ/√3 · MDEV"),
-    ("mdev", "modified Allan"), ("htdev", "Hadamard time deviation"),
-    ("hdev", "overlapping Hadamard"), ("ttotdev", "time total deviation"),
-    ("mhdev", "modified Hadamard"), ("mtie", "maximum time interval error"),
-    ("totdev", "total"), ("tierms", "RMS time interval error"),
-    ("mtotdev", "modified total"), ("theo1", "Thêo1 (ThêoBR when bias-corrected)"),
-    ("htotdev", "Hadamard total"), ("theoh", "ThêoH composite of ADEV and ThêoBR"),
-    ("mhtotdev", "modified Hadamard total"), ("pdev", "parabolic deviation"),
-]
-
-# ── Analysis (no GUI state) ───────────────────────────────────────────────
-
-nsamples(rec::PhaseData) = length(rec.x)
-nsamples(rec::FrequencyData) = length(rec.y)
-samples(rec::PhaseData) = rec.x
-samples(rec::FrequencyData) = rec.y
-
-function load_record(path, kind, tau0_text, time_col, value_col, header)
-    isempty(strip(path)) && error("Choose a file first (Browse…).")
-    t0 = isempty(strip(tau0_text)) ? nothing : parse(Float64, tau0_text)
-    reader = kind == "phase" ? read_phase : read_frequency
-    return reader(strip(path); tau0=t0, time_col=time_col, value_col=value_col, header=header)
-end
-
-function synthesize(N, tau0, seed, levels)
-    sigma1 = Dict{Int,Float64}(α => 10.0^e for (α, e) in levels)
-    isempty(sigma1) && error("Switch on at least one noise term.")
-    return noise_gen(PhaseData, N, tau0; sigma1=sigma1, rng=Xoshiro(seed))
-end
-
-function preprocess(rec; outliers=false, gaps=false, detrend_mode=:none)
-    outliers && (rec = remove_outliers(rec))
-    gaps && (rec = fillgaps(rec))
-    detrend_mode != :none && (rec = detrend(rec; method=detrend_mode))
-    return rec
-end
-
-function analyze(rec, devs, taumode, ci, confidence, correct_bias)
-    isempty(devs) && error("Select at least one deviation.")
-    return stability(rec; devs=Tuple(devs), taus=taumode, ci=ci,
-                     confidence=confidence, correct_bias=correct_bias)
-end
-
-function spectra(rec, f_carrier)
-    sy = Sy(rec); sx = Sx(rec)
-    l = f_carrier > 0 ? L(rec; f_carrier=f_carrier) : nothing
-    return (; sy, sx, l)
-end
-
-function dynamic_map(rec, dev_sym, frac)
-    n = nsamples(rec)
-    window = min(n, max(64, round(Int, n * frac)))
-    f = dev_sym == :dadev ? dadev : dhdev
-    return f(rec, Octave; window=window)
-end
-
-# Summary lines for the Record page.
-function record_summary(rec)
-    v = samples(rec)
-    n = length(v)
-    T = (n - 1) * rec.tau0
-    y = rec isa PhaseData ? diff(v) ./ rec.tau0 : v
-    finite = filter(isfinite, y)
-    drift = length(finite) > 2 ? begin
-        t = (0:length(finite)-1) .* rec.tau0
-        cov(t, finite) / var(t)
-    end : NaN
-    kind = rec isa PhaseData ? "phase x(t), seconds" : "fractional frequency y(t)"
-    span = T >= 86400 ? @sprintf("%.2f d", T / 86400) : T >= 3600 ? @sprintf("%.2f h", T / 3600) : @sprintf("%.0f s", T)
-    return [
-        "Record: $kind" * (rec.source == "user" ? ", synthetic" : ", " * basename(rec.source)),
-        @sprintf("N = %d samples, τ₀ = %g s, span T = %s", n, rec.tau0, span),
-        @sprintf("mean y = %.3e, std y = %.3e, NaN samples = %d", mean(finite), std(finite), count(isnan, v)),
-        @sprintf("least-squares frequency drift = %.3e per s (%.3e per day)", drift, drift * 86400),
-    ]
-end
-
-# ── Drawing (shared by the window and the export figure) ──────────────────
-
-# Axis and table labels with real subscripts.
-const LBL_SIGMA_Y   = rich("σ", subscript("y"), "(τ)")
-const LBL_SIGMA_X = rich("σ", subscript("x"), "(τ)  (s)")
-const LBL_SIGMA_MIN = rich("σ", subscript("min"))
-const LBL_SIGMA_MAX = rich("σ", subscript("max"))
-const N_EFF     = rich("n", subscript("eff"))
-const S_Y       = rich("S", subscript("y"), "(f)  (1/Hz)")
-const S_X       = rich("S", subscript("x"), "(f)  (s²/Hz)")
-
-# Integer-decade ticks for log axes (10⁰, 10¹, …); Makie's default picker
-# skips decades on wide ranges. Falls back to the linear picker inside a decade.
-struct DecadeTicks end
-function Makie.get_tickvalues(::DecadeTicks, vmin, vmax)
-    ks = ceil(Int, vmin):floor(Int, vmax)
-    length(ks) >= 2 && return Float64.(ks)
-    return Makie.get_tickvalues(WilkinsonTicks(5, k_min=3), vmin, vmax)
-end
-const LOG_TICKS = LogTicks(DecadeTicks())
-log_axis_kw() = (xticks=LOG_TICKS, yticks=LOG_TICKS,
-                 xminorticksvisible=true, yminorticksvisible=true,
-                 xminorticks=IntervalsBetween(9), yminorticks=IntervalsBetween(9),
-                 xminorgridvisible=true, yminorgridvisible=true,
-                 xminorgridstyle=:dot, yminorgridstyle=:dot)
-
-function draw_results!(ax, results; band=false, legend_position=:lb)
-    empty!(ax)
-    palette = Makie.wong_colors()
-    for (i, r) in enumerate(results)
-        color = palette[mod1(i, length(palette))]
-        keep = findall(v -> isfinite(v) && v > 0, r.dev)
-        isempty(keep) && continue
-        τ, σ = r.tau[keep], r.dev[keep]
-        if !isempty(r.ci)
-            lo, hi = ci_lower(r)[keep], ci_upper(r)[keep]
-            ok = isfinite.(lo) .& isfinite.(hi) .& (lo .> 0)
-            if band
-                band!(ax, τ[ok], lo[ok], hi[ok]; color=(color, 0.22))
-            else
-                errorbars!(ax, τ[ok], σ[ok], (σ .- lo)[ok], (hi .- σ)[ok];
-                           color=color, whiskerwidth=7, linewidth=1)
-            end
-        end
-        scatterlines!(ax, τ, σ; color=color, markersize=9, linewidth=1.6,
-                      strokecolor=:white, strokewidth=0.8,
-                      label=uppercase(string(r.deviation_type)))
-    end
-    autolimits!(ax)
-    return isempty(results) ? nothing : axislegend(ax; position=legend_position, framevisible=false)
-end
-
-function draw_spectrum!(ax, s::SpectralResult; color)
-    empty!(ax)
-    keep = s.freq .> 0
-    lines!(ax, s.freq[keep], s.psd[keep]; color=color, linewidth=1.4)
-    autolimits!(ax)
-end
-
-# Dynamic deviation as the SP1065 waterfall: one σ(τ) curve per window time,
-# stacked along the time axis, coloured by window centre. Axis3 has no log
-# scales, so log10(τ) and log10(σ) are plotted and the decade ticks relabelled.
-# `cb` is a Ref holding the previous Colorbar (or nothing) and `cb_cell` its
-# grid position; the colorbar is rebuilt on every draw.
-decade_labels(ks) = [Makie.rich("10", Makie.superscript(string(k))) for k in ks]
-dynamic_axis(gp) = Axis3(gp; xlabel="τ (s)", ylabel="Time t (s)", zlabel="σ",
-                         azimuth=1.6π, elevation=0.2π, perspectiveness=0.3,
-                         ytickformat=vs -> [@sprintf("%g", v) for v in vs],
-                         xlabeloffset=36, ylabeloffset=48, zlabeloffset=56)
-function draw_dynamic!(ax, dyn; cb=nothing, cb_cell=nothing)
-    empty!(ax)
-    z = map(v -> (isfinite(v) && v > 0) ? log10(v) : NaN, dyn.dev)
-    lx = log10.(dyn.tau)
-    tmin, tmax = Float64.(extrema(dyn.t))
-    cmap = cgrad(:viridis)
-    for (i, tc) in enumerate(dyn.t)
-        c = tmax > tmin ? cmap[(tc - tmin) / (tmax - tmin)] : cmap[0.5]
-        lines!(ax, lx, fill(Float64(tc), length(lx)), z[i, :]; color=c, linewidth=1.6)
-    end
-    kx = floor(Int, minimum(lx)):ceil(Int, maximum(lx))
-    zfin = filter(isfinite, z)
-    kz = isempty(zfin) ? (0:0) : (floor(Int, minimum(zfin)):ceil(Int, maximum(zfin)))
-    ax.xticks = (Float64.(kx), decade_labels(kx))
-    ax.zticks = (Float64.(kz), decade_labels(kz))
-    ax.title = uppercase(string(dyn.deviation_type)) * ", window = $(dyn.window) samples, $(length(dyn.t)) windows"
-    autolimits!(ax)
-    if cb !== nothing
-        cb[] === nothing || delete!(cb[])
-        cb[] = Colorbar(cb_cell; colormap=:viridis, limits=(tmin, max(tmax, tmin + 1)),
-                        label="window centre t (s)", height=Relative(0.6))
-    end
-    return ax
-end
-
-function draw_record!(ax, rec)
-    empty!(ax)
-    v = samples(rec)
-    n = length(v)
-    step = max(1, cld(n, MAX_SERIES_POINTS))
-    idx = 1:step:n
-    t = (idx .- 1) .* rec.tau0
-    lines!(ax, t, v[idx]; color=Makie.wong_colors()[1], linewidth=1)
-    ax.ylabel = rec isa PhaseData ? "x(t) (s)" : "y(t)"
-    ax.title = step > 1 ? "every $(step)th sample shown" : ""
-    autolimits!(ax)
-end
-
-function fill_table!(grid, r::StabilityResult)
-    foreach(delete!, contents(grid))
-    trim!(grid)
-    has_ci = !isempty(r.edf)
-    header = has_ci ? ["τ (s)", "σ", N_EFF, LBL_SIGMA_MIN, LBL_SIGMA_MAX, "EDF", "noise"] :
-                      ["τ (s)", "σ", N_EFF]
-    ncol = length(header)
-    g(v) = isfinite(v) ? @sprintf("%.5g", v) : "NaN"
-    Box(grid[1, 1:ncol]; color=:gray85, strokevisible=false)
-    for (j, h) in enumerate(header)
-        Label(grid[1, j], h; font=:bold, halign=:right, tellwidth=true, color=:gray15,
-              padding=(6, 6, 3, 3))
-    end
-    nrows = min(length(r.tau), MAX_TABLE_ROWS)
-    for i in 1:nrows
-        iseven(i) && Box(grid[i + 1, 1:ncol]; color=:gray94, strokevisible=false)
-        cells = has_ci ?
-            [g(r.tau[i]), g(r.dev[i]), string(r.neff[i]), g(r.ci[i].lo),
-             g(r.ci[i].hi), g(r.edf[i]), string(r.noise_type[i])] :
-            [g(r.tau[i]), g(r.dev[i]), string(r.neff[i])]
-        for (j, c) in enumerate(cells)
-            Label(grid[i + 1, j], c; halign=:right, tellwidth=true, color=:gray10,
-                  padding=(6, 6, 1, 1))
-        end
-    end
-    if length(r.tau) > nrows
-        Label(grid[nrows + 2, 1:ncol],
-              "$(length(r.tau) - nrows) more rows not shown; Export table… writes all of them";
-              halign=:left, tellwidth=false, color=:gray50)
-    end
-    colgap!(grid, 0)
-    rowgap!(grid, 0)
-end
-
-# Publication figure for a page, rendered through CairoMakie.
-function export_figure(page, state, opts)
-    fig = Figure(size=(900, page == "Spectrum" ? 900 : page == "Dynamic deviation" ? 640 : 560), fontsize=13)
-    if page == "Deviations"
-        suite = state.suite[]
-        sy = filter(r -> !(r.deviation_type in SIGMA_X), suite.results)
-        sx = filter(r ->   r.deviation_type in SIGMA_X,  suite.results)
-        row = 1
-        if !isempty(sy)
-            ax = Axis(fig[row, 1]; xscale=log10, yscale=log10, log_axis_kw()...,
-                      xlabel="Averaging time τ (s)", ylabel=LBL_SIGMA_Y, title=opts.title)
-            draw_results!(ax, sy; band=opts.band); row += 1
-        end
-        if !isempty(sx)
-            ax = Axis(fig[row, 1]; xscale=log10, yscale=log10, log_axis_kw()...,
-                      xlabel="Averaging time τ (s)", ylabel=LBL_SIGMA_X,
-                      title=isempty(sy) ? opts.title : "")
-            draw_results!(ax, sx; band=opts.band, legend_position=:lt)
-        end
-    elseif page == "Spectrum"
-        sp = state.spectra[]
-        ax1 = Axis(fig[1, 1]; xscale=log10, yscale=log10, log_axis_kw()..., ylabel=S_Y, title=opts.title)
-        ax2 = Axis(fig[2, 1]; xscale=log10, yscale=log10, log_axis_kw()..., ylabel=S_X)
-        draw_spectrum!(ax1, sp.sy; color=Makie.wong_colors()[1])
-        draw_spectrum!(ax2, sp.sx; color=Makie.wong_colors()[2])
-        if sp.l !== nothing
-            ax3 = Axis(fig[3, 1]; xscale=log10, xticks=LOG_TICKS, xminorticksvisible=true,
-                       xminorticks=IntervalsBetween(9), xlabel="Frequency f (Hz)", ylabel="ℒ(f) (dBc/Hz)")
-            draw_spectrum!(ax3, sp.l; color=Makie.wong_colors()[3])
-        else
-            ax2.xlabel = "Frequency f (Hz)"
-        end
-    elseif page == "Dynamic deviation"
-        ax = dynamic_axis(fig[1, 1]); ax.title = opts.title
-        draw_dynamic!(ax, state.dynamic[]; cb=Ref{Any}(nothing), cb_cell=fig[1, 2])
-    else
-        ax = Axis(fig[1, 1]; xlabel="Time t (s)", title=opts.title)
-        draw_record!(ax, state.record[])
-    end
-    return fig
-end
 
 # ── Window ────────────────────────────────────────────────────────────────
 
@@ -338,16 +29,17 @@ function set_visible!(blocks, v)
     end
 end
 
-function build(; size=(1500, 940))
-    fig = Figure(; size=size, fontsize=12, backgroundcolor=:gray98)
+function build(; size=(1500, 940), fontsize=12)
+    fig = Figure(; size=size, fontsize=fontsize, backgroundcolor=:gray98)
     controls = GridLayout(fig[1, 1]; tellheight=false, valign=:top)
     plots    = GridLayout(fig[1, 2]; tellwidth=false, tellheight=false)
-    colsize!(fig.layout, 1, Fixed(430))
+    colsize!(fig.layout, 1, Fixed(round(Int, 430 * fontsize / 12)))
     colgap!(fig.layout, 24)
     rowgap!(controls, 2)
     colgap!(controls, 8)
 
-    const_h = 26
+    const_h = round(Int, 2.2 * fontsize)
+    hint = fontsize - 1
     small(str) = Textbox(fig; stored_string=str, width=62, height=const_h, tellwidth=false, halign=:left)
     menu(; kw...) = Menu(fig; height=const_h, kw...)
     textbox(; kw...) = Textbox(fig; height=const_h, kw...)
@@ -381,7 +73,7 @@ function build(; size=(1500, 940))
         cell[1, 2] = Label(fig, string(d); halign=:left, color=:gray20)
     end
     Label(controls[nextrow(), 1:2], rich("σ", subscript("y"), ": adev … theoh, pdev.   σ", subscript("x"), " (seconds): tdev, htdev, ttotdev, mtie, tierms.");
-          halign=:left, tellwidth=false, color=:gray50, fontsize=11)
+          halign=:left, tellwidth=false, color=:gray35, fontsize=hint)
 
     section("Analysis")
     tau_menu    = labelled("τ grid", menu(; options=first.(TAU_MODES), default="Octave", width=170))
@@ -400,10 +92,10 @@ function build(; size=(1500, 940))
 
     run_btn = Button(fig; label="Run analysis", buttoncolor=RGBf(0.33, 0.47, 0.72),
                      labelcolor=:white, buttoncolor_hover=RGBf(0.4, 0.55, 0.8),
-                     font=:bold, height=32)
+                     font=:bold, height=const_h + 6)
     controls[nextrow(), 1:2] = run_btn
-    Label(controls[nextrow(), 1:2], "Enter in any field also runs the analysis.";
-          halign=:center, tellwidth=false, color=:gray50, fontsize=11)
+    Label(controls[nextrow(), 1:2], "Enter in a field also runs the analysis.";
+          halign=:center, tellwidth=false, color=:gray35, fontsize=hint)
 
     status = Label(fig[2, 1:2], "Ready."; halign=:left, tellwidth=false, color=:gray30,
                    padding=(6, 6, 4, 4))
@@ -421,12 +113,12 @@ function build(; size=(1500, 940))
     # Record page: data source and synthesis controls, then the time series.
     rec_page = GridLayout(plots[2, 1]; alignmode=Outside())
     src = GridLayout(rec_page[1, 1]; valign=:top)
-    Box(src[1, 1:2]; color=:gray88, strokevisible=false, cornerradius=4)
-    Label(src[1, 1:2], "Load a file"; font=:bold, halign=:left, tellwidth=false, padding=(8, 8, 4, 4), color=:gray15)
-    path_box = textbox(; placeholder="choose a file with Browse…", tellwidth=false)
+    Box(src[1, 1:3]; color=:gray88, strokevisible=false, cornerradius=4)
+    Label(src[1, 1:3], "Load a file"; font=:bold, halign=:left, tellwidth=false, padding=(8, 8, 4, 4), color=:gray15)
+    path_box = textbox(; placeholder="no file chosen", tellwidth=false, halign=:left)
     open_btn = Button(fig; label="Browse…", height=const_h)
     src[2, 1] = Label(fig, "File"; halign=:right, color=:gray25)
-    let g = GridLayout(src[2, 2]; tellwidth=false); g[1, 1] = path_box; g[1, 2] = open_btn; end
+    src[2, 2:3] = path_box
     kind = menu(; options=["phase", "frequency"], default="phase", width=110, tellwidth=false, halign=:left)
     src[3, 1] = Label(fig, "Record type"; halign=:right, color=:gray25)
     src[3, 2] = kind
@@ -438,10 +130,10 @@ function build(; size=(1500, 940))
     let g = GridLayout(src[5, 2]; tellwidth=false, halign=:left); g[1, 1] = time_col; g[1, 2] = value_col; end
     src[6, 1] = Label(fig, "Header rows"; halign=:right, color=:gray25)
     src[6, 2] = header
-    Label(src[7, 1:2], "Stable32 .DAT: header rows 10, time column 0, value column 1.";
-          halign=:left, tellwidth=false, color=:gray50, fontsize=11)
-    load_btn = Button(fig; label="Load file", height=const_h, tellwidth=false, halign=:right)
-    src[8, 2] = load_btn
+    Label(src[7, 1:3], "Stable32 .DAT: header rows 10, time column 0, value column 1.";
+          halign=:left, tellwidth=false, color=:gray35, fontsize=hint)
+    load_btn = Button(fig; label="Load file", height=const_h)
+    let g = GridLayout(src[8, 2:3]; halign=:right, tellwidth=false); g[1, 1] = open_btn; g[1, 2] = load_btn; end
 
     syn = GridLayout(rec_page[1, 2]; valign=:top)
     Box(syn[1, 1:2]; color=:gray88, strokevisible=false, cornerradius=4)
@@ -483,7 +175,7 @@ function build(; size=(1500, 940))
     tbl = GridLayout(dev_page[1:2, 2]; halign=:left, valign=:top)
     tbl_head = GridLayout(tbl[1, 1]; halign=:left)
     table_menu = Menu(tbl_head[1, 1]; options=["adev"], default="adev", width=140, tellwidth=true, halign=:left)
-    tbl_head[1, 2] = Label(fig, "per-τ table"; halign=:left, color=:gray40)
+    tbl_head[1, 2] = Label(fig, "per-τ table"; halign=:left, color=:gray35)
     table_grid = GridLayout(tbl[2, 1]; halign=:left, valign=:top)
     colgap!(dev_page, 20)
 
@@ -493,7 +185,7 @@ function build(; size=(1500, 940))
     let opts = GridLayout(spec_page[1, 1]; halign=:left, tellwidth=false)
         opts[1, 1] = Label(fig, "Carrier frequency for ℒ(f) (Hz)"; color=:gray25)
         opts[1, 2] = carrier_box
-        opts[1, 3] = Label(fig, "(takes effect at the next run)"; color=:gray50)
+        opts[1, 3] = Label(fig, "(takes effect at the next run)"; color=:gray35)
     end
     ax_sy = Axis(spec_page[2, 1]; xscale=log10, yscale=log10, log_axis_kw()..., ylabel=S_Y)
     ax_sx = Axis(spec_page[3, 1]; xscale=log10, yscale=log10, log_axis_kw()..., ylabel=S_X)
@@ -507,7 +199,7 @@ function build(; size=(1500, 940))
     let opts = GridLayout(dyn_page[1, 1:2]; halign=:left, tellwidth=false)
         opts[1, 1] = Label(fig, "Estimator"; color=:gray25); opts[1, 2] = dyn_menu
         opts[1, 3] = Label(fig, "window as a fraction of the record"; color=:gray25); opts[1, 4] = frac_menu
-        opts[1, 5] = Label(fig, "(takes effect at the next run; drag the plot to rotate)"; color=:gray50)
+        opts[1, 5] = Label(fig, "(takes effect at the next run; drag the plot to rotate)"; color=:gray35)
     end
     ax_d = dynamic_axis(dyn_page[2, 1])
     cb_d = Ref{Any}(nothing)
@@ -542,6 +234,7 @@ function build(; size=(1500, 940))
     pages = Dict("Record" => (rec_page, 2), "Deviations" => (dev_page, 3), "Spectrum" => (spec_page, 4),
                  "Dynamic deviation" => (dyn_page, 5), "Help" => (help_page, 6))
     legends = Dict{String,Vector{Makie.Block}}(p => Makie.Block[] for p in PAGES)
+    sx_shown = Ref(true)          # whether the σ_x axis currently has content
     function show_page(name)
         for (p, (gl, r)) in pages
             on_page = p == name
@@ -551,6 +244,7 @@ function build(; size=(1500, 940))
             rowgap!(plots, r - 1, on_page ? 16 : 0)
         end
         cb_d[] === nothing || set_visible!([cb_d[]], name == "Dynamic deviation")
+        sx_shown[] || set_visible!([ax_x], false)     # keep the empty σ_x axis collapsed
     end
     on(page_menu.selection) do name; name === nothing || show_page(name); end
 
@@ -558,7 +252,8 @@ function build(; size=(1500, 940))
              spectra=Ref{Any}(nothing), dynamic=Ref{Any}(nothing), last_dir=Ref(pwd()))
 
     say(msg; error=false) = (status.text = msg; status.color = error ? :firebrick : :gray30)
-    text(tb) = something(tb.stored_string[], "")
+    # What the field shows counts, Enter or not (Makie only commits on Enter).
+    text(tb) = something(tb.displayed_string[], "")
     parse_int(tb, what) = (v = tryparse(Int, text(tb)); v === nothing ? error("$what must be an integer, got \"$(text(tb))\".") : v)
     parse_float(tb, what) = (v = tryparse(Float64, text(tb)); v === nothing ? error("$what must be a number, got \"$(text(tb))\".") : v)
 
@@ -609,8 +304,9 @@ function build(; size=(1500, 940))
                 leg = draw_results!(ax, rs; band=band_toggle.active[], legend_position=pos)
                 leg === nothing || push!(legends["Deviations"], leg)
             end
-            rowsize!(dev_page, 2, isempty(sx) ? Fixed(0) : Auto(1))
-            set_visible!([ax_x], !isempty(sx) && page_menu.selection[] == "Deviations")
+            sx_shown[] = !isempty(sx)
+            rowsize!(dev_page, 2, sx_shown[] ? Auto(1) : Fixed(0))
+            rowgap!(dev_page, 1, sx_shown[] ? 16 : 0)
             names = string.(keys(suite))
             table_menu.options = names
             table_menu.i_selected = 1
@@ -641,11 +337,40 @@ function build(; size=(1500, 940))
     end
 
     on(run_btn.clicks) do _; run(); end
-    on(load_btn.clicks) do _; reload(true); end
-    on(synth_btn.clicks) do _; reload(false); end
-    for tb in (tau0_box, time_col, value_col, header, seed_box, carrier_box)
-        on(tb.stored_string) do _; run(); end
+    from_file = Ref(false)        # how the current record was produced
+    # Keyboard: Tab / Shift+Tab move between the fields of the current page,
+    # F5 runs, Page Up / Page Down switch pages, F1 opens Help.
+    page_fields = Dict("Record" => [path_box, tau0_box, time_col, value_col, header, seed_box],
+                       "Spectrum" => [carrier_box])
+    on(events(fig).keyboardbutton; priority=100) do ev
+        ev.action == Keyboard.press || return Consume(false)
+        page = page_menu.selection[]
+        if ev.key == Keyboard.tab
+            fields = get(page_fields, page, Textbox[])
+            isempty(fields) && return Consume(false)   # no custom order here; leave Tab to Makie
+            i = findfirst(tb -> tb.focused[], fields)
+            back = ispressed(fig, Keyboard.left_shift | Keyboard.right_shift)
+            nxt = i === nothing ? (back ? length(fields) : 1) : mod1(i + (back ? -1 : 1), length(fields))
+            foreach(Makie.defocus!, fields)
+            Makie.focus!(fields[nxt])
+            return Consume(true)
+        elseif ev.key == Keyboard.f5
+            run(); return Consume(true)
+        elseif ev.key == Keyboard.f1
+            page_menu.i_selected = findfirst(==("Help"), PAGES); return Consume(true)
+        elseif ev.key in (Keyboard.page_down, Keyboard.page_up)
+            step = ev.key == Keyboard.page_down ? 1 : -1
+            page_menu.i_selected = mod1(something(page_menu.i_selected[], 1) + step, length(PAGES))
+            return Consume(true)
+        end
+        return Consume(false)
     end
+    on(load_btn.clicks) do _; from_file[] = true; reload(true); end
+    on(synth_btn.clicks) do _; from_file[] = false; reload(false); end
+    for tb in (tau0_box, time_col, value_col, header, seed_box)
+        on(tb.stored_string) do _; reload(from_file[]); state.record[] === nothing || run(); end
+    end
+    on(carrier_box.stored_string) do _; run(); end
     on(table_menu.selection) do name
         s = state.suite[]
         (s === nothing || name === nothing) && return
@@ -656,6 +381,7 @@ function build(; size=(1500, 940))
         isempty(p) && return
         state.last_dir[] = dirname(p)
         path_box.displayed_string[] = p; path_box.stored_string[] = p
+        from_file[] = true
         reload(true)
     end
     function export_to(default_name, filterlist, writer)
@@ -667,53 +393,79 @@ function build(; size=(1500, 940))
             say("Error: " * sprint(showerror, err); error=true)
         end
     end
+    write_figure(p, page) = Makie.save(p, export_figure(page, state, (; title=title_lbl.text[], band=band_toggle.active[]));
+                                       backend=CairoMakie, px_per_unit=2)
+    write_table(p) = SigmaTau.save(p, state.suite[])
+    write_record(p) = SigmaTau.save(p, state.record[])
     on(export_fig_btn.clicks) do _
         page = page_menu.selection[]
         page == "Help" && (say("Nothing to export on the Help page."); return)
         (page == "Record" ? state.record[] : state.suite[]) === nothing &&
             (say("Run an analysis first."; error=true); return)
-        export_to("sigmatau_$(lowercase(replace(page, " " => "_"))).png", "png,pdf,svg") do p
-            exfig = export_figure(page, state, (; title=title_lbl.text[], band=band_toggle.active[]))
-            Makie.save(p, exfig; backend=CairoMakie, px_per_unit=2)
-        end
+        export_to("sigmatau_$(lowercase(replace(page, " " => "_"))).png", "png,pdf,svg", p -> write_figure(p, page))
     end
     on(export_tsv_btn.clicks) do _
         state.suite[] === nothing && (say("Run an analysis first."; error=true); return)
-        export_to("sigmatau_suite.tsv", "tsv,txt") do p; SigmaTau.save(p, state.suite[]); end
+        export_to("sigmatau_suite.tsv", "tsv,txt", write_table)
     end
     on(export_rec_btn.clicks) do _
         state.record[] === nothing && (say("Load or synthesize a record first."; error=true); return)
-        export_to("sigmatau_record.txt", "txt,csv,dat") do p; SigmaTau.save(p, state.record[]); end
+        export_to("sigmatau_record.txt", "txt,csv,dat", write_record)
     end
 
     DataInspector(fig)
     show_page("Record")
-    return (; fig, run, reload, state, show_page,
-            export_figure=(page) -> export_figure(page, state, (; title=title_lbl.text[], band=band_toggle.active[])),
-            controls=(; dev_toggles, band_toggle, page_menu))
+    return (; fig, run, reload, state, show_page, write_figure, write_table, write_record,
+            status=() -> status.text[],
+            controls=(; dev_toggles, band_toggle, page_menu, path_box, kind, tau0_box, time_col, value_col, header))
 end
 
 # ── Entry point ───────────────────────────────────────────────────────────
 
 if abspath(PROGRAM_FILE) == @__FILE__
+    # Options: --smoke (headless self-test), --fontsize=N (default 12; 14 or 16
+    # for projection), --size=WxH (window size). SIGMATAU_FONTSIZE also works.
+    option(name, default) = (i = findfirst(startswith("--$name="), ARGS); i === nothing ? default : split(ARGS[i], "=")[2])
     smoke = "--smoke" in ARGS
-    win_size = smoke ? (parse(Int, get(ENV, "SIGMATAU_SMOKE_W", "1500")), parse(Int, get(ENV, "SIGMATAU_SMOKE_H", "940"))) : (1500, 940)
-    app = build(; size=win_size)
+    fontsize = parse(Int, option("fontsize", get(ENV, "SIGMATAU_FONTSIZE", "12")))
+    # `win_size`, not `size`: a top-level `size` would shadow Base.size.
+    win_size = Tuple(parse.(Int, split(option("size", "1500x940"), "x")))
+    app = build(; size=win_size, fontsize=fontsize)
     app.reload(false)       # open with a synthetic record on screen
     app.run()
     if smoke
-        app.controls.dev_toggles[:tdev].active[] = true
-        app.controls.dev_toggles[:mtie].active[] = true
+        dir = get(ENV, "SIGMATAU_SMOKE_DIR", tempdir())
+        c = app.controls
+        # Load path: the Stable32 fixture through the Record-page fields.
+        fixture = joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation", "stable32gen.DAT")
+        c.path_box.displayed_string[] = fixture; c.header.displayed_string[] = "10"   # typed, no Enter
+        app.reload(true)
+        n_fixture = nsamples(app.state.record[])
+        n_fixture == 8192 || error("smoke test: Stable32 fixture read $n_fixture samples")
+        c.dev_toggles[:tdev].active[] = true
+        c.dev_toggles[:mtie].active[] = true
         app.run()
         s = app.state.suite[]
-        s === nothing && error("smoke test: no suite produced")
-        dir = get(ENV, "SIGMATAU_SMOKE_DIR", tempdir())
+        (s === nothing || s.n != 8192) && error("smoke test: no suite from the loaded file")
+        # Export paths and the record round trip.
+        app.write_table(joinpath(dir, "suite.tsv"))
+        length(load_suite(joinpath(dir, "suite.tsv")).results) == length(s.results) || error("smoke test: suite round trip")
+        app.write_record(joinpath(dir, "record.txt"))
+        c.path_box.displayed_string[] = joinpath(dir, "record.txt"); c.header.displayed_string[] = "0"
+        app.reload(true)
+        nsamples(app.state.record[]) == 8192 || error("smoke test: record round trip")
+        # Error path: a bad field reports in the status line and keeps the record.
+        c.tau0_box.displayed_string[] = "abc"
+        app.reload(false)
+        startswith(app.status(), "Error:") || error("smoke test: bad τ₀ not reported")
+        c.tau0_box.displayed_string[] = "1.0"
+        app.reload(false); app.run()
+        s = app.state.suite[]
         for page in PAGES
-            app.controls.page_menu.i_selected = findfirst(==(page), PAGES)
+            c.page_menu.i_selected = findfirst(==(page), PAGES)
             Makie.save(joinpath(dir, "explorer_" * replace(lowercase(page), " " => "_") * ".png"),
                        app.fig; px_per_unit=1)
-            page == "Help" || Makie.save(joinpath(dir, "export_" * replace(lowercase(page), " " => "_") * ".pdf"),
-                                         app.export_figure(page); backend=CairoMakie)
+            page == "Help" || app.write_figure(joinpath(dir, "export_" * replace(lowercase(page), " " => "_") * ".pdf"), page)
         end
         println("smoke test OK: ", join(string.(keys(s)), ", "), " → ", dir)
     else

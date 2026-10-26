@@ -432,7 +432,7 @@ const LK = ReferenceKernels
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
         # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
-        # is via the f^(α/2) shaping helper (`_gen_powerlaw_phase`).
+        # is via the Kasdin–Walter helper (`_gen_powerlaw_phase`).
         using Random
         N    = 1024
         tau0 = 1.0
@@ -573,39 +573,55 @@ const LK = ReferenceKernels
     end
 
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
-        # Bonus: kernel parity for the more common ADEV/HDEV across all 5
-        # noise types, locking in that the synthesizer + kernels survive the
-        # full SP1065 alpha range.
-        #
-        # rtol target is 1e-11 (was 1e-12). On macOS x86_64 our `_mdev_core`
-        # and `LK.mdev_var` agree bit-exactly (Δ_ol = 0 ULP for nearly all
-        # rows), and both agree with allantools to ≤ 8.5e-14 worst-case on
-        # the stable32gen.DAT fixture (3-way verification, 2026-05-08).
-        # Linux x86_64 LLVM picks a different SIMD reduction order and the
-        # two implementations drift by ~10,000 ULPs on this synthesised
-        # input — irreducible cross-platform codegen variance, not a math
-        # bug. 1e-11 still asserts 11-sig-fig parity, well above any drift
-        # we have observed.
+        # Kernel accuracy across the full SP1065 α range: each kernel against
+        # the same formula evaluated in BigFloat, so the tolerance measures the
+        # Float64 kernel's own rounding and not a Float64 reference's. ADEV and
+        # HDEV are direct differences and sit near machine precision; MDEV and
+        # MHDEV go through prefix sums, whose conditioning on a random-walk
+        # phase (α = −2, excursions ~10³ against unit second differences)
+        # bounds them at ~1e-11 over many seeds, hence 1e-10.
         using Random
         N    = 1024
         tau0 = 1.0
         ms   = [1, 2, 4, 8, 16]
-        rt   = 1e-11
+        rt   = 1e-10
 
         for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
             Random.seed!(123)
-            x    = _gen_powerlaw_phase(alpha, N; tau0=tau0)
-            x_cs = pushfirst!(cumsum(x), 0.0)
+            x     = _gen_powerlaw_phase(alpha, N; tau0=tau0)
+            xb    = BigFloat.(x)
+            xb_cs = pushfirst!(cumsum(xb), big(0.0))
             for m in ms
                 @test SigmaTau._adev_core(x, [m], tau0)[1]  ≈
-                      sqrt(LK.adev_var(x, m, tau0))                 atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.adev_var(xb, m, big(tau0))))            atol=1e-25 rtol=rt
                 @test SigmaTau._mdev_core(x, [m], tau0)[1]  ≈
-                      sqrt(LK.mdev_var(x, m, tau0, x_cs))            atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.mdev_var(xb, m, big(tau0), xb_cs)))     atol=1e-25 rtol=rt
                 @test SigmaTau._hdev_core(x, [m], tau0)[1]  ≈
-                      sqrt(LK.hdev_var(x, m, tau0))                  atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.hdev_var(xb, m, big(tau0))))            atol=1e-25 rtol=rt
                 @test SigmaTau._mhdev_core(x, [m], tau0)[1] ≈
-                      sqrt(LK.mhdev_var(x, m, tau0, x_cs))           atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.mhdev_var(xb, m, big(tau0), xb_cs)))    atol=1e-25 rtol=rt
             end
+        end
+    end
+
+    @testset "MDEV/MHDEV precision on a clock with a frequency offset" begin
+        # A phase ramp (uncorrected frequency offset) contributes nothing to the
+        # modified estimators but makes naive prefix sums grow like N²·offset;
+        # the kernels remove the least-squares line first. Compare against the
+        # same formula evaluated in BigFloat; without the detrend the error is
+        # ~3e-7 here, with it the ~1e-11 prefix-sum conditioning floor remains.
+        rng  = Xoshiro(20261026)
+        N    = 20000
+        tau0 = 1.0
+        p    = noise_gen(PhaseData, N, tau0; sigma1 = Dict(0 => 1e-12), rng = rng)
+        x    = p.x .+ 1e-9 .* (0:N-1)
+        xb   = BigFloat.(x)
+        xb_cs = pushfirst!(cumsum(xb), big(0.0))
+        for m in (1, 16, 256)
+            exact_m  = Float64(sqrt(LK.mdev_var(xb, m, big(tau0), xb_cs)))
+            exact_mh = Float64(sqrt(LK.mhdev_var(xb, m, big(tau0), xb_cs)))
+            @test SigmaTau._mdev_core(x, [m], tau0)[1]  ≈ exact_m  rtol = 1e-10
+            @test SigmaTau._mhdev_core(x, [m], tau0)[1] ≈ exact_mh rtol = 1e-10
         end
     end
 
@@ -1207,34 +1223,40 @@ const LK = ReferenceKernels
             @test isapprox(σ_emp, sqrt(2) * σ; rtol = 0.2)
         end
 
-        @testset "h-mode hits requested σ_y(τ=τ₀) through analytic conversion" begin
-            Random.seed!(5)
-            tau0 = 1.0
-            # WFM: σ²_y(τ₀) = h_0 / (2 τ₀)  ⇒  h_0 = 2 τ₀ σ²
-            target_σ = 2e-12
-            h0       = 2 * tau0 * target_σ^2
-            p = noise_gen(PhaseData, 4096, tau0; h = Dict(0 => h0))
-            σ_emp = _adev_core(p.x, [1], tau0)[1]
-            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
+        @testset "h-mode: the generated spectrum carries the requested coefficient" begin
+            using Statistics: var, median
+            # An `h` component is scaled analytically on the Kasdin–Walter
+            # filter's low-frequency PSD, 2τ₀(2πτ₀f)^α per unit innovation.
+            # Exact discrete checks for the three integer-order processes
+            # (sample variances, so a few percent of spread at N = 65536):
+            τ0 = 1.0; h = 1e-24; N = 65536
+            y_rw = noise_gen(FrequencyData, N, τ0; h = Dict(-2 => h), rng = Xoshiro(3)).y
+            @test isapprox(var(diff(y_rw)), 2π^2 * τ0 * h; rtol = 0.05)      # random-walk innovations
+            x_wp = noise_gen(PhaseData, N, τ0; h = Dict(2 => h), rng = Xoshiro(3)).x
+            @test isapprox(var(x_wp), h / (8π^2 * τ0); rtol = 0.05)           # white phase, S_x = h/(4π²)
+            y_wf = noise_gen(FrequencyData, N, τ0; h = Dict(0 => h), rng = Xoshiro(3)).y
+            @test isapprox(var(y_wf), h / (2τ0); rtol = 0.05)                 # white frequency
+            # Welch estimate of S_y(f)/(h f^α) well below Nyquist, every α.
+            for α in (2, 1, 0, -1, -2)
+                p  = noise_gen(FrequencyData, N, τ0; h = Dict(α => h), rng = Xoshiro(7))
+                sy = Sy(p)
+                keep = (sy.freq .> 0.003 / τ0) .& (sy.freq .< 0.03 / τ0)
+                ratio = median(sy.psd[keep] ./ (h .* sy.freq[keep] .^ α))
+                @test isapprox(ratio, 1.0; rtol = 0.15)
+            end
         end
 
-        @testset "h-mode FFM: σ² = 2 ln(2) h_{-1}" begin
-            Random.seed!(11)
-            target_σ = 3e-13
-            h_m1     = target_σ^2 / (2 * log(2))
-            p = noise_gen(PhaseData, 4096, 1.0; h = Dict(-1 => h_m1))
-            σ_emp = _adev_core(p.x, [1], 1.0)[1]
-            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
-        end
-
-        @testset "h-mode RWFM at τ₀ ≠ 1: σ² = (2π²/3) h_{-2} τ₀" begin
-            Random.seed!(13)
-            tau0     = 0.5
-            target_σ = 4e-14
-            h_m2     = 3 * target_σ^2 / (2 * π^2 * tau0)
-            p = noise_gen(PhaseData, 4096, tau0; h = Dict(-2 => h_m2))
-            σ_emp = _adev_core(p.x, [1], tau0)[1]
-            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
+        @testset "h-mode RWFM at τ₀ ≠ 1: discrete random walk, σ²(τ₀) = π² h_{-2} τ₀" begin
+            # For the sampled random walk the innovation variance is q = 2π²τ₀h
+            # and ADEV²(τ₀) = q/2 = π²τ₀h, not the continuous-time (2π²/3)hτ₀
+            # (the latter holds for τ ≫ τ₀). Sample estimate at N = 65536.
+            using Statistics: var
+            tau0 = 0.5
+            h_m2 = 1e-26
+            p = noise_gen(FrequencyData, 65536, tau0; h = Dict(-2 => h_m2), rng = Xoshiro(13))
+            @test isapprox(var(diff(p.y)), 2π^2 * tau0 * h_m2; rtol = 0.05)
+            x = cumsum(p.y) .* tau0
+            @test isapprox(_adev_core(x, [1], tau0)[1], sqrt(π^2 * tau0 * h_m2); rtol = 0.05)
         end
 
         @testset "determinism: seed → same output" begin

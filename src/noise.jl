@@ -304,9 +304,9 @@ end
 
 # Power-law noise synthesizer (internal).
 # Generates synthetic phase data with a chosen fractional-frequency power-law
-# slope α ∈ {-2, -1, 0, 1, 2} via a frequency-domain `f^(α/2)` shaping of
-# white Gaussian noise, integrated to phase. Used by the test suite to
-# exercise stability deviations across all five SP1065 noise types.
+# slope α ∈ {-2, -1, 0, 1, 2} by the Kasdin–Walter discrete fractional
+# filter applied to white Gaussian noise, integrated to phase. Used by
+# `noise_gen`, the test suite and the Monte Carlo calibrations.
 #
 # Requires an `AbstractFFTs` backend (e.g. `FFTW`) to be loaded by the caller.
 # `SigmaTau` declares `AbstractFFTs` in its [deps] but no concrete backend;
@@ -318,28 +318,36 @@ using AbstractFFTs
     _gen_powerlaw_y(alpha, N; rng=nothing) → Vector{Float64}
 
 Internal primitive. Synthesize an N-sample fractional-frequency vector `y`
-with power spectral density ∝ `f^alpha`. The DC component is zeroed so the
-output has zero mean; the absolute amplitude is whatever the f^(α/2) shaper
-happens to produce on unit-variance white noise. Callers that need a
-calibrated level should rescale (e.g. via [`noise_gen`](@ref)).
+with power spectral density ∝ `|2 sin(πf)|^alpha`, the discrete-time form of
+`f^alpha` (Kasdin & Walter 1992). The output is made zero-mean; the absolute
+amplitude is that of the filter on unit-variance white noise. Callers that
+need a calibrated level should rescale (e.g. via [`noise_gen`](@ref)).
 
 Pass an `AbstractRNG` as `rng` to draw from a specific stream (e.g. for a
 Monte Carlo with independent per-realization seeds); the default `nothing`
 draws from the global RNG, so existing seeded callers are unaffected.
 """
 function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
-    # White Gaussian noise → fractional-frequency series shaped to f^alpha.
+    # Kasdin–Walter discrete fractional filter (Kasdin & Walter 1992; the
+    # method allantools uses): white Gaussian noise convolved with the impulse
+    # response of (1 - z⁻¹)^(-α/2), whose power spectrum is |2 sin(πf)|^α, the
+    # discrete-time counterpart of f^α. It is exact at the integer orders:
+    # α = 2 is the first difference of white noise (so the integrated phase is
+    # white), α = 0 is white, α = -2 is a cumulative sum. Shaping FFT bins by
+    # the continuous f^(α/2) instead leaves the phase spectrum of α = 2 rising
+    # toward Nyquist, which the lag-1 noise identifier reads as α ≈ 3 at m = 1.
     w = rng === nothing ? randn(N) : randn(rng, N)
-    W = fft(w)
-
-    # Symmetric FFT-bin frequency magnitude. Bin 0 (DC) gets a placeholder
-    # so the f^(alpha/2) term is finite; the DC bin is zeroed afterwards.
-    f = abs.(AbstractFFTs.fftfreq(N, 1.0))
-    f[1] = 1.0
-
-    Y    = W .* f .^ (alpha / 2)
-    Y[1] = 0.0
-    return real.(ifft(Y))
+    h = Vector{Float64}(undef, N)
+    h[1] = 1.0
+    @inbounds for k in 1:N-1
+        h[k+1] = h[k] * (k - 1 - alpha / 2) / k
+    end
+    # Linear (not circular) convolution through zero-padded FFTs.
+    M = 2N
+    W = fft(vcat(w, zeros(M - N)))
+    H = fft(vcat(h, zeros(M - N)))
+    y = real.(ifft(W .* H))[1:N]
+    return y .- (sum(y) / N)
 end
 
 """
@@ -357,9 +365,9 @@ sequence has power spectral density ∝ `f^alpha`. Mapping:
 | -2 | RWFM       | 1/f⁴           |
 
 For deterministic output, seed the global RNG (`Random.seed!`) before calling,
-or pass an `AbstractRNG` as `rng`. The DC component is zeroed before the inverse
-transform so the output has zero mean. Calls `AbstractFFTs.fft`/`ifft`, so
-the caller must have an FFT backend loaded (e.g. `using FFTW`).
+or pass an `AbstractRNG` as `rng`. The frequency sequence is made zero-mean
+before integration. Calls `AbstractFFTs.fft`/`ifft`, so the caller must have an
+FFT backend loaded (e.g. `using FFTW`).
 """
 function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0, rng=nothing)
     # Phase: x[k] = τ₀ · Σⱼ₌₁ᵏ y[j]
@@ -368,36 +376,14 @@ end
 
 
 # Public power-law clock-noise generator.
-# Wraps the internal `_gen_powerlaw_y` spectral shaper with a magnitude-aware
+# Wraps the internal `_gen_powerlaw_y` Kasdin–Walter filter with a magnitude-aware
 # API. Users specify the noise mixture by α exponent and either a target
 # Allan deviation σ_y(τ=τ₀) per noise type or the corresponding fractional-
 # frequency PSD coefficient h_α. Contributions for different α are drawn
 # independently and summed.
 
-# σ_y(τ=τ₀) from h_α via SP1065 Table 3 with the Nyquist bandwidth
-# f_h = 1/(2τ₀) for the bandwidth-dependent WHPM (α=2) and FLPM (α=1) cases.
-function _h_to_sigma1(alpha::Int, h::Float64, tau0::Float64)
-    if alpha == 2
-        return sqrt(3 * h / (8 * π^2 * tau0^3))
-    elseif alpha == 1
-        # 2π·f_h·τ = π at τ=τ₀, f_h=1/(2τ₀); SP1065 Table 3 numerator
-        # collapses to 1.038 + 3·ln(π).
-        coef = 1.038 + 3 * log(π)
-        return sqrt(coef * h / (4 * π^2 * tau0^2))
-    elseif alpha == 0
-        return sqrt(h / (2 * tau0))
-    elseif alpha == -1
-        return sqrt(2 * log(2) * h)
-    elseif alpha == -2
-        return sqrt(2 * π^2 * h * tau0 / 3)
-    else
-        throw(ArgumentError(
-            "noise_gen: unsupported α = $alpha; expected ∈ {-2, -1, 0, 1, 2}"))
-    end
-end
-
 # Empirical σ_y(τ=τ₀) of a fractional-frequency vector via overlapping ADEV
-# at m=1. Used to rescale a raw spectral-shaper realization to a known level.
+# at m=1. Used to rescale a raw filter realization to a known level.
 function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
     x = cumsum(y) .* tau0
     return _adev_core(x, [1], tau0)[1]
@@ -412,36 +398,38 @@ function _noise_gen_y(N::Int, tau0::Float64,
     N >= 4 || throw(ArgumentError("noise_gen: N must be ≥ 4 (got $N)"))
     tau0 > 0 || throw(ArgumentError("noise_gen: tau0 must be > 0 (got $tau0)"))
 
-    targets = Dict{Int, Float64}()
-    if !isempty(sigma1)
-        for (α, s) in sigma1
-            α isa Integer ||
-                throw(ArgumentError("noise_gen: α keys must be Int, got $(typeof(α))"))
-            -2 <= α <= 2 ||
-                throw(ArgumentError("noise_gen: α must be ∈ {-2,…,2}, got $α"))
-            s >= 0 ||
-                throw(ArgumentError("noise_gen: σ values must be ≥ 0, got $s for α=$α"))
-            targets[Int(α)] = Float64(s)
-        end
-    else
-        for (α, hα) in h
-            α isa Integer ||
-                throw(ArgumentError("noise_gen: α keys must be Int, got $(typeof(α))"))
-            -2 <= α <= 2 ||
-                throw(ArgumentError("noise_gen: α must be ∈ {-2,…,2}, got $α"))
-            hα >= 0 ||
-                throw(ArgumentError("noise_gen: h values must be ≥ 0, got $hα for α=$α"))
-            targets[Int(α)] = _h_to_sigma1(Int(α), Float64(hα), tau0)
-        end
+    check(α, v, what) = begin
+        α isa Integer ||
+            throw(ArgumentError("noise_gen: α keys must be Int, got $(typeof(α))"))
+        -2 <= α <= 2 ||
+            throw(ArgumentError("noise_gen: α must be ∈ {-2,…,2}, got $α"))
+        v >= 0 ||
+            throw(ArgumentError("noise_gen: $what values must be ≥ 0, got $v for α=$α"))
     end
 
     y_total = zeros(Float64, N)
-    for (α, σ_target) in targets
-        σ_target == 0 && continue
-        y_raw = _gen_powerlaw_y(α, N; rng=rng)
-        σ_raw = _measure_sigma1(y_raw, tau0)
-        σ_raw > 0 || continue
-        y_total .+= y_raw .* (σ_target / σ_raw)
+    if !isempty(sigma1)
+        # Empirical calibration: rescale the realization so its overlapping
+        # ADEV at τ₀ equals the request exactly.
+        for (α, s) in sigma1
+            check(α, s, "σ")
+            s == 0 && continue
+            y_raw = _gen_powerlaw_y(Int(α), N; rng=rng)
+            σ_raw = _measure_sigma1(y_raw, tau0)
+            σ_raw > 0 || continue
+            y_total .+= y_raw .* (Float64(s) / σ_raw)
+        end
+    else
+        # Analytic calibration of the PSD coefficient: the Kasdin–Walter
+        # filter driven by unit white noise sampled at τ₀ has one-sided PSD
+        # 2τ₀·|2 sin(πfτ₀)|^α = 2τ₀·(2πτ₀f)^α at low frequency, so scaling by
+        # √(h_α / (2τ₀(2πτ₀)^α)) gives S_y(f) = h_α f^α there.
+        for (α, hα) in h
+            check(α, hα, "h")
+            hα == 0 && continue
+            y_raw = _gen_powerlaw_y(Int(α), N; rng=rng)
+            y_total .+= y_raw .* sqrt(Float64(hα) / (2 * tau0 * (2π * tau0)^Int(α)))
+        end
     end
     return y_total
 end
@@ -475,15 +463,16 @@ Pass *either* `sigma1` *or* `h` (not both):
 - `h[α] = h_α`: fractional-frequency PSD coefficient in
   `S_y(f) = h_α f^α`. Unambiguous everywhere.
 
-For WHPM (α=2) and FLPM (α=1) the SP1065 σ_y(τ) ↔ h_α relation depends on a
-measurement bandwidth `f_h`. This function uses the Nyquist convention
-`f_h = 1/(2τ₀)`, the highest frequency representable on a record sampled
-at `τ₀`.
-
-Each per-α component is rescaled to hit its requested amplitude exactly for
-the drawn realization, so the empirical σ_y(τ=τ₀) of an isolated component
-equals the requested value to numerical precision; the natural slope of the
-power-law carries through to larger τ. Components from different α are
+`sigma1` components are rescaled so the empirical σ_y(τ=τ₀) of the drawn
+realization equals the request exactly. `h` components are scaled
+analytically: the Kasdin–Walter filter driven by unit white noise has
+one-sided PSD `2τ₀ |2 sin(πfτ₀)|^α`, which is `2τ₀ (2πτ₀ f)^α` at low
+frequency, so the component is multiplied by `√(h_α / (2τ₀ (2πτ₀)^α))` and
+its spectrum is `h_α f^α` up to the sine-versus-linear roll-off near
+Nyquist. The empirical σ_y(τ₀) of an `h` component therefore fluctuates
+with the realization (≈ √(2/N) relative), and for the coloured noises it is
+not the continuous-time SP1065 value, because a sampled discrete process is
+not a band-limited continuous one. Components from different α are
 statistically independent.
 
 Seed the global RNG (`Random.seed!`) before calling for reproducible output,
