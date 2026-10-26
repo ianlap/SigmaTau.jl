@@ -21,6 +21,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   (lag-1 autocorrelation −0.2 instead of 0), which the noise identifier read
   as α ≈ 3 at τ₀ and reported as `:unknown`. Realizations for a given seed
   change; levels are still calibrated to σ_y(τ₀).
+- `mdev`, `tdev`, `mhdev` and `htdev` remove the least-squares phase line
+  before forming their prefix sums (an exact invariance of the modified
+  estimators). On a record with an uncorrected 1e-9 frequency offset the
+  kernels previously lost about seven significant digits to cancellation;
+  they now agree with BigFloat arithmetic to 1e-12.
 - `plot(::DynamicStabilityResult)` draws the SP1065 waterfall (one σ(τ)
   curve per window, stacked along t) and no longer offers a heatmap.
 

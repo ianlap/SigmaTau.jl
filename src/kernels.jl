@@ -30,6 +30,36 @@ function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return devs
 end
 
+# Prefix sums x_cs[1] = 0, x_cs[i+1] = Σⱼ₌₁ⁱ x[j] of the phase with its
+# least-squares line removed. The modified estimators are exact second
+# (MDEV) and third (MHDEV) differences of x, so a linear phase ramp, i.e. a
+# frequency offset, contributes nothing to them; removing it before the
+# prefix sums costs nothing in exactness and keeps the sums from growing like
+# N²·offset. Without this, a record with an uncorrected 1e-9 frequency offset
+# loses about seven significant digits to cancellation in the prefix sums.
+# One length-(N+1) allocation; the carry chain blocks SIMD, so no @simd.
+function _prefix_sums_detrended(x::Vector{Float64})
+    N = length(x)
+    # Least-squares line through (i, x[i]), i = 1..N, in one pass.
+    sx = 0.0; sxi = 0.0
+    @inbounds @simd for i in 1:N
+        sx  += x[i]
+        sxi += x[i] * i
+    end
+    mean_i = (N + 1) / 2
+    var_i  = (N^2 - 1) / 12 * N          # Σ (i - mean_i)²
+    slope  = N > 1 ? (sxi - mean_i * sx) / var_i : 0.0
+    icpt   = sx / N - slope * mean_i
+    x_cs = Vector{Float64}(undef, N + 1)
+    x_cs[1] = 0.0
+    acc = 0.0
+    @inbounds for i in 1:N
+        acc += x[i] - (icpt + slope * i)
+        x_cs[i+1] = acc
+    end
+    return x_cs
+end
+
 """
     _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
@@ -40,15 +70,7 @@ function _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    # Prefix sum x_cs[1] = 0, x_cs[i+1] = Σⱼ₌₁ⁱ x[j]. One length-(N+1)
-    # allocation; the carry chain blocks SIMD, so no @simd here.
-    x_cs = Vector{Float64}(undef, N + 1)
-    x_cs[1] = 0.0
-    acc = 0.0
-    @inbounds for i in 1:N
-        acc += x[i]
-        x_cs[i+1] = acc
-    end
+    x_cs = _prefix_sums_detrended(x)
 
     for (k, m) in enumerate(m_values)
         Ne = N - 3m + 1
@@ -120,15 +142,7 @@ function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    # Prefix sum x_cs[1] = 0, x_cs[i+1] = Σⱼ₌₁ⁱ x[j]. One length-(N+1)
-    # allocation; the carry chain blocks SIMD, so no @simd here.
-    x_cs = Vector{Float64}(undef, N + 1)
-    x_cs[1] = 0.0
-    acc = 0.0
-    @inbounds for i in 1:N
-        acc += x[i]
-        x_cs[i+1] = acc
-    end
+    x_cs = _prefix_sums_detrended(x)
 
     for (k, m) in enumerate(m_values)
         Ne = N - 4m + 1
