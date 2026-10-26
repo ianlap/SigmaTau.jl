@@ -60,7 +60,7 @@ slide.addText([{ text: C.authors, options: { bold: true, fontSize: T.authors } }
 
 // ---------- block renderers: each returns the height it consumed ----------
 function heading(x, y, text) {
-  const h = inH(lines(text, INNER, T.heading, 0.46), T.heading) + 0.05;
+  const h = inH(lines(text, INNER, T.heading, 0.43), T.heading) + 0.05;
   slide.addText(runs(text), { x: x + PAD, y, w: INNER, h, fontSize: T.heading, bold: true, color: CRIMSON, fontFace: FONT, valign: 'top', margin: 0, isTextBox: true, objectName: 'Heading' });
   return h + 0.18;
 }
