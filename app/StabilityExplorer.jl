@@ -57,13 +57,14 @@ Header rows to skip: $(@bind header NumberField(0:1000; default=0))
 # ╔═╡ fb6d2dc3-9ddf-4a98-a49f-51ed53108a8f
 md"""
 **Synthetic record** (used when *Synthesize* is selected). Each term is
-specified by its σ_y(1 s); the exponent slider sets log₁₀ of that level.
+specified by its deviation at the sample interval, σ_y(τ₀); the slider sets
+log₁₀ of that level.
 
 Samples N: $(@bind N_syn Select([4096, 8192, 16384, 32768, 86400]; default=16384))
 τ₀ (s): $(@bind tau0_syn NumberField(0.001:0.001:1000.0; default=1.0))
 Seed: $(@bind seed NumberField(1:10_000; default=42))
 
-| | on | log₁₀ σ_y(1 s) |
+| | on | log₁₀ σ_y(τ₀) |
 |---|---|---|
 | White PM (α = +2) | $(@bind wpm_on CheckBox(default=true)) | $(@bind wpm_exp Slider(-16:-9; default=-11, show_value=true)) |
 | White FM (α = 0) | $(@bind wfm_on CheckBox(default=true)) | $(@bind wfm_exp Slider(-16:-9; default=-12, show_value=true)) |
@@ -89,7 +90,7 @@ Deviations: $(@bind devs MultiCheckBox(["adev", "mdev", "tdev", "hdev", "mhdev",
 τ grid: $(@bind taumode_name Select(["Octave", "HalfOctave", "QuarterOctave", "Decade", "HalfDecade", "AllTaus"]; default="Octave"))
 Confidence intervals: $(@bind ci_on CheckBox(default=true))
 level: $(@bind confidence Select([0.683 => "68.3 % (1σ)", 0.90 => "90 %", 0.95 => "95 %", 0.99 => "99 %"]; default=0.683))
-Bias-correct the total family: $(@bind correct_bias CheckBox(default=true))
+Bias-correct the total family and Thêo1 (ThêoBR): $(@bind correct_bias CheckBox(default=true))
 Draw CI as shaded band instead of error bars: $(@bind ci_band_on CheckBox(default=false))
 """
 
@@ -140,8 +141,19 @@ suite = let
 end
 
 # ╔═╡ 27b74d46-ce84-4c01-9ee8-fa81cfbdfa1e
-plot(suite; ci_band=ci_band_on, legend=:bottomleft, size=(820, 520),
-     title=string(suite.n, " samples, τ₀ = ", suite.tau0, " s"))
+# σ_y (dimensionless) and σ_x (seconds) results go on separate axes.
+let
+    is_sigma_x(r) = r.deviation_type in (:tdev, :htdev, :ttotdev, :mtie, :tierms)
+    sy = filter(!is_sigma_x, suite.results)
+    sx = filter(is_sigma_x, suite.results)
+    ttl = string(suite.n, " samples, τ₀ = ", suite.tau0, " s")
+    panels = Any[]
+    isempty(sy) || push!(panels, plot(sy; ci_band=ci_band_on, legend=:bottomleft,
+                                      ylabel="σ_y(τ)", title=ttl))
+    isempty(sx) || push!(panels, plot(sx; ci_band=ci_band_on, legend=:topleft,
+                                      ylabel="σ_x(τ) (s)", title=isempty(sy) ? ttl : ""))
+    plot(panels...; layout=(length(panels), 1), size=(820, 520 * length(panels)))
+end
 
 # ╔═╡ f3ad8ee2-4d70-434f-b209-240b76a7976c
 md"""
@@ -193,7 +205,7 @@ View: $(@bind dyn_view Select(["heatmap" => "heatmap σ(t, τ)", "path3d" => "st
 # ╔═╡ cfb825dc-bfae-4a20-a695-0268c361aadd
 if dyn_on
     n = record isa PhaseData ? length(record.x) : length(record.y)
-    window = max(64, round(Int, n * dyn_frac))
+    window = min(n, max(64, round(Int, n * dyn_frac)))   # never longer than the record
     f = dyn_dev == "dadev" ? dadev : dhdev
     dyn = f(record, Octave; window=window)
     dyn_view == "path3d" ? plot(dyn; seriestype=:path3d, size=(820, 560)) :

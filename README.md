@@ -91,8 +91,8 @@ record). The harness, method and both measurements are in
 record, pick deviations, τ grid, confidence level and preprocessing, and get
 the plot, the table and a TSV export.
 
-```julia
-julia> using Pluto; Pluto.run(notebook="app/StabilityExplorer.jl")
+```bash
+julia --project=app -e 'using Pkg; Pkg.instantiate(); using Pluto; Pluto.run(notebook="app/StabilityExplorer.jl")'
 ```
 
 ## Tests
