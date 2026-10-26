@@ -159,8 +159,22 @@ grid, and per-α fits.
 !!! warning "Edge zone at the reach limit"
     The kernel needs `N − 4m + 1 ≥ 1`, so MHTOTDEV's reach limit is `τ = T/4`
     (`T/τ ≥ 4`). The fitted linear form crosses `ν = 1` near
-    `T/τ ≈ 3.2–4.5` depending on α (lowest at α = +2, highest at α = −2), and a
-    χ² interval computed from `ν < 1` is degenerate (the bounds collapse).
-    Treat confidence intervals as valid for `T/τ ≳ 5–6` and indicative only
-    in the final octave before the reach limit; the σ values themselves are
-    valid all the way to `τ = T/4`.
+    `T/τ ≈ 3.2–4.5` depending on α (lowest at α = +2, highest at α = −2).
+    Below `ν = 1` the χ² interval is degenerate, so `confidence_intervals`
+    falls back to the Gaussian `±K_α σ z/√N` approximation there (lower bound
+    floored at zero). Treat confidence intervals as valid for `T/τ ≳ 5–6` and
+    indicative only in the final octave before the reach limit; the σ values
+    themselves are valid all the way to `τ = T/4`.
+
+!!! note "Degrees-of-freedom gain over MHDEV"
+    The extension buys degrees of freedom for the phase noises and white FM
+    but not for the reddest noise. At the same τ the fitted MHTOTDEV EDF is
+    about 1.5× the Greenhall–Riley MHDEV EDF for WHPM, 1.3× for WHFM, 1.2×
+    for FLFM, and 0.9× for RWFM, and the RWFM deficit is a property of the
+    estimator rather than of the fit: a direct Monte Carlo (N = 4096,
+    m = 64, 300 realizations, Kasdin–Walter synthesis) gives an empirical
+    EDF of 47 for MHTOTDEV against 58 for MHDEV, with the fitted value at
+    46. For random-walk FM the reflected extension re-uses the record's
+    low-frequency content and the bias correction divides by `B ≈ 2.1`, so
+    MHTOTDEV's advantage there is reach (`τ = T/4`), not precision; prefer
+    MHDEV where both exist.
