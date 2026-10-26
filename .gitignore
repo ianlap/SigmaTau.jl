@@ -13,8 +13,11 @@ tools/artifacts/*
 !tools/artifacts/
 !tools/artifacts/mhtotdev_mc_full.json
 
-# Benchmark outputs
-bench/results/
+# Benchmark outputs (the timing JSONs are tracked as provenance; the input
+# sample files are not, as the measured record is not public)
+bench/results/*
+!bench/results/
+!bench/results/*.json
 
 # Editors and OS
 .vscode/
