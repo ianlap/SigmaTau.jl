@@ -24,6 +24,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   `h` components are now scaled on the filter's low-frequency PSD so the
   generated spectrum is `h_α f^α` (before, h was converted to σ_y(τ₀) with the
   continuous-time formulas, which do not hold for sampled discrete processes).
+- MHTOTDEV bias and EDF coefficients re-measured with the Kasdin–Walter
+  synthesis (full sweep at `e3ba9da`, seed 20260531, R = 3000, N ≤ 32768;
+  `tools/artifacts/mhtotdev_mc_full.json`). White FM is unchanged; the
+  largest shifts are the white-PM EDF (`b, c` 1.687, 4.317 → 1.634, 3.833)
+  and bias slope, and the random-walk EDF intercept (2.449 → 2.415).
 - `mdev`, `tdev`, `mhdev` and `htdev` remove the least-squares phase line
   before forming their prefix sums (an exact invariance of the modified
   estimators). On a record with an uncorrected 1e-9 frequency offset the
