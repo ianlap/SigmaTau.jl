@@ -188,8 +188,8 @@ plot(
     taus, σ1_truth;
     label  = "Clock 1 truth",
     xscale = :log10, yscale = :log10,
-    xlabel = raw"\(\tau\) (s)",
-    ylabel = raw"\(\sigma_y(\tau)\)",
+    xlabel = "τ (s)",
+    ylabel = "σ_y(τ)",
     title  = "Three-cornered hat: recovered vs ground-truth σ_y(τ)",
     legend = :topright,
     lw     = 1.5,

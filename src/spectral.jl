@@ -1,16 +1,4 @@
-# spectral.jl — Welch PSD core and the public Sy / Sx / L estimators.
-#
-# Merged from stab/spectral.jl (the _welch_psd core) and stab/api/spectral.jl
-# (the PhaseData/FrequencyData entry points). Core first, API after.
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/spectral.jl (Welch core) ───────────────────────────────────────
-
-# stab/spectral.jl — Welch power-spectral-density core.
-#
-# Pure `Vector{Float64}` → arrays kernel shared by the public `Sy` / `Sx` / `L`
-# API in `stab/api/spectral.jl`. One-sided "density" normalization (matching
+# Welch PSD core shared by the public `Sy` / `Sx` / `L` API. One-sided "density" normalization (matching
 # scipy.signal.welch with `scaling="density", return_onesided=True`) so that
 # the integral of the returned PSD over [0, fs/2] recovers the variance of the
 # (per-segment mean-removed) input. Uses the real FFT from FFTW (imported once
@@ -119,14 +107,8 @@ more segments (lower variance).
 """
 _default_nperseg(N::Int) = min(N, 256)
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/spectral.jl (public API) ───────────────────────────────────
-
-# stab/api/spectral.jl — public spectral-density entry points.
-#
-# `Sy` / `Sx` / `L` take `PhaseData` / `FrequencyData` and return a
-# `SpectralResult`, wrapping the `_welch_psd` core in `stab/spectral.jl`.
+# Public API: `Sy` / `Sx` / `L` take `PhaseData` / `FrequencyData` and return a
+# `SpectralResult` wrapping the `_welch_psd` core.
 # Reference: IEEE Std 1139-2022 §3.3–3.5; NIST SP1065 (Riley & Howe 2008).
 
 # Resolve Welch parameters from explicit kwargs, filling defaults from the

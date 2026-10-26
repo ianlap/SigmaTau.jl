@@ -1,4 +1,4 @@
-# SigmaTau — Stability analysis
+# Stability functions
 
 ## Allan family deviations
 

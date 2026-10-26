@@ -1,13 +1,5 @@
-# grids.jl — averaging-factor grids and conversion helpers.
-#
-# Merged from stab/taus.jl (TauMode, _kernel_m_max, _grid, tau_values) and
-# stab/utils.jl (_f64, _freq_to_phase, _phase_to_freq, _default_m_values).
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/taus.jl ────────────────────────────────────────────────────────
-
-# stab/taus.jl — Averaging-factor grid selection (`TauMode` + `tau_values`)
 
 """
     TauMode
@@ -160,11 +152,6 @@ function tau_values(mode::TauMode, N::Int, kernel::Symbol)
     return ms
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/utils.jl ───────────────────────────────────────────────────────
-
-# utils.jl — Shared helpers for the stability API
 
 """
     _f64(v::AbstractVector{<:Real}) → Vector{Float64}

@@ -76,13 +76,13 @@ using Plots
 
 plot(r_adev;
      label  = "ADEV",
-     xlabel = raw"Averaging time \(\tau\) (s)",
-     ylabel = raw"\(\sigma_y(\tau)\)",
+     xlabel = "Averaging time τ (s)",
+     ylabel = "σ_y(τ)",
      title  = "ADEV of a drifting clock: the ramp masks the floor",
      legend = :bottomleft,
      lw     = 1.5)
-plot!(taus, σ1 ./ sqrt.(taus); ls = :dash, label = raw"WHFM floor \(\sigma_1\tau^{-1/2}\)")
-plot!(taus, D .* taus ./ sqrt(2); ls = :dot, label = raw"drift ramp \(D\tau/\sqrt{2}\)")
+plot!(taus, σ1 ./ sqrt.(taus); ls = :dash, label = "WHFM floor σ₁ τ^(-1/2)")
+plot!(taus, D .* taus ./ sqrt(2); ls = :dot, label = "drift ramp Dτ/√2")
 
 # Past the crossover the curve tracks the drift line, not the clock's
 # noise. Stable32 users handle this by detrending first (the Drift
@@ -95,20 +95,20 @@ plot!(taus, D .* taus ./ sqrt(2); ls = :dot, label = raw"drift ramp \(D\tau/\sqr
 # difference. A linear term in ``y(t)`` is quadratic in phase, and a
 # third difference annihilates any quadratic — so constant frequency
 # drift contributes exactly zero, with no detrending pass over the
-# data. See [the Allan-family theory page](../theory/allan_family.md)
-# for the kernel definition.
+# data.
+#
 
 r_hdev = hdev(fd, m_values)
 
 plot(r_adev;
      label  = "ADEV",
-     xlabel = raw"Averaging time \(\tau\) (s)",
-     ylabel = raw"\(\sigma_y(\tau)\)",
+     xlabel = "Averaging time τ (s)",
+     ylabel = "σ_y(τ)",
      title  = "ADEV vs HDEV on the same drifting record",
      legend = :bottomleft,
      lw     = 1.5)
 plot!(r_hdev; label = "HDEV", lw = 1.5)
-plot!(taus, σ1 ./ sqrt.(taus); ls = :dash, label = raw"WHFM floor \(\sigma_1\tau^{-1/2}\)")
+plot!(taus, σ1 ./ sqrt.(taus); ls = :dash, label = "WHFM floor σ₁ τ^(-1/2)")
 
 # HDEV follows the true τ⁻¹/² noise floor across the whole grid. The
 # clock under the drift is recovered without touching the data.
@@ -136,8 +136,7 @@ r_mhdev = mhdev(fd, m_values)
 # (it is a σ_x quantity). HTDEV is to MHDEV what TDEV is to MDEV — a
 # time-error summary built on the drift-immune third-difference kernel —
 # and it is original to this package: SP1065, IEEE 1139-2022, and
-# NBS-TN-1337 do not define it (see
-# [the HTDEV section of the theory page](../theory/allan_family.md)).
+# NBS-TN-1337 do not define it.
 
 r_htdev = htdev(fd, m_values)
 
@@ -166,9 +165,7 @@ end
 # original to this package and has no published coefficient tables —
 # and that calibration is valid only for `τ/τ₀ ≥ 16`, the same floor
 # the Hadamard-total literature quotes. See
-# [the total-family theory page](../theory/total_family.md) and
-# [MHTOTDEV bias and EDF](../theory/mhtotdev_bias_edf.md) for the
-# methodology.
+# [MHTOTDEV bias and EDF](../mhtotdev.md) for the methodology.
 #
 # Unlike its parent `mhdev`, the total kernel is not drift-immune on
 # its own — the boundary extension re-admits residual drift — so
@@ -224,8 +221,8 @@ end
 plot(r_mh;
      label   = "MHDEV (3 h record)",
      ci_band = true,
-     xlabel  = raw"Averaging time \(\tau\) (s)",
-     ylabel  = raw"\(\sigma_y(\tau)\)",
+     xlabel  = "Averaging time τ (s)",
+     ylabel  = "σ_y(τ)",
      title   = "MHDEV vs MHTOTDEV confidence on a short record",
      legend  = :bottomleft,
      lw      = 1.5)

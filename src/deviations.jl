@@ -1,13 +1,3 @@
-# deviations.jl — public deviation API (PhaseData/FrequencyData ->
-# StabilityResult). Merged from stab/api/{allan, hadamard, total, mtie,
-# pdev}.jl. Wraps the kernels in kernels.jl and the stats in edf.jl / noise.jl.
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/allan.jl ───────────────────────────────────────────────────
-
-# api/allan.jl — User wrappers for stability calculations
-
 """
 $(SIGNATURES)
 
@@ -134,11 +124,6 @@ tdev(data::PhaseData;     kwargs...) = tdev(data, _default_m_values(length(data.
 tdev(data::FrequencyData; kwargs...) = tdev(data, _default_m_values(length(data.y), :tdev); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/hadamard.jl ────────────────────────────────────────────────
-
-# api/hadamard.jl — User wrappers for Hadamard stability calculations
-
 """
     hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
 
@@ -229,11 +214,6 @@ mhdev(data::FrequencyData; kwargs...) = mhdev(data, _default_m_values(length(dat
 htdev(data::PhaseData;     kwargs...) = htdev(data, _default_m_values(length(data.x), :htdev); kwargs...)
 htdev(data::FrequencyData; kwargs...) = htdev(data, _default_m_values(length(data.y), :htdev); kwargs...)
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/total.jl ───────────────────────────────────────────────────
-
-# api/total.jl — User wrappers for Total stability calculations
 
 # Map variance-scale bias factor B to its deviation-scale unbias divisor √B,
 # treating non-positive B as NaN. Only :totvar can yield B ≤ 0 in practice
@@ -468,11 +448,6 @@ mhtotdev(data::PhaseData;     kwargs...) = mhtotdev(data, _default_m_values(leng
 mhtotdev(data::FrequencyData; kwargs...) = mhtotdev(data, _default_m_values(length(data.y), :mhtotdev); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/mtie.jl ────────────────────────────────────────────────────
-
-# api/mtie.jl — User wrapper for Maximum Time Interval Error
-
 """
 $(SIGNATURES)
 
@@ -521,11 +496,6 @@ mtie(data::FrequencyData, taus::TauMode; kwargs...) = mtie(data, tau_values(taus
 mtie(data::PhaseData;     kwargs...) = mtie(data, _default_m_values(length(data.x), :mtie); kwargs...)
 mtie(data::FrequencyData; kwargs...) = mtie(data, _default_m_values(length(data.y), :mtie); kwargs...)
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/tierms.jl ──────────────────────────────────────────────────
-
-# api/tierms.jl — User wrapper for RMS Time Interval Error
 
 """
 $(SIGNATURES)
@@ -585,11 +555,6 @@ tierms(data::FrequencyData, taus::TauMode; kwargs...) = tierms(data, tau_values(
 tierms(data::PhaseData;     kwargs...) = tierms(data, _default_m_values(length(data.x), :tierms); kwargs...)
 tierms(data::FrequencyData; kwargs...) = tierms(data, _default_m_values(length(data.y), :tierms); kwargs...)
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/pdev.jl ────────────────────────────────────────────────────
-
-# api/pdev.jl — User wrapper for parabolic deviation
 
 """
 $(SIGNATURES)
@@ -651,11 +616,6 @@ pdev(data::FrequencyData, taus::TauMode; kwargs...) = pdev(data, tau_values(taus
 pdev(data::PhaseData;     kwargs...) = pdev(data, _default_m_values(length(data.x), :pdev); kwargs...)
 pdev(data::FrequencyData; kwargs...) = pdev(data, _default_m_values(length(data.y), :pdev); kwargs...)
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/theo.jl ────────────────────────────────────────────────────
-
-# api/theo.jl — User wrappers for Thêo1 / ThêoBR / ThêoH
 
 """
     theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
@@ -817,11 +777,7 @@ theoh(data::PhaseData;     kwargs...) = theoh(data, _default_m_values(length(dat
 theoh(data::FrequencyData; kwargs...) = theoh(data, _default_m_values(length(data.y), :theoh); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/dynamic.jl ─────────────────────────────────────────────────
-
-# api/dynamic.jl — Dynamic (time-resolved) deviations: DADEV / DHDEV.
-#
+# Dynamic (time-resolved) deviations.
 # Both slide an analysis window of `window` phase samples across the record
 # and evaluate an existing overlapping kernel (`_adev_core` / `_hdev_core`)
 # inside each window, producing the σ_y(t, τ) map of Galleani & Tavella 2009
