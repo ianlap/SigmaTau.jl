@@ -99,7 +99,16 @@ julia --project=app -e 'using Pkg; Pkg.instantiate()'   # first run only
 julia --project=app app/StabilityExplorer.jl
 ```
 
-The first launch compiles GLMakie and takes a minute or two. `--fontsize=14`
+The first launch compiles GLMakie and takes a minute or two.
+
+A browser edition with the same analysis and plots serves on
+`http://127.0.0.1:9384`; its controls are native HTML (labelled inputs, a
+real table, a live status region, Tab order), so it works with screen
+readers and browser zoom:
+
+```bash
+julia --project=app app/StabilityWeb.jl            # --port=N to change the port
+``` `--fontsize=14`
 (or 16) enlarges every label for projection, `--size=WxH` sets the window,
 and `--smoke` runs the headless self-test that CI-style checks use.
 

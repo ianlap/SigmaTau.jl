@@ -35,6 +35,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
+- `app/StabilityWeb.jl`: a browser edition of the explorer (Bonito + WGLMakie)
+  with native HTML controls for screen readers and keyboard use; shares
+  `app/ExplorerCore.jl` with the window.
 - `app/StabilityExplorer.jl`: a GLMakie desktop application covering file
   import, synthesis, preprocessing, the deviation suite with χ² intervals,
   the per-τ table, spectra, dynamic deviation waterfalls, and figure, table
