@@ -573,39 +573,55 @@ const LK = ReferenceKernels
     end
 
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
-        # Bonus: kernel parity for the more common ADEV/HDEV across all 5
-        # noise types, locking in that the synthesizer + kernels survive the
-        # full SP1065 alpha range.
-        #
-        # rtol target is 1e-11 (was 1e-12). On macOS x86_64 our `_mdev_core`
-        # and `LK.mdev_var` agree bit-exactly (Δ_ol = 0 ULP for nearly all
-        # rows), and both agree with allantools to ≤ 8.5e-14 worst-case on
-        # the stable32gen.DAT fixture (3-way verification, 2026-05-08).
-        # Linux x86_64 LLVM picks a different SIMD reduction order and the
-        # two implementations drift by ~10,000 ULPs on this synthesised
-        # input — irreducible cross-platform codegen variance, not a math
-        # bug. 1e-11 still asserts 11-sig-fig parity, well above any drift
-        # we have observed.
+        # Kernel accuracy across the full SP1065 α range: each kernel against
+        # the same formula evaluated in BigFloat, so the tolerance measures the
+        # Float64 kernel's own rounding and not a Float64 reference's. ADEV and
+        # HDEV are direct differences and sit near machine precision; MDEV and
+        # MHDEV go through prefix sums, whose conditioning on a random-walk
+        # phase (α = −2, excursions ~10³ against unit second differences)
+        # bounds them at ~1e-11 over many seeds, hence 1e-10.
         using Random
         N    = 1024
         tau0 = 1.0
         ms   = [1, 2, 4, 8, 16]
-        rt   = 1e-11
+        rt   = 1e-10
 
         for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
             Random.seed!(123)
-            x    = _gen_powerlaw_phase(alpha, N; tau0=tau0)
-            x_cs = pushfirst!(cumsum(x), 0.0)
+            x     = _gen_powerlaw_phase(alpha, N; tau0=tau0)
+            xb    = BigFloat.(x)
+            xb_cs = pushfirst!(cumsum(xb), big(0.0))
             for m in ms
                 @test SigmaTau._adev_core(x, [m], tau0)[1]  ≈
-                      sqrt(LK.adev_var(x, m, tau0))                 atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.adev_var(xb, m, big(tau0))))            atol=1e-25 rtol=rt
                 @test SigmaTau._mdev_core(x, [m], tau0)[1]  ≈
-                      sqrt(LK.mdev_var(x, m, tau0, x_cs))            atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.mdev_var(xb, m, big(tau0), xb_cs)))     atol=1e-25 rtol=rt
                 @test SigmaTau._hdev_core(x, [m], tau0)[1]  ≈
-                      sqrt(LK.hdev_var(x, m, tau0))                  atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.hdev_var(xb, m, big(tau0))))            atol=1e-25 rtol=rt
                 @test SigmaTau._mhdev_core(x, [m], tau0)[1] ≈
-                      sqrt(LK.mhdev_var(x, m, tau0, x_cs))           atol=1e-25 rtol=rt
+                      Float64(sqrt(LK.mhdev_var(xb, m, big(tau0), xb_cs)))    atol=1e-25 rtol=rt
             end
+        end
+    end
+
+    @testset "MDEV/MHDEV precision on a clock with a frequency offset" begin
+        # A phase ramp (uncorrected frequency offset) contributes nothing to the
+        # modified estimators but makes naive prefix sums grow like N²·offset;
+        # the kernels remove the least-squares line first. Compare against the
+        # same formula evaluated in BigFloat; without the detrend the error is
+        # ~3e-7 here, with it the ~1e-11 prefix-sum conditioning floor remains.
+        rng  = Xoshiro(20261026)
+        N    = 20000
+        tau0 = 1.0
+        p    = noise_gen(PhaseData, N, tau0; sigma1 = Dict(0 => 1e-12), rng = rng)
+        x    = p.x .+ 1e-9 .* (0:N-1)
+        xb   = BigFloat.(x)
+        xb_cs = pushfirst!(cumsum(xb), big(0.0))
+        for m in (1, 16, 256)
+            exact_m  = Float64(sqrt(LK.mdev_var(xb, m, big(tau0), xb_cs)))
+            exact_mh = Float64(sqrt(LK.mhdev_var(xb, m, big(tau0), xb_cs)))
+            @test SigmaTau._mdev_core(x, [m], tau0)[1]  ≈ exact_m  rtol = 1e-10
+            @test SigmaTau._mhdev_core(x, [m], tau0)[1] ≈ exact_mh rtol = 1e-10
         end
     end
 
