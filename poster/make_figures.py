@@ -196,21 +196,44 @@ def fig_suite_pkg():
 from matplotlib.colors import LinearSegmentedColormap, LogNorm
 CRIMSON_RAMP = LinearSegmentedColormap.from_list('crimson_seq', ['#FBEEF0', '#E9A3AE', '#C9566C', '#9E1B32', '#5A0F1D'])
 def fig_dynamic():
+    """Classic offset waterfall (SP1065 dynamic-stability look): one sigma_y(tau) curve per analysis
+    window, each shifted up and right by its position in time; nearer windows occlude farther ones."""
+    from matplotlib.patches import Polygon
     f = os.path.join(HERE, 'data', 'dynamic_map.csv')
     if not os.path.exists(f):
         print('no dynamic_map.csv; run julia_figdata.jl'); return
     m = list(csv.reader(open(f)))
     taus = np.array([float(h.split('=')[1]) for h in m[0][1:]])
     t = np.array([float(r[0]) for r in m[1:]]); Z = np.array([[float(v) for v in r[1:]] for r in m[1:]])
-    fig, ax = plt.subplots(figsize=(6.4, 4.6))
-    # cell edges: windows are centred on t with constant step; taus are octave spaced
-    dt = t[1] - t[0]; te = np.concatenate(([t[0] - dt / 2], t + dt / 2))
-    tau_e = np.concatenate(([taus[0] / np.sqrt(2)], taus * np.sqrt(2)))
-    pm = ax.pcolormesh(te, tau_e, Z.T, cmap=CRIMSON_RAMP, norm=LogNorm(vmin=np.nanmin(Z), vmax=np.nanmax(Z)), shading='flat', edgecolors='white', linewidth=0.6)
-    ax.set_yscale('log'); ax.set_xlabel('window centre $t$ (s)'); ax.set_ylabel(r'$\tau$ (s)')
-    ax.axvline(4096, color=INK, lw=2, ls='--'); ax.text(4096 + 60, taus[-1] * 1.0, 'noise level\nchanges', fontsize=14, color=INK, va='center', ha='left')
-    cb = fig.colorbar(pm, ax=ax, pad=0.02); cb.set_label(r'$\sigma_y(t,\tau)$', fontsize=18); cb.ax.tick_params(labelsize=14)
-    ax.grid(False)
+    xs = np.log10(taus); lz = np.log10(Z); n = len(t)
+    dx, dy = 0.017, 0.021                      # per-window shift in log10(tau) and log10(sigma) units
+    floor = np.nanmin(lz) - 0.12
+    fig, ax = plt.subplots(figsize=(7.4, 5.6))
+    for k in range(n - 1, -1, -1):             # back to front
+        x = xs + k * dx; y = lz[k] + k * dy
+        verts = [(x[0], floor + k * dy)] + list(zip(x, y)) + [(x[-1], floor + k * dy)]
+        face = '#FBEEF0' if t[k] < 4096 else '#E9A3AE'
+        ax.add_patch(Polygon(verts, closed=True, facecolor=face, edgecolor=CRIMSON, linewidth=1.3, zorder=10 + (n - k)))
+    # tau axis along the front curve
+    for v, lab in [(1, '1'), (10, '10'), (100, '100')]:
+        ax.plot([np.log10(v)] * 2, [floor - 0.06, floor], color=INK2, lw=1.2, zorder=100)
+        ax.text(np.log10(v), floor - 0.09, lab, ha='center', va='top', fontsize=15, color=INK2)
+    ax.text(xs.mean(), floor - 0.30, r'averaging time $\tau$ (s)', ha='center', va='top', fontsize=17, color=INK)
+    # time axis along the offset direction (right-hand ends of the floors)
+    for tt in (1000, 3000, 5000, 7000):
+        k = int(np.argmin(np.abs(t - tt)))
+        ax.plot([xs[-1] + k * dx, xs[-1] + k * dx + 0.06], [floor + k * dy] * 2, color=INK2, lw=1.2, zorder=100)
+        ax.text(xs[-1] + k * dx + 0.09, floor + k * dy, f'{tt}', ha='left', va='center', fontsize=15, color=INK2)
+    kmid = n // 2
+    ax.text(xs[-1] + kmid * dx + 0.62, floor + kmid * dy - 0.16, 'window centre $t$ (s)', rotation=51, ha='center', va='center', fontsize=17, color=INK)
+    # sigma axis at the front left
+    for v in (-13, -12):
+        ax.plot([xs[0] - 0.07, xs[0]], [v, v], color=INK2, lw=1.2, zorder=100)
+        ax.text(xs[0] - 0.1, v, r'$10^{%d}$' % v, ha='right', va='center', fontsize=15, color=INK2)
+    ax.text(xs[0] - 0.88, (floor + lz[0].max()) / 2, r'$\sigma_y(t,\tau)$', rotation=90, ha='center', va='center', fontsize=17, color=INK)
+    ax.text(xs[0] - 0.62, lz.max() + (n - 1) * dy + 0.05, 'noise level changes at $t$ = 4096 s\n(lighter: before, darker: after)', fontsize=14, color=INK2, ha='left', va='bottom')
+    ax.set_xlim(xs[0] - 1.02, xs[-1] + (n - 1) * dx + 0.95); ax.set_ylim(floor - 0.45, lz.max() + (n - 1) * dy + 0.42)
+    ax.axis('off')
     save(fig, 'F7_dynamic')
 
 if __name__ == '__main__':
