@@ -15,13 +15,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Repository trimmed for the public release: the extended theory pages, FAQ,
   plotting cookbook and migration guides moved to the `dev` branch; the docs
   build no longer needs a TeX install.
+- `plot(::DynamicStabilityResult)` draws the SP1065 waterfall (one σ(τ)
+  curve per window, stacked along t) and no longer offers a heatmap.
 
 ### Added
 
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
 - `app/StabilityExplorer.jl`: a GLMakie desktop application covering file
   import, synthesis, preprocessing, the deviation suite with χ² intervals,
-  the per-τ table, spectra, dynamic maps, and figure, table and record export.
+  the per-τ table, spectra, dynamic deviation waterfalls, and figure, table
+  and record export.
 
 ## [0.5.0] - 2026-06-09
 
