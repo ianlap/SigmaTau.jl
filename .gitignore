@@ -1,82 +1,23 @@
-# macOS
-.DS_Store
-
 # Julia
 Manifest.toml
-*.cov
 *.jl.cov
 *.jl.mem
-*.log
-*_output.log
-deps/deps.jl
-deps/build.log
-docs/build/
-docs/site/
 LocalPreferences.toml
-/.julia/
 
-# Editors / IDEs
-.vscode/
-.idea/
-.obsidian/
-*.swp
-*.swo
-*~
+# Docs build output and Literate-generated tutorial pages
+docs/build/
+docs/src/tutorials/
 
-# Local tool config
-.claude/
-.codex/
-.aider*
-.gemini/
-.codegraph/
-[Cc][Ll][Aa][Uu][Dd][Ee].md
-[Aa][Gg][Ee][Nn][Tt][Ss].md
-
-# Environment
-.env
-.envrc
-
-# Internal planning / migration artifacts (not for public repo)
-legacy/
-legdocs/
-
-# Local Python venv used by ad-hoc analysis scripts.
-.bench-venv/
-
-# Proprietary / large clock recordings used for off-repo validation
-clock_data/
-
-# Scratchpad files (Ian's REPL throwaways, never checked in)
-scratch.jl
-scratch.py
-scratch/
-
-# Internal planning docs (not for public repo)
-docs/super*/
-
-# One-off repo-setup script
-makedir.sh
-
-# Literate.jl-generated tutorial pages. `docs/make.jl` walks
-# `examples/*.jl` and renders each into `docs/src/tutorials/<name>.md`
-# at build time; the `.jl` files are the single source of truth.
-# Hand-written tutorials (e.g. `single_clock_holdover.md`) are NOT
-# matched by this pattern — only the numeric-prefix Literate output is.
-docs/src/tutorials/0*_*.md
-
-# Monte Carlo run outputs from tools/mc_mhtotdev.jl. The harness is tracked;
-# the full-sweep fit JSON is tracked as research provenance, while ad-hoc
-# laptop/quick-run outputs stay local.
+# Monte Carlo run outputs (the full-sweep JSON is tracked as provenance)
 tools/artifacts/*
 !tools/artifacts/
 !tools/artifacts/mhtotdev_mc_full.json
 
-# Local design asset (kept on disk, not part of the package).
-SigmaTauDesign.zip
+# Benchmark outputs
+bench/results/
 
-# Local research material (never public)
-example_writings/
-reference_papers/
-paper/
-.superpowers/
-tui/
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

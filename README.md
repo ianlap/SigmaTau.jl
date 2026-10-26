@@ -1,36 +1,32 @@
 # SigmaTau.jl
 
 [![CI](https://github.com/ianlap/SigmaTau.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/ianlap/SigmaTau.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Docs — stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://ianlap.github.io/SigmaTau.jl/stable/)
-[![Docs — dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ianlap.github.io/SigmaTau.jl/dev/)
-[![Julia ≥ 1.11](https://img.shields.io/badge/julia-%E2%89%A5%201.11-9558B2.svg)](https://julialang.org/)
+[![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://ianlap.github.io/SigmaTau.jl/stable/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-SigmaTau.jl is a Julia package for time-and-frequency stability analysis. It
-implements the Allan, Modified Allan, Hadamard, and Total deviation families,
-MTIE, parabolic deviation, lag-1 ACF noise identification, Greenhall-Riley
-EDF / chi-squared confidence intervals, and calibrated power-law noise
-generation in one flat namespace.
+Time-and-frequency stability analysis in Julia. One call gives the deviation,
+the identified noise type, the equivalent degrees of freedom and the χ²
+confidence interval at every τ. The estimators agree with Stable32 to its
+printed precision and with allantools to machine precision, and the heavy
+total-family kernels run thousands of times faster than allantools.
 
-The stability estimators are cross-checked against Stable32 and allantools.
-Coming from Stable32? See the
-[migration guide](https://ianlap.github.io/SigmaTau.jl/stable/migration_from_stable32/).
+```julia
+using SigmaTau
 
-## Scope
+p = read_phase("clock.DAT"; time_col=0, value_col=1, tau0=1.0)
 
-- Deviation kernels are checked against Stable32, allantools, and a MATLAB
-  reference where external references exist.
-- Against allantools 2024.06 on a real N≈407 000 record, the modified-total
-  kernels run **~3,800–4,200× faster**
-  (`mtotdev` 0.47 s vs ~30 min; `htotdev` 0.46 s vs ~32 min), and the full
-  seven-kernel sweep finishes ~4,000× sooner. The cheap kernels
-  (`adev`/`mdev`/`hdev`/`tdev`) run 13–40× faster. See
-  [Performance](https://ianlap.github.io/SigmaTau.jl/stable/performance/).
-  *(Benchmarked against allantools; Stable32 is parity-verified for numerics,
-  not speed-tested.)*
-- `using SigmaTau` brings the shared types (`PhaseData`, `FrequencyData`,
-  `StabilityResult`) and every public deviation, noise-ID, EDF/CI, MTIE, PDEV,
-  and IO function into scope.
+r = adev(p)                 # octave τ grid, overlapping estimator
+r.tau, r.dev                # σ_y(τ)
+r.noise_type                # :WHPM / :FLPM / :WHFM / :FLFM / :RWFM per τ
+r.ci[1].lo, r.ci[1].hi      # 68.3 % χ² bounds (Greenhall–Riley EDF)
+r.neff, r.edf
+
+suite = stability(p; devs=(:adev, :mdev, :hdev, :mhtotdev))
+suite[:hdev].dev
+
+using Plots
+plot(suite)                 # log-log σ(τ) with CI error bars
+```
 
 ## Install
 
@@ -38,128 +34,74 @@ Coming from Stable32? See the
 pkg> add https://github.com/ianlap/SigmaTau.jl
 ```
 
-Or, working from a clone of this repo:
+Julia 1.11 or later. Optional: `Plots` for the plot recipes, `Pluto` for the
+interactive explorer in `app/`.
 
-```julia
-pkg> activate .
-pkg> instantiate
+## Estimators
+
+| Family | Functions |
+|---|---|
+| Allan | `adev`, `mdev`, `tdev` |
+| Hadamard | `hdev`, `mhdev`, `htdev` |
+| Total | `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` |
+| Thêo | `theo1` (ThêoBR by default), `theoh` |
+| Time error | `mtie`, `tierms`, `pdev` |
+| Time-resolved | `dadev`, `dhdev` |
+| Real time | `StreamingStability` (`adev`, `mdev`, `hdev`, `mhdev`) |
+| Multi-clock | `nch` (N-cornered hat) |
+| Spectra and synthesis | `Sy`, `Sx`, `L`, `noise_gen` |
+
+Every function accepts `PhaseData` or `FrequencyData`, an explicit vector of
+averaging factors or a `TauMode` grid (`Octave`, `Decade`, `AllTaus`, ...).
+`read_phase` / `read_frequency`, `detrend`, `fillgaps` and `remove_outliers`
+cover the usual preprocessing; `save` / `load_result` / `load_suite`
+round-trip results as plain text.
+
+## Compared with Stable32 and allantools
+
+| | Stable32 | allantools | SigmaTau |
+|---|---|---|---|
+| Platform | Windows GUI, closed source | Python library | Julia library + Pluto GUI |
+| χ² confidence intervals with per-τ noise ID | yes | manual (`edf_greenhall` + `confidence_interval`) | every call |
+| Total-family bias correction | TOTDEV, HTOTDEV | none | all five, switchable |
+| MDEV-class Hadamard (`mhdev`, `htdev`, `mhtotdev`) | no | no | yes |
+| Thêo1 / ThêoBR / ThêoH | yes | Thêo1 only | yes |
+| Dynamic (time-resolved) deviation | yes | no | yes |
+| Real-time accumulators | no | ADEV, HDEV, TDEV | ADEV, MDEV, HDEV, MHDEV |
+| N-cornered hat | three clocks | three clocks | N ≥ 3 |
+| Multithreaded kernels | n/a | no | yes |
+
+Validation: the core estimators match Stable32 to ≤ 0.005 % (its
+five-significant-figure output) and allantools to ≤ 1e-13 relative on the
+shipped fixture; raw total kernels match allantools to ≤ 4.4e-15. Where a
+default differs from a reference (MTOTDEV bias correction, noise-ID
+detrending), the per-τ tables in the
+[validation page](https://ianlap.github.io/SigmaTau.jl/stable/validation/)
+name the switch that reproduces the reference.
+
+Performance: on identical inputs, `adev`/`mdev`/`hdev`/`tdev` run roughly 10
+to 40 times faster than allantools, and `mtotdev`/`htotdev` 1,600 times faster
+on 4 cores to 4,200 times faster on 12 (0.47 s vs 30 min on a 407,000-sample
+record). The harness, method and both measurements are in
+[`bench/`](bench/README.md).
+
+## Interactive explorer
+
+`app/StabilityExplorer.jl` is a Pluto notebook: load a file or synthesize a
+record, pick deviations, τ grid, confidence level and preprocessing, and get
+the plot, the table and a TSV export.
+
+```bash
+julia --project=app -e 'using Pkg; Pkg.instantiate(); using Pluto; Pluto.run(notebook="app/StabilityExplorer.jl")'
 ```
 
-## Quickstart
-
-```julia
-using SigmaTau
-
-# Phase residuals (seconds), sampled every τ₀ = 1 s.
-x = randn(10_000)
-data = PhaseData(x, 1.0)
-
-# One deviation, octave-spaced τ grid (Stable32's default spacing).
-result = adev(data)
-
-result.tau          # τ values (s)
-result.dev          # σ_y(τ)
-result.noise_type   # :WHPM / :FLPM / :WHFM / :FLFM / :RWFM, per τ
-result.ci           # χ² (or Gaussian fallback) confidence bounds — one
-                    # (lo, hi) tuple per τ: result.ci[1].lo / result.ci[1].hi;
-                    # ci_lower(result) / ci_upper(result) give plain vectors
-result.edf          # equivalent degrees of freedom (empty when ci=false)
-result.neff         # number of analysis windows per τ (always populated)
-```
-
-Compute a whole suite in one call and index it by deviation:
-
-```julia
-suite = stability(data; devs=(:adev, :mdev, :hdev, :mhdev))
-suite[:adev].dev    # the ADEV curve
-keys(suite)         # which deviations are present, in order
-```
-
-`nch` separates per-clock noise from pairwise comparisons (the
-three-cornered hat, generalized to N clocks) — see the three-cornered-hat
-tutorial in the docs:
-
-```julia
-clock_a, clock_b, clock_c = nch(r_ab, r_bc, r_ca)
-```
-
-Read a Stable32-style data file and choose a τ grid explicitly or by spacing.
-A single-column `.DAT` needs `time_col=0` (no time column) and an explicit
-`tau0`:
-
-```julia
-p = read_phase("clock.DAT"; time_col=0, value_col=1, tau0=1.0)
-adev(p, [1, 2, 4, 8, 16, 32, 64])   # explicit averaging factors
-adev(p, Decade)                     # decade-spaced grid
-```
-
-Every public function also accepts `FrequencyData`:
-
-```julia
-y = randn(10_000) .* 1e-9
-adev(FrequencyData(y, 1.0), [1, 2, 4])
-```
-
-### Available deviations
-
-```
-adev  mdev  tdev
-hdev  mhdev  htdev
-totdev  mtotdev  ttotdev  htotdev  mhtotdev
-mtie  tierms  pdev
-theo1  theoh
-dadev  dhdev
-```
-
-### Plotting
-
-`SigmaTau` ships a `RecipesBase` package extension. Loading any
-`Plots`-compatible backend brings in a log-log τ–σ recipe with optional error
-bars from the result's CI bounds, plus overlays for a whole suite:
-
-```julia
-using Plots, SigmaTau
-plot(adev(data))                    # single deviation with CI error bars
-plot(stability(data))              # overlay the default suite
-```
-
-### Streaming
-
-`StreamingStability` computes `adev`/`mdev`/`hdev`/`mhdev` in real time as
-phase samples arrive — O(1) per sample per τ, bounded memory (Dobrogowski &
-Kasznia 2007):
-
-```julia
-acc = StreamingStability(:adev, 1.0, [1, 10, 100])
-push!(acc, x_next)        # feed samples as they are measured
-snapshot(acc)              # running StabilityResult, matches the batch kernel
-```
-
-## Documentation
-
-Full docs — tutorials, theory, the migration guide, performance numbers, and
-the API reference — are at
-**[ianlap.github.io/SigmaTau.jl](https://ianlap.github.io/SigmaTau.jl/stable/)**.
-
-## Running tests
+## Tests
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Tests are organised under `test/` (`types/`, `stab/`, `io/`,
-`umbrella_smoke.jl`); the command above runs all sub-suites under a single
-top-level `test/runtests.jl`.
-
-## Contributing
-
-Bug reports, new deviations, validation fixtures, and benchmarks are welcome.
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). The main references for the underlying
-math are NIST SP1065 (Riley & Howe), Greenhall & Riley 2003, and IEEE 1139-2022.
-
 ## Citing
-
-If you use SigmaTau.jl in published work, cite it as:
 
 ```bibtex
 @software{lapinski-sigmatau,
@@ -171,8 +113,5 @@ If you use SigmaTau.jl in published work, cite it as:
 }
 ```
 
-Machine-readable citation metadata is in [`CITATION.cff`](CITATION.cff).
-
-## License
-
-MIT. See [`LICENSE`](LICENSE).
+Definitions follow NIST SP1065 (Riley & Howe), IEEE Std 1139-2022 and
+Greenhall & Riley 2003. MIT license.

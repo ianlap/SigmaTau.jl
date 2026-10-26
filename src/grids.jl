@@ -1,14 +1,4 @@
-# grids.jl — averaging-factor grids and conversion helpers.
-#
-# Merged from stab/taus.jl (TauMode, _kernel_m_max, _grid, tau_values) and
-# stab/utils.jl (_f64, _freq_to_phase, _phase_to_freq, _default_m_values).
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/taus.jl ────────────────────────────────────────────────────────
-
-# stab/taus.jl — Averaging-factor grid selection (`TauMode` + `tau_values`)
-
+# Averaging-factor grids (TauMode, tau_values) and phase/frequency conversion.
 """
     TauMode
 
@@ -39,7 +29,7 @@ integers, deduplicated, and clamped to each kernel's algorithmic m-max (see
 
 Largest averaging factor `m` for which `kernel`'s core L-check still yields at
 least one analysis window, given `N` samples. Shared by [`tau_values`](@ref)
-and [`_default_m_values`](@ref).
+and `_default_m_values`.
 
 Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
 
@@ -58,7 +48,7 @@ Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
 | `:theoh`                  | `⌊0.75 · 2·((N − 1) ÷ 2)⌋` (τ-grid units) |
 
 The ordinary and modified estimators require ≥2 analysis windows at the largest
-τ — a single window is one raw difference (EDF ≈ 1) — so their caps sit one step
+τ (a single window is one raw difference, EDF ≈ 1), so their caps sit one step
 below the total family, whose subsequence extension keeps a single subsequence a
 valid long-τ estimate. (HTOTDEV's general branch runs on `y = diff(x)` of length
 `N−1`, giving `(N−1) ÷ 3`; MTOTDEV runs on phase directly, giving `N ÷ 3`.)
@@ -70,7 +60,7 @@ any `m ≥ 1`.
 """
 function _kernel_m_max(N::Int, kernel::Symbol)
     # Ordinary/modified estimators use raw differences, so the largest τ must
-    # retain ≥2 analysis windows — a single window is one difference (EDF ≈ 1)
+    # retain ≥2 analysis windows; a single window is one difference (EDF ≈ 1)
     # and is rejected by the cores. Total estimators extend each subsequence
     # (reflection / time reversal), so a single subsequence is still a valid
     # long-τ estimate (the point of the total approach); they keep the natural
@@ -143,15 +133,15 @@ functions accept a `TauMode` directly (`adev(pd, Decade)`) as shorthand.
 
 Note the name reads like seconds, but the returned values are averaging factors,
 matching the existing `m_values` convention. `kernel` is the deviation symbol
-(`:adev`, `:mdev`, …) that determines the m-max clamp; see [`_kernel_m_max`](@ref).
+(`:adev`, `:mdev`, …) that determines the m-max clamp; see `_kernel_m_max`.
 
 For `:theo1` (defined at even averaging factors only, SP1065 eq. 30) odd grid
 entries are rounded up to the next even value, deduplicated, and clamped to the
-even m-max. `:theoh` grids are plain integers — its m-values are τ-grid factors
+even m-max. `:theoh` grids are plain integers: its m-values are τ-grid factors
 (target `τ = m·τ0`) and the even-factor conversion for the Thêo1 segment
 happens inside [`theoh`](@ref).
 
-`tau_values(Octave, N, kernel)` equals [`_default_m_values`](@ref)`(N, kernel)`.
+`tau_values(Octave, N, kernel)` equals `_default_m_values``(N, kernel)`.
 """
 function tau_values(mode::TauMode, N::Int, kernel::Symbol)
     m_max = _kernel_m_max(N, kernel)
@@ -160,11 +150,6 @@ function tau_values(mode::TauMode, N::Int, kernel::Symbol)
     return ms
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/utils.jl ───────────────────────────────────────────────────────
-
-# utils.jl — Shared helpers for the stability API
 
 """
     _f64(v::AbstractVector{<:Real}) → Vector{Float64}
@@ -208,37 +193,9 @@ _phase_to_freq(data::PhaseData) = FrequencyData(diff(data.x) ./ data.tau0, data.
 """
     _default_m_values(N::Int, kernel::Symbol) → Vector{Int}
 
-Octave-spaced default averaging-factor grid `[1, 2, 4, …, 2^k]` bounded
-above by the kernel's algorithmic m-max — the largest `m` for which the
-core L-check still yields at least one window. Used by the zero-arg
-convenience methods on every public deviation API
-(`adev(pd)`, `mdev(pd)`, …) so callers can skip the `m_values` argument.
-
-Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
-
-| `kernel`                  | m_max          |
-|---------------------------|----------------|
-| `:adev`, `:pdev`          | `(N − 2) ÷ 2`  |
-| `:totdev`                 | `(N − 1) ÷ 2`  |
-| `:mdev`, `:tdev`          | `(N − 1) ÷ 3`  |
-| `:mtotdev`, `:ttotdev`    | `N ÷ 3`        |
-| `:hdev`                   | `(N − 2) ÷ 3`  |
-| `:htotdev`                | `(N − 1) ÷ 3`  |
-| `:mhdev`, `:htdev`        | `(N − 1) ÷ 4`  |
-| `:mhtotdev`               | `N ÷ 4`        |
-| `:mtie`, `:tierms`        | `N − 1`        |
-| `:theo1`                  | `2·((N − 1) ÷ 2)` (largest even ≤ N − 1) |
-| `:theoh`                  | `⌊0.75 · 2·((N − 1) ÷ 2)⌋` (τ-grid units) |
-
-The ordinary and modified estimators require ≥2 analysis windows at the
-largest τ (a single window is one raw difference, EDF ≈ 1), so their caps
-sit one step below the total family, whose subsequence extension keeps a
-single subsequence a valid long-τ estimate. (HTOTDEV's general branch runs
-on `y = diff(x)` of length `N−1`, giving `(N−1) ÷ 3`; MTOTDEV runs on phase
-directly, giving `N ÷ 3`.) `:theo1` grids are rounded to even averaging
-factors and deduplicated (see [`tau_values`](@ref)).
-
-Throws `ArgumentError` for unknown kernel symbols or `N` too short to
-admit any `m ≥ 1`.
+Octave-spaced averaging-factor grid `[1, 2, 4, …]` capped at the kernel's
+algorithmic m-max (see `_kernel_m_max`); what every zero-argument
+deviation call (`adev(pd)`, `mdev(pd)`, …) uses. Equivalent to
+`tau_values(Octave, N, kernel)`.
 """
 _default_m_values(N::Int, kernel::Symbol) = tau_values(Octave, N, kernel)

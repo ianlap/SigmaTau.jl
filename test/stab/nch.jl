@@ -1,9 +1,8 @@
 # nch.jl — N-cornered-hat noise separation tests.
 #
-# The primary contract is that `nch` reproduces the manual Gray–Allan
-# three-cornered-hat solution of examples/06_three_cornered_hat.jl on
-# the tutorial's own fixture (same seeds, same grids, same NaN policy),
-# plus exact-algebra recovery checks for the general N-clock formula
+# `nch` must reproduce a manual Gray–Allan three-cornered-hat solution on
+# a three-clock fixture (same NaN policy), plus exact-algebra recovery
+# checks for the general N-clock formula
 #   σ̂²ᵢ = (Rᵢ − S/(N−1)) / (N−2),  Rᵢ = Σ_{j≠i} s²ᵢⱼ,  S = Σ_{j<k} s²ⱼₖ.
 
 using Test
@@ -20,9 +19,8 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
 
 @testset "N-cornered hat (nch)" begin
 
-    @testset "reproduces tutorial 06's manual three-cornered hat" begin
-        # Same fixture as examples/06_three_cornered_hat.jl: three
-        # independent white-FM clocks, pairwise ADEV, manual TCH inversion.
+    @testset "reproduces the manual three-cornered hat" begin
+        # Three independent white-FM clocks, pairwise ADEV, manual TCH inversion.
         N    = 8192
         tau0 = 1.0
         m_values = unique(round.(Int, exp10.(range(0, log10(N ÷ 128); length = 12))))

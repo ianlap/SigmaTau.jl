@@ -1,13 +1,4 @@
-# types.jl — shared data records and result types.
-#
-# Merged from types/{abstract, phase_data, frequency_data, stability_result,
-# stability_suite, spectral_result}.jl. Order matters: PhaseData/FrequencyData
-# subtype AbstractTimingData, and the show methods follow their structs.
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/abstract.jl ───────────────────────────────────────────────────
-
+# Data records (PhaseData, FrequencyData) and result types.
 """
     AbstractTimingData
 
@@ -15,9 +6,6 @@ Supertype of timing data records (`PhaseData`, `FrequencyData`).
 """
 abstract type AbstractTimingData end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/phase_data.jl ─────────────────────────────────────────────────
 
 """
     PhaseData{T<:AbstractFloat}
@@ -46,9 +34,6 @@ struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── types/frequency_data.jl ─────────────────────────────────────────────
-
 """
     FrequencyData{T<:AbstractFloat}
 
@@ -75,7 +60,7 @@ struct FrequencyData{T<:AbstractFloat} <: AbstractTimingData
     end
 end
 
-# Compact one-line displays for the data records — sample count, τ₀, and the
+# Compact one-line displays for the data records: sample count, τ₀, and the
 # provenance only when it is not the "user" default. Full-vector dumps would
 # swamp the REPL for realistic record lengths.
 function Base.show(io::IO, p::PhaseData)
@@ -92,9 +77,6 @@ function Base.show(io::IO, f::FrequencyData)
     print(io, ")")
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/stability_result.jl ───────────────────────────────────────────
 
 """
     StabilityResult
@@ -156,7 +138,7 @@ Empty when the result carries no CIs.
 ci_upper(r::StabilityResult) = getfield.(r.ci, :hi)
 
 # Display rounding for the show methods below: 4 significant digits via %.4g.
-# The stored vectors keep full precision — this is presentation only.
+# The stored vectors keep full precision; this is presentation only.
 _show4g(x::Real) = @sprintf("%.4g", x)
 
 function Base.show(io::IO, r::StabilityResult)
@@ -203,9 +185,6 @@ function Base.show(io::IO, ::MIME"text/plain", r::StabilityResult)
     return
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/stability_suite.jl ────────────────────────────────────────────
 
 """
     StabilitySuite
@@ -270,9 +249,6 @@ function Base.show(io::IO, ::MIME"text/plain", s::StabilitySuite)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── types/spectral_result.jl ────────────────────────────────────────────
-
 """
     SpectralResult
 
@@ -308,9 +284,6 @@ function Base.show(io::IO, r::SpectralResult)
               ", ", r.units, ", nperseg=", r.nperseg, ")")
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/dynamic_stability_result.jl ───────────────────────────────────
 
 """
     DynamicStabilityResult

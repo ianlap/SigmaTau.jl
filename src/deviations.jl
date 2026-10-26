@@ -1,18 +1,13 @@
-# deviations.jl — public deviation API (PhaseData/FrequencyData ->
-# StabilityResult). Merged from stab/api/{allan, hadamard, total, mtie,
-# pdev}.jl. Wraps the kernels in kernels.jl and the stats in edf.jl / noise.jl.
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/allan.jl ───────────────────────────────────────────────────
-
-# api/allan.jl — User wrappers for stability calculations
+# Public deviation API: PhaseData / FrequencyData in, StabilityResult out.
+# Wraps the kernels in kernels.jl with noise identification, EDF and
+# confidence intervals from noise.jl and edf.jl.
 
 """
-$(SIGNATURES)
+    adev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Overlapping Allan deviation σ_y(τ) for a phase record, per IEEE 1139-2022 §C.2.
-EDF for the χ²-based CI uses the truncated-sum algorithm of [Greenhall & Riley 2003](@cite greenhall-2003-edf-stability).
+Overlapping Allan deviation σ_y(τ) of a phase record, per IEEE 1139-2022 §C.2.
+The EDF for the χ² confidence interval uses the truncated-sum algorithm of
+[Greenhall & Riley 2003](@cite greenhall-2003-edf-stability).
 
 `m_values` selects the analysis-interval factors (τ = m·τ₀). When
 `ci=true`, the result populates per-τ noise type, χ²-based confidence
@@ -51,12 +46,11 @@ function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 end
 
 """
-$(SIGNATURES)
+    mdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Modified Allan deviation Mod σ_y(τ) for a phase record, per IEEE 1139-2022 §C.3.
-
-Uses a phase-averaged second difference; better than `adev` at separating
-white-PM from flicker-PM noise.
+Modified Allan deviation Mod σ_y(τ) of a phase record, per IEEE 1139-2022 §C.3.
+The phase-averaged second difference separates white PM from flicker PM, which
+`adev` cannot.
 
 # Examples
 
@@ -91,13 +85,10 @@ function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 end
 
 """
-    tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    tdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Computes the Time Deviation (TDEV) for the given PhaseData.
-
-TDEV has units of seconds (it is a σ_x quantity, not σ_y), defined as
-`σ_x(τ) = (τ/√3) · σ_y,MDEV(τ)`. Confidence-interval bounds inherit
-MDEV's χ²/Gaussian limits scaled by the same `τ/√3` factor.
+Time deviation σ_x(τ) = (τ/√3) · Mod σ_y(τ), per IEEE 1139-2022 §C.4. A σ_x
+quantity in seconds. Confidence bounds are MDEV's scaled by the same factor.
 """
 function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mdev(data, m_values; ci=ci, confidence=confidence)
@@ -134,15 +125,11 @@ tdev(data::PhaseData;     kwargs...) = tdev(data, _default_m_values(length(data.
 tdev(data::FrequencyData; kwargs...) = tdev(data, _default_m_values(length(data.y), :tdev); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/hadamard.jl ────────────────────────────────────────────────
-
-# api/hadamard.jl — User wrappers for Hadamard stability calculations
-
 """
-    hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    hdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Computes the Overlapping Hadamard Deviation for the given PhaseData.
+Overlapping Hadamard deviation of a phase record, per NIST SP1065 §5.2.6. The
+third difference removes linear frequency drift.
 """
 function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -163,9 +150,11 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 end
 
 """
-    mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mhdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Computes the Modified Hadamard Deviation for the given PhaseData.
+Modified Hadamard deviation of a phase record: the phase-averaged third
+difference, drift-immune like `hdev` and able to separate white PM from
+flicker PM like `mdev`.
 """
 function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -186,14 +175,11 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
 end
 
 """
-    htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    htdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Computes the Hadamard time deviation (HTDEV) for the given `PhaseData`
-— a third-difference time deviation, related to MHDEV by
-`σ_x,HT(τ) = τ / √(10/3) · σ_y,MH(τ)`. HTDEV has units of seconds
-(it is a σ_x quantity); HTDEV is to MHDEV what TDEV is to MDEV. The
-construction is original to this package; SP1065, IEEE 1139-2022,
-and NBS-TN-1337 do not define it.
+Hadamard time deviation σ_x,HT(τ) = τ/√(10/3) · σ_y,MH(τ), the σ_x form of
+`mhdev` in seconds, as TDEV is of MDEV. The construction is original to this
+package; SP1065, IEEE 1139-2022 and NBS TN-1337 do not define it.
 """
 function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mhdev(data, m_values; ci=ci, confidence=confidence)
@@ -230,33 +216,27 @@ htdev(data::PhaseData;     kwargs...) = htdev(data, _default_m_values(length(dat
 htdev(data::FrequencyData; kwargs...) = htdev(data, _default_m_values(length(data.y), :htdev); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/total.jl ───────────────────────────────────────────────────
-
-# api/total.jl — User wrappers for Total stability calculations
-
 # Map variance-scale bias factor B to its deviation-scale unbias divisor √B,
 # treating non-positive B as NaN. Only :totvar can yield B ≤ 0 in practice
 # (its B = 1 − a·τ/T formula goes negative if a caller passes an oversized
-# τ — e.g., τ > T/a for FFM); the :mtot and :htot tables are bounded
+# τ, e.g. τ > T/a for FLFM); the :mtot and :htot tables are bounded
 # positive. Without this guard a single out-of-range τ would throw
 # DomainError from sqrt and abort the whole deviation call instead of
 # producing a NaN row for just that τ.
 _unbias_divisor(B::AbstractVector{<:Real}) = [b > 0 ? sqrt(b) : NaN for b in B]
 
 """
-    totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    totdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Computes the Total Deviation for the given PhaseData, using the canonical
-Howe 1995 / NIST SP1065 eqn 25 endpoint mean-flip extension (see `_totdev_core`).
+Total deviation of a phase record, per NIST SP1065 eq. 25 (Howe 1995), with
+the whole-record mean-flip extension.
 
 `correct_bias=true` (default) applies the SP1065 noise-type-dependent
 unbias correction `σ_unbiased = σ_raw / √B`, where `B = E[TOTVAR]/AVAR`
 is the variance-scale bias factor from [`bias_correction`](@ref). TOTVAR
-is biased low for FFM and RWFM as τ approaches T, so the correction
-increases σ at long τ. Set `correct_bias=false` to return the raw
-kernel value (Stable32 actually applies the correction by default,
-contrary to older notes — verify against the build you compare with).
+is biased low for FLFM and RWFM as τ approaches T, so the correction
+increases σ at long τ. Stable32 applies the same correction by default; `correct_bias=false`
+returns the raw kernel value, which is what allantools reports.
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -265,7 +245,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     T = (length(x) - 1) * data.tau0
     neff = _neff_counts(:totdev, length(x), m_values)
 
-    # Noise IDs needed for either path — bias correction reads α, CIs read α.
+    # Noise IDs are needed for either path: bias correction and CIs both read α.
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
@@ -282,17 +262,16 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
 end
 
 """
-    mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mtotdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Computes the Modified Total Deviation for the given PhaseData, using the
-canonical Greenhall 2003 per-window time-reverse extension (see `_mtotdev_core`).
+Modified total deviation of a phase record, per NIST SP1065 §5.2.11, with the
+per-subsegment detrend and time-reverse extension of Howe and Vernotte.
 
-`correct_bias=true` (default) applies the SP1065 Table 11 unbias
-correction `σ_unbiased = σ_raw / √B`, where `B ∈ {1.06, 1.17, 1.27,
-1.30, 1.31}` for α ∈ {2, 1, 0, -1, -2}. MTOT is biased high, so the
-correction drops σ by roughly 3 – 13 %. Pass `correct_bias=false` to
-return the raw kernel — matches Stable32 and allantools, which do not
-apply this correction.
+`correct_bias=true` (default) applies the SP1065 Table 11 correction
+`σ_unbiased = σ_raw / √B`, where `B ∈ {1.06, 1.17, 1.27, 1.30, 1.31}` for
+α ∈ {2, 1, 0, -1, -2}. MTOT is biased high, so the correction lowers σ by 3
+to 13 %. `correct_bias=false` returns the raw kernel, which is what Stable32
+and allantools report.
 """
 function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -317,20 +296,18 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 end
 
 """
-    htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    htotdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Computes the Hadamard Total Deviation for the given PhaseData, using the
-canonical Greenhall 2003 per-window time-reverse extension (see `_htotdev_core`).
+Hadamard total deviation of a phase record, per NIST SP1065 §5.2.13, with the
+per-subsegment detrend and time-reverse extension of Howe et al. 2000.
 
 `correct_bias=true` (default) applies the FCS 2001 (Howe & Tasset)
 Table I unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
 α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0), so the
-correction raises σ — substantially for divergent FM. PM noises
-(α > 0) get B = 1 (no published model). Pass
-`correct_bias=false` to return the raw kernel value (Stable32 actually
-applies the correction by default — see TOTDEV docstring for the same
-caveat).
+correction raises σ, substantially for divergent FM. PM noises (α > 0) get
+B = 1 (no published model). Stable32 applies the same correction by default; `correct_bias=false`
+returns the raw kernel value, which is what allantools reports.
 """
 function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -355,20 +332,12 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 end
 
 """
-    ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    ttotdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Time-Total Deviation. Wraps [`mtotdev`](@ref) and rescales by `τ/√3`,
-analogous to [`tdev`](@ref) wrapping [`mdev`](@ref). TTOTDEV has units
-of seconds (it is a `σ_x` quantity, not `σ_y`) and gives a
-time-deviation summary of long-τ stability with MTOTDEV's
-per-subsegment extended window — useful for telecom / time-transfer
-analyses on records too short for ordinary TDEV at the τ of interest.
-
-The `correct_bias`, `ci`, and `confidence` kwargs flow through to
-the underlying `mtotdev` call unchanged. Confidence-interval bounds
-inherit MTOTDEV's χ²/Gaussian limits scaled by the same `τ / √3` factor;
-the EDF column is reused as-is (a time rescaling does not change the
-degrees of freedom).
+Time total deviation (τ/√3) · MTOTDEV, per NIST SP1065 §5.2.12: the σ_x form of
+[`mtotdev`](@ref) in seconds, as [`tdev`](@ref) is of [`mdev`](@ref). Keyword
+arguments pass through to `mtotdev`; confidence bounds are scaled by the same
+factor and the EDF is unchanged.
 """
 function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mtotdev(data, m_values; ci=ci, correct_bias=correct_bias, confidence=confidence)
@@ -383,32 +352,28 @@ function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 end
 
 """
-    mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    mhtotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Modified Hadamard Total Deviation, using the Greenhall methodology SigmaTau
-adopts for this novel estimator (see `_mhtotdev_core`).
+Modified Hadamard total deviation of a phase record: the total (boundary-
+extended) form of [`mhdev`](@ref), using the per-subsegment detrend and
+time-reverse extension of the other total estimators. Original to this
+package.
 
 `remove_drift=true` (default) removes the record's least-squares frequency
 drift (the quadratic phase term) before the analysis, and the per-τ noise
 identification runs on the drift-removed record. Unlike MHDEV, the total
-estimator is not drift-immune: its per-window detrend removes only the local
-frequency offset, so residual deterministic drift re-enters through the
-reflected window boundaries and reads several times high at long τ. Removing
-the global least-squares drift is exact for a deterministic drift (the fit
-is a linear projection) and discards no statistical information; it is the
-same practice SP1065 prescribes before TOTVAR / MTOTVAR. Per-window drift
-removal was evaluated and rejected — both the phase-domain and
-frequency-domain variants measurably damage the statistic at the PM noise
-types (see the "MHTOTDEV bias and EDF" theory page). Pass
-`remove_drift=false` for data that is already detrended.
+estimator is not drift-immune: residual drift re-enters through the
+reflected window boundaries and reads high at long τ. Removing a
+deterministic drift discards no statistical information and is the practice
+SP1065 prescribes before any total estimator. Pass `remove_drift=false` for
+data that is already detrended.
 
 `correct_bias=true` (default) applies the Monte-Carlo-measured unbias
 correction `σ_unbiased = σ_raw / √B`, where `B = b0 + b1·(τ/T)` is the
 τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)`; the
-coefficients are measured with the default drift removal in the loop, so the
-calibration matches what this function computes. Pass `correct_bias=false`
-for the raw kernel value. EDF uses the measured `_coeff_mhtot` fit. See the
-"MHTOTDEV bias and EDF" theory page for the measurement methodology.
+coefficients were measured with the default drift removal in the loop. Pass
+`correct_bias=false` for the raw kernel value. The EDF uses the same Monte
+Carlo fit; see the "MHTOTDEV bias and EDF" page for the method.
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -468,21 +433,16 @@ mhtotdev(data::PhaseData;     kwargs...) = mhtotdev(data, _default_m_values(leng
 mhtotdev(data::FrequencyData; kwargs...) = mhtotdev(data, _default_m_values(length(data.y), :mhtotdev); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/mtie.jl ────────────────────────────────────────────────────
-
-# api/mtie.jl — User wrapper for Maximum Time Interval Error
-
 """
-$(SIGNATURES)
+    mtie(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Maximum Time Interval Error (MTIE) for a phase record, per ITU-T G.810.
+Maximum time interval error (MTIE) of a phase record, per ITU-T G.810.
 For each averaging factor `m`, returns the largest peak-to-peak phase
 excursion observed in any sliding window of `m+1` samples (spanning
 `τ = m·τ₀`).
 
 MTIE is a σ_x quantity (units of seconds), reported as a single
-deterministic envelope rather than a statistical σ — there is no
+deterministic envelope rather than a statistical σ; there is no
 published EDF / χ² confidence model for it, so `noise_type`, `ci`,
 and `edf` are returned empty even when `ci=true` (`neff` is still
 populated). `ci` and `confidence` are accepted for API uniformity with
@@ -522,15 +482,10 @@ mtie(data::PhaseData;     kwargs...) = mtie(data, _default_m_values(length(data.
 mtie(data::FrequencyData; kwargs...) = mtie(data, _default_m_values(length(data.y), :mtie); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/tierms.jl ──────────────────────────────────────────────────
-
-# api/tierms.jl — User wrapper for RMS Time Interval Error
-
 """
-$(SIGNATURES)
+    tierms(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-RMS Time Interval Error (TIE rms) for a phase record, per NIST SP1065
+RMS time interval error (TIE rms) of a phase record, per NIST SP1065
 §5.2.18 eq. 37 [riley-2008-sp1065](@cite). For each averaging factor `m`,
 returns the root-mean-square phase change over all `N − m` spans of
 `τ = m·τ₀`:
@@ -586,15 +541,10 @@ tierms(data::PhaseData;     kwargs...) = tierms(data, _default_m_values(length(d
 tierms(data::FrequencyData; kwargs...) = tierms(data, _default_m_values(length(data.y), :tierms); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/pdev.jl ────────────────────────────────────────────────────
-
-# api/pdev.jl — User wrapper for parabolic deviation
-
 """
-$(SIGNATURES)
+    pdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Parabolic deviation σ_PDEV(τ) for a phase record, per Vernotte–Lenczner–
+Parabolic deviation σ_PDEV(τ) of a phase record, per Vernotte–Lenczner–
 Bourgeois–Rubiola (IEEE T-UFFC 63(4), 2016) and Vernotte–Chen–Rubiola 2020. PDEV
 is built from a least-squares parabolic fit and is the recommended estimator when
 evaluating the uncertainty of an ω-averaged frequency measurement. At `τ = τ₀`
@@ -652,15 +602,10 @@ pdev(data::PhaseData;     kwargs...) = pdev(data, _default_m_values(length(data.
 pdev(data::FrequencyData; kwargs...) = pdev(data, _default_m_values(length(data.y), :pdev); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/theo.jl ────────────────────────────────────────────────────
-
-# api/theo.jl — User wrappers for Thêo1 / ThêoBR / ThêoH
-
 """
-    theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    theo1(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
-Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15 eq. 30 — a
+Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15 eq. 30, a
 two-sample variance that mimics the Allan variance while extending the
 usable averaging-time range to 75 % of the record span (see
 `_theo1_core` for the kernel).
@@ -675,7 +620,7 @@ Conventions (SP1065 / Stable32):
   `τ = 0.75·m·τ0` (SP1065 §5.2.15), as plotted by Stable32. allantools'
   `theo1` computes the same deviation values (eq. 30 with the
   Howe & Peppler 0.75 normalization, which SP1065's printed eq. 30
-  omits — its own Table 2 requires it) but reports them at `τ = m·τ0`;
+  omits, although its own Table 2 requires it) but reports them at `τ = m·τ0`;
   SigmaTau resolves that definitional offset in favor of
   SP1065/Stable32, so `r.dev` matches allantools at the same `m` while
   `r.tau` is allantools' τ scaled by 0.75.
@@ -690,7 +635,7 @@ Conventions (SP1065 / Stable32):
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
 formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
-and bias-removed forms. The kernel's double sum is O(N·m) per τ — far
+and bias-removed forms. The kernel's double sum is O(N·m) per τ, far
 costlier than the O(N) Allan kernels at large m.
 """
 function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
@@ -715,7 +660,7 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
 end
 
 """
-    theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    theoh(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 ThêoH ("hybrid-ThêoBR") per NIST SP1065 (Riley 2008) §5.2.16 eq. 34: a
 composite σ_y(τ) curve that is overlapping ADEV at short averaging
@@ -724,12 +669,12 @@ single continuous stability plot from `τ0` out to 75 % of the record
 span.
 
 `m_values` are **τ-grid factors** (target `τ = m·τ0`, any positive
-integers — unlike [`theo1`](@ref) they need not be even). Each point is
+integers; unlike [`theo1`](@ref) they need not be even). Each point is
 assigned per eq. 34's crossover `k = 20 %` of the record span
 `T = (N−1)·τ0`:
 
-- `m·τ0 ≤ k` — overlapping ADEV at factor `m`; reported at `τ = m·τ0`.
-- `m·τ0 > k` — ThêoBR at the even Thêo1 factor nearest `4m/3`
+- `m·τ0 ≤ k`: overlapping ADEV at factor `m`; reported at `τ = m·τ0`.
+- `m·τ0 > k`: ThêoBR at the even Thêo1 factor nearest `4m/3`
   (exact whenever `m` is divisible by 3); reported at its true
   effective `τ = 0.75·m_theo·τ0`.
 
@@ -739,7 +684,7 @@ even-factor rounding step. The ThêoBR scaling needs `N ≥ 19`; shorter
 records yield NaN on the Thêo1 segment. CIs use the ADEV
 (Greenhall–Riley) EDF on the ADEV segment and the SP1065 Table 3 Thêo1
 EDF on the Thêo1 segment. ThêoBR/ThêoH always carry the eq. 33 bias
-removal — there is no `correct_bias` switch (raw Thêo1 is available via
+removal; there is no `correct_bias` switch (raw Thêo1 is available via
 `theo1(...; correct_bias=false)`).
 """
 function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
@@ -817,15 +762,11 @@ theoh(data::PhaseData;     kwargs...) = theoh(data, _default_m_values(length(dat
 theoh(data::FrequencyData; kwargs...) = theoh(data, _default_m_values(length(data.y), :theoh); kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/dynamic.jl ─────────────────────────────────────────────────
-
-# api/dynamic.jl — Dynamic (time-resolved) deviations: DADEV / DHDEV.
-#
+# Dynamic (time-resolved) deviations.
 # Both slide an analysis window of `window` phase samples across the record
 # and evaluate an existing overlapping kernel (`_adev_core` / `_hdev_core`)
 # inside each window, producing the σ_y(t, τ) map of Galleani & Tavella 2009
-# as applied by McKelvy et al. 2025. No new kernel math is introduced — one
+# as applied by McKelvy et al. 2025. No new kernel math is introduced: one
 # window buffer is allocated, each window is copied into it, and the core is
 # called per window. Simple and provably consistent with the static
 # estimators; the cost is (number of windows) × (one static-kernel call on
@@ -863,7 +804,7 @@ end
 """
     dadev(data, m_values; window, step=window÷2) → DynamicStabilityResult
 
-Dynamic Allan deviation σ_y(t, τ) — a time-resolved stability map
+Dynamic Allan deviation σ_y(t, τ), a time-resolved stability map
 (Galleani & Tavella 2009; McKelvy et al. 2025
 [mckelvy-2025-telemetrystability](@cite)). An analysis window `W(t_c)` of
 `window` phase samples slides across the record in increments of `step`
@@ -883,7 +824,7 @@ The result's rows are windows (centered at the times in `t`), columns are τ.
 
 No confidence intervals are produced: the literature gives no EDF model for
 the time-resolved map (each window's value alone is an ordinary ADEV with
-`window` samples — use [`adev`](@ref) on a slice when a CI is needed).
+`window` samples; use [`adev`](@ref) on a slice when a CI is needed).
 Each window is evaluated by a full `_adev_core` call on a copied buffer, so
 runtime scales with the window count: halving `step` doubles the cost.
 """
@@ -897,7 +838,7 @@ end
 """
     dhdev(data, m_values; window, step=window÷2) → DynamicStabilityResult
 
-Dynamic Hadamard deviation — the same sliding-window construction as
+Dynamic Hadamard deviation: the same sliding-window construction as
 [`dadev`](@ref) with the overlapping third-difference (Hadamard) kernel
 inside each window, so the map rejects linear frequency drift *within each
 window* (a drifting clock shows its noise floor, not its drift ramp).
@@ -905,7 +846,7 @@ Entries the window cannot support (`window − 3m < 2`) yield `NaN` columns.
 Pass a [`TauMode`](@ref) for a grid clamped to the window length
 (`tau_values(mode, window, :hdev)`).
 
-Like `dadev`, no confidence intervals are produced — there is no published
+Like `dadev`, no confidence intervals are produced; there is no published
 EDF model for the time-resolved map.
 """
 function dhdev(data::PhaseData, m_values::Vector{Int};

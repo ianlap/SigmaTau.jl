@@ -1,4 +1,4 @@
-# io/outliers.jl — Stable32-style MAD outlier detection and removal.
+# Stable32-style median-absolute-deviation outlier detection and removal.
 #
 # The check function in Stable32 (NIST SP1065 §10.10, "Check" data function)
 # flags frequency samples whose absolute deviation from the median exceeds
@@ -24,7 +24,7 @@ is Stable32's default deglitching threshold.
 For `FrequencyData` the test runs directly on the samples `y`. For
 `PhaseData` it runs on the first differences `Δᵢ = x[i+1] − x[i]` (a phase
 glitch appears as a step in frequency), and each flagged difference `Δᵢ`
-flags **phase sample `i+1`** — the sample where the step lands. An isolated
+flags **phase sample `i+1`**, the sample where the step lands. An isolated
 phase glitch at `x[j]` therefore produces two flagged differences (`Δⱼ₋₁` up,
 `Δⱼ` down) and flags samples `j` and `j+1`.
 

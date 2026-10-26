@@ -1,7 +1,7 @@
-# io/save.jl — `save`: the canonical writer for timing data, results, and
-# suites. Timing records go out as commented two-column text that
-# `read_phase` / `read_frequency` round-trip with no keywords; results and
-# suites delegate to the existing `save_result` / `save_suite` writers.
+# `save`: one writer for timing data, results and suites. Timing records go
+# out as commented two-column text that `read_phase` / `read_frequency`
+# round-trip with no keywords; results and suites delegate to `save_result`
+# / `save_suite`.
 
 """
     save(path::AbstractString, data::PhaseData)      → path
@@ -12,8 +12,8 @@
 Write a SigmaTau object to a plain text file at `path`. Returns `path` so the
 call can be chained.
 
-For `PhaseData` / `FrequencyData` the file is two delimited columns — sample
-time `(i-1)·τ₀` in seconds and the sample value — preceded by a comment
+For `PhaseData` / `FrequencyData` the file is two delimited columns, sample
+time `(i-1)·τ₀` in seconds and the sample value, preceded by a comment
 header recording the provenance:
 
 ```
@@ -31,7 +31,7 @@ originating file path for records that came from [`read_phase`](@ref) /
 the readers: `,` for `.csv`, tab otherwise. [`read_phase`](@ref) /
 [`read_frequency`](@ref) skip the comment header automatically and pick up
 `# tau0:` when no `tau0` keyword is given, so `read_phase(save(path, pd))`
-reproduces `pd` exactly — and any external tool can consume the file as a
+reproduces `pd` exactly, and any external tool can consume the file as a
 plain two-column table. Typical use: generate noise with [`noise_gen`](@ref)
 and hand it to software outside SigmaTau.
 

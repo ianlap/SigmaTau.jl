@@ -1,4 +1,4 @@
-# streaming.jl — real-time streaming stability accumulators.
+# Real-time streaming stability accumulators.
 #
 # Implements the Dobrogowski–Kasznia real-time computation scheme (2007 IEEE
 # Frequency Control Symposium): per averaging factor m, keep a running sum of
@@ -12,7 +12,7 @@
 #
 # Correctness contract: at any sample count, `snapshot(acc).dev` reproduces
 # the batch kernels `_adev_core` / `_mdev_core` / `_hdev_core` /
-# `_mhdev_core` on the samples pushed so far — same windows, same
+# `_mhdev_core` on the samples pushed so far: same windows, same
 # normalization, same NaN guards. The streaming equivalence testset in
 # test/stab/streaming.jl locks this in at rtol 1e-10.
 
@@ -28,7 +28,7 @@ const _STREAMING_LAG = Dict{Symbol,Int}(:adev => 2, :mdev => 3, :hdev => 3, :mhd
 Real-time streaming accumulator for the overlapping difference-family
 deviations: feed phase samples one at a time with `push!` (or in chunks
 with `append!`) and read off the running deviation estimate at any moment
-with [`snapshot`](@ref) — without storing the record or recomputing
+with [`snapshot`](@ref), without storing the record or recomputing
 anything.
 
 `dev` selects the estimator: `:adev`, `:mdev`, `:hdev`, or `:mhdev`. `tau0`
@@ -37,24 +37,11 @@ is the sample interval in seconds and `m_values` the averaging factors
 estimate equals the corresponding batch call on the samples seen so far
 (`adev(PhaseData(x[1:k], tau0), m_values; ci=false)`, etc.).
 
-Implements the real-time computation scheme of Dobrogowski & Kasznia
-[dobrogowski-2007-realtime-adev](@cite). For `:adev`/`:hdev` each new
-sample updates a per-m running sum of squared second/third differences
-(their eqs. 6–9); for the modified family `:mdev`/`:mhdev` a per-m sliding
-inner sum ``S_i(m)`` is maintained alongside the cumulative sum of its
-squares (their eqs. 10–14, generalized to third differences for `:mhdev`).
-Every update is O(1) per new sample per m — the per-sample cost is
-O(`length(m_values)`) regardless of how long the stream runs.
-
-Memory is bounded: only a ring buffer of the most recent samples is held,
-sized to the selected kernel's deepest lag — `2·maximum(m_values) + 1`
-samples for `:adev`, `3·maximum(m_values) + 1` for `:mdev`/`:hdev`, and
-`4·maximum(m_values) + 1` for `:mhdev` (the deepest lag any kernel needs).
-
-The total-family estimators (`totdev`, `mtotdev`, `ttotdev`, `htotdev`,
-`mhtotdev`) and the Thêo family cannot stream: their extension/sampling
-schemes re-read the *whole* record on every update, so they have no O(1)
-per-sample form.
+Implements the running-sum scheme of Dobrogowski & Kasznia
+[dobrogowski-2007-realtime-adev](@cite), generalized to third differences
+for the Hadamard pair. Each sample costs O(`length(m_values)`), and memory
+is a ring buffer of at most `4·maximum(m_values) + 1` samples. The total
+and Thêo families cannot stream: they re-read the whole record.
 
 # Example
 
@@ -144,7 +131,7 @@ function Base.push!(acc::StreamingStability, x_next::Real)
         for (k, m) in enumerate(ms)
             if t > 3m
                 # Eq. 12 slide: drop the oldest second difference of the
-                # window, pick up the newest — a single third difference.
+                # window, pick up the newest: a single third difference.
                 @inbounds inner[k] += _ring_get(buf, cap, t) -
                     3.0 * _ring_get(buf, cap, t - m) +
                     3.0 * _ring_get(buf, cap, t - 2m) -
@@ -193,7 +180,7 @@ end
 """
     append!(acc::StreamingStability, xs::AbstractVector{<:Real}) → acc
 
-Feed a chunk of phase samples (seconds), in order — exactly equivalent to
+Feed a chunk of phase samples (seconds), in order; equivalent to
 `push!`-ing them one at a time.
 """
 function Base.append!(acc::StreamingStability, xs::AbstractVector{<:Real})
@@ -210,9 +197,9 @@ The deviation estimate over all samples streamed so far, as a plain
 [`StabilityResult`](@ref). `dev` matches the batch kernel on the same record
 at every m (NaN where the batch kernel has fewer than 2 analysis windows);
 `neff` carries the current window counts (0 at NaN points). The
-`ci`/`edf`/`noise_type` fields are empty — on-demand EDF/CI for streaming
-accumulators is future work; for confidence intervals run the batch API on
-the full record.
+`ci`/`edf`/`noise_type` fields are empty (on-demand EDF/CI for streaming
+accumulators is not implemented); for confidence intervals run the batch API
+on the full record.
 """
 function snapshot(acc::StreamingStability)
     ms = acc.m_values

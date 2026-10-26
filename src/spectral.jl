@@ -1,27 +1,14 @@
-# spectral.jl — Welch PSD core and the public Sy / Sx / L estimators.
-#
-# Merged from stab/spectral.jl (the _welch_psd core) and stab/api/spectral.jl
-# (the PhaseData/FrequencyData entry points). Core first, API after.
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/spectral.jl (Welch core) ───────────────────────────────────────
-
-# stab/spectral.jl — Welch power-spectral-density core.
-#
-# Pure `Vector{Float64}` → arrays kernel shared by the public `Sy` / `Sx` / `L`
-# API in `stab/api/spectral.jl`. One-sided "density" normalization (matching
-# scipy.signal.welch with `scaling="density", return_onesided=True`) so that
-# the integral of the returned PSD over [0, fs/2] recovers the variance of the
-# (per-segment mean-removed) input. Uses the real FFT from FFTW (imported once
-# in `SigmaTau.jl`).
+# Welch PSD core and the public `Sy` / `Sx` / `L` spectral estimators.
+# One-sided "density" normalization (as scipy.signal.welch with
+# `scaling="density", return_onesided=True`), so the integral of the PSD over
+# [0, fs/2] recovers the variance of the per-segment mean-removed input.
 
 """
     _window(kind::Symbol, n::Int) → Vector{Float64}
 
 Length-`n` analysis window. Supports `:hann`, `:hamming`, and `:rectangular`
-(the no-op boxcar). Periodic ("DFT-even") convention — the `n` in the cosine
-denominator is `n`, not `n-1` — which is the correct form for spectral
+(the no-op boxcar). Periodic ("DFT-even") convention, with `n` rather than
+`n-1` in the cosine denominator, which is the correct form for spectral
 estimation (avoids the half-sample bias of the symmetric window).
 """
 function _window(kind::Symbol, n::Int)
@@ -119,14 +106,8 @@ more segments (lower variance).
 """
 _default_nperseg(N::Int) = min(N, 256)
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/api/spectral.jl (public API) ───────────────────────────────────
-
-# stab/api/spectral.jl — public spectral-density entry points.
-#
-# `Sy` / `Sx` / `L` take `PhaseData` / `FrequencyData` and return a
-# `SpectralResult`, wrapping the `_welch_psd` core in `stab/spectral.jl`.
+# Public API: `Sy` / `Sx` / `L` take `PhaseData` / `FrequencyData` and return a
+# `SpectralResult` wrapping the `_welch_psd` core.
 # Reference: IEEE Std 1139-2022 §3.3–3.5; NIST SP1065 (Riley & Howe 2008).
 
 # Resolve Welch parameters from explicit kwargs, filling defaults from the

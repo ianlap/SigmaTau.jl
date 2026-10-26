@@ -1,39 +1,18 @@
 # Examples
 
-Each `.jl` file in this directory is a runnable Julia script and the source for
-a docs page on the published site. The examples are written in
-[Literate.jl](https://github.com/fredrikekre/Literate.jl) format —
-plain Julia code, with prose comments lifted into Markdown headings
-when the docs build.
+Runnable scripts in [Literate.jl](https://github.com/fredrikekre/Literate.jl)
+format. The docs build renders each one into a tutorial page.
 
-| Script                              | Topic                                                                |
-|-------------------------------------|----------------------------------------------------------------------|
-| `00_julia_for_metrologists.jl`      | Stable32-to-Julia primer: install, load, plot, save.                |
-| `01_phase_data.jl`                  | Build a `PhaseData` / `FrequencyData` record; phase ↔ frequency.    |
-| `02_compute_adev.jl`                | Run `adev`; explore `StabilityResult` (CI, EDF, noise type).         |
-| `03_drifting_clock_hadamard.jl`     | Characterize a drifting clock with `hdev`/`mhdev`/`htdev`/`mhtotdev`. |
-| `04_reading_your_data.jl`           | Import `.DAT` files, counter CSVs; gaps, detrending, exporting results. |
-| `06_three_cornered_hat.jl`          | Recover individual clock σ_y(τ) from three pairwise differences.     |
-
-## Running
-
-From the repo root:
+| Script | Topic |
+|---|---|
+| `01_drifting_clock_hadamard.jl` | Drift on a rubidium-class record; `hdev`, `mhdev`, `htdev`, and `mhtotdev` on a short record. |
+| `02_reading_your_data.jl` | `.DAT` files and counter CSVs; gaps, outliers, detrending; saving results. |
+| `03_three_cornered_hat.jl` | Separating individual clock noise from pairwise comparisons; `nch`. |
 
 ```bash
-julia --project=examples examples/01_phase_data.jl
+julia --project=examples -e 'using Pkg; Pkg.instantiate()'   # first run only
+julia --project=examples examples/01_drifting_clock_hadamard.jl
 ```
 
-`examples/Project.toml` is the environment that carries `Plots` + `PGFPlotsX`
-(the package's runtime `Project.toml` deliberately doesn't depend on
-either; they're only needed for visualisation). On the first run,
-`julia --project=examples -e 'using Pkg; Pkg.instantiate()'` will
-resolve and download dependencies.
-A clean checkout under `--project=.` would fail with
-`Package Plots not found` — use `--project=examples`.
-
-## Docs build
-
-`docs/make.jl` walks this directory and runs `Literate.markdown` on
-each `.jl` file, dropping the resulting `.md` into
-`docs/src/tutorials/`. The generated pages are gitignored — the
-`.jl` files are the single source of truth.
+`examples/Project.toml` adds `Plots`; the package itself has no plotting
+dependency.

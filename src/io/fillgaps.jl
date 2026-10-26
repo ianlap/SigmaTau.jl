@@ -1,5 +1,5 @@
-# io/fillgaps.jl — Howe & Schlossberger gap imputation that preserves the
-# noise character (and AVAR shape) of the surrounding data.
+# Howe and Schlossberger gap imputation, which preserves the noise character
+# (and AVAR shape) of the surrounding data.
 #
 # Reference: D. A. Howe and L. Schlossberger,
 # "Characterizing Frequency Stability Measurements having Multiple Data Gaps",
@@ -17,7 +17,7 @@
 Howe's symmetric reflect-and-FFT-shape filter. `x` is padded as
 `[reverse(x); x; reverse(x)]`, multiplied in the frequency domain by the
 even-symmetric mask `exp(-|k|/N)`, then the central third is returned.
-Used both for synthesising fill points and as a smoothing pass on existing
+Used both for synthesizing fill points and as a smoothing pass on existing
 data so the linear ramp matches a low-passed endpoint instead of a noisy
 single sample.
 """
@@ -42,7 +42,7 @@ function _howe_filter(x::AbstractVector{<:Real})
             filt[N - k] = filt[k + 1]
         end
     else
-        # odd: the centre bin gets filt[half] (k=half-1+1) repeated, then mirror.
+        # odd: the center bin gets filt[half] (k=half-1+1) repeated, then mirror.
         @inbounds filt[half + 1] = filt[half]
         @inbounds for k in 0:half-1
             filt[N - k] = filt[k + 1]
@@ -154,11 +154,11 @@ end
 
 # --- per-gap point selection ----------------------------------------------
 # Returns one of:
-#   :left, view-into-x           — sizegap points to the left of the gap
-#   :right, view-into-x          — sizegap points to the right
-#   :both, (left_view, right_view) — half-sized chunks from each side
-#   :none, nothing                — couldn't fill (caller advances/retreats)
-#   :done, nothing                — globally unfillable, caller bails out
+#   :left, view-into-x:            sizegap points to the left of the gap
+#   :right, view-into-x:           sizegap points to the right
+#   :both, (left_view, right_view): half-sized chunks from each side
+#   :none, nothing:                 cannot fill (caller advances/retreats)
+#   :done, nothing:                 globally unfillable, caller stops
 function _check_right(x, gaps, curgap, sizegap, gap_num, gap_total)
     rightlen = length(x) - curgap[2]
     if rightlen >= sizegap
@@ -366,11 +366,10 @@ function _make_equispaced(t::AbstractVector{<:Real}, x::AbstractVector{<:Real})
     length(t) >= 2 || throw(ArgumentError("_make_equispaced: need at least 2 samples"))
     dt = minimum(diff(t))
     dt > 0 || throw(ArgumentError("_make_equispaced: time vector is not strictly increasing"))
-    # Size the grid to the same rounding scheme used to place samples below,
-    # so the last sample's index never lands past the grid end. A plain
-    # `t[1]:dt:t[end]` truncates when the span isn't an exact multiple of `dt`,
-    # which previously let `idx` overrun `xfilled` (an out-of-bounds write, and
-    # a hard crash under `@inbounds`).
+    # Size the grid with the same rounding used to place samples below, so
+    # the last sample's index never lands past the grid end; a plain
+    # `t[1]:dt:t[end]` truncates when the span is not an exact multiple of
+    # `dt` and would let `idx` overrun `xfilled`.
     n = round(Int, (t[end] - t[1]) / dt) + 1
     tfilled = collect(range(t[1]; step=dt, length=n))
     xfilled = fill(NaN, n)
@@ -389,7 +388,7 @@ Impute `NaN` samples using Howe & Schlossberger's reflect-and-FFT-filter
 algorithm, which preserves the local noise character and the AVAR/MDEV
 curves of the surrounding data. Returns a new `PhaseData` /
 `FrequencyData` with the same `tau0`. The input is treated as already
-equispaced — for raw `(t, x)` tables with irregular sampling, use
+equispaced; for raw `(t, x)` tables with irregular sampling, use
 [`read_phase`](@ref) with `fillgaps=true`.
 
 Single-sample gaps are filled with the mean of their neighbours; multi-sample
