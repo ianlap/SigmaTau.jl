@@ -46,8 +46,9 @@ const HELP_SECTIONS = [
      "fill in and the status line at the bottom reports what was computed.\n" *
      "4. Export figure… writes the current page as PNG, PDF or SVG. Export table… writes the suite " *
      "as a tab-separated file. Export record… writes the preprocessed record as text.\n" *
-     "Keyboard: Enter in a field runs the analysis; fields are selected with the mouse (no Tab order). " *
-     "Start with --fontsize=14 or 16 for larger text."),
+     "Keyboard: Tab and Shift+Tab move between the fields of a page, Enter in a field or F5 runs the " *
+     "analysis, Page Up and Page Down switch pages, F1 opens this page. Start with --fontsize=14 or 16 " *
+     "for larger text."),
     ("Deviations",
      "Frequency deviations are dimensionless; time deviations (tdev, htdev, ttotdev, mtie, tierms) are in " *
      "seconds and plot on their own axes. Hadamard estimators remove linear frequency drift; modified " *
@@ -645,6 +646,33 @@ function build(; size=(1500, 940), fontsize=12)
     end
 
     on(run_btn.clicks) do _; run(); end
+    # Keyboard: Tab / Shift+Tab move between the fields of the current page,
+    # F5 runs, Page Up / Page Down switch pages, F1 opens Help.
+    page_fields = Dict("Record" => [path_box, tau0_box, time_col, value_col, header, seed_box],
+                       "Spectrum" => [carrier_box])
+    on(events(fig).keyboardbutton; priority=100) do ev
+        ev.action == Keyboard.press || return Consume(false)
+        page = page_menu.selection[]
+        if ev.key == Keyboard.tab
+            fields = get(page_fields, page, Textbox[])
+            isempty(fields) && return Consume(true)
+            i = findfirst(tb -> tb.focused[], fields)
+            back = ispressed(fig, Keyboard.left_shift | Keyboard.right_shift)
+            nxt = i === nothing ? (back ? length(fields) : 1) : mod1(i + (back ? -1 : 1), length(fields))
+            foreach(Makie.defocus!, fields)
+            Makie.focus!(fields[nxt])
+            return Consume(true)
+        elseif ev.key == Keyboard.f5
+            run(); return Consume(true)
+        elseif ev.key == Keyboard.f1
+            page_menu.i_selected = findfirst(==("Help"), PAGES); return Consume(true)
+        elseif ev.key in (Keyboard.page_down, Keyboard.page_up)
+            step = ev.key == Keyboard.page_down ? 1 : -1
+            page_menu.i_selected = mod1(something(page_menu.i_selected[], 1) + step, length(PAGES))
+            return Consume(true)
+        end
+        return Consume(false)
+    end
     on(load_btn.clicks) do _; reload(true); end
     on(synth_btn.clicks) do _; reload(false); end
     for tb in (tau0_box, time_col, value_col, header, seed_box, carrier_box)
