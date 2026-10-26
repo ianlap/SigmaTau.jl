@@ -262,6 +262,9 @@ function explorer_app()
 
         # Open with a synthetic record analysed, like the window.
         load_data(false); run()
+        # Bonito owns the <html> element; declare the document language for
+        # assistive technology (axe-core html-has-lang).
+        evaljs(session, js"document.documentElement.lang = 'en';")
 
         controls = DOM.div(
             DOM.fieldset(DOM.legend("Deviations"), dev_grid,
