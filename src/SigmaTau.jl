@@ -59,9 +59,8 @@ export DEFAULT_CONFIDENCE
 export TauMode, AllTaus, Octave, HalfOctave, QuarterOctave, Decade, HalfDecade
 export tau_values
 
-# Internal deviation kernels (`_*_core`) are intentionally NOT exported — they
-# are reachable as `SigmaTau._adev_core` etc. for power users, but the leading
-# underscore marks them unsupported and they are kept out of the bare namespace.
+# The deviation kernels (`_*_core`) are not exported. They are reachable as
+# `SigmaTau._adev_core` etc.; the leading underscore marks them unsupported.
 
 export identify_noise, calculate_edf, confidence_intervals, bias_correction
 

@@ -1,4 +1,4 @@
-# io/results.jl — Save/load StabilityResult and StabilitySuite as
+# Save and load StabilityResult and StabilitySuite as
 # tab-separated text (stdlib only).
 
 const _IO_VERSION = "2"
@@ -70,8 +70,7 @@ columns, written as `""` / `NaN` (along with `noise_type` and `edf`) when
 Returns `path` so the call can be chained. For a whole [`stability`](@ref)
 session (multiple deviations + metadata) use [`save_suite`](@ref).
 
-[`save`](@ref) is the canonical generic entry point — `save(path, r)`
-delegates here, and this name remains as an alias.
+[`save`](@ref) is the generic entry point; `save(path, r)` delegates here.
 
 # Examples
 
@@ -104,7 +103,7 @@ reconstructed; the on-disk `ci_lower` / `ci_upper` columns zip back into the
 `ci` tuple vector. When `calc_ci=false`, `noise_type`, `ci`, and `edf` are
 returned as empty vectors, matching the standard deviation API contract.
 Files written before the `neff` column existed load with `neff` filled with
-zeros. Files written by [`save_suite`](@ref) are rejected — use
+zeros. Files written by [`save_suite`](@ref) are rejected; use
 [`load_suite`](@ref) for those.
 
 See also [`save_result`](@ref).
@@ -112,7 +111,7 @@ See also [`save_result`](@ref).
 function load_result(path::AbstractString)
     lines = readlines(path)
     (!isempty(lines) && occursin("StabilitySuite", lines[1])) &&
-        error("load_result: \"$path\" is a StabilitySuite file — use `load_suite` instead.")
+        error("load_result: \"$path\" is a StabilitySuite file; use `load_suite` instead.")
 
     deviation_type = :unknown
     has_ci         = true   # default: assume CI present if header is absent (v1 compat)
@@ -144,8 +143,7 @@ mode, and the deviation set; each result then follows as a `# --- result <sym>
 ---` block reusing the same seven-column table as [`save_result`](@ref).
 Returns `path`.
 
-[`save`](@ref) is the canonical generic entry point — `save(path, suite)`
-delegates here, and this name remains as an alias.
+[`save`](@ref) is the generic entry point; `save(path, suite)` delegates here.
 """
 function save_suite(path::AbstractString, suite::StabilitySuite; source_file::AbstractString="")
     open(path, "w") do io
@@ -173,12 +171,12 @@ end
 Read a `StabilitySuite` previously written by [`save_suite`](@ref) (format v2),
 reconstructing every result block and the session metadata (`data_kind`, `tau0`,
 `n`, `confidence`, `tau_mode`). Files written by [`save_result`](@ref) are
-rejected — use [`load_result`](@ref) for those.
+rejected; use [`load_result`](@ref) for those.
 """
 function load_suite(path::AbstractString)
     lines = readlines(path)
     (!isempty(lines) && occursin("StabilitySuite", lines[1])) ||
-        error("load_suite: \"$path\" is not a StabilitySuite file — use `load_result` for single results.")
+        error("load_suite: \"$path\" is not a StabilitySuite file; use `load_result` for single results.")
 
     meta       = Dict{String,String}()
     delim_idxs = Int[]

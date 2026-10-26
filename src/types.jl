@@ -1,5 +1,4 @@
-
-
+# Data records (PhaseData, FrequencyData) and result types.
 """
     AbstractTimingData
 
@@ -61,7 +60,7 @@ struct FrequencyData{T<:AbstractFloat} <: AbstractTimingData
     end
 end
 
-# Compact one-line displays for the data records — sample count, τ₀, and the
+# Compact one-line displays for the data records: sample count, τ₀, and the
 # provenance only when it is not the "user" default. Full-vector dumps would
 # swamp the REPL for realistic record lengths.
 function Base.show(io::IO, p::PhaseData)
@@ -139,7 +138,7 @@ Empty when the result carries no CIs.
 ci_upper(r::StabilityResult) = getfield.(r.ci, :hi)
 
 # Display rounding for the show methods below: 4 significant digits via %.4g.
-# The stored vectors keep full precision — this is presentation only.
+# The stored vectors keep full precision; this is presentation only.
 _show4g(x::Real) = @sprintf("%.4g", x)
 
 function Base.show(io::IO, r::StabilityResult)

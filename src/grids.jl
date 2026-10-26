@@ -1,6 +1,4 @@
-
-
-
+# Averaging-factor grids (TauMode, tau_values) and phase/frequency conversion.
 """
     TauMode
 
@@ -50,7 +48,7 @@ Per-kernel m-max (derived from the `L`/`Ne` guard in each `_*_core`):
 | `:theoh`                  | `⌊0.75 · 2·((N − 1) ÷ 2)⌋` (τ-grid units) |
 
 The ordinary and modified estimators require ≥2 analysis windows at the largest
-τ — a single window is one raw difference (EDF ≈ 1) — so their caps sit one step
+τ (a single window is one raw difference, EDF ≈ 1), so their caps sit one step
 below the total family, whose subsequence extension keeps a single subsequence a
 valid long-τ estimate. (HTOTDEV's general branch runs on `y = diff(x)` of length
 `N−1`, giving `(N−1) ÷ 3`; MTOTDEV runs on phase directly, giving `N ÷ 3`.)
@@ -62,7 +60,7 @@ any `m ≥ 1`.
 """
 function _kernel_m_max(N::Int, kernel::Symbol)
     # Ordinary/modified estimators use raw differences, so the largest τ must
-    # retain ≥2 analysis windows — a single window is one difference (EDF ≈ 1)
+    # retain ≥2 analysis windows; a single window is one difference (EDF ≈ 1)
     # and is rejected by the cores. Total estimators extend each subsequence
     # (reflection / time reversal), so a single subsequence is still a valid
     # long-τ estimate (the point of the total approach); they keep the natural
@@ -139,7 +137,7 @@ matching the existing `m_values` convention. `kernel` is the deviation symbol
 
 For `:theo1` (defined at even averaging factors only, SP1065 eq. 30) odd grid
 entries are rounded up to the next even value, deduplicated, and clamped to the
-even m-max. `:theoh` grids are plain integers — its m-values are τ-grid factors
+even m-max. `:theoh` grids are plain integers: its m-values are τ-grid factors
 (target `τ = m·τ0`) and the even-factor conversion for the Thêo1 segment
 happens inside [`theoh`](@ref).
 

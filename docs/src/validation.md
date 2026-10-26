@@ -43,7 +43,7 @@ Default settings throughout; the total-family tables additionally show
 | HTOTDEV | ≤ 0.003 % at 11 of 12 τ¹ | ≤ 4.4e-15 | ≤ 0.1 % at 9 of 12 τ¹ ² |
 
 ¹ The single recurring residual is a noise-identification convention, not
-a numerical disagreement — see below.
+a numerical disagreement; see below.
 ² At the two flicker-PM τ (32 s, 64 s) the bounds differ by up to 0.8 %
 (TOTDEV) / 1.1 % (HTOTDEV): the published TOTVAR/HTOT EDF tables stop at
 α = 0, and the two programs substitute different EDF models above it.
@@ -53,22 +53,22 @@ longest τ.
 
 Three per-estimator facts behind those rows:
 
-- **TOTDEV** — both programs apply the Howe/Walter `B = 1 − a·τ/T`
+- **TOTDEV**: both programs apply the Howe/Walter `B = 1 − a·τ/T`
   correction for FLFM/RWFM. SigmaTau's default (`correct_bias=true`)
   matches Stable32's σ to ≤ 0.005 % at every τ including the FLFM row at
   τ = 512 s; `correct_bias=false` reproduces allantools' raw SP1065
   eq. 25 kernel to ≤ 2.8e-15.
-- **HTOTDEV** — Stable32 *applies* the Howe 2005 bias correction by
+- **HTOTDEV**: Stable32 *applies* the Howe 2005 bias correction by
   default (the factors are exactly `1/√(1+a)`), and so does SigmaTau:
   `correct_bias=true` (the default) matches Stable32 to ≤ 0.003 % at
   every matching-α τ. `correct_bias=false` reproduces allantools' raw
   kernel to ≤ 4.4e-15.
-- **MTOTDEV** — here the two programs deliberately report different
+- **MTOTDEV**: here the two programs deliberately report different
   statistics. Stable32 reports the raw estimator; SigmaTau's raw kernel
   matches it to ≤ 0.004 % (and allantools to ≤ 1.1e-15). SigmaTau's
   default divides by `√B(α)` (SP1065 Table 11) to unbias toward the
   parent modified-Allan statistic, which places the default output
-  2.9 % (WHPM) to 12.3 % (FLFM) below Stable32 on this fixture — up to
+  2.9 % (WHPM) to 12.3 % (FLFM) below Stable32 on this fixture, and up to
   ≈ 14.5 % at RWFM per the table. Pass `correct_bias=false` to reproduce
   Stable32 and allantools.
 
@@ -79,8 +79,8 @@ default identification assigns α = 0. This is a convention difference in
 the lag-1 ACF identifier: SigmaTau quadratically detrends each decimated
 subseries before classifying (`detrend=true` default); Stable32 does not.
 `identify_noise(x, m_values; detrend=false)` reproduces Stable32's α at
-all 12 τ on this fixture. Because the EDF — and, for the total family,
-the bias factor — depend on α, the flipped row carries different CI
+all 12 τ on this fixture. Because the EDF (and, for the total family,
+the bias factor) depend on α, the flipped row carries different CI
 bounds (and, for HTOTDEV, a 0.25 % σ difference). The rows are marked ¹
 in the tables below.
 
@@ -99,7 +99,7 @@ different interval method.
 The tables below compare Stable32, allantools, and SigmaTau at each
 averaging interval τ. Stable32 columns carry 5 significant figures (the
 fixture's precision); SigmaTau and allantools columns are truncated to 6.
-CI columns are the 68.3 % `[lower, upper]` bounds — Stable32's
+CI columns are the 68.3 % `[lower, upper]` bounds, Stable32's
 MinSigma/MaxSigma against SigmaTau's `ci_lower`/`ci_upper`. Rows marked ¹
 are the τ = 256 s noise-identification flip.
 
@@ -175,7 +175,7 @@ are the τ = 256 s noise-identification flip.
 
 `SigmaTau corrected` is the default (`correct_bias=true`); it differs
 from the raw column only at the FLFM row (τ = 512 s), where the
-Howe/Walter `B = 1 − a·τ/T` correction applies — and that is the row
+Howe/Walter `B = 1 − a·τ/T` correction applies, and that is the row
 where Stable32 matches the corrected value, confirming Stable32 applies
 the same correction. The SigmaTau CI column belongs to the default
 (corrected) output.
@@ -200,7 +200,7 @@ the same correction. The SigmaTau CI column belongs to the default
 
 Stable32 and allantools both report the raw estimator here; the SigmaTau
 raw column matches both (≤ 0.004 % / ≤ 1.1e-15). The corrected column is
-SigmaTau's default — the raw value divided by `√B(α)` from SP1065
+SigmaTau's default, the raw value divided by `√B(α)` from SP1065
 Table 11, which on this fixture is 2.9 % (WHPM), 7.5 % (FLPM), 11.3 %
 (WHFM), or 12.3 % (FLFM) below Stable32. The SigmaTau CI column belongs
 to the raw output for like-for-like comparison with Stable32's bounds.
@@ -225,7 +225,7 @@ to the raw output for like-for-like comparison with Stable32's bounds.
 Stable32 applies the Howe 2005 bias correction by default and so does
 SigmaTau: the corrected (default) column matches Stable32 at every
 matching-α τ; the raw column matches allantools. The two columns differ
-by exactly `√(1+a)` per Howe 2005 — for example 0.9975 at WHFM and 0.9225
+by exactly `√(1+a)` per Howe 2005, for example 0.9975 at WHFM and 0.9225
 at FLFM (τ = 512 s, where Stable32 = 3.3578e-03 matches the corrected
 3.35777e-03, not the raw 3.09753e-03). The SigmaTau CI column belongs to
 the default (corrected) output.
