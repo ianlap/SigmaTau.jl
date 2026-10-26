@@ -734,8 +734,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     option(name, default) = (i = findfirst(startswith("--$name="), ARGS); i === nothing ? default : split(ARGS[i], "=")[2])
     smoke = "--smoke" in ARGS
     fontsize = parse(Int, option("fontsize", get(ENV, "SIGMATAU_FONTSIZE", "12")))
-    size = Tuple(parse.(Int, split(option("size", smoke ? "1500x940" : "1500x940"), "x")))
-    app = build(; size=size, fontsize=fontsize)
+    # `win_size`, not `size`: a top-level `size` would shadow Base.size.
+    win_size = Tuple(parse.(Int, split(option("size", "1500x940"), "x")))
+    app = build(; size=win_size, fontsize=fontsize)
     app.reload(false)       # open with a synthetic record on screen
     app.run()
     if smoke
