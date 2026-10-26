@@ -65,30 +65,7 @@ using RecipesBase
         @test length(rd) == 2
     end
 
-    @testset "dynamic deviation map: log10 heatmap" begin
-        big = PhaseData(cumsum(randn(2048)) .* 1e-9, 1.0)
-        res = dadev(big, [1, 2, 4, 100]; window=128)   # m=100 ⇒ NaN column
-        rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), res)
-        # All series are emitted via @series; an argument-less parent entry may
-        # also appear depending on the RecipesBase version. Keep the data series.
-        data = [sd for sd in rd if length(sd.args) == 3]
-        @test length(data) == 1
-        pa = data[1].plotattributes
-        @test pa[:seriestype] === :heatmap
-        @test pa[:yscale] === :log10                  # τ axis is log
-        @test haskey(pa, :colorbar_title)             # log10 σ legend
-        @test occursin("log10", string(pa[:colorbar_title]))
-        # Decade ticks on the τ axis span the grid.
-        @test all(t -> t ≈ 10.0^round(log10(t)), pa[:yticks])
-        # Heatmap args: x = t, y = τ, z = log10(dev) transposed to τ × t.
-        x, y, z = data[1].args
-        @test x == res.t && y == res.tau
-        @test size(z) == (length(res.tau), length(res.t))
-        @test z[1, 1] ≈ log10(res.dev[1, 1])
-        @test all(isnan, z[end, :])                   # unsupported m stays NaN
-    end
-
-    @testset "dynamic deviation map: 3-D waterfall mode" begin
+    @testset "dynamic deviation: 3-D waterfall" begin
         # The SP1065-style dynamic-deviation presentation: one σ(τ) curve per
         # window time, stacked along the time axis as 3-D lines. An
         # argument-less parent entry may also appear depending on the
@@ -98,7 +75,7 @@ using RecipesBase
 
         big = PhaseData(cumsum(randn(2048)) .* 1e-9, 1.0)
         res = dadev(big, [1, 2, 4]; window=128, step=512)   # 4 windows ⇒ labelled
-        rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(:seriestype => :path3d), res)
+        rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), res)   # default rendering
         cs = curves(rd)
         @test length(cs) == length(res.t) == 4        # one line per window
         for (i, sd) in enumerate(cs)
@@ -121,7 +98,7 @@ using RecipesBase
 
         # Many-window maps suppress the per-curve legend.
         wide = dadev(big, [1, 2]; window=128, step=64)
-        rdw = curves(RecipesBase.apply_recipe(Dict{Symbol,Any}(:seriestype => :path3d), wide))
+        rdw = curves(RecipesBase.apply_recipe(Dict{Symbol,Any}(), wide))
         @test length(rdw) == length(wide.t) > 8
         @test all(sd -> sd.plotattributes[:label] == "", rdw)
     end

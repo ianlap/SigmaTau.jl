@@ -38,8 +38,8 @@ theoh
 
 ## Dynamic (time-resolved) deviations
 
-`dadev` and `dhdev` slide a window across the record and return a σ(t, τ)
-map as a [`DynamicStabilityResult`](@ref).
+`dadev` and `dhdev` slide a window across the record and return σ(t, τ)
+as a [`DynamicStabilityResult`](@ref).
 
 ```@docs
 dadev
