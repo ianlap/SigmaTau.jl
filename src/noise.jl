@@ -304,9 +304,9 @@ end
 
 # Power-law noise synthesizer (internal).
 # Generates synthetic phase data with a chosen fractional-frequency power-law
-# slope α ∈ {-2, -1, 0, 1, 2} via a frequency-domain `f^(α/2)` shaping of
-# white Gaussian noise, integrated to phase. Used by the test suite to
-# exercise stability deviations across all five SP1065 noise types.
+# slope α ∈ {-2, -1, 0, 1, 2} by the Kasdin–Walter discrete fractional
+# filter applied to white Gaussian noise, integrated to phase. Used by
+# `noise_gen`, the test suite and the Monte Carlo calibrations.
 #
 # Requires an `AbstractFFTs` backend (e.g. `FFTW`) to be loaded by the caller.
 # `SigmaTau` declares `AbstractFFTs` in its [deps] but no concrete backend;
@@ -318,28 +318,36 @@ using AbstractFFTs
     _gen_powerlaw_y(alpha, N; rng=nothing) → Vector{Float64}
 
 Internal primitive. Synthesize an N-sample fractional-frequency vector `y`
-with power spectral density ∝ `f^alpha`. The DC component is zeroed so the
-output has zero mean; the absolute amplitude is whatever the f^(α/2) shaper
-happens to produce on unit-variance white noise. Callers that need a
-calibrated level should rescale (e.g. via [`noise_gen`](@ref)).
+with power spectral density ∝ `|2 sin(πf)|^alpha`, the discrete-time form of
+`f^alpha` (Kasdin & Walter 1992). The output is made zero-mean; the absolute
+amplitude is that of the filter on unit-variance white noise. Callers that
+need a calibrated level should rescale (e.g. via [`noise_gen`](@ref)).
 
 Pass an `AbstractRNG` as `rng` to draw from a specific stream (e.g. for a
 Monte Carlo with independent per-realization seeds); the default `nothing`
 draws from the global RNG, so existing seeded callers are unaffected.
 """
 function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
-    # White Gaussian noise → fractional-frequency series shaped to f^alpha.
+    # Kasdin–Walter discrete fractional filter (Kasdin & Walter 1992; the
+    # method allantools uses): white Gaussian noise convolved with the impulse
+    # response of (1 - z⁻¹)^(-α/2), whose power spectrum is |2 sin(πf)|^α, the
+    # discrete-time counterpart of f^α. It is exact at the integer orders:
+    # α = 2 is the first difference of white noise (so the integrated phase is
+    # white), α = 0 is white, α = -2 is a cumulative sum. Shaping FFT bins by
+    # the continuous f^(α/2) instead leaves the phase spectrum of α = 2 rising
+    # toward Nyquist, which the lag-1 noise identifier reads as α ≈ 3 at m = 1.
     w = rng === nothing ? randn(N) : randn(rng, N)
-    W = fft(w)
-
-    # Symmetric FFT-bin frequency magnitude. Bin 0 (DC) gets a placeholder
-    # so the f^(alpha/2) term is finite; the DC bin is zeroed afterwards.
-    f = abs.(AbstractFFTs.fftfreq(N, 1.0))
-    f[1] = 1.0
-
-    Y    = W .* f .^ (alpha / 2)
-    Y[1] = 0.0
-    return real.(ifft(Y))
+    h = Vector{Float64}(undef, N)
+    h[1] = 1.0
+    @inbounds for k in 1:N-1
+        h[k+1] = h[k] * (k - 1 - alpha / 2) / k
+    end
+    # Linear (not circular) convolution through zero-padded FFTs.
+    M = 2N
+    W = fft(vcat(w, zeros(M - N)))
+    H = fft(vcat(h, zeros(M - N)))
+    y = real.(ifft(W .* H))[1:N]
+    return y .- (sum(y) / N)
 end
 
 """
@@ -357,9 +365,9 @@ sequence has power spectral density ∝ `f^alpha`. Mapping:
 | -2 | RWFM       | 1/f⁴           |
 
 For deterministic output, seed the global RNG (`Random.seed!`) before calling,
-or pass an `AbstractRNG` as `rng`. The DC component is zeroed before the inverse
-transform so the output has zero mean. Calls `AbstractFFTs.fft`/`ifft`, so
-the caller must have an FFT backend loaded (e.g. `using FFTW`).
+or pass an `AbstractRNG` as `rng`. The frequency sequence is made zero-mean
+before integration. Calls `AbstractFFTs.fft`/`ifft`, so the caller must have an
+FFT backend loaded (e.g. `using FFTW`).
 """
 function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0, rng=nothing)
     # Phase: x[k] = τ₀ · Σⱼ₌₁ᵏ y[j]
@@ -368,7 +376,7 @@ end
 
 
 # Public power-law clock-noise generator.
-# Wraps the internal `_gen_powerlaw_y` spectral shaper with a magnitude-aware
+# Wraps the internal `_gen_powerlaw_y` Kasdin–Walter filter with a magnitude-aware
 # API. Users specify the noise mixture by α exponent and either a target
 # Allan deviation σ_y(τ=τ₀) per noise type or the corresponding fractional-
 # frequency PSD coefficient h_α. Contributions for different α are drawn
@@ -397,7 +405,7 @@ function _h_to_sigma1(alpha::Int, h::Float64, tau0::Float64)
 end
 
 # Empirical σ_y(τ=τ₀) of a fractional-frequency vector via overlapping ADEV
-# at m=1. Used to rescale a raw spectral-shaper realization to a known level.
+# at m=1. Used to rescale a raw filter realization to a known level.
 function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
     x = cumsum(y) .* tau0
     return _adev_core(x, [1], tau0)[1]

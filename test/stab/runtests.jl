@@ -432,7 +432,7 @@ const LK = ReferenceKernels
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
         # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
-        # is via the f^(α/2) shaping helper (`_gen_powerlaw_phase`).
+        # is via the Kasdin–Walter helper (`_gen_powerlaw_phase`).
         using Random
         N    = 1024
         tau0 = 1.0
