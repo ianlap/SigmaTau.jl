@@ -1,4 +1,3 @@
-# stats/edf.jl — Equivalent Degrees of Freedom and Confidence Intervals
 using Statistics
 using Distributions
 
@@ -202,7 +201,7 @@ function _coeff_mhtot(alpha::Int)
     # mhtotdev pipeline INCLUDING its default global least-squares drift
     # removal (remove_drift=true), so the calibration matches what users
     # compute; all fits R² ≥ 0.9982. MHTOTDEV is novel to SigmaTau, so these
-    # have no external reference — see docs theory/mhtotdev_bias_edf.md. Both
+    # have no external reference — see docs mhtotdev.md. Both
     # the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
     # fit; TotHvar edges ahead at α = ±2 (ΔR² ≤ 8e-4) and Mod-Totvar fits
     # better elsewhere, so the Mod-Totvar form is kept uniformly as in the
@@ -388,7 +387,7 @@ Conventions per variance type:
   `b1 ∈ {-0.120, -0.069, -0.171, -0.719, -5.588}` for α ∈ {2, 1, 0, -1, -2}.
   MHTOTDEV is ≈ unbiased for white/flicker noise (B ≈ 1) and reads high
   for redder FM (RWFM B ≈ 2.2 at small τ, falling toward 1 as τ→T).
-  See docs `theory/mhtotdev_bias_edf.md`.
+  See docs `mhtotdev.md`.
 
 Anything unrecognised falls through to B = 1.
 """
@@ -425,7 +424,7 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             # ~45 % (WHFM) to ~96 % (RWFM). MHTOTDEV is ≈ unbiased for
             # white/flicker PM (B ≈ 1) and reads high for redder FM
             # (RWFM B ≈ 2.2 at small τ). MHTOTDEV is novel to SigmaTau —
-            # no external reference; see docs theory/mhtotdev_bias_edf.md.
+            # no external reference; see docs mhtotdev.md.
             b0_t = Dict(2=>1.0308, 1=>0.9883, 0=>1.0545, -1=>1.2947, -2=>2.1686)
             b1_t = Dict(2=>-0.1197, 1=>-0.0686, 0=>-0.1706, -1=>-0.7193, -2=>-5.5884)
             aa = clamp(alpha, -2, 2)

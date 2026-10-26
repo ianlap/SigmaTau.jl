@@ -1,12 +1,4 @@
-# types.jl — shared data records and result types.
-#
-# Merged from types/{abstract, phase_data, frequency_data, stability_result,
-# stability_suite, spectral_result}.jl. Order matters: PhaseData/FrequencyData
-# subtype AbstractTimingData, and the show methods follow their structs.
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/abstract.jl ───────────────────────────────────────────────────
 
 """
     AbstractTimingData
@@ -15,9 +7,6 @@ Supertype of timing data records (`PhaseData`, `FrequencyData`).
 """
 abstract type AbstractTimingData end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/phase_data.jl ─────────────────────────────────────────────────
 
 """
     PhaseData{T<:AbstractFloat}
@@ -45,9 +34,6 @@ struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
     end
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/frequency_data.jl ─────────────────────────────────────────────
 
 """
     FrequencyData{T<:AbstractFloat}
@@ -92,9 +78,6 @@ function Base.show(io::IO, f::FrequencyData)
     print(io, ")")
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/stability_result.jl ───────────────────────────────────────────
 
 """
     StabilityResult
@@ -204,9 +187,6 @@ function Base.show(io::IO, ::MIME"text/plain", r::StabilityResult)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── types/stability_suite.jl ────────────────────────────────────────────
-
 """
     StabilitySuite
 
@@ -270,9 +250,6 @@ function Base.show(io::IO, ::MIME"text/plain", s::StabilitySuite)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── types/spectral_result.jl ────────────────────────────────────────────
-
 """
     SpectralResult
 
@@ -308,9 +285,6 @@ function Base.show(io::IO, r::SpectralResult)
               ", ", r.units, ", nperseg=", r.nperseg, ")")
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── types/dynamic_stability_result.jl ───────────────────────────────────
 
 """
     DynamicStabilityResult

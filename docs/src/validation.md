@@ -1,25 +1,34 @@
-# Validation: Stable32
+# Validation
 
-This page documents agreement between SigmaTau.jl outputs and reference
-fixtures generated from `test/fixtures/validation/stable32gen.DAT` — an
-8192-point phase record at τ₀ = 1 s. Two references are compared at every
-τ:
+SigmaTau is checked against two independent references:
 
-- **Stable32** (`stable32out/stable32_data_full.csv`): σ, the identified
-  noise exponent α, and the 68.3 % confidence bounds, all printed to
-  5 significant figures. That rounding sets the agreement floor of
-  roughly `5e-5` for any comparison against this file.
-- **allantools** (`allantools_out/allantools_data_full.csv`): σ printed
-  at full Float64 precision, so kernel-level agreement can be checked to
-  machine precision.
+1. **Stable32** (W. Riley), the de facto reference application for
+   time-and-frequency stability analysis. Its outputs are printed to five
+   significant figures, which sets an agreement floor of about `5e-5`
+   relative.
+2. **allantools** (A. Wallin), an open-source Python library whose outputs
+   are full Float64, so kernel-level agreement can be checked to machine
+   precision.
 
-All SigmaTau values below were computed from the shipped fixture with the
-current code:
+Estimators that neither reference implements (`mhdev`, `htdev`, `mhtotdev`,
+`theoh`, `nch`, the dynamic and streaming variants) are tested against
+inlined textbook kernels and algebraic identities in `test/stab/`.
+
+Where the references disagree with each other, or with SigmaTau's default
+output, the difference is traced to a named definitional choice (a bias
+correction policy or a noise-identification convention), and the option that
+reproduces each reference is stated. The comparisons below are regenerated
+from the shipped fixture `test/fixtures/validation/stable32gen.DAT`, an
+8192-point phase record at τ₀ = 1 s, with:
 
 ```julia
 p = read_phase("test/fixtures/validation/stable32gen.DAT";
                time_col=0, value_col=1, tau0=1.0, header=10)
 ```
+
+The Stable32 reference is `stable32out/stable32_data_full.csv` (σ, the
+identified noise exponent α, and the 68.3 % confidence bounds); the
+allantools reference is `allantools_out/allantools_data_full.csv`.
 
 Default settings throughout; the total-family tables additionally show
 `correct_bias=false` ("raw") columns.
@@ -85,7 +94,7 @@ remaining total-family differences at α > 0 (footnote ² above) come from
 EDF substitutions outside the published coefficient tables, not from a
 different interval method.
 
-## Detailed comparison
+## Per-τ comparison
 
 The tables below compare Stable32, allantools, and SigmaTau at each
 averaging interval τ. Stable32 columns carry 5 significant figures (the
@@ -235,7 +244,3 @@ the default (corrected) output.
 | 512 | 3.3578e-03 | 3.09753e-03 | 3.09753e-03 | 3.35777e-03 | [2.9050e-03, 4.1199e-03] | [2.9047e-03, 4.1207e-03] |
 | 1024 | 2.4120e-03 | 2.40600e-03 | 2.40600e-03 | 2.41204e-03 | [2.0370e-03, 3.1179e-03] | [2.0368e-03, 3.1187e-03] |
 | 2048 | 2.9382e-03 | 2.93086e-03 | 2.93086e-03 | 2.93822e-03 | [2.3269e-03, 4.6000e-03] | [2.3265e-03, 4.6009e-03] |
-
-## Methodology
-
-See [Validation Methodology](methodology.md) for the shipped fixture strategy.

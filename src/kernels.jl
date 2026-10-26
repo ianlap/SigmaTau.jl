@@ -1,20 +1,8 @@
-# kernels.jl — raw deviation kernels (Vector{Float64} in, arrays out).
-#
-# Merged from stab/core/{allan, hadamard, total, mtie, pdev}.jl. These are the
-# internal _*_core functions; the public PhaseData/FrequencyData API lives in
-# deviations.jl.
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/allan.jl ──────────────────────────────────────────────────
-
-# core/allan.jl — Core Stability Kernels
-
 """
     _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
 Computes the Overlapping Allan Deviation (ADEV) for a set of averaging factors `m`.
-This is a highly optimized, SIMD-vectorized loop with no allocations in the inner loop.
+Allocation-free SIMD inner loop.
 """
 function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -89,16 +77,11 @@ function _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/hadamard.jl ───────────────────────────────────────────────
-
-# core/hadamard.jl — Core Hadamard Stability Kernels
-
 """
     _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
 Computes the Overlapping Hadamard Deviation (HDEV) for a set of averaging factors `m`.
-This uses a highly optimized, SIMD-vectorized loop with no allocations in the inner loop.
+Allocation-free SIMD inner loop.
 """
 function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -161,11 +144,6 @@ function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return devs
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/total.jl ──────────────────────────────────────────────────
-
-# core/total.jl — Core Total Stability Kernels
 
 """
     _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
@@ -626,11 +604,6 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/mtie.jl ───────────────────────────────────────────────────
-
-# core/mtie.jl — Maximum Time Interval Error kernel
-
 """
     _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
@@ -716,11 +689,6 @@ function _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/tierms.jl ─────────────────────────────────────────────────
-
-# core/tierms.jl — RMS Time Interval Error kernel
-
 """
     _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
@@ -759,11 +727,6 @@ function _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return devs
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/pdev.jl ───────────────────────────────────────────────────
-
-# core/pdev.jl — Parabolic deviation (Vernotte 2015 / 2020)
 
 """
     _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
@@ -864,11 +827,6 @@ function _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return devs
 end
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/theo.jl ───────────────────────────────────────────────────
-
-# core/theo.jl — Thêo1 / ThêoBR kernels (NIST SP1065 §5.2.15–5.2.16)
 
 """
     _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
@@ -989,9 +947,6 @@ _theoh_is_adev(m::Int, N::Int) = m <= 0.2 * (N - 1)
 # Even Thêo1 factor nearest to m/0.75 = 4m/3 (exact whenever 3 | m).
 _theoh_theo_m(m::Int) = 2 * max(1, round(Int, m / 1.5))
 
-
-# ──────────────────────────────────────────────────────────────────────
-# ── analysis-window counts ──────────────────────────────────────────────
 
 """
     _neff_counts(dev_sym::Symbol, N::Int, m_values::Vector{Int}) → Vector{Int}

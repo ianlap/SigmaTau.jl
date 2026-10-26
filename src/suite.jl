@@ -1,5 +1,3 @@
-# api/suite.jl — compute-all entry point.
-
 """
 Default deviation set computed by [`stability`](@ref) when `devs` is not given:
 overlapping Allan, modified Allan, overlapping Hadamard, and modified Hadamard.
@@ -101,8 +99,7 @@ stability(data::FrequencyData; kwargs...) =
     _stability(data, length(data.y), :frequency, data.tau0; kwargs...)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── N-cornered hat (nch) ────────────────────────────────────────────────
+# N-cornered hat
 
 # Resolve the measured pair (i, j), i < j, from a possibly part-filled
 # matrix: prefer the upper-triangle entry, accept the transposed one
@@ -207,7 +204,7 @@ function nch(pairwise::AbstractMatrix{StabilityResult})
     end
 
     # Per-clock separation: σ̂²ᵢ = (Rᵢ − S/(N−1)) / (N−2); non-positive
-    # estimates → NaN (matching tutorial 06's `positive_sqrt`).
+    # estimates → NaN (as in the three-cornered-hat example).
     results = Vector{StabilityResult}(undef, n_clocks)
     for i in 1:n_clocks
         dev_i = Vector{Float64}(undef, n_tau)
@@ -222,7 +219,7 @@ function nch(pairwise::AbstractMatrix{StabilityResult})
 end
 
 # Three-cornered-hat convenience form: pairwise results in the cyclic
-# order A−B, B−C, C−A (tutorial 06's labeling with A=1, B=2, C=3; the
+# order A−B, B−C, C−A (the three-cornered-hat example's labeling with A=1, B=2, C=3; the
 # C−A record maps to pairwise[1, 3] since orientation is irrelevant).
 function nch(r_ab::StabilityResult, r_bc::StabilityResult, r_ca::StabilityResult)
     pairwise = Matrix{StabilityResult}(undef, 3, 3)

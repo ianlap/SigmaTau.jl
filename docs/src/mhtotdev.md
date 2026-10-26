@@ -1,4 +1,4 @@
-# Theory: MHTOTDEV bias and EDF
+# MHTOTDEV bias and EDF
 
 MHTOTDEV (modified Hadamard total deviation) is novel to SigmaTau — no other
 library computes it, and no published reference gives its bias factor or its
@@ -11,8 +11,7 @@ This page documents the methodology; it is the reproducible basis for the
 shipped `_coeff_mhtot` EDF coefficients and the `bias_correction(:mhtot, …)`
 table. The harness is [`tools/mc_mhtotdev.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/mc_mhtotdev.jl).
 The estimator under test is the shipped `mhtotdev` pipeline, including its
-default global least-squares drift removal (`remove_drift=true`; see
-[Theory: Total family](total_family.md)), so the coefficients calibrate
+default global least-squares drift removal (`remove_drift=true`), so the coefficients calibrate
 exactly the statistic users compute.
 
 The procedure follows the NIST total-variance literature: Howe, Beard,
@@ -123,13 +122,6 @@ The harness emits a per-cell CSV and a JSON summary of metadata plus fitted
 coefficients (git SHA, seed, thread count, N grid, R, and the μ(α) check
 result). The authoritative full-sweep JSON is tracked at
 `tools/artifacts/mhtotdev_mc_full.json`; ad-hoc quick-run outputs stay local.
-
-!!! note "Provisional vs. authoritative numbers"
-    The coefficient tables in `_coeff_mhtot` and `bias_correction(:mhtot, …)`
-    are populated from the full sweep (N up to 32768, R = 3000), run on a
-    workstation. The harness's reduced `quick` mode (N ≤ 2048, R = 200–400)
-    reproduces the μ(α) slopes and the qualitative bias trend below; the
-    published tables use the full-sweep values.
 
 ## Result
 

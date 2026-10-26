@@ -44,8 +44,8 @@ Random.seed!(20260609)
 # Call the reader that matches the file: `read_phase` returns a `PhaseData`,
 # `read_frequency` a `FrequencyData`, and the two take identical keyword
 # arguments. Every deviation function accepts either container and converts
-# internally — see [the phase-data tutorial](01_phase_data.md) for the
-# conversion identity.
+# internally (phase is the running integral of fractional frequency,
+# `x[k] = τ₀ Σ y[j]`).
 
 # ## A two-column file: `read_phase` with defaults
 #
@@ -337,9 +337,3 @@ foreach(println, readlines(suitepath)[1:14])
 suite2 = load_suite(suitepath)
 suite2[:hdev].dev ≈ suite[:hdev].dev
 
-# ## Where to go next
-#
-# - [Phase data and frequency data](01_phase_data.md) — the two containers in
-#   detail, and the phase ↔ frequency identity.
-# - [Computing the Allan deviation](02_compute_adev.md) — every field of the
-#   `StabilityResult` you just wrote to disk.

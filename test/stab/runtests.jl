@@ -98,8 +98,7 @@ const LK = LegacyKernels
         @test res_htdev.deviation_type == :htdev
 
         # htdev wraps mhdev with the τ/√(10/3) scaling — point estimates AND
-        # CI bounds inherit the same multiplicative factor. Closes R-MED-5
-        # (HTDEV CI scaling formal verification): for a non-degenerate
+        # CI bounds inherit the same multiplicative factor. For a non-degenerate
         # Y = c · X with c constant in τ, the χ²-based CI scales linearly in
         # c, so [Y.lo, Y.hi] = c · [X.lo, X.hi] is the correct operation.
         res_mhdev_ref = mhdev(pd, m_values)
@@ -870,7 +869,7 @@ const LK = LegacyKernels
         # Regression for the eps*N threshold bug in `_lag1_acf` that
         # produced :unknown classifications on any phase record with std
         # below ~√eps ≈ 1.5e-8 (i.e. all real-world records, in seconds).
-        # Same WPM+RWFM fixture used by examples/02_compute_adev.jl: every
+        # Same WPM+RWFM fixture used by the ADEV example: every
         # m must classify to a real power-law noise, never :unknown.
         using Random
         Random.seed!(20260509)
@@ -1050,7 +1049,7 @@ const LK = LegacyKernels
         end
 
         @testset "HTOTDEV at N=1536 stays clear of the diff(x) m-max" begin
-            # Regression for codex review on PR #35: HTOTDEV operates on
+            # Regression: HTOTDEV operates on
             # y = diff(x), so its valid m-range is `m ≤ (N−1) ÷ 3`. At
             # N=1536, naïvely using `N ÷ 3 = 512` would push past
             # `(1535) ÷ 3 = 511`, putting an invalid `m = 512` into the

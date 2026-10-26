@@ -1,13 +1,4 @@
-# noise.jl — power-law noise identification and synthesis.
-#
-# Merged from stab/noise/{lag1, synth, gen}.jl (lag-1 ACF / B1 / R(n) noise-type
-# ID, the internal spectral shaper, and the public noise_gen generator).
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/noise/lag1.jl ──────────────────────────────────────────────────
-
-# noise/lag1.jl — Lag-1 Autocorrelation for noise identification
+# Lag-1 autocorrelation noise identification (with B1 / R(n) fallback).
 using Statistics
 using StaticArrays
 
@@ -316,11 +307,7 @@ function _simple_mdev(x::Vector{Float64}, m::Int, tau0::Float64)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/noise/synth.jl ─────────────────────────────────────────────────
-
-# noise/synth.jl — Power-law phase-noise synthesizer (non-exported helper).
-#
+# Power-law noise synthesizer (internal).
 # Generates synthetic phase data with a chosen fractional-frequency power-law
 # slope α ∈ {-2, -1, 0, 1, 2} via a frequency-domain `f^(α/2)` shaping of
 # white Gaussian noise, integrated to phase. Used by the test suite to
@@ -385,11 +372,7 @@ function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0, rng=nothing)
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/noise/gen.jl ───────────────────────────────────────────────────
-
-# noise/gen.jl — Public power-law clock-noise generator.
-#
+# Public power-law clock-noise generator.
 # Wraps the internal `_gen_powerlaw_y` spectral shaper with a magnitude-aware
 # API. Users specify the noise mixture by α exponent and either a target
 # Allan deviation σ_y(τ=τ₀) per noise type or the corresponding fractional-
