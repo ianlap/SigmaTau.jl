@@ -64,7 +64,7 @@ round-trip results as plain text.
 | Platform | Windows GUI, closed source | Python library | Julia library + desktop GUI |
 | χ² confidence intervals with per-τ noise ID | yes | manual (`edf_greenhall` + `confidence_interval`) | every call |
 | Total-family bias correction | TOTDEV, HTOTDEV | none | all five, switchable |
-| MDEV-class Hadamard (`mhdev`, `htdev`, `mhtotdev`) | no | no | yes |
+| Modified Hadamard Class (`mhdev`, `htdev`, `mhtotdev`) | no | no | yes |
 | Thêo1 / ThêoBR / ThêoH | yes | Thêo1 only | yes |
 | Dynamic (time-resolved) deviation | yes | no | yes |
 | Real-time accumulators | no | ADEV, HDEV, TDEV | ADEV, MDEV, HDEV, MHDEV |
@@ -80,9 +80,9 @@ detrending), the per-τ tables in the
 name the switch that reproduces the reference.
 
 Performance: on identical inputs, `adev`/`mdev`/`hdev`/`tdev` run roughly 10
-to 40 times faster than allantools, and `mtotdev`/`htotdev` 1,600 times faster
-on 4 cores to 4,200 times faster on 12 (0.47 s vs 30 min on a 407,000-sample
-record). The harness, method and both measurements are in
+to 40 times faster than allantools, `totdev` about 70 times, and
+`mtotdev`/`htotdev` 1,600 times faster on 4 threads to 4,200 times faster on 12
+(0.46 s vs 30 min on a 407,000-sample record). The harness, method and both measurements are in
 [`bench/`](bench/README.md).
 
 ## Desktop explorer
