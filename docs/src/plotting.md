@@ -103,27 +103,25 @@ with a linear ordinate. The DC bin is dropped.
 plot(Sy(p))
 ```
 
-## Dynamic deviation maps
+## Dynamic deviations
 
-[`dadev`](@ref) and [`dhdev`](@ref) return a σ(t, τ) map. The fixture here
-steps the white-FM level up tenfold halfway through, an event a static
-deviation averages over:
+[`dadev`](@ref) and [`dhdev`](@ref) return σ(t, τ) over sliding windows.
+`plot(d)` draws the presentation used in SP1065: one σ(τ) curve per window
+time, stacked along the time axis as 3-D lines. The fixture here steps the
+white-FM level up tenfold halfway through, an event a static deviation
+averages over:
 
 ```@example plotting
 Random.seed!(7) # hide
 y_step = [randn(4096) .* 1e-11; randn(4096) .* 1e-10]
 d = dadev(FrequencyData(y_step, 1.0), Octave; window = 2048, step = 1024)
 
-plot(d)
+plot(d; camera = (60, 25), legend = :topleft)
 ```
 
-`seriestype = :path3d` gives the presentation used in the literature, one
-σ(τ) curve per window time stacked along the time axis; `camera = (azimuth,
-elevation)` rotates the view:
-
-```@example plotting
-plot(d; seriestype = :path3d, camera = (60, 25), legend = :topleft)
-```
+`camera = (azimuth, elevation)` rotates the view. Maps with more than eight
+windows are drawn without a legend; the raw matrix is `d.dev` (windows × τ)
+with window centres in `d.t`.
 
 ## Tables
 
