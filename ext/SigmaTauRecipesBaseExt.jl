@@ -97,51 +97,31 @@ end
     end
 end
 
-# Dynamic deviation map (DADEV / DHDEV): log10(σ) over (t, τ). Default
-# rendering is a heatmap with a log-scale τ axis; pass
-# `seriestype = :path3d` for the SP1065-style dynamic-deviation view: one
-# σ(τ) curve per window time, stacked along the time axis as 3-D lines.
-# Plots' 3-D axes do not support log scales, so the 3-D branch plots
-# log10(τ) and log10(σ) as the coordinates and labels the decade ticks in
-# plain-text `1e<k>` form. The map is stored windows × taus; the heatmap z matrix is
-# rows-along-y, so it is transposed there. Non-positive and NaN cells
-# (windows that cannot support the averaging factor) map to NaN and render
-# blank (heatmap) or terminate the curve (3-D lines).
+# Dynamic deviation (DADEV / DHDEV) in the SP1065 presentation: one σ(τ)
+# curve per window time, stacked along the time axis as 3-D lines. Plots'
+# 3-D axes do not support log scales, so log10(τ) and log10(σ) are the
+# plotted coordinates and the decade ticks are labelled in plain-text
+# `1e<k>` form. Non-positive and NaN cells (windows that cannot support the
+# averaging factor) map to NaN and terminate the curve.
 @recipe function f(res::DynamicStabilityResult)
     title --> uppercase(string(res.deviation_type))
     z = map(v -> (isfinite(v) && v > 0) ? log10(v) : NaN, res.dev)
-
-    st = get(plotattributes, :seriestype, :heatmap)
-    if st === :path3d || st === :path3D
-        logτ = log10.(res.tau)
-        kx = floor(Int, minimum(logτ)):ceil(Int, maximum(logτ))
-        zfin = filter(isfinite, z)
-        kz = isempty(zfin) ? (0:0) :
-             (floor(Int, minimum(zfin)):ceil(Int, maximum(zfin)))
-        xlabel --> "Averaging Time τ (s)"
-        ylabel --> "Time t (s)"
-        xticks --> (Float64.(kx), ["1e$k" for k in kx])
-        zticks --> (Float64.(kz), ["1e$k" for k in kz])
-        zguide --> "σ"
-        # Legend gets noisy past a handful of windows; label only small maps.
-        labelled = length(res.t) <= 8
-        for (i, tc) in enumerate(res.t)
-            @series begin
-                seriestype := :path3d
-                label := labelled ? "t = $(round(tc; sigdigits=4)) s" : ""
-                logτ, fill(tc, length(logτ)), z[i, :]
-            end
-        end
-    else
-        xlabel --> "Time t (s)"
-        ylabel --> "Averaging Time τ (s)"
-        colorbar_title --> "log10 σ"
-        yscale --> :log10
-        yticks --> _decade_ticks(res.tau)
+    logτ = log10.(res.tau)
+    kx = floor(Int, minimum(logτ)):ceil(Int, maximum(logτ))
+    zfin = filter(isfinite, z)
+    kz = isempty(zfin) ? (0:0) : (floor(Int, minimum(zfin)):ceil(Int, maximum(zfin)))
+    xlabel --> "Averaging Time τ (s)"
+    ylabel --> "Time t (s)"
+    xticks --> (Float64.(kx), ["1e$k" for k in kx])
+    zticks --> (Float64.(kz), ["1e$k" for k in kz])
+    zguide --> "σ"
+    # Legend gets noisy past a handful of windows; label only small maps.
+    labelled = length(res.t) <= 8
+    for (i, tc) in enumerate(res.t)
         @series begin
-            seriestype := :heatmap
-            label := ""
-            res.t, res.tau, permutedims(z)
+            seriestype := :path3d
+            label := labelled ? "t = $(round(tc; sigdigits=4)) s" : ""
+            logτ, fill(tc, length(logτ)), z[i, :]
         end
     end
     return nothing

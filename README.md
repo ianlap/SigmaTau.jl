@@ -91,7 +91,7 @@ record). The harness, method and both measurements are in
 writing code: load a file or synthesize a power-law record, choose
 preprocessing, estimators, τ grid and confidence level, and read the σ_y and
 σ_x curves with χ² intervals, the per-τ table, the S_y, S_x and ℒ(f) spectra,
-and a dynamic σ(t, τ) map. Export writes publication figures (PNG, PDF, SVG),
+and a dynamic σ(t, τ) waterfall. Export writes publication figures (PNG, PDF, SVG),
 the suite as TSV, and the record as text.
 
 ```bash
