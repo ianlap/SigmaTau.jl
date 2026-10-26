@@ -31,6 +31,7 @@ makedocs(
     checkdocs = :exports,
     pages = [
         "Home"       => "index.md",
+        "Plotting and tables" => "plotting.md",
         "Validation" => "validation.md",
         "MHTOTDEV bias and EDF" => "mhtotdev.md",
         "Tutorials"  => [
