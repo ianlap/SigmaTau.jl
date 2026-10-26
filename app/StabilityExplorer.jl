@@ -424,12 +424,13 @@ function build(; size=(1500, 940), fontsize=12)
     # Record page: data source and synthesis controls, then the time series.
     rec_page = GridLayout(plots[2, 1]; alignmode=Outside())
     src = GridLayout(rec_page[1, 1]; valign=:top)
-    Box(src[1, 1:2]; color=:gray88, strokevisible=false, cornerradius=4)
-    Label(src[1, 1:2], "Load a file"; font=:bold, halign=:left, tellwidth=false, padding=(8, 8, 4, 4), color=:gray15)
-    path_box = textbox(; placeholder="choose a file with Browse…", tellwidth=false)
+    Box(src[1, 1:3]; color=:gray88, strokevisible=false, cornerradius=4)
+    Label(src[1, 1:3], "Load a file"; font=:bold, halign=:left, tellwidth=false, padding=(8, 8, 4, 4), color=:gray15)
+    path_box = textbox(; placeholder="no file chosen", tellwidth=false, halign=:left)
     open_btn = Button(fig; label="Browse…", height=const_h)
     src[2, 1] = Label(fig, "File"; halign=:right, color=:gray25)
-    let g = GridLayout(src[2, 2]; tellwidth=false); g[1, 1] = path_box; g[1, 2] = open_btn; end
+    src[2, 2] = path_box
+    src[2, 3] = open_btn
     kind = menu(; options=["phase", "frequency"], default="phase", width=110, tellwidth=false, halign=:left)
     src[3, 1] = Label(fig, "Record type"; halign=:right, color=:gray25)
     src[3, 2] = kind
@@ -441,10 +442,10 @@ function build(; size=(1500, 940), fontsize=12)
     let g = GridLayout(src[5, 2]; tellwidth=false, halign=:left); g[1, 1] = time_col; g[1, 2] = value_col; end
     src[6, 1] = Label(fig, "Header rows"; halign=:right, color=:gray25)
     src[6, 2] = header
-    Label(src[7, 1:2], "Stable32 .DAT: header rows 10, time column 0, value column 1.";
+    Label(src[7, 1:3], "Stable32 .DAT: header rows 10, time column 0, value column 1.";
           halign=:left, tellwidth=false, color=:gray35, fontsize=hint)
     load_btn = Button(fig; label="Load file", height=const_h, tellwidth=false, halign=:right)
-    src[8, 2] = load_btn
+    src[8, 2:3] = load_btn
 
     syn = GridLayout(rec_page[1, 2]; valign=:top)
     Box(syn[1, 1:2]; color=:gray88, strokevisible=false, cornerradius=4)
