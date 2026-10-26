@@ -15,6 +15,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Repository trimmed for the public release: the extended theory pages, FAQ,
   plotting cookbook and migration guides moved to the `dev` branch; the docs
   build no longer needs a TeX install.
+- `noise_gen` (and the internal `_gen_powerlaw_y`) now synthesizes power-law
+  noise with the Kasdin–Walter discrete fractional filter instead of shaping
+  FFT bins by `f^(α/2)`. The old shaper left white-PM phase slightly blue
+  (lag-1 autocorrelation −0.2 instead of 0), which the noise identifier read
+  as α ≈ 3 at τ₀ and reported as `:unknown`. Realizations for a given seed
+  change; levels are still calibrated to σ_y(τ₀).
 - `plot(::DynamicStabilityResult)` draws the SP1065 waterfall (one σ(τ)
   curve per window, stacked along t) and no longer offers a heatmap.
 
