@@ -13,7 +13,7 @@ module.exports = {
     [
       { type: 'panel', heading: 'A clock record is finite, so every σ(τ) point is an estimate with an interval',
         body: [
-          'Clock noise is power-law, S_y(f) ∝ f^α with α ∈ {+2, +1, 0, −1, −2} (white PM to random-walk FM). From N phase samples at spacing τ₀, the number of independent samples at averaging time τ = mτ₀ is not N/m: it depends on the noise type, on τ/T and on the estimator.',
+          'Clock noise is power-law, S_{y}(f) ∝ f^{α} with α ∈ {+2, +1, 0, −1, −2} (white PM to random-walk FM). From N phase samples at spacing τ₀, the number of independent samples at averaging time τ = mτ₀ is not N/m: it depends on the noise type, on τ/T and on the estimator.',
           'A usable stability point therefore needs four quantities computed together: the deviation, the noise type at that τ, the equivalent degrees of freedom (EDF) and the χ² interval.',
         ] },
       { type: 'panel', heading: 'One call returns deviation, noise type, EDF and interval at every τ',
@@ -25,10 +25,10 @@ module.exports = {
           ['Definitions: ', 'NIST SP1065 and IEEE Std 1139-2022; every departure from a reference is a named, documented switch.'],
         ],
         figure: 'F1_suite', figH: 6.2,
-        caption: 'Fig. 1. Deviation suite on the shipped 8192-point validation record (τ₀ = 1 s) with 68.3 % χ² intervals. MDEV rolls white PM off as τ^−3/2 and separates it from flicker PM; the totals reach τ = T/4 with tighter long-τ intervals.' },
+        caption: 'Fig. 1. Deviation suite on the shipped 8192-point validation record (τ₀ = 1 s) with 68.3 % χ² intervals. MDEV rolls white PM off as τ^{−3/2} and separates it from flicker PM; the totals reach τ = T/4 with tighter long-τ intervals.' },
       { type: 'panel', heading: 'Real-time and multi-clock use',
         bullets: [
-          ['Streaming: ', 'ADEV, MDEV, HDEV and MHDEV accumulate in O(1) per sample per τ (Dobrogowski–Kasznia 2007, extended to third differences) from a ring buffer of at most 4·m_max + 1 samples; the running deviation equals the batch kernel on the samples seen so far.'],
+          ['Streaming: ', 'ADEV, MDEV, HDEV and MHDEV accumulate in O(1) per sample per τ (Dobrogowski–Kasznia 2007, extended to third differences) from a ring buffer of at most 4·m_{max} + 1 samples; the running deviation equals the batch kernel on the samples seen so far.'],
           ['Time-resolved and ensemble: ', 'dynamic σ(t, τ) maps for non-stationary records; N-cornered hat for N ≥ 3 clocks with independent noises.'],
         ] },
     ],
@@ -43,7 +43,7 @@ module.exports = {
       { type: 'panel', heading: 'Monte Carlo against synthesized noise measures both the bias and the EDF',
         bullets: [
           ['Design: ', 'α ∈ {+2, +1, 0, −1, −2}; N ∈ {1024, …, 32768}; octave m grid; R = 3000 realizations per cell; one independent random stream per (seed, α, N, r). The statistic calibrated is the shipped pipeline, including its default drift removal.'],
-          ['Reference: ', 'MHDEV on the same realization (its EDF follows from the Greenhall–Riley spectral sum). Bias B = E[MHTOTVAR] / E[MHVAR]; EDF = 2 V̄² / s_V², bootstrap standard error ≈ √(2/R) = 2.6 %.'],
+          ['Reference: ', 'MHDEV on the same realization (its EDF follows from the Greenhall–Riley spectral sum). Bias B = E[MHTOTVAR] / E[MHVAR]; EDF = 2 mean(V)^{2} / var(V), bootstrap standard error ≈ √(2/R) = 2.6 %.'],
           ['Fits: ', 'over τ/τ₀ ≥ 16, the validity window of the total-variance literature. EDF ν = b T/τ − c (Mod-Totvar; the TotHvar form is better by at most ΔR² = 8 × 10⁻⁴, at α = ±2) and bias B = b₀ + b₁ τ/T, both by weighted least squares.'],
         ],
         figures: ['F4_mhtot_bias', 'F5_mhtot_edf'], figH: 3.85,
