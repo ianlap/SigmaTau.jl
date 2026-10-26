@@ -80,8 +80,8 @@ module.exports = {
             ['−2', 'random-walk FM', '2.1686', '−5.5884', '0.7631', '2.4490', '0.9985'],
           ] } },
       { type: 'panel', heading: 'Time-resolved stability: σ(t, τ) maps for non-stationary records',
-        figure: 'F7_dynamic', figH: 5.0,
-        caption: 'Fig. 5. DADEV on a synthesized 8191-sample record (τ₀ = 1 s): white FM at σ_{y}(1 s) = 1 × 10⁻¹² for the first half, then 3 × 10⁻¹² plus flicker FM at 1 × 10⁻¹²; window 1024 samples, step 128. Each cell is an ordinary overlapping ADEV of its window, so the change is located to within one window length; a 3-D view is in the desktop explorer.' },
+        figure: 'F7_dynamic', figH: 5.1,
+        caption: 'Fig. 5. DADEV waterfall on a synthesized 8191-sample record (τ₀ = 1 s): white FM at σ_{y}(1 s) = 1 × 10⁻¹² for the first half, then 3 × 10⁻¹² plus flicker FM at 1 × 10⁻¹²; window 1024 samples, step 128. Each curve is the overlapping ADEV of one window, so the change is located to within one window length.' },
     ],
   ],
 
