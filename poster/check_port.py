@@ -1,6 +1,8 @@
-import sys; sys.path.insert(0, '/home/user/SigmaTau.jl/poster')
+import os, sys
+HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
 import numpy as np, stab_np as S
-x = S.read_phase('/home/user/SigmaTau.jl/test/fixtures/validation/stable32gen.DAT')
+x = S.read_phase(os.path.join(ROOT, 'test', 'fixtures', 'validation', 'stable32gen.DAT'))
 print('N =', len(x))
 ref = {}  # Stable32 sigma from docs/src/validation.md
 ref['adev'] = {1:1.0097e+00,2:5.0444e-01,4:2.5021e-01,8:1.3063e-01,16:6.2750e-02,32:3.1804e-02,64:1.6085e-02,128:8.1063e-03,256:4.5004e-03,512:3.1642e-03,1024:3.1373e-03,2048:4.6131e-03}
