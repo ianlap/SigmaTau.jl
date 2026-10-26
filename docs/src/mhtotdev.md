@@ -127,15 +127,16 @@ result). The authoritative full-sweep JSON is tracked at
 
 Full sweep (N = 1024 … 32768, R = 3000, both bias and EDF over `τ/τ_0 ≥ 16`,
 with the wrapper's default `remove_drift=true` global drift removal in the
-loop). All EDF fits are excellent (R² ≥ 0.9982):
+loop, Kasdin–Walter synthesis, git `e3ba9da`). All EDF fits have
+R² ≥ 0.9988:
 
 | α  | Noise | EDF `b`, `c` | bias `b0` | `b1` |
 |---:|:------|:-------------|:----------|:-----|
-|  2 | WHPM  | 1.6869, 4.3166 | 1.0308 | −0.1197 |
-|  1 | FLPM  | 1.1671, 3.2107 | 0.9883 | −0.0686 |
+|  2 | WHPM  | 1.6342, 3.8334 | 1.0249 | −0.0078 |
+|  1 | FLPM  | 1.1651, 3.1934 | 0.9879 | −0.0630 |
 |  0 | WHFM  | 1.0861, 3.3451 | 1.0545 | −0.1706 |
-| −1 | FLFM  | 1.0095, 3.3254 | 1.2947 | −0.7193 |
-| −2 | RWFM  | 0.7631, 2.4490 | 2.1686 | −5.5884 |
+| −1 | FLFM  | 1.0096, 3.3662 | 1.2946 | −0.7752 |
+| −2 | RWFM  | 0.7641, 2.4152 | 2.1678 | −5.6243 |
 
 MHTOTDEV is **≈ unbiased for the PM noises** (`b0 ≈ 1`, `b1` small) and reads
 **progressively high for redder FM** at small τ; for random-walk FM,
@@ -144,23 +145,37 @@ term now carries two physical effects with the same sign: the
 boundary-extension bias falling off toward the record length, and the
 suppression of totalized low-frequency power by the global least-squares
 drift removal as τ → T (the well-known effect of drift removal on red
-noise). Together they cut the bias-fit residual by ~18.5 % (WHPM), ~33.2 %
-(FLPM), ~44.7 % (WHFM), ~61.1 % (FLFM), and ~96.0 % (RWFM); even the PM
-noises now show a small but nonzero `b1`.
+noise). Together they cut the bias-fit residual by ~2.5 % (WHPM), ~36.5 %
+(FLPM), ~44.7 % (WHFM), ~65.3 % (FLFM), and ~96.0 % (RWFM); for white PM
+the τ/T term is negligible.
 
 Two methodology points matter for reproducing the table: (1) restricting the
 bias to the same
 `τ/τ_0 ≥ 16` window as the EDF, since the near-degenerate `m = 1` cell otherwise
 dominates the weighted ratio and pulls the apparent bias spuriously below 1; and
-(2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.9982 across
+(2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.9988 across
 all noise types. The tracked full-sweep artifact records the git SHA, seed,
 grid, and per-α fits.
 
 !!! warning "Edge zone at the reach limit"
     The kernel needs `N − 4m + 1 ≥ 1`, so MHTOTDEV's reach limit is `τ = T/4`
     (`T/τ ≥ 4`). The fitted linear form crosses `ν = 1` near
-    `T/τ ≈ 3.2–4.5` depending on α (lowest at α = +2, highest at α = −2), and a
-    χ² interval computed from `ν < 1` is degenerate (the bounds collapse).
-    Treat confidence intervals as valid for `T/τ ≳ 5–6` and indicative only
-    in the final octave before the reach limit; the σ values themselves are
-    valid all the way to `τ = T/4`.
+    `T/τ ≈ 3.2–4.5` depending on α (lowest at α = +2, highest at α = −2).
+    Below `ν = 1` the χ² interval is degenerate, so `confidence_intervals`
+    falls back to the Gaussian `±K_α σ z/√N` approximation there (lower bound
+    floored at zero). Treat confidence intervals as valid for `T/τ ≳ 5–6` and
+    indicative only in the final octave before the reach limit; the σ values
+    themselves are valid all the way to `τ = T/4`.
+
+!!! note "Degrees-of-freedom gain over MHDEV"
+    The extension buys degrees of freedom for the phase noises and white FM
+    but not for the reddest noise. At the same τ the fitted MHTOTDEV EDF is
+    about 1.5× the Greenhall–Riley MHDEV EDF for WHPM, 1.3× for WHFM, 1.2×
+    for FLFM, and 0.9× for RWFM, and the RWFM deficit is a property of the
+    estimator rather than of the fit: a direct Monte Carlo (N = 4096,
+    m = 64, 300 realizations, Kasdin–Walter synthesis) gives an empirical
+    EDF of 47 for MHTOTDEV against 58 for MHDEV, with the fitted value at
+    46. For random-walk FM the reflected extension re-uses the record's
+    low-frequency content and the bias correction divides by `B ≈ 2.1`, so
+    MHTOTDEV's advantage there is reach (`τ = T/4`), not precision; prefer
+    MHDEV where both exist.
