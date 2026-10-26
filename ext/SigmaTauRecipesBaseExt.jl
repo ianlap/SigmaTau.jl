@@ -99,7 +99,7 @@ end
 
 # Dynamic deviation map (DADEV / DHDEV): log10(σ) over (t, τ). Default
 # rendering is a heatmap with a log-scale τ axis; pass
-# `seriestype = :path3d` for the SP1065-style dynamic-deviation view — one
+# `seriestype = :path3d` for the SP1065-style dynamic-deviation view: one
 # σ(τ) curve per window time, stacked along the time axis as 3-D lines.
 # Plots' 3-D axes do not support log scales, so the 3-D branch plots
 # log10(τ) and log10(σ) as the coordinates and labels the decade ticks in

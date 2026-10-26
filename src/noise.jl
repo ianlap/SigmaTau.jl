@@ -1,3 +1,6 @@
+# Power-law noise identification (lag-1 ACF with B1 / R(n) fallback) and
+# calibrated power-law noise synthesis.
+
 # Lag-1 autocorrelation noise identification (with B1 / R(n) fallback).
 using Statistics
 using StaticArrays
@@ -7,8 +10,9 @@ const NEFF_RELIABLE = 30
 """
     identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, detrend::Bool=true) → Vector{Symbol}
 
-Identifies dominant power-law noise type using lag-1 autocorrelation for
-phase data with B1-ratio fallback.
+Identify the dominant power-law noise type at each averaging factor by the
+lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
+fewer than `NEFF_RELIABLE` effective samples remain.
 
 The full record always passes through a 5σ outlier filter before the
 per-m loop; that step is unconditional and unrelated to the polynomial
@@ -72,15 +76,12 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
 end
 
 function _preprocess(x::Vector{Float64})
-    # 5σ outlier filter only — no polynomial detrending. The pre-record
-    # linear detrend that lived here previously was distinct to SigmaTau
-    # (Stable32 and allantools both leave the full record untouched and
-    # detrend per-m instead). Removing it lets our default α track the
-    # external references; the per-m polynomial detrend still runs in
-    # `_noise_id_lag1acf` / `_noise_id_b1rn` (toggleable via the
-    # `detrend` kwarg on `identify_noise`).
+    # 5σ outlier filter only, no polynomial detrending of the full record:
+    # Stable32 and allantools both leave the record untouched and detrend
+    # per m, which `_noise_id_lag1acf` / `_noise_id_b1rn` do (switchable
+    # with the `detrend` keyword of `identify_noise`).
     x_std = std(x)
-    x_std < eps() && return x  # degenerate input — nothing to filter against.
+    x_std < eps() && return x  # degenerate input; nothing to filter against
     x_mean = mean(x)
     thresh = 5.0 * x_std
     # Two-pass count-then-fill avoids the N-length boolean mask + temporary
@@ -121,8 +122,7 @@ function _detrend_quadratic(x::Vector{Float64})
     S4 = (N_float^2 * (N_float + 1.0)^2) / 4.0
     S5 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0) * (3.0*N_float^2 + 3.0*N_float - 1.0)) / 30.0
 
-    # 3×3 LS solve via StaticArrays — heap-free (vs `M = [S1 S2 S3; …]`
-    # which allocated the matrix, the V vector, and the LU work).
+    # 3×3 least-squares solve via StaticArrays, allocation-free.
     M = @SMatrix [S1 S2 S3; S2 S3 S4; S3 S4 S5]
     V = @SVector [X1, X2, X3]
     C = M \ V
@@ -173,13 +173,10 @@ function _lag1_acf(x::Vector{Float64})
         ssx += d*d
         raw += v*v
     end
-    # Scale-invariant degeneracy guard: bail out only when the centred
-    # signal really has no power (or float-zero relative to the
-    # raw-magnitude scale). The previous form `ssx < eps(Float64) * N`
-    # mixed dimensions — it tripped on any data with std below
-    # ~√eps ≈ 1.5e-8 regardless of N, so phase records in seconds
-    # (typically 1e-9 .. 1e-12) produced spurious NaN classifications
-    # even though there was 12+ orders of dynamic range left in the
+    # Scale-invariant degeneracy guard: bail out only when the centered
+    # signal has no power relative to the raw-magnitude scale. An absolute
+    # threshold would trip on phase records in seconds (1e-9 .. 1e-12)
+    # even though there is ample dynamic range left in the
     # Float64 representation.
     raw > 0 && ssx <= eps(Float64) * raw && return NaN
     ssx == 0.0 && return NaN
@@ -210,7 +207,7 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true)
 
     y_blocks = reshape(dx[1:Nd], m, :)
     y_avg = vec(mean(y_blocks, dims=1))
-    # Bessel-corrected (N-1 divisor) — Howe/Barnes B1 theory assumes the
+    # Bessel-corrected (N-1 divisor): Howe/Barnes B1 theory assumes the
     # unbiased population-variance estimator. The N-divisor variant
     # systematically understates B1 at small N_eff and pushes long-τ
     # classifications into the PM region. Matches Stable32 exactly.
@@ -284,10 +281,8 @@ function _simple_mdev(x::Vector{Float64}, m::Int, tau0::Float64)
     N  = length(x)
     Ne = N - 3m + 1
     Ne <= 0 && return NaN
-    # One length-(N+1) buffer for the prefix sum, then fold the three
-    # running-sum differences into a single accumulator. Previously three
-    # broadcast subtractions and `cumsum(pushfirst!(copy(x), 0.0))` allocated
-    # six length-N(ish) intermediates per call.
+    # One length-(N+1) prefix-sum buffer; the three running-sum differences
+    # fold into a single accumulator, so nothing else is allocated per call.
     cs = Vector{Float64}(undef, N + 1)
     cs[1] = 0.0
     acc = 0.0
@@ -338,7 +333,7 @@ function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
     W = fft(w)
 
     # Symmetric FFT-bin frequency magnitude. Bin 0 (DC) gets a placeholder
-    # so the f^(alpha/2) term is finite; we zero the DC bin afterwards.
+    # so the f^(alpha/2) term is finite; the DC bin is zeroed afterwards.
     f = abs.(AbstractFFTs.fftfreq(N, 1.0))
     f[1] = 1.0
 
@@ -355,7 +350,7 @@ sequence has power spectral density ∝ `f^alpha`. Mapping:
 
 | α  | Noise type | Phase spectrum |
 |---:|:-----------|:---------------|
-|  2 | WPM        | flat           |
+|  2 | WHPM       | flat           |
 |  1 | FLPM       | 1/f            |
 |  0 | WHFM       | 1/f²           |
 | -1 | FLFM       | 1/f³           |
@@ -363,8 +358,8 @@ sequence has power spectral density ∝ `f^alpha`. Mapping:
 
 For deterministic output, seed the global RNG (`Random.seed!`) before calling,
 or pass an `AbstractRNG` as `rng`. The DC component is zeroed before the inverse
-transform so the output has zero mean. Calls into `AbstractFFTs.fft`/`ifft` —
-caller must have an FFT backend loaded (e.g. `using FFTW`).
+transform so the output has zero mean. Calls `AbstractFFTs.fft`/`ifft`, so
+the caller must have an FFT backend loaded (e.g. `using FFTW`).
 """
 function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0, rng=nothing)
     # Phase: x[k] = τ₀ · Σⱼ₌₁ᵏ y[j]
@@ -380,7 +375,7 @@ end
 # independently and summed.
 
 # σ_y(τ=τ₀) from h_α via SP1065 Table 3 with the Nyquist bandwidth
-# f_h = 1/(2τ₀) for the bandwidth-dependent WPM (α=2) and FPM (α=1) cases.
+# f_h = 1/(2τ₀) for the bandwidth-dependent WHPM (α=2) and FLPM (α=1) cases.
 function _h_to_sigma1(alpha::Int, h::Float64, tau0::Float64)
     if alpha == 2
         return sqrt(3 * h / (8 * π^2 * tau0^3))
@@ -464,25 +459,25 @@ is a sum of user-specified power laws `S_y(f) = h_α f^α`. Returns either a
 
 | α  | Noise type                | Phase PSD slope |
 |---:|:--------------------------|:----------------|
-|  2 | WPM — white phase         | flat            |
-|  1 | FPM — flicker phase       | 1/f             |
-|  0 | WFM — white frequency     | 1/f²            |
-| -1 | FFM — flicker frequency   | 1/f³            |
-| -2 | RWFM — random-walk freq.  | 1/f⁴            |
+|  2 | WHPM, white phase          | flat            |
+|  1 | FLPM, flicker phase        | 1/f             |
+|  0 | WHFM, white frequency      | 1/f²            |
+| -1 | FLFM, flicker frequency    | 1/f³            |
+| -2 | RWFM, random-walk frequency | 1/f⁴           |
 
 # Specifying the mixture
 
 Pass *either* `sigma1` *or* `h` (not both):
 
-- `sigma1[α] = σ` — target Allan deviation σ_y(τ=τ₀) of the α-component.
+- `sigma1[α] = σ`: target Allan deviation σ_y(τ=τ₀) of the α-component.
   Convenient when working from a clock spec sheet that quotes
   σ_y(1 s) directly.
-- `h[α] = h_α` — fractional-frequency PSD coefficient in
+- `h[α] = h_α`: fractional-frequency PSD coefficient in
   `S_y(f) = h_α f^α`. Unambiguous everywhere.
 
-For WPM (α=2) and FPM (α=1) the SP1065 σ_y(τ) ↔ h_α relation depends on a
+For WHPM (α=2) and FLPM (α=1) the SP1065 σ_y(τ) ↔ h_α relation depends on a
 measurement bandwidth `f_h`. This function uses the Nyquist convention
-`f_h = 1/(2τ₀)` — the highest frequency representable on a record sampled
+`f_h = 1/(2τ₀)`, the highest frequency representable on a record sampled
 at `τ₀`.
 
 Each per-α component is rescaled to hit its requested amplitude exactly for
@@ -501,13 +496,13 @@ Monte Carlo with independent per-realization seeds).
 using SigmaTau, Random
 Random.seed!(0)
 
-# Composite: WFM at σ_y(1 s) = 1e-12 plus RWFM at σ_y(1 s) = 1e-14
+# Composite: WHFM at σ_y(1 s) = 1e-12 plus RWFM at σ_y(1 s) = 1e-14
 p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14))
 
 # Same record but as fractional-frequency
 y = noise_gen(FrequencyData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14))
 
-# Specify by h_α (here pure WFM with h_0 = 2e-24 → σ_y(1 s) ≈ 1e-12)
+# Specify by h_α (here pure WHFM with h_0 = 2e-24 → σ_y(1 s) ≈ 1e-12)
 noise_gen(PhaseData, 8192, 1.0; h = Dict(0 => 2e-24))
 ```
 """

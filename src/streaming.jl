@@ -1,4 +1,4 @@
-# streaming.jl — real-time streaming stability accumulators.
+# Real-time streaming stability accumulators.
 #
 # Implements the Dobrogowski–Kasznia real-time computation scheme (2007 IEEE
 # Frequency Control Symposium): per averaging factor m, keep a running sum of
@@ -12,7 +12,7 @@
 #
 # Correctness contract: at any sample count, `snapshot(acc).dev` reproduces
 # the batch kernels `_adev_core` / `_mdev_core` / `_hdev_core` /
-# `_mhdev_core` on the samples pushed so far — same windows, same
+# `_mhdev_core` on the samples pushed so far: same windows, same
 # normalization, same NaN guards. The streaming equivalence testset in
 # test/stab/streaming.jl locks this in at rtol 1e-10.
 
@@ -28,7 +28,7 @@ const _STREAMING_LAG = Dict{Symbol,Int}(:adev => 2, :mdev => 3, :hdev => 3, :mhd
 Real-time streaming accumulator for the overlapping difference-family
 deviations: feed phase samples one at a time with `push!` (or in chunks
 with `append!`) and read off the running deviation estimate at any moment
-with [`snapshot`](@ref) — without storing the record or recomputing
+with [`snapshot`](@ref), without storing the record or recomputing
 anything.
 
 `dev` selects the estimator: `:adev`, `:mdev`, `:hdev`, or `:mhdev`. `tau0`
@@ -131,7 +131,7 @@ function Base.push!(acc::StreamingStability, x_next::Real)
         for (k, m) in enumerate(ms)
             if t > 3m
                 # Eq. 12 slide: drop the oldest second difference of the
-                # window, pick up the newest — a single third difference.
+                # window, pick up the newest: a single third difference.
                 @inbounds inner[k] += _ring_get(buf, cap, t) -
                     3.0 * _ring_get(buf, cap, t - m) +
                     3.0 * _ring_get(buf, cap, t - 2m) -
@@ -180,7 +180,7 @@ end
 """
     append!(acc::StreamingStability, xs::AbstractVector{<:Real}) → acc
 
-Feed a chunk of phase samples (seconds), in order — exactly equivalent to
+Feed a chunk of phase samples (seconds), in order; equivalent to
 `push!`-ing them one at a time.
 """
 function Base.append!(acc::StreamingStability, xs::AbstractVector{<:Real})
@@ -197,9 +197,9 @@ The deviation estimate over all samples streamed so far, as a plain
 [`StabilityResult`](@ref). `dev` matches the batch kernel on the same record
 at every m (NaN where the batch kernel has fewer than 2 analysis windows);
 `neff` carries the current window counts (0 at NaN points). The
-`ci`/`edf`/`noise_type` fields are empty — on-demand EDF/CI for streaming
-accumulators is future work; for confidence intervals run the batch API on
-the full record.
+`ci`/`edf`/`noise_type` fields are empty (on-demand EDF/CI for streaming
+accumulators is not implemented); for confidence intervals run the batch API
+on the full record.
 """
 function snapshot(acc::StreamingStability)
     ms = acc.m_values

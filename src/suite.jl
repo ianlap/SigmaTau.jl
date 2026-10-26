@@ -1,3 +1,4 @@
+# `stability`: a suite of deviations in one call, and `nch`, the N-cornered hat.
 """
 Default deviation set computed by [`stability`](@ref) when `devs` is not given:
 overlapping Allan, modified Allan, overlapping Hadamard, and modified Hadamard.
@@ -56,7 +57,7 @@ end
     stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, taus=Octave,
               ci=true, confidence=DEFAULT_CONFIDENCE, kwargs...) → StabilitySuite
 
-Compute a suite of stability deviations from one record in a single call — the
+Compute a suite of stability deviations from one record in a single call, the
 batch analog of `adev`, `mdev`, …. Each symbol in `devs` is dispatched to its
 public deviation function with a per-deviation averaging-factor grid derived from
 `taus`, so every deviation gets a grid valid for its own algorithmic m-max.
@@ -70,7 +71,7 @@ deviation. The extra keyword argument `correct_bias` is forwarded only to the
 deviations that accept it (the total family and `theo1`); `pdev` and `theoh`
 receive `ci`/`confidence`; `mtie`/`tierms` receive only `ci`. Note that an
 explicit `taus`
-vector is passed to every deviation verbatim — `:theo1` interprets it as even
+vector is passed to every deviation verbatim: `:theo1` interprets it as even
 Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
 prefer a `TauMode` when mixing the Theo family with others.
 
@@ -107,7 +108,7 @@ stability(data::FrequencyData; kwargs...) =
 function _nch_pair(pairwise::AbstractMatrix{StabilityResult}, i::Int, j::Int)
     isassigned(pairwise, i, j) && return pairwise[i, j]
     isassigned(pairwise, j, i) && return pairwise[j, i]
-    throw(ArgumentError("nch: no pairwise result for clocks ($i, $j) — fill pairwise[$i, $j] (or its transpose)"))
+    throw(ArgumentError("nch: no pairwise result for clocks ($i, $j); fill pairwise[$i, $j] (or its transpose)"))
 end
 
 """
@@ -131,7 +132,7 @@ With `Rᵢ = Σ_{j≠i} s²ᵢⱼ` (clock `i`'s row sum) and `S = Σ_{j<k} s²�
 At `N = 3` this is the classic three-cornered hat,
 `σ̂²_A = ½(s²_AB + s²_AC − s²_BC)`.
 
-`pairwise[i, j]` (for `i < j`; the transposed entry is also accepted —
+`pairwise[i, j]` (for `i < j`; the transposed entry is also accepted, so
 fill either triangle, or both) is the deviation computed on the
 difference record between clocks `i` and `j`. All entries must share the
 same `deviation_type` and the same τ grid; otherwise an `ArgumentError`
@@ -141,17 +142,17 @@ results in the cyclic order A−B, B−C, C−A and returns `[A, B, C]`
 
 Returned conventions (one `StabilityResult` per clock, in clock order):
 
-- `deviation_type` is kept from the inputs — the statistic is still
-  e.g. an ADEV; the hat merely separates the pairwise variances into
-  per-clock contributions.
+- `deviation_type` is kept from the inputs: the statistic is still an
+  ADEV, say; the hat only separates the pairwise variances into per-clock
+  contributions.
 - Non-positive variance estimates (common when one clock dominates or
   the independence assumption fails) are reported as `NaN` in `dev`
-  rather than clamped to zero — they are invalid estimates, and zeros
-  poison log-scale plots.
+  rather than clamped to zero; they are invalid estimates, and zeros
+  break log-scale plots.
 - `ci`, `edf`, and `noise_type` are empty: there is no established
   confidence model for the hat-separated estimates (the inversion mixes
   χ² variables of differing sign), so no bounds are fabricated.
-- `neff` is the elementwise minimum over all pairwise inputs — every
+- `neff` is the elementwise minimum over all pairwise inputs: every
   separated estimate uses every measured pair, so the least-averaged
   input bounds its quality.
 
@@ -181,16 +182,16 @@ function nch(pairwise::AbstractMatrix{StabilityResult})
     n_tau = length(ref.tau)
 
     # Accumulate per-τ row sums Rᵢ and the all-pairs sum S, validating
-    # every pair against the reference grid/type as we go.
+    # every pair against the reference grid and type.
     R = zeros(n_clocks, n_tau)
     S = zeros(n_tau)
     neff_min = fill(typemax(Int), n_tau)
     for i in 1:(n_clocks - 1), j in (i + 1):n_clocks
         r = _nch_pair(pairwise, i, j)
         r.deviation_type === ref.deviation_type || throw(ArgumentError(
-            "nch: pairwise ($i, $j) is :$(r.deviation_type) but ($(1), $(2)) is :$(ref.deviation_type) — all pairs must share one deviation type"))
+            "nch: pairwise ($i, $j) is :$(r.deviation_type) but (1, 2) is :$(ref.deviation_type); all pairs must share one deviation type"))
         r.tau == ref.tau || throw(ArgumentError(
-            "nch: pairwise ($i, $j) was computed on a different τ grid — all pairs must share one grid"))
+            "nch: pairwise ($i, $j) was computed on a different τ grid; all pairs must share one grid"))
         @inbounds for k in 1:n_tau
             v = r.dev[k]^2
             R[i, k] += v

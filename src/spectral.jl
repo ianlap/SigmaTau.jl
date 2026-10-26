@@ -1,15 +1,14 @@
-# Welch PSD core shared by the public `Sy` / `Sx` / `L` API. One-sided "density" normalization (matching
-# scipy.signal.welch with `scaling="density", return_onesided=True`) so that
-# the integral of the returned PSD over [0, fs/2] recovers the variance of the
-# (per-segment mean-removed) input. Uses the real FFT from FFTW (imported once
-# in `SigmaTau.jl`).
+# Welch PSD core and the public `Sy` / `Sx` / `L` spectral estimators.
+# One-sided "density" normalization (as scipy.signal.welch with
+# `scaling="density", return_onesided=True`), so the integral of the PSD over
+# [0, fs/2] recovers the variance of the per-segment mean-removed input.
 
 """
     _window(kind::Symbol, n::Int) → Vector{Float64}
 
 Length-`n` analysis window. Supports `:hann`, `:hamming`, and `:rectangular`
-(the no-op boxcar). Periodic ("DFT-even") convention — the `n` in the cosine
-denominator is `n`, not `n-1` — which is the correct form for spectral
+(the no-op boxcar). Periodic ("DFT-even") convention, with `n` rather than
+`n-1` in the cosine denominator, which is the correct form for spectral
 estimation (avoids the half-sample bias of the symmetric window).
 """
 function _window(kind::Symbol, n::Int)

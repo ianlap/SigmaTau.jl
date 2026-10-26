@@ -1,3 +1,5 @@
+# Equivalent degrees of freedom, bias factors and χ² confidence intervals.
+
 using Statistics
 using Distributions
 
@@ -10,7 +12,7 @@ Greenhall–Riley spectral integrals for ADEV / MDEV / HDEV / MHDEV (via
 total-family estimators, and the SP1065 Table 3 empirical formulas for
 `:theo1` (via `_theo1_edf`).
 
-WPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 9 and
+WHPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 9 and
 FCS 2001 publish coefficients for α ∈ {0, -1, -2} only. For α ∈ {1, 2}
 this routine falls back to the ADEV-style (`d=2`, `F=m`, `S=m`) or
 HDEV-style (`d=3`, `F=m`, `S=m`) Greenhall–Riley formula so every
@@ -19,8 +21,8 @@ overlapped convention applied to the four overlapped variants
 (ADEV/MDEV/HDEV/MHDEV); both TOTDEV and HTOTDEV operate on a stride-1
 phase record (Howe's reflected-boundary extension preserves overlap),
 so the overlapped EDF is the consistent choice. The substitute is
-pragmatic, not canonical — it is dominated by the same noise-shape
-contribution as ADEV/HDEV at WPM/FLPM, but is documented as a policy
+pragmatic, not canonical: it is dominated by the same noise-shape
+contribution as ADEV/HDEV at WHPM/FLPM, but is documented as a policy
 choice rather than a derivation.
 """
 function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64)
@@ -41,9 +43,9 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mhdev
             edfs[k] = _calc_edf_core(alpha, 3, m, 1, m, N)
         elseif method == :totdev
-            # SP1065 Table 9 covers α ∈ {0,-1,-2}. For WPM/FLPM (α=2,1) TOTDEV
+            # SP1065 Table 9 covers α ∈ {0,-1,-2}. For WHPM/FLPM (α=2,1) TOTDEV
             # is dominated by the same noise-shape contribution as ADEV, so the
-            # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m — overlapped
+            # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m, the overlapped
             # convention) is the accepted pragmatic substitute when no
             # totvar-specific table value is published.
             if alpha == 2 || alpha == 1
@@ -55,7 +57,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mtotdev
             # The SP1065 Table 8 coefficient formula is valid only for
             # τ ≥ 16τ0. Below that floor MTOT reduces to MDEV, so it inherits
-            # the modified-Allan EDF (Greenhall–Riley, d=2, F=1) — verified to
+            # the modified-Allan EDF (Greenhall–Riley, d=2, F=1), verified to
             # match Stable32's reported Chi Square DF to ~5 sig figs at small m
             # (and avoids the b·(T/τ) form returning an unphysical EDF > N).
             if m < 16
@@ -65,8 +67,8 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 edfs[k] = b * (T / tau) - c
             end
         elseif method == :htotdev
-            # Same logic as :totdev: for WPM/FLPM, fall back to HDEV-style EDF
-            # (third-difference, F=m, S=m — overlapped convention) since the
+            # Same logic as :totdev: for WHPM/FLPM, fall back to HDEV-style EDF
+            # (third-difference, F=m, S=m, the overlapped convention) since the
             # FCS 2001 table only gives coefficients for α ∈ {0,-1,-2}.
             if alpha == 2 || alpha == 1
                 edfs[k] = _calc_edf_core(alpha, 3, m, m, m, N)
@@ -182,7 +184,7 @@ end
 
 function _coeff_mtot(alpha::Int)
     # edf = b·(T/τ) − c, coefficients per noise type from NIST SP1065
-    # (Riley 2008) §5.4.3 Table 8 — the published standard, traceable to
+    # (Riley 2008) §5.4.3 Table 8, the published standard, traceable to
     # Greenhall's degrees-of-freedom recipes (Greenhall 1991 / Greenhall &
     # Riley 2003). Used verbatim for all five noise types, matching how
     # `_coeff_totvar` follows SP1065 Table 7.
@@ -196,12 +198,12 @@ end
 
 function _coeff_mhtot(alpha::Int)
     # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
-    # (tools/mc_mhtotdev.jl, full sweep at git 3806ccb — the L = 4m subsegment
-    # kernel — seed 20260531, R=3000, N up to 32768) against the shipped
+    # (tools/mc_mhtotdev.jl, full sweep at git 3806ccb with the L = 4m subsegment
+    # kernel, seed 20260531, R=3000, N up to 32768) against the shipped
     # mhtotdev pipeline INCLUDING its default global least-squares drift
     # removal (remove_drift=true), so the calibration matches what users
     # compute; all fits R² ≥ 0.9982. MHTOTDEV is novel to SigmaTau, so these
-    # have no external reference — see docs mhtotdev.md. Both
+    # have no external reference; see docs mhtotdev.md. Both
     # the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
     # fit; TotHvar edges ahead at α = ±2 (ΔR² ≤ 8e-4) and Mod-Totvar fits
     # better elsewhere, so the Mod-Totvar form is kept uniformly as in the
@@ -217,7 +219,7 @@ end
 # A(α) coefficient of the PVAR EDF approximation, Vernotte–Chen–Rubiola 2020
 # (arXiv:2005.13631) Eq. (18): the 3rd-order polynomial
 #   A(α) = 27 + (1/4)α + (5/14)α² − (3/4)α³
-# fit to massive Monte-Carlo, with A(+2)=23 fixed by the white-PM closed form of
+# fitted to a large Monte Carlo, with A(+2)=23 fixed by the white-PM closed form of
 # Vernotte et al. 2016 (arXiv:1506.00687) Eq. (24). Stored as the integer-α values
 # the paper reports (the cubic rounded), since noise identification only yields
 # integer α. The companion coefficient B(α) = 12 is constant for all α (Eq. 18).
@@ -295,26 +297,26 @@ Equivalent χ² degrees of freedom of the Thêo1 statistic at averaging factor
 (Riley 2008) §5.2.15 Table 3 (Howe & Peppler 2003), with `r = 0.75·m` and the
 stated validity condition `τ0 ≤ T/10`. One closed form per power-law noise
 type; α outside {−2…2} returns NaN. Also used for ThêoBR / the Thêo1 segment
-of ThêoH — the bias-removal ratio is a scalar rescaling, which standard
+of ThêoH; the bias-removal ratio is a scalar rescaling, which standard
 practice (Stable32) treats as not changing the degrees of freedom.
 """
 function _theo1_edf(alpha::Int, m::Int, N::Int)
     m < 2 && return NaN
     r = 0.75 * m
     Nf = Float64(N)
-    if alpha == 2        # W PM
+    if alpha == 2        # WHPM
         return (0.86 * (Nf + 1.0) * (Nf - 4.0 * r / 3.0) / (Nf - r)) *
                (r / (r + 1.14))
-    elseif alpha == 1    # F PM
+    elseif alpha == 1    # FLPM
         return ((4.798 * Nf^2 - 6.374 * Nf * r + 12.387 * r) /
                 (sqrt(r + 36.6) * (Nf - r))) * (r / (r + 0.3))
-    elseif alpha == 0    # W FM
+    elseif alpha == 0    # WHFM
         return ((4.1 * Nf + 0.8) / r - (3.1 * Nf + 6.5) / Nf) *
                (r^1.5 / (r^1.5 + 5.2))
-    elseif alpha == -1   # F FM
+    elseif alpha == -1   # FLFM
         return ((2.0 * Nf^2 - 1.3 * Nf * r - 3.5 * r) / (Nf * r)) *
                (r^3 / (r^3 + 2.3))
-    elseif alpha == -2   # RW FM
+    elseif alpha == -2   # RWFM
         return ((4.4 * Nf - 2.0) / (2.9 * r)) *
                (((4.4 * Nf - 1.0)^2 - 8.6 * r * (4.4 * Nf - 1.0) + 11.4 * r^2) /
                 (4.4 * Nf - 3.0)^2)
@@ -325,8 +327,8 @@ end
 function _coeff_htot(alpha::Int)
     # FCS 2001 / Howe & Tasset 2005 Table I, columns b₀ and b₁ of
     #   edf(τ) = (T/τ) / (b₀ + b₁·τ/T)
-    # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses
-    # an undocumented fallback that we do not currently match.
+    # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses an
+    # undocumented fallback that is not reproduced here.
     alpha == 0  && return (0.559, 1.004)
     alpha == -1 && return (0.868, 1.140)
     alpha == -2 && return (0.938, 1.696)
@@ -357,19 +359,19 @@ the caller takes the square root before dividing the deviation.
 Recognised `var_type` values: `:totvar`, `:mtot`, `:htot`, `:mhtot`.
 
 Conventions per variance type:
-- `:totvar` — Howe/Walter (1994). `B = 1 − a·τ/T` with `a = 1/(3·ln 2)`
-  for FFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
+- `:totvar`: Howe/Walter (1994). `B = 1 − a·τ/T` with `a = 1/(3·ln 2)`
+  for FLFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
   divergent FM noises only.
-- `:mtot`   — SP1065 Table 11 / Greenhall 1999. Independent of τ.
+- `:mtot`: SP1065 Table 11 / Greenhall 1999. Independent of τ.
   Biased high (B > 1); MTOT overstates MVAR, consistent with the Monte
   Carlo of Howe & Vernotte 2003 (Table 1). Stable32 reports MTOT raw, so
   `correct_bias=false` on `mtotdev` matches Stable32.
-- `:htot`   — FCS 2001 (Howe & Tasset) Table I `a` column. `B = 1 + a`
+- `:htot`: FCS 2001 (Howe & Tasset) Table I `a` column. `B = 1 + a`
   with the published `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}`
-  for α ∈ {0, -1, -2, -3, -4}. Biased low (B < 1) — HTOT understates
+  for α ∈ {0, -1, -2, -3, -4}. Biased low (B < 1); HTOT understates
   the divergent-FM variance. B = 1 for α > 0 (no published model;
   matches Stable32).
-- `:mhtot`  — measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
+- `:mhtot`: measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
   `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
   external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
   `:totvar`): `b0 ∈ {1.031, 0.988, 1.054, 1.295, 2.169}` and
@@ -406,13 +408,13 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             # full sweep at git 3806ccb, the L = 4m subsegment kernel) over the
             # τ/τ0 ≥ 16 validity window (Howe et al. 2000), with the wrapper's
             # default global drift removal (remove_drift=true) in the loop.
-            # Modeled as B = b0 + b1·(τ/T) — the same τ/T-linear form as
+            # Modeled as B = b0 + b1·(τ/T), the same τ/T-linear form as
             # :totvar. For the PM noises b1 is small (B ≈ constant); for the FM
             # noises the b1 term carries both the boundary bias and the
             # drift-removal suppression near τ → T and cuts the fit residual by
             # ~45 % (WHFM) to ~96 % (RWFM). MHTOTDEV is ≈ unbiased for
             # white/flicker PM (B ≈ 1) and reads high for redder FM
-            # (RWFM B ≈ 2.2 at small τ). MHTOTDEV is novel to SigmaTau —
+            # (RWFM B ≈ 2.2 at small τ). MHTOTDEV is novel to SigmaTau;
             # no external reference; see docs mhtotdev.md.
             b0_t = Dict(2=>1.0308, 1=>0.9883, 0=>1.0545, -1=>1.2947, -2=>2.1686)
             b1_t = Dict(2=>-0.1197, 1=>-0.0686, 0=>-0.1706, -1=>-0.7193, -2=>-5.5884)
@@ -427,7 +429,7 @@ end
 """
     confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64) → (Vector{Float64}, Vector{Float64})
 
-Returns lower and upper confidence limits.
+Lower and upper confidence limits for each deviation.
 Uses Distributions.jl for accurate χ² limits.
 """
 function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64)
@@ -455,7 +457,7 @@ function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, nois
             Kn = _kn_from_alpha(_alpha_from_noise(noises[k]))
             half = Kn * d * z / sqrt(Float64(N))
             # A deviation is non-negative by construction, so floor the lower
-            # limit at zero — the symmetric Gaussian approximation can otherwise
+            # limit at zero; the symmetric Gaussian approximation can otherwise
             # push it below zero for short records at high confidence.
             lower[k] = max(d - half, 0.0)
             upper[k] = d + half
