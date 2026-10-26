@@ -50,7 +50,7 @@ plot(stability(p))               # overlay a suite
 ## Contents
 
 - [Plotting and tables](plotting.md): the plot recipes, confidence-band styles,
-  dynamic maps, and table export.
+  dynamic deviation waterfalls, and table export.
 - [Validation](validation.md): per-τ agreement with Stable32 and allantools.
 - [MHTOTDEV bias and EDF](mhtotdev.md): how the coefficients of the one
   estimator with no published reference were measured.
