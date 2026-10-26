@@ -45,7 +45,9 @@ const HELP_SECTIONS = [
      "3. Press Run analysis, or Enter in any field. The Deviations, Spectrum and Dynamic deviation pages " *
      "fill in and the status line at the bottom reports what was computed.\n" *
      "4. Export figure… writes the current page as PNG, PDF or SVG. Export table… writes the suite " *
-     "as a tab-separated file. Export record… writes the preprocessed record as text."),
+     "as a tab-separated file. Export record… writes the preprocessed record as text.\n" *
+     "Keyboard: Enter in a field runs the analysis; fields are selected with the mouse (no Tab order). " *
+     "Start with --fontsize=14 or 16 for larger text."),
     ("Deviations",
      "Frequency deviations are dimensionless; time deviations (tdev, htdev, ttotdev, mtie, tierms) are in " *
      "seconds and plot on their own axes. Hadamard estimators remove linear frequency drift; modified " *
@@ -278,7 +280,7 @@ function fill_table!(grid, r::StabilityResult)
     if length(r.tau) > nrows
         Label(grid[nrows + 2, 1:ncol],
               "$(length(r.tau) - nrows) more rows not shown; Export table… writes all of them";
-              halign=:left, tellwidth=false, color=:gray50)
+              halign=:left, tellwidth=false, color=:gray35)
     end
     colgap!(grid, 0)
     rowgap!(grid, 0)
@@ -338,16 +340,17 @@ function set_visible!(blocks, v)
     end
 end
 
-function build(; size=(1500, 940))
-    fig = Figure(; size=size, fontsize=12, backgroundcolor=:gray98)
+function build(; size=(1500, 940), fontsize=12)
+    fig = Figure(; size=size, fontsize=fontsize, backgroundcolor=:gray98)
     controls = GridLayout(fig[1, 1]; tellheight=false, valign=:top)
     plots    = GridLayout(fig[1, 2]; tellwidth=false, tellheight=false)
-    colsize!(fig.layout, 1, Fixed(430))
+    colsize!(fig.layout, 1, Fixed(round(Int, 430 * fontsize / 12)))
     colgap!(fig.layout, 24)
     rowgap!(controls, 2)
     colgap!(controls, 8)
 
-    const_h = 26
+    const_h = round(Int, 2.2 * fontsize)
+    hint = fontsize - 1
     small(str) = Textbox(fig; stored_string=str, width=62, height=const_h, tellwidth=false, halign=:left)
     menu(; kw...) = Menu(fig; height=const_h, kw...)
     textbox(; kw...) = Textbox(fig; height=const_h, kw...)
@@ -381,7 +384,7 @@ function build(; size=(1500, 940))
         cell[1, 2] = Label(fig, string(d); halign=:left, color=:gray20)
     end
     Label(controls[nextrow(), 1:2], rich("σ", subscript("y"), ": adev … theoh, pdev.   σ", subscript("x"), " (seconds): tdev, htdev, ttotdev, mtie, tierms.");
-          halign=:left, tellwidth=false, color=:gray50, fontsize=11)
+          halign=:left, tellwidth=false, color=:gray35, fontsize=hint)
 
     section("Analysis")
     tau_menu    = labelled("τ grid", menu(; options=first.(TAU_MODES), default="Octave", width=170))
@@ -400,10 +403,10 @@ function build(; size=(1500, 940))
 
     run_btn = Button(fig; label="Run analysis", buttoncolor=RGBf(0.33, 0.47, 0.72),
                      labelcolor=:white, buttoncolor_hover=RGBf(0.4, 0.55, 0.8),
-                     font=:bold, height=32)
+                     font=:bold, height=const_h + 6)
     controls[nextrow(), 1:2] = run_btn
     Label(controls[nextrow(), 1:2], "Enter in any field also runs the analysis.";
-          halign=:center, tellwidth=false, color=:gray50, fontsize=11)
+          halign=:center, tellwidth=false, color=:gray35, fontsize=hint)
 
     status = Label(fig[2, 1:2], "Ready."; halign=:left, tellwidth=false, color=:gray30,
                    padding=(6, 6, 4, 4))
@@ -439,7 +442,7 @@ function build(; size=(1500, 940))
     src[6, 1] = Label(fig, "Header rows"; halign=:right, color=:gray25)
     src[6, 2] = header
     Label(src[7, 1:2], "Stable32 .DAT: header rows 10, time column 0, value column 1.";
-          halign=:left, tellwidth=false, color=:gray50, fontsize=11)
+          halign=:left, tellwidth=false, color=:gray35, fontsize=hint)
     load_btn = Button(fig; label="Load file", height=const_h, tellwidth=false, halign=:right)
     src[8, 2] = load_btn
 
@@ -483,7 +486,7 @@ function build(; size=(1500, 940))
     tbl = GridLayout(dev_page[1:2, 2]; halign=:left, valign=:top)
     tbl_head = GridLayout(tbl[1, 1]; halign=:left)
     table_menu = Menu(tbl_head[1, 1]; options=["adev"], default="adev", width=140, tellwidth=true, halign=:left)
-    tbl_head[1, 2] = Label(fig, "per-τ table"; halign=:left, color=:gray40)
+    tbl_head[1, 2] = Label(fig, "per-τ table"; halign=:left, color=:gray35)
     table_grid = GridLayout(tbl[2, 1]; halign=:left, valign=:top)
     colgap!(dev_page, 20)
 
@@ -493,7 +496,7 @@ function build(; size=(1500, 940))
     let opts = GridLayout(spec_page[1, 1]; halign=:left, tellwidth=false)
         opts[1, 1] = Label(fig, "Carrier frequency for ℒ(f) (Hz)"; color=:gray25)
         opts[1, 2] = carrier_box
-        opts[1, 3] = Label(fig, "(takes effect at the next run)"; color=:gray50)
+        opts[1, 3] = Label(fig, "(takes effect at the next run)"; color=:gray35)
     end
     ax_sy = Axis(spec_page[2, 1]; xscale=log10, yscale=log10, log_axis_kw()..., ylabel=S_Y)
     ax_sx = Axis(spec_page[3, 1]; xscale=log10, yscale=log10, log_axis_kw()..., ylabel=S_X)
@@ -507,7 +510,7 @@ function build(; size=(1500, 940))
     let opts = GridLayout(dyn_page[1, 1:2]; halign=:left, tellwidth=false)
         opts[1, 1] = Label(fig, "Estimator"; color=:gray25); opts[1, 2] = dyn_menu
         opts[1, 3] = Label(fig, "window as a fraction of the record"; color=:gray25); opts[1, 4] = frac_menu
-        opts[1, 5] = Label(fig, "(takes effect at the next run; drag the plot to rotate)"; color=:gray50)
+        opts[1, 5] = Label(fig, "(takes effect at the next run; drag the plot to rotate)"; color=:gray35)
     end
     ax_d = dynamic_axis(dyn_page[2, 1])
     cb_d = Ref{Any}(nothing)
@@ -667,53 +670,78 @@ function build(; size=(1500, 940))
             say("Error: " * sprint(showerror, err); error=true)
         end
     end
+    write_figure(p, page) = Makie.save(p, export_figure(page, state, (; title=title_lbl.text[], band=band_toggle.active[]));
+                                       backend=CairoMakie, px_per_unit=2)
+    write_table(p) = SigmaTau.save(p, state.suite[])
+    write_record(p) = SigmaTau.save(p, state.record[])
     on(export_fig_btn.clicks) do _
         page = page_menu.selection[]
         page == "Help" && (say("Nothing to export on the Help page."); return)
         (page == "Record" ? state.record[] : state.suite[]) === nothing &&
             (say("Run an analysis first."; error=true); return)
-        export_to("sigmatau_$(lowercase(replace(page, " " => "_"))).png", "png,pdf,svg") do p
-            exfig = export_figure(page, state, (; title=title_lbl.text[], band=band_toggle.active[]))
-            Makie.save(p, exfig; backend=CairoMakie, px_per_unit=2)
-        end
+        export_to("sigmatau_$(lowercase(replace(page, " " => "_"))).png", "png,pdf,svg", p -> write_figure(p, page))
     end
     on(export_tsv_btn.clicks) do _
         state.suite[] === nothing && (say("Run an analysis first."; error=true); return)
-        export_to("sigmatau_suite.tsv", "tsv,txt") do p; SigmaTau.save(p, state.suite[]); end
+        export_to("sigmatau_suite.tsv", "tsv,txt", write_table)
     end
     on(export_rec_btn.clicks) do _
         state.record[] === nothing && (say("Load or synthesize a record first."; error=true); return)
-        export_to("sigmatau_record.txt", "txt,csv,dat") do p; SigmaTau.save(p, state.record[]); end
+        export_to("sigmatau_record.txt", "txt,csv,dat", write_record)
     end
 
     DataInspector(fig)
     show_page("Record")
-    return (; fig, run, reload, state, show_page,
-            export_figure=(page) -> export_figure(page, state, (; title=title_lbl.text[], band=band_toggle.active[])),
-            controls=(; dev_toggles, band_toggle, page_menu))
+    return (; fig, run, reload, state, show_page, write_figure, write_table, write_record,
+            status=() -> status.text[],
+            controls=(; dev_toggles, band_toggle, page_menu, path_box, kind, tau0_box, time_col, value_col, header))
 end
 
 # ── Entry point ───────────────────────────────────────────────────────────
 
 if abspath(PROGRAM_FILE) == @__FILE__
+    # Options: --smoke (headless self-test), --fontsize=N (default 12; 14 or 16
+    # for projection), --size=WxH (window size). SIGMATAU_FONTSIZE also works.
+    option(name, default) = (i = findfirst(startswith("--$name="), ARGS); i === nothing ? default : split(ARGS[i], "=")[2])
     smoke = "--smoke" in ARGS
-    size = smoke ? (parse(Int, get(ENV, "SIGMATAU_SMOKE_W", "1500")), parse(Int, get(ENV, "SIGMATAU_SMOKE_H", "940"))) : (1500, 940)
-    app = build(; size=size)
+    fontsize = parse(Int, option("fontsize", get(ENV, "SIGMATAU_FONTSIZE", "12")))
+    size = Tuple(parse.(Int, split(option("size", smoke ? "1500x940" : "1500x940"), "x")))
+    app = build(; size=size, fontsize=fontsize)
     app.reload(false)       # open with a synthetic record on screen
     app.run()
     if smoke
-        app.controls.dev_toggles[:tdev].active[] = true
-        app.controls.dev_toggles[:mtie].active[] = true
+        dir = get(ENV, "SIGMATAU_SMOKE_DIR", tempdir())
+        c = app.controls
+        # Load path: the Stable32 fixture through the Record-page fields.
+        fixture = joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation", "stable32gen.DAT")
+        c.path_box.stored_string[] = fixture; c.header.stored_string[] = "10"
+        app.reload(true)
+        n_fixture = nsamples(app.state.record[])
+        n_fixture == 8192 || error("smoke test: Stable32 fixture read $n_fixture samples")
+        c.dev_toggles[:tdev].active[] = true
+        c.dev_toggles[:mtie].active[] = true
         app.run()
         s = app.state.suite[]
-        s === nothing && error("smoke test: no suite produced")
-        dir = get(ENV, "SIGMATAU_SMOKE_DIR", tempdir())
+        (s === nothing || s.n != 8192) && error("smoke test: no suite from the loaded file")
+        # Export paths and the record round trip.
+        app.write_table(joinpath(dir, "suite.tsv"))
+        length(load_suite(joinpath(dir, "suite.tsv")).results) == length(s.results) || error("smoke test: suite round trip")
+        app.write_record(joinpath(dir, "record.txt"))
+        c.path_box.stored_string[] = joinpath(dir, "record.txt"); c.header.stored_string[] = "0"
+        app.reload(true)
+        nsamples(app.state.record[]) == 8192 || error("smoke test: record round trip")
+        # Error path: a bad field reports in the status line and keeps the record.
+        c.tau0_box.stored_string[] = "abc"
+        app.reload(false)
+        startswith(app.status(), "Error:") || error("smoke test: bad τ₀ not reported")
+        c.tau0_box.stored_string[] = "1.0"
+        app.reload(false); app.run()
+        s = app.state.suite[]
         for page in PAGES
-            app.controls.page_menu.i_selected = findfirst(==(page), PAGES)
+            c.page_menu.i_selected = findfirst(==(page), PAGES)
             Makie.save(joinpath(dir, "explorer_" * replace(lowercase(page), " " => "_") * ".png"),
                        app.fig; px_per_unit=1)
-            page == "Help" || Makie.save(joinpath(dir, "export_" * replace(lowercase(page), " " => "_") * ".pdf"),
-                                         app.export_figure(page); backend=CairoMakie)
+            page == "Help" || app.write_figure(joinpath(dir, "export_" * replace(lowercase(page), " " => "_") * ".pdf"), page)
         end
         println("smoke test OK: ", join(string.(keys(s)), ", "), " → ", dir)
     else

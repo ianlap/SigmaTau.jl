@@ -99,7 +99,9 @@ julia --project=app -e 'using Pkg; Pkg.instantiate()'   # first run only
 julia --project=app app/StabilityExplorer.jl
 ```
 
-The first launch compiles GLMakie and takes a minute or two.
+The first launch compiles GLMakie and takes a minute or two. `--fontsize=14`
+(or 16) enlarges every label for projection, `--size=WxH` sets the window,
+and `--smoke` runs the headless self-test that CI-style checks use.
 
 ## Tests
 
