@@ -73,7 +73,7 @@ module.exports = {
               "all five, switchable"
             ],
             [
-              "MDEV-class Hadamard (MHDEV, HTDEV, MHTOTDEV)",
+              "Modified Hadamard Class (MHDEV, HTDEV, MHTOTDEV)",
               "no",
               "no",
               "yes"
@@ -133,13 +133,13 @@ module.exports = {
       },
       {
         "type": "panel",
-        "heading": "4 × 10⁵-sample modified totals: 0.47 s vs 30 min",
+        "heading": "4 × 10⁵-sample modified totals: 0.46 s vs 30 min",
         "body": [
-          "Measured 406 763-sample phase record, kernel-only timing, same samples, τ grid and statistic; allantools single-threaded (no parallel path). MTOTDEV 0.469 s vs 1 803.6 s (3,842×); HTOTDEV 0.455 s vs 1 928.0 s (4,233×). Reflected extension streamed per thread; window sum split across threads."
+          "Measured 406 763-sample phase record, kernel-only timing, same samples, τ grid and statistic; allantools single-threaded (no parallel path). MTOTDEV 0.461 s vs 1 810 s (3,926×); HTOTDEV 0.461 s vs 1 926 s (4,178×). Reflected extension streamed per thread; window sum split across threads."
         ],
         "figure": "F3_speed",
         "figH": 4.1,
-        "caption": "Fig. 3. Speed-up per kernel, N = 25 000 white-PM record (bench/), 12-core workstation; diamonds: independent 4-core re-run. Ratios portable; absolute times machine-dependent."
+        "caption": "Fig. 3. Speed-up per kernel, N = 25 000 white-PM record (bench/), 12-thread workstation; diamonds: 4-core container run. Ratios portable; absolute times machine-dependent."
       },
       {
         "type": "panel",
@@ -160,7 +160,7 @@ module.exports = {
       },
       {
         "type": "panel",
-        "heading": "PM unbiased, red FM reads high; EDF R² ≥ 0.9982",
+        "heading": "PM unbiased, red FM reads high; EDF R² ≥ 0.9988",
         "figures": [
           "F4_mhtot_bias",
           "F5_mhtot_edf"
@@ -182,19 +182,19 @@ module.exports = {
             [
               "+2",
               "white PM",
-              "1.0308",
-              "−0.1197",
-              "1.6869",
-              "4.3166",
-              "0.9982"
+              "1.0249",
+              "−0.0078",
+              "1.6342",
+              "3.8334",
+              "0.9989"
             ],
             [
               "+1",
               "flicker PM",
-              "0.9883",
-              "−0.0686",
-              "1.1671",
-              "3.2107",
+              "0.9879",
+              "−0.0630",
+              "1.1651",
+              "3.1934",
               "0.9988"
             ],
             [
@@ -209,20 +209,20 @@ module.exports = {
             [
               "−1",
               "flicker FM",
-              "1.2947",
-              "−0.7193",
-              "1.0095",
-              "3.3254",
-              "0.9991"
+              "1.2946",
+              "−0.7752",
+              "1.0096",
+              "3.3662",
+              "0.9992"
             ],
             [
               "−2",
               "random-walk FM",
-              "2.1686",
-              "−5.5884",
-              "0.7631",
-              "2.4490",
-              "0.9985"
+              "2.1678",
+              "−5.6243",
+              "0.7641",
+              "2.4152",
+              "0.9988"
             ]
           ]
         }
