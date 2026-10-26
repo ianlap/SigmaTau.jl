@@ -44,8 +44,10 @@ t  = (0:N-1) .* τ₀
 y  = fd_noise.y .+ D .* t   # drift injected explicitly
 fd = FrequencyData(y, τ₀)
 
-# A common octave τ-grid for every estimator in this tutorial, from
-# 1 s out to 8192 s (≈ 2.3 h):
+# We use one octave-spaced τ grid, 1 s to 8192 s (about 2.3 h), for every
+# estimator in this tutorial, so the curves can be compared point for point.
+# (With no grid argument each function picks its own octave grid up to its
+# algorithmic τ_max, which differs between kernels.)
 
 m_values = [2^k for k in 0:13]
 taus     = m_values .* τ₀
