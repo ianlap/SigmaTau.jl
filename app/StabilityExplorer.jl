@@ -697,8 +697,8 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     smoke = "--smoke" in ARGS
-    size = smoke ? (parse(Int, get(ENV, "SIGMATAU_SMOKE_W", "1500")), parse(Int, get(ENV, "SIGMATAU_SMOKE_H", "940"))) : (1500, 940)
-    app = build(; size=size)
+    win_size = smoke ? (parse(Int, get(ENV, "SIGMATAU_SMOKE_W", "1500")), parse(Int, get(ENV, "SIGMATAU_SMOKE_H", "940"))) : (1500, 940)
+    app = build(; size=win_size)
     app.reload(false)       # open with a synthetic record on screen
     app.run()
     if smoke
