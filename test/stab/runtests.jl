@@ -1223,34 +1223,40 @@ const LK = ReferenceKernels
             @test isapprox(σ_emp, sqrt(2) * σ; rtol = 0.2)
         end
 
-        @testset "h-mode hits requested σ_y(τ=τ₀) through analytic conversion" begin
-            Random.seed!(5)
-            tau0 = 1.0
-            # WFM: σ²_y(τ₀) = h_0 / (2 τ₀)  ⇒  h_0 = 2 τ₀ σ²
-            target_σ = 2e-12
-            h0       = 2 * tau0 * target_σ^2
-            p = noise_gen(PhaseData, 4096, tau0; h = Dict(0 => h0))
-            σ_emp = _adev_core(p.x, [1], tau0)[1]
-            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
+        @testset "h-mode: the generated spectrum carries the requested coefficient" begin
+            using Statistics: var, median
+            # An `h` component is scaled analytically on the Kasdin–Walter
+            # filter's low-frequency PSD, 2τ₀(2πτ₀f)^α per unit innovation.
+            # Exact discrete checks for the three integer-order processes
+            # (sample variances, so a few percent of spread at N = 65536):
+            τ0 = 1.0; h = 1e-24; N = 65536
+            y_rw = noise_gen(FrequencyData, N, τ0; h = Dict(-2 => h), rng = Xoshiro(3)).y
+            @test isapprox(var(diff(y_rw)), 2π^2 * τ0 * h; rtol = 0.05)      # random-walk innovations
+            x_wp = noise_gen(PhaseData, N, τ0; h = Dict(2 => h), rng = Xoshiro(3)).x
+            @test isapprox(var(x_wp), h / (8π^2 * τ0); rtol = 0.05)           # white phase, S_x = h/(4π²)
+            y_wf = noise_gen(FrequencyData, N, τ0; h = Dict(0 => h), rng = Xoshiro(3)).y
+            @test isapprox(var(y_wf), h / (2τ0); rtol = 0.05)                 # white frequency
+            # Welch estimate of S_y(f)/(h f^α) well below Nyquist, every α.
+            for α in (2, 1, 0, -1, -2)
+                p  = noise_gen(FrequencyData, N, τ0; h = Dict(α => h), rng = Xoshiro(7))
+                sy = Sy(p)
+                keep = (sy.freq .> 0.003 / τ0) .& (sy.freq .< 0.03 / τ0)
+                ratio = median(sy.psd[keep] ./ (h .* sy.freq[keep] .^ α))
+                @test isapprox(ratio, 1.0; rtol = 0.15)
+            end
         end
 
-        @testset "h-mode FFM: σ² = 2 ln(2) h_{-1}" begin
-            Random.seed!(11)
-            target_σ = 3e-13
-            h_m1     = target_σ^2 / (2 * log(2))
-            p = noise_gen(PhaseData, 4096, 1.0; h = Dict(-1 => h_m1))
-            σ_emp = _adev_core(p.x, [1], 1.0)[1]
-            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
-        end
-
-        @testset "h-mode RWFM at τ₀ ≠ 1: σ² = (2π²/3) h_{-2} τ₀" begin
-            Random.seed!(13)
-            tau0     = 0.5
-            target_σ = 4e-14
-            h_m2     = 3 * target_σ^2 / (2 * π^2 * tau0)
-            p = noise_gen(PhaseData, 4096, tau0; h = Dict(-2 => h_m2))
-            σ_emp = _adev_core(p.x, [1], tau0)[1]
-            @test isapprox(σ_emp, target_σ; rtol = 1e-10)
+        @testset "h-mode RWFM at τ₀ ≠ 1: discrete random walk, σ²(τ₀) = π² h_{-2} τ₀" begin
+            # For the sampled random walk the innovation variance is q = 2π²τ₀h
+            # and ADEV²(τ₀) = q/2 = π²τ₀h, not the continuous-time (2π²/3)hτ₀
+            # (the latter holds for τ ≫ τ₀). Sample estimate at N = 65536.
+            using Statistics: var
+            tau0 = 0.5
+            h_m2 = 1e-26
+            p = noise_gen(FrequencyData, 65536, tau0; h = Dict(-2 => h_m2), rng = Xoshiro(13))
+            @test isapprox(var(diff(p.y)), 2π^2 * tau0 * h_m2; rtol = 0.05)
+            x = cumsum(p.y) .* tau0
+            @test isapprox(_adev_core(x, [1], tau0)[1], sqrt(π^2 * tau0 * h_m2); rtol = 0.05)
         end
 
         @testset "determinism: seed → same output" begin
