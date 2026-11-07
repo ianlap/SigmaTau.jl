@@ -1,4 +1,4 @@
-"""Parse the per-tau tables in docs/src/validation.md into poster/data/validation.json."""
+"""Parse the per-tau tables in docs/src/validation.md into paper/data/validation.json."""
 import re, json, os
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 md = open(os.path.join(ROOT, 'docs', 'src', 'validation.md')).read()

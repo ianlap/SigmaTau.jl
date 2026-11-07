@@ -1,8 +1,8 @@
-# Produce poster figure data with the real package (run from the repo root):
-#   julia --project=. poster/julia_figdata.jl
-# Writes poster/data/suite_fixture.csv  (every deviation on the validation fixture, with noise type, EDF, CI)
-#        poster/data/dynamic_map.csv    (dadev map of a synthesized record with a mid-record noise-level change)
-#        poster/data/streaming_check.csv (streamed vs batch ADEV/MDEV/HDEV/MHDEV at several sample counts)
+# Produce figure data with the real package (run from the repo root):
+#   julia --project=. paper/julia_figdata.jl
+# Writes paper/data/suite_fixture.csv  (every deviation on the validation fixture, with noise type, EDF, CI)
+#        paper/data/dynamic_map.csv    (dadev map of a synthesized record with a mid-record noise-level change)
+#        paper/data/streaming_check.csv (streamed vs batch ADEV/MDEV/HDEV/MHDEV at several sample counts)
 using SigmaTau, Random, DelimitedFiles, Printf
 root = normpath(joinpath(@__DIR__, ".."))
 out  = joinpath(@__DIR__, "data"); mkpath(out)

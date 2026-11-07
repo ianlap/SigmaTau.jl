@@ -1,7 +1,0 @@
-{
-  "name": "sigmatau-poster",
-  "private": true,
-  "description": "Builds the SigmaTau.jl poster from content.js and figures/",
-  "scripts": { "build": "node build_poster.js" },
-  "dependencies": { "pptxgenjs": "^4.0.0" }
-}
