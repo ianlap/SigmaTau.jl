@@ -16,9 +16,10 @@ fewer than `NEFF_RELIABLE` effective samples remain.
 
 Every entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`; the
 function never returns `:unknown`. Estimates outside α ∈ [-2, 2] are
-clamped to the nearest end, an averaging factor whose estimate fails takes
-its nearest successful neighbour's type, and a record with no usable
-estimate at all (e.g. constant) is reported as `:WHFM`.
+clamped to the nearest end, an averaging factor whose estimate fails
+takes the type of the successful one nearest to it in log(m), and a
+record with no usable estimate at all (e.g. constant) is reported as
+`:WHFM`.
 
 The full record always passes through a 5σ outlier filter before the
 per-m loop; that step is unconditional and unrelated to the polynomial
@@ -68,29 +69,33 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
         ok[k] = true
     end
 
-    return _fill_noise_symbols(alphas, ok)
+    return _fill_noise_symbols(alphas, ok, m_values)
 end
 
 const _NOISE_SYMBOLS = (:RWFM, :FLFM, :WHFM, :FLPM, :WHPM)  # α = -2 … 2
 
 # Map integer α to noise symbols. An averaging factor whose estimate failed
 # (too few points after differencing, a degenerate decimated series) takes
-# the nearest successful neighbour on the m grid, preferring the shorter m
-# on a tie because it rests on more data. With no successful estimate at
-# all (constant or very short record), fall back to :WHFM, the same α = 0
+# the type of the successful averaging factor closest to it in log(m), the
+# natural distance on octave or decade τ grids; a tie goes to the shorter m
+# because it rests on more data. With no successful estimate at all
+# (constant or very short record), fall back to :WHFM, the same α = 0
 # default `_alpha_from_noise` uses for EDF.
-function _fill_noise_symbols(alphas::Vector{Int}, ok::AbstractVector{Bool})
+function _fill_noise_symbols(alphas::Vector{Int}, ok::AbstractVector{Bool},
+                             m_values::AbstractVector{<:Integer})
     n = length(alphas)
     noises = Vector{Symbol}(undef, n)
     any(ok) || return fill!(noises, :WHFM)
     for k in 1:n
         j = k
         if !ok[k]
-            for d in 1:n
-                if k - d >= 1 && ok[k - d]
-                    j = k - d; break
-                elseif k + d <= n && ok[k + d]
-                    j = k + d; break
+            best = Inf
+            for i in 1:n
+                ok[i] || continue
+                dist = abs(log(m_values[i] / m_values[k]))
+                if dist < best || (dist == best && m_values[i] < m_values[j])
+                    best = dist
+                    j = i
                 end
             end
         end
