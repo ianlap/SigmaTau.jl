@@ -101,6 +101,11 @@ julia --project=app app/StabilityExplorer.jl
 
 The first launch compiles GLMakie and takes a minute or two.
 
+To ship it to someone without Julia, `julia app/SigmaTauExplorer/build/build.jl`
+compiles it into a standalone app folder with a custom sysimage, so the window
+opens without the compile wait; see
+[`app/SigmaTauExplorer`](app/SigmaTauExplorer/README.md).
+
 A browser edition with the same analysis and plots serves on
 `http://127.0.0.1:9384`; its controls are native HTML (labelled inputs, a
 real table, a live status region, Tab order), so it works with screen
