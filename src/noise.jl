@@ -14,6 +14,13 @@ Identify the dominant power-law noise type at each averaging factor by the
 lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
 fewer than `NEFF_RELIABLE` effective samples remain.
 
+Every entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`; the
+function never returns `:unknown`. Estimates outside α ∈ [-2, 2] are
+clamped to the nearest end, an averaging factor whose estimate fails
+takes the type of the successful one nearest to it in log(m), and a
+record with no usable estimate at all (e.g. constant) is reported as
+`:WHFM`.
+
 The full record always passes through a 5σ outlier filter before the
 per-m loop; that step is unconditional and unrelated to the polynomial
 detrend below.
@@ -34,8 +41,8 @@ up with a Stable32-generated reference fixture point-for-point.
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, detrend::Bool=true)
     x_clean = _preprocess(x)
     N = length(x_clean)
-    noises = Vector{Symbol}(undef, length(m_values))
-    last_reliable = :unknown
+    alphas = Vector{Int}(undef, length(m_values))
+    ok = falses(length(m_values))
 
     for (k, m) in enumerate(m_values)
         N_eff = N ÷ m
@@ -51,27 +58,49 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             alpha = NaN
         end
 
-        if !isnan(alpha)
-            # Map alpha to symbol
-            if round(alpha) == 2
-                noises[k] = :WHPM
-            elseif round(alpha) == 1
-                noises[k] = :FLPM
-            elseif round(alpha) == 0
-                noises[k] = :WHFM
-            elseif round(alpha) == -1
-                noises[k] = :FLFM
-            elseif round(alpha) == -2
-                noises[k] = :RWFM
-            else
-                noises[k] = :unknown
-            end
-            last_reliable = noises[k]
-        else
-            noises[k] = last_reliable
-        end
+        isnan(alpha) && continue
+        # The lag-1 estimate is continuous and noisy: a white-PM record can
+        # come out at α ≈ 2.6, and at d = dmax a ρ near its 0.5 ceiling gives
+        # α ≈ -3 (and FWFM/RRFM-dominated data, or an infinite ratio, can go
+        # further). None of those has a symbol here, so clamp to the
+        # supported range and take the nearest power law instead of
+        # reporting :unknown.
+        alphas[k] = round(Int, clamp(alpha, -2.0, 2.0))
+        ok[k] = true
     end
 
+    return _fill_noise_symbols(alphas, ok, m_values)
+end
+
+const _NOISE_SYMBOLS = (:RWFM, :FLFM, :WHFM, :FLPM, :WHPM)  # α = -2 … 2
+
+# Map integer α to noise symbols. An averaging factor whose estimate failed
+# (too few points after differencing, a degenerate decimated series) takes
+# the type of the successful averaging factor closest to it in log(m), the
+# natural distance on octave or decade τ grids; a tie goes to the shorter m
+# because it rests on more data. With no successful estimate at all
+# (constant or very short record), fall back to :WHFM, the same α = 0
+# default `_alpha_from_noise` uses for EDF.
+function _fill_noise_symbols(alphas::Vector{Int}, ok::AbstractVector{Bool},
+                             m_values::AbstractVector{<:Integer})
+    n = length(alphas)
+    noises = Vector{Symbol}(undef, n)
+    any(ok) || return fill!(noises, :WHFM)
+    for k in 1:n
+        j = k
+        if !ok[k]
+            best = Inf
+            for i in 1:n
+                ok[i] || continue
+                dist = abs(log(m_values[i] / m_values[k]))
+                if dist < best || (dist == best && m_values[i] < m_values[j])
+                    best = dist
+                    j = i
+                end
+            end
+        end
+        noises[k] = _NOISE_SYMBOLS[alphas[j] + 3]
+    end
     return noises
 end
 
