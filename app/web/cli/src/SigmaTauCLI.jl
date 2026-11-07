@@ -128,14 +128,22 @@ end
 function load_record(o::Options)
     o.synth > 0 && return synth_record(o)
     isfile(o.input) || throw(CLIError("no such file: " * o.input))
-    tau0 = isnan(o.tau0) ? nothing : o.tau0
+    det = detrend_symbol(o.detrend)
+    # Two concrete call sites instead of `tau0 = isnan ? nothing : x`: a
+    # Union{Nothing,Float64} keyword makes the kwcall dynamic under --trim.
     if o.kind == "frequency"
-        fd = read_frequency(o.input; tau0=tau0, time_col=o.time_col, value_col=o.value_col,
-                            header=o.header, scaling=o.scaling, detrend=detrend_symbol(o.detrend))
+        fd = isnan(o.tau0) ?
+            read_frequency(o.input; time_col=o.time_col, value_col=o.value_col,
+                           header=o.header, scaling=o.scaling, detrend=det) :
+            read_frequency(o.input; tau0=o.tau0, time_col=o.time_col, value_col=o.value_col,
+                           header=o.header, scaling=o.scaling, detrend=det)
         return PhaseData(cumsum(fd.y) .* fd.tau0, fd.tau0; source=fd.source)
     end
-    return read_phase(o.input; tau0=tau0, time_col=o.time_col, value_col=o.value_col,
-                      header=o.header, scaling=o.scaling, detrend=detrend_symbol(o.detrend))
+    return isnan(o.tau0) ?
+        read_phase(o.input; time_col=o.time_col, value_col=o.value_col,
+                   header=o.header, scaling=o.scaling, detrend=det) :
+        read_phase(o.input; tau0=o.tau0, time_col=o.time_col, value_col=o.value_col,
+                   header=o.header, scaling=o.scaling, detrend=det)
 end
 
 # ── Estimators ────────────────────────────────────────────────────────────
@@ -307,7 +315,7 @@ function (@main)(args::Vector{String})::Cint
         return Cint(0)
     catch err
         msg = err isa CLIError ? err.msg :
-              err isa ArgumentError ? String(err.msg) :
+              err isa ArgumentError ? (err.msg isa String ? err.msg : "invalid argument") :
               err isa DomainError ? "domain error in the analysis" :
               "analysis failed (" * String(nameof(typeof(err))) * ")"
         write_error(io, msg)
