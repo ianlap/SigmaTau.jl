@@ -1,6 +1,6 @@
 // Entry point: routing, loading records, the Run action, the header chip,
 // status bar, export menu, drag and drop and keyboard shortcuts.
-import { state, update, subscribe, newClock, activeClock, multi } from "./state.js";
+import { state, update, subscribe, newClock, activeClock, multi, referenceClock, isReference } from "./state.js";
 import { health, load, analyze } from "./core.js";
 import { initPanel, renderPanel } from "./panel.js";
 import { openImport } from "./importer.js";
@@ -58,29 +58,50 @@ function markRecordStale(s) { s.run.stale = "record"; }
 
 const baseName = (n) => n.replace(/\.[^.]+$/, "");
 
+let nextGroup = 1;
+
+// Load a file through the import dialog. The first value column goes into
+// `clock` (or a new clock); each further value column becomes its own clock,
+// all in one group so a reference clock can be chosen among them.
 async function importFile(file, clock, prev) {
   const settings = await openImport(file, prev);
   if (!settings) return;
-  let c = clock;
+  const group = prev?.group ?? nextGroup++;
+  const touched = [];
   update((s) => {
-    if (!c) {
-      c = newClock({ name: baseName(file.name) });
-      s.clocks.push(c);
-    } else if (!multi() || c.source.type !== "file" || c.name === baseName(c.source.name ?? "")) {
-      c.name = baseName(file.name);
-    }
-    Object.assign(c, {
-      source: { type: "file", name: file.name, content: file.text },
-      kind: settings.kind, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
-      value_col: settings.value_col, header: settings.header, scaling: settings.scaling,
-      hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo,
-      fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, result: null,
+    settings.value_cols.forEach((col, k) => {
+      let c = k === 0 ? clock : null;
+      const colName = settings.names[k] ?? (settings.value_cols.length > 1 ? `${baseName(file.name)} col ${col}` : baseName(file.name));
+      if (!c) {
+        c = newClock({ name: colName });
+        s.clocks.push(c);
+      } else if (!multi() || c.source.type !== "file" || c.name === baseName(c.source.name ?? "")) {
+        c.name = settings.value_cols.length > 1 ? colName : baseName(file.name);
+      }
+      Object.assign(c, {
+        source: { type: "file", name: file.name, content: file.text }, group,
+        kind: settings.kind, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
+        value_col: col, header: settings.header, scaling: settings.scaling,
+        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo,
+        fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, result: null,
+      });
+      touched.push(c);
     });
-    s.activeClock = c.id;
+    s.activeClock = touched[0].id;
     s.dataMode = "file";
   });
   go("data");
-  await loadClock(c);
+  await Promise.all(touched.map(loadClock));
+}
+
+// Choose the reference clock (null = as measured). Clocks from the same file
+// are re-read against it; the reference itself leaves the plots.
+async function setReference(id) {
+  const old = referenceClock();
+  update((s) => { s.reference = id; markRecordStale(s); });
+  const r = referenceClock();
+  const groups = new Set([old?.group, r?.group].filter((g) => g !== null && g !== undefined));
+  await Promise.all(state.clocks.filter((c) => groups.has(c.group)).map((c) => { c.result = null; return loadClock(c); }));
 }
 
 async function openInto(clock) {
@@ -124,7 +145,7 @@ function selectClock(id) {
 // ── Run ──
 let runCtl = null;
 async function run() {
-  const clocks = state.clocks.filter((c) => c.record);
+  const clocks = state.clocks.filter((c) => c.record && !isReference(c));
   if (!clocks.length || !state.devs.length || state.run.state === "running") return;
   runCtl?.abort();
   runCtl = new AbortController();
@@ -261,7 +282,7 @@ document.addEventListener("drop", async (e) => {
 });
 
 // ── Start ──
-initPanel({ run, addClock, selectClock });
+initPanel({ run, addClock, selectClock, setReference });
 go(location.hash.slice(1) || "stability");
 (async () => {
   const hc = await health();

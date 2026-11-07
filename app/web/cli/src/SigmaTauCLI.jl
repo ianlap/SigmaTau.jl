@@ -34,6 +34,7 @@ mutable struct Options
     tau0::Float64         # NaN = from the file
     time_col::Int
     value_col::Int
+    reference_col::Int    # 0 = none; else the value is taken against this column
     header::Int
     scaling::Float64
     detrend::String
@@ -47,7 +48,7 @@ mutable struct Options
     remove_outliers::Bool # replace 5σ outliers and fill (uses FFTW)
 end
 
-Options() = Options("", 0, 42, "phase", NaN, 1, 2, 0, 1.0, "none",
+Options() = Options("", 0, 42, "phase", NaN, 1, 2, 0, 0, 1.0, "none",
                     ["adev", "mdev", "hdev", "mhdev"], "octave", true, 0.683, true, 4000,
                     false, false)
 
@@ -91,6 +92,7 @@ function parse_args(args::Vector{String})
         elseif a == "--tau0";       o.tau0 = parse_float(flag_value(args, i), a); i += 1
         elseif a == "--time-col";   o.time_col = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--value-col";  o.value_col = parse_int(flag_value(args, i), a); i += 1
+        elseif a == "--reference-col"; o.reference_col = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--header";     o.header = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--scaling";    o.scaling = parse_float(flag_value(args, i), a); i += 1
         elseif a == "--detrend";    o.detrend = flag_value(args, i); i += 1
@@ -142,24 +144,38 @@ function load_record(o::Options)
     return data
 end
 
+# The value column, minus the reference column when one is chosen (several
+# clocks measured in one file against a common timebase). The readers' detrend
+# is linear, so detrending each column and subtracting equals detrending the
+# difference.
 function read_record(o::Options)
     o.synth > 0 && return synth_record(o)
     isfile(o.input) || throw(CLIError("no such file: " * o.input))
+    data = read_column(o, o.value_col)
+    o.reference_col > 0 || return data
+    o.reference_col == o.value_col && throw(CLIError("the reference column is the value column"))
+    ref = read_column(o, o.reference_col)
+    length(ref.x) == length(data.x) || throw(CLIError("reference and value columns differ in length"))
+    return PhaseData(Float64[Float64(data.x[i]) - Float64(ref.x[i]) for i in eachindex(data.x)], data.tau0;
+                     source=data.source)
+end
+
+function read_column(o::Options, value_col::Int)
     det = detrend_symbol(o.detrend)
     # Two concrete call sites instead of `tau0 = isnan ? nothing : x`: a
     # Union{Nothing,Float64} keyword makes the kwcall dynamic under --trim.
     if o.kind == "frequency"
         fd = isnan(o.tau0) ?
-            read_frequency(o.input; time_col=o.time_col, value_col=o.value_col,
+            read_frequency(o.input; time_col=o.time_col, value_col=value_col,
                            header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps) :
-            read_frequency(o.input; tau0=o.tau0, time_col=o.time_col, value_col=o.value_col,
+            read_frequency(o.input; tau0=o.tau0, time_col=o.time_col, value_col=value_col,
                            header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps)
         return PhaseData(cumsum(fd.y) .* fd.tau0, fd.tau0; source=fd.source)
     end
     return isnan(o.tau0) ?
-        read_phase(o.input; time_col=o.time_col, value_col=o.value_col,
+        read_phase(o.input; time_col=o.time_col, value_col=value_col,
                    header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps) :
-        read_phase(o.input; tau0=o.tau0, time_col=o.time_col, value_col=o.value_col,
+        read_phase(o.input; tau0=o.tau0, time_col=o.time_col, value_col=value_col,
                    header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps)
 end
 
