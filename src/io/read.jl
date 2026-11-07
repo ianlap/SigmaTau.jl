@@ -4,15 +4,20 @@
 """
     _read_columns(path; header=0, delim=nothing) → Matrix{Float64}
 
-stdlib `DelimitedFiles.readdlm` wrapper. Auto-detects the delimiter from
-the file extension unless `delim` is given:
+Read a numeric delimited text file into a `Matrix{Float64}` (one row per
+non-blank line). Auto-detects the delimiter from the file extension unless
+`delim` is given:
 
 - `.csv` → `,`
 - `.tsv` → `\\t`
-- everything else → whitespace (`readdlm` default)
+- everything else → runs of spaces/tabs
 
-The result must be coercible to `Matrix{Float64}`. For CSV files with
-string headers, set `header` to the number of header rows to skip.
+Every field must parse as `Float64` and every row must have the same number
+of columns. For files with string headers, set `header` to the number of
+leading lines to skip.
+
+This is a small typed parser rather than `DelimitedFiles.readdlm`, whose
+untyped internals block `juliac --trim` builds.
 """
 function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,Nothing}=nothing)
     isfile(path) || throw(ArgumentError("read_columns: file not found: $path"))
@@ -26,18 +31,52 @@ function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,No
     else
         nothing
     end
-    raw = if d === nothing
-        readdlm(path; skipstart=header)
-    else
-        readdlm(path, d; skipstart=header)
+    vals  = Float64[]
+    ncols = -1
+    nrows = 0
+    lineno = 0
+    io = open(path, "r")
+    try
+        for line in eachline(io)
+            lineno += 1
+            lineno <= header && continue
+            all(isspace, line) && continue
+            fields = d === nothing ? split(line; keepempty=false) : split(line, d)
+            if ncols < 0
+                ncols = length(fields)
+            elseif length(fields) != ncols
+                throw(ArgumentError("read_columns: failed to parse $path as a Float64 matrix: " *
+                                    "line $lineno has $(length(fields)) columns, expected $ncols"))
+            end
+            for f in fields
+                # Accept double-quoted fields ("1.0"), as readdlm did.
+                fs = strip(f)
+                if length(fs) >= 2 && first(fs) == '"' && last(fs) == '"'
+                    fs = SubString(fs, nextind(fs, 1), prevind(fs, lastindex(fs)))
+                end
+                v = tryparse(Float64, fs)
+                v === nothing &&
+                    throw(ArgumentError("read_columns: failed to parse $path as a Float64 matrix " *
+                                        "(non-numeric content?): line $lineno, entry \"" * String(f) * "\""))
+                push!(vals, v)
+            end
+            nrows += 1
+        end
+    finally
+        close(io)
     end
-    M = try
-        Matrix{Float64}(raw)
-    catch err
-        throw(ArgumentError("read_columns: failed to coerce $path to Float64 matrix " *
-                            "(non-numeric content?). Original error: $err"))
-    end
-    return M
+    nrows == 0 && return Matrix{Float64}(undef, 0, 0)
+    return permutedims(reshape(vals, ncols, nrows))
+end
+
+# Median sample spacing of a time column. Hand-rolled instead of
+# `Statistics.median`, whose NaN error path prints the whole vector and so
+# blocks `juliac --trim` builds.
+function _median_step(t::AbstractVector{<:Real})
+    dt = sort!(Float64.(diff(t)))
+    any(isnan, dt) && throw(ArgumentError("read: time column contains NaN"))
+    n = length(dt)
+    return isodd(n) ? dt[(n + 1) ÷ 2] : (dt[n ÷ 2] + dt[n ÷ 2 + 1]) / 2
 end
 
 """
@@ -50,14 +89,22 @@ header does not start with `#` (e.g. Stable32 `.DAT` exports) are untouched.
 """
 function _scan_comment_header(path::AbstractString)
     ncomment    = 0
-    header_tau0 = nothing
-    open(path, "r") do io
+    header_tau0::Union{Float64,Nothing} = nothing
+    # Plain open/close rather than a do-block: the closure would box the two
+    # reassigned locals and make the return type Tuple{Any,Any}.
+    io = open(path, "r")
+    try
         for line in eachline(io)
             startswith(line, '#') || break
             ncomment += 1
             m = match(r"^#\s*tau0:\s*(\S+)", line)
-            m === nothing || (header_tau0 = tryparse(Float64, m.captures[1]))
+            if m !== nothing
+                cap = m.captures[1]
+                cap === nothing || (header_tau0 = tryparse(Float64, cap))
+            end
         end
+    finally
+        close(io)
     end
     return ncomment, header_tau0
 end
@@ -104,7 +151,7 @@ function _ingest(path::AbstractString;
     elseif header_tau0 !== nothing
         header_tau0
     elseif have_time && length(t) > 1
-        Float64(median(diff(t)))
+        _median_step(t)
     else
         throw(ArgumentError("read: tau0 must be supplied when no time column is present"))
     end
