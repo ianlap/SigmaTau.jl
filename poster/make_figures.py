@@ -100,21 +100,23 @@ def fig_validation():
 # =====================================================================
 # F3  Speed: bench/README.md recorded results (N = 25 000 synthetic record)
 # =====================================================================
-BENCH_12 = [('adev', 15e-6, 393e-6, 20), ('mdev', 56e-6, 1.13e-3, 20), ('hdev', 25e-6, 341e-6, 14), ('tdev', 51e-6, 991e-6, 19),
-            ('totdev', 254e-6, 684e-6, 2.7), ('mtotdev', 30.3e-3, 107.3, 3543), ('htotdev', 31.5e-3, 114.3, 3632)]
-BENCH_4  = {'adev': 11, 'mdev': 15, 'hdev': 11, 'tdev': 9, 'totdev': 74, 'mtotdev': 1641, 'htotdev': 1860}
+# bench/README.md Table 1 (6-core / 12-thread Ryzen 5 9600X, 12 threads) and the
+# 4-core container table; speed-ups are the ratios of the printed times.
+BENCH_12 = [('adev', 13.5e-6, 180e-6, 13), ('mdev', 34.1e-6, 860e-6, 25), ('hdev', 19.0e-6, 233e-6, 12), ('tdev', 32.2e-6, 860e-6, 27),
+            ('totdev', 7.33e-6, 520e-6, 71), ('mtotdev', 26.3e-3, 108.0, 4106), ('htotdev', 27.2e-3, 115.0, 4228)]
+BENCH_4  = {'adev': 11, 'mdev': 15, 'hdev': 11, 'tdev': 8.7, 'totdev': 73, 'mtotdev': 1637, 'htotdev': 1865}
 def fig_speed():
     fig, ax = plt.subplots(figsize=(9.0, 5.4))
     names = [b[0] for b in BENCH_12]; sp12 = [b[3] for b in BENCH_12]; sp4 = [BENCH_4[n] for n in names]
     y = np.arange(len(names))[::-1]
-    ax.barh(y, sp12, height=0.58, color=CRIMSON, label='12-core workstation', zorder=3)
-    ax.plot(sp4, y, marker='D', color=GRAY, ls='none', ms=10, label='4-core cloud container, re-run', zorder=4)
-    for yi, s in zip(y, sp12):
+    ax.barh(y, sp12, height=0.58, color=CRIMSON, label='6-core / 12-thread workstation', zorder=3)
+    ax.plot(sp4, y, marker='D', color=GRAY, ls='none', ms=10, label='4-core cloud container, earlier run', zorder=4)
+    for yi, s, s4 in zip(y, sp12, sp4):
         txt = f'{s:,.0f}x' if s >= 10 else f'{s:g}x'
-        ax.text(s * 1.25, yi, txt, va='center', ha='left', fontsize=19, color=INK)
+        ax.text(max(s, s4) * 1.25, yi, txt, va='center', ha='left', fontsize=19, color=INK)
     ax.set_xscale('log'); ax.set_xlim(1, 6e4)
     ax.set_yticks(y); ax.set_yticklabels([n.upper() for n in names])
-    ax.set_xlabel('speed-up over allantools (same samples, same $\\tau$ grid, same statistic)')
+    ax.set_xlabel('speed-up vs allantools (same samples, $\\tau$ grid, statistic)')
     ax.grid(axis='y', visible=False)
     ax.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0), fontsize=15, borderaxespad=0.2)
     save(fig, 'F3_speed')
