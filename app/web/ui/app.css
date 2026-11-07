@@ -253,3 +253,5 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .cmp .tbl-row { grid-template-columns: minmax(0, 1.6fr) repeat(var(--ncols, 2), minmax(0, 1fr)); }
 .tau-select { display: flex; align-items: center; gap: 8px; }
 .ref-tag { font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent); border: 1px solid var(--accent); border-radius: 9px; padding: 1px 7px; margin-right: 4px; }
+.imp-side .wide-input { width: 100%; height: 34px; padding: 0 12px; background: var(--bg-popover); }
+.ref-block { display: flex; flex-direction: column; gap: 6px; }

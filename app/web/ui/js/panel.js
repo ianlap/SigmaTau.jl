@@ -31,6 +31,24 @@ function clockRows() {
   }).join("");
 }
 
+// "As measured" or any clock that shares its original reference and time
+// stamps with others: today, clocks read from the same file.
+function referenceSelect() {
+  const against = [...new Set(state.clocks.map((c) => c.against).filter(Boolean))];
+  const groupSize = (g) => state.clocks.filter((c) => c.group !== null && c.group === g).length;
+  const opts = state.clocks.map((c) => {
+    const ok = c.source.type === "file" && groupSize(c.group) > 1;
+    return `<option value="${c.id}" ${c.id === state.reference ? "selected" : ""} ${ok ? "" : "disabled"}>${h(c.name)}${ok ? "" : " (no shared reference)"}</option>`;
+  }).join("");
+  const r = state.clocks.find((c) => c.id === state.reference);
+  const others = r ? state.clocks.filter((c) => c !== r && c.group !== r.group).length : 0;
+  return `<div class="ref-block">
+    <label class="opt" title="Only clocks measured together, in one file, share a reference and time stamps"><span>Reference</span>
+      <select class="wide" data-ref-select><option value="">As measured${against.length === 1 ? ` (vs ${h(against[0])})` : ""}</option>${opts}</select></label>
+    ${others ? `<div class="muted small">${others} clock${others > 1 ? "s" : ""} from other files stay as measured.</div>` : ""}
+  </div>`;
+}
+
 function estimatorRows(several) {
   return state.devs.map((id, i) => {
     const e = byId[id];
@@ -66,9 +84,7 @@ export function renderPanel() {
       ${several ? `
       <section><div class="side-head"><h2>Clocks</h2><span class="note">colour = clock</span></div></section>
       <div class="rows">${clockRows()}</div>
-      <label class="opt" title="Clocks read from the same file are taken against the reference; the reference leaves the plots"><span>Reference</span>
-        <select class="wide" data-ref-select><option value="">None (as measured)</option>${state.clocks.filter((c) => c.source.type === "file").map((c) =>
-          `<option value="${c.id}" ${c.id === state.reference ? "selected" : ""}>${h(c.name)}</option>`).join("")}</select></label>
+      ${referenceSelect()}
       <button class="btn-dashed" type="button" data-act="add-clock">+ Add clock</button>
       <div class="rule"></div>` : ""}
       <div class="side-head"><h2>Estimators</h2><span class="note">${several ? "line style = estimator" : `${nDev} selected`}</span></div>

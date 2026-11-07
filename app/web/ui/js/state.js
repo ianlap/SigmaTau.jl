@@ -40,6 +40,7 @@ export function newClock(fields = {}) {
     time_col: 1,
     value_col: 2,
     group: null,             // clocks read from one file share a group
+    against: "",             // what the file says the clocks were measured against
     header: 0,
     scaling: 1,
     detrend: "none",
