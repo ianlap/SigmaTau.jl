@@ -1,4 +1,4 @@
-"""Poster figures for SigmaTau.jl. All data come from the repository:
+"""Figures for SigmaTau.jl. All data come from the repository:
   data/validation.json   <- docs/src/validation.md (SigmaTau, Stable32, allantools per tau)
   tools/artifacts/mhtotdev_mc_full.json  <- Monte Carlo fits
   bench/README.md        <- recorded timings (typed in below, verbatim)
@@ -28,7 +28,7 @@ SERIES  = [CRIMSON, BLUE, AMBER, GREEN, VIOLET]
 MARKERS = ['o', 's', '^', 'D', 'v']
 
 rcParams.update({
-    'font.family': 'Carlito',          # Calibri-metric; the poster body font
+    'font.family': 'Carlito',          # Calibri-metric
     'font.size': 20, 'axes.titlesize': 22, 'axes.labelsize': 22,
     'xtick.labelsize': 18, 'ytick.labelsize': 18, 'legend.fontsize': 18,
     'axes.edgecolor': AXIS, 'axes.linewidth': 1.2, 'axes.labelcolor': INK,
@@ -157,7 +157,7 @@ def fig_mhtot_edf():
 
 
 # =====================================================================
-# F1 (package output)  Suite on the fixture from poster/data/suite_fixture.csv (julia_figdata.jl)
+# F1 (package output)  Suite on the fixture from paper/data/suite_fixture.csv (julia_figdata.jl)
 # =====================================================================
 import csv
 def _suite_rows():
@@ -193,7 +193,7 @@ def fig_suite_pkg():
     save(fig, 'F1_suite')
 
 # =====================================================================
-# F7  Dynamic Allan deviation map from poster/data/dynamic_map.csv (julia_figdata.jl)
+# F7  Dynamic Allan deviation map from paper/data/dynamic_map.csv (julia_figdata.jl)
 # =====================================================================
 from matplotlib.colors import LinearSegmentedColormap, LogNorm
 CRIMSON_RAMP = LinearSegmentedColormap.from_list('crimson_seq', ['#FBEEF0', '#E9A3AE', '#C9566C', '#9E1B32', '#5A0F1D'])

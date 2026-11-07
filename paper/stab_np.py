@@ -1,5 +1,5 @@
 """Minimal numpy port of the overlapping ADEV / MDEV / HDEV / TOTDEV kernels,
-used only to draw poster figures when Julia is unavailable. Verified against
+used only to draw figures when Julia is unavailable. Verified against
 the Stable32 fixture values in docs/src/validation.md (see check_port.py)."""
 import numpy as np
 
