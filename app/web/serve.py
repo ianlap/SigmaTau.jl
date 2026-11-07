@@ -76,8 +76,12 @@ def request_to_args(req, workdir):
     opt("grid", "--grid")
     opt("series", "--series", int)
     devs = req.get("devs")
-    if devs:
-        args += ["--devs", ",".join(str(d) for d in devs)]
+    if devs is not None:
+        args += ["--devs", ",".join(str(d) for d in devs) or "none"]
+    if req.get("fillgaps"):
+        args.append("--fillgaps")
+    if req.get("remove_outliers"):
+        args.append("--remove-outliers")
     if req.get("confidence") is None and "confidence" in req:
         args.append("--no-ci")
     else:
