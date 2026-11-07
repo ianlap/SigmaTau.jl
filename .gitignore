@@ -27,3 +27,7 @@ bench/results/*
 
 # Compiled explorer app output
 app/SigmaTauExplorer/dist/
+
+# Web explorer: compiled core and local Plotly copy
+app/web/cli/build/
+app/web/ui/vendor/

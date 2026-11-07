@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SigmaTau explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-name">SigmaTau</span><span class="brand-sub">explorer</span></div>
+    <nav class="tabs" role="tablist" aria-label="Pages">
+      <a role="tab" href="#data" data-page="data">Data</a>
+      <a role="tab" href="#stability" data-page="stability">Stability</a>
+      <a role="tab" href="#spectrum" data-page="spectrum">Spectrum</a>
+      <a role="tab" href="#dynamic" data-page="dynamic">Dynamic</a>
+    </nav>
+    <div class="topbar-right">
+      <button class="record-pill" id="record-pill" type="button" title="Go to the Data page">
+        <span class="dot" aria-hidden="true"></span><span id="record-pill-text">No record</span>
+      </button>
+      <div class="menu-wrap">
+        <button class="btn" id="export-btn" type="button" aria-haspopup="menu" aria-expanded="false">Export ▾</button>
+        <div class="menu" id="export-menu" role="menu" hidden>
+          <button role="menuitem" data-export="png">Plot as PNG</button>
+          <button role="menuitem" data-export="svg">Plot as SVG</button>
+          <button role="menuitem" data-export="tsv">Table as TSV</button>
+          <button role="menuitem" data-export="json">All results as JSON</button>
+        </div>
+      </div>
+      <button class="btn btn-round" id="help-btn" type="button" aria-label="Help">?</button>
+    </div>
+  </header>
+
+  <main id="page" class="page"></main>
+
+  <footer class="statusbar" role="status" aria-live="polite">
+    <span class="status-dot" id="status-dot" aria-hidden="true"></span>
+    <span id="status-text">Starting…</span>
+    <span class="status-hint" id="status-hint"></span>
+  </footer>
+
+  <dialog id="help-dialog" class="dialog">
+    <form method="dialog">
+      <h2>Using the explorer</h2>
+      <p>Add one or more clocks on the <b>Data</b> page, pick estimators on <b>Stability</b>, and the plot and table update as you change options.</p>
+      <ul class="keys">
+        <li><kbd>F5</kbd> run the analysis now</li>
+        <li><kbd>1</kbd>–<kbd>4</kbd> switch pages</li>
+        <li>Hover a point for its value, drag to zoom, double-click to reset.</li>
+      </ul>
+      <div class="dialog-actions"><button class="btn btn-primary">Close</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
