@@ -60,6 +60,15 @@ function synthCard(c) {
   </div>`;
 }
 
+// NaN samples from the core plus samples missing from the time column, which
+// the readers skip unless gaps are filled.
+function gapRow(c, k) {
+  const missing = c.fillgaps ? 0 : (c.missing ?? 0);
+  const n = k.gaps + missing;
+  const tip = `${thousands(k.gaps)} NaN sample${k.gaps === 1 ? "" : "s"} · ${thousands(missing)} missing from the time column${missing ? " (turn on Fill gaps to put them back)" : ""}`;
+  return `<div class="kv" title="${tip}"><span>Gaps</span><span class="mono ${n ? "warnv" : ""}">${thousands(n)}</span></div>`;
+}
+
 function checkCard(c) {
   const k = c?.record?.check;
   if (!k) return `<div class="card check-card"><h2>Record check</h2><p class="muted small">${c?.error ? "The core could not read this record." : c ? "Reading…" : "No record yet."}</p></div>`;
@@ -72,7 +81,7 @@ function checkCard(c) {
     <h2>Record check</h2>
     <div class="kv"><span>Samples</span><span class="mono">${thousands(k.samples)}</span></div>
     <div class="kv"><span>Span</span><span class="mono">${duration(k.span_s)}</span></div>
-    <div class="kv"><span>Gaps (NaN)</span><span class="mono ${k.gaps ? "warnv" : ""}">${thousands(k.gaps)}</span></div>
+    ${gapRow(c, k)}
     <div class="kv"><span>Points past 5σ</span>${out}</div>
     <div class="kv"><span>Frequency drift</span><span class="mono">${drift}</span></div>
     <div class="rule"></div>

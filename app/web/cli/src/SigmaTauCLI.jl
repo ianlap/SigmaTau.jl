@@ -140,8 +140,27 @@ end
 
 function load_record(o::Options)
     data = read_record(o)
-    o.remove_outliers && (data = remove_outliers(data))
+    o.remove_outliers && (data = deglitch(data))
     return data
+end
+
+# Remove 5σ outliers in the frequency domain and integrate back. A glitch in a
+# phase record is a step, i.e. one bad frequency sample; SigmaTau's
+# remove_outliers(::PhaseData) refills the phase sample the step lands on,
+# which keeps the step. Going through FrequencyData removes it.
+function deglitch(data::PhaseData)
+    x = data.x
+    N = length(x)
+    N < 3 && return data
+    t0 = Float64(data.tau0)
+    y = Float64[(Float64(x[i + 1]) - Float64(x[i])) / t0 for i in 1:N-1]
+    fd = remove_outliers(FrequencyData(y, t0; source=data.source))
+    out = Vector{Float64}(undef, N)
+    out[1] = Float64(x[1])
+    for i in 1:N-1
+        out[i + 1] = out[i] + Float64(fd.y[i]) * t0
+    end
+    return PhaseData(out, t0; source=data.source)
 end
 
 # The value column, minus the reference column when one is chosen (several
@@ -154,7 +173,13 @@ function read_record(o::Options)
     data = read_column(o, o.value_col)
     o.reference_col > 0 || return data
     o.reference_col == o.value_col && throw(CLIError("the reference column is the value column"))
-    ref = read_column(o, o.reference_col)
+    o.reference_col >= 1 || throw(CLIError("--reference-col must be 1 or more"))
+    ref = try
+        read_column(o, o.reference_col)
+    catch err
+        err isa ArgumentError || rethrow()
+        throw(CLIError("--reference-col " * string(o.reference_col) * " is not a column of this file"))
+    end
     length(ref.x) == length(data.x) || throw(CLIError("reference and value columns differ in length"))
     return PhaseData(Float64[Float64(data.x[i]) - Float64(ref.x[i]) for i in eachindex(data.x)], data.tau0;
                      source=data.source)
