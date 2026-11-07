@@ -115,6 +115,11 @@
             write(path, "0,1\n2,1\n6,1\n")
             @test read_phase(path).tau0 == 3.0
 
+            # Double-quoted CSV fields.
+            path = joinpath(dir, "quoted.csv")
+            write(path, "\"0\",\"1.0\"\n\"1\", \"2.0\"\n")
+            @test read_phase(path).x == [1.0, 2.0]
+
             # Ragged rows and non-numeric entries are ArgumentErrors.
             path = joinpath(dir, "ragged.txt")
             write(path, "0 1.0\n1 2.0 3.0\n")
