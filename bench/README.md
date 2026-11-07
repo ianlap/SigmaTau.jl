@@ -51,34 +51,33 @@ verbatim. The JSON files in `results/` are the raw timings behind Tables 1 to 3.
 Tables 1 to 3 come from a 6-core / 12-thread AMD Ryzen 5 9600X workstation
 (Fedora, Linux 6.19), SigmaTau 0.5.0, Julia 1.12.6 with `-t auto` = 12
 threads, Python 3.14.4, numpy 2.4.4 and allantools 2024.06. The machine
-was otherwise idle. They were timed at commit 36379ab (`src/` identical
-to `main` at 23634b0), before PR #57 added a detrending pass to the
-MDEV/MHDEV prefix sums.
+was otherwise idle. They were timed on `main` at 9c6acb7, which includes PR #57
+(the detrending pass before the MDEV/MHDEV prefix sums).
 
 **Table 1.** Synthetic record, N = 25 000, one fixed-seed record. Each time is
 the minimum of repeated calls, from the best of three runs (see Method).
 
 | Kernel | SigmaTau (12 threads) | allantools | Speed-up |
 |---|---:|---:|---:|
-| adev | 13.3 µs | 179 µs | 13× |
-| mdev | 31.1 µs | 858 µs | 28× |
-| hdev | 18.6 µs | 234 µs | 13× |
-| tdev | 28.4 µs | 862 µs | 30× |
-| totdev | 7.04 µs | 511 µs | 73× |
-| mtotdev | 27.1 ms | 107 s | 3,948× |
-| htotdev | 27.6 ms | 114 s | 4,130× |
+| adev | 13.5 µs | 180 µs | 13× |
+| mdev | 34.1 µs | 860 µs | 25× |
+| hdev | 19.0 µs | 233 µs | 12× |
+| tdev | 32.2 µs | 860 µs | 27× |
+| totdev | 7.33 µs | 520 µs | 71× |
+| mtotdev | 26.3 ms | 108 s | 4,106× |
+| htotdev | 27.2 ms | 115 s | 4,228× |
 
 **Table 2.** Measured phase record, N = 406 763, one timed call per kernel.
 
 | Kernel | SigmaTau (12 threads) | allantools | Speed-up |
 |---|---:|---:|---:|
-| adev | 266 µs | 8.27 ms | 31× |
-| mdev | 825 µs | 20.5 ms | 25× |
-| hdev | 341 µs | 14.2 ms | 42× |
-| tdev | 492 µs | 20.3 ms | 41× |
-| totdev | 155 µs | 12.3 ms | 79× |
-| mtotdev | 444 ms | 1,814 s | 4,086× |
-| htotdev | 457 ms | 1,932 s | 4,228× |
+| adev | 277 µs | 8.51 ms | 31× |
+| mdev | 909 µs | 21.2 ms | 23× |
+| hdev | 357 µs | 14.3 ms | 40× |
+| tdev | 599 µs | 20.1 ms | 34× |
+| totdev | 177 µs | 11.4 ms | 64× |
+| mtotdev | 461 ms | 1,810 s | 3,926× |
+| htotdev | 461 ms | 1,926 s | 4,178× |
 
 **Table 3.** End-to-end default call, synthetic record, N = 25 000, same run
 as Table 1. One timed call per kernel. The speed-up divides the allantools
@@ -86,13 +85,13 @@ time by the SigmaTau default-call time.
 
 | Kernel | SigmaTau kernel-only | SigmaTau default call | allantools | Speed-up (allantools ÷ default call) |
 |---|---:|---:|---:|---:|
-| adev | 13.3 µs | 62.6 µs | 179 µs | 2.9× |
-| mdev | 31.1 µs | 115 µs | 858 µs | 7.5× |
-| hdev | 18.6 µs | 111 µs | 234 µs | 2.1× |
-| tdev | 28.4 µs | 83.2 µs | 862 µs | 10× |
-| totdev | 7.04 µs | 64.8 µs | 511 µs | 7.9× |
-| mtotdev | 27.1 ms | 31.1 ms | 107 s | 3,441× |
-| htotdev | 27.6 ms | 28.4 ms | 114 s | 4,014× |
+| adev | 13.5 µs | 66.8 µs | 180 µs | 2.7× |
+| mdev | 34.1 µs | 125 µs | 860 µs | 6.9× |
+| hdev | 19.0 µs | 110 µs | 233 µs | 2.1× |
+| tdev | 32.2 µs | 87.2 µs | 860 µs | 9.9× |
+| totdev | 7.33 µs | 64.5 µs | 520 µs | 8.1× |
+| mtotdev | 26.3 ms | 26.8 ms | 108 s | 4,030× |
+| htotdev | 27.2 ms | 29.3 ms | 115 s | 3,925× |
 
 The default call adds per-τ noise identification, EDF and χ² intervals (and
 the bias correction for the totals), which the kernel-only ratios in Tables 1
