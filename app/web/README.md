@@ -53,7 +53,9 @@ output was identical in testing. The synthetic record in the core avoids FFTW.
 | `--header N` | non-comment header lines to skip | 0 |
 | `--scaling X` | multiply values (1e-9 for ns) | 1 |
 | `--detrend none\|mean\|endpoint\|linear` | | `none` |
-| `--devs a,b,…` | any of adev mdev tdev hdev mhdev htdev totdev mtotdev ttotdev htotdev mhtotdev theo1 theoh pdev mtie tierms | adev,mdev,hdev,mhdev |
+| `--fillgaps` | put the record on an even time grid and fill gaps (needs a time column) | |
+| `--remove-outliers` | remove 5σ outliers before the analysis | |
+| `--devs a,b,…` | any of adev mdev tdev hdev mhdev htdev totdev mtotdev ttotdev htotdev mhtotdev theo1 theoh pdev mtie tierms; `none` reads the record only | adev,mdev,hdev,mhdev |
 | `--grid octave\|half-octave\|quarter-octave\|decade\|half-decade\|all` | τ grid | `octave` |
 | `--confidence P` / `--no-ci` | interval level, or none | 0.683 |
 | `--no-bias-correction` | for the total estimators and Thêo1 | |
@@ -65,7 +67,9 @@ Success (exit 0):
 {
   "sigmatau": "0.5.0",
   "record": { "n": 16384, "tau0": 1.0, "kind": "phase", "source": "synthetic",
-              "series": { "t": [0.0, 4.0, ...], "x": [0.0, 1.2e-12, ...] } },
+              "series": { "t": [0.0, 4.0, ...], "x": [0.0, 1.2e-12, ...] },
+              "check": { "samples": 16384, "span_s": 16384.0, "gaps": 0, "outliers": 2,
+                         "outlier_t": [...], "outlier_x": [...], "drift_per_day": 3.1e-14 } },
   "options": { "grid": "octave", "ci": true, "confidence": 0.683, "bias_correction": true },
   "results": [
     { "dev": "adev", "axis": "sigma_y", "tau": [1.0, 2.0, ...], "sigma": [...],
@@ -76,23 +80,34 @@ Success (exit 0):
 ```
 
 `axis` is `sigma_x` (seconds) for tdev, htdev, ttotdev, mtie and tierms.
-`ci_lo`, `ci_hi`, `edf` and `noise` are empty with `--no-ci`. Non-finite
+`ci_lo`, `ci_hi`, `edf` and `noise` are empty with `--no-ci`. `check` is
+the Data page's record check: NaN gaps, points past 5σ (at most 500 listed)
+and the linear frequency drift per day. Non-finite
 numbers are written as `null`. Failure (exit 2): `{"error": "message"}`.
 
 `serve.py` exposes it as `POST /api/analyze` with a JSON body
 `{source: {type: "file", name, content} | {type: "synth", n, seed}, kind,
-tau0, time_col, value_col, header, scaling, detrend, devs, grid, confidence
-(null for none), bias_correction, series}` and returns the core's JSON.
+tau0, time_col, value_col, header, scaling, detrend, fillgaps,
+remove_outliers, devs, grid, confidence (null for none), bias_correction,
+series}` and returns the core's JSON.
 `GET /api/health` reports whether a core was found.
 
 ## Front end
 
 - `ui/theme.css` holds every color, font and size; restyle there.
-- `ui/js/api.js` is the only code that talks to the core, and
+- `ui/js/core.js` is the only code that talks to the core, and
   `ui/js/platform.js` the only code that opens or saves files. A Tauri
   shell replaces those two and keeps the rest.
-- Pages: Data (clocks and the import dialog), Stability (estimators,
-  options, σ(τ) plot, per-τ table), Spectrum and Dynamic (placeholders until
-  the core returns those).
-- Several clocks can be loaded; Stability shows them overlaid (one line
-  style per clock) or side by side with shared axes.
+- Layout: a side panel (clocks, estimators, options, Run analysis) and four
+  pages. Data has the file card, the import dialog (pick the time and value
+  columns, record type, units, τ₀; gaps flagged from the whole file), the
+  record check and the phase plot with outliers marked. Stability has the
+  σ(τ) plot with the per-τ table, or "Compare at τ" when several clocks are
+  loaded. Spectrum and Dynamic are placeholders until the core returns those.
+- Analysis runs only on Run analysis (F5); changed inputs mark the results
+  out of date in the panel and the status bar.
+- Several clocks can be loaded, with no limit. With more than one, colour
+  means clock (eight colours, then they repeat) and line style means
+  estimator; the eye button hides a clock.
+- Keys: F5 runs, 1 to 4 switch pages, a file dropped anywhere opens the
+  import dialog.

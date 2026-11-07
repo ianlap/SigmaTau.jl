@@ -5,37 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SigmaTau explorer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-name">SigmaTau</span><span class="brand-sub">explorer</span></div>
-    <nav class="tabs" role="tablist" aria-label="Pages">
-      <a role="tab" href="#data" data-page="data">Data</a>
-      <a role="tab" href="#stability" data-page="stability">Stability</a>
-      <a role="tab" href="#spectrum" data-page="spectrum">Spectrum</a>
-      <a role="tab" href="#dynamic" data-page="dynamic">Dynamic</a>
+    <nav class="tabs" aria-label="Pages">
+      <a href="#data" data-page="data">Data</a>
+      <a href="#stability" data-page="stability">Stability</a>
+      <a href="#spectrum" data-page="spectrum">Spectrum</a>
+      <a href="#dynamic" data-page="dynamic">Dynamic</a>
     </nav>
-    <div class="topbar-right">
-      <button class="record-pill" id="record-pill" type="button" title="Go to the Data page">
-        <span class="dot" aria-hidden="true"></span><span id="record-pill-text">No record</span>
-      </button>
-      <div class="menu-wrap">
-        <button class="btn" id="export-btn" type="button" aria-haspopup="menu" aria-expanded="false">Export ▾</button>
-        <div class="menu" id="export-menu" role="menu" hidden>
-          <button role="menuitem" data-export="png">Plot as PNG</button>
-          <button role="menuitem" data-export="svg">Plot as SVG</button>
-          <button role="menuitem" data-export="tsv">Table as TSV</button>
-          <button role="menuitem" data-export="json">All results as JSON</button>
-        </div>
+    <span class="grow"></span>
+    <button class="record-chip" id="record-chip" type="button" title="Show the record on the Data page">
+      <span class="dot" id="record-dot" aria-hidden="true"></span><span id="record-chip-text">No record</span>
+    </button>
+    <div class="menu-wrap">
+      <button class="btn" id="export-btn" type="button" aria-haspopup="menu" aria-expanded="false">Export ▾</button>
+      <div class="menu" id="export-menu" role="menu" hidden>
+        <button role="menuitem" data-export="png">Plot as PNG</button>
+        <button role="menuitem" data-export="svg">Plot as SVG</button>
+        <button role="menuitem" data-export="tsv">Results as TSV</button>
+        <button role="menuitem" data-export="json">Results as JSON</button>
       </div>
-      <button class="btn btn-round" id="help-btn" type="button" aria-label="Help">?</button>
     </div>
+    <button class="btn btn-round" id="help-btn" type="button" aria-label="Help">?</button>
   </header>
 
-  <main id="page" class="page"></main>
+  <div class="body">
+    <aside class="side" id="side" aria-label="Clocks, estimators and options"></aside>
+    <main class="page" id="page"></main>
+  </div>
 
   <footer class="statusbar" role="status" aria-live="polite">
     <span class="status-dot" id="status-dot" aria-hidden="true"></span>
@@ -43,12 +45,14 @@
     <span class="status-hint" id="status-hint"></span>
   </footer>
 
-  <dialog id="help-dialog" class="dialog">
+  <dialog id="picker-dialog" class="dialog picker-dialog" aria-label="Add estimators"></dialog>
+  <dialog id="import-dialog" class="dialog import-dialog" aria-label="Import a record"></dialog>
+  <dialog id="help-dialog" class="dialog help-dialog">
     <form method="dialog">
       <h2>Using the explorer</h2>
-      <p>Add one or more clocks on the <b>Data</b> page, pick estimators on <b>Stability</b>, and the plot and table update as you change options.</p>
+      <p>Load a record on <b>Data</b>, pick estimators in the panel, and press <b>Run analysis</b>. Add more clocks to compare them: colour then means clock and line style means estimator.</p>
       <ul class="keys">
-        <li><kbd>F5</kbd> run the analysis now</li>
+        <li><kbd>F5</kbd> run the analysis</li>
         <li><kbd>1</kbd>–<kbd>4</kbd> switch pages</li>
         <li>Hover a point for its value, drag to zoom, double-click to reset.</li>
       </ul>
