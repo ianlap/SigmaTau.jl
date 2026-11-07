@@ -65,6 +65,7 @@ export function openImport(file, prev = null) {
       tau0,
       hasTimeCol: st.time > 0,
       gaps: ts ? ts.gaps : 0,
+      missing: ts ? ts.missing : 0,         // samples missing from the time column
       sourceInfo: `${s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", "")} · ${st.kind} · τ₀ ${num(tau0, 4)} s` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
       unitName: (units.find(([f]) => f === st.scaling) ?? units[0])[1],
