@@ -909,6 +909,44 @@ const LK = ReferenceKernels
         @test noises_scaled == noises
     end
 
+    @testset "noise ID never returns :unknown" begin
+        using Random
+        known = (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM)
+
+        # Lag-1 estimates outside α ∈ [-2, 2] clamp to the nearest end.
+        # White PM scatters above α = 2.5 on some realizations, and
+        # random-run FM (α = -4) with dmax = 3 (the HDEV family's setting)
+        # lands below -2.5; both used to come back :unknown.
+        rng = MersenneTwister(7)
+        m_grid = [1, 2, 4, 8, 16, 32, 64]
+        for _ in 1:50
+            wpm = randn(rng, 2048)
+            @test all(in(known), identify_noise(wpm, m_grid))
+        end
+        rrfm = cumsum(cumsum(cumsum(randn(rng, 4096))))
+        n3 = identify_noise(rrfm, m_grid; dmin=0, dmax=3)
+        @test all(in(known), n3)
+        @test n3[1] == :RWFM
+
+        # Averaging factors whose estimate fails take the successful one
+        # nearest in log(m), including leading ones (previously :unknown),
+        # with the shorter m winning a tie. No success at all → :WHFM.
+        fill_syms = SigmaTau._fill_noise_symbols
+        @test fill_syms([0, 0, -2, 0, 2], Bool[0, 0, 1, 0, 1], [1, 2, 4, 8, 16]) ==
+              [:RWFM, :RWFM, :RWFM, :RWFM, :WHPM]
+        @test fill_syms([1, 0, 0], Bool[1, 0, 0], [1, 2, 4]) == [:FLPM, :FLPM, :FLPM]
+        @test fill_syms([0, 0], Bool[0, 0], [1, 2]) == [:WHFM, :WHFM]
+        # Non-uniform grid: m = 10 is far closer to 11 than to 1.
+        @test fill_syms([2, 0, -1], Bool[1, 0, 1], [1, 10, 11]) ==
+              [:WHPM, :FLFM, :FLFM]
+
+        # Degenerate records: constant phase and a record too short for any
+        # estimate at the long averaging factors.
+        @test identify_noise(fill(3.0, 256), [1, 2, 4]) == fill(:WHFM, 3)
+        short = cumsum(randn(rng, 40))
+        @test all(in(known), identify_noise(short, [1, 2, 4, 8, 13]))
+    end
+
     @testset "noise-ID Stable32-fixture cross-check vs allantools" begin
         # Reference table generated with allantools 2024.06's
         # `autocorr_noise_id(x, m, data_type='phase', dmin=0, dmax=2)`
