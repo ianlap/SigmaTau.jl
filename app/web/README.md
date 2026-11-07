@@ -110,9 +110,13 @@ series}` and returns the core's JSON.
 - Several clocks can be loaded, with no limit. With more than one, colour
   means clock (eight colours, then they repeat) and line style means
   estimator; the eye button hides a clock.
-- One file can hold several clocks: mark several value columns in the import
-  dialog. "Reference" in the Clocks list takes the clocks from that file
-  against the chosen one; the reference leaves the plots. Import settings are
-  remembered per file format (extension, column count and names).
+- One file can hold several clocks: in the import dialog each column is
+  Time, Clock or Ignore, and every Clock column becomes a clock named from its
+  header. "Measured against" records the shared reference. The Reference
+  select in the Clocks list re-references the clocks of that file to the
+  chosen one (x_i - x_R); clocks without a shared reference are greyed out,
+  and the reference itself leaves the plots. With "Remember for files like
+  this" (on by default) a file with the same extension and header loads
+  without the dialog; Import settings… reopens it.
 - Keys: F5 runs, 1 to 4 switch pages, a file dropped anywhere opens the
   import dialog.

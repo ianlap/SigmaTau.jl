@@ -21,7 +21,7 @@ let transient = null;      // { kind, text } shown in the status bar until the n
 const ctx = {
   run, addClock, openFile: openInto, reimport, useSynth, setRecord,
   goData: () => go("data"),
-  status: (kind, text) => { transient = { kind, text }; renderStatus(); },
+  status: (kind, text) => { transient = { kind, text, until: kind === "error" ? Infinity : Date.now() + 8000 }; renderStatus(); },
 };
 
 // ── Routing ──
@@ -81,7 +81,7 @@ async function importFile(file, clock, prev) {
       Object.assign(c, {
         source: { type: "file", name: file.name, content: file.text }, group,
         kind: settings.kind, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
-        value_col: col, header: settings.header, scaling: settings.scaling,
+        value_col: col, against: settings.against, header: settings.header, scaling: settings.scaling,
         hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo,
         fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, result: null,
       });
@@ -91,6 +91,7 @@ async function importFile(file, clock, prev) {
     s.dataMode = "file";
   });
   go("data");
+  if (settings.remembered) ctx.status("good", `Read ${file.name} with the settings remembered for files like this. Import settings… changes them.`);
   await Promise.all(touched.map(loadClock));
 }
 
@@ -101,7 +102,9 @@ async function setReference(id) {
   update((s) => { s.reference = id; markRecordStale(s); });
   const r = referenceClock();
   const groups = new Set([old?.group, r?.group].filter((g) => g !== null && g !== undefined));
+  const hadResults = state.clocks.some((c) => c.result);
   await Promise.all(state.clocks.filter((c) => groups.has(c.group)).map((c) => { c.result = null; return loadClock(c); }));
+  if (hadResults) await run();
 }
 
 async function openInto(clock) {
@@ -114,9 +117,35 @@ async function addClock() {
   if (f) await importFile(f, null);
 }
 
+// Reopen the import dialog for a file's clocks. Columns dropped there drop
+// their clocks; new ones are added.
 async function reimport(c) {
   if (c?.source.type !== "file") return;
-  await importFile({ name: c.source.name, text: c.source.content }, c, c);
+  const group = state.clocks.filter((k) => k.group === c.group);
+  const prev = { ...c, value_cols: group.map((k) => k.value_col) };
+  const settings = await openImport({ name: c.source.name, text: c.source.content }, prev);
+  if (!settings) return;
+  const keep = new Map(group.map((k) => [k.value_col, k]));
+  update((s) => {
+    s.clocks = s.clocks.filter((k) => k.group !== c.group || settings.value_cols.includes(k.value_col));
+    if (s.reference !== null && !s.clocks.some((k) => k.id === s.reference)) s.reference = null;
+  });
+  const touched = [];
+  update((s) => {
+    settings.value_cols.forEach((col, i) => {
+      let k = keep.get(col);
+      if (!k) { k = newClock({ name: settings.names[i] ?? `${baseName(c.source.name)} col ${col}` }); s.clocks.push(k); }
+      Object.assign(k, {
+        group: c.group, kind: settings.kind, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
+        value_col: col, against: settings.against, header: settings.header, scaling: settings.scaling,
+        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo, source: c.source,
+        fillgaps: settings.hasTimeCol ? k.fillgaps : false, result: null,
+      });
+      touched.push(k);
+    });
+    if (!s.clocks.some((k) => k.id === s.activeClock)) s.activeClock = touched[0]?.id ?? null;
+  });
+  await Promise.all(touched.map(loadClock));
 }
 
 async function useSynth(c, { n, tau0, seed }) {
@@ -218,7 +247,7 @@ function render() {
   page?.refresh();
   renderStatus();
 }
-subscribe(() => { if (state.run.state !== "running") transient = transient?.kind === "error" ? transient : null; render(); });
+subscribe(() => { if (transient && Date.now() > transient.until) transient = null; render(); });
 
 // ── Export ──
 const exportBtn = document.getElementById("export-btn");
