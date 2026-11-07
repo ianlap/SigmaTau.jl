@@ -49,7 +49,12 @@ function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,No
                                     "line $lineno has $(length(fields)) columns, expected $ncols"))
             end
             for f in fields
-                v = tryparse(Float64, f)
+                # Accept double-quoted fields ("1.0"), as readdlm did.
+                fs = strip(f)
+                if length(fs) >= 2 && first(fs) == '"' && last(fs) == '"'
+                    fs = SubString(fs, nextind(fs, 1), prevind(fs, lastindex(fs)))
+                end
+                v = tryparse(Float64, fs)
                 v === nothing &&
                     throw(ArgumentError("read_columns: failed to parse $path as a Float64 matrix " *
                                         "(non-numeric content?): line $lineno, entry \"" * String(f) * "\""))
