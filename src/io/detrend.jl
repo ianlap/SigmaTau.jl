@@ -3,6 +3,8 @@
 # `detrend(::Vector)` from other packages.
 
 const _DETREND_MODES = (:none, :mean, :endpoint, :linear, :quadratic)
+# Precomputed so error paths do not print a tuple at runtime (keeps juliac --trim happy).
+const _DETREND_MODES_STR = string(_DETREND_MODES)
 
 """
     _detrend_core!(x::Vector{Float64}, mode::Symbol) → x
@@ -84,7 +86,7 @@ function _detrend_core!(x::Vector{Float64}, mode::Symbol)
         end
         return x
     else
-        throw(ArgumentError("detrend: unknown method $mode (expected one of $_DETREND_MODES)"))
+        throw(ArgumentError("detrend: unknown method $mode (expected one of $_DETREND_MODES_STR)"))
     end
 end
 
@@ -121,7 +123,7 @@ pd_zero  = detrend(pd; method=:mean)
 """
 function detrend(pd::PhaseData; method::Symbol=:linear)
     method in _DETREND_MODES ||
-        throw(ArgumentError("detrend: unknown method $method (expected one of $_DETREND_MODES)"))
+        throw(ArgumentError("detrend: unknown method $method (expected one of $_DETREND_MODES_STR)"))
     x = Vector{Float64}(pd.x)
     _detrend_core!(x, method)
     return PhaseData(x, pd.tau0; source=pd.source)
@@ -129,7 +131,7 @@ end
 
 function detrend(fd::FrequencyData; method::Symbol=:linear)
     method in _DETREND_MODES ||
-        throw(ArgumentError("detrend: unknown method $method (expected one of $_DETREND_MODES)"))
+        throw(ArgumentError("detrend: unknown method $method (expected one of $_DETREND_MODES_STR)"))
     y = Vector{Float64}(fd.y)
     _detrend_core!(y, method)
     return FrequencyData(y, fd.tau0; source=fd.source)
