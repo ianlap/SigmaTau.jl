@@ -928,14 +928,17 @@ const LK = ReferenceKernels
         @test all(in(known), n3)
         @test n3[1] == :RWFM
 
-        # Averaging factors whose estimate fails take the nearest successful
-        # neighbour, including leading ones (previously :unknown), with the
-        # shorter m winning a tie. No success at all falls back to :WHFM.
+        # Averaging factors whose estimate fails take the successful one
+        # nearest in log(m), including leading ones (previously :unknown),
+        # with the shorter m winning a tie. No success at all → :WHFM.
         fill_syms = SigmaTau._fill_noise_symbols
-        @test fill_syms([0, 0, -2, 0, 2], Bool[0, 0, 1, 0, 1]) ==
+        @test fill_syms([0, 0, -2, 0, 2], Bool[0, 0, 1, 0, 1], [1, 2, 4, 8, 16]) ==
               [:RWFM, :RWFM, :RWFM, :RWFM, :WHPM]
-        @test fill_syms([1, 0, 0], Bool[1, 0, 0]) == [:FLPM, :FLPM, :FLPM]
-        @test fill_syms([0, 0], Bool[0, 0]) == [:WHFM, :WHFM]
+        @test fill_syms([1, 0, 0], Bool[1, 0, 0], [1, 2, 4]) == [:FLPM, :FLPM, :FLPM]
+        @test fill_syms([0, 0], Bool[0, 0], [1, 2]) == [:WHFM, :WHFM]
+        # Non-uniform grid: m = 10 is far closer to 11 than to 1.
+        @test fill_syms([2, 0, -1], Bool[1, 0, 1], [1, 10, 11]) ==
+              [:WHPM, :FLFM, :FLFM]
 
         # Degenerate records: constant phase and a record too short for any
         # estimate at the long averaging factors.
