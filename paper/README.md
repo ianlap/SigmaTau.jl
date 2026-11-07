@@ -1,7 +1,7 @@
 # Figures
 
 Figures about SigmaTau.jl, kept for papers and talks. They were drawn for
-the 2026 poster, so they use a large type size, the Carlito
+a poster, so they use a large type size, the Carlito
 font and a crimson accent (`#9E1B32`). Data series use a colorblind-safe
 palette (crimson, blue, amber, green, violet, validated for adjacent-pair
 separation under protan, deutan and tritan simulation) with distinct marker
