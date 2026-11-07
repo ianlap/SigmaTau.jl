@@ -53,10 +53,6 @@ versions follow [Semantic Versioning](https://semver.org/).
   import, synthesis, preprocessing, the deviation suite with χ² intervals,
   the per-τ table, spectra, dynamic deviation waterfalls, and figure, table
   and record export.
-- `app/SigmaTauExplorer`: the desktop explorer as a package with
-  `julia_main` and `@main` entry points, a PackageCompiler `create_app` build
-  script whose sysimage traces the `--smoke` self-test, and a manual
-  `Explorer app` workflow that builds and smoke-tests a Linux app folder.
 
 ## [0.5.0] - 2026-06-09
 

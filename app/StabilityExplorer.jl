@@ -422,9 +422,8 @@ end
 
 # ── Entry point ───────────────────────────────────────────────────────────
 
-# `explorer_main(args)` is the whole program: the script guard below calls it,
-# and so does `julia_main` in the compiled app (app/SigmaTauExplorer). It
-# returns the process exit code and only returns once the window is closed.
+# `explorer_main(args)` is the whole program; the script guard below calls it.
+# It returns the process exit code and only returns once the window is closed.
 function explorer_main(args::Vector{String})::Cint
     # Options: --smoke (headless self-test), --fontsize=N (default 12; 14 or 16
     # for projection), --size=WxH (window size). SIGMATAU_FONTSIZE also works.
@@ -440,8 +439,8 @@ function explorer_main(args::Vector{String})::Cint
         dir = get(ENV, "SIGMATAU_SMOKE_DIR", tempdir())
         c = app.controls
         # Load path: the Stable32 fixture through the Record-page fields.
-        # SIGMATAU_SMOKE_FIXTURE points a compiled app at the file; the default
-        # only exists next to a source checkout of SigmaTau.
+        # SIGMATAU_SMOKE_FIXTURE overrides the path; the default only exists
+        # next to a source checkout of SigmaTau.
         fixture = get(() -> joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation", "stable32gen.DAT"),
                       ENV, "SIGMATAU_SMOKE_FIXTURE")
         c.path_box.displayed_string[] = fixture; c.header.displayed_string[] = "10"   # typed, no Enter
