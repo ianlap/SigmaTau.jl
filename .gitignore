@@ -24,3 +24,6 @@ bench/results/*
 .idea/
 *.swp
 .DS_Store
+
+# Compiled explorer app output
+app/SigmaTauExplorer/dist/

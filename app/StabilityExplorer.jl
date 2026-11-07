@@ -422,11 +422,14 @@ end
 
 # ── Entry point ───────────────────────────────────────────────────────────
 
-if abspath(PROGRAM_FILE) == @__FILE__
+# `explorer_main(args)` is the whole program: the script guard below calls it,
+# and so does `julia_main` in the compiled app (app/SigmaTauExplorer). It
+# returns the process exit code and only returns once the window is closed.
+function explorer_main(args::Vector{String})::Cint
     # Options: --smoke (headless self-test), --fontsize=N (default 12; 14 or 16
     # for projection), --size=WxH (window size). SIGMATAU_FONTSIZE also works.
-    option(name, default) = (i = findfirst(startswith("--$name="), ARGS); i === nothing ? default : split(ARGS[i], "=")[2])
-    smoke = "--smoke" in ARGS
+    option(name, default) = (i = findfirst(startswith("--$name="), args); i === nothing ? default : split(args[i], "=")[2])
+    smoke = "--smoke" in args
     fontsize = parse(Int, option("fontsize", get(ENV, "SIGMATAU_FONTSIZE", "12")))
     # `win_size`, not `size`: a top-level `size` would shadow Base.size.
     win_size = Tuple(parse.(Int, split(option("size", "1500x940"), "x")))
@@ -437,7 +440,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
         dir = get(ENV, "SIGMATAU_SMOKE_DIR", tempdir())
         c = app.controls
         # Load path: the Stable32 fixture through the Record-page fields.
-        fixture = joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation", "stable32gen.DAT")
+        # SIGMATAU_SMOKE_FIXTURE points a compiled app at the file; the default
+        # only exists next to a source checkout of SigmaTau.
+        fixture = get(() -> joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation", "stable32gen.DAT"),
+                      ENV, "SIGMATAU_SMOKE_FIXTURE")
         c.path_box.displayed_string[] = fixture; c.header.displayed_string[] = "10"   # typed, no Enter
         app.reload(true)
         n_fixture = nsamples(app.state.record[])
@@ -472,4 +478,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         screen = display(app.fig; title="SigmaTau explorer " * VERSION_STRING)
         wait(screen)
     end
+    return 0
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    exit(explorer_main(ARGS))
 end
