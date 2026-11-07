@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `read_phase` / `read_frequency` parse columns with a small typed reader
+  instead of `DelimitedFiles.readdlm`, take the median time step with a local
+  helper instead of `Statistics.median`, and no longer box locals in the
+  comment-header scan. Results are unchanged; the readers are now type-stable,
+  and everything except FFTW-backed paths (`noise_gen`, `fillgaps`) passes
+  `juliac --trim=safe` verification.
 - **Breaking:** `mhtotdev` values change for `m ≥ 2`. The subsegment phase
   length is now `4m` (one full MHVAR span) instead of `3m + 1`. Bias and EDF
   coefficients were re-measured by the full Monte Carlo sweep
