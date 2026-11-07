@@ -359,7 +359,10 @@ function analyze(io::IO, o::Options)
     t_start = time_ns()
     data = load_record(o)
     N = length(data.x)
-    N >= 8 || throw(CLIError("the record has only " * string(N) * " samples"))
+    # Reading and checking a record (--devs none) needs only a few samples;
+    # the estimators need at least eight.
+    nmin = isempty(o.devs) ? 3 : 8
+    N >= nmin || throw(CLIError("the record has only " * string(N) * " samples"))
     mode = tau_mode(o.grid)
     buf = IOBuffer()
     print(buf, "{\"sigmatau\":"); json_string(buf, SIGMATAU_VERSION)

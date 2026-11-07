@@ -54,7 +54,7 @@ async function loadClock(c) {
   }
 }
 
-function markRecordStale(s) { s.run.stale = "record"; }
+function markRecordStale(s) { s.run.stale = "record"; s.run.gen = (s.run.gen ?? 0) + 1; }
 
 const baseName = (n) => n.replace(/\.[^.]+$/, "");
 
@@ -180,6 +180,7 @@ async function run() {
   runCtl = new AbortController();
   transient = null;
   update((s) => { s.run.state = "running"; });
+  const gen = state.run.gen ?? 0;
   const t0 = performance.now();
   let failed = 0;
   await Promise.all(clocks.map(async (c) => {
@@ -197,7 +198,8 @@ async function run() {
   const what = clocks.length > 1 ? `${clocks.length} clocks` : `${thousands(clocks[0].record.n)} samples`;
   update((st) => {
     st.run.state = failed ? "error" : "idle";
-    st.run.stale = failed ? st.run.stale : null;
+    // Inputs changed while this ran: the results are already out of date.
+    if (!failed && (st.run.gen ?? 0) === gen) st.run.stale = null;
     st.run.note = `Ran ${nd} estimator${nd === 1 ? "" : "s"} on ${what} in ${num(s, 2)} s`;
   });
   if (failed) ctx.status("error", `${failed} of ${clocks.length} clocks failed: ${clocks.find((c) => c.error)?.error}`);

@@ -35,7 +35,7 @@ export function openImport(file, prev = null) {
     timeUnit: p?.timeUnit ?? guess.timeUnit,
     values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
     scaling: p?.scaling ?? 1,
-    tau0In: p?.tau0 ?? s.tau0Hint ?? 1,
+    tau0In: p?.tau0 ?? s.tau0Hint ?? "",     // no guess: without a time column τ0 must be given
     against: p?.against ?? "",
     remember: true,
   };
@@ -120,7 +120,7 @@ export function openImport(file, prev = null) {
         : "";
       const err = !s.nCols ? "No numeric rows found in this file."
         : s.bad ? `Line ${s.bad} is not numeric. The core will refuse the file.`
-        : !(tau0 > 0) ? "Enter a sample interval τ₀ greater than zero." : "";
+        : !(tau0 > 0) ? "Enter the sample interval τ₀: this file has no time column." : "";
 
       // One normalised line per clock column.
       const lines = st.values.map((c, k) => {
@@ -220,6 +220,7 @@ export function openImport(file, prev = null) {
         st.tau0In = e.target.value;
         const { tau0 } = derived();
         dlg.querySelector("[data-act=load]").disabled = !(tau0 > 0);
+        if (tau0 > 0) dlg.querySelector(".imp-foot .err")?.remove();
       }
     };
     dlg.oncancel = (e) => { e.preventDefault(); finish(null); };

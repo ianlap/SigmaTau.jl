@@ -16,7 +16,8 @@ function splitter(name) {
   return [fn, delim === "," ? "comma-separated" : delim === "\t" ? "tab-separated" : "whitespace-separated"];
 }
 
-const isNum = (x) => x !== "" && Number.isFinite(Number(x));
+// NaN marks a missing sample; Julia's reader parses it as a Float64.
+const isNum = (x) => x !== "" && (Number.isFinite(Number(x)) || /^[+-]?nan$/i.test(x));
 
 export function sniff(name, text) {
   const lines = text.split(/\r?\n/);
@@ -100,7 +101,9 @@ export function timeStats(col, unit = 1) {
   for (let i = 1; i < col.length; i++) d.push(col[i] - col[i - 1]);
   if (!d.length) return null;
   const sorted = [...d].sort((a, b) => a - b);
-  const step = sorted[Math.floor(sorted.length / 2)];
+  // Same median as the reader's _median_step: average the middle pair.
+  const m = sorted.length >> 1;
+  const step = sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
   let gaps = 0, missing = 0, uneven = 0;
   for (const x of d) {
     if (x > 1.5 * step) { gaps++; missing += Math.round(x / step) - 1; }

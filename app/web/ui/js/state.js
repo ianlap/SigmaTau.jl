@@ -85,4 +85,5 @@ export const activeClock = () =>
 // "inputs" (estimators or options).
 export function markStale(s, why) {
   if (s.run.stale !== "record") s.run.stale = why;
+  s.run.gen = (s.run.gen ?? 0) + 1;      // a run started before this is out of date
 }
