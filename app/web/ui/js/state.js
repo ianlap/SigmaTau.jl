@@ -8,6 +8,7 @@ export const state = {
   core: { ok: false, name: null },
   clocks: [],              // see newClock()
   activeClock: null,       // id of the clock the Data page shows
+  reference: null,         // id of the reference clock, or null (as measured)
   devs: ["adev", "mdev", "hdev", "mhdev"],
   grid: "octave",
   ci: true,
@@ -38,6 +39,7 @@ export function newClock(fields = {}) {
     tau0: null,              // null = from the file
     time_col: 1,
     value_col: 2,
+    group: null,             // clocks read from one file share a group
     header: 0,
     scaling: 1,
     detrend: "none",
@@ -61,7 +63,19 @@ export function update(mutator) {
   for (const fn of listeners) fn();
 }
 
-export const visibleClocks = () => state.clocks.filter((c) => c.visible);
+export const referenceClock = () => state.clocks.find((c) => c.id === state.reference) ?? null;
+export const isReference = (c) => c.id === state.reference;
+
+// Column to subtract from this clock's value column: the reference clock's,
+// when both come from the same file. 0 = none.
+export function referenceColFor(c) {
+  const r = referenceClock();
+  if (!r || r === c || c.source.type !== "file" || r.group === null || r.group !== c.group) return 0;
+  return r.value_col;
+}
+
+// Clocks that get analysed and plotted: not hidden, not the reference.
+export const visibleClocks = () => state.clocks.filter((c) => c.visible && !isReference(c));
 export const multi = () => state.clocks.length > 1;
 export const activeClock = () =>
   state.clocks.find((c) => c.id === state.activeClock) ?? state.clocks[0] ?? null;

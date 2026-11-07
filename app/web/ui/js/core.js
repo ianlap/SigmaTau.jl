@@ -1,7 +1,7 @@
 // The only module that talks to the analysis core. Today that is serve.py
 // over local HTTP (it runs sigmatau-cli); a Tauri shell replaces the fetch
 // in post() with `invoke` on a sidecar command and keeps the same shapes.
-import { state } from "./state.js";
+import { state, referenceColFor } from "./state.js";
 
 export async function health() {
   try {
@@ -38,6 +38,7 @@ function recordRequest(clock) {
     tau0: clock.source.type === "synth" ? clock.source.tau0 : clock.tau0,
     time_col: clock.time_col,
     value_col: clock.value_col,
+    reference_col: referenceColFor(clock),
     header: clock.header,
     scaling: clock.scaling,
     detrend: clock.detrend,

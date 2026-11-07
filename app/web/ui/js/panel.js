@@ -1,13 +1,13 @@
 // The side panel: clocks (when there are several), estimators, options and
 // the Run button. One clock: colour = estimator. Several: colour = clock and
 // line style = estimator.
-import { state, update, markStale, multi } from "./state.js";
+import { state, update, markStale, multi, isReference, referenceColFor } from "./state.js";
 import { byId, GRIDS, CONFIDENCES, gridName } from "./estimators.js";
 import { seriesColor, strokeSvg } from "./plot.js";
 import { escapeHtml as h, thousands } from "./format.js";
 import { openPicker } from "./picker.js";
 
-let handlers = { run() {}, addClock() {}, selectClock() {} };
+let handlers = { run() {}, addClock() {}, selectClock() {}, setReference() {} };
 export function initPanel(h) {
   handlers = { ...handlers, ...h };
   const side = document.getElementById("side");
@@ -20,11 +20,13 @@ const confLabel = (c) => (CONFIDENCES.find(([v]) => v === c) ?? [c, `${c * 100} 
 function clockRows() {
   return state.clocks.map((c) => {
     const n = c.record?.n;
-    const sub = [c.source.type === "file" ? c.source.name : "synthetic", n ? `${thousands(n)} pts` : c.error ? "error" : "…"].join(" · ");
+    const ref = isReference(c);
+    const against = !ref && state.reference !== null && referenceColFor(c) ? "vs reference" : "";
+    const sub = ref ? "reference" : [c.source.type === "file" ? c.source.name : "synthetic", n ? `${thousands(n)} pts` : c.error ? "error" : "…", against].filter(Boolean).join(" · ");
     return `<div class="row clock-row ${c.id === state.activeClock ? "active" : ""} ${c.visible ? "" : "hidden-clock"}" data-clock="${c.id}" role="button" tabindex="0">
       <span class="row-main"><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>
         <span class="clock-text"><b>${h(c.name)}</b><span>${h(sub)}</span></span></span>
-      <button class="eye" type="button" data-eye="${c.id}" title="${c.visible ? "Hide" : "Show"} ${h(c.name)} on the plots" aria-pressed="${c.visible}">${c.visible ? "◉" : "○"}</button>
+      ${ref ? `<span class="ref-tag" title="Reference clock">ref</span>` : `<button class="eye" type="button" data-eye="${c.id}" title="${c.visible ? "Hide" : "Show"} ${h(c.name)} on the plots" aria-pressed="${c.visible}">${c.visible ? "◉" : "○"}</button>`}
     </div>`;
   }).join("");
 }
@@ -64,6 +66,9 @@ export function renderPanel() {
       ${several ? `
       <section><div class="side-head"><h2>Clocks</h2><span class="note">colour = clock</span></div></section>
       <div class="rows">${clockRows()}</div>
+      <label class="opt" title="Clocks read from the same file are taken against the reference; the reference leaves the plots"><span>Reference</span>
+        <select class="wide" data-ref-select><option value="">None (as measured)</option>${state.clocks.filter((c) => c.source.type === "file").map((c) =>
+          `<option value="${c.id}" ${c.id === state.reference ? "selected" : ""}>${h(c.name)}</option>`).join("")}</select></label>
       <button class="btn-dashed" type="button" data-act="add-clock">+ Add clock</button>
       <div class="rule"></div>` : ""}
       <div class="side-head"><h2>Estimators</h2><span class="note">${several ? "line style = estimator" : `${nDev} selected`}</span></div>
@@ -108,6 +113,7 @@ function onClick(e) {
 }
 
 function onChange(e) {
+  if ("refSelect" in e.target.dataset) { handlers.setReference(e.target.value ? Number(e.target.value) : null); return; }
   const opt = e.target.dataset.opt;
   if (!opt) return;
   const v = e.target.type === "checkbox" ? e.target.checked : e.target.value;

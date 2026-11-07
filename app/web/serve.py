@@ -70,6 +70,7 @@ def request_to_args(req, workdir):
     opt("tau0", "--tau0", float)
     opt("time_col", "--time-col", int)
     opt("value_col", "--value-col", int)
+    opt("reference_col", "--reference-col", int)
     opt("header", "--header", int)
     opt("scaling", "--scaling", float)
     opt("detrend", "--detrend")

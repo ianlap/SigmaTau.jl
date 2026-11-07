@@ -6,19 +6,37 @@ import { escapeHtml as h, thousands, duration, num } from "./format.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
 
+// Settings are remembered per file format: same extension, column count
+// and column names.
+const formatKey = (s) => `sigmatau.import.${s.name.toLowerCase().split(".").pop()}.${s.nCols}.${s.names.join("|")}`;
+function remembered(s) {
+  try { return JSON.parse(localStorage.getItem(formatKey(s)) ?? "null"); } catch { return null; }
+}
+function remember(s, st) {
+  try {
+    localStorage.setItem(formatKey(s), JSON.stringify({ kind: st.kind, time_col: st.time, timeUnit: st.timeUnit, value_cols: st.values, scaling: st.scaling, tau0: st.tau0In }));
+  } catch { /* storage off: nothing to remember */ }
+}
+
+// `prev`: settings of the clock being re-imported (one value column).
 export function openImport(file, prev = null) {
   const dlg = document.getElementById("import-dialog");
   const s = sniff(file.name, file.text);
   const guess = guessRoles(s);
+  const mem = prev ? null : remembered(s);
+  const p = prev ? { ...prev, value_cols: [prev.value_col] } : mem;
   const st = {
-    kind: prev?.kind ?? "phase",
-    time: prev?.time_col ?? guess.time,          // 0 = no time column
-    timeUnit: prev?.timeUnit ?? guess.timeUnit,
-    value: Math.min(prev?.value_col ?? guess.value, Math.max(1, s.nCols)),
-    scaling: prev?.scaling ?? 1,
-    tau0In: prev?.tau0 ?? s.tau0Hint ?? 1,
+    kind: p?.kind ?? "phase",
+    time: p?.time_col ?? guess.time,          // 0 = no time column
+    timeUnit: p?.timeUnit ?? guess.timeUnit,
+    values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
+    scaling: p?.scaling ?? 1,
+    tau0In: p?.tau0 ?? s.tau0Hint ?? 1,
   };
-  if (st.time === st.value) st.time = 0;
+  if (!st.values.length) st.values = [guess.value];
+  st.values = st.values.filter((c) => c !== st.time);
+  if (!st.values.length) st.time = 0, st.values = [guess.value];
+  const fromMemory = !!mem;
 
   return new Promise((resolve) => {
     const finish = (out) => { dlg.close(); resolve(out); };
@@ -34,8 +52,10 @@ export function openImport(file, prev = null) {
       const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
       if (!units.some(([f]) => f === st.scaling)) st.scaling = 1;
       const unitName = units.find(([f]) => f === st.scaling)[1];
-      const valueName = s.names[st.value - 1] || `column ${st.value}`;
-      const role = (c) => (c === st.time ? "time" : c === st.value ? "value" : "ignore");
+      const colName = (c) => s.names[c - 1] || `column ${c}`;
+      const valueName = colName(st.values[0]);
+      const role = (c) => (c === st.time ? "time" : st.values.includes(c) ? "value" : "ignore");
+      const several = st.values.length > 1;
 
       const pills = Array.from({ length: s.nCols }, (_, i) => {
         const c = i + 1, r = role(c);
@@ -52,7 +72,7 @@ export function openImport(file, prev = null) {
       const topRows = s.top.map(({ ln, text }) => {
         if (ln === s.namesLine) {
           return `<tr class="names"><td class="ln">${ln}</td>${s.names.map((n, i) =>
-            `<td class="${cls(i + 1)}" data-col="${i + 1}" title="Use as the value column">${h(n)}</td>`).join("")}</tr>`;
+            `<td class="${cls(i + 1)}" data-col="${i + 1}" title="Click to add or drop this column as a clock">${h(n)}</td>`).join("")}</tr>`;
         }
         return `<tr class="comment"><td class="ln">${ln}</td><td colspan="${Math.max(1, s.nCols)}">${h(text)}</td></tr>`;
       }).join("");
@@ -64,13 +84,13 @@ export function openImport(file, prev = null) {
       const n = s.nRows + (ts ? ts.missing : 0);
       const spanS = ts ? ts.span : tau0 * (s.nRows - 1);
       const summary = s.nCols
-        ? `${thousands(s.nRows)} samples · ${duration(spanS)} · ${st.kind === "phase" ? "phase" : "frequency"} in ${unitName}`
+        ? `${several ? `${st.values.length} clocks (${st.values.map(colName).join(", ")}) · ` : ""}${thousands(s.nRows)} samples · ${duration(spanS)} · ${st.kind === "phase" ? "phase" : "frequency"} in ${unitName}${fromMemory ? " · settings remembered for this format" : ""}`
         : "";
       const err = !s.nCols ? "No numeric rows found in this file."
         : s.bad ? `Line ${s.bad} is not numeric. The core will refuse the file.`
         : !(tau0 > 0) ? "Enter a sample interval τ₀ greater than zero." : "";
 
-      const pts = thin(s.columns[st.value - 1] ?? []);
+      const pts = thin(s.columns[st.values[0] - 1] ?? []);
       let spark = "";
       if (pts.length > 1) {
         const ys = pts.map((p) => p[1]).filter(Number.isFinite);
@@ -89,7 +109,7 @@ export function openImport(file, prev = null) {
       dlg.innerHTML = `
         <div class="imp-head">${FILE_ICON}
           <div><b>Import ${h(s.name)}</b><span class="muted small">${thousands(s.lines)} lines · ${s.delimName}${s.stable32 ? " · Stable32 file" : ""}</span></div>
-          <span class="grow"></span><span>Choose what each column holds with the menus above it</span>
+          <span class="grow"></span><span>Choose what each column holds with the menus above it.<br>Mark several value columns to load one clock each.</span>
         </div>
         <div class="imp-body">
           <div class="imp-main">
@@ -125,17 +145,24 @@ export function openImport(file, prev = null) {
       const kind = e.target.closest("[data-kind]")?.dataset.kind;
       if (kind) { st.kind = kind; render(); return; }
       const col = e.target.closest("tr.names td[data-col]")?.dataset.col;
-      if (col) { st.value = Number(col); if (st.time === st.value) st.time = 0; render(); return; }
+      if (col) {
+        const c = Number(col);
+        if (st.values.includes(c)) { if (st.values.length > 1) st.values = st.values.filter((v) => v !== c); }
+        else { st.values.push(c); st.values.sort((a, b) => a - b); if (st.time === c) st.time = 0; }
+        render(); return;
+      }
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (act === "cancel") finish(null);
       if (act === "load") {
         const { ts, tau0 } = derived();
         const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
+        remember(s, st);
         finish({
           kind: st.kind,
           time_col: st.time,
           timeUnit: st.timeUnit,
-          value_col: st.value,
+          value_cols: [...st.values],
+          names: st.values.map((c) => s.names[c - 1] || null),
           header: s.header,
           scaling: st.scaling,
           tau0,
@@ -151,10 +178,16 @@ export function openImport(file, prev = null) {
       const t = e.target;
       if (t.dataset.col) {
         const c = Number(t.dataset.col), v = t.value;
-        if (v === "value") { st.value = c; if (st.time === c) st.time = 0; }
-        else if (v.startsWith("time:")) { st.time = c; st.timeUnit = Number(v.slice(5)); if (st.value === c) st.value = c === 1 ? 2 : 1; }
-        else { if (st.time === c) st.time = 0; }
-        if (st.value > s.nCols) st.value = 1;
+        if (v === "value") { if (!st.values.includes(c)) st.values.push(c); if (st.time === c) st.time = 0; }
+        else if (v.startsWith("time:")) {
+          st.time = c; st.timeUnit = Number(v.slice(5));
+          st.values = st.values.filter((x) => x !== c);
+          if (!st.values.length) st.values = [Array.from({ length: s.nCols }, (_, i) => i + 1).find((x) => x !== c) ?? 1];
+        } else {
+          if (st.time === c) st.time = 0;
+          if (st.values.includes(c) && st.values.length > 1) st.values = st.values.filter((x) => x !== c);
+        }
+        st.values.sort((a, b) => a - b);
         render();
       } else if (t.id === "imp-units") { st.scaling = Number(t.value); render(); }
     };

@@ -50,6 +50,7 @@ output was identical in testing. The synthetic record in the core avoids FFTW.
 | `--kind phase\|frequency` | what the value column holds | `phase` |
 | `--tau0 S` | sample interval; else from the file | |
 | `--time-col I`, `--value-col I` | 1-based columns; time 0 = none | 1, 2 |
+| `--reference-col J` | take the value against this column (several clocks in one file) | 0 = none |
 | `--header N` | non-comment header lines to skip | 0 |
 | `--scaling X` | multiply values (1e-9 for ns) | 1 |
 | `--detrend none\|mean\|endpoint\|linear` | | `none` |
@@ -87,7 +88,7 @@ numbers are written as `null`. Failure (exit 2): `{"error": "message"}`.
 
 `serve.py` exposes it as `POST /api/analyze` with a JSON body
 `{source: {type: "file", name, content} | {type: "synth", n, seed}, kind,
-tau0, time_col, value_col, header, scaling, detrend, fillgaps,
+tau0, time_col, value_col, reference_col, header, scaling, detrend, fillgaps,
 remove_outliers, devs, grid, confidence (null for none), bias_correction,
 series}` and returns the core's JSON.
 `GET /api/health` reports whether a core was found.
@@ -109,5 +110,9 @@ series}` and returns the core's JSON.
 - Several clocks can be loaded, with no limit. With more than one, colour
   means clock (eight colours, then they repeat) and line style means
   estimator; the eye button hides a clock.
+- One file can hold several clocks: mark several value columns in the import
+  dialog. "Reference" in the Clocks list takes the clocks from that file
+  against the chosen one; the reference leaves the plots. Import settings are
+  remembered per file format (extension, column count and names).
 - Keys: F5 runs, 1 to 4 switch pages, a file dropped anywhere opens the
   import dialog.
