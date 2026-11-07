@@ -99,4 +99,29 @@
             @test fd.tau0 ≈ 1.0
         end
     end
+
+    @testset "column parser: whitespace, blank lines, header, errors" begin
+        mktempdir() do dir
+            # Mixed spaces/tabs, a blank line, CRLF endings, a skipped text header.
+            path = joinpath(dir, "p.dat")
+            write(path, "time phase\r\n0   1.0e-9\r\n\r\n1\t\t2.0e-9\r\n2 3.0e-9\r\n")
+            p = read_phase(path; header=1)
+            @test p isa PhaseData{Float64}
+            @test p.x == [1.0e-9, 2.0e-9, 3.0e-9]
+            @test p.tau0 == 1.0
+
+            # Median spacing with an even number of steps: (2 + 4) / 2 = 3.
+            path = joinpath(dir, "even.csv")
+            write(path, "0,1\n2,1\n6,1\n")
+            @test read_phase(path).tau0 == 3.0
+
+            # Ragged rows and non-numeric entries are ArgumentErrors.
+            path = joinpath(dir, "ragged.txt")
+            write(path, "0 1.0\n1 2.0 3.0\n")
+            @test_throws ArgumentError read_phase(path)
+            path = joinpath(dir, "text.txt")
+            write(path, "0 1.0\n1 abc\n")
+            @test_throws ArgumentError read_phase(path)
+        end
+    end
 end
