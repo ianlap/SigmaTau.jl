@@ -31,3 +31,6 @@ app/SigmaTauExplorer/dist/
 # Web explorer: compiled core and local Plotly copy
 app/web/cli/build/
 app/web/ui/vendor/
+
+# Python bytecode
+__pycache__/
