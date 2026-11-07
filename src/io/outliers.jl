@@ -53,8 +53,8 @@ end
 function _mad_outliers(v::AbstractVector{<:Real}, nsigma::Real)
     finite = [x for x in v if !isnan(x)]
     isempty(finite) && return Int[]
-    med       = median(finite)
-    mad       = median(abs.(finite .- med))
+    med       = _median_nonan(finite)
+    mad       = _median_nonan(abs.(finite .- med))
     threshold = nsigma * mad / 0.6745
     return [i for i in eachindex(v) if abs(v[i] - med) > threshold]
 end
