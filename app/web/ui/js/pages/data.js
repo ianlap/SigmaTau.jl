@@ -144,7 +144,7 @@ export function refresh() {
   const removed = c?.drift && c.drift !== "none" ? `, ${c.drift} drift removed` : "";
   const title = driftView ? `Frequency y(t)${removed}` : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
   root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
-  root.querySelector("[data-ref=plot-hint]").textContent = driftView ? "Fit in crimson · drag to zoom" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
+  root.querySelector("[data-ref=plot-hint]").textContent = driftView ? "Fit in crimson · drag to zoom" : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
   root.querySelector("[data-ref=range]").innerHTML = driftView ? "" : rangeBar(c);
   const bar = root.querySelector("[data-ref=drift-bar]");
   bar.hidden = !driftView;
