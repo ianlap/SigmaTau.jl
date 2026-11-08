@@ -13,8 +13,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   every α in the basis and the dominant noise type at each τ; it sits beside
   the per-τ lag-1 ACF classifier `identify_noise`, which is unchanged. The
   NNLS problem is solved exactly by enumerating active sets. Default bases:
-  α ≥ -2 for `:mdev` and `:mhtotdev`, down to α = -4 for `:mhdev` and
-  `:hdev`, one PM column for the unmodified `:hdev`.
+  α ≥ -2 for `:mdev`, down to α = -4 for `:mhdev`, `:hdev` and `:mhtotdev`,
+  one PM column for the unmodified `:hdev`.
 - `noise_gen` draws random-run FM (α = -4) through `h = Dict(-4 => h₋₄)`, by
   double integration of white noise with driver variance `8π⁴τ₀³h₋₄`.
   `sigma1` refuses α ≤ -3, where σ_y(τ₀) diverges.

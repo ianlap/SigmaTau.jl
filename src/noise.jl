@@ -673,9 +673,7 @@ end
 
 # Difference order: 2 for the Allan family (converges for α > -3), 3 for the
 # Hadamard family (converges for α > -5).
-# MHTOTDEV counts as 2: its per-window linear detrend leaves a
-# second-difference low-frequency response, so it too stops at α = -2.
-_nnls_diff_order(deviation::Symbol) = (deviation === :mdev || deviation === :mhtotdev) ? 2 : 3
+_nnls_diff_order(deviation::Symbol) = deviation === :mdev ? 2 : 3
 
 """
     _nnls_mu(family, alpha) → Float64
@@ -699,6 +697,8 @@ end
 
 # Convergent, non-degenerate default basis per estimator.
 function _nnls_default_alphas(deviation::Symbol)
+    # MHTOTDEV's per-window detrend is quadratic, matched to the third
+    # difference, so it converges over the full Hadamard range like MHDEV.
     family = _nnls_family(deviation)
     if _nnls_diff_order(deviation) == 2
         # Allan family: the second-difference kernel diverges for α ≤ -3.
@@ -781,15 +781,14 @@ The columns are analytic power laws `Kᵢ(τ) = (τ/τ₀)^μ(αᵢ)`, with μ t
 *variance* response exponent — `μ = -α-1` for the modified family
 (MDEV/MHDEV/MHTOTDEV) and, for the unmodified family (HDEV), `μ = -α-1` for
 α ≤ 0 with WPM and FPM both collapsing onto μ = -2. The defaults therefore
-carry α ∈ {2, 1, 0, -1, -2} for `:mdev` and `:mhtotdev`, {2, 0, -1, -2, -3, -4}
-for `:hdev`, and {2, 1, 0, -1, -2, -3, -4} for `:mhdev`. The convergence
+carry α ∈ {2, 1, 0, -1, -2} for `:mdev`, {2, 0, -1, -2, -3, -4} for `:hdev`,
+and {2, 1, 0, -1, -2, -3, -4} for `:mhdev` and `:mhtotdev`. The convergence
 condition per estimator is:
 
 | estimator | converges for | reason |
 |:----------|:--------------|:-------|
 | `:mdev` | α > -3 | second-difference kernel |
-| `:mhtotdev` | α > -3 | third-difference kernel, but the per-window linear detrend leaves a second-difference low-frequency response |
-| `:mhdev`, `:hdev` | α > -5 | third-difference kernel |
+| `:mhdev`, `:hdev`, `:mhtotdev` | α > -5 | third-difference kernel (MHTOTDEV's per-window quadratic detrend matches it, so the boundary extension keeps the range) |
 
 An unmodified basis additionally cannot carry both PM columns — they are the
 same column. Passing a basis that violates either rule is an error.
@@ -868,7 +867,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
         α >= αmin || throw(ArgumentError(
             "noise_id_nnls: $deviation does not converge at α = $α — its " *
             "$(_nnls_diff_order(deviation))-difference kernel requires α ≥ $αmin. " *
-            "Use :hdev or :mhdev for α < -2."))
+            "Use a Hadamard-family estimator (:hdev, :mhdev, :mhtotdev) for α < -2."))
     end
     μs = [_nnls_mu(family, α) for α in αs]
     if length(unique(μs)) != length(μs)

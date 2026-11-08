@@ -140,9 +140,9 @@ end
         # unmodified basis carries only one PM column.
         @test SigmaTau._nnls_default_alphas(:mdev)     == [2, 1, 0, -1, -2]
         @test SigmaTau._nnls_default_alphas(:mhdev)    == [2, 1, 0, -1, -2, -3, -4]
-        # MHTOTDEV's per-window detrend is linear, which leaves a
-        # second-difference low-frequency response: it stops at α = -2 too.
-        @test SigmaTau._nnls_default_alphas(:mhtotdev) == [2, 1, 0, -1, -2]
+        # MHTOTDEV's per-window detrend is quadratic, matched to the third
+        # difference, so it carries the full modified-family basis like MHDEV.
+        @test SigmaTau._nnls_default_alphas(:mhtotdev) == [2, 1, 0, -1, -2, -3, -4]
         @test SigmaTau._nnls_default_alphas(:hdev)     == [2, 0, -1, -2, -3, -4]
         @test 1 ∉ SigmaTau._nnls_default_alphas(:hdev)
     end
@@ -178,9 +178,9 @@ end
         # α = -4 lives outside the Allan family's convergence range, so `:mdev`
         # cannot even carry the column — asking for it is an error. The
         # third-difference estimators pass the τ³ response through and
-        # identify it. MHTOTDEV's linear per-window detrend does not (its RRFM
-        # slope is about τ¹ and N-dependent), so it refuses the column as well.
-        for deviation in (:mhdev, :hdev)
+        # identify it, MHTOTDEV included (its quadratic per-window detrend
+        # keeps the Hadamard range through the boundary extension).
+        for deviation in (:mhdev, :hdev, :mhtotdev)
             p = noise_gen(PhaseData, N, 1.0; h = Dict(-4 => 1e-40),
                           rng = Xoshiro(20260808))
             r = noise_id_nnls(p; deviation = deviation)
@@ -189,7 +189,6 @@ end
         end
         p2048 = noise_gen(PhaseData, 2048, 1.0; h = Dict(-4 => 1e-40), rng = Xoshiro(1))
         @test_throws ArgumentError noise_id_nnls(p2048; deviation = :mdev, alphas = [0, -4])
-        @test_throws ArgumentError noise_id_nnls(p2048; deviation = :mhtotdev, alphas = [0, -4])
 
     end
 
