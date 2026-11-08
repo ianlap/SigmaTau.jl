@@ -80,6 +80,11 @@ until 0.7.
 
 ### Added
 
+- Python bindings, the `sigmatau` package in `python/`. Every call runs in an
+  embedded Julia through juliacall, so results match the Julia API exactly.
+  The names and keywords are the 0.6 ones (`psd_y`, `ncornered_hat`,
+  `save`/`load`, `m=`), plus `deviation(name, ...)` and `estimators()`.
+  Tested by a pytest suite in its own CI workflow.
 - `StabilityResult` carries the record's `tau0`, sample count `n` and the
   interval `confidence` (`NaN` without intervals), and result files store
   them. Files from earlier versions load with `NaN` / 0. The seven-argument
