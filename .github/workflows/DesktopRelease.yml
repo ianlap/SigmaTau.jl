@@ -2,9 +2,10 @@ name: Desktop release
 
 # Builds the desktop explorer (app/desktop) for macOS (Apple silicon and
 # Intel) and Linux (.deb and AppImage), with the trimmed sigmatau core inside.
-# A tag like app-v0.1.0 also publishes the files as a draft GitHub release; a
-# manual run or a pull request touching app/desktop only uploads them as
-# workflow artifacts.
+# It runs only on a tag like app-v0.1.0, which also publishes the files as a
+# draft GitHub release, or by hand (Actions > Desktop release > Run workflow),
+# which only uploads them as workflow artifacts. It takes 20 to 30 minutes,
+# so it does not run on pull requests.
 #
 # macOS signing is optional. With these repository secrets the app is signed
 # with a Developer ID and notarized; without them it is signed ad hoc:
@@ -17,10 +18,6 @@ name: Desktop release
 on:
   push:
     tags: ['app-v*']
-  pull_request:
-    paths:
-      - 'app/desktop/**'
-      - '.github/workflows/DesktopRelease.yml'
   workflow_dispatch:
 
 permissions:
