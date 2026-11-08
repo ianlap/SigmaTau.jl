@@ -1376,6 +1376,7 @@ end
 include("taus.jl")
 include("suite.jl")
 include("spectral.jl")
+include("noise_gen.jl")
 include("mhtotdev_mc.jl")
 include("pdev_edf_mc.jl")
 include("theo.jl")

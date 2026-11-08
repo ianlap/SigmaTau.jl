@@ -221,6 +221,16 @@ mktempdir() do dir
         @test g.code == 0 && occursin("\"quantity\":\"phase\"", g.out)
         @test run_cli("analyze", tim, "--input-format", "counter", "--tau0", "1").code == 2
         @test run_cli("analyze", tim, "--reference-col", "2").code == 1
+        semi = joinpath(dir, "semi.txt")
+        write(semi, "time;phase (ns)\n" * join(string.(0:63, ";", X[1:64] .* 1e9), "\n"))
+        d = csv_rows(run_cli("analyze", semi, "--input-format", "table", "--delim", ";",
+                             "--devs", "adev", "--no-ci").out)
+        @test parse.(Float64, getindex.(d, 5)) ≈ adev(PhaseData(X[1:64], 1.0); ci=false).dev rtol=1e-9
+        # The filled second of the GPSDO log stays out of the drift fit.
+        o = SigmaTauCLI.Options()
+        o.input, o.fillgaps = fx("gpsdo.csv"), true
+        SigmaTauCLI.read_record(o)
+        @test findall(!, o.measured) == [24]
     end
 
     @testset "reference column" begin
