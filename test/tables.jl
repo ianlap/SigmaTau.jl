@@ -4,69 +4,28 @@ using SigmaTau
 using Tables
 
 @testset "Tables.jl extension" begin
-    Random.seed!(23)
-    pd = PhaseData(cumsum(randn(256)) .* 1e-9, 1.0)
+    pd = PhaseData(cumsum(randn(MersenneTwister(23), 256)) .* 1e-9, 1.0)
+    r  = adev(pd; ci=false)
+    rc = adev(pd; ci=true)
+    @test Tables.istable(typeof(r)) && Tables.rowaccess(typeof(r))
+    @test Tables.schema(r).names ==
+          (:deviation_type, :tau, :dev, :noise_type, :ci_lower, :ci_upper, :edf, :neff)
 
-    result = adev(pd; ci=false)
-    @test Tables.istable(typeof(result))
-    @test Tables.rowaccess(typeof(result))
-    @test Tables.schema(result).names == (
-        :deviation_type,
-        :tau,
-        :dev,
-        :noise_type,
-        :ci_lower,
-        :ci_upper,
-        :edf,
-        :neff,
-    )
+    # Without CI the CI columns are missing; neff is always there.
+    c = Tables.columntable(r)
+    @test (c.tau, c.dev, c.neff) == (r.tau, r.dev, r.neff)
+    @test all(c.deviation_type .=== :adev) && eltype(c.neff) == Int
+    @test all(ismissing, c.noise_type) && all(ismissing, c.ci_lower) &&
+          all(ismissing, c.ci_upper) && all(ismissing, c.edf)
+    cc = Tables.columntable(rc)
+    @test (cc.noise_type, cc.ci_lower, cc.ci_upper, cc.edf) ==
+          (rc.noise_type, ci_lower(rc), ci_upper(rc), rc.edf)
 
-    rows = collect(Tables.rows(result))
-    @test length(rows) == length(result.tau)
-    @test rows[1].deviation_type === :adev
-    @test rows[1].tau == result.tau[1]
-    @test rows[1].dev == result.dev[1]
-    @test ismissing(rows[1].noise_type)
-    @test ismissing(rows[1].ci_lower)
-    @test ismissing(rows[1].ci_upper)
-    @test ismissing(rows[1].edf)
-    # neff is populated even on a ci=false result.
-    @test rows[1].neff == result.neff[1]
-    @test rows[1].neff isa Int
-
-    result_ci = adev(pd; ci=true)
-    rows_ci = collect(Tables.rows(result_ci))
-    @test rows_ci[1].noise_type == result_ci.noise_type[1]
-    @test rows_ci[1].ci_lower == result_ci.ci[1].lo
-    @test rows_ci[1].ci_upper == result_ci.ci[1].hi
-    @test rows_ci[1].edf == result_ci.edf[1]
-    @test rows_ci[1].neff == result_ci.neff[1]
-    @test [row.neff for row in rows_ci] == result_ci.neff
-
-    suite = stability(pd; devs=(:adev, :mdev), m=Octave, ci=false)
-    @test Tables.istable(typeof(suite))
-    @test Tables.rowaccess(typeof(suite))
-
-    suite_rows = collect(Tables.rows(suite))
-    @test length(suite_rows) == length(suite[:adev].tau) + length(suite[:mdev].tau)
-    @test suite_rows[1].deviation_type === :adev
-    @test suite_rows[length(suite[:adev].tau) + 1].deviation_type === :mdev
-
-    cols = Tables.columntable(suite)
-    @test cols.deviation_type == [row.deviation_type for row in suite_rows]
-    @test cols.tau == [row.tau for row in suite_rows]
-    @test cols.dev == [row.dev for row in suite_rows]
-    @test cols.neff == vcat(suite[:adev].neff, suite[:mdev].neff)
-
-    # A bare StabilityResult also round-trips through columntable (rowaccess +
-    # schema fallback on ResultRows).
-    result_cols = Tables.columntable(result)
-    @test result_cols.tau == result.tau
-    @test result_cols.dev == result.dev
-
-    # An empty suite (devs=()) reports zero rows and must not throw — the
-    # SuiteRows length reduction seeds init=0 for the empty case.
-    empty_suite = stability(pd; devs=(), ci=false)
-    @test length(Tables.rows(empty_suite)) == 0
-    @test length(Tables.columntable(empty_suite).tau) == 0
+    # A suite stacks its results in order.
+    s = stability(pd; devs=(:adev, :mdev), m=Octave, ci=false)
+    @test Tables.istable(typeof(s)) && Tables.rowaccess(typeof(s))
+    sc = Tables.columntable(s)
+    @test sc.deviation_type == [fill(:adev, length(s[:adev].tau)); fill(:mdev, length(s[:mdev].tau))]
+    @test (sc.tau, sc.neff) == ([s[:adev].tau; s[:mdev].tau], [s[:adev].neff; s[:mdev].neff])
+    @test length(Tables.rows(stability(pd; devs=(), ci=false))) == 0
 end

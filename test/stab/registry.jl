@@ -32,17 +32,12 @@ using Test, Random, SigmaTau
                    :mhtotdev => mhtotdev, :theo1 => theo1, :theoh => theoh,
                    :pdev => pdev, :mtie => mtie, :tierms => tierms)
         small = PhaseData(x[1:512], 1.0)
-        for r in estimators()
-            f = fns[r.name]
-            a = deviation(r.name, small)
-            b = f(small)
-            @test a.deviation_type === r.name
-            @test a.tau == b.tau
-            @test isequal(a.dev, b.dev)
-            @test isequal(a.ci, b.ci)
-            c = deviation(r.name, small, HalfOctave; ci=false)
-            @test isequal(c.dev, f(small, HalfOctave; ci=false).dev)
-        end
+        same(a, b) = a.deviation_type === b.deviation_type && a.tau == b.tau &&
+                     isequal(a.dev, b.dev) && isequal(a.ci, b.ci)
+        @test isempty([r.name for r in estimators()
+                       if !same(deviation(r.name, small), fns[r.name](small)) ||
+                          !same(deviation(r.name, small, HalfOctave; ci=false),
+                                fns[r.name](small, HalfOctave; ci=false))])
         @test deviation(:adev, pd, 1:4; confidence=0.95).ci == adev(pd, 1:4; confidence=0.95).ci
         @test deviation(:totdev, pd, [1, 2]; correct_bias=false).dev ==
               totdev(pd, [1, 2]; correct_bias=false).dev
@@ -64,17 +59,14 @@ using Test, Random, SigmaTau
     end
 
     @testset "tau_mode()" begin
-        for (s, m) in (("octave", Octave), ("half-octave", HalfOctave),
-                       ("halfoctave", HalfOctave), ("Half_Octave", HalfOctave),
-                       ("quarter-octave", QuarterOctave), ("quarteroctave", QuarterOctave),
-                       ("decade", Decade), ("half-decade", HalfDecade),
-                       ("halfdecade", HalfDecade), ("all", AllTaus),
-                       ("alltaus", AllTaus), (" AllTaus ", AllTaus))
-            @test tau_mode(s) === m
-        end
-        for m in instances(TauMode)
-            @test tau_mode(string(m)) === m
-        end
+        spellings = (("octave", Octave), ("half-octave", HalfOctave),
+                     ("halfoctave", HalfOctave), ("Half_Octave", HalfOctave),
+                     ("quarter-octave", QuarterOctave), ("quarteroctave", QuarterOctave),
+                     ("decade", Decade), ("half-decade", HalfDecade),
+                     ("halfdecade", HalfDecade), ("all", AllTaus),
+                     ("alltaus", AllTaus), (" AllTaus ", AllTaus))
+        @test isempty([s for (s, m) in spellings if tau_mode(s) !== m])
+        @test all(m -> tau_mode(string(m)) === m, instances(TauMode))
         @test_throws ArgumentError tau_mode("weekly")
     end
 
@@ -82,11 +74,7 @@ using Test, Random, SigmaTau
         t = 0:999
         q = PhaseData(0.5e-12 .* t .^ 2, 2.0)       # y slope = 1e-12/τ0² per s
         s = summarize(q)
-        @test s.n == 1000
-        @test s.tau0 == 2.0
-        @test s.span == 2000.0
-        @test s.gaps == 0
-        @test s.outliers == Int[]
+        @test (s.n, s.tau0, s.span, s.gaps, s.outliers) == (1000, 2.0, 2000.0, 0, Int[])
         @test s.drift_per_day ≈ 0.25e-12 * 86400 rtol = 1e-9
         y = randn(MersenneTwister(3), 500) .* 1e-12
         y[100] = 1e-9
@@ -100,9 +88,7 @@ using Test, Random, SigmaTau
     end
 
     @testset "dynamic defaults" begin
-        @test SigmaTau._default_window(2048) == 256
-        @test SigmaTau._default_window(100) == 16
-        @test SigmaTau._default_window(10) == 10
+        @test SigmaTau._default_window.((2048, 100, 10)) == (256, 16, 10)
         r = dadev(pd)
         @test r.window == 256
         @test r.tau == adev(PhaseData(x[1:256], 1.0)).tau

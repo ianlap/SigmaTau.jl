@@ -31,14 +31,15 @@ const _CC = CrossCheck
             ("scipy Welch S_y / S_x",                     _CC.welch_rows),
             ("allantools per-window dynamic maps",        _CC.dynamic_rows))
         @testset "$label" begin
-            rows = f()
-            @test !isempty(rows)
-            for r in rows
-                isinf(r.tol) && continue
-                ok = _CC.passes(r)
-                ok || @info "cross-check miss" r.group r.dataset r.estimator r.m r.ref r.got relerr(r) r.tol
-                @test ok
+            # One assertion per group; every row is still checked, and each
+            # miss is logged with its reference value and tolerance.
+            rows = filter(r -> !isinf(r.tol), f())
+            misses = filter(r -> !_CC.passes(r), rows)
+            for r in misses
+                @info "cross-check miss" r.group r.dataset r.estimator r.m r.ref r.got relerr(r) r.tol
             end
+            @test !isempty(rows)
+            @test isempty(misses)
         end
     end
 end
