@@ -390,9 +390,36 @@ function dynamic_rows()
     return rows
 end
 
+# ── allantools gradev on records with gaps ──────────────────────────────────
+
+# Samples blanked before both programs run; the same spans are in
+# tools/validation/gen_allantools.py.
+const GAP_SPANS = ((101, 160), (777, 777), (1500, 1503), (3001, 3100))
+
+function gap_rows()
+    rows = Row[]
+    cache = Dict{String,StabilityResult}()
+    for r in _csv(joinpath(AT, "gaps.csv"))
+        ds = r["dataset"]
+        res = get!(cache, ds) do
+            x = copy(dataset(ds).x)
+            for (lo, hi) in GAP_SPANS
+                x[lo:hi] .= NaN
+            end
+            ms = [parse(Int, q["m"]) for q in _csv(joinpath(AT, "gaps.csv")) if q["dataset"] == ds]
+            adev(PhaseData(x, 1.0), ms; ci=false)
+        end
+        m = parse(Int, r["m"])
+        j = findfirst(==(m), Int.(res.tau))
+        push!(rows, Row("allantools gradev", ds, "adev", m, _f(r["dev"]), res.dev[j], 1e-12, ""))
+        push!(rows, Row("allantools gradev", ds, "terms", m, parse(Float64, r["n"]), Float64(res.neff[j]), 0.0, ""))
+    end
+    return rows
+end
+
 "Every comparison row, in report order."
 all_rows() = vcat(allantools_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
                   allantools_edf_rows(), allantools_ci_rows(), allantools_noiseid_rows(),
-                  welch_rows(), dynamic_rows())
+                  welch_rows(), dynamic_rows(), gap_rows())
 
 end # module
