@@ -64,7 +64,11 @@ fmt(f) = joinpath(FMT, f)
         @test SigmaTau._read_data(fmt("gpsdo.csv"), :auto; fillgaps=true).filled == (1:41 .== 24)
         semi = tempname() * ".txt"
         write(semi, "time;phase (ns)\n0;1.0\n1;2.0\n2;4.0\n")
-        @test read_data(semi; format=:table, delim=';').x == [1e-9, 2e-9, 4e-9]
+        @test read_data(semi; delim=';').x == [1e-9, 2e-9, 4e-9]      # detected with the delimiter
+        # A time column found by its ISO timestamps rather than its name.
+        iso = tempname() * ".csv"
+        write(iso, "measurement_time,phase (ns)\n2026-11-08T12:00:00Z,1\n2026-11-08T12:00:01Z,2\n2026-11-08T12:00:03Z,4\n")
+        @test length(read_data(iso; fillgaps=true)) == 4
     end
 
     @testset "ISO 8601 offsets" begin

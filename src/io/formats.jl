@@ -57,7 +57,7 @@ function _delim_for(path::AbstractString, line::AbstractString, delim::Char='\0'
 end
 
 """
-    detect_format(path) → Symbol
+    detect_format(path; delim=nothing) → Symbol
 
 Name the layout of a data file from its extension and first lines, one of
 [`INPUT_FORMATS`](@ref):
@@ -74,8 +74,14 @@ Name the layout of a data file from its extension and first lines, one of
   most GPSDO and logging-script output).
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
   [`read_frequency`](@ref).
+
+`delim` is the field delimiter, by default comma for `.csv`, tab for
+`.tsv`, else whitespace.
 """
-function detect_format(path::AbstractString)
+detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing) =
+    _detect_format(path, delim === nothing ? '\0' : Char(delim))
+
+function _detect_format(path::AbstractString, delim::Char)
     isfile(path) || throw(ArgumentError("detect_format: file not found: " * String(path)))
     lines = _head_lines(path, 200)
     any(l -> startswith(l, "TIC "), lines) &&
@@ -92,7 +98,7 @@ function detect_format(path::AbstractString)
         length(data) >= 8 && break
     end
     isempty(data) && return :columns
-    d = _delim_for(path, data[1])
+    d = _delim_for(path, data[1], delim)
     first_fields = _split_fields(data[1], d)
     if length(data) >= 2 && !all(_isnumfield, first_fields)
         next = _split_fields(data[2], d)
@@ -292,7 +298,9 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         push!(rows, String[String(strip(f, '"')) for f in _split_fields(s, d)])
     end
     length(rows) >= 2 || throw(ArgumentError("read_data: fewer than 2 rows under the column names in " * String(path)))
-    time = something(findfirst(n -> occursin(_TIME_NAMES, n), names), 0)
+    # The time column by name, else the first one holding ISO timestamps.
+    time = something(findfirst(n -> occursin(_TIME_NAMES, n), names),
+                     findfirst(f -> !isnan(_iso_seconds(f)), rows[1]), 0)
     c = _pick_column(names, column, column_name, time)
     v = Float64[]
     for (k, r) in enumerate(rows)
@@ -332,7 +340,7 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     isfile(path) || throw(ArgumentError("read_data: file not found: " * String(path)))
     kind in (:auto, :phase, :frequency) ||
         throw(ArgumentError("read_data: kind must be :auto, :phase or :frequency, got :" * String(kind)))
-    fmt = format === :auto ? detect_format(path) : format
+    fmt = format === :auto ? _detect_format(path, delim) : format
     hint = kind === :phase ? 1 : kind === :frequency ? -1 : 0
     r = if fmt === :timelab
         _read_timelab(path, tau0)
