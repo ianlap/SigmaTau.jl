@@ -170,7 +170,7 @@ end
 const CSV_DRIFT = "source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
 
 function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
-    need_samples(data, 8, "a drift fit")
+    need_samples(data, 3, "a drift fit")   # drift_fit checks each model's own minimum
     f = drift_fit(data; model=Symbol(o.model))
     src = source_name(o, data)
     n = count(isfinite, f.y)

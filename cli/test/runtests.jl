@@ -248,6 +248,10 @@ mktempdir() do dir
         r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
         @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
         @test run_cli("drift", ff, "--model", "cubic").code == 1
+        # Four phase samples: three frequency steps fit a line but not a log.
+        sf = write_table(joinpath(dir, "short.csv"), [0.0, 1.0, 3.0, 6.0] .* 1e-9)
+        @test run_cli("drift", sf).code == 0
+        @test run_cli("drift", sf, "--model", "log").code == 3
     end
 
     @testset "--remove-drift" begin
