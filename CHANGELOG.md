@@ -30,6 +30,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `noise_gen` covers flicker-walk FM (α = −3) and random-run FM (α = −4), and
+  takes noise-type names as keys (`Dict(:WHFM => 1e-12)`). Its spectrum,
+  `h_α (sin(πfτ₀)/(πτ₀))^α`, is checked against theory for every α from +2
+  to −4 in the test suite.
+
 - `read_data` and `detect_format` read instrument files by layout: TimeLab
   `.tim` (τ₀ and scale factor from the header), Stable32 `.phd`/`.frd`
   (MJD time tags, `Type:` header), SCPI counter readings (Hz converted to
