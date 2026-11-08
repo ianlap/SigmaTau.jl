@@ -52,7 +52,7 @@ fn core_path(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-const COMMANDS: [&str; 4] = ["check", "analyze", "spectrum", "dynamic"];
+const COMMANDS: [&str; 5] = ["check", "analyze", "spectrum", "dynamic", "drift"];
 
 /// Check a request `{args: [command, flags...], file: {name, content} | null}`
 /// (the same rules as serve.py) and return the sigmatau arguments, with the

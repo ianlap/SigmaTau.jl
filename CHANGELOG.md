@@ -38,6 +38,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Explorer sessions: **File → Save session** stores the clocks, their files,
   import settings and analysis settings in one JSON file; **Open session**
   (or dropping the file on the window) restores it and reruns.
+- `noise_id_nnls(data[, m]; deviation=:mhdev, alphas, weights=:edf)`: a
+  weighted nonnegative least-squares fit of the measured σ̂²(τ) profile to
+  power-law components. One fit over the whole τ range gives the amplitude of
+  every α in the basis and the dominant noise type at each τ; it sits beside
+  the per-τ lag-1 ACF classifier `identify_noise`, which is unchanged. The
+  NNLS problem is solved exactly by enumerating active sets. Default bases:
+  α ≥ -2 for `:mdev`, down to α = -4 for `:mhdev`, `:hdev` and `:mhtotdev`,
+  one PM column for the unmodified `:hdev`.
 - `noise_gen` covers flicker-walk FM (α = −3) and random-run FM (α = −4), and
   takes noise-type names as keys (`Dict(:WHFM => 1e-12)`). Its spectrum,
   `h_α (sin(πfτ₀)/(πτ₀))^α`, is checked against theory for every α from +2
@@ -57,6 +65,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   the terms used and the EDF and confidence interval follow from it. ADEV
   matches allantools' `gradev` value and term count to 2e-15. The CLI and
   the explorer pick this up without a flag.
+- `drift_fit(data; model)`: Stable32's frequency drift fits (linear,
+  quadratic, MIL-PRF-55310 log and diffusion) with standard errors, the
+  drift rate at the end of the record per day and its uncertainty, and the
+  fitted curve. Gaps are skipped. Coefficients and standard errors match
+  scipy least squares (polynomials to 1e-13, log to 2e-8, diffusion to 1e-10).
+  The CLI adds `sigmatau drift FILE --model MODEL`, and the explorer's Data
+  plot gets a Frequency drift view with the fit and its residuals.
 - Reference cross-check suite (`test/validation/`): every estimator on
   power-law records with α = +2 … −4, plus EDF, χ² intervals, noise ID,
   Welch spectra and dynamic maps, against allantools, scipy, Stable32's
@@ -114,11 +129,16 @@ until 0.7.
   comment-header scan. Results are unchanged; the readers are now type-stable,
   and everything except FFTW-backed paths (`noise_gen`, `fillgaps`) passes
   `juliac --trim=safe` verification.
-- **Breaking:** `mhtotdev` values change for `m ≥ 2`. The subsegment phase
-  length is now `4m` (one full MHVAR span) instead of `3m + 1`. Bias and EDF
-  coefficients were re-measured by the full Monte Carlo sweep
-  (`tools/mc_mhtotdev.jl`, seed 20260531, R = 3000, N ≤ 32768); provenance in
-  `tools/artifacts/mhtotdev_mc_full.json`.
+- **Breaking:** `mhtotdev` values change for `m ≥ 2`. Each subsegment is now
+  `4m` phase samples (one full MHVAR span) instead of `3m + 1`, and its
+  least-squares quadratic is removed before the reflection instead of a line.
+  MHTOTDEV is now immune to linear frequency drift on its own and converges
+  for power laws down to α = −4, like HDEV and MHDEV; `remove_drift` now
+  only affects noise identification. It reads low by a nearly constant factor
+  (bias B ≈ 0.90 for white PM, ≈ 0.79 for FM noise, corrected by default).
+  Bias and EDF coefficients were re-measured by the full Monte Carlo sweep
+  (`tools/mc_mhtotdev.jl` at `9d7a408`, seed 20260531, R = 3000, N ≤ 32768);
+  provenance in `tools/artifacts/mhtotdev_mc_full.json`.
 - Repository trimmed for the public release: the extended theory pages, FAQ,
   plotting cookbook and migration guides moved to the `dev` branch; the docs
   build no longer needs a TeX install.
@@ -131,11 +151,6 @@ until 0.7.
   `h` components are now scaled on the filter's low-frequency PSD so the
   generated spectrum is `h_α f^α` (before, h was converted to σ_y(τ₀) with the
   continuous-time formulas, which do not hold for sampled discrete processes).
-- MHTOTDEV bias and EDF coefficients re-measured with the Kasdin–Walter
-  synthesis (full sweep at `e3ba9da`, seed 20260531, R = 3000, N ≤ 32768;
-  `tools/artifacts/mhtotdev_mc_full.json`). White FM is unchanged; the
-  largest shifts are the white-PM EDF (`b, c` 1.687, 4.317 → 1.634, 3.833)
-  and bias slope, and the random-walk EDF intercept (2.449 → 2.415).
 - `mdev`, `tdev`, `mhdev` and `htdev` remove the least-squares phase line
   before forming their prefix sums (an exact invariance of the modified
   estimators). On a record with an uncorrected 1e-9 frequency offset the

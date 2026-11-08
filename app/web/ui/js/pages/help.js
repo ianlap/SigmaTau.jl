@@ -79,6 +79,7 @@ export function mount(root) {
       </section>
 
       <section id="help-drift"><h2>Drift removal</h2>
+        <p><b>Frequency drift</b> on the Data plot fits a model to the fractional frequency by least squares and reports the drift rate at the end of the record per day, with its standard error: <b>Linear</b> a + b·t, <b>Quadratic</b> a + b·t + c·t², <b>Log</b> a·ln(1 + b·t) + c (the MIL-PRF-55310 aging model) and <b>Diffusion</b> a + b·√(t + c). <b>Residuals</b> plots what the model leaves. The standard error assumes white residuals, so it is optimistic when flicker or random-walk FM dominates. Hover the rate for the fitted coefficients.</p>
         <p><b>Drift removal</b> in the record check fits the phase by least squares, over the samples that are not gaps, and removes the fit before every analysis. <b>Linear</b> removes a frequency offset (a straight line in phase); <b>Quadratic</b> also removes a linear frequency drift (a parabola in phase), which SP1065 asks for before the total estimators. The check lists what was removed, and the phase plot shows the residual. HDEV and its relatives ignore a linear drift anyway; ADEV, MDEV and the totals rise as τ<sup>+1</sup> when one is left in.</p>
       </section>
 

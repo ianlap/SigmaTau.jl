@@ -16,6 +16,7 @@ function fill_template(tpl::String)
     s = replace(s, "@@FMT@@" => join(FORMATS, " "))
     s = replace(s, "@@DETREND@@" => join(DETRENDS, " "))
     s = replace(s, "@@DRIFT@@" => join(DRIFTS, " "))
+    s = replace(s, "@@MODELS@@" => join(DRIFT_MODELS, " "))
     s = replace(s, "@@VALUEOPTS@@" => join(value_options(), "|"))
     for c in COMMANDS
         s = replace(s, "@@OPTS_" * c * "@@" => join(cmd_options(c), " "))
@@ -38,6 +39,7 @@ _sigmatau() {
         --format)  COMPREPLY=( $(compgen -W "@@FMT@@" -- "$cur") ); return ;;
         --detrend) COMPREPLY=( $(compgen -W "@@DETREND@@" -- "$cur") ); return ;;
         --remove-drift) COMPREPLY=( $(compgen -W "@@DRIFT@@" -- "$cur") ); return ;;
+        --model)   COMPREPLY=( $(compgen -W "@@MODELS@@" -- "$cur") ); return ;;
         --out)     COMPREPLY=(); return ;;
         @@VALUEOPTS@@) COMPREPLY=(); return ;;
     esac
@@ -52,6 +54,7 @@ _sigmatau() {
         check)      opts="@@OPTS_check@@" ;;
         spectrum)   opts="@@OPTS_spectrum@@" ;;
         dynamic)    opts="@@OPTS_dynamic@@" ;;
+        drift)      opts="@@OPTS_drift@@" ;;
         report)     opts="@@OPTS_report@@" ;;
     esac
     if [[ "$cur" == -* ]]; then
@@ -77,7 +80,7 @@ _sigmatau() {
       case $words[1] in
         completion) _values 'shell' @@SHELLS@@ ;;
         help)       _values 'command' @@SUBCMDS@@ ;;
-        analyze|check|spectrum|dynamic|report)
+        analyze|check|spectrum|dynamic|drift|report)
           case $words[CURRENT-1] in
             --devs)    _values -s , 'deviation' @@DEVS@@ ;;
             --dev)     _values 'deviation' @@DYN@@ ;;
@@ -85,6 +88,7 @@ _sigmatau() {
             --format)  _values 'format' @@FMT@@ ;;
             --detrend) _values 'mode' @@DETREND@@ ;;
             --remove-drift) _values 'mode' @@DRIFT@@ ;;
+            --model)   _values 'model' @@MODELS@@ ;;
             --out)     _files ;;
             *)
               if [[ $PREFIX == -* ]]; then
@@ -94,6 +98,7 @@ _sigmatau() {
                   check)    opts=(@@OPTS_check@@) ;;
                   spectrum) opts=(@@OPTS_spectrum@@) ;;
                   dynamic)  opts=(@@OPTS_dynamic@@) ;;
+                  drift)    opts=(@@OPTS_drift@@) ;;
                   report)   opts=(@@OPTS_report@@) ;;
                 esac
                 compadd -a opts
@@ -116,10 +121,10 @@ complete -c sigmatau -f -n '__fish_seen_subcommand_from help' -a '@@SUBCMDS@@'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze report' -l devs -a '@@DEVS@@' -d 'comma list of deviations'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from dynamic' -l dev -a '@@DYN@@' -d 'dynamic deviation'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze dynamic report' -l grid -a '@@GRIDS@@' -d 'τ grid'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic' -l format -a '@@FMT@@' -d 'output format'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic report' -l detrend -a '@@DETREND@@' -d 'detrend mode'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic report' -l remove-drift -a '@@DRIFT@@' -d 'drift to fit and remove'
-complete -c sigmatau -r -F -n '__fish_seen_subcommand_from analyze check spectrum dynamic report' -l out -d 'write to PATH'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift' -l format -a '@@FMT@@' -d 'output format'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift report' -l detrend -a '@@DETREND@@' -d 'detrend mode'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift report' -l remove-drift -a '@@DRIFT@@' -d 'drift to fit and remove'
+complete -c sigmatau -r -F -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift report' -l out -d 'write to PATH'
 """
 
 const POWERSHELL = raw"""
@@ -142,6 +147,7 @@ Register-ArgumentCompleter -Native -CommandName sigmatau -ScriptBlock {
         '--format'  { return _res ('@@FMT@@' -split ' ') }
         '--detrend' { return _res ('@@DETREND@@' -split ' ') }
         '--remove-drift' { return _res ('@@DRIFT@@' -split ' ') }
+        '--model'   { return _res ('@@MODELS@@' -split ' ') }
         '--out'     { return }
     }
     if ($elements.Count -le 2 -and -not $wordToComplete.StartsWith('-')) {
@@ -155,6 +161,7 @@ Register-ArgumentCompleter -Native -CommandName sigmatau -ScriptBlock {
             'check'    { return _res ('@@OPTS_check@@' -split ' ') }
             'spectrum' { return _res ('@@OPTS_spectrum@@' -split ' ') }
             'dynamic'  { return _res ('@@OPTS_dynamic@@' -split ' ') }
+            'drift'    { return _res ('@@OPTS_drift@@' -split ' ') }
             'report'   { return _res ('@@OPTS_report@@' -split ' ') }
         }
     }

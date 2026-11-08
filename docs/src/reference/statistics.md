@@ -11,6 +11,7 @@ outside an estimator call.
 ```@docs
 noise_gen
 identify_noise
+noise_id_nnls
 ```
 
 ## EDF, bias and confidence intervals

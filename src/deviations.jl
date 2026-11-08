@@ -406,23 +406,20 @@ end
     mhtotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Modified Hadamard total deviation of a phase record: the total (boundary-
-extended) form of [`mhdev`](@ref), using the per-subsegment detrend and
-time-reverse extension of the other total estimators. Original to this
-package.
+extended) form of [`mhdev`](@ref). Each window of 4m samples has its own
+least-squares quadratic removed before the time-reverse extension, so the
+estimator is drift-immune like MHDEV and converges for every noise type
+MHDEV does, down to random-run FM (α = −4). Original to this package.
 
-`remove_drift=true` (default) removes the record's least-squares frequency
-drift (the quadratic phase term) before the analysis, and the per-τ noise
-identification runs on the drift-removed record. Unlike MHDEV, the total
-estimator is not drift-immune: residual drift re-enters through the
-reflected window boundaries and reads high at long τ. Removing a
-deterministic drift discards no statistical information and is the practice
-SP1065 prescribes before any total estimator. Pass `remove_drift=false` for
-data that is already detrended.
+`remove_drift=true` (default) also removes the record's least-squares
+frequency drift before the analysis, so the per-τ noise identification runs
+on the drift-removed record; the deviation itself does not change. Pass
+`remove_drift=false` to identify noise on the record as given.
 
 `correct_bias=true` (default) applies the Monte-Carlo-measured unbias
 correction `σ_unbiased = σ_raw / √B`, where `B = b0 + b1·(τ/T)` is the
-τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)`; the
-coefficients were measured with the default drift removal in the loop. Pass
+τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)` (B ≈ 0.79–0.90:
+the per-window detrend absorbs part of the variance). Pass
 `correct_bias=false` for the raw kernel value. The EDF uses the same Monte
 Carlo fit; see the "MHTOTDEV bias and EDF" page for the method.
 """
