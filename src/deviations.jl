@@ -866,3 +866,17 @@ dadev(data::PhaseData,     taus::TauMode; window::Int, kwargs...) = dadev(data, 
 dadev(data::FrequencyData, taus::TauMode; window::Int, kwargs...) = dadev(data, tau_values(taus, window, :adev); window=window, kwargs...)
 dhdev(data::PhaseData,     taus::TauMode; window::Int, kwargs...) = dhdev(data, tau_values(taus, window, :hdev); window=window, kwargs...)
 dhdev(data::FrequencyData, taus::TauMode; window::Int, kwargs...) = dhdev(data, tau_values(taus, window, :hdev); window=window, kwargs...)
+
+# ── Any integer vector of averaging factors ──────────────────────────────
+# The methods above take `Vector{Int}`; these accept ranges (`1:10`), views
+# and other integer vectors and forward a `Vector{Int}` copy, so
+# `adev(pd, 1:10)` works like `adev(pd, collect(1:10))`.
+for f in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
+          :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
+          :mtie, :tierms, :pdev, :theo1, :theoh, :dadev, :dhdev)
+    @eval $f(data::AbstractTimingData, m_values::AbstractVector{<:Integer}; kwargs...) =
+        $f(data, collect(Int, m_values); kwargs...)
+end
+
+identify_noise(data::AbstractTimingData, taus::TauMode; kwargs...) =
+    identify_noise(data, tau_values(taus, length(data), :adev); kwargs...)

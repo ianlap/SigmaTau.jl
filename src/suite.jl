@@ -26,8 +26,8 @@ _dispatch_dev(::Val{:ttotdev},  data, m; ci, confidence, kwargs...) = ttotdev(da
 _dispatch_dev(::Val{:htotdev},  data, m; ci, confidence, kwargs...) = htotdev(data, m;  ci, confidence, kwargs...)
 _dispatch_dev(::Val{:mhtotdev}, data, m; ci, confidence, kwargs...) = mhtotdev(data, m; ci, confidence, kwargs...)
 
-_dispatch_dev(::Val{:mtie},   data, m; ci, confidence, kwargs...) = mtie(data, m; ci)
-_dispatch_dev(::Val{:tierms}, data, m; ci, confidence, kwargs...) = tierms(data, m; ci)
+_dispatch_dev(::Val{:mtie},   data, m; ci, confidence, kwargs...) = mtie(data, m; ci, confidence)
+_dispatch_dev(::Val{:tierms}, data, m; ci, confidence, kwargs...) = tierms(data, m; ci, confidence)
 _dispatch_dev(::Val{:pdev},   data, m; ci, confidence, kwargs...) = pdev(data, m; ci, confidence)
 
 # Theo family: `theo1` accepts `correct_bias` (ThêoBR removal, on by default)
@@ -46,6 +46,8 @@ function _stability(data, N::Int, kind::Symbol, tau0::Float64;
                     kwargs...)
     results = StabilityResult[]
     for sym in devs
+        sym in (:dadev, :dhdev) && throw(ArgumentError(
+            "stability: :$sym is a dynamic deviation; call $sym(data; window, step) instead"))
         m = taus isa TauMode ? tau_values(taus, N, sym) : collect(Int, taus)
         push!(results, _dispatch_dev(Val(sym), data, m; ci, confidence, kwargs...))
     end

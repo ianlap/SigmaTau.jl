@@ -7,6 +7,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `stability` passes `confidence` through to `mtie` and `tierms` like the
+  other estimators (both still report no intervals), and asking it for
+  `:dadev` / `:dhdev` now says to call those functions directly instead of
+  failing inside the τ grid.
 - `remove_outliers(::PhaseData)` now cleans in frequency space: it
   differences the phase, gaps and fills the outlying frequency samples, and
   integrates back from `x[1]`. A phase step is now removed instead of being
@@ -50,6 +54,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Every estimator (and `dadev` / `dhdev`) accepts any integer vector of
+  averaging factors: `adev(pd, 1:10)`, `adev(pd, 2 .^ (0:6))`, `Int32` or view
+  vectors work like a `Vector{Int}`. `stability(pd; taus=1:10)` already did.
+- `PhaseData` / `FrequencyData` accept any real vector (views, ranges,
+  integers), copied into a `Vector` of its float type.
+- `length(::PhaseData)` / `length(::FrequencyData)`.
+- `identify_noise(data::PhaseData, m)` and `identify_noise(data::FrequencyData, m)`,
+  with `m` an integer vector or a `TauMode`.
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
 - `app/StabilityWeb.jl`: a browser edition of the explorer (Bonito + WGLMakie)
   with native HTML controls for screen readers and keyboard use; shares

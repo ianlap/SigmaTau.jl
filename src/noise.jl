@@ -9,6 +9,13 @@ const NEFF_RELIABLE = 30
 
 """
     identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, detrend::Bool=true) → Vector{Symbol}
+    identify_noise(data::PhaseData, m_values; kwargs...) → Vector{Symbol}
+    identify_noise(data::FrequencyData, m_values; kwargs...) → Vector{Symbol}
+
+The record forms take the same keywords and accept any integer vector or
+[`TauMode`](@ref) for `m_values`; a `FrequencyData` record is integrated to
+phase first. Use `dmax=2` for the Allan family and `dmax=3` for the Hadamard
+family, as the deviation functions do.
 
 Identify the dominant power-law noise type at each averaging factor by the
 lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
@@ -71,6 +78,13 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
 
     return _fill_noise_symbols(alphas, ok, m_values)
 end
+
+# Record forms: phase taken from the record (frequency integrated), any integer
+# vector (or a TauMode, defined in deviations.jl) accepted for the averaging factors.
+identify_noise(data::PhaseData, m_values::AbstractVector{<:Integer}; kwargs...) =
+    identify_noise(Vector{Float64}(data.x), collect(Int, m_values); kwargs...)
+identify_noise(data::FrequencyData, m_values::AbstractVector{<:Integer}; kwargs...) =
+    identify_noise(_freq_to_phase(data), m_values; kwargs...)
 
 const _NOISE_SYMBOLS = (:RWFM, :FLFM, :WHFM, :FLPM, :WHPM)  # α = -2 … 2
 
