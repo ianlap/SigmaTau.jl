@@ -56,7 +56,12 @@ averaging factors or a `TauMode` grid (`Octave`, `Decade`, `AllTaus`, ...).
 `read_phase` / `read_frequency`, `detrend`, `fillgaps` and `remove_outliers`
 cover the usual preprocessing; `save` / `load` round-trip records, results
 and suites as plain text. `estimators()` lists the estimators and
-`deviation(:adev, data, m)` runs one chosen by name.
+`deviation(:adev, data, m)` runs one chosen by name. The
+[documentation](https://ianlap.github.io/SigmaTau.jl/stable/) has a
+[getting-started tutorial](https://ianlap.github.io/SigmaTau.jl/stable/getting_started/),
+a guide to
+[choosing an estimator](https://ianlap.github.io/SigmaTau.jl/stable/guide/choosing/)
+and the full API reference.
 
 ## Compared with Stable32 and allantools
 
@@ -77,7 +82,7 @@ five-significant-figure output) and allantools to ≤ 1e-13 relative on the
 shipped fixture; raw total kernels match allantools to ≤ 4.4e-15. Where a
 default differs from a reference (MTOTDEV bias correction, noise-ID
 detrending), the per-τ tables in the
-[validation page](https://ianlap.github.io/SigmaTau.jl/stable/validation/)
+[validation page](https://ianlap.github.io/SigmaTau.jl/stable/explanation/validation/)
 name the switch that reproduces the reference.
 
 Performance: on identical inputs, `adev`/`mdev`/`hdev`/`tdev` run roughly 10

@@ -30,18 +30,32 @@ makedocs(
     plugins = [bib],
     checkdocs = :exports,
     pages = [
-        "Home"       => "index.md",
-        "Plotting and tables" => "plotting.md",
-        "Validation" => "validation.md",
-        "MHTOTDEV bias and EDF" => "mhtotdev.md",
-        "Tutorials"  => [
+        "Home" => "index.md",
+        "Tutorials" => [
+            "Getting started" => "getting_started.md",
             "tutorials/01_drifting_clock_hadamard.md",
             "tutorials/02_reading_your_data.md",
             "tutorials/03_three_cornered_hat.md",
         ],
-        "API" => [
-            "reference/types.md",
-            "reference/stab.md",
+        "How-to guides" => [
+            "Choosing an estimator" => "guide/choosing.md",
+            "Plotting and tables" => "guide/plotting.md",
+            "Using the explorer" => "guide/explorer.md",
+            "Command line" => "guide/cli.md",
+        ],
+        "Background" => [
+            "Noise, EDF and confidence" => "explanation/noise_and_confidence.md",
+            "Validation" => "explanation/validation.md",
+            "MHTOTDEV bias and EDF" => "explanation/mhtotdev.md",
+        ],
+        "Reference" => [
+            "Types" => "reference/types.md",
+            "Estimators" => "reference/estimators.md",
+            "Suites, τ grids and streaming" => "reference/suites.md",
+            "Data and files" => "reference/data.md",
+            "Preprocessing" => "reference/preprocessing.md",
+            "Spectra" => "reference/spectra.md",
+            "Noise and statistics" => "reference/statistics.md",
         ],
         "Bibliography" => "bibliography.md",
     ],

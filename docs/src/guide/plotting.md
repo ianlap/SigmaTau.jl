@@ -36,7 +36,7 @@ plot(r; lw = 1.5, marker = :diamond, ms = 4,
 ## Confidence-interval styles
 
 | Call                        | CI rendering                        |
-|-----------------------------|-------------------------------------|
+|:---|:---|
 | `plot(r)`                   | error bars (default)                |
 | `plot(r; ci_band = true)`   | filled band                         |
 | `plot(adev(p; ci = false))` | none, since the `ci` vector is empty |
@@ -77,7 +77,7 @@ On log-log axes the slope of σ_y(τ) identifies the dominant noise type
 [riley-2008-sp1065](@cite):
 
 | Noise type     | α  | ADEV slope | MDEV slope |
-|----------------|---:|:-----------|:-----------|
+|:---|---:|:-----------|:-----------|
 | WHPM           |  2 | τ⁻¹        | τ⁻³ᐟ²      |
 | FLPM           |  1 | ≈ τ⁻¹      | τ⁻¹        |
 | WHFM           |  0 | τ⁻¹ᐟ²      | τ⁻¹ᐟ²      |
