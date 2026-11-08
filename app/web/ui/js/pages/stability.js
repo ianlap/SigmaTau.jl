@@ -115,12 +115,15 @@ function pinTraces(devs) {
   return out;
 }
 
-// What a run was: shown on its pin.
+// What a run was, from the core's own record of it (the settings may have
+// changed since): shown on its pin.
 function runSummary(c) {
-  const parts = [state.devs.map(label).join(", "), gridName(state.grid).toLowerCase() + " τ"];
-  if (c.range) parts.push(`range ${num(c.range[0], 4)}–${num(c.range[1], 4)} s`);
-  if (c.drift && c.drift !== "none") parts.push(`${c.drift} drift removed`);
-  if (state.tauMin || state.tauMax) parts.push(`τ ${state.tauMin ?? "…"}–${state.tauMax ?? "…"} s`);
+  const a = c.result.doc.analysis ?? {};
+  const parts = [(a.deviations ?? []).map(label).join(", "), a.tau_mode === "m" ? "explicit m" : `${gridName(a.tau_mode ?? "").toLowerCase()} τ`];
+  const [r0, r1] = a.range ?? [null, null];
+  if (r0 !== null || r1 !== null) parts.push(`range ${r0 === null ? "start" : `${num(r0, 4)} s`} – ${r1 === null ? "end" : `${num(r1, 4)} s`}`);
+  if (a.remove_drift && a.remove_drift !== "none") parts.push(`${a.remove_drift} drift removed`);
+  if (a.tau_min !== null && a.tau_min !== undefined || a.tau_max !== null && a.tau_max !== undefined) parts.push(`τ ${a.tau_min ?? "…"}–${a.tau_max ?? "…"} s`);
   return parts.join(" · ");
 }
 

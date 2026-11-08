@@ -340,6 +340,17 @@ mktempdir() do dir
         @test run_cli("analyze", pf, "--range", "5").code == 1
         @test run_cli("analyze", pf, "--range", "9:3").code == 1
         @test run_cli("analyze", pf, "--range", "1e9:").code == 3
+        @test run_cli("analyze", pf, "--tau-min", "16", "--tau-max", "2").code == 1
+        @test run_cli("analyze", pf, "--devs", "adev", "--tau-min", "1.5", "--tau-max", "1.9").code == 3
+        # The detrend is fitted to the range alone.
+        rows = csv_rows(run_cli("analyze", pf, "--range", "10:200", "--detrend", "linear", "--devs", "adev", "--no-ci").out)
+        ref = adev(detrend(PhaseData(X[11:201], 1.0); method=:linear), tau_values(Octave, 191, :adev); ci=false)
+        @test parse.(Float64, getindex.(rows, 5)) ≈ ref.dev rtol=1e-12
+        # Dynamic window centres stay in the whole record's time.
+        whole = run_cli("dynamic", pf, "--window", "64", "--format", "json").out
+        part = run_cli("dynamic", pf, "--window", "64", "--range", "64:", "--format", "json").out
+        t(s) = parse(Float64, match(r"\"t\":\[([^,\]]+)", s)[1])
+        @test t(part) == t(whole) + 64
     end
 
     @testset "synthetic record" begin

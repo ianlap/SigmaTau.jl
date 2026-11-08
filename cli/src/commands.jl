@@ -55,6 +55,7 @@ end
 
 function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 8, "the analysis")
+    o.tau_min > o.tau_max && throw(usage_error("--tau-min is above --tau-max"))
     N = length(data.x)
     mode = tau_mode(o.grid)
     results = StabilityResult[]
@@ -64,6 +65,8 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         isempty(ms) && continue
         push!(results, deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=o.bias))
     end
+    isempty(results) && !(isnan(o.tau_min) && isnan(o.tau_max)) &&
+        throw(CLIError(EXIT_ANALYSIS, "no averaging time of the grid lies within --tau-min and --tau-max"))
     src = source_name(o, data)
     if o.format != "json"
         print(io, CSV_ANALYZE); print(io, '\n')
@@ -148,6 +151,8 @@ function cmd_dynamic(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     ms = tau_values(tau_mode(o.grid), w, hd ? :hdev : :adev)
     isempty(ms) && throw(CLIError(EXIT_ANALYSIS, "the window is too short for any τ"))
     r = hd ? dhdev(data, ms; window=w, step=st) : dadev(data, ms; window=w, step=st)
+    # Window centres in the whole record's time, not the range's.
+    r.t .+= range_offset(o, Float64(data.tau0))
     if o.format != "json"
         print(io, "t,tau,dev\n")
         for i in eachindex(r.t), j in eachindex(r.tau)
