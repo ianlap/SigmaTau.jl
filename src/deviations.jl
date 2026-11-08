@@ -418,8 +418,8 @@ on the drift-removed record; the deviation itself does not change. Pass
 
 `correct_bias=true` (default) applies the Monte-Carlo-measured unbias
 correction `σ_unbiased = σ_raw / √B`, where `B = b0 + b1·(τ/T)` is the
-τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)`; the
-coefficients were measured with the default drift removal in the loop. Pass
+τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)` (B ≈ 0.79–0.90:
+the per-window detrend absorbs part of the variance). Pass
 `correct_bias=false` for the raw kernel value. The EDF uses the same Monte
 Carlo fit; see the "MHTOTDEV bias and EDF" page for the method.
 """
