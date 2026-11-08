@@ -45,6 +45,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   the terms used and the EDF and confidence interval follow from it. ADEV
   matches allantools' `gradev` value and term count to 2e-15. The CLI and
   the explorer pick this up without a flag.
+- `drift_fit(data; model)`: Stable32's frequency drift fits (linear,
+  quadratic, MIL-PRF-55310 log and diffusion) with standard errors, the
+  drift rate at the end of the record per day and its uncertainty, and the
+  fitted curve. Gaps are skipped. Coefficients and standard errors match
+  scipy least squares (polynomials to 1e-13, log to 2e-8, diffusion to 1e-10).
+  The CLI adds `sigmatau drift FILE --model MODEL`, and the explorer's Data
+  plot gets a Frequency drift view with the fit and its residuals.
 - Reference cross-check suite (`test/validation/`): every estimator on
   power-law records with α = +2 … −4, plus EDF, χ² intervals, noise ID,
   Welch spectra and dynamic maps, against allantools, scipy, Stable32's

@@ -237,6 +237,19 @@ mktempdir() do dir
         @test run_cli("analyze", rf, "--reference-col", "2").code == 1
     end
 
+    @testset "drift" begin
+        # Frequency with an injected aging of 2e-15 per second.
+        y = 1e-11 .* sinpi.((1:400) ./ 13) .+ 2e-15 .* (0:399) .* 60
+        ff = write_table(joinpath(dir, "aging.csv"), y; tau0=60.0)
+        ref = drift_fit(FrequencyData(y, 60.0))
+        rows = csv_rows(run_cli("drift", ff, "--freq").out)
+        @test rows[1][3] == "linear" && isempty(rows[1][8])
+        @test parse(Float64, rows[1][10]) ≈ ref.rate rtol=1e-9
+        r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
+        @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
+        @test run_cli("drift", ff, "--model", "cubic").code == 1
+    end
+
     @testset "--remove-drift" begin
         # A known offset and drift on top of X: linear removes the offset,
         # quadratic both, and what was removed is reported.

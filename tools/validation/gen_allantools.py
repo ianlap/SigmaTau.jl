@@ -21,6 +21,7 @@ Outputs (CSV, values at %.17e so Float64 round-trips):
   welch.csv    dataset, kind, nperseg, f, psd           scipy.signal.welch S_y and S_x
   dynamic.csv  dataset, kind, window, start, m, dev     per-window OADEV / OHDEV
   gaps.csv     dataset, m, n, dev                       gap-tolerant ADEV (gradev)
+  drift.csv    model, inj_a, inj_b, inj_c, param, value, stderr   scipy least-squares drift fits
 """
 import argparse
 import csv
@@ -243,6 +244,55 @@ def gen_gaps(w):
             w.writerow([name, int(round(t)), int(n), fmt(float(d))])
 
 
+# Drift models injected into the white-FM record's frequency (t = 0, 1, …);
+# test/validation/CrossCheck.jl rebuilds the same records from the inj_*
+# columns.
+DRIFT_CASES = [
+    ("linear", (1e-3, 2e-5, 0.0)),
+    ("quadratic", (1e-3, 2e-5, 3e-9)),
+    ("log", (0.05, 2e-3, 0.01)),
+    ("diffusion", (0.01, 3e-3, 500.0)),
+]
+
+
+def drift_model(name):
+    return {
+        "linear": lambda t, a, b: a + b * t,
+        "quadratic": lambda t, a, b, c: a + b * t + c * t ** 2,
+        "log": lambda t, a, b, c: a * np.log1p(b * t) + c,
+        "diffusion": lambda t, a, b, c: a + b * np.sqrt(t + c),
+    }[name]
+
+
+def drift_jac(name):
+    one = lambda t: np.ones_like(t)
+    return {
+        "linear": lambda t, a, b: np.column_stack([one(t), t]),
+        "quadratic": lambda t, a, b, c: np.column_stack([one(t), t, t ** 2]),
+        "log": lambda t, a, b, c: np.column_stack([np.log1p(b * t), a * t / (1 + b * t), one(t)]),
+        "diffusion": lambda t, a, b, c: np.column_stack([one(t), np.sqrt(t + c), b / (2 * np.sqrt(t + c))]),
+    }[name]
+
+
+def gen_drift(w):
+    import scipy.optimize
+    w.writerow(["model", "inj_a", "inj_b", "inj_c", "param", "value", "stderr"])
+    y0 = np.diff(read_phase(os.path.join(FIX, "noise", alpha_file(0))))
+    t = np.arange(len(y0), dtype=float)
+    for name, inj in DRIFT_CASES:
+        f, jac = drift_model(name), drift_jac(name)
+        p0 = np.array(inj[:2] if name == "linear" else inj)
+        y = y0 + f(t, *p0)
+        sol = scipy.optimize.least_squares(lambda p: f(t, *p) - y, p0, jac=lambda p: jac(t, *p),
+                                           method="lm", x_scale="jac",
+                                           xtol=1e-15, ftol=1e-15, gtol=1e-15, max_nfev=100000)
+        J = sol.jac
+        s2 = np.sum(sol.fun ** 2) / (len(y) - len(p0))
+        cov = s2 * np.linalg.inv(J.T @ J)
+        for k, (v, c) in enumerate(zip(sol.x, np.diag(cov))):
+            w.writerow([name, fmt(inj[0]), fmt(inj[1]), fmt(inj[2]), "abc"[k], fmt(float(v)), fmt(float(np.sqrt(c)))])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(FIX, "allantools"))
@@ -250,6 +300,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     for fname, gen in (("edf.csv", gen_edf), ("ci.csv", gen_ci), ("noiseid.csv", gen_noiseid),
                        ("welch.csv", gen_welch), ("dynamic.csv", gen_dynamic), ("gaps.csv", gen_gaps),
+                       ("drift.csv", gen_drift),
                        ("devs.csv", gen_devs)):
         with open(os.path.join(args.out, fname), "w", newline="") as f:
             gen(csv.writer(f, lineterminator="\n"))

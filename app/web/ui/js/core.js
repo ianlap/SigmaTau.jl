@@ -119,7 +119,7 @@ function view(doc) {
   });
   const d = doc.dynamic;
   const dynamic = d && { dev: d.deviation, window: d.window, step: d.step, t: d.t, tau: d.tau, map: d.dev };
-  return { record, results, spectrum: doc.spectrum, dynamic, elapsed_ms: doc.elapsed_ms, doc };
+  return { record, results, spectrum: doc.spectrum, dynamic, drift: doc.drift, elapsed_ms: doc.elapsed_ms, doc };
 }
 
 const run = async (body, signal) => view(await post(body, signal));
@@ -140,6 +140,14 @@ export function analyze(clock, signal) {
     "--spectrum",
   ]), signal);
 }
+
+// Fit a frequency drift model (linear, quadratic, log, diffusion) to one clock.
+export function drift(clock, signal) {
+  return run(request(clock, "drift", ["--model", state.driftModel, "--series", 2000]), signal);
+}
+
+// Settings that decide a clock's drift fit; a change means refit.
+export const driftKey = (clock) => JSON.stringify([request(clock, "drift", []), state.driftModel]);
 
 // Settings that decide a clock's dynamic map; a change means recompute.
 export const dynamicKey = (clock) =>
