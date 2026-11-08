@@ -1,9 +1,8 @@
 # SigmaTau web explorer
 
-A browser front end for SigmaTau over a small compiled analysis core. It is
-the successor to the Makie explorer in `app/`: plain HTML, CSS and Plotly.js,
-so it is easy to restyle and can later be wrapped in a desktop window (Tauri)
-without changes.
+A browser front end for SigmaTau over a small compiled analysis core: plain
+HTML, CSS and Plotly.js, so it is easy to restyle, and the same pages run in
+the Tauri desktop window in `app/desktop/`.
 
 ```
 app/web/
