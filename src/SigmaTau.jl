@@ -12,9 +12,6 @@ using Printf
 include("types.jl")
 
 # ── IO: file readers, detrend, gap fill, result round-trip ──────────────
-# IO functions return top-level types (PhaseData / FrequencyData /
-# StabilityResult). FFTW and Statistics are imported above so included
-# files don't need their own directives.
 include("io/results.jl")
 include("io/detrend.jl")
 include("io/fillgaps.jl")

@@ -17,8 +17,7 @@ of columns. Lines starting with `#` are comments and are skipped wherever they
 appear. For files with string headers, set `header` to the number of
 leading lines to skip.
 
-This is a small typed parser rather than `DelimitedFiles.readdlm`, whose
-untyped internals block `juliac --trim` builds.
+Typed on purpose: `DelimitedFiles.readdlm` blocks `juliac --trim` builds.
 """
 function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,Nothing}=nothing)
     isfile(path) || throw(ArgumentError("read_columns: file not found: $path"))
@@ -53,7 +52,7 @@ function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,No
                                     "line $lineno has $(length(fields)) columns, expected $ncols"))
             end
             for f in fields
-                # Accept double-quoted fields ("1.0"), as readdlm did.
+                # Accept double-quoted fields ("1.0").
                 fs = strip(f)
                 if length(fs) >= 2 && first(fs) == '"' && last(fs) == '"'
                     fs = SubString(fs, nextind(fs, 1), prevind(fs, lastindex(fs)))

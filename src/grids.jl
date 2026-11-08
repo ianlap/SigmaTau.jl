@@ -98,10 +98,9 @@ end
 """
     _grid(mode::TauMode, m_max::Int) → Vector{Int}
 
-Averaging-factor grid for `mode`, clamped to `[1, m_max]`. `Octave` is returned
-via the exact integer formula `[2^k for k in 0:floor(Int, log2(m_max))]` so the
-default grid is byte-identical to the historical one; the other geometric modes
-round their factor powers to `Int`, deduplicate, and clamp.
+Averaging-factor grid for `mode`, clamped to `[1, m_max]`. `Octave` uses exact
+powers of two; the other geometric modes round their factor powers to `Int`,
+deduplicate, and clamp.
 """
 function _grid(mode::TauMode, m_max::Int)
     if mode === AllTaus

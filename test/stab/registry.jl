@@ -98,4 +98,11 @@ using Test, Random, SigmaTau
         @test dadev(fd).window == SigmaTau._default_window(length(fd))
         @test dadev(pd, Decade; window = 512).window == 512
     end
+
+    @testset "explorer catalog matches the registry" begin
+        js = read(joinpath(pkgdir(SigmaTau), "app", "web", "ui", "js", "estimators.js"), String)
+        row = r"id: \"(\w+)\",\s*label: \"([^\"]+)\",\s*group: \"(\w+)\",\s*axis: \"(\w+)\""
+        @test [Tuple(m.captures) for m in eachmatch(row, js)] ==
+              [(String(e.name), e.label, String(e.family), String(e.axis)) for e in estimators()]
+    end
 end

@@ -31,8 +31,6 @@ struct CLIError <: Exception
 end
 usage_error(msg::String) = CLIError(EXIT_USAGE, msg)
 
-pow2_at_most(n::Int) = (p = 16; while 2p <= n; p *= 2; end; p)
-
 include("options.jl")
 include("record.jl")
 include("output.jl")

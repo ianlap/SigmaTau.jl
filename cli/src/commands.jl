@@ -109,7 +109,7 @@ function spectra(o::Options, data::PhaseData)
     N = length(data.x)
     # One segment length for both spectra, from the phase record's length (the
     # library's own default for psd_y counts the N − 1 frequency samples).
-    np = o.nperseg > 0 ? min(o.nperseg, N) : min(pow2_at_most(N ÷ 4), N)
+    np = o.nperseg > 0 ? min(o.nperseg, N) : SigmaTau._default_nperseg(N)
     return psd_y(data; nperseg=np), psd_x(data; nperseg=np)
 end
 
@@ -139,7 +139,7 @@ end
 function cmd_dynamic(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 16, "a dynamic deviation")
     N = length(data.x)
-    w = o.window > 0 ? min(o.window, N) : min(pow2_at_most(N ÷ 8), N)
+    w = o.window > 0 ? min(o.window, N) : SigmaTau._default_window(N)
     st = o.step > 0 ? o.step : max(w ÷ 2, 1)
     hd = o.dev == "dhdev"
     ms = tau_values(tau_mode(o.grid), w, hd ? :hdev : :adev)

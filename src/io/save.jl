@@ -79,9 +79,8 @@ SigmaTau phase or frequency file a `PhaseData` / `FrequencyData` (through
 [`read_phase`](@ref) / [`read_frequency`](@ref)). For other data files call
 the readers directly.
 
-Result files written before 0.6 load with `tau0 = NaN`, `n = 0` and
-`confidence = NaN`; files written before the `neff` column existed load with
-`neff` filled with zeros.
+Result files from v0.4 load with `tau0 = NaN`, `n = 0`, `confidence = NaN`
+and `neff` filled with zeros.
 
 !!! note
     FileIO.jl also exports `load`; qualify the call as `SigmaTau.load(path)`
