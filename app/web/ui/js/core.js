@@ -62,5 +62,23 @@ export function analyze(clock, signal) {
     confidence: state.ci ? state.confidence : null,
     bias_correction: state.bias,
     series: 0,
+    spectrum: true,
+  }, signal);
+}
+
+// Settings that decide a clock's dynamic map; a change means recompute.
+export const dynamicKey = (clock) =>
+  JSON.stringify([recordRequest(clock), state.dyn.dev, state.dyn.frac, state.grid]);
+
+// Sliding-window deviation map for one clock (window = record / frac).
+export function dynamic(clock, signal) {
+  const n = clock.record?.n ?? 0;
+  return post({
+    ...recordRequest(clock),
+    devs: [],
+    grid: state.grid,
+    series: 0,
+    dynamic: state.dyn.dev,
+    window: Math.max(16, Math.floor(n / state.dyn.frac)),
   }, signal);
 }

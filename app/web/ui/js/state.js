@@ -19,6 +19,10 @@ export const state = {
   axis: "sigma_y",         // "sigma_y" | "sigma_x"
   tableDev: null,          // estimator in the per-τ table
   compareTau: null,        // τ of the "Compare at τ" table
+  // Spectrum page (display settings, applied without a run)
+  spec: { carrier: 10e6, carrierText: "10e6", phase: "L", avg: "log", guides: true },
+  // Dynamic page: estimator, window = record / frac, map or 3D waterfall
+  dyn: { dev: "dadev", frac: 8, view: "map", cell: null },
   dataMode: "file",        // "file" | "synth" on the Data page
   run: { state: "idle", stale: null, note: "" },  // stale: null | "record" | "inputs"
 };
@@ -48,7 +52,8 @@ export function newClock(fields = {}) {
     remove_outliers: false,
     hasTimeCol: false,
     record: null,            // record + check from the core
-    result: null,            // last analysis from the core
+    result: null,            // last analysis from the core (with the spectrum)
+    dynamic: null,           // last dynamic-deviation map, with its settings key
     error: null,
     ...fields,
   };

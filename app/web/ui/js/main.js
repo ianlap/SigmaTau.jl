@@ -6,13 +6,15 @@ import { initPanel, renderPanel } from "./panel.js";
 import { openImport } from "./importer.js";
 import * as stability from "./pages/stability.js";
 import * as data from "./pages/data.js";
-import { placeholder } from "./pages/placeholder.js";
+import * as spectrum from "./pages/spectrum.js";
+import * as dynamicPage from "./pages/dynamic.js";
+import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
 import { openFile, saveFile } from "./platform.js";
 import { loadPlotly } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, stability, spectrum: placeholder("spectrum"), dynamic: placeholder("dynamic") };
+const PAGES = { data, stability, spectrum, dynamic: dynamicPage, help };
 const ORDER = ["data", "stability", "spectrum", "dynamic"];
 const pageEl = document.getElementById("page");
 let page = null;
@@ -244,7 +246,10 @@ function renderStatus() {
 
 function render() {
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.page === state.page));
-  renderPanel();
+  document.getElementById("help-btn").classList.toggle("on", state.page === "help");
+  // One clock: Spectrum and Dynamic put their settings in the panel. Several
+  // clocks: the panel keeps the clocks and the page shows a toolbar.
+  renderPanel(!multi() && page?.controls ? page.controls() : null);
   renderChip();
   page?.refresh();
   renderStatus();
@@ -288,13 +293,18 @@ exportMenu.addEventListener("click", async (e) => {
 
 // ── Header buttons and keys ──
 document.getElementById("record-chip").addEventListener("click", () => go("data"));
-document.getElementById("help-btn").addEventListener("click", () => document.getElementById("help-dialog").showModal());
+document.getElementById("help-btn").addEventListener("click", () => go("help"));
+// Page settings (data-ctl) live in the panel or in a page toolbar.
+for (const type of ["click", "change"]) {
+  document.addEventListener(type, (e) => { if (e.target.closest?.("[data-ctl]")) page?.onControl?.(e); });
+}
 document.addEventListener("keydown", (e) => {
   if (document.querySelector("dialog[open]")) return;
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
   const i = "1234".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
+  if (e.key === "?") go("help");
 });
 
 // ── Drag and drop anywhere ──

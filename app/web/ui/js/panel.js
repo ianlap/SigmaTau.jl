@@ -68,7 +68,9 @@ function options() {
   </div>`;
 }
 
-export function renderPanel() {
+// `pageControls`: settings HTML of the current page, shown instead of the
+// estimators and options (one clock on Spectrum or Dynamic).
+export function renderPanel(pageControls = null) {
   const side = document.getElementById("side");
   const several = multi();
   const nDev = state.devs.length;
@@ -87,6 +89,7 @@ export function renderPanel() {
       ${referenceSelect()}
       <button class="btn-dashed" type="button" data-act="add-clock">+ Add clock</button>
       <div class="rule"></div>` : ""}
+      ${pageControls ? `<div class="page-ctl">${pageControls}</div>` : `
       <div class="side-head"><h2>Estimators</h2><span class="note">${several ? "line style = estimator" : `${nDev} selected`}</span></div>
       <div class="rows">${estimatorRows(several)}</div>
       <button class="btn-dashed" type="button" data-act="pick">+ Add estimator</button>
@@ -95,7 +98,7 @@ export function renderPanel() {
         <button class="opts-toggle" type="button" data-act="opts" aria-expanded="${state.optionsOpen}"><h2>Options</h2>
           <span class="note">${gridName(state.grid).toLowerCase()} τ · ${state.ci ? `${confLabel(state.confidence)} CI` : "no CI"} ${state.optionsOpen ? "▾" : "▸"}</span></button>
         ${state.optionsOpen ? options() : ""}`
-      : `<h2>Options</h2>${options()}`}
+      : `<h2>Options</h2>${options()}`}`}
     </div>
     <div class="side-foot">
       <button class="run-btn" type="button" data-act="run" ${run.state === "running" || !state.clocks.length || !nDev ? "disabled" : ""}>
