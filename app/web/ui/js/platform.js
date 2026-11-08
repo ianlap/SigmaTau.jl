@@ -1,8 +1,10 @@
-// Host integration in one place, so a desktop shell (Tauri) can replace it
-// without touching the pages:
-//   openFile()  -> { name, text } or null   (Tauri: dialog plugin + fs read)
-//   saveFile(name, blob)                      (Tauri: dialog save + fs write)
-// The core itself is reached through api.js.
+// Host integration in one place, so the pages work the same in a browser
+// and in the desktop shell (app/desktop):
+//   openFile()  -> { name, text } or null   (a file input in both)
+//   saveFile(name, blob)                      (browser download, or the shell's save dialog)
+// The core itself is reached through core.js.
+
+const tauri = window.__TAURI__?.core;
 
 export function openFile(accept = ".txt,.dat,.csv,.tsv,.phd,.frq,text/*") {
   return new Promise((resolve) => {
@@ -18,7 +20,11 @@ export function openFile(accept = ".txt,.dat,.csv,.tsv,.phd,.frq,text/*") {
   });
 }
 
-export function saveFile(name, blob) {
+export async function saveFile(name, blob) {
+  if (tauri) {
+    const data = Array.from(new Uint8Array(await blob.arrayBuffer()));
+    return tauri.invoke("save_file", { name, data });
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
