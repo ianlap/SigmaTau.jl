@@ -109,10 +109,11 @@ function _resolve_tau0(tau0::Float64, header::Float64, t::Vector{Float64}, what:
     throw(ArgumentError("read_data: " * what * " has no sample interval; pass tau0"))
 end
 
+# With fillgaps, samples go on an even grid of the time column (or, without
+# one, stay where they are) and NaN samples are filled.
 function _equispace(t::Vector{Float64}, v::Vector{Float64}, fillgaps::Bool)
     fillgaps || return v
-    length(t) >= 2 || throw(ArgumentError("read_data: fillgaps=true needs a time column"))
-    _, v_eq = _make_equispaced(t, v)
+    v_eq = length(t) >= 2 ? _make_equispaced(t, v)[2] : v
     return _howe_fillgaps_core(v_eq)[1]
 end
 
@@ -362,7 +363,7 @@ column is phase or frequency by its name.
 - `scaling`: multiplies the samples after any unit conversion from a
   column name (`(ns)`, `[ps]`, `ppb` …).
 - `fillgaps`: put samples on an even grid of the time column and fill the
-  missing ones with [`fillgaps`](@ref).
+  missing ones (and any `NaN` reading) with [`fillgaps`](@ref).
 
 Counter readings of `9.91E+37` (SCPI's "no reading") become `NaN`.
 

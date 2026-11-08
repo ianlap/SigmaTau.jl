@@ -64,7 +64,7 @@ export function openImport(file, prev = null) {
       header: s.header,
       scaling: st.scaling,
       tau0,
-      hasTimeCol: st.time > 0,
+      hasTimeCol: st.time > 0 || !!s.format,  // instrument readers can fill gaps without one
       gaps: ts ? ts.gaps : 0,
       missing: ts ? ts.missing : 0,         // samples missing from the time column
       sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind} · τ₀ ${num(tau0, 4)} s` +

@@ -35,6 +35,7 @@ fmt(f) = joinpath(FMT, f)
         f = [parse(Float64, l) for l in eachline(fmt("counter_53230a_freq.csv"))]
         @test y isa FrequencyData
         @test isnan(y.y[18])                       # 9.91E+37 = no reading
+        @test all(isfinite, read_data(fmt("counter_53230a_freq.csv"); tau0=1.0, fillgaps=true).y)
         @test y.y[1] ≈ (f[1] - 10e6) / 10e6 rtol=1e-12
         @test read_data(fmt("counter_53230a_freq.csv"); tau0=1.0, nominal=1e7).y[1] == y.y[1]
         x = read_data(fmt("counter_53230a_ti.txt"); tau0=1.0)

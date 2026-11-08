@@ -6,7 +6,7 @@
 
 const tauri = window.__TAURI__?.core;
 
-export function openFile(accept = ".txt,.dat,.csv,.tsv,.phd,.frq,text/*") {
+export function openFile(accept = ".txt,.dat,.csv,.tsv,.phd,.frd,.frq,.tim,.log,text/*") {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
