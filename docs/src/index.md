@@ -70,7 +70,7 @@ pages say how.
 | Drift, outlier and gap tools | `detrend`, `remove_outliers`, `fillgaps` |
 | PSD and phase noise | `psd_y`, `psd_x`, `ssb_phase_noise` |
 
-Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev` and the real-time
+Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev`, `noise_id_nnls` and the real-time
 `StreamingStability` accumulators. Two defaults differ from Stable32
 (MTOTDEV bias correction and noise-ID detrending); the
 [validation page](explanation/validation.md) names the switch that reproduces

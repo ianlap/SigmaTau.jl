@@ -148,9 +148,10 @@ using SigmaTau
         m_grid = [1, 2, 4, 8, 16, 32, 64, 128]
 
         # kernel => (reference variance at m, m grid). TOTDEV is the canonical
-        # Howe form (SP1065 eq. 25, no detrend). MHTOTDEV is novel to SigmaTau
-        # with no external reference, so this machine-precision anchor is its
-        # primary correctness contract.
+        # Howe form (SP1065 eq. 25, no detrend). MHTOTDEV (per-window
+        # least-squares quadratic removal, against a Vandermonde-solve
+        # reference) is novel to SigmaTau with no external reference, so this
+        # machine-precision anchor is its primary correctness contract.
         refs = ((_adev_core,     m -> LK.adev_var(x, m, tau0),               m_grid),
                 (_mdev_core,     m -> LK.mdev_var(x, m, tau0, x_cs),         m_grid),
                 (_hdev_core,     m -> LK.hdev_var(x, m, tau0),               m_grid),

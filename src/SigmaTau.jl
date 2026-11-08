@@ -64,7 +64,7 @@ export tau_values
 # The deviation kernels (`_*_core`) are not exported. They are reachable as
 # `SigmaTau._adev_core` etc.; the leading underscore marks them unsupported.
 
-export identify_noise, calculate_edf, confidence_intervals, bias_correction
+export identify_noise, noise_id_nnls, calculate_edf, confidence_intervals, bias_correction
 
 export adev, mdev, tdev
 export hdev, mhdev, htdev

@@ -30,6 +30,7 @@ using Statistics
 using Random
 using Printf
 using Dates
+using Serialization
 
 # ── Configuration ───────────────────────────────────────────────────────────
 const QUICK = "quick" in ARGS
@@ -212,8 +213,17 @@ function main()
             nreal = (N == N_GRID[end]) ? R_ANCHOR : R   # anchor at the top N
             @printf("  → α=%+d  N=%5d  R=%d  cells=%d  …\n", alpha, N, nreal, length(ms))
             flush(stdout)
+            # Each finished (α, N) cell is cached, so a stopped run resumes
+            # where it left off. Delete tools/artifacts/cache/ to start over.
+            cache = joinpath(outdir, "cache", "$(tag)_a$(alpha)_N$(N)_R$(nreal).jls")
             local stats
-            elapsed = @elapsed stats = cell_stats(alpha, N, ms, nreal)
+            elapsed = @elapsed stats = if isfile(cache)
+                deserialize(cache)
+            else
+                st = cell_stats(alpha, N, ms, nreal)
+                mkpath(dirname(cache)); serialize(cache, st)
+                st
+            end
             meanV, varV, meanW, edf, B, edf_se, B_se = stats
 
             # μ(α) cross-check on the MHVAR estimate (interior m only).

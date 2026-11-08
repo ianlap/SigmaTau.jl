@@ -81,9 +81,8 @@ using SigmaTau
         # (frequency drift) before the kernel by default. The fit is a linear
         # projection, so adding a deterministic offset/frequency-offset/drift
         # polynomial to a record cannot change the result — exactly, up to
-        # roundoff. The raw kernel itself is NOT drift-immune (its per-window
-        # detrend removes only the local frequency offset), which is the
-        # reason the wrapper-level removal exists; lock in both facts.
+        # roundoff. The kernel's per-window quadratic removal is drift-immune
+        # by itself as well; lock in both facts.
         using Random
         N    = 512
         tau0 = 1.0
@@ -106,11 +105,11 @@ using SigmaTau
         @test all(isfinite, with_trend.dev)
         @test with_trend.dev ≈ base.dev rtol = 1e-8
 
-        # remove_drift=false on the drifting record must differ at long τ —
-        # the kernel alone re-admits drift through the window boundaries.
+        # The per-window quadratic removal takes out an offset and a drift on
+        # its own, so remove_drift=false gives the same values.
         raw = mhtotdev(PhaseData(x_trend, tau0), ms; ci=false, correct_bias=false,
                        remove_drift=false)
-        @test raw.dev[end] > 2 * base.dev[end]
+        @test raw.dev ≈ base.dev rtol = 1e-8
     end
 
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
