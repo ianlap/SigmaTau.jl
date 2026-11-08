@@ -305,3 +305,21 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .help-tbl { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 .help-tbl th, .help-tbl td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
 .help-tbl th { background: var(--table-head); font-weight: 600; }
+
+/* Drift removal on the Data page */
+.seg-sm button { height: 24px; padding: 0 10px; }
+.drift-block { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.drift-note { text-align: right; min-height: 1.3em; }
+
+/* Stability toolbar: overlay toggles */
+.toggles { display: inline-flex; gap: 14px; margin-left: auto; font-size: 12.5px; }
+.toggles .check { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+
+/* Dynamic: σ(t) at one τ across clocks */
+.dyn-multi { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.dyn-row { flex: 1; min-height: 260px; display: flex; gap: 14px; }
+.dyn-slice { flex: none; padding: 14px 16px 6px; }
+.dyn-slice .grow-right { margin-left: auto; }
+.dyn-slice.waiting { opacity: 0.55; }
+.dyn-slice .card-row { display: flex; align-items: center; gap: 12px; }
+.dyn-slice .plot { height: 240px; }

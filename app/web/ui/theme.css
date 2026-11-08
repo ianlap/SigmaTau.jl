@@ -41,6 +41,13 @@
   --s8: #a88f00;
   --outlier: #e69f00;
 
+  /* Noise-type strip on the Stability plot, ordered by α (white PM … RW FM) */
+  --noise-wpm:  #dde4ee;
+  --noise-fpm:  #dfe8dc;
+  --noise-wfm:  #ece3c9;
+  --noise-ffm:  #efd9c5;
+  --noise-rwfm: #ead0cf;
+
   /* Heatmap ramp, one scale shared across clocks */
   --heat-lo:  #eef2fa;
   --heat-mid: #2f4e90;

@@ -37,6 +37,25 @@ export const gridName = (g) => (GRIDS.find(([v]) => v === g) ?? [g, g])[1];
 
 export const CONFIDENCES = [[0.683, "68.3 %"], [0.9, "90 %"], [0.95, "95 %"], [0.99, "99 %"]];
 
-// SigmaTau's noise symbols shown the usual way.
+// SigmaTau's noise symbols shown the usual way, with the power-law exponent α
+// of S_y(f) ∝ f^α.
 const NOISE_NAMES = { WHPM: "WPM", FLPM: "FPM", WHFM: "WFM", FLFM: "FFM", RWFM: "RWFM" };
+export const NOISE_ALPHA = { WHPM: 2, FLPM: 1, WHFM: 0, FLFM: -1, RWFM: -2 };
+export const NOISE_LONG = { WHPM: "white phase", FLPM: "flicker phase", WHFM: "white frequency", FLFM: "flicker frequency", RWFM: "random-walk frequency" };
 export const noiseLabel = (s) => NOISE_NAMES[String(s)] ?? String(s);
+export const noiseAlpha = (s) => NOISE_ALPHA[String(s)];
+const alphaText = (a) => (a > 0 ? `+${a}` : a < 0 ? `−${-a}` : "0");
+export const noiseTitle = (s) => (s in NOISE_ALPHA ? `${NOISE_LONG[s]} noise, α = ${alphaText(NOISE_ALPHA[s])}` : String(s));
+
+// Slope of log σ against log τ for a power-law noise. The modified estimators
+// (MDEV, MHDEV, MTOTDEV, MHTOTDEV) separate white from flicker phase noise;
+// the others give τ^−1 for both.
+const MODIFIED = new Set(["mdev", "mhdev", "mtotdev", "mhtotdev"]);
+export function noiseSlope(dev, noise) {
+  const a = NOISE_ALPHA[String(noise)];
+  if (a === undefined) return null;
+  return MODIFIED.has(dev) ? -(a + 1) / 2 : -(Math.min(a, 1) + 1) / 2;
+}
+
+// Estimators the bias-correction option changes.
+export const BIAS_CORRECTED = new Set(["totdev", "mtotdev", "htotdev", "mhtotdev", "ttotdev", "theo1"]);

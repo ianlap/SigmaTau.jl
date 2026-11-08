@@ -5,7 +5,7 @@
 // estimator, window or record changes; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
-import { loadPlotly, baseLayout, linAxis, CONFIG, seriesColor, css } from "../plot.js";
+import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css } from "../plot.js";
 import { sci, num, thousands, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
@@ -61,6 +61,9 @@ export function mount(el, c) {
     <div class="card side-card dyn-cell" data-ref="cell" hidden></div>`;
   root.addEventListener("click", (e) => {
     if (e.target.closest("[data-act=load]")) ctx.goData();
+  });
+  root.addEventListener("change", (e) => {
+    if (e.target.dataset.ref === "slice-tau") update((s) => { s.dyn.sliceTau = Number(e.target.value); });
   });
   loadPlotly().then((P) => { Plotly = P; refresh(); }).catch(() => {});
 }
@@ -205,10 +208,16 @@ export function refresh() {
   const ids = clocks.map((c) => c.id).join(",");
   if (area.dataset.ids !== ids) {
     area.dataset.ids = ids;
-    area.innerHTML = `<div class="dyn-grid" style="--n:${clocks.length}">${clocks.map((c) => `
+    area.innerHTML = `<div class="dyn-multi"><div class="dyn-row"><div class="dyn-grid" style="--n:${clocks.length}">${clocks.map((c) => `
       <div class="card dyn-card" data-clock="${c.id}"><h3><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>${h(c.name)}</h3>
         <div class="plot"></div><div class="empty" hidden></div></div>`).join("")}</div>
-      <div class="dyn-scale"><div class="plot" data-ref="scale"></div></div>`;
+      <div class="dyn-scale"><div class="plot" data-ref="scale"></div></div></div>
+      <div class="card dyn-slice"><div class="card-row"><h2>Compare at τ</h2><select data-ref="slice-tau" aria-label="τ"></select>
+        <span class="muted small grow-right" data-ref="slice-sub"></span></div><div class="plot" data-ref="slice"></div></div></div>`;
+    area.querySelectorAll(".dyn-card .plot").forEach(bindSliceClick);
+    // Plotly only follows window resizes; follow the row too.
+    const row = area.querySelector(".dyn-row");
+    new ResizeObserver(() => row.querySelectorAll(".plot").forEach((p) => { if (p.layout) Plotly.Plots.resize(p); })).observe(row);
   }
   for (const c of clocks) {
     const box = area.querySelector(`.dyn-card[data-clock="${c.id}"]`);
@@ -234,6 +243,86 @@ export function refresh() {
       xaxis: { visible: false }, yaxis: { visible: false },
     }, { ...CONFIG, displayModeBar: false, staticPlot: true });
   }
+  drawSlice(area, ready);
+}
+
+// ── Several clocks: σ over time at one τ ──
+// One line per clock through its windows, so a clock that drifts or steps
+// stands out against the others at the same τ. The dotted lines are each
+// clock's whole-record value from the last run.
+
+const sameTau = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b));
+
+function sliceTaus(ready) {
+  const all = [];
+  for (const c of ready) for (const t of c.dynamic.tau) if (!all.some((u) => sameTau(u, t))) all.push(t);
+  return all.sort((a, b) => a - b);
+}
+
+function drawSlice(area, ready) {
+  const box = area.querySelector(".dyn-slice");
+  if (!box) return;
+  const taus = sliceTaus(ready);
+  // The card keeps its place while maps compute, so the maps above it do not
+  // change size when it fills in.
+  box.classList.toggle("waiting", !taus.length);
+  if (!taus.length) return;
+  if (!taus.some((t) => state.dyn.sliceTau && sameTau(t, state.dyn.sliceTau))) state.dyn.sliceTau = taus[Math.min(2, taus.length - 1)];
+  const tau = state.dyn.sliceTau;
+  const sel = box.querySelector("[data-ref=slice-tau]");
+  if (document.activeElement !== sel) {
+    sel.innerHTML = taus.map((t) => `<option value="${t}" ${sameTau(t, tau) ? "selected" : ""}>${num(t, 4)} s</option>`).join("");
+  }
+  const whole = state.dyn.dev === "dhdev" ? "hdev" : "adev";
+  const traces = [];
+  const shapes = [];
+  let windows = 0;
+  for (const c of ready) {
+    const d = c.dynamic;
+    const j = d.tau.findIndex((t) => sameTau(t, tau));
+    if (j < 0) continue;
+    const color = seriesColor(c.slot);
+    windows = Math.max(windows, d.t.length);
+    traces.push({
+      x: d.t, y: d.map.map((row) => row[j]), name: c.name, mode: "lines+markers",
+      line: { color, width: 2 }, marker: { color, size: 5 },
+      hovertemplate: `<b>${h(c.name)}</b><br>t = %{x:.6g} s<br>${NAME[d.dev]} = %{y:.3e}<extra></extra>`,
+    });
+    const r = c.result?.results.find((x) => x.dev === whole);
+    const i = r ? r.tau.findIndex((t) => sameTau(t, tau)) : -1;
+    if (i >= 0 && r.sigma[i] > 0) {
+      shapes.push({ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: r.sigma[i], y1: r.sigma[i], line: { color, width: 1, dash: "dot" } });
+    }
+  }
+  for (const c of ready) {
+    const plot = area.querySelector(`.dyn-card[data-clock="${c.id}"] .plot`);
+    const j = c.dynamic.tau.findIndex((t) => sameTau(t, tau));
+    if (plot?.layout) Plotly.relayout(plot, { shapes: j < 0 ? [] : [{ type: "rect", xref: "x", yref: "paper", x0: j - 0.5, x1: j + 0.5, y0: 0, y1: 1, line: { color: css("--accent"), width: 2 } }] });
+  }
+  box.querySelector("[data-ref=slice-sub]").textContent = `${NAME[state.dyn.dev]} in each window · dotted = whole record (${whole.toUpperCase()}, last run) · click a map column to change τ`;
+  Plotly.react(box.querySelector("[data-ref=slice]"), traces, {
+    ...baseLayout(), margin: { l: 70, r: 14, t: 8, b: 44 },
+    xaxis: linAxis("Window centre t (s)"), yaxis: { ...logAxis(`${NAME[state.dyn.dev]} at τ = ${num(tau, 4)} s`), dtick: undefined },
+    showlegend: true, legend: { ...baseLayout().legend, orientation: "h", x: 0, xanchor: "left", y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", borderwidth: 0 },
+    shapes, uirevision: "slice",
+  }, CONFIG);
+}
+
+let sliceBound = new WeakSet();
+function bindSliceClick(plot) {
+  if (sliceBound.has(plot)) return;
+  sliceBound.add(plot);
+  const tryBind = () => {
+    if (!plot.on) return setTimeout(tryBind, 100);
+    plot.on("plotly_click", (ev) => {
+      const j = ev.points?.[0]?.x;
+      const id = Number(plot.closest("[data-clock]")?.dataset.clock);
+      const c = state.clocks.find((k) => k.id === id);
+      const tau = Number.isInteger(j) ? c?.dynamic?.tau?.[j] : undefined;
+      if (tau) update((s) => { s.dyn.sliceTau = tau; });
+    });
+  };
+  tryBind();
 }
 
 let bound = new WeakSet();

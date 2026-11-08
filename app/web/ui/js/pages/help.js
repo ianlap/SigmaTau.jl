@@ -9,6 +9,7 @@ const SECTIONS = [
   ["estimators", "Estimators"],
   ["noise", "Noise types"],
   ["intervals", "Confidence intervals"],
+  ["drift", "Drift removal"],
   ["spectrum", "Spectra"],
   ["dynamic", "Dynamic deviation"],
   ["files", "Files"],
@@ -48,8 +49,8 @@ export function mount(root) {
 
       <section id="help-pages"><h2>The pages</h2>
         <dl class="gloss">
-          <dt>Data</dt><dd>Load a file or synthesize a test record; the record check (samples, span, gaps, outliers, drift); detrending, gap filling and outlier removal; the phase plot.</dd>
-          <dt>Stability</dt><dd>σ(τ) on log–log axes for σ<sub>y</sub> (frequency) or σ<sub>x</sub> (time) estimators, with confidence intervals as bars or a band. One clock shows the per-τ table; several clocks show "Compare at τ" with the most stable clock in bold. Click the plot to move τ.</dd>
+          <dt>Data</dt><dd>Load a file or synthesize a test record; the record check (samples, span, gaps, outliers, drift); drift removal, gap filling and outlier removal; the phase plot.</dd>
+          <dt>Stability</dt><dd>σ(τ) on log–log axes for σ<sub>y</sub> (frequency) or σ<sub>x</sub> (time) estimators, with confidence intervals as bars or a band (<b>CI band</b>) and the identified noise types along the top (<b>Noise ID</b>). One clock shows the per-τ table; several clocks show "Compare at τ" with the most stable clock in bold. Click the plot to move τ.</dd>
           <dt>Spectrum</dt><dd>S<sub>y</sub>(f) and either ℒ(f) at a carrier you choose or S<sub>x</sub>(f), on one frequency axis. Settings here apply at once.</dd>
           <dt>Dynamic</dt><dd>σ(t, τ) in sliding windows, to see whether the stability changes over the record. Recomputes when you change the estimator or window.</dd>
         </dl>
@@ -68,6 +69,7 @@ export function mount(root) {
 
       <section id="help-noise"><h2>Noise types</h2>
         <p>The noise column of the per-τ table is SigmaTau's identification at each τ (lag-1 autocorrelation where there are enough averaged samples, the B1 and R(n) ratios at long τ). It sets the equivalent degrees of freedom and so the confidence interval. S<sub>y</sub>(f) ∝ f<sup>α</sup>; σ<sub>y</sub>²(τ) ∝ τ<sup>μ</sup>.</p>
+        <p><b>Noise ID</b> on Stability shows the same identification as a strip above the plot, one run per noise type (one strip per clock when several are shown). It comes from the first σ<sub>y</sub> estimator in the panel. With one clock, dashed guides give the slope each noise type implies for that estimator: τ<sup>−1</sup> for white and flicker PM on ADEV (τ<sup>−3/2</sup> and τ<sup>−1</sup> on MDEV), τ<sup>−1/2</sup> for white FM, flat for flicker FM and τ<sup>+1/2</sup> for random-walk FM. A curve that bends away from its guide is a sign of a mixed or misidentified region. Noise identification runs with the confidence intervals, so both need them on.</p>
         <table class="help-tbl"><thead><tr><th>Label</th><th>Name</th><th>S<sub>y</sub></th><th>σ²(τ)</th><th>Signature</th></tr></thead>
           <tbody>${NOISE.map((n) => `<tr><td><span class="badge">${n[0]}</span></td><td>${n[1]}</td><td>${n[2]}</td><td>${n[3]}</td><td>${n[4]}</td></tr>`).join("")}</tbody></table>
       </section>
@@ -76,12 +78,16 @@ export function mount(root) {
         <p>Intervals use the χ² distribution with the equivalent degrees of freedom (EDF) for the identified noise type and the number of samples at each τ, at the confidence level in Options (68.3 % is ±1σ). EDF falls as τ grows, so the last points carry wide intervals. n<sub>eff</sub> and the interval bounds are in the row tooltips and in every export.</p>
       </section>
 
+      <section id="help-drift"><h2>Drift removal</h2>
+        <p><b>Drift removal</b> in the record check fits the phase by least squares, over the samples that are not gaps, and removes the fit before every analysis. <b>Linear</b> removes a frequency offset (a straight line in phase); <b>Quadratic</b> also removes a linear frequency drift (a parabola in phase), which SP1065 asks for before the total estimators. The check lists what was removed, and the phase plot shows the residual. HDEV and its relatives ignore a linear drift anyway; ADEV, MDEV and the totals rise as τ<sup>+1</sup> when one is left in.</p>
+      </section>
+
       <section id="help-spectrum"><h2>Spectra</h2>
         <p>S<sub>y</sub>(f) (1/Hz) and S<sub>x</sub>(f) (s²/Hz) are one-sided Welch estimates with a Hann window and 50 % overlap; the segment is the largest power of two up to a quarter of the record. ℒ(f) = ½·(2π·f<sub>carrier</sub>)²·S<sub>x</sub>(f), in dBc/Hz. "Log-binned" averages ten bins per decade; "Welch, every bin" shows the raw estimate. Slope guides name stretches whose slope is close to a whole power law. A record with gaps must be filled first.</p>
       </section>
 
       <section id="help-dynamic"><h2>Dynamic deviation</h2>
-        <p>DADEV and DHDEV compute ADEV or HDEV inside a window that slides across the record by half its length. Rows are window centre times, columns are τ, and darker means less stable. A stationary clock gives the same colours down every column; a drift, step or disturbed stretch changes them. DHDEV ignores linear drift inside each window. With several clocks, each gets its own map on one shared colour scale.</p>
+        <p>DADEV and DHDEV compute ADEV or HDEV inside a window that slides across the record by half its length. Rows are window centre times, columns are τ, and darker means less stable. A stationary clock gives the same colours down every column; a drift, step or disturbed stretch changes them. DHDEV ignores linear drift inside each window. With several clocks, each gets its own map on one shared colour scale, and <b>Compare at τ</b> below them plots every clock's deviation over time at one τ (pick it there or click a map column), with each clock's whole-record value dotted.</p>
       </section>
 
       <section id="help-files"><h2>Files</h2>

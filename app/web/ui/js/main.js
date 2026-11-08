@@ -58,6 +58,7 @@ async function loadClock(c) {
 
 function markRecordStale(s) { s.run.stale = "record"; s.run.gen = (s.run.gen ?? 0) + 1; }
 
+const DRIFT_FACT = { none: "drift kept", linear: "offset removed", quadratic: "drift removed" };
 const baseName = (n) => n.replace(/\.[^.]+$/, "");
 
 let nextGroup = 1;
@@ -155,7 +156,7 @@ async function useSynth(c, { n, tau0, seed }) {
     if (!c) { c = newClock(); s.clocks.push(c); s.activeClock = c.id; }
     Object.assign(c, {
       source: { type: "synth", n, seed, tau0 }, sourceInfo: "white + random-walk FM", kind: "phase",
-      tau0, hasTimeCol: false, missing: 0, fillgaps: false, remove_outliers: false, detrend: "none", result: null,
+      tau0, hasTimeCol: false, missing: 0, fillgaps: false, remove_outliers: false, drift: "none", result: null,
     });
     if (c.name === "Clock" || !multi()) c.name = "Synthetic record";
   });
@@ -218,7 +219,7 @@ function renderChip() {
   if (withRec.length === 1 && !multi()) {
     const c = withRec[0], r = c.record;
     const facts = [`${thousands(r.n)} samples`, `τ<sub>0</sub> ${num(r.tau0, 4)} s`, duration(r.n * r.tau0),
-      fresh ? (c.detrend === "none" ? "no detrend" : `${c.detrend} detrend`) : "not analysed yet"];
+      fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analysed yet"];
     text.innerHTML = `${h(c.source.type === "file" ? c.source.name : "synthetic record")} <span class="facts">${facts.join(" · ")}</span>`;
     return;
   }

@@ -92,6 +92,15 @@ until 0.7.
   zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
   (`app/web/cli`), and the explorer now runs it with `--format json`. The `Web core` workflow now builds and tests it. See
   `docs/src/cli.md`.
+- `sigmatau --remove-drift none|linear|quadratic`: fits a line (frequency
+  offset) or a parabola (offset and linear frequency drift) to the phase over
+  the non-gap samples and removes it; the JSON reports `removed_offset` and
+  `removed_drift_per_day`.
+- Explorer: a noise-identification strip (one per clock) and power-law slope
+  guides on the Stability plot, confidence bands by default with a plot toggle
+  and a bias-correction note in the caption, drift-removal controls with the
+  phase residual on the Data page, and a "Compare at τ" chart under the
+  multi-clock Dynamic maps (each clock's deviation over time at one τ).
 - `StabilityResult` carries the record's `tau0`, sample count `n` and the
   interval `confidence` (`NaN` without intervals), and result files store
   them. Files from earlier versions load with `NaN` / 0. The seven-argument

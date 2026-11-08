@@ -59,7 +59,8 @@ The record (all four analysis commands):
 | `--header N` | extra header lines to skip |
 | `--delim CHAR` | field delimiter; default from the extension, `'\t'` for a tab |
 | `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
-| `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear` |
+| `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
+| `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
 | `--fillgaps` | put the record on an even time grid and fill the gaps (needs a time column) |
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
@@ -117,14 +118,14 @@ numbers are `null`.
   "record": {
     "quantity": "phase", "n": 16384, "tau0": 1.0, "span_s": 16384.0,
     "gaps": 0, "outliers": 2, "outlier_t": [812.0, 9031.0], "outlier_x": [3.1e-9, 3.4e-9],
-    "drift_per_day": 3.1e-14,
+    "drift_per_day": 3.1e-14, "removed_offset": null, "removed_drift_per_day": null,
     "series": { "t": [0.0, 4.0], "x": [0.0, 1.2e-12] }
   },
   "analysis": {
     "quantity": "phase", "tau0": 1.0, "n": 16384, "tau_mode": "octave",
     "ci": true, "confidence": 0.683, "bias_correction": true,
     "deviations": ["adev", "tdev"],
-    "detrend": "none", "fillgaps": false, "remove_outliers": false, "reference_col": 0
+    "detrend": "none", "remove_drift": "none", "fillgaps": false, "remove_outliers": false, "reference_col": 0
   },
   "results": [
     { "deviation": "adev", "label": "ADEV", "axis": "sigma_y",

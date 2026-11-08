@@ -71,7 +71,7 @@ function recordArgs(clock) {
   if (ref) opt("--reference-col", ref);
   opt("--header", clock.header);
   opt("--scaling", clock.scaling);
-  opt("--detrend", clock.detrend);
+  if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
   if (clock.fillgaps) a.push("--fillgaps");
   if (clock.remove_outliers) a.push("--remove-outliers");
   a.push("--format", "json");
@@ -95,6 +95,7 @@ function view(doc) {
     check: {
       samples: r.n, span_s: r.span_s, gaps: r.gaps, outliers: r.outliers,
       outlier_t: r.outlier_t ?? [], outlier_x: r.outlier_x ?? [], drift_per_day: r.drift_per_day,
+      removed_offset: r.removed_offset ?? null, removed_drift: r.removed_drift_per_day ?? null,
     },
   };
   const results = (doc.results ?? []).map((res) => {
