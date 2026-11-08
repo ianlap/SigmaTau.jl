@@ -255,7 +255,7 @@ const LK = ReferenceKernels
     end
 
     @testset "FrequencyData ↔ PhaseData equivalence" begin
-        # adev(FrequencyData(y, τ₀)) must equal adev(PhaseData(cumsum(y)·τ₀, τ₀)).
+        # adev(FrequencyData(y, τ₀)) must equal adev(PhaseData([0; cumsum(y)]·τ₀, τ₀)).
         # Spot-checked on adev (Allan family) and hdev (Hadamard family).
         using Random
         Random.seed!(7)
@@ -263,7 +263,7 @@ const LK = ReferenceKernels
         tau0 = 1.0
         y = randn(200) .* 1e-9          # fractional frequency
         fd = FrequencyData(y, tau0)
-        pd_equiv = PhaseData(cumsum(y) .* tau0, tau0)
+        pd_equiv = PhaseData([0.0; cumsum(y)] .* tau0, tau0)
 
         m_values_eq = [1, 2, 4, 8]
 
@@ -765,7 +765,7 @@ const LK = ReferenceKernels
         Random.seed!(20260509)
         y = randn(100) .* 1e-9
         fd = FrequencyData(y, 1.0)
-        pd_eq = PhaseData(cumsum(y) .* 1.0, 1.0)
+        pd_eq = PhaseData([0.0; cumsum(y)] .* 1.0, 1.0)
         @test mtie(fd, [1, 2, 4]).dev ≈ mtie(pd_eq, [1, 2, 4]).dev
     end
 
@@ -856,7 +856,7 @@ const LK = ReferenceKernels
         Random.seed!(20260509)
         y = randn(200) .* 1e-9
         fd = FrequencyData(y, 1.0)
-        pd_eq = PhaseData(cumsum(y) .* 1.0, 1.0)
+        pd_eq = PhaseData([0.0; cumsum(y)] .* 1.0, 1.0)
         @test pdev(fd, [1, 2, 4]).dev ≈ pdev(pd_eq, [1, 2, 4]).dev
     end
 
@@ -1141,9 +1141,9 @@ const LK = ReferenceKernels
                 r_explicit = fn(p, ms; ci = false)
                 @test r_default.tau == r_explicit.tau
                 @test r_default.dev == r_explicit.dev
-                # FrequencyData entry point resolves to its own default m-grid
-                # (computed from length(f.y) = N-1, not N).
-                ms_f = SigmaTau._default_m_values(length(f.y), kernel)
+                # FrequencyData entry point resolves its default m-grid from the
+                # length(f.y) + 1 phase points it integrates to.
+                ms_f = SigmaTau._default_m_values(length(f.y) + 1, kernel)
                 r_default_f = fn(f; ci = false)
                 @test r_default_f.tau == ms_f .* tau0
             end
@@ -1180,29 +1180,32 @@ const LK = ReferenceKernels
             @test length(fd.y) == length(x) - 1
         end
 
-        @testset "round-trip identities (modulo the lost offset/sample)" begin
+        @testset "round-trip identities (modulo the phase offset)" begin
             Random.seed!(31)
             τ₀ = 1.0
-            # Frequency → phase → frequency drops the first sample.
+            # Frequency → phase → frequency is the identity: N samples give
+            # N + 1 phase points starting at 0 (SP1065, Stable32, allantools).
             y  = randn(64)
             fd = FrequencyData(y, τ₀)
-            fd2 = SigmaTau._phase_to_freq(SigmaTau._freq_to_phase(fd))
-            @test length(fd2.y) == length(y) - 1
-            @test fd2.y ≈ y[2:end]
-            # Phase → frequency → phase recovers x[2:end] − x[1].
+            pd1 = SigmaTau._freq_to_phase(fd)
+            @test length(pd1.x) == length(y) + 1
+            @test pd1.x[1] == 0.0
+            fd2 = SigmaTau._phase_to_freq(pd1)
+            @test fd2.y ≈ y
+            # Phase → frequency → phase recovers x − x[1].
             x   = cumsum(randn(64))
             pd  = PhaseData(x, τ₀)
             pd2 = SigmaTau._freq_to_phase(SigmaTau._phase_to_freq(pd))
-            @test length(pd2.x) == length(x) - 1
-            @test pd2.x ≈ x[2:end] .- x[1]
+            @test length(pd2.x) == length(x)
+            @test pd2.x ≈ x .- x[1]
         end
 
         @testset "deviation equivalence: adev/mdev/hdev agree on either domain" begin
             # Build a synthetic WFM phase record, compute ADEV/MDEV/HDEV via
             # the phase path and via the frequency path (after _phase_to_freq).
-            # Second- and third-difference kernels are shift-invariant so the
-            # lost initial sample is the only source of disagreement; with
-            # N=4096 the σ values agree to well within rtol=5e-3.
+            # Second- and third-difference kernels are shift-invariant and the
+            # conversion is lossless up to the offset, so both paths agree to
+            # rounding.
             Random.seed!(2026)
             τ₀ = 1.0
             p_full = PhaseData(_gen_powerlaw_phase(0.0, 4096; tau0=τ₀), τ₀)
@@ -1213,7 +1216,7 @@ const LK = ReferenceKernels
                 r_phase = fn(p_full,  ms; ci = false)
                 r_freq  = fn(f_diff,  ms; ci = false)
                 @test r_freq.tau == r_phase.tau
-                @test isapprox(r_freq.dev, r_phase.dev; rtol = 5e-3)
+                @test isapprox(r_freq.dev, r_phase.dev; rtol = 1e-10)
             end
         end
     end

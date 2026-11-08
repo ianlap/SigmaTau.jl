@@ -132,6 +132,10 @@ mktempdir() do dir
         r = run_cli("analyze", ff, "--freq", "--tau0", "1", "--devs", "adev")
         @test r.code == 0
         @test all(f -> f[2] == "frequency", csv_rows(r.out))
+        # Every frequency sample is used, as in the library's FrequencyData methods.
+        r = run_cli("analyze", ff, "--freq", "--tau0", "1", "--devs", "adev", "--m", "1,2,4")
+        ref = adev(FrequencyData(diff(X), 1.0), [1, 2, 4]; ci=false)
+        @test parse.(Float64, getindex.(csv_rows(r.out), 5)) ≈ ref.dev rtol=1e-12
     end
 
     @testset "analyze -> JSON" begin

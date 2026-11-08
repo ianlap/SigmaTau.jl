@@ -168,21 +168,34 @@ _f64(v::AbstractVector{<:Real}) = Vector{Float64}(v)
     _freq_to_phase(data::FrequencyData) → PhaseData
 
 Convert fractional-frequency samples to phase residuals using the running
-integral `x[k] = τ₀ · Σⱼ₌₁ᵏ y[j]`. Length is preserved (N → N), matching the
-convention that `adev(FrequencyData(y, τ₀), …)` agrees with
-`adev(PhaseData(cumsum(y)·τ₀, τ₀), …)`.
+integral `x[1] = 0`, `x[k+1] = τ₀ · Σⱼ₌₁ᵏ y[j]` (NIST SP1065 §1.6; the
+conversion Stable32 and allantools perform). `N` frequency samples give
+`N + 1` phase samples, so every `y[k]` survives as the phase difference
+`x[k+1] − x[k]` and `adev(FrequencyData(y, τ₀), …)` equals
+`adev(PhaseData([0; cumsum(y)]·τ₀, τ₀), …)`. This is the exact inverse of
+[`_phase_to_freq`](@ref) up to the phase offset `x[1]`.
 """
-_freq_to_phase(data::FrequencyData) = PhaseData(cumsum(data.y) .* data.tau0, data.tau0)
+function _freq_to_phase(data::FrequencyData)
+    y = data.y
+    x = Vector{Float64}(undef, length(y) + 1)
+    x[1] = 0.0
+    acc = 0.0
+    @inbounds for k in eachindex(y)
+        acc += y[k]
+        x[k+1] = acc * data.tau0
+    end
+    return PhaseData(x, data.tau0)
+end
 
 """
     _phase_to_freq(data::PhaseData) → FrequencyData
 
 Convert phase residuals to fractional frequency via the canonical first
 difference `y[k] = (x[k+1] − x[k]) / τ₀`. Length drops from `N` to
-`N − 1`. The inverse direction (`_freq_to_phase`) recovers an
-`N`-length record but loses the absolute phase offset, so the
+`N − 1`. The inverse direction (`_freq_to_phase`) recovers the
+`N`-length record but not the absolute phase offset, so the
 phase ↔ frequency map is bijective only up to a constant: round-trip
-`_freq_to_phase ∘ _phase_to_freq` returns `x[2:end] .- x[1]`.
+`_freq_to_phase ∘ _phase_to_freq` returns `x .- x[1]`.
 
 Deviation estimators are shift-invariant (their second/third differences
 annihilate the offset), so e.g. `adev(pd, m_values) ≈

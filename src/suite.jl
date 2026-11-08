@@ -69,7 +69,7 @@ stability(data::PhaseData; kwargs...) =
     _stability(data, length(data.x), :phase, data.tau0; kwargs...)
 
 stability(data::FrequencyData; kwargs...) =
-    _stability(data, length(data.y), :frequency, data.tau0; kwargs...)
+    _stability(data, length(data.y) + 1, :frequency, data.tau0; kwargs...)   # N + 1 phase points
 
 
 # N-cornered hat

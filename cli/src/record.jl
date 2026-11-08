@@ -130,7 +130,9 @@ function read_column(o::Options, value_col::Int)
           detrend=detrend_symbol(o.detrend), fillgaps=o.fillgaps)
     if o.freq
         fd = read_freq(o, kw)
-        return PhaseData(cumsum(fd.y) .* fd.tau0, fd.tau0; source=fd.source)
+        # Same integration as SigmaTau's FrequencyData methods: N frequency
+        # samples give N + 1 phase points starting at 0, so no sample is lost.
+        return PhaseData([0.0; cumsum(fd.y)] .* fd.tau0, fd.tau0; source=fd.source)
     end
     return read_phase_col(o, kw)
 end

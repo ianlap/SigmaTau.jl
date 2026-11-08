@@ -12,7 +12,8 @@ using Test, Random, SigmaTau
         @test (r.tau0, r.n, r.confidence) == (2.0, 1024, 0.95)
         @test isnan(adev(pd; ci = false).confidence)
         @test isnan(mtie(pd).confidence)            # no interval model
-        @test adev(FrequencyData(diff(x), 2.0)).n == 1023
+        # 1023 frequency samples integrate to 1024 phase points (x[1] = 0).
+        @test adev(FrequencyData(diff(x), 2.0)).n == 1024
         @test stability(pd)[:mdev].tau0 == 2.0
         acc = StreamingStability(:adev, 2.0, [1, 2])
         append!(acc, x[1:100])

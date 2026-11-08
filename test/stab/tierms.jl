@@ -134,7 +134,7 @@ using SigmaTau: _tierms_core, _f64
         Random.seed!(20260610)
         y = randn(100) .* 1e-9
         fd = FrequencyData(y, 1.0)
-        pd_eq = PhaseData(cumsum(y) .* 1.0, 1.0)
+        pd_eq = PhaseData([0.0; cumsum(y)] .* 1.0, 1.0)
         @test tierms(fd, [1, 2, 4]).dev ≈ tierms(pd_eq, [1, 2, 4]).dev
 
         # TauMode and zero-arg dispatch: octave grid up to m_max = N − 1.
