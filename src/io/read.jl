@@ -13,7 +13,8 @@ non-blank line). Auto-detects the delimiter from the file extension unless
 - everything else → runs of spaces/tabs
 
 Every field must parse as `Float64` and every row must have the same number
-of columns. For files with string headers, set `header` to the number of
+of columns. Lines starting with `#` are comments and are skipped wherever they
+appear. For files with string headers, set `header` to the number of
 leading lines to skip.
 
 This is a small typed parser rather than `DelimitedFiles.readdlm`, whose
@@ -41,6 +42,9 @@ function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,No
             lineno += 1
             lineno <= header && continue
             all(isspace, line) && continue
+            # A '#' line anywhere is a comment (Stable32's "# Header End",
+            # notes written mid-record).
+            startswith(lstrip(line), '#') && continue
             fields = d === nothing ? split(line; keepempty=false) : split(line, d)
             if ncols < 0
                 ncols = length(fields)
@@ -87,32 +91,57 @@ function _median_step(t::AbstractVector{<:Real})
 end
 
 """
-    _scan_comment_header(path) → (ncomment::Int, header_tau0::Union{Float64,Nothing})
+    _scan_comment_header(path) → (nskip::Int, header_tau0::Union{Float64,Nothing})
 
-Count the contiguous block of leading `#` comment lines in `path` (the header
-that [`save`](@ref) writes) and extract the `# tau0: <value>` entry when one
-is present. Scanning stops at the first non-comment line, so files whose
-header does not start with `#` (e.g. Stable32 `.DAT` exports) are untouched.
+Find the header lines to skip before the data and any sample interval the
+header states.
+
+- A contiguous block of leading `#` comment lines (the header that
+  [`save`](@ref) writes); a `# tau0: <value>` entry supplies the sample
+  interval.
+- A Stable32 export header: text lines such as `Tau: 1.0` closed by a
+  `# Header End` line within the first 64 lines. Everything up to and
+  including that line is skipped, and `Tau:` supplies the sample interval.
 """
 function _scan_comment_header(path::AbstractString)
     ncomment    = 0
     header_tau0::Union{Float64,Nothing} = nothing
-    # Plain open/close rather than a do-block: the closure would box the two
+    s32_end     = 0
+    s32_tau::Union{Float64,Nothing} = nothing
+    leading     = true
+    lineno      = 0
+    # Plain open/close rather than a do-block: the closure would box the
     # reassigned locals and make the return type Tuple{Any,Any}.
     io = open(path, "r")
     try
         for line in eachline(io)
-            startswith(line, '#') || break
-            ncomment += 1
-            m = match(r"^#\s*tau0:\s*(\S+)", line)
+            lineno += 1
+            if leading && startswith(line, '#')
+                ncomment += 1
+                m = match(r"^#\s*tau0:\s*(\S+)", line)
+                if m !== nothing
+                    cap = m.captures[1]
+                    cap === nothing || (header_tau0 = tryparse(Float64, cap))
+                end
+                continue
+            end
+            leading = false
+            lineno > 64 && break
+            st = strip(line)
+            if st == "# Header End"
+                s32_end = lineno
+                break
+            end
+            m = match(r"^Tau:\s*(\S+)", st)
             if m !== nothing
                 cap = m.captures[1]
-                cap === nothing || (header_tau0 = tryparse(Float64, cap))
+                cap === nothing || (s32_tau = tryparse(Float64, cap))
             end
         end
     finally
         close(io)
     end
+    s32_end > 0 && return s32_end, (header_tau0 === nothing ? s32_tau : header_tau0)
     return ncomment, header_tau0
 end
 
@@ -133,8 +162,11 @@ function _ingest(path::AbstractString;
                  detrend::Symbol,
                  fillgaps::Bool)
     isfile(path) || throw(ArgumentError("read: file not found: $path"))
-    ncomment, header_tau0 = _scan_comment_header(path)
-    M = _read_columns(path; header=header + ncomment, delim=delim)
+    nskip, header_tau0 = _scan_comment_header(path)
+    # A Stable32 header block is itself non-comment header lines, so an
+    # explicit `header` that already covers it is not added on top.
+    stable32 = nskip > 0 && !startswith(readline(path), '#')
+    M = _read_columns(path; header=stable32 ? max(header, nskip) : header + nskip, delim=delim)
     ncols = size(M, 2)
     value_col >= 1 || throw(ArgumentError("read: value_col must be ≥ 1"))
     value_col <= ncols ||
@@ -189,7 +221,9 @@ analysis. The returned record carries `path` in its `source` field.
 Leading `#` comment lines (the header that [`save`](@ref) writes) are skipped
 automatically, and a `# tau0: <value>` entry in that header supplies the
 sample interval when the `tau0` keyword is omitted, so files written by
-`save(path, data)` round-trip with no keywords at all.
+`save(path, data)` round-trip with no keywords at all. Stable32 exports (a
+text header closed by `# Header End`) are read the same way, with `Tau:`
+supplying the sample interval. `#` lines later in the file are skipped too.
 
 # Keyword arguments
 

@@ -89,6 +89,13 @@ def request_to_args(req, workdir):
         opt("confidence", "--confidence", float)
     if req.get("bias_correction") is False:
         args.append("--no-bias-correction")
+    if req.get("spectrum"):
+        args.append("--spectrum")
+    opt("nperseg", "--nperseg", int)
+    if req.get("dynamic"):
+        args += ["--dynamic", str(req["dynamic"])]
+    opt("window", "--window", int)
+    opt("step", "--step", int)
     return args
 
 

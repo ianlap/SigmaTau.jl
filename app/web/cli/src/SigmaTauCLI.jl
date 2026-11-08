@@ -46,11 +46,16 @@ mutable struct Options
     series::Int           # max record points returned for plotting
     fillgaps::Bool        # Howe gap filling (needs a time column; uses FFTW)
     remove_outliers::Bool # replace 5σ outliers and fill (uses FFTW)
+    spectrum::Bool        # add S_y(f) and S_x(f) (Welch)
+    nperseg::Int          # Welch segment length; 0 = auto
+    dynamic::String       # "" = none, "dadev" or "dhdev"
+    window::Int           # dynamic window in samples; 0 = N ÷ 8
+    step::Int             # dynamic step in samples; 0 = window ÷ 2
 end
 
 Options() = Options("", 0, 42, "phase", NaN, 1, 2, 0, 0, 1.0, "none",
                     ["adev", "mdev", "hdev", "mhdev"], "octave", true, 0.683, true, 4000,
-                    false, false)
+                    false, false, false, 0, "", 0, 0)
 
 # ── Argument parsing ──────────────────────────────────────────────────────
 
@@ -104,6 +109,11 @@ function parse_args(args::Vector{String})
         elseif a == "--series";     o.series = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--fillgaps";   o.fillgaps = true
         elseif a == "--remove-outliers"; o.remove_outliers = true
+        elseif a == "--spectrum";   o.spectrum = true
+        elseif a == "--nperseg";    o.nperseg = parse_int(flag_value(args, i), a); i += 1
+        elseif a == "--dynamic";    o.dynamic = flag_value(args, i); i += 1
+        elseif a == "--window";     o.window = parse_int(flag_value(args, i), a); i += 1
+        elseif a == "--step";       o.step = parse_int(flag_value(args, i), a); i += 1
         else throw(CLIError("unknown option " * a))
         end
         i += 1
@@ -116,6 +126,9 @@ function parse_args(args::Vector{String})
         d in ALL_DEVS || throw(CLIError("unknown deviation " * d))
     end
     0 < o.confidence < 1 || throw(CLIError("--confidence must be between 0 and 1"))
+    o.dynamic in ("", "dadev", "dhdev") || throw(CLIError("--dynamic must be dadev or dhdev"))
+    o.nperseg >= 0 || throw(CLIError("--nperseg must be positive"))
+    o.window >= 0 && o.step >= 0 || throw(CLIError("--window and --step must be positive"))
     return o
 end
 
@@ -388,11 +401,69 @@ function analyze(io::IO, o::Options)
         write_result(buf, d, r)
         first = false
     end
-    print(buf, "],\"elapsed_ms\":")
+    print(buf, ']')
+    if o.spectrum
+        print(buf, ",\"spectrum\":"); write_spectrum(buf, data, o)
+    end
+    if !isempty(o.dynamic)
+        print(buf, ",\"dynamic\":"); write_dynamic(buf, data, o, mode)
+    end
+    print(buf, ",\"elapsed_ms\":")
     json_number(buf, (time_ns() - t_start) / 1e6)
     print(buf, "}\n")
     write(io, take!(buf))
     return nothing
+end
+
+# ── Spectrum and dynamic deviation ────────────────────────────────────────
+
+# Welch segment: the largest power of two up to N/4 (at least 16), so the
+# spectrum reaches low frequencies and still averages four or more segments.
+function auto_nperseg(N::Int)
+    np = 16
+    while 2np <= N ÷ 4
+        np *= 2
+    end
+    return min(np, N)
+end
+
+# S_y(f) and S_x(f) on one frequency grid, DC dropped. ℒ(f) is S_x scaled by
+# the carrier, so the page computes it.
+function write_spectrum(io::IO, data::PhaseData, o::Options)
+    N = length(data.x)
+    N >= 16 || throw(CLIError("the spectrum needs at least 16 samples"))
+    any(isnan, data.x) && throw(CLIError("the spectrum needs a record without gaps; fill them on the Data page"))
+    np = o.nperseg > 0 ? min(o.nperseg, N) : auto_nperseg(N)
+    sy = Sy(data; nperseg=np)
+    sx = Sx(data; nperseg=np)
+    n = min(length(sy.freq), length(sx.freq))
+    print(io, "{\"nperseg\":"); print(io, np)
+    print(io, ",\"f\":"); json_array(io, sx.freq[2:n])
+    print(io, ",\"sy\":"); json_array(io, sy.psd[2:n])
+    print(io, ",\"sx\":"); json_array(io, sx.psd[2:n])
+    print(io, '}')
+end
+
+# Sliding-window deviation map: rows are windows (centre times t), columns τ.
+function write_dynamic(io::IO, data::PhaseData, o::Options, mode::TauMode)
+    N = length(data.x)
+    w = o.window > 0 ? min(o.window, N) : max(N ÷ 8, 16)
+    st = o.step > 0 ? o.step : max(w ÷ 2, 1)
+    hd = o.dynamic == "dhdev"
+    ms = tau_values(mode, w, hd ? :hdev : :adev)
+    isempty(ms) && throw(CLIError("the dynamic window is too short for any τ"))
+    r = hd ? dhdev(data, ms; window=w, step=st) : dadev(data, ms; window=w, step=st)
+    print(io, "{\"dev\":"); json_string(io, o.dynamic)
+    print(io, ",\"window\":"); print(io, w)
+    print(io, ",\"step\":"); print(io, st)
+    print(io, ",\"t\":"); json_array(io, r.t)
+    print(io, ",\"tau\":"); json_array(io, r.tau)
+    print(io, ",\"map\":[")
+    for i in 1:size(r.dev, 1)
+        i > 1 && print(io, ',')
+        json_array(io, Float64[r.dev[i, j] for j in 1:size(r.dev, 2)])
+    end
+    print(io, "]}")
 end
 
 function (@main)(args::Vector{String})::Cint

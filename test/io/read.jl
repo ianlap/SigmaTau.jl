@@ -127,6 +127,35 @@
             path = joinpath(dir, "text.txt")
             write(path, "0 1.0\n1 abc\n")
             @test_throws ArgumentError read_phase(path)
+
+            # '#' lines inside the data are comments.
+            path = joinpath(dir, "mid.txt")
+            write(path, "0 1.0\n# note\n1 2.0\n  # indented note\n2 3.0\n")
+            @test read_phase(path).x == [1.0, 2.0, 3.0]
+        end
+    end
+
+    @testset "Stable32 header" begin
+        mktempdir() do dir
+            path = joinpath(dir, "s32.dat")
+            write(path, "File: s32.dat\r\nType: Phase\r\nPoints: 3\r\nTau: 2.000000e+00\r\n" *
+                        "Multiplier: 1.0\r\n# Header End\r\n1.0e-9\r\n2.0e-9\r\n3.0e-9\r\n")
+            p = read_phase(path; time_col=0, value_col=1)
+            @test p.x == [1.0e-9, 2.0e-9, 3.0e-9]
+            @test p.tau0 == 2.0
+            # An explicit header that already covers the block, or stops short
+            # of the "# Header End" line, reads the same data.
+            @test read_phase(path; time_col=0, value_col=1, header=6).x == p.x
+            @test read_phase(path; time_col=0, value_col=1, header=5).x == p.x
+            # An explicit tau0 still wins.
+            @test read_phase(path; time_col=0, value_col=1, tau0=1.0).tau0 == 1.0
+            # The fixture exported by Stable32 reads with no header keyword.
+            fx = joinpath(@__DIR__, "..", "fixtures", "validation", "stable32gen.DAT")
+            if isfile(fx)
+                d = read_phase(fx; time_col=0, value_col=1)
+                @test length(d.x) == 8192
+                @test d.tau0 == 1.0
+            end
         end
     end
 end
