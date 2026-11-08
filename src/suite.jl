@@ -1,4 +1,4 @@
-# `stability`: a suite of deviations in one call, and `nch`, the N-cornered hat.
+# `stability`: a suite of deviations in one call, and `ncornered_hat`, the N-cornered hat.
 """
 Default deviation set computed by [`stability`](@ref) when `devs` is not given:
 overlapping Allan, modified Allan, overlapping Hadamard, and modified Hadamard.
@@ -8,69 +8,41 @@ in seconds and must be requested explicitly.
 """
 const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 
-# Per-symbol routing with keyword filtering. The Allan/Hadamard families forward
-# only `ci`/`confidence`; the total family also forwards any extra kwargs
-# (`correct_bias`), letting each total function apply it; `pdev` forwards
-# `ci`/`confidence`; `mtie`/`tierms` forward only `ci`. The fallback rejects
-# unknown symbols.
-_dispatch_dev(::Val{:adev},  data, m; ci, confidence, kwargs...) = adev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:mdev},  data, m; ci, confidence, kwargs...) = mdev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:tdev},  data, m; ci, confidence, kwargs...) = tdev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:hdev},  data, m; ci, confidence, kwargs...) = hdev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:mhdev}, data, m; ci, confidence, kwargs...) = mhdev(data, m; ci, confidence)
-_dispatch_dev(::Val{:htdev}, data, m; ci, confidence, kwargs...) = htdev(data, m; ci, confidence)
-
-_dispatch_dev(::Val{:totdev},   data, m; ci, confidence, kwargs...) = totdev(data, m;   ci, confidence, kwargs...)
-_dispatch_dev(::Val{:mtotdev},  data, m; ci, confidence, kwargs...) = mtotdev(data, m;  ci, confidence, kwargs...)
-_dispatch_dev(::Val{:ttotdev},  data, m; ci, confidence, kwargs...) = ttotdev(data, m;  ci, confidence, kwargs...)
-_dispatch_dev(::Val{:htotdev},  data, m; ci, confidence, kwargs...) = htotdev(data, m;  ci, confidence, kwargs...)
-_dispatch_dev(::Val{:mhtotdev}, data, m; ci, confidence, kwargs...) = mhtotdev(data, m; ci, confidence, kwargs...)
-
-_dispatch_dev(::Val{:mtie},   data, m; ci, confidence, kwargs...) = mtie(data, m; ci)
-_dispatch_dev(::Val{:tierms}, data, m; ci, confidence, kwargs...) = tierms(data, m; ci)
-_dispatch_dev(::Val{:pdev},   data, m; ci, confidence, kwargs...) = pdev(data, m; ci, confidence)
-
-# Theo family: `theo1` accepts `correct_bias` (ThêoBR removal, on by default)
-# so extra kwargs flow through; `theoh` is always bias-removed and gets only
-# `ci`/`confidence`. Note their grids differ: :theo1 uses even Thêo1 factors,
-# :theoh uses τ-grid factors (see `tau_values`).
-_dispatch_dev(::Val{:theo1}, data, m; ci, confidence, kwargs...) = theo1(data, m; ci, confidence, kwargs...)
-_dispatch_dev(::Val{:theoh}, data, m; ci, confidence, kwargs...) = theoh(data, m; ci, confidence)
-
-_dispatch_dev(::Val{S}, data, m; kwargs...) where {S} =
-    throw(ArgumentError("stability: unknown deviation :$S"))
-
 function _stability(data, N::Int, kind::Symbol, tau0::Float64;
-                    devs = DEFAULT_DEVIATIONS, taus = Octave,
-                    ci::Bool = true, confidence::Float64 = DEFAULT_CONFIDENCE,
-                    kwargs...)
+                    devs = DEFAULT_DEVIATIONS, m = Octave, taus = nothing,
+                    ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
+                    correct_bias::Bool = true, remove_drift::Bool = true)
+    if taus !== nothing
+        Base.depwarn("stability: `taus` is deprecated, use `m`", :stability)
+        m = taus
+    end
     results = StabilityResult[]
     for sym in devs
-        m = taus isa TauMode ? tau_values(taus, N, sym) : collect(Int, taus)
-        push!(results, _dispatch_dev(Val(sym), data, m; ci, confidence, kwargs...))
+        name = Symbol(sym)
+        ms = m isa TauMode ? _resolve_m(name, m, N) : collect(Int, m)
+        push!(results, deviation(name, data, ms; ci, confidence, correct_bias, remove_drift))
     end
-    tau_mode = taus isa TauMode ? Symbol(string(taus)) : :explicit
-    return StabilitySuite(results, kind, tau0, N, ci ? confidence : NaN, tau_mode)
+    tau_mode = m isa TauMode ? Symbol(string(m)) : :explicit
+    return StabilitySuite(results, kind, tau0, N, ci ? Float64(confidence) : NaN, tau_mode)
 end
 
 """
-    stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, taus=Octave,
-              ci=true, confidence=DEFAULT_CONFIDENCE, kwargs...) → StabilitySuite
+    stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, m=Octave,
+              ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true,
+              remove_drift=true) → StabilitySuite
 
 Compute a suite of stability deviations from one record in a single call, the
-batch analog of `adev`, `mdev`, …. Each symbol in `devs` is dispatched to its
-public deviation function with a per-deviation averaging-factor grid derived from
-`taus`, so every deviation gets a grid valid for its own algorithmic m-max.
+batch analog of `adev`, `mdev`, …. Each symbol in `devs` is run through
+[`deviation`](@ref) with a per-deviation averaging-factor grid derived from
+`m`, so every deviation gets a grid valid for its own algorithmic m-max.
 Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 
-`devs` is any iterable of deviation symbols drawn from `(:adev, :mdev, :tdev,
-:hdev, :mhdev, :htdev, :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev, :mtie,
-:tierms, :pdev, :theo1, :theoh)`. `taus` is a [`TauMode`](@ref) (e.g. `Octave`,
-`Decade`) or an explicit `Vector{Int}` of averaging factors applied to every
-deviation. The extra keyword argument `correct_bias` is forwarded only to the
-deviations that accept it (the total family and `theo1`); `pdev` and `theoh`
-receive `ci`/`confidence`; `mtie`/`tierms` receive only `ci`. Note that an
-explicit `taus`
+`devs` is any iterable of estimator names from [`estimators`](@ref)
+(symbols or strings). `m` is a [`TauMode`](@ref) (e.g. `Octave`, `Decade`)
+or an integer vector of averaging factors applied to every deviation, as in
+the estimator functions (`taus=` before 0.6).
+`correct_bias` reaches only the estimators that take it (the total family and
+`theo1`), and `remove_drift` only `mhtotdev`. Note that an explicit `m`
 vector is passed to every deviation verbatim: `:theo1` interprets it as even
 Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
 prefer a `TauMode` when mixing the Theo family with others.
@@ -82,7 +54,7 @@ julia> using SigmaTau
 
 julia> pd = PhaseData(collect(1.0:64.0), 1.0);
 
-julia> suite = stability(pd; devs=(:adev, :hdev), taus=Octave, ci=false);
+julia> suite = stability(pd; devs=(:adev, :hdev), m=Octave, ci=false);
 
 julia> keys(suite)
 2-element Vector{Symbol}:
@@ -97,7 +69,7 @@ stability(data::PhaseData; kwargs...) =
     _stability(data, length(data.x), :phase, data.tau0; kwargs...)
 
 stability(data::FrequencyData; kwargs...) =
-    _stability(data, length(data.y), :frequency, data.tau0; kwargs...)
+    _stability(data, length(data.y) + 1, :frequency, data.tau0; kwargs...)   # N + 1 phase points
 
 
 # N-cornered hat
@@ -108,12 +80,12 @@ stability(data::FrequencyData; kwargs...) =
 function _nch_pair(pairwise::AbstractMatrix{StabilityResult}, i::Int, j::Int)
     isassigned(pairwise, i, j) && return pairwise[i, j]
     isassigned(pairwise, j, i) && return pairwise[j, i]
-    throw(ArgumentError("nch: no pairwise result for clocks ($i, $j); fill pairwise[$i, $j] (or its transpose)"))
+    throw(ArgumentError("ncornered_hat: no pairwise result for clocks ($i, $j); fill pairwise[$i, $j] (or its transpose)"))
 end
 
 """
-    nch(pairwise::AbstractMatrix{StabilityResult}) → Vector{StabilityResult}
-    nch(r_ab, r_bc, r_ca) → Vector{StabilityResult}
+    ncornered_hat(pairwise::AbstractMatrix{StabilityResult}) → Vector{StabilityResult}
+    ncornered_hat(r_ab, r_bc, r_ca) → Vector{StabilityResult}
 
 N-cornered-hat noise separation (the classic Gray–Allan three-cornered
 hat at `N = 3`; see NIST SP1065 §10.7 [riley-2008-sp1065](@cite)).
@@ -165,18 +137,18 @@ julia> x1, x2, x3 = randn(256), randn(256), randn(256);
 
 julia> r(a, b) = adev(PhaseData(a .- b, 1.0), [1, 2, 4]; ci=false);
 
-julia> clocks = nch(r(x1, x2), r(x2, x3), r(x3, x1));
+julia> clocks = ncornered_hat(r(x1, x2), r(x2, x3), r(x3, x1));
 
 julia> length(clocks), clocks[1].deviation_type
 (3, :adev)
 ```
 """
-function nch(pairwise::AbstractMatrix{StabilityResult})
+function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
     n_clocks, n_cols = size(pairwise)
     n_clocks == n_cols || throw(ArgumentError(
-        "nch: pairwise matrix must be square, got $(n_clocks)×$(n_cols)"))
+        "ncornered_hat: pairwise matrix must be square, got $(n_clocks)×$(n_cols)"))
     n_clocks >= 3 || throw(ArgumentError(
-        "nch: need at least 3 clocks for a cornered hat, got $n_clocks"))
+        "ncornered_hat: need at least 3 clocks for a cornered hat, got $n_clocks"))
 
     ref = _nch_pair(pairwise, 1, 2)
     n_tau = length(ref.tau)
@@ -189,9 +161,9 @@ function nch(pairwise::AbstractMatrix{StabilityResult})
     for i in 1:(n_clocks - 1), j in (i + 1):n_clocks
         r = _nch_pair(pairwise, i, j)
         r.deviation_type === ref.deviation_type || throw(ArgumentError(
-            "nch: pairwise ($i, $j) is :$(r.deviation_type) but (1, 2) is :$(ref.deviation_type); all pairs must share one deviation type"))
+            "ncornered_hat: pairwise ($i, $j) is :$(r.deviation_type) but (1, 2) is :$(ref.deviation_type); all pairs must share one deviation type"))
         r.tau == ref.tau || throw(ArgumentError(
-            "nch: pairwise ($i, $j) was computed on a different τ grid; all pairs must share one grid"))
+            "ncornered_hat: pairwise ($i, $j) was computed on a different τ grid; all pairs must share one grid"))
         @inbounds for k in 1:n_tau
             v = r.dev[k]^2
             R[i, k] += v
@@ -211,7 +183,8 @@ function nch(pairwise::AbstractMatrix{StabilityResult})
             dev_i[k] = v > 0 ? sqrt(v) : NaN
         end
         results[i] = StabilityResult(ref.deviation_type, copy(ref.tau), dev_i,
-                                     Symbol[], _CIBound[], Float64[], copy(neff_min))
+                                     Symbol[], _CIBound[], Float64[], copy(neff_min),
+                                     ref.tau0, ref.n, NaN)
     end
     return results
 end
@@ -219,10 +192,10 @@ end
 # Three-cornered-hat convenience form: pairwise results in the cyclic
 # order A−B, B−C, C−A (the three-cornered-hat example's labeling with A=1, B=2, C=3; the
 # C−A record maps to pairwise[1, 3] since orientation is irrelevant).
-function nch(r_ab::StabilityResult, r_bc::StabilityResult, r_ca::StabilityResult)
+function ncornered_hat(r_ab::StabilityResult, r_bc::StabilityResult, r_ca::StabilityResult)
     pairwise = Matrix{StabilityResult}(undef, 3, 3)
     pairwise[1, 2] = r_ab
     pairwise[2, 3] = r_bc
     pairwise[1, 3] = r_ca
-    return nch(pairwise)
+    return ncornered_hat(pairwise)
 end

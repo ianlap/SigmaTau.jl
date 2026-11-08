@@ -24,13 +24,14 @@ end
                 :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
                 :mtie, :tierms, :pdev, :theo1, :theoh,
                 :dadev, :dhdev,
-                :Sy, :Sx, :L,
-                :stability, :DEFAULT_DEVIATIONS, :nch,
+                :psd_y, :psd_x, :ssb_phase_noise,
+                :stability, :DEFAULT_DEVIATIONS, :ncornered_hat,
+                :estimators, :deviation, :tau_mode, :summarize,
                 :identify_noise, :calculate_edf, :confidence_intervals,
                 :bias_correction, :DEFAULT_CONFIDENCE,
                 :TauMode, :AllTaus, :Octave, :HalfOctave,
                 :QuarterOctave, :Decade, :HalfDecade, :tau_values,
-                :save, :save_result, :load_result, :save_suite, :load_suite,
+                :save, :load,
                 :read_phase, :read_frequency,
                 :detrend, :fillgaps,
                 :find_outliers, :remove_outliers,
@@ -74,7 +75,7 @@ end
     tau0 = 1.0
     y = randn(200) .* 1e-9
     fd = FrequencyData(y, tau0)
-    pd_eq = PhaseData(cumsum(y) .* tau0, tau0)
+    pd_eq = PhaseData([0.0; cumsum(y)] .* tau0, tau0)
     ms = [1, 2, 4]
 
     for f in (adev, mdev, tdev, hdev, mhdev, htdev,

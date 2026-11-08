@@ -5,6 +5,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- EDF for `adev`, `mdev`, `tdev`, `hdev`, `mhdev` (and every caller of the
+  Greenhall EDF) now follows the full Greenhall & Riley 2003 algorithm:
+  exact basic sum only while J ≤ 100, Tables 1–3 beyond that, the
+  `m′ = J_max/r` substitution, F = ∞ once m(d+1) > 100, and the white-PM
+  closed form. Summing the whole series moved the EDF up to 3.5 % (CI bounds
+  up to 0.25 %) away from Stable32 and allantools wherever J > 100.
+- `htotdev` at `m = 1` (plain overlapping HDEV) no longer applies the
+  TotHvar bias factor or the FCS 2001 table EDF; σ was 0.25 % high there on
+  white FM.
+- `FrequencyData` input is integrated to `N + 1` phase points
+  (`x = [0; cumsum(y)]·τ₀`) as in SP1065, Stable32 and allantools. Every
+  estimator on `FrequencyData` used to drop the first frequency sample;
+  so did `sigmatau --freq`.
+- `mtotdev` / `ttotdev` at odd `m ≥ 3` remove the subsegment trend with
+  Stable32's half averages (first and last ⌊3m/2⌋ points); values move by
+  0.2–0.4 % at m = 3 and now match allantools.
+
 ### Added
 
 - `noise_id_nnls(data[, m]; deviation=:mhdev, alphas, weights=:edf)`: a
@@ -18,9 +37,52 @@ versions follow [Semantic Versioning](https://semver.org/).
 - `noise_gen` draws random-run FM (α = -4) through `h = Dict(-4 => h₋₄)`, by
   double integration of white noise with driver variance `8π⁴τ₀³h₋₄`.
   `sigma1` refuses α ≤ -3, where σ_y(τ₀) diverges.
+- Reference cross-check suite (`test/validation/`): every estimator on
+  power-law records with α = +2 … −4, plus EDF, χ² intervals, noise ID,
+  Welch spectra and dynamic maps, against allantools, scipy, Stable32's
+  PHASE.DAT runs and the NBS 1000-point published values. A `Cross-check`
+  workflow regenerates the allantools tables with a live install
+  (`tools/validation/gen_allantools.py`); `tools/validation/report.jl`
+  writes the agreement and discrepancy tables (`tools/validation/REPORT.md`).
+- `identify_noise(...; b1_length=:averaged)`: the B1 fallback (fewer than
+  30 averaged points) evaluates B1 theory at the averaged-point count
+  instead of the full record length. Random-walk FM at long τ is found far
+  more often (Monte Carlo, N = 1024, m = 40–128: 67 % vs 0 %); white FM
+  somewhat less often (63 % vs 82 %). The default `:record` keeps
+  Stable32's convention.
+
+### Deprecated
+
+Renames for 0.6. The old names keep working, with a deprecation warning,
+until 0.7.
+
+- `psd_y`, `psd_x`, `ssb_phase_noise` replace `Sy`, `Sx`, `L`, and their
+  `taper=` keyword replaces `window=` (which now only means the dynamic
+  deviations' window). `SpectralResult.window` is now `.taper`; `r.window`
+  still reads it.
+- `ncornered_hat` replaces `nch`.
+- `save(path, x)` writes records, results and suites, and `load(path)` reads
+  any of them back (records through `read_phase` / `read_frequency`).
+  `save_result`, `save_suite`, `load_result` and `load_suite` are deprecated.
+- `stability(data; m=...)` replaces `taus=`, the same name the estimators use.
+- `identify_noise(...; remove_drift=false)` replaces `detrend=false`, matching
+  `mhtotdev`'s keyword and freeing the name of the `detrend` function.
 
 ### Changed
 
+- The spectra's default `nperseg` (`psd_y`, `psd_x`, `ssb_phase_noise`) is now the largest power of two up to
+  `N ÷ 4` (at least 16) instead of `min(N, 256)`, matching the explorer. Long
+  records get finer low-frequency resolution by default; pass `nperseg=256`
+  for the old spectra.
+- `dadev` / `dhdev` `window` is now optional: the largest power of two up to
+  `N ÷ 8` (at least 16), with `step = window ÷ 2` as before.
+- `stability` takes `correct_bias` and `remove_drift` (for `mhtotdev`) as its only extra keywords; any other
+  keyword is now a `MethodError` instead of being passed to some estimators
+  and silently dropped for the rest.
+- `stability` passes `confidence` through to `mtie` and `tierms` like the
+  other estimators (both still report no intervals), and asking it for
+  `:dadev` / `:dhdev` now says to call those functions directly instead of
+  failing inside the τ grid.
 - `remove_outliers(::PhaseData)` now cleans in frequency space: it
   differences the phase, gaps and fills the outlying frequency samples, and
   integrates back from `x[1]`. A phase step is now removed instead of being
@@ -64,14 +126,62 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Python bindings, the `sigmatau` package in `python/`. Every call runs in an
+  embedded Julia through juliacall, so results match the Julia API exactly.
+  The names and keywords are the 0.6 ones (`psd_y`, `ncornered_hat`,
+  `save`/`load`, `m=`), plus `deviation(name, ...)` and `estimators()`.
+  Tested by a pytest suite in its own CI workflow.
+- `sigmatau`, a compiled command line in `cli/` (package `SigmaTauCLI`, built
+  with `juliac --trim=safe`): `analyze`, `check`, `spectrum`, `dynamic`,
+  `completion` and `version`, CSV or versioned JSON output
+  (`schema_version: 1`), documented exit codes and shell completion for bash,
+  zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
+  (`app/web/cli`), and the explorer now runs it with `--format json`. The `Web core` workflow now builds and tests it. See
+  `docs/src/guide/cli.md`.
+- `sigmatau --remove-drift none|linear|quadratic`: fits a line (frequency
+  offset) or a parabola (offset and linear frequency drift) to the phase over
+  the non-gap samples and removes it; the JSON reports `removed_offset` and
+  `removed_drift_per_day`.
+- Explorer: a noise-identification strip (one per clock) and power-law slope
+  guides on the Stability plot, confidence bands by default with a plot toggle
+  and a bias-correction note in the caption, drift-removal controls with the
+  phase residual on the Data page, and a "Compare at τ" chart under the
+  multi-clock Dynamic maps (each clock's deviation over time at one τ).
+- `StabilityResult` carries the record's `tau0`, sample count `n` and the
+  interval `confidence` (`NaN` without intervals), and result files store
+  them. Files from earlier versions load with `NaN` / 0. The seven-argument
+  constructor still works and leaves them unknown.
+- `estimators()`: the registry of the 16 estimators (name, label, family,
+  σ_y or σ_x axis, whether `correct_bias` applies, one-line description), for
+  menus, command lines and docs.
+- `deviation(name, data, m=Octave; ci, confidence, correct_bias)`: run an
+  estimator chosen at run time; written as plain branches so it compiles under
+  `juliac --trim`. `stability` now runs through it and accepts names as
+  strings too.
+- `tau_mode("half-octave")` and friends: parse a τ-grid name into a `TauMode`,
+  ignoring case and separators.
+- `summarize(data)`: samples, τ₀, span, `NaN` gaps, 5σ outlier indices and
+  linear frequency drift per day, as the explorer's Data page shows them.
+- `dadev(pd)` / `dhdev(pd)` work with no grid and no window: the octave grid
+  and a default window (see below).
+- Every estimator (and `dadev` / `dhdev`) accepts any integer vector of
+  averaging factors: `adev(pd, 1:10)`, `adev(pd, 2 .^ (0:6))`, `Int32` or view
+  vectors work like a `Vector{Int}`. `stability(pd; taus=1:10)` already did.
+- `PhaseData` / `FrequencyData` accept any real vector (views, ranges,
+  integers), copied into a `Vector` of its float type.
+- `length(::PhaseData)` / `length(::FrequencyData)`.
+- `identify_noise(data::PhaseData, m)` and `identify_noise(data::FrequencyData, m)`,
+  with `m` an integer vector or a `TauMode`.
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
-- `app/StabilityWeb.jl`: a browser edition of the explorer (Bonito + WGLMakie)
-  with native HTML controls for screen readers and keyboard use; shares
-  `app/ExplorerCore.jl` with the window.
-- `app/StabilityExplorer.jl`: a GLMakie desktop application covering file
-  import, synthesis, preprocessing, the deviation suite with χ² intervals,
-  the per-τ table, spectra, dynamic deviation waterfalls, and figure, table
-  and record export.
+- `app/web/`: a web explorer (HTML, CSS, Plotly.js) over an analysis core
+  compiled with `juliac --trim`, and `app/desktop/`, a Tauri window around it.
+
+### Removed
+
+- The GLMakie desktop explorer (`app/StabilityExplorer.jl`), its Bonito
+  browser edition (`app/StabilityWeb.jl`) and their shared `app/ExplorerCore.jl`
+  and environment, replaced by `app/web/`.
+- The unused `DelimitedFiles` dependency (the readers have their own parser).
 
 ## [0.5.0] - 2026-06-09
 

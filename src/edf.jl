@@ -69,8 +69,11 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :htotdev
             # Same logic as :totdev: for WHPM/FLPM, fall back to HDEV-style EDF
             # (third-difference, F=m, S=m, the overlapped convention) since the
-            # FCS 2001 table only gives coefficients for α ∈ {0,-1,-2}.
-            if alpha == 2 || alpha == 1
+            # FCS 2001 table only gives coefficients for α ∈ {0,-1,-2}. At m = 1
+            # the HTOTDEV kernel *is* overlapping HDEV (SP1065, Stable32 and
+            # allantools all report HDEV there), so it takes HDEV's EDF too; the
+            # table formula would give an EDF above N.
+            if alpha == 2 || alpha == 1 || m == 1
                 edfs[k] = _calc_edf_core(alpha, 3, m, m, m, N)
             else
                 b0, b1 = _coeff_htot(alpha)
@@ -100,6 +103,44 @@ function _alpha_from_noise(noise::Symbol)
     return 0
 end
 
+# Greenhall & Riley 2003 ("Uncertainty of stability variances based on finite
+# differences", PTTI 2003), the EDF algorithm Stable32 and allantools implement.
+# `F` is the filter factor (1 for the modified variances, m for the unmodified
+# ones) and `S` the stride factor (m for the overlapped estimators). The exact
+# basic sum (their eq. 10) is evaluated whenever its length J is at most
+# J_MAX = 100; beyond that (with r = M/S ≥ d + 1) the paper's Tables 1–3 give the large-J asymptote,
+# and the "m′ = J_MAX/r" substitution covers short records. For unmodified
+# variances with α ≤ 0 the filter factor is taken as ∞ once m(d+1) > J_MAX,
+# as the paper prescribes (case 2.1b). Following every branch reproduces
+# Stable32's χ² bounds; summing the full series instead differs by up to ~3.5 %
+# in EDF wherever J > 100.
+const _GR_JMAX = 100
+
+# Table 1 (modified variances, F = 1): (a0, a1) by α = 2 … −4 (rows), d = 1 … 3.
+const _GR_TABLE1 = (
+    ((2/3, 1/3),       (7/9, 1/2),       (22/25, 2/3)),
+    ((0.840, 0.345),   (0.997, 0.616),   (1.141, 0.843)),
+    ((1.079, 0.368),   (1.033, 0.607),   (1.184, 0.848)),
+    ((NaN, NaN),       (1.048, 0.534),   (1.180, 0.816)),
+    ((NaN, NaN),       (1.302, 0.535),   (1.175, 0.777)),
+    ((NaN, NaN),       (NaN, NaN),       (1.194, 0.703)),
+    ((NaN, NaN),       (NaN, NaN),       (1.489, 0.702)),
+)
+# Table 2 (unmodified variances, F = m): (a0, a1) by α = 2 … −4, d = 1 … 3.
+const _GR_TABLE2 = (
+    ((3/2, 1/2),       (35/18, 1.0),     (231/100, 3/2)),
+    ((78.6, 25.2),     (790.0, 410.0),   (9950.0, 6520.0)),
+    ((2/3, 1/6),       (2/3, 1/3),       (7/9, 1/2)),
+    ((NaN, NaN),       (0.852, 0.375),   (0.997, 0.617)),
+    ((NaN, NaN),       (1.079, 0.368),   (1.033, 0.607)),
+    ((NaN, NaN),       (NaN, NaN),       (1.053, 0.553)),
+    ((NaN, NaN),       (NaN, NaN),       (1.302, 0.535)),
+)
+# Table 3 (unmodified, α = 1): (b0, b1) by d = 1 … 3.
+const _GR_TABLE3 = ((6.0, 4.0), (15.23, 12.0), (47.8, 40.0))
+
+_gr_table(t, alpha, d) = t[3 - alpha][d]
+
 function _calc_edf_core(alpha::Int, d::Int, m::Int, F::Int, S::Int, N::Int)
     alpha + 2d <= 1 && return NaN
     L = m/F + m*d
@@ -107,69 +148,110 @@ function _calc_edf_core(alpha::Int, d::Int, m::Int, F::Int, S::Int, N::Int)
 
     M = 1 + floor(Int, S * (N - L) / m)
     J = min(M, (d + 1) * S)
+    r = M / S
+    Jm = _GR_JMAX
 
-    inv_F   = 1.0 / Float64(F)
-    inv_S   = 1.0 / Float64(S)
-    inv_M_f = 1.0 / Float64(M)
+    if F == 1                                    # case 1: modified variances
+        J <= Jm && return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), 1.0)
+        if r >= d + 1
+            a0, a1 = _gr_table(_GR_TABLE1, alpha, d)
+            return 1 / ((a0 - a1 / r) / r)
+        end
+        return 1 / _gr_inv_edf(alpha, d, Jm, Jm, Jm / r, 1.0)
+    end
 
-    sz0 = _compute_sz(0.0, F, alpha, d, inv_F)
+    F == m || return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), Float64(F))
+
+    if alpha <= 0                                # case 2: unmodified, α ≤ 0
+        if J <= Jm
+            Fp = m * (d + 1) <= Jm ? Float64(m) : Inf
+            return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), Fp)
+        elseif r >= d + 1
+            a0, a1 = _gr_table(_GR_TABLE2, alpha, d)
+            return 1 / ((a0 - a1 / r) / r)
+        end
+        return 1 / _gr_inv_edf(alpha, d, Jm, Jm, Jm / r, Inf)
+    elseif alpha == 1                            # case 3: unmodified, flicker PM
+        J <= Jm && return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), Float64(m))
+        b0, b1 = _GR_TABLE3[d]
+        if r >= d + 1
+            a0, a1 = _gr_table(_GR_TABLE2, alpha, d)
+            return 1 / ((a0 - a1 / r) / ((b0 + b1 * log(m))^2 * r))
+        end
+        mp = Jm / r
+        return 1 / (_gr_basic_sum(alpha, d, Jm, Jm, mp, mp) / ((b0 + b1 * log(m))^2 * Jm))
+    end
+    # case 4: unmodified, white PM. Closed form once K = ⌈r⌉ > d; the exact sum
+    # (to which the closed form is equal) covers the K ≤ d corner the paper
+    # leaves open.
+    if ceil(r) > d
+        a0 = binomial(4d, 2d) / binomial(2d, d)^2
+        return 1 / ((a0 - (d / 2) / r) / M)
+    end
+    return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), Float64(m))
+end
+
+# 1/edf = BasicSum(J, M, S, F) / (s_z(0)² · M), Greenhall & Riley eq. (12).
+function _gr_inv_edf(alpha::Int, d::Int, J::Int, M::Int, S::Float64, F::Float64)
+    sz0 = _compute_sz(0.0, F, alpha, d)
+    return _gr_basic_sum(alpha, d, J, M, S, F) / (sz0 * sz0 * M)
+end
+
+# Greenhall & Riley eq. (10).
+function _gr_basic_sum(alpha::Int, d::Int, J::Int, M::Int, S::Float64, F::Float64)
+    sz0 = _compute_sz(0.0, F, alpha, d)
     bsum = sz0 * sz0
+    inv_M = 1.0 / M
     for j in 1:(J-1)
-        szj = _compute_sz(j * inv_S, F, alpha, d, inv_F)
-        bsum += 2.0 * (1.0 - j * inv_M_f) * szj * szj
+        szj = _compute_sz(j / S, F, alpha, d)
+        bsum += 2.0 * (1.0 - j * inv_M) * szj * szj
     end
-    if J <= M
-        szJ = _compute_sz(J * inv_S, F, alpha, d, inv_F)
-        bsum += (1.0 - J * inv_M_f) * szJ * szJ
-    end
-
-    bsum > 0 || return NaN
-    return M * sz0 * sz0 / bsum
+    szJ = _compute_sz(J / S, F, alpha, d)
+    bsum += (1.0 - J * inv_M) * szJ * szJ
+    return bsum
 end
 
 @inline function _compute_sw(t::Float64, alpha::Int)
     ta = abs(t)
     if alpha == 2;  return -ta
-    elseif alpha == 1;  return t*t * log(max(ta, eps()))
+    elseif alpha == 1;  return t == 0 ? 0.0 : t*t * log(ta)
     elseif alpha == 0;  return ta*ta*ta
-    elseif alpha == -1; return -(t*t)*(t*t) * log(max(ta, eps()))
+    elseif alpha == -1; return t == 0 ? 0.0 : -(t*t)*(t*t) * log(ta)
     elseif alpha == -2; return -(ta*ta*ta*ta*ta)
-    elseif alpha == -3; return  (t*t)*(t*t)*(t*t) * log(max(ta, eps()))
+    elseif alpha == -3; return t == 0 ? 0.0 : (t*t)*(t*t)*(t*t) * log(ta)
     elseif alpha == -4; return  (ta*ta*ta*ta)*(ta*ta*ta)
     else; return NaN
     end
 end
 
-@inline function _compute_sx(t::Float64, F::Int, alpha::Int, inv_F::Float64)
-    if F > 100 && alpha <= 0
-        return _compute_sw(t, alpha + 2)
-    end
-    return Float64(F*F) * (2.0 * _compute_sw(t, alpha) -
-                           _compute_sw(t - inv_F, alpha) -
-                           _compute_sw(t + inv_F, alpha))
+# s_x(t) of Greenhall & Riley eq. (8); F = Inf is the F → ∞ limit s_w(t, α+2).
+@inline function _compute_sx(t::Float64, F::Float64, alpha::Int)
+    isinf(F) && return _compute_sw(t, alpha + 2)
+    inv_F = 1.0 / F
+    return F*F * (2.0 * _compute_sw(t, alpha) -
+                  _compute_sw(t - inv_F, alpha) -
+                  _compute_sw(t + inv_F, alpha))
 end
 
-@inline function _compute_sz(t::Float64, F::Int, alpha::Int, d::Int, inv_F::Float64)
-    # Inline sx calls (the previous `sx(u) = _compute_sx(...)` closure
-    # interfered with Julia inlining the body inside this branchy hot loop).
+@inline function _compute_sz(t::Float64, F::Float64, alpha::Int, d::Int)
     if d == 1
-        return 2.0*_compute_sx(t,     F, alpha, inv_F) -
-                   _compute_sx(t-1.0, F, alpha, inv_F) -
-                   _compute_sx(t+1.0, F, alpha, inv_F)
+        return 2.0*_compute_sx(t,     F, alpha) -
+                   _compute_sx(t-1.0, F, alpha) -
+                   _compute_sx(t+1.0, F, alpha)
     elseif d == 2
-        return 6.0*_compute_sx(t,     F, alpha, inv_F) -
-               4.0*_compute_sx(t-1.0, F, alpha, inv_F) -
-               4.0*_compute_sx(t+1.0, F, alpha, inv_F) +
-                   _compute_sx(t-2.0, F, alpha, inv_F) +
-                   _compute_sx(t+2.0, F, alpha, inv_F)
+        return 6.0*_compute_sx(t,     F, alpha) -
+               4.0*_compute_sx(t-1.0, F, alpha) -
+               4.0*_compute_sx(t+1.0, F, alpha) +
+                   _compute_sx(t-2.0, F, alpha) +
+                   _compute_sx(t+2.0, F, alpha)
     elseif d == 3
-        return 20.0*_compute_sx(t,     F, alpha, inv_F) -
-               15.0*_compute_sx(t-1.0, F, alpha, inv_F) -
-               15.0*_compute_sx(t+1.0, F, alpha, inv_F) +
-                6.0*_compute_sx(t-2.0, F, alpha, inv_F) +
-                6.0*_compute_sx(t+2.0, F, alpha, inv_F) -
-                    _compute_sx(t-3.0, F, alpha, inv_F) -
-                    _compute_sx(t+3.0, F, alpha, inv_F)
+        return 20.0*_compute_sx(t,     F, alpha) -
+               15.0*_compute_sx(t-1.0, F, alpha) -
+               15.0*_compute_sx(t+1.0, F, alpha) +
+                6.0*_compute_sx(t-2.0, F, alpha) +
+                6.0*_compute_sx(t+2.0, F, alpha) -
+                    _compute_sx(t-3.0, F, alpha) -
+                    _compute_sx(t+3.0, F, alpha)
     else
         return NaN
     end

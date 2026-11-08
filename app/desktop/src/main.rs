@@ -6,7 +6,8 @@
 //   analyze(id, req)    -> the core's JSON (request shape: app/web/README.md)
 //   cancel(id)          -> stop a running analysis
 //   save_file(name, data) -> save dialog, then write the bytes
-// The compiled core (juliac bundle) ships in the app's resources as core/.
+// The compiled sigmatau binary (cli/, a juliac bundle) ships in the app's
+// resources as core/.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde_json::{json, Map, Value};
@@ -21,7 +22,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 const TIMEOUT: Duration = Duration::from_secs(600);
-const CORE_EXE: &str = if cfg!(windows) { "sigmatau-cli.exe" } else { "sigmatau-cli" };
+const CORE_EXE: &str = if cfg!(windows) { "sigmatau.exe" } else { "sigmatau" };
 
 #[derive(Default)]
 struct Runs {
@@ -43,7 +44,7 @@ fn core_path(app: &AppHandle) -> Option<PathBuf> {
         }
     }
     if cfg!(debug_assertions) {
-        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/cli/build/bin").join(CORE_EXE);
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../cli/build/bin").join(CORE_EXE);
         if p.exists() {
             return Some(p);
         }
@@ -51,112 +52,44 @@ fn core_path(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-fn present<'a>(req: &'a Map<String, Value>, key: &str) -> Option<&'a Value> {
-    req.get(key).filter(|v| !v.is_null())
-}
+const COMMANDS: [&str; 4] = ["check", "analyze", "spectrum", "dynamic"];
 
-fn as_int(v: &Value) -> Result<i64, String> {
-    v.as_i64()
-        .or_else(|| v.as_f64().map(|f| f as i64))
-        .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
-        .ok_or_else(|| format!("expected an integer, got {v}"))
-}
-
-fn as_float(v: &Value) -> Result<f64, String> {
-    v.as_f64()
-        .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
-        .ok_or_else(|| format!("expected a number, got {v}"))
-}
-
-fn as_text(v: &Value) -> String {
-    match v {
-        Value::String(s) => s.clone(),
-        other => other.to_string(),
-    }
-}
-
-/// Translate a request into sigmatau-cli flags (the same mapping as serve.py).
+/// Check a request `{args: [command, flags...], file: {name, content} | null}`
+/// (the same rules as serve.py) and return the sigmatau arguments, with the
+/// record saved under `workdir`.
 fn request_to_args(req: &Map<String, Value>, workdir: &Path) -> Result<Vec<String>, String> {
-    let mut args: Vec<String> = Vec::new();
-    let src = present(req, "source").and_then(Value::as_object).cloned().unwrap_or_default();
-    match src.get("type").and_then(Value::as_str) {
-        Some("synth") => {
-            let n = src.get("n").map(as_int).transpose()?.unwrap_or(8192);
-            let seed = src.get("seed").map(as_int).transpose()?.unwrap_or(42);
-            args.extend(["--synth".into(), n.to_string(), "--seed".into(), seed.to_string()]);
-        }
-        Some("file") => {
-            let name = src.get("name").and_then(Value::as_str).unwrap_or("record.txt");
-            let name = Path::new(name).file_name().and_then(|s| s.to_str()).unwrap_or("record.txt");
-            let path = workdir.join(name);
-            let content = src.get("content").and_then(Value::as_str).unwrap_or("");
-            std::fs::write(&path, content).map_err(|e| format!("could not write the record: {e}"))?;
-            args.extend(["--input".into(), path.to_string_lossy().into_owned()]);
-        }
-        _ => return Err("source.type must be 'file' or 'synth'".into()),
+    let list = req.get("args").and_then(Value::as_array).ok_or("args must be a list of strings")?;
+    let mut args = Vec::with_capacity(list.len() + 1);
+    for v in list {
+        args.push(v.as_str().ok_or("args must be a list of strings")?.to_owned());
     }
-
-    for (key, flag) in [("kind", "--kind"), ("detrend", "--detrend"), ("grid", "--grid")] {
-        if let Some(v) = present(req, key) {
-            args.extend([flag.into(), as_text(v)]);
-        }
+    let command = args.first().ok_or("args is empty")?;
+    if !COMMANDS.contains(&command.as_str()) {
+        return Err(format!("unknown command {command:?}"));
     }
-    for (key, flag) in [("tau0", "--tau0"), ("scaling", "--scaling")] {
-        if let Some(v) = present(req, key) {
-            args.extend([flag.into(), as_float(v)?.to_string()]);
-        }
+    if args.iter().any(|a| a == "--out" || a.starts_with("--out=")) {
+        return Err("--out is not allowed here".into());
     }
-    for (key, flag) in [
-        ("time_col", "--time-col"),
-        ("value_col", "--value-col"),
-        ("reference_col", "--reference-col"),
-        ("header", "--header"),
-        ("series", "--series"),
-    ] {
-        if let Some(v) = present(req, key) {
-            args.extend([flag.into(), as_int(v)?.to_string()]);
-        }
-    }
-    if let Some(devs) = present(req, "devs").and_then(Value::as_array) {
-        let list: Vec<String> = devs.iter().map(as_text).collect();
-        let joined = list.join(",");
-        args.extend(["--devs".into(), if joined.is_empty() { "none".into() } else { joined }]);
-    }
-    let truthy = |key: &str| present(req, key).map_or(false, |v| v.as_bool().unwrap_or(true));
-    if truthy("fillgaps") {
-        args.push("--fillgaps".into());
-    }
-    if truthy("remove_outliers") {
-        args.push("--remove-outliers".into());
-    }
-    match req.get("confidence") {
-        Some(Value::Null) => args.push("--no-ci".into()),
-        Some(v) => args.extend(["--confidence".into(), as_float(v)?.to_string()]),
-        None => {}
-    }
-    if req.get("bias_correction") == Some(&Value::Bool(false)) {
-        args.push("--no-bias-correction".into());
-    }
-    if truthy("spectrum") {
-        args.push("--spectrum".into());
-    }
-    if let Some(v) = present(req, "nperseg") {
-        args.extend(["--nperseg".into(), as_int(v)?.to_string()]);
-    }
-    if let Some(v) = present(req, "dynamic").filter(|v| v.as_bool() != Some(false)) {
-        args.extend(["--dynamic".into(), as_text(v)]);
-    }
-    for (key, flag) in [("window", "--window"), ("step", "--step")] {
-        if let Some(v) = present(req, key) {
-            args.extend([flag.into(), as_int(v)?.to_string()]);
-        }
+    if let Some(file) = req.get("file").and_then(Value::as_object) {
+        let name = file.get("name").and_then(Value::as_str).unwrap_or("record.txt");
+        let name = Path::new(name).file_name().and_then(|s| s.to_str()).unwrap_or("record.txt");
+        let path = workdir.join(name);
+        let content = file.get("content").and_then(Value::as_str).unwrap_or("");
+        std::fs::write(&path, content).map_err(|e| format!("could not write the record: {e}"))?;
+        args.insert(1, path.to_string_lossy().into_owned());
     }
     Ok(args)
 }
 
 /// Run the core, polling so a cancel or the timeout can stop it.
 fn run_core(core: &Path, args: &[String], id: u64, runs: &Runs) -> Result<Value, String> {
-    let mut child = Command::new(core)
+    let mut cmd = Command::new(core);
+    // The compiled core runs on one thread unless told otherwise; the
+    // total deviations and Thêo1 split their work across all cores.
+    if std::env::var_os("JULIA_NUM_THREADS").is_none() {
+        cmd.env("JULIA_NUM_THREADS", "auto");
+    }
+    let mut child = cmd
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

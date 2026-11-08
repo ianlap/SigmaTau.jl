@@ -34,8 +34,8 @@ plot(suite)                 # log-log σ(τ) with CI error bars
 pkg> add https://github.com/ianlap/SigmaTau.jl
 ```
 
-Julia 1.11 or later. `Plots` is optional and enables the plot recipes; the
-desktop explorer in `app/` has its own environment.
+Julia 1.11 or later. `Plots` is optional and enables the plot recipes. The
+explorer in `app/web/` has its own environment.
 
 ## Estimators
 
@@ -48,14 +48,27 @@ desktop explorer in `app/` has its own environment.
 | Time error | `mtie`, `tierms`, `pdev` |
 | Time-resolved | `dadev`, `dhdev` |
 | Real time | `StreamingStability` (`adev`, `mdev`, `hdev`, `mhdev`) |
-| Multi-clock | `nch` (N-cornered hat) |
-| Spectra and synthesis | `Sy`, `Sx`, `L`, `noise_gen` |
+| Multi-clock | `ncornered_hat` |
+| Spectra and synthesis | `psd_y`, `psd_x`, `ssb_phase_noise`, `noise_gen` |
 
 Every function accepts `PhaseData` or `FrequencyData`, an explicit vector of
 averaging factors or a `TauMode` grid (`Octave`, `Decade`, `AllTaus`, ...).
 `read_phase` / `read_frequency`, `detrend`, `fillgaps` and `remove_outliers`
-cover the usual preprocessing; `save` / `load_result` / `load_suite`
-round-trip results as plain text.
+cover the usual preprocessing; `save` / `load` round-trip records, results
+and suites as plain text. `estimators()` lists the estimators and
+`deviation(:adev, data, m)` runs one chosen by name. The
+[documentation](https://ianlap.github.io/SigmaTau.jl/stable/) has a
+[getting-started tutorial](https://ianlap.github.io/SigmaTau.jl/stable/getting_started/),
+a guide to
+[choosing an estimator](https://ianlap.github.io/SigmaTau.jl/stable/guide/choosing/)
+and the full API reference.
+
+## Python
+
+`python/` holds the `sigmatau` Python package, a juliacall wrapper with the
+same names (`st.adev(pd)`, `st.psd_y(pd)`, `st.deviation("mhtotdev", pd)`).
+Install it from a checkout with `pip install -e "python/[dev]"`; see
+[`python/README.md`](python/README.md).
 
 ## Compared with Stable32 and allantools
 
@@ -76,7 +89,7 @@ five-significant-figure output) and allantools to ≤ 1e-13 relative on the
 shipped fixture; raw total kernels match allantools to ≤ 4.4e-15. Where a
 default differs from a reference (MTOTDEV bias correction, noise-ID
 detrending), the per-τ tables in the
-[validation page](https://ianlap.github.io/SigmaTau.jl/stable/validation/)
+[validation page](https://ianlap.github.io/SigmaTau.jl/stable/explanation/validation/)
 name the switch that reproduces the reference.
 
 Performance: on identical inputs, `adev`/`mdev`/`hdev`/`tdev` run roughly 10
@@ -85,32 +98,36 @@ to 40 times faster than allantools, `totdev` about 70 times, and
 (0.46 s vs 30 min on a 407,000-sample record). The harness, method and both measurements are in
 [`bench/`](bench/README.md).
 
-## Desktop explorer
+## Command line
 
-`app/StabilityExplorer.jl` opens a window for the whole workflow without
-writing code: load a file or synthesize a power-law record, choose
-preprocessing, estimators, τ grid and confidence level, and read the σ_y and
-σ_x curves with χ² intervals, the per-τ table, the S_y, S_x and ℒ(f) spectra,
-and a dynamic σ(t, τ) waterfall. Export writes publication figures (PNG, PDF, SVG),
-the suite as TSV, and the record as text.
+`sigmatau` is a compiled command line over the same code (about 30 ms to
+start, no Julia needed to run it):
 
 ```bash
-julia --project=app -e 'using Pkg; Pkg.instantiate()'   # first run only
-julia --project=app app/StabilityExplorer.jl
+sigmatau analyze clock.dat --devs adev,mdev,tdev            # CSV on stdout
+sigmatau analyze clock.dat --format json --out result.json  # versioned JSON
+sigmatau spectrum clock.dat                                 # S_y(f), S_x(f)
+sigmatau dynamic clock.dat --dev dhdev                      # sliding-window HDEV
 ```
 
-The first launch compiles GLMakie and takes a minute or two.
+Build it from `cli/` with JuliaC; see [the docs page](docs/src/guide/cli.md).
 
-A browser edition with the same analysis and plots serves on
-`http://127.0.0.1:9384`; its controls are native HTML (labelled inputs, a
-real table, a live status region, Tab order), so it works with screen
-readers and browser zoom; it passes an axe-core WCAG 2.1 AA audit:
+## Explorer
+
+`app/web/` is a point-and-click explorer for the whole workflow. You can load a
+file (Stable32 `.DAT`, CSV, TSV or whitespace columns, several clocks per file)
+or synthesize a power-law record. It checks the record for gaps and outliers,
+then plots σ_y and σ_x with χ² intervals, the S_y and S_x spectra, and the
+dynamic σ(t, τ) map. The pages are plain HTML and JavaScript over the compiled
+`sigmatau` command line, which answers in tens of milliseconds.
 
 ```bash
-julia --project=app app/StabilityWeb.jl            # --port=N to change the port
-``` `--fontsize=14`
-(or 16) enlarges every label for projection, `--size=WxH` sets the window,
-and `--smoke` runs the headless self-test that CI-style checks use.
+python3 app/web/serve.py --open          # http://127.0.0.1:9385
+```
+
+[`app/web/README.md`](app/web/README.md) shows how to build the core, and
+[`app/desktop/README.md`](app/desktop/README.md) wraps the same pages in a
+Tauri desktop window.
 
 ## Tests
 

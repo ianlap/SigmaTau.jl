@@ -255,127 +255,220 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return _mtotdev_greenhall(x, m_values, tau0)
 end
 
+# ── Shared machinery for the Greenhall total deviations ──────────────────
+#
+# MTOTDEV, HTOTDEV and MHTOTDEV all take, for each window of L samples, the
+# window minus a fitted ramp (`val`), extend it to [reverse(val); val;
+# reverse(val)], and sum the squares of an m-spaced difference of m-sample
+# box sums over that extension. A box sum is a difference of the cumulative
+# sum E of the extension, and E is piecewise a cumulative sum V of `val`
+# read forward or backward:
+#
+#   E(q) = V(L) − V(L−q)        0  ≤ q ≤ L
+#   E(q) = V(L) + V(q−L)        L  ≤ q ≤ 2L
+#   E(q) = 3V(L) − V(3L−q)      2L ≤ q ≤ 3L
+#
+# with V(k) = W(k) − c·Q(k), W the window's own cumulative sum and Q the
+# ramp's. W comes from a compensated (double-double) prefix sum of the whole
+# record, so each window costs one pass to build V and its reverse and one
+# vectorised pass over the box differences, where the per-sample running box
+# sums this replaces carried a serial dependency through every step. The
+# extension's mirror symmetry halves the second pass.
+
+# `v` minus its least-squares line. MTOTDEV, HTOTDEV and MHTOTDEV are
+# unchanged by adding a line to the phase (the per-window frequency removal
+# takes out its slope and the differences take out the rest), so the
+# kernels work on the residual, which keeps the prefix sums below small.
+function _minus_line(v::Vector{Float64})
+    n = length(v)
+    n < 2 && return copy(v)
+    c = (n + 1) / 2.0
+    sy = 0.0; sty = 0.0
+    @inbounds for i in 1:n
+        sy += v[i]; sty += (i - c) * v[i]
+    end
+    b = sty / (n * (Float64(n)^2 - 1) / 12.0)
+    a = sy / n
+    return Float64[v[i] - (a + b * (i - c)) for i in 1:n]
+end
+
+# Prefix sums S[k+1] = Σ_{i≤k} v[i] as hi + lo (TwoSum compensation), so a
+# window sum S[b] − S[a] keeps full precision on long records.
+function _prefix_dd(v::Vector{Float64})
+    n = length(v)
+    hi = Vector{Float64}(undef, n + 1)
+    lo = Vector{Float64}(undef, n + 1)
+    hi[1] = 0.0; lo[1] = 0.0
+    s = 0.0; c = 0.0
+    @inbounds for i in 1:n
+        a = v[i]
+        t = s + a
+        bp = t - s
+        c += (s - (t - bp)) + (a - bp)
+        s = t
+        hi[i+1] = s; lo[i+1] = c
+    end
+    return hi, lo
+end
+
+# V(k), k = 0..L, into Vb[1..L+1] for the window starting after sample `o`:
+# W(k) = S[o+1+k] − S[o+1], minus c·(k(k−1)/2 − mid·k). The window mean is
+# taken out as well (every statistic here differences it away), which keeps
+# E small next to the differences taken of it when the record has an offset.
+@inline function _fill_window_cumsum!(Vb::Vector{Float64}, hi::Vector{Float64}, lo::Vector{Float64},
+                                      o::Int, L::Int, c::Float64, mid::Float64)
+    h0 = hi[o+1]; l0 = lo[o+1]
+    Lf = Float64(L)
+    mean = (((hi[o+1+L] - h0) + (lo[o+1+L] - l0)) - c * (0.5 * Lf * (Lf - 1.0) - mid * Lf)) / Lf
+    @inbounds @simd for k in 0:L
+        kf = Float64(k)
+        Vb[k+1] = ((hi[o+1+k] - h0) + (lo[o+1+k] - l0)) - (c * (0.5 * kf * (kf - 1.0) - mid * kf) + mean * kf)
+    end
+    return Vb
+end
+
+# The extension's cumulative sum E is never stored. With Vr the reverse of
+# V (Vr[t+1] = V(L−t)), each piece of E is a forward read:
+#
+#   piece 1 (q ≤ L):       E(q) = V(L) − Vr[q+1]
+#   piece 2 (L ≤ q ≤ 2L):  E(q) = V(L) + V[q−L+1]
+#   piece 3 (2L ≤ q):      E(q) = 3V(L) − Vr[q−2L+1]
+#
+# so a box difference Σ_p w_p E(j−1+p·m) over a run of starts j where each
+# term stays in one piece is a unit-stride loop over two arrays.
+@inline _extension_piece(q::Int, L::Int) = q <= L ? 1 : (q <= 2L ? 2 : 3)
+
+# (constant, coefficient, use Vr?, index offset from j) for term p.
+@inline function _extension_term(piece::Int, VL::Float64, L::Int, p::Int, m::Int, w::Float64)
+    piece == 1 && return (w * VL, -w, true, p * m)
+    piece == 2 && return (w * VL, w, false, p * m - L)
+    return (3.0 * w * VL, -w, true, p * m - 2L)
+end
+
+# Σ_{j=ja}^{jb} (Σ_p w_p E(j−1+p·m))² for a run of starts in which no term
+# changes piece (each term's piece is read at jb).
+function _sumsq_box_run(w::NTuple{K,Float64}, Vb::Vector{Float64}, Vr::Vector{Float64},
+                        L::Int, m::Int, ja::Int, jb::Int) where {K}
+    ja > jb && return 0.0
+    VL = Vb[L+1]
+    t = ntuple(p -> _extension_term(_extension_piece(jb - 1 + (p - 1) * m, L), VL, L, p - 1, m, w[p]), Val(K))
+    cst = 0.0
+    for p in 1:K
+        cst += t[p][1]
+    end
+    a = ntuple(p -> t[p][3] ? Vr : Vb, Val(K))
+    c = ntuple(p -> t[p][2], Val(K))
+    o = ntuple(p -> t[p][4], Val(K))
+    s = 0.0
+    @inbounds @simd for j in ja:jb
+        d = cst
+        for p in 1:K
+            d += c[p] * a[p][j+o[p]]
+        end
+        s += d * d
+    end
+    return s
+end
+
+# The same over any run of starts, split where a term crosses a seam.
+function _sumsq_boxes(w::NTuple{K,Float64}, Vb::Vector{Float64}, Vr::Vector{Float64},
+                      L::Int, m::Int, ja::Int, jb::Int) where {K}
+    s = 0.0
+    lo = ja
+    while lo <= jb
+        hi = jb
+        for p in 0:K-1
+            for seam in (L, 2L)
+                jc = seam + 2 - p * m        # first start with q = seam + 1
+                (jc > lo && jc <= hi) && (hi = jc - 1)
+            end
+        end
+        s += _sumsq_box_run(w, Vb, Vr, L, m, lo, hi)
+        lo = hi + 1
+    end
+    return s
+end
+
+# The extension is mirror-symmetric about both seams, so a box difference
+# starting at j and one at its mirror image are equal up to sign. Over a run
+# of starts that the mirror maps onto itself, sum the first half twice and
+# the middle start once.
+function _sumsq_boxes_mirrored(w::NTuple{K,Float64}, Vb::Vector{Float64}, Vr::Vector{Float64},
+                               L::Int, m::Int, ja::Int, jb::Int) where {K}
+    n = jb - ja + 1
+    n <= 0 && return 0.0
+    h = n ÷ 2
+    s = 2.0 * _sumsq_boxes(w, Vb, Vr, L, m, ja, ja + h - 1)
+    isodd(n) && (s += _sumsq_boxes(w, Vb, Vr, L, m, ja + h, ja + h))
+    return s
+end
+
+@inline function _reverse_into!(Vr::Vector{Float64}, Vb::Vector{Float64}, L::Int)
+    @inbounds @simd for t in 0:L
+        Vr[t+1] = Vb[L-t+1]
+    end
+    return Vr
+end
+
+const _W_D2 = (-1.0, 3.0, -3.0, 1.0)          # E(j−1), E(j−1+m), …, E(j−1+3m)
+const _W_D3 = (1.0, -4.0, 6.0, -4.0, 1.0)     # E(j−1), …, E(j−1+4m)
+
+# Run `window_sum(n_lo, n_hi, Vb, Vr)` over `nwin` windows split into
+# per-thread chunks, each with its own V buffers for windows of Lmax samples.
+function _sum_over_windows(window_sum::F, nwin::Int, Lmax::Int) where {F}
+    nchunks = max(1, min(Threads.nthreads(), nwin))
+    chunk_size = cld(nwin, nchunks)
+    chunk_sums = zeros(nchunks)
+    Threads.@threads :dynamic for c in 1:nchunks
+        n_lo = (c - 1) * chunk_size + 1
+        n_hi = min(c * chunk_size, nwin)
+        Vb = Vector{Float64}(undef, Lmax + 1)
+        Vr = Vector{Float64}(undef, Lmax + 1)
+        chunk_sums[c] = n_lo <= n_hi ? window_sum(n_lo, n_hi, Vb, Vr) : 0.0
+    end
+    return sum(chunk_sums)
+end
+
 function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+    # Greenhall 2003: per window of 3m phase samples, remove the half-mean
+    # frequency, extend by reflection, and average the squared second
+    # difference of m-sample means over the 6m positions of the extension.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-
-    # Sequential m-loop, parallel over subsequences. The subsequence list
-    # (length nsubs ≈ N − 3m) is long and uniform; chunking it across
-    # threads gives near-linear speedup per m; parallelism over m instead
-    # gives uneven work per thread and nested @threads overhead. The
-    # reduction order differs from the sequential loop by a few ULP.
-    #
-    # ext-buffer pool: one buffer per chunk slot, sized once for the
-    # largest m. Reused across all m's; cheap m's only touch the first
-    # 3·seg_len entries. Eliminates per-m, per-chunk allocation churn
-    # (was ~600 MB of churn on the 3M-sample file, max_m=2^19).
-    nthreads = Threads.nthreads()
-    max_m = maximum(m_values; init=0)
-    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
-
+    hi, lo = _prefix_dd(_minus_line(x))
     for k in eachindex(m_values)
         m = m_values[k]
         nsubs = N - 3m + 1
-        if nsubs < 1
+        if m < 1 || nsubs < 1
             devs[k] = NaN
             continue
         end
-
-        seg_len = 3m
-        nchunks = max(1, min(nthreads, nsubs))
-        chunk_size = cld(nsubs, nchunks)
-        chunk_sums = zeros(nchunks)
-
-        half_n = seg_len / 2.0
-        hi_half = floor(Int, half_n)
-        lo_half_len = seg_len - hi_half
-        inv_hi = 1.0 / hi_half
-        inv_lo = 1.0 / lo_half_len
-        inv_half_n_tau0 = 1.0 / (half_n * tau0)
-
-        Threads.@threads :dynamic for c in 1:nchunks
-            n_lo = (c - 1) * chunk_size + 1
-            n_hi = min(c * chunk_size, nsubs)
-            ext = ext_pool[c]
-            local_sum = 0.0
-
-            # Seed the running half-window sums for the chunk's first window;
-            # for m ≥ 2 they are then updated in O(1) per n inside the loop
-            # rather than re-summed over each window.
-            s1 = 0.0
-            s2 = 0.0
-            if m >= 2
-                @inbounds @simd for i in 1:hi_half
-                    s1 += x[n_lo - 1 + i]
-                end
-                @inbounds @simd for i in hi_half+1:seg_len
-                    s2 += x[n_lo - 1 + i]
-                end
-            end
-
+        L = 3m
+        # Half-average frequency (Stable32, allantools): the means of the
+        # first and last ⌊3m/2⌋ samples, a distance 3m − ⌊3m/2⌋ apart; for
+        # odd m the middle sample is in neither half.
+        kh = L ÷ 2
+        inv_span = 1.0 / (Float64(kh) * (L - kh))
+        outer = _sum_over_windows(nsubs, L) do n_lo, n_hi, Vb, Vr
+            acc = 0.0
             for n in n_lo:n_hi
-                if m == 1
-                    slope = (x[n+2] - x[n]) / (2.0 * tau0)
-                else
-                    slope = (s2 * inv_lo - s1 * inv_hi) * inv_half_n_tau0
+                o = n - 1
+                c = @inbounds begin
+                    s1 = (hi[o+1+kh] - hi[o+1]) + (lo[o+1+kh] - lo[o+1])
+                    s2 = (hi[o+1+L] - hi[o+1+L-kh]) + (lo[o+1+L] - lo[o+1+L-kh])
+                    (s2 - s1) * inv_span
                 end
-
-                @inbounds for j in 1:seg_len
-                    val = x[n-1+j] - slope * tau0 * (j - 1)
-                    rev_val = x[n-1 + seg_len - j + 1] - slope * tau0 * (seg_len - j)
-
-                    ext[j] = rev_val
-                    ext[seg_len + j] = val
-                    ext[2seg_len + j] = rev_val
-                end
-
-                # Sliding-window inner reduction. a1, a2, a3 are running
-                # sums of m consecutive ext values, equivalent to
-                # cs[j+km+1] - cs[j+(k-1)m+1] from the cumulative-sum
-                # variant. Eliminating cs saves the build pass (9m memory
-                # ops per subseq) and one per-chunk allocation. The carry
-                # chain on a1/a2/a3 prevents @simd vectorisation of the
-                # slide loop, but the savings on cs traffic outweigh the
-                # lost SIMD.
-                a1 = 0.0
-                a2 = 0.0
-                a3 = 0.0
-                @inbounds @simd for i in 1:m
-                    a1 += ext[i]
-                    a2 += ext[i+m]
-                    a3 += ext[i+2m]
-                end
-
-                d2 = (a3 - 2.0*a2 + a1) / m
-                block_sum = d2^2
-
-                @inbounds for j in 1:(6m - 1)
-                    a1 += ext[j+m]  - ext[j]
-                    a2 += ext[j+2m] - ext[j+m]
-                    a3 += ext[j+3m] - ext[j+2m]
-                    d2 = (a3 - 2.0*a2 + a1) / m
-                    block_sum += d2^2
-                end
-                local_sum += block_sum / (6.0 * m)
-
-                # O(1) half-sum update for the next window: drop the head of
-                # each half and pick up the new tail. s1 covers x[n..n+hi_half-1],
-                # s2 covers x[n+hi_half..n+seg_len-1]; shifting by 1 swaps x[n]
-                # out of s1, x[n+hi_half] from s2 into s1, and x[n+seg_len] into s2.
-                if m >= 2 && n < n_hi
-                    @inbounds begin
-                        s1 += x[n + hi_half] - x[n]
-                        s2 += x[n + seg_len] - x[n + hi_half]
-                    end
-                end
+                _fill_window_cumsum!(Vb, hi, lo, o, L, c, 0.0)
+                _reverse_into!(Vr, Vb, L)
+                # Starts 1..3m+1 mirror about the first seam, 3m+2..6m about the second.
+                sq = _sumsq_boxes_mirrored(_W_D2, Vb, Vr, L, m, 1, 3m + 1) +
+                     _sumsq_boxes_mirrored(_W_D2, Vb, Vr, L, m, 3m + 2, 6m)
+                acc += sq / (Float64(m)^2 * 6.0 * m)
             end
-            chunk_sums[c] = local_sum
+            acc
         end
-
-        outer_sum = sum(chunk_sums)
-        devs[k] = sqrt(outer_sum / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
+        devs[k] = sqrt(outer / (2.0 * Float64(m)^2 * tau0^2 * nsubs))
     end
-
     return devs
 end
 
@@ -393,108 +486,60 @@ end
 function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-
-    y = Vector{Float64}(undef, N-1)
-    @inbounds @simd for i in 1:N-1
-        y[i] = (x[i+1] - x[i]) / tau0
-    end
-    Ny = length(y)
-
-    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
-    # rationale, sliding-window inner reduction, and ext-buffer pool.
-    nthreads = Threads.nthreads()
-    max_m = maximum(m_values; init=0)
-    ext_pool = [Vector{Float64}(undef, 3 * 3 * max(max_m, 1)) for _ in 1:nthreads]
-
+    Ny = N - 1
+    # Cumulative sums of y = diff(x)/τ0 are phase differences, so the
+    # window sums need no prefix array: Σ y[i+1..i+k] = (x[i+1+k] − x[i+1])/τ0.
+    # The compensated prefix machinery is shared, so pass x/τ0 as `hi`
+    # and zeros as `lo`; x minus its line, as y's mean drops out too.
+    xs = _minus_line(x) ./ tau0
+    zlo = zeros(N)
     for k in eachindex(m_values)
         m = m_values[k]
         if m == 1
-            L = N - 3
-            if L <= 0
+            L1 = N - 3
+            if L1 <= 0
                 devs[k] = NaN
                 continue
             end
             sum_sq = 0.0
-            @inbounds @simd for i in 1:L
+            @inbounds @simd for i in 1:L1
                 d3 = x[i+3] - 3.0*x[i+2] + 3.0*x[i+1] - x[i]
                 sum_sq += d3^2
             end
-            devs[k] = sqrt(sum_sq / (6.0 * L * tau0^2))
+            devs[k] = sqrt(sum_sq / (6.0 * L1 * tau0^2))
             continue
         end
-
         n_iter = Ny - 3m + 1
-        if n_iter < 1
+        if m < 1 || n_iter < 1
             devs[k] = NaN
             continue
         end
-
-        seg_len = 3m
-        nchunks = max(1, min(nthreads, n_iter))
-        chunk_size = cld(n_iter, nchunks)
-        chunk_sums = zeros(nchunks)
-
-        Threads.@threads :dynamic for c in 1:nchunks
-            i_lo = (c - 1) * chunk_size
-            i_hi = min(c * chunk_size, n_iter) - 1
-            ext = ext_pool[c]
-            local_sum = 0.0
-            for i in i_lo:i_hi
-                hi = floor(Int, seg_len / 2)
-                lo_start = ceil(Int, seg_len / 2) + 1
-
-                s1 = 0.0
-                @inbounds @simd for j in 1:hi
-                    s1 += y[i+j]
+        L = 3m
+        hi_half = L ÷ 2
+        lo_start = cld(L, 2) + 1
+        nlo = L - lo_start + 1
+        denom = isodd(L) ? 0.5 * (L - 1) + 1.0 : 0.5 * L
+        mid = Float64(L ÷ 2)
+        total = _sum_over_windows(n_iter, L) do n_lo, n_hi, Vb, Vr
+            acc = 0.0
+            for n in n_lo:n_hi
+                i = n - 1                       # window y[i+1 .. i+L]
+                @inbounds begin
+                    m1 = (xs[i+1+hi_half] - xs[i+1]) / hi_half
+                    m2 = (xs[i+1+L] - xs[i+lo_start]) / nlo
                 end
-                m1 = s1 / hi
-
-                s2 = 0.0
-                @inbounds @simd for j in lo_start:seg_len
-                    s2 += y[i+j]
-                end
-                m2 = s2 / (seg_len - lo_start + 1)
-
-                slope = isodd(seg_len) ? (m2 - m1) / (0.5*(seg_len - 1) + 1.0) : (m2 - m1) / (0.5*seg_len)
-                mid = floor(seg_len / 2)
-
-                @inbounds for j in 1:seg_len
-                    val = y[i+j] - slope * (j - 1 - mid)
-                    rev_val = y[i + seg_len - j + 1] - slope * (seg_len - j - mid)
-
-                    ext[j] = rev_val
-                    ext[seg_len + j] = val
-                    ext[2seg_len + j] = rev_val
-                end
-
-                a1 = 0.0
-                a2 = 0.0
-                a3 = 0.0
-                @inbounds @simd for j in 1:m
-                    a1 += ext[j]
-                    a2 += ext[j+m]
-                    a3 += ext[j+2m]
-                end
-
-                d3 = (a3 - 2.0*a2 + a1) / m
-                sq = d3^2
-
-                @inbounds for j in 1:(6m - 1)
-                    a1 += ext[j+m]  - ext[j]
-                    a2 += ext[j+2m] - ext[j+m]
-                    a3 += ext[j+3m] - ext[j+2m]
-                    d3 = (a3 - 2.0*a2 + a1) / m
-                    sq += d3^2
-                end
-                local_sum += sq / (6.0 * m)
+                slope = (m2 - m1) / denom
+                _fill_window_cumsum!(Vb, xs, zlo, i, L, slope, mid)
+                _reverse_into!(Vr, Vb, L)
+                # Starts 1..3m+1 mirror about the first seam, 3m+2..6m about the second.
+                sq = _sumsq_boxes_mirrored(_W_D2, Vb, Vr, L, m, 1, 3m + 1) +
+                     _sumsq_boxes_mirrored(_W_D2, Vb, Vr, L, m, 3m + 2, 6m)
+                acc += sq / (Float64(m)^2 * 6.0 * m)
             end
-            chunk_sums[c] = local_sum
+            acc
         end
-
-        dev_sum = sum(chunk_sums)
-        devs[k] = sqrt(dev_sum / (6.0 * n_iter))
+        devs[k] = sqrt(total / (6.0 * n_iter))
     end
-
     return devs
 end
 
@@ -535,131 +580,83 @@ function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64
 end
 
 function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Per-window quadratic LS detrend + per-window time-reverse extension
-    # + averaged third-difference operator.
+    # Per window of 4m phase samples: least-squares quadratic removal,
+    # reflection extension, and the squared m-sample box sum of the third
+    # difference at each of the 8m + 1 positions of the extension.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-
-    # See `_mtotdev_greenhall` for the sequential-outer / parallel-inner
-    # rationale, sliding-window inner reduction, and buffer pool.
-    nthreads = Threads.nthreads()
-    max_m = maximum(m_values; init=0)
-    max_Lp = 4 * max(max_m, 1)
-    max_L3 = 3 * max_Lp - 3 * max(max_m, 1)
-    ext_pool = [Vector{Float64}(undef, 3 * max_Lp) for _ in 1:nthreads]
-    d3_pool  = [Vector{Float64}(undef, max_L3)     for _ in 1:nthreads]
-    det_pool = [Vector{Float64}(undef, max_Lp)     for _ in 1:nthreads]
-
+    r = _minus_line(x)          # a line is absorbed by every window's quadratic
+    hi, lo = _prefix_dd(r)
     for k in eachindex(m_values)
         m = m_values[k]
-        if m < 1
-            devs[k] = NaN
-            continue
-        end
         nsubs = N - 4m + 1
-        if nsubs < 1
+        if m < 1 || nsubs < 1
             devs[k] = NaN
             continue
         end
-
-        Lp = 4m
-        L3 = 3Lp - 3m
-
-        # Orthogonal quadratic basis on the fixed grid t = 0..Lp−1, computed
-        # once per m: p0 = 1, p1 = t − t̄, p2 = p1² − ⟨p1²⟩/Lp. Orthogonality
-        # (⟨p1,p2⟩ = 0 by grid symmetry) turns the per-window LS fit into
-        # three independent dot products — no normal-equations solve, and no
-        # conditioning loss at large Lp. τ0 cancels in the fitted values.
-        tbar = (Lp - 1) / 2.0
-        p1 = Vector{Float64}(undef, Lp)
-        p2 = Vector{Float64}(undef, Lp)
-        s11 = 0.0
-        @inbounds for j in 1:Lp
-            p1[j] = (j - 1) - tbar
-            s11 += p1[j]^2
-        end
-        c2 = s11 / Lp
-        s22 = 0.0
-        @inbounds for j in 1:Lp
-            p2[j] = p1[j]^2 - c2
-            s22 += p2[j]^2
-        end
-
-        nchunks = max(1, min(nthreads, nsubs))
-        chunk_size = cld(nsubs, nchunks)
-        chunk_sums = zeros(nchunks)
-
-        # `let`-rebind everything the threaded closure reads. These names are
-        # reassigned on each `m` iteration, so capturing them directly makes
-        # Julia box them — and `p1`/`p2`/`s11`/`s22` are read in the innermost
-        # loop, where a boxed access costs a dynamic dispatch per element (~55×
-        # on the whole kernel, measured at N = 8192). The fresh bindings below
-        # are never reassigned, so they are captured by value and stay typed.
-        # Arithmetic is untouched: results are bit-identical.
-        let p1 = p1, p2 = p2, s11 = s11, s22 = s22, m = m, Lp = Lp, L3 = L3,
-            nsubs = nsubs, chunk_size = chunk_size, x = x,
-            ext_pool = ext_pool, d3_pool = d3_pool, det_pool = det_pool,
-            chunk_sums = chunk_sums
-        Threads.@threads :dynamic for c in 1:nchunks
-            n_lo = (c - 1) * chunk_size + 1
-            n_hi = min(c * chunk_size, nsubs)
-            ext = ext_pool[c]
-            d3_vec = d3_pool[c]
-            det = det_pool[c]
-            local_sum = 0.0
+        L = 4m
+        n_avg = 8m + 1
+        p1, p2, P1, P2, s11, s22 = _quad_basis(L)
+        total = _sum_over_windows(nsubs, L) do n_lo, n_hi, Vb, Vr
+            acc = 0.0
             for n in n_lo:n_hi
-                s0 = 0.0; s1p = 0.0; s2p = 0.0
-                @inbounds @simd for j in 1:Lp
-                    w = x[n-1+j]
-                    s0  += w
-                    s1p += w * p1[j]
-                    s2p += w * p2[j]
-                end
-                a0 = s0 / Lp
-                a1 = s1p / s11
-                a2 = s2p / s22
-
-                @inbounds for j in 1:Lp
-                    det[j] = x[n-1+j] - (a0 + a1 * p1[j] + a2 * p2[j])
-                end
-                @inbounds for j in 1:Lp
-                    ext[j]       = det[Lp - j + 1]
-                    ext[Lp + j]  = det[j]
-                    ext[2Lp + j] = det[Lp - j + 1]
-                end
-
-                @inbounds for j in 1:L3
-                    d3_vec[j] = ext[j] - 3.0*ext[j+m] + 3.0*ext[j+2m] - ext[j+3m]
-                end
-
-                n_avg = L3 + 1 - m
-                if n_avg > 0
-                    A = 0.0
-                    @inbounds @simd for j in 1:m
-                        A += d3_vec[j]
-                    end
-                    block_var = A^2
-
-                    @inbounds for j in 1:(n_avg - 1)
-                        A += d3_vec[j+m] - d3_vec[j]
-                        block_var += A^2
-                    end
-                    block_var /= (n_avg * 6.0 * Float64(m)^2)
-                else
-                    block_var = 0.0
-                end
-
-                local_sum += block_var
+                o = n - 1
+                _fill_window_cumsum_quad!(Vb, hi, lo, r, o, L, p1, p2, P1, P2, s11, s22)
+                _reverse_into!(Vr, Vb, L)
+                # Starts 1..4m+1 and 4m+2..8m mirror onto themselves; 8m+1 is the
+                # mirror of 4m+1 across the second seam but is taken as is.
+                sq = _sumsq_boxes_mirrored(_W_D3, Vb, Vr, L, m, 1, 4m + 1) +
+                     _sumsq_boxes_mirrored(_W_D3, Vb, Vr, L, m, 4m + 2, 8m) +
+                     _sumsq_boxes(_W_D3, Vb, Vr, L, m, 8m + 1, 8m + 1)
+                acc += sq / (n_avg * 6.0 * Float64(m)^2)
             end
-            chunk_sums[c] = local_sum
+            acc
         end
-        end     # let
-
-        total_sum = sum(chunk_sums)
-        devs[k] = sqrt(total_sum / (nsubs * Float64(m)^2 * tau0^2))
+        devs[k] = sqrt(total / (nsubs * Float64(m)^2 * tau0^2))
     end
-
     return devs
+end
+
+# Orthogonal quadratic basis on the window grid t = 0..L−1: p1 = t − t̄ and
+# p2 = p1² − ⟨p1²⟩, with their cumulative sums P1, P2 (P[k+1] = Σ_{j≤k} p[j])
+# and norms. Orthogonality turns each window's least-squares fit into three
+# independent dot products.
+function _quad_basis(L::Int)
+    tbar = (L - 1) / 2.0
+    p1 = Float64[(j - 1) - tbar for j in 1:L]
+    s11 = sum(abs2, p1)
+    c2 = s11 / L
+    p2 = Float64[p1[j]^2 - c2 for j in 1:L]
+    s22 = sum(abs2, p2)
+    P1 = zeros(L + 1); P2 = zeros(L + 1)
+    for j in 1:L
+        P1[j+1] = P1[j] + p1[j]
+        P2[j+1] = P2[j] + p2[j]
+    end
+    return p1, p2, P1, P2, s11, s22
+end
+
+# V(k), k = 0..L, for the window starting after sample `o`: the cumulative
+# sum of the window minus its least-squares quadratic a0 + a1·p1 + a2·p2.
+@inline function _fill_window_cumsum_quad!(Vb::Vector{Float64}, hi::Vector{Float64}, lo::Vector{Float64},
+                                           r::Vector{Float64}, o::Int, L::Int,
+                                           p1::Vector{Float64}, p2::Vector{Float64},
+                                           P1::Vector{Float64}, P2::Vector{Float64},
+                                           s11::Float64, s22::Float64)
+    s1 = 0.0; s2 = 0.0
+    @inbounds @simd for j in 1:L
+        w = r[o+j]
+        s1 += w * p1[j]
+        s2 += w * p2[j]
+    end
+    h0 = hi[o+1]; l0 = lo[o+1]
+    a0 = ((hi[o+1+L] - h0) + (lo[o+1+L] - l0)) / L
+    a1 = s1 / s11
+    a2 = s2 / s22
+    @inbounds @simd for k in 0:L
+        Vb[k+1] = ((hi[o+1+k] - h0) + (lo[o+1+k] - l0)) - (a0 * Float64(k) + a1 * P1[k+1] + a2 * P2[k+1])
+    end
+    return Vb
 end
 
 
@@ -920,28 +917,55 @@ processed in parallel across threads.
 """
 function _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     devs = Vector{Float64}(undef, length(m_values))
+    # Thêo1 is unchanged by a phase offset. Measuring from the first sample
+    # (exact for nearby values) keeps the pair sums small next to their
+    # differences on records with a large offset.
+    x1 = isempty(x) ? 0.0 : x[1]
+    xr = x .- x1
     Threads.@threads :dynamic for k in eachindex(m_values)
-        devs[k] = _theo1_dev_at(x, m_values[k], tau0)
+        devs[k] = _theo1_dev_at(xr, m_values[k], tau0)
     end
     return devs
 end
 
 # Single-m Thêo1 deviation; NaN for odd m or m outside [2, N−1].
+#
+# Each term is (x_i + x_{i+m}) − (x_{c−δ} + x_{c+δ}) with c = i + m/2, so the
+# pair sum A_i = x_i + x_{i+m} is formed once per m, and two δ are taken per
+# pass over i, which reads 2.5 samples per term instead of 4.
 function _theo1_dev_at(x::Vector{Float64}, m::Int, tau0::Float64)
     N = length(x)
     (m < 2 || isodd(m) || m > N - 1) && return NaN
 
     half = m ÷ 2
     L = N - m
+    A = Vector{Float64}(undef, L)
+    @inbounds @simd for i in 1:L
+        A[i] = x[i] + x[i + m]
+    end
     total = 0.0
-    @inbounds for delta in 0:(half - 1)
-        w = 1.0 / (half - delta)
-        s = 0.0
+    delta = 0
+    @inbounds while delta + 1 <= half - 1
+        s0 = 0.0
+        s1 = 0.0
         @simd for i in 1:L
-            d = x[i] - x[i - delta + half] + x[i + m] - x[i + delta + half]
-            s += d * d
+            c = i + half
+            d0 = A[i] - (x[c - delta] + x[c + delta])
+            d1 = A[i] - (x[c - delta - 1] + x[c + delta + 1])
+            s0 += d0 * d0
+            s1 += d1 * d1
         end
-        total += w * s
+        total += s0 / (half - delta) + s1 / (half - delta - 1)
+        delta += 2
+    end
+    @inbounds if delta <= half - 1
+        s0 = 0.0
+        @simd for i in 1:L
+            c = i + half
+            d0 = A[i] - (x[c - delta] + x[c + delta])
+            s0 += d0 * d0
+        end
+        total += s0 / (half - delta)
     end
 
     return sqrt(total / (0.75 * L * (m * tau0)^2))
@@ -964,8 +988,13 @@ function _avar_var_at(x::Vector{Float64}, m::Int, tau0::Float64)
     return s / (2.0 * L * (m * tau0)^2)
 end
 
+# Thêo1 factors the fast ThêoBR ratio computes exactly: the first
+# _THEOBR_DENSE of the ladder and _THEOBR_SAMPLES spread over the rest.
+const _THEOBR_DENSE = 16
+const _THEOBR_SAMPLES = 32
+
 """
-    _theobr_ratio(x::Vector{Float64}, tau0::Float64) → Float64
+    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false) → Float64
 
 ThêoBR automatic bias-removal factor per NIST SP1065 (Riley 2008)
 §5.2.16 eq. 33: the average over `i = 0…n`, `n = ⌊N/6 − 3⌋`, of the
@@ -975,23 +1004,60 @@ so each term is an AVAR/Theo1 comparison at matched averaging time.
 Multiply a Thêo1 *variance* by this factor (a deviation by its square
 root) to get the bias-removed ThêoBR estimate.
 
+The exact average needs Thêo1 at every one of the ~N/6 factors, which is
+O(N³) work (minutes at N = 65 536). Unless `exact=true` or the ladder is
+short, this computes AVAR at every factor but Thêo1 only at the first 16
+and at 32 evenly spaced along the rest, interpolating the
+Thêo1 variance between them linearly in log m–log σ² (exact for a power
+law). Against the exact ratio on simulated power-law noises (α = +2…−2,
+N = 8192 and 16 384) this stays within 0.5 % (0.25 % on the deviation),
+far inside ThêoBR's own confidence interval, at about 1 s for N = 65 536
+on four threads. This is a fast ThêoBR in the spirit of Taylor & Howe
+(2010); their block-averaging form was tried and rejected here because it
+moved the ratio by 10–40 % for the PM noises.
+
 Ratio terms whose AVAR has no analysis window (eq. 33's ladder reaches
 m ≈ N/2, where `N − 2m < 1` for some record lengths) or whose Thêo1 is
 not finite/positive are skipped and the average is taken over the
 computable terms. Returns NaN when no term is computable (`N < 19`).
 """
-function _theobr_ratio(x::Vector{Float64}, tau0::Float64)
+function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false)
     N = length(x)
     n = N ÷ 6 - 3
     n < 0 && return NaN
 
-    theo_devs = _theo1_core(x, [12 + 4i for i in 0:n], tau0)
+    # Factors i at which Thêo1 is computed: all of them, or the first 16
+    # plus evenly spaced samples (always including the last).
+    idx = if exact || n + 1 <= _THEOBR_DENSE + _THEOBR_SAMPLES
+        collect(0:n)
+    else
+        sort!(unique!(vcat(collect(0:_THEOBR_DENSE-1),
+                           round.(Int, range(0, n; length=_THEOBR_SAMPLES)))))
+    end
+    tvars = _theo1_core(x, [12 + 4i for i in idx], tau0) .^ 2
+    ok = [isfinite(t) && t > 0 for t in tvars]
+
+    avars = Vector{Float64}(undef, n + 1)
+    Threads.@threads :dynamic for i in 0:n
+        avars[i+1] = _avar_var_at(x, 9 + 3i, tau0)
+    end
 
     total = 0.0
     cnt = 0
+    j = 1                                  # idx[j] ≤ i < idx[j+1]
     for i in 0:n
-        avar = _avar_var_at(x, 9 + 3i, tau0)
-        tvar = theo_devs[i + 1]^2
+        while j < length(idx) && idx[j+1] <= i
+            j += 1
+        end
+        tvar = if idx[j] == i
+            ok[j] ? tvars[j] : NaN
+        elseif j < length(idx) && ok[j] && ok[j+1]
+            l0 = log(12.0 + 4idx[j]); l1 = log(12.0 + 4idx[j+1])
+            exp(log(tvars[j]) + (log(tvars[j+1]) - log(tvars[j])) * (log(12.0 + 4i) - l0) / (l1 - l0))
+        else
+            NaN
+        end
+        avar = avars[i+1]
         if isfinite(avar) && isfinite(tvar) && tvar > 0
             total += avar / tvar
             cnt += 1

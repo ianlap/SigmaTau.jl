@@ -255,7 +255,7 @@ const LK = ReferenceKernels
     end
 
     @testset "FrequencyData ↔ PhaseData equivalence" begin
-        # adev(FrequencyData(y, τ₀)) must equal adev(PhaseData(cumsum(y)·τ₀, τ₀)).
+        # adev(FrequencyData(y, τ₀)) must equal adev(PhaseData([0; cumsum(y)]·τ₀, τ₀)).
         # Spot-checked on adev (Allan family) and hdev (Hadamard family).
         using Random
         Random.seed!(7)
@@ -263,7 +263,7 @@ const LK = ReferenceKernels
         tau0 = 1.0
         y = randn(200) .* 1e-9          # fractional frequency
         fd = FrequencyData(y, tau0)
-        pd_equiv = PhaseData(cumsum(y) .* tau0, tau0)
+        pd_equiv = PhaseData([0.0; cumsum(y)] .* tau0, tau0)
 
         m_values_eq = [1, 2, 4, 8]
 
@@ -765,7 +765,7 @@ const LK = ReferenceKernels
         Random.seed!(20260509)
         y = randn(100) .* 1e-9
         fd = FrequencyData(y, 1.0)
-        pd_eq = PhaseData(cumsum(y) .* 1.0, 1.0)
+        pd_eq = PhaseData([0.0; cumsum(y)] .* 1.0, 1.0)
         @test mtie(fd, [1, 2, 4]).dev ≈ mtie(pd_eq, [1, 2, 4]).dev
     end
 
@@ -856,7 +856,7 @@ const LK = ReferenceKernels
         Random.seed!(20260509)
         y = randn(200) .* 1e-9
         fd = FrequencyData(y, 1.0)
-        pd_eq = PhaseData(cumsum(y) .* 1.0, 1.0)
+        pd_eq = PhaseData([0.0; cumsum(y)] .* 1.0, 1.0)
         @test pdev(fd, [1, 2, 4]).dev ≈ pdev(pd_eq, [1, 2, 4]).dev
     end
 
@@ -945,6 +945,33 @@ const LK = ReferenceKernels
         @test identify_noise(fill(3.0, 256), [1, 2, 4]) == fill(:WHFM, 3)
         short = cumsum(randn(rng, 40))
         @test all(in(known), identify_noise(short, [1, 2, 4, 8, 13]))
+    end
+
+    @testset "noise-ID B1 length (b1_length)" begin
+        # Long-τ points (N/m < NEFF_RELIABLE) go through the B1 fallback.
+        # `b1_length=:averaged` evaluates B1 theory at the averaged-point
+        # count and finds random-walk FM far more often than the
+        # Stable32-compatible default `:record`.
+        rng = MersenneTwister(20261108)
+        ms = [40, 64, 128]
+        hits = Dict(:record => 0, :averaged => 0)
+        trials = 60
+        for _ in 1:trials
+            x = _gen_powerlaw_phase(-2, 1024; rng=rng)
+            for mode in (:record, :averaged)
+                hits[mode] += count(==(:RWFM), identify_noise(x, ms; b1_length=mode))
+            end
+        end
+        total = trials * length(ms)
+        @test hits[:averaged] / total > 0.4
+        @test hits[:averaged] > 4 * hits[:record]
+        # Default is :record, and the lag-1 ACF path (N/m ≥ 30) ignores it.
+        x = _gen_powerlaw_phase(0, 1024; rng=rng)
+        @test identify_noise(x, ms) == identify_noise(x, ms; b1_length=:record)
+        @test identify_noise(x, [1, 4, 16]; b1_length=:averaged) == identify_noise(x, [1, 4, 16])
+        @test identify_noise(PhaseData(x, 1.0), ms; b1_length=:averaged) ==
+              identify_noise(x, ms; b1_length=:averaged)
+        @test_throws ArgumentError identify_noise(x, ms; b1_length=:bogus)
     end
 
     @testset "noise-ID Stable32-fixture cross-check vs allantools" begin
@@ -1141,9 +1168,9 @@ const LK = ReferenceKernels
                 r_explicit = fn(p, ms; ci = false)
                 @test r_default.tau == r_explicit.tau
                 @test r_default.dev == r_explicit.dev
-                # FrequencyData entry point resolves to its own default m-grid
-                # (computed from length(f.y) = N-1, not N).
-                ms_f = SigmaTau._default_m_values(length(f.y), kernel)
+                # FrequencyData entry point resolves its default m-grid from the
+                # length(f.y) + 1 phase points it integrates to.
+                ms_f = SigmaTau._default_m_values(length(f.y) + 1, kernel)
                 r_default_f = fn(f; ci = false)
                 @test r_default_f.tau == ms_f .* tau0
             end
@@ -1180,29 +1207,32 @@ const LK = ReferenceKernels
             @test length(fd.y) == length(x) - 1
         end
 
-        @testset "round-trip identities (modulo the lost offset/sample)" begin
+        @testset "round-trip identities (modulo the phase offset)" begin
             Random.seed!(31)
             τ₀ = 1.0
-            # Frequency → phase → frequency drops the first sample.
+            # Frequency → phase → frequency is the identity: N samples give
+            # N + 1 phase points starting at 0 (SP1065, Stable32, allantools).
             y  = randn(64)
             fd = FrequencyData(y, τ₀)
-            fd2 = SigmaTau._phase_to_freq(SigmaTau._freq_to_phase(fd))
-            @test length(fd2.y) == length(y) - 1
-            @test fd2.y ≈ y[2:end]
-            # Phase → frequency → phase recovers x[2:end] − x[1].
+            pd1 = SigmaTau._freq_to_phase(fd)
+            @test length(pd1.x) == length(y) + 1
+            @test pd1.x[1] == 0.0
+            fd2 = SigmaTau._phase_to_freq(pd1)
+            @test fd2.y ≈ y
+            # Phase → frequency → phase recovers x − x[1].
             x   = cumsum(randn(64))
             pd  = PhaseData(x, τ₀)
             pd2 = SigmaTau._freq_to_phase(SigmaTau._phase_to_freq(pd))
-            @test length(pd2.x) == length(x) - 1
-            @test pd2.x ≈ x[2:end] .- x[1]
+            @test length(pd2.x) == length(x)
+            @test pd2.x ≈ x .- x[1]
         end
 
         @testset "deviation equivalence: adev/mdev/hdev agree on either domain" begin
             # Build a synthetic WFM phase record, compute ADEV/MDEV/HDEV via
             # the phase path and via the frequency path (after _phase_to_freq).
-            # Second- and third-difference kernels are shift-invariant so the
-            # lost initial sample is the only source of disagreement; with
-            # N=4096 the σ values agree to well within rtol=5e-3.
+            # Second- and third-difference kernels are shift-invariant and the
+            # conversion is lossless up to the offset, so both paths agree to
+            # rounding.
             Random.seed!(2026)
             τ₀ = 1.0
             p_full = PhaseData(_gen_powerlaw_phase(0.0, 4096; tau0=τ₀), τ₀)
@@ -1213,7 +1243,7 @@ const LK = ReferenceKernels
                 r_phase = fn(p_full,  ms; ci = false)
                 r_freq  = fn(f_diff,  ms; ci = false)
                 @test r_freq.tau == r_phase.tau
-                @test isapprox(r_freq.dev, r_phase.dev; rtol = 5e-3)
+                @test isapprox(r_freq.dev, r_phase.dev; rtol = 1e-10)
             end
         end
     end
@@ -1277,7 +1307,7 @@ const LK = ReferenceKernels
             # Welch estimate of S_y(f)/(h f^α) well below Nyquist, every α.
             for α in (2, 1, 0, -1, -2)
                 p  = noise_gen(FrequencyData, N, τ0; h = Dict(α => h), rng = Xoshiro(7))
-                sy = Sy(p)
+                sy = psd_y(p)
                 keep = (sy.freq .> 0.003 / τ0) .& (sy.freq .< 0.03 / τ0)
                 ratio = median(sy.psd[keep] ./ (h .* sy.freq[keep] .^ α))
                 @test isapprox(ratio, 1.0; rtol = 0.15)
@@ -1353,4 +1383,7 @@ include("tierms.jl")
 include("nch.jl")
 include("dynamic.jl")
 include("streaming.jl")
+include("api_inputs.jl")
+include("registry.jl")
+include("deprecated.jl")
 include("nnls_noise_id.jl")

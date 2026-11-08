@@ -140,6 +140,21 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         @test isnan(rshort.dev[1])
     end
 
+    @testset "fast ThêoBR ratio against the exact ladder" begin
+        # The ratio computes Thêo1 at a sample of the eq. 33 ladder and
+        # interpolates the rest; it stays within 0.5 % of the full average.
+        for alpha in (2, 1, 0, -1, -2)
+            p = noise_gen(PhaseData, 3000, 1.0; sigma1 = Dict(alpha => 1e-12),
+                          rng = MersenneTwister(50 + alpha))
+            x = _f64(p.x)
+            @test _theobr_ratio(x, 1.0) ≈ _theobr_ratio(x, 1.0; exact=true) rtol = 5e-3
+        end
+        # Short ladders are computed in full.
+        x = _f64(noise_gen(PhaseData, 200, 1.0; sigma1 = Dict(0 => 1e-12),
+                           rng = MersenneTwister(1)).x)
+        @test _theobr_ratio(x, 1.0) == _theobr_ratio(x, 1.0; exact=true)
+    end
+
     @testset "ThêoH assembly and crossover continuity" begin
         Random.seed!(42)
         N = 4096
@@ -214,7 +229,7 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         Random.seed!(5)
         p = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12))
         fd = FrequencyData(diff(p.x) ./ 1.0, 1.0)
-        pd_eq = PhaseData(cumsum(diff(p.x)), 1.0)
+        pd_eq = PhaseData([0.0; cumsum(diff(p.x))], 1.0)
 
         # FrequencyData round-trips through _freq_to_phase.
         a = theo1(fd, [4, 8]; ci=false)

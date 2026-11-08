@@ -1,5 +1,5 @@
 """Figures for SigmaTau.jl. All data come from the repository:
-  data/validation.json   <- docs/src/validation.md (SigmaTau, Stable32, allantools per tau)
+  data/validation.json   <- docs/src/explanation/validation.md (SigmaTau, Stable32, allantools per tau)
   tools/artifacts/mhtotdev_mc_full.json  <- Monte Carlo fits
   bench/README.md        <- recorded timings (typed in below, verbatim)
   test/fixtures/validation/stable32gen.DAT  <- the 8192-point fixture (numpy port, stab_np.py)

@@ -1,0 +1,57 @@
+name: Cross-check
+
+# Regenerates the allantools / scipy reference tables from the committed phase
+# records with a live allantools install, then runs the reference cross-check
+# test group (test/validation/) against those fresh tables. The committed
+# tables in test/fixtures/validation/allantools/ keep the group runnable
+# offline; this job catches drift in either library.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  crosscheck:
+    name: allantools + Stable32 cross-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install allantools
+        run: python -m pip install allantools==2024.6 scipy numpy
+      - name: Regenerate reference tables
+        run: python tools/validation/gen_allantools.py --out "$RUNNER_TEMP/allantools"
+      - name: Compare with the committed tables
+        # Informational: a changed table means allantools or scipy moved.
+        run: |
+          for f in devs edf ci noiseid welch dynamic; do
+            if ! cmp -s "test/fixtures/validation/allantools/$f.csv" "$RUNNER_TEMP/allantools/$f.csv"; then
+              echo "::notice::$f.csv differs from the committed table"
+            fi
+          done
+          cat "$RUNNER_TEMP/allantools/VERSION"
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Cross-check test group
+        env:
+          SIGMATAU_ALLANTOOLS_DIR: ${{ runner.temp }}/allantools
+        run: julia --project=. -e 'using Test; include("test/validation/runtests.jl")'
+      - name: Report
+        if: always()
+        env:
+          SIGMATAU_ALLANTOOLS_DIR: ${{ runner.temp }}/allantools
+        run: |
+          julia --project=. tools/validation/report.jl "$RUNNER_TEMP/REPORT.md"
+          cat "$RUNNER_TEMP/REPORT.md" >> "$GITHUB_STEP_SUMMARY"

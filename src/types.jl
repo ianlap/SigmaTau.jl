@@ -8,9 +8,20 @@ abstract type AbstractTimingData end
 
 
 """
-    PhaseData{T<:AbstractFloat}
+    PhaseData(x, tau0=1.0; source="user")
 
-Phase residuals `x(t)` sampled at uniform interval `tau0` (default `1.0` s).
+Phase residuals `x(t)` in seconds, sampled at uniform interval `tau0` (default
+`1.0` s). This is the record every estimator takes: wrap a vector once and the
+sample interval travels with the data. `x` can be any real vector (a view, a
+range, integers); it is copied to a `Vector` of floats. `NaN` marks a missing
+sample (see [`fillgaps`](@ref)). `length(data)` is the number of samples.
+
+```julia
+p = PhaseData(x, 1.0)          # x in seconds, τ₀ = 1 s
+adev(p)
+```
+
+[`read_phase`](@ref) builds one from a file.
 
 $(TYPEDFIELDS)
 """
@@ -33,11 +44,26 @@ struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
     end
 end
 
+# Any real vector (a view, a range, integers): copied into a `Vector` of its
+# float type, so `PhaseData(view(x, 1:100), 1.0)` and `PhaseData(1:10)` work.
+PhaseData(x::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user") =
+    PhaseData(Vector{float(eltype(x))}(x), tau0; source=source)
+
 
 """
-    FrequencyData{T<:AbstractFloat}
+    FrequencyData(y, tau0=1.0; source="user")
 
-Fractional-frequency samples `y(t)` at uniform interval `tau0` (default `1.0` s).
+Fractional-frequency samples `y(t)` (dimensionless) at uniform interval `tau0`
+(default `1.0` s). Every estimator accepts it and integrates it to phase,
+`x = τ₀ · cumsum(y)`, before the analysis. Like [`PhaseData`](@ref) it
+takes any real vector and supports `length`.
+
+```julia
+f = FrequencyData(y, 10.0)     # one reading every 10 s
+mdev(f)
+```
+
+[`read_frequency`](@ref) builds one from a file.
 
 $(TYPEDFIELDS)
 """
@@ -59,6 +85,17 @@ struct FrequencyData{T<:AbstractFloat} <: AbstractTimingData
         return new{T}(y, Float64(tau0), String(source))
     end
 end
+
+FrequencyData(y::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user") =
+    FrequencyData(Vector{float(eltype(y))}(y), tau0; source=source)
+
+"""
+    length(data::PhaseData) / length(data::FrequencyData) → Int
+
+Number of samples in the record.
+"""
+Base.length(p::PhaseData) = length(p.x)
+Base.length(f::FrequencyData) = length(f.y)
 
 # Compact one-line displays for the data records: sample count, τ₀, and the
 # provenance only when it is not the "user" default. Full-vector dumps would
@@ -107,7 +144,17 @@ struct StabilityResult
     edf::Vector{Float64}
     "Number of analysis windows averaged at each τ (0 where the kernel returns NaN)."
     neff::Vector{Int}
+    "Sample interval τ₀ of the record, in seconds (`NaN` if unknown)."
+    tau0::Float64
+    "Number of samples in the record (0 if unknown)."
+    n::Int
+    "Confidence level of `ci` (`NaN` when no intervals were computed)."
+    confidence::Float64
 end
+
+# Results built without the record metadata (older files, hand-made results).
+StabilityResult(deviation_type::Symbol, tau, dev, noise_type, ci, edf, neff) =
+    StabilityResult(deviation_type, tau, dev, noise_type, ci, edf, neff, NaN, 0, NaN)
 
 # Element type of `StabilityResult.ci`.
 const _CIBound = @NamedTuple{lo::Float64, hi::Float64}
@@ -240,7 +287,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", s::StabilitySuite)
     ci = isnan(s.confidence) ? "no CI" : "CI @ $(s.confidence)"
     print(io, "StabilitySuite: ", length(s), " deviation(s), ", s.data_kind,
-              " data, N=", s.n, ", τ₀=", _show4g(s.tau0), " s, taus=", s.tau_mode, ", ", ci)
+              " data, N=", s.n, ", τ₀=", _show4g(s.tau0), " s, m=", s.tau_mode, ", ", ci)
     for r in s.results
         n = length(r.tau)
         rng = n == 0 ? "" : "  τ∈[$(_show4g(r.tau[1])), $(_show4g(r.tau[end]))] s"
@@ -252,7 +299,8 @@ end
 """
     SpectralResult
 
-Unified return type for every spectral-density estimate (`Sy`, `Sx`, `L`).
+Unified return type for every spectral-density estimate ([`psd_y`](@ref),
+[`psd_x`](@ref), [`ssb_phase_noise`](@ref)).
 
 Mirrors [`StabilityResult`](@ref): a flat, non-parametric record carrying the
 one-sided frequency grid, the estimated spectrum, and the Welch parameters that
@@ -261,7 +309,7 @@ produced it, so a saved or plotted result is self-describing.
 $(TYPEDFIELDS)
 """
 struct SpectralResult
-    "Which estimate produced this result: `:Sy`, `:Sx`, or `:L`."
+    "Which estimate produced this result: `:Sy` (S_y(f)), `:Sx` (S_x(f)) or `:L` (ℒ(f))."
     spectral_type::Symbol
     "One-sided frequency grid `f` in Hz."
     freq::Vector{Float64}
@@ -273,8 +321,14 @@ struct SpectralResult
     nperseg::Int
     "Welch segment overlap (samples)."
     noverlap::Int
-    "Window applied to each segment: `:hann`, `:hamming`, or `:rectangular`."
-    window::Symbol
+    "Taper applied to each segment: `:hann`, `:hamming`, or `:rectangular`."
+    taper::Symbol
+end
+
+# `r.window` was the field's name before 0.6.
+function Base.getproperty(r::SpectralResult, s::Symbol)
+    s === :window && return getfield(r, :taper)
+    return getfield(r, s)
 end
 
 function Base.show(io::IO, r::SpectralResult)
