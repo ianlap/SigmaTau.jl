@@ -42,7 +42,7 @@ export function mount(root) {
           <li>Open a phase or frequency record on <b>Data</b>, or drop a file anywhere in the window. The import dialog asks which column is time and which columns are clocks.</li>
           <li>Check the record: gaps, points past 5σ and drift are listed next to the phase plot.</li>
           <li>Pick estimators in the panel (<b>+ Add estimator</b>) and press <b>Run analysis</b> (F5).</li>
-          <li>Read the result on <b>Stability</b>, <b>Spectrum</b> and <b>Dynamic</b>. Export the plot or every number from the <b>Export</b> menu.</li>
+          <li>Read the result on <b>Stability</b>, <b>Spectrum</b> and <b>Dynamic</b>. Export the plot, every number or a printable report from the <b>File</b> menu, which also saves and reopens a whole session.</li>
         </ol>
         <p>Nothing recomputes behind your back on Stability and Spectrum: after you change the record, the estimators or the options, the Run button and the status bar turn amber until you run again.</p>
       </section>

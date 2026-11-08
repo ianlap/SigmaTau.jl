@@ -20,8 +20,9 @@ function elapsed(io::IO, t_start::UInt64)
     print(io, "}\n")
 end
 
-function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args::Vector{String})
     c = o.command
+    c == "report"   && return cmd_report(io, o, data, args)
     c == "analyze"  && return cmd_analyze(io, o, data, t_start)
     c == "check"    && return cmd_check(io, o, data, t_start)
     c == "spectrum" && return cmd_spectrum(io, o, data, t_start)
@@ -53,7 +54,7 @@ end
 
 # ── analyze ───────────────────────────────────────────────────────────────
 
-function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+function analysis_results(o::Options, data::PhaseData)
     need_samples(data, 8, "the analysis")
     N = length(data.x)
     mode = tau_mode(o.grid)
@@ -63,6 +64,12 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         isempty(ms) && continue
         push!(results, deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=o.bias))
     end
+    return results
+end
+
+function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+    results = analysis_results(o, data)
+    N = length(data.x)
     src = source_name(o, data)
     if o.format != "json"
         print(io, CSV_ANALYZE); print(io, '\n')

@@ -1,12 +1,13 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "report"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
     ("spectrum",   "FILE", "Welch power spectral densities S_y(f) and S_x(f)"),
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
+    ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
     ("version",    "",     "print the version"),
     ("help",       "[COMMAND]", "print this help, or a command's options"),
@@ -30,6 +31,7 @@ struct Opt
 end
 
 const ALL = COMMANDS
+const TABULAR = ["analyze", "check", "spectrum", "dynamic"]   # CSV or JSON out (report writes HTML)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
@@ -51,20 +53,20 @@ const OPTS = [
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps (needs a time column)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     # Analysis
-    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze"]),
-    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic"]),
-    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze"]),
-    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze"]),
-    Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze"]),
-    Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze"]),
+    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report"]),
+    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "report"]),
+    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "report"]),
+    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze", "report"]),
+    Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
+    Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
     # Output
-    Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", ALL),
-    Opt("--format", "FMT", FORMATS, false, "csv (default) or json", ALL),
+    Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
+    Opt("--format", "FMT", FORMATS, false, "csv (default) or json", TABULAR),
     Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", ALL),
     Opt("--quiet", "", String[], false, "no informational messages on stderr", ALL),
     Opt("--help", "", String[], false, "show this command's options", ALL),
@@ -306,6 +308,7 @@ function print_help(io::IO)
     print(io, "  sigmatau analyze trace.tim                      # TimeLab, τ₀ from the header\n")
     print(io, "  sigmatau spectrum --synth 65536\n")
     print(io, "  sigmatau dynamic clock.dat --dev dhdev --window 4096\n")
+    print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
 end
 
 function print_command_help(io::IO, cmd::String)
@@ -331,7 +334,7 @@ function print_command_help(io::IO, cmd::String)
         k += 1
         print(io, "  "); padded(io, sigs[k], w); print(io, op.help, "\n")
     end
-    if cmd == "analyze"
+    if cmd == "analyze" || cmd == "report"
         print(io, "\nDeviations: ", join(estimator_names(), ", "), "\n")
     end
 end

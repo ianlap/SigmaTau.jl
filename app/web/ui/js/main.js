@@ -11,6 +11,8 @@ import * as dynamicPage from "./pages/dynamic.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
 import { openFile, saveFile } from "./platform.js";
+import { buildReport } from "./report.js";
+import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
@@ -169,6 +171,19 @@ async function setRecord(c, fields) {
   await loadClock(c);
 }
 
+// Replace everything with a saved session, read its records and rerun.
+async function openSession(file) {
+  let doc, clocks;
+  try { doc = parseSession(file.text); } catch (err) { return ctx.status("error", `${file.name}: ${err.message}`); }
+  for (const c of state.clocks) controllers.get(c.id)?.abort();
+  update((s) => { clocks = applySession(s, doc); markRecordStale(s); });
+  nextGroup = Math.max(nextGroup, ...clocks.map((c) => (c.group ?? 0) + 1));
+  go("stability");
+  await Promise.all(clocks.map(loadClock));
+  await run();
+  ctx.status("good", `Opened the session ${file.name}.`);
+}
+
 function selectClock(id) {
   update((s) => { s.activeClock = id; });
   go("data");
@@ -257,7 +272,7 @@ function render() {
 }
 subscribe(() => { if (transient && Date.now() > transient.until) transient = null; render(); });
 
-// ── Export ──
+// ── File menu: exports, report, session ──
 const exportBtn = document.getElementById("export-btn");
 const exportMenu = document.getElementById("export-menu");
 exportBtn.addEventListener("click", () => {
@@ -272,6 +287,22 @@ exportMenu.addEventListener("click", async (e) => {
   if (!kind) return;
   exportMenu.hidden = true;
   const analysed = state.clocks.filter((c) => c.result);
+  if (kind === "save-session") {
+    if (!state.clocks.length) return ctx.status("warn", "There is nothing to save yet.");
+    return saveFile("sigmatau-session.json", new Blob([sessionText()], { type: "application/json" }));
+  }
+  if (kind === "open-session") {
+    const f = await openFile(".json,application/json");
+    return f && openSession(f);
+  }
+  if (kind === "report") {
+    try {
+      const html = await buildReport();
+      return saveFile("sigmatau-report.html", new Blob([html], { type: "text/html" }));
+    } catch (err) {
+      return ctx.status("warn", err.message);
+    }
+  }
   if (kind === "png" || kind === "svg") {
     const el = page?.plotElement();
     if (!el?.data) return ctx.status("warn", "Nothing to export on this page yet.");
@@ -320,7 +351,9 @@ document.addEventListener("drop", async (e) => {
   dragDepth = 0;
   document.body.classList.remove("dragging");
   const f = e.dataTransfer.files[0];
-  if (f) await importFile({ name: f.name, text: await f.text() }, activeClock());
+  if (!f) return;
+  const file = { name: f.name, text: await f.text() };
+  await (isSession(file.text) ? openSession(file) : importFile(file, activeClock()));
 });
 
 // ── Start ──

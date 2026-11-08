@@ -131,14 +131,23 @@ export function load(clock, signal) {
 }
 
 // Run the selected estimators on one clock, with its spectrum.
-export function analyze(clock, signal) {
-  return run(request(clock, "analyze", [
-    "--devs", state.devs.join(","),
-    "--grid", state.grid,
-    ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
-    ...(state.bias ? [] : ["--no-bias-correction"]),
-    "--spectrum",
-  ]), signal);
+const analyzeRequest = (clock) => request(clock, "analyze", [
+  "--devs", state.devs.join(","),
+  "--grid", state.grid,
+  ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
+  ...(state.bias ? [] : ["--no-bias-correction"]),
+  "--spectrum",
+]);
+
+export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
+
+// The sigmatau command line that reproduces a clock's analysis (CSV out),
+// for reports.
+export function analyzeCommand(clock) {
+  const { args, file } = analyzeRequest(clock);
+  const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--format" && args[i - 1] !== "--format");
+  const q = (a) => (/^[\w.,:+\/=-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
+  return ["sigmatau", kept[0], ...(file ? [file.name] : []), ...kept.slice(1)].map(q).join(" ");
 }
 
 // Settings that decide a clock's dynamic map; a change means recompute.
