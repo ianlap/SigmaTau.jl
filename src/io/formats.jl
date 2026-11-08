@@ -9,12 +9,16 @@ names them.
 """
 const INPUT_FORMATS = (:columns, :stable32, :timelab, :counter, :table)
 
-# What a format reader returns: the samples, τ₀, and whether they are phase.
+# What a format reader returns: the samples, τ₀, whether they are phase, and
+# which samples fillgaps put back (empty when none were).
 struct _Record
     v::Vector{Float64}
     tau0::Float64
     phase::Bool
+    filled::BitVector
 end
+_Record(v::Vector{Float64}, tau0::Float64, phase::Bool) = _Record(v, tau0, phase, falses(0))
+_Record(vf::Tuple{Vector{Float64},BitVector}, tau0::Float64, phase::Bool) = _Record(vf[1], tau0, phase, vf[2])
 
 _split_fields(line::AbstractString, d::Union{Char,Nothing}) =
     d === nothing ? split(line; keepempty=false) : map(strip, split(line, d))
@@ -42,7 +46,8 @@ _scpi_nan(v::Float64) = v == 9.91e37 ? NaN : v
 
 const _TIMELAB_FIELD = r"^(STR|DBL|S32|BLN|S64|U32) 0x[0-9A-Fa-f]+ \"([^\"]*)\"\s?(.*)$"
 
-function _delim_for(path::AbstractString, line::AbstractString)
+function _delim_for(path::AbstractString, line::AbstractString, delim::Char='\0')
+    delim == '\0' || return delim
     ext = lowercase(splitext(path)[2])
     ext == ".csv" && return ','
     ext == ".tsv" && return '\t'
@@ -110,11 +115,13 @@ function _resolve_tau0(tau0::Float64, header::Float64, t::Vector{Float64}, what:
 end
 
 # With fillgaps, samples go on an even grid of the time column (or, without
-# one, stay where they are) and NaN samples are filled.
+# one, stay where they are) and NaN samples are filled. Returns the samples
+# and the mask of filled ones.
 function _equispace(t::Vector{Float64}, v::Vector{Float64}, fillgaps::Bool)
-    fillgaps || return v
+    fillgaps || return v, falses(0)
     v_eq = length(t) >= 2 ? _make_equispaced(t, v)[2] : v
-    return _howe_fillgaps_core(v_eq)[1]
+    filled, mask = _howe_fillgaps_core(v_eq)
+    return filled, BitVector(mask)
 end
 
 function _read_timelab(path::AbstractString, tau0::Float64)
@@ -183,12 +190,13 @@ function _nominal(f::Vector{Float64}, nominal::Float64)
     return round(s / n; sigdigits=4)
 end
 
-function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, fillgaps::Bool)
+function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hint::Int,
+                       delim::Char, fillgaps::Bool)
     t = Float64[]; v = Float64[]
     for line in eachline(path)
         s = strip(line)
         (isempty(s) || startswith(s, '#')) && continue
-        f = _split_fields(s, _delim_for(path, s))
+        f = _split_fields(s, _delim_for(path, s, delim))
         x = tryparse(Float64, f[end])
         x === nothing && throw(ArgumentError("read_data: non-numeric counter reading \"" * String(s) * "\" in " * String(path)))
         push!(v, _scpi_nan(x))
@@ -202,8 +210,9 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, fi
     t0 = _resolve_tau0(tau0, NaN, t, "this counter log (no timestamps; pass tau0 = the gate time)")
     finite = filter(isfinite, v)
     isempty(finite) && throw(ArgumentError("read_data: no finite counter readings in " * String(path)))
-    # Time-interval readings (seconds) are phase; anything ≥ 1 is a frequency in Hz.
-    phase = _median_nonan(abs.(finite)) < 1
+    # Time-interval readings (seconds) are phase; anything ≥ 1 is a frequency
+    # in Hz, unless the caller says which.
+    phase = hint == 0 ? _median_nonan(abs.(finite)) < 1 : hint > 0
     if !phase
         f0 = _nominal(v, nominal)
         v = (v .- f0) ./ f0
@@ -229,18 +238,24 @@ const _PHASE_NAMES = r"phase|time ?err|\btie\b|pps|time ?offset|time ?diff|\bx\b
 const _FREQ_NAMES  = r"freq|\bffe\b|osc|fractional|\by\b"i
 const _TIME_NAMES  = r"^(t|mjd|time|timestamp|date|datetime|utc|epoch|elapsed|sec|seconds)\s*([(\[].*)?$"i
 
-# Seconds since 2000-01-01 of an ISO 8601 timestamp ("2026-11-08T21:41:03.5",
-# a space for the T, an optional trailing Z); NaN if it is not one.
+# UTC seconds since 2000-01-01 of an ISO 8601 timestamp
+# ("2026-11-08T21:41:03.5", a space for the T, then Z, ±hh:mm, ±hhmm or
+# nothing); NaN if it is not one.
 function _iso_seconds(s::AbstractString)
-    m = match(r"^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z?$", strip(s))
+    m = match(r"^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)(Z|([+-])(\d{2}):?(\d{2}))?$", strip(s))
     m === nothing && return NaN
     c = Float64[]
-    for x in m.captures
+    for i in 1:6
+        x = m.captures[i]
         x === nothing && return NaN
         push!(c, parse(Float64, x))
     end
     days = Dates.value(Dates.Date(Int(c[1]), Int(c[2]), Int(c[3])) - Dates.Date(2000, 1, 1))
-    return days * 86400.0 + c[4] * 3600 + c[5] * 60 + c[6]
+    sec = days * 86400.0 + c[4] * 3600 + c[5] * 60 + c[6]
+    sign, hh, mm = m.captures[8], m.captures[9], m.captures[10]
+    (sign === nothing || hh === nothing || mm === nothing) && return sec
+    offset = parse(Int, hh) * 3600 + parse(Int, mm) * 60
+    return sign == "+" ? sec - offset : sec + offset
 end
 
 function _pick_column(names::Vector{String}, column::Int, column_name::String, time::Int)
@@ -262,7 +277,7 @@ function _pick_column(names::Vector{String}, column::Int, column_name::String, t
 end
 
 function _read_table(path::AbstractString, tau0::Float64, column::Int, column_name::String,
-                     nominal::Float64, phase_hint::Int, fillgaps::Bool)
+                     nominal::Float64, phase_hint::Int, delim::Char, fillgaps::Bool)
     names = String[]
     rows = Vector{Vector{String}}()
     d::Union{Char,Nothing} = nothing
@@ -270,7 +285,7 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         s = strip(line)
         (isempty(s) || startswith(s, '#')) && continue
         if isempty(names)
-            d = _delim_for(path, s)
+            d = _delim_for(path, s, delim)
             names = String[String(strip(f, '"')) for f in _split_fields(s, d)]
             continue
         end
@@ -313,7 +328,7 @@ end
 # meaning "not given", `kind` one of :auto, :phase, :frequency.
 function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, column::Int=0,
                     column_name::String="", nominal::Float64=NaN, kind::Symbol=:auto,
-                    scaling::Float64=1.0, fillgaps::Bool=false)
+                    scaling::Float64=1.0, delim::Char='\0', fillgaps::Bool=false)
     isfile(path) || throw(ArgumentError("read_data: file not found: " * String(path)))
     kind in (:auto, :phase, :frequency) ||
         throw(ArgumentError("read_data: kind must be :auto, :phase or :frequency, got :" * String(kind)))
@@ -324,9 +339,9 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     elseif fmt === :stable32
         _read_stable32(path, tau0, hint, fillgaps)
     elseif fmt === :counter
-        _read_counter(path, tau0, nominal, fillgaps)
+        _read_counter(path, tau0, nominal, hint, delim, fillgaps)
     elseif fmt === :table
-        _read_table(path, tau0, column, column_name, nominal, hint, fillgaps)
+        _read_table(path, tau0, column, column_name, nominal, hint, delim, fillgaps)
     elseif fmt === :columns
         v, t0 = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
                         header=0, delim=nothing, scaling=1.0, detrend=:none, fillgaps=fillgaps)
@@ -336,12 +351,12 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     end
     scaling == 1 || (r.v .*= scaling)
     phase = hint == 0 ? r.phase : hint > 0
-    return _Record(r.v, r.tau0, phase)
+    return _Record(r.v, r.tau0, phase, r.filled)
 end
 
 """
     read_data(path; format=:auto, tau0=nothing, column=nothing, nominal=nothing,
-                    kind=:auto, scaling=1.0, fillgaps=false) → PhaseData or FrequencyData
+                    kind=:auto, scaling=1.0, delim=nothing, fillgaps=false) → PhaseData or FrequencyData
 
 Read a measurement file in any of the [`INPUT_FORMATS`](@ref), detected with
 [`detect_format`](@ref) unless `format` names one. The record type follows
@@ -362,6 +377,8 @@ column is phase or frequency by its name.
 - `kind`: `:phase` or `:frequency` overrides the record type.
 - `scaling`: multiplies the samples after any unit conversion from a
   column name (`(ns)`, `[ps]`, `ppb` …).
+- `delim`: field delimiter of counter and table files; by default comma
+  for `.csv`, tab for `.tsv`, else whitespace.
 - `fillgaps`: put samples on an even grid of the time column and fill the
   missing ones (and any `NaN` reading) with [`fillgaps`](@ref).
 
@@ -376,13 +393,15 @@ p = read_data("gpsdo.csv"; column="PPS offset (ns)")
 function read_data(path::AbstractString; format::Symbol=:auto, tau0::Union{Real,Nothing}=nothing,
                    column::Union{Integer,AbstractString,Nothing}=nothing,
                    nominal::Union{Real,Nothing}=nothing, kind::Symbol=:auto,
-                   scaling::Real=1.0, fillgaps::Bool=false)
+                   scaling::Real=1.0, delim::Union{AbstractChar,Nothing}=nothing,
+                   fillgaps::Bool=false)
     r = _read_data(path, format;
                    tau0=tau0 === nothing ? NaN : Float64(tau0),
                    column=column isa Integer ? Int(column) : 0,
                    column_name=column isa AbstractString ? String(column) : "",
                    nominal=nominal === nothing ? NaN : Float64(nominal),
-                   kind=kind, scaling=Float64(scaling), fillgaps=fillgaps)
+                   kind=kind, scaling=Float64(scaling),
+                   delim=delim === nothing ? '\0' : Char(delim), fillgaps=fillgaps)
     return r.phase ? PhaseData(r.v, r.tau0; source=String(path)) :
                      FrequencyData(r.v, r.tau0; source=String(path))
 end

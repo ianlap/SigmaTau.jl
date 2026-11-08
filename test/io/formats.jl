@@ -42,6 +42,11 @@ fmt(f) = joinpath(FMT, f)
         @test x isa PhaseData
         @test x.x[1] ≈ 1.2345e-7 rtol=1e-3
         @test_throws ArgumentError read_data(fmt("counter_53230a_ti.txt"))  # gate time needed
+        # Sub-hertz readings look like time intervals unless the caller says.
+        slow = tempname() * ".txt"
+        write(slow, "+5.00000001E-01\n+4.99999998E-01\n+5.00000002E-01\n")
+        @test read_data(slow; tau0=1.0) isa PhaseData
+        @test read_data(slow; tau0=1.0, kind=:frequency).y ≈ [2e-9, -4e-9, 4e-9] rtol=1e-6
     end
 
     @testset "named columns (GPSDO log)" begin
@@ -56,5 +61,16 @@ fmt(f) = joinpath(FMT, f)
         @test o isa FrequencyData && o.y ≈ parse.(Float64, getindex.(rows, 3)) .* 1e-9
         @test read_data(fmt("gpsdo.csv"); column=4, kind=:phase) isa PhaseData
         @test_throws ArgumentError read_data(fmt("gpsdo.csv"); column="nope")
+        @test SigmaTau._read_data(fmt("gpsdo.csv"), :auto; fillgaps=true).filled == (1:41 .== 24)
+        semi = tempname() * ".txt"
+        write(semi, "time;phase (ns)\n0;1.0\n1;2.0\n2;4.0\n")
+        @test read_data(semi; format=:table, delim=';').x == [1e-9, 2e-9, 4e-9]
+    end
+
+    @testset "ISO 8601 offsets" begin
+        utc = SigmaTau._iso_seconds("2026-11-08T12:00:00Z")
+        @test SigmaTau._iso_seconds("2026-11-08T14:00:00+02:00") == utc
+        @test SigmaTau._iso_seconds("2026-11-08 06:30:00-0530") == utc
+        @test SigmaTau._iso_seconds("2026-11-08T12:00:00") == utc
     end
 end
