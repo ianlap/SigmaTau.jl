@@ -83,7 +83,7 @@ async function importFile(file, clock, prev) {
       }
       Object.assign(c, {
         source: { type: "file", name: file.name, content: file.text }, group,
-        kind: settings.kind, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
+        kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, against: settings.against, header: settings.header, scaling: settings.scaling,
         hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo,
         fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, result: null,
@@ -139,7 +139,7 @@ async function reimport(c) {
       let k = keep.get(col);
       if (!k) { k = newClock({ name: settings.names[i] ?? `${baseName(c.source.name)} col ${col}` }); s.clocks.push(k); }
       Object.assign(k, {
-        group: c.group, kind: settings.kind, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
+        group: c.group, kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, against: settings.against, header: settings.header, scaling: settings.scaling,
         hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo, source: c.source,
         fillgaps: settings.hasTimeCol ? k.fillgaps : false, result: null,

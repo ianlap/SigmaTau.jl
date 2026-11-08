@@ -97,6 +97,43 @@ def read_frequency(
 
 
 @_map_errors
+def read_data(
+    path: str,
+    *,
+    format: str = "auto",
+    tau0: float | None = None,
+    column: int | str | None = None,
+    nominal: float | None = None,
+    kind: str = "auto",
+    scaling: float = 1.0,
+    fillgaps: bool = False,
+) -> PhaseData | FrequencyData:
+    """Read a measurement file in any supported layout (TimeLab ``.tim``, Stable32
+    ``.phd``/``.frd``, counter readings, named columns, plain columns).
+
+    ``format`` is detected by :func:`detect_format` unless given. The record type
+    follows the file; ``kind`` ("phase" / "frequency") overrides it. ``column``
+    picks the clock column of a named-column file, ``nominal`` the nominal
+    frequency (Hz) for readings in Hz. See the Julia ``read_data`` docstring.
+    """
+    kwargs = {"format": jl.Symbol(str(format)), "kind": jl.Symbol(str(kind)),
+              "scaling": float(scaling), "fillgaps": bool(fillgaps)}
+    if tau0 is not None:
+        kwargs["tau0"] = float(tau0)
+    if column is not None:
+        kwargs["column"] = column if isinstance(column, str) else int(column)
+    if nominal is not None:
+        kwargs["nominal"] = float(nominal)
+    return data_from_jl(jl.read_data(str(path), **kwargs))
+
+
+@_map_errors
+def detect_format(path: str) -> str:
+    """Name a data file's layout: timelab, stable32, counter, table or columns."""
+    return str(jl.detect_format(str(path)))
+
+
+@_map_errors
 def detrend(
     data: PhaseData | FrequencyData, *, method: str = "linear"
 ) -> PhaseData | FrequencyData:
@@ -183,6 +220,8 @@ def load(path: str) -> StabilityResult | StabilitySuite | PhaseData | FrequencyD
 
 
 __all__ = [
+    "read_data",
+    "detect_format",
     "read_phase",
     "read_frequency",
     "detrend",

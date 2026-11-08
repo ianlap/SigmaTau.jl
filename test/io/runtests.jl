@@ -6,6 +6,7 @@ using SigmaTau
     include("detrend.jl")
     include("fillgaps.jl")
     include("read.jl")
+    include("formats.jl")
     include("results.jl")
     include("save.jl")
     include("outliers.jl")

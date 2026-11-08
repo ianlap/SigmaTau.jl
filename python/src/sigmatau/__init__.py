@@ -42,10 +42,12 @@ from .grids import (
     tau_values,
 )
 from .io import (
+    detect_format,
     detrend,
     fillgaps,
     find_outliers,
     load,
+    read_data,
     read_frequency,
     read_phase,
     remove_outliers,
@@ -119,6 +121,8 @@ __all__ = [
     "psd_x",
     "ssb_phase_noise",
     # file IO
+    "read_data",
+    "detect_format",
     "read_phase",
     "read_frequency",
     "detrend",

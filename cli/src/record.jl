@@ -28,7 +28,7 @@ end
 # --fillgaps or when the grid does not line up with the record.
 function measured_mask(o::Options, N::Int)
     keep = trues(N)
-    (o.fillgaps && o.synth <= 0 && o.time_col >= 1) || return keep
+    (o.fillgaps && o.synth <= 0 && o.time_col >= 1 && input_format(o) === :columns) || return keep
     t = read_times(o)
     length(t) >= 2 || return keep
     dt = Inf
@@ -108,6 +108,8 @@ end
 function read_record(o::Options)
     o.synth > 0 && return synth_record(o)
     isfile(o.input) || throw(CLIError(EXIT_INPUT, "no such file: " * o.input))
+    fmt = input_format(o)
+    fmt === :columns || return read_instrument(o, fmt)
     data = read_column(o, o.value_col)
     o.reference_col > 0 || return data
     o.reference_col == o.value_col && throw(usage_error("the reference column is the value column"))
@@ -153,4 +155,28 @@ function read_freq(o::Options, kw)
     end
     return isnan(o.tau0) ? read_frequency(p; delim=o.delim, kw...) :
                            read_frequency(p; tau0=o.tau0, delim=o.delim, kw...)
+end
+
+# The reader for this file: the one named by --input-format, else the
+# detected one. A table goes through the column reader when its columns are
+# given explicitly (as the explorer does after its import dialog).
+function input_format(o::Options)
+    o.input_format == "auto" || return Symbol(o.input_format)
+    fmt = detect_format(o.input)
+    fmt === :table && o.columns_set && isempty(o.column) && return :columns
+    return fmt
+end
+
+# TimeLab, Stable32 .phd/.frd, counter and named-column files: one clock per
+# file, read by SigmaTau's format readers, which set the record type.
+function read_instrument(o::Options, fmt::Symbol)
+    o.reference_col > 0 && throw(usage_error("--reference-col applies to column files only"))
+    r = SigmaTau._read_data(o.input, fmt; tau0=o.tau0, column_name=o.column, nominal=o.nominal,
+                            kind=o.freq ? :frequency : :auto, scaling=o.scaling, fillgaps=o.fillgaps)
+    o.freq = !r.phase
+    detrend = detrend_symbol(o.detrend)
+    v = r.v
+    detrend === :none || SigmaTau._detrend_core!(v, detrend)
+    r.phase && return PhaseData(v, r.tau0; source=o.input)
+    return PhaseData([0.0; cumsum(v)] .* r.tau0, r.tau0; source=o.input)
 end

@@ -30,7 +30,7 @@ export function openImport(file, prev = null) {
   const mem = prev ? null : remembered(s);
   const p = prev ?? mem;
   const st = {
-    kind: p?.kind ?? "phase",
+    kind: s.kindHint ?? p?.kind ?? "phase",
     time: p?.time_col ?? guess.time,          // 0 = no time column
     timeUnit: p?.timeUnit ?? guess.timeUnit,
     values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
@@ -55,6 +55,7 @@ export function openImport(file, prev = null) {
     const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
     return {
       kind: st.kind,
+      format: s.format,
       time_col: st.time,
       timeUnit: st.timeUnit,
       value_cols: [...st.values],
@@ -63,10 +64,10 @@ export function openImport(file, prev = null) {
       header: s.header,
       scaling: st.scaling,
       tau0,
-      hasTimeCol: st.time > 0,
+      hasTimeCol: st.time > 0 || !!s.format,  // instrument readers can fill gaps without one
       gaps: ts ? ts.gaps : 0,
       missing: ts ? ts.missing : 0,         // samples missing from the time column
-      sourceInfo: `${s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", "")} · ${st.kind} · τ₀ ${num(tau0, 4)} s` +
+      sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind} · τ₀ ${num(tau0, 4)} s` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
       unitName: (units.find(([f]) => f === st.scaling) ?? units[0])[1],
       remembered: fromMemory && !prev,
@@ -142,7 +143,7 @@ export function openImport(file, prev = null) {
 
       dlg.innerHTML = `
         <div class="imp-head">${FILE_ICON}
-          <div><b>Import ${h(s.name)}</b><span class="muted small">${thousands(s.lines)} lines · ${s.delimName}${s.stable32 ? " · Stable32 file" : ""}</span></div>
+          <div><b>Import ${h(s.name)}</b><span class="muted small">${thousands(s.lines)} lines · ${s.formatLabel ?? `${s.delimName}${s.stable32 ? " · Stable32 file" : ""}`}</span></div>
           <span class="grow"></span><span>Click a column heading to choose what it holds</span>
         </div>
         <div class="imp-body">
@@ -159,10 +160,12 @@ export function openImport(file, prev = null) {
             </div>
           </div>
           <div class="imp-side">
-            <div><label class="lbl">Record type</label>
+            ${s.format ? `<div><label class="lbl">Record type</label>
+              <div class="muted small">${h(s.formatLabel)}: read as ${st.kind === "phase" ? "phase in seconds" : "fractional frequency"}${s.format === "counter" && st.kind === "frequency" ? " against the nominal frequency (the mean reading to 4 significant figures)" : ""}.</div></div>`
+            : `<div><label class="lbl">Record type</label>
               <div class="seg" role="group"><button type="button" data-kind="phase" class="${st.kind === "phase" ? "on" : ""}">Phase (time error)</button><button type="button" data-kind="frequency" class="${st.kind === "frequency" ? "on" : ""}">Fractional frequency</button></div></div>
             <div><label class="lbl" for="imp-units">${st.kind === "phase" ? "Phase units" : "Frequency units"}</label>
-              <select id="imp-units">${units.map(([f, l]) => `<option value="${f}" ${f === st.scaling ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+              <select id="imp-units">${units.map(([f, l]) => `<option value="${f}" ${f === st.scaling ? "selected" : ""}>${l}</option>`).join("")}</select></div>`}
             <div><label class="lbl">Sample interval τ<sub>0</sub></label>${tauLine}</div>
             ${gap}
             <div><label class="lbl" for="imp-against">Measured against</label>

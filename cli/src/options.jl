@@ -14,6 +14,7 @@ const COMMAND_HELP = [
 
 const SHELLS = ["bash", "zsh", "fish", "powershell"]
 const FORMATS = ["csv", "json"]
+const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "table"]
 const DETRENDS = ["none", "mean", "endpoint", "linear"]
 const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
@@ -35,6 +36,9 @@ const OPTS = [
     Opt("--seed", "S", String[], false, "random seed for --synth (default 42)", ALL),
     Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ALL),
     Opt("--freq", "", String[], false, "FILE holds fractional frequency", ALL),
+    Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns)", ALL),
+    Opt("--column", "NAME", String[], false, "clock column of a table file, by name (default: the column named phase / PPS / time error, else frequency)", ALL),
+    Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean to 4 significant figures)", ALL),
     Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column)", ALL),
     Opt("--time-col", "N", String[], false, "1-based time column, 0 = none (default 1)", ALL),
     Opt("--value-col", "N", String[], false, "1-based value column (default 2)", ALL),
@@ -101,12 +105,16 @@ mutable struct Options
     remove_drift::String
     removed_offset::Float64   # fitted and removed by --remove-drift; NaN = none
     removed_drift::Float64    # per day
+    input_format::String
+    column::String            # "" = by name
+    nominal::Float64          # NaN = from the readings
+    columns_set::Bool         # --time-col, --value-col or --header given
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN)
+                    "none", NaN, NaN, "auto", "", NaN, false)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -177,10 +185,13 @@ function set_option!(o::Options, name::String, v::String)
     if name == "--synth";              o.synth = parse_int(v, name)
     elseif name == "--seed";           o.seed = parse_int(v, name)
     elseif name == "--tau0";           o.tau0 = parse_float(v, name)
-    elseif name == "--time-col";       o.time_col = parse_int(v, name)
-    elseif name == "--value-col";      o.value_col = parse_int(v, name)
+    elseif name == "--input-format";   o.input_format = check_choice(v, name, INPUT_LAYOUTS)
+    elseif name == "--column";         o.column = v
+    elseif name == "--nominal";        o.nominal = parse_float(v, name)
+    elseif name == "--time-col";       o.time_col = parse_int(v, name); o.columns_set = true
+    elseif name == "--value-col";      o.value_col = parse_int(v, name); o.columns_set = true
     elseif name == "--reference-col";  o.reference_col = parse_int(v, name)
-    elseif name == "--header";         o.header = parse_int(v, name)
+    elseif name == "--header";         o.header = parse_int(v, name); o.columns_set = true
     elseif name == "--delim";          o.delim = parse_delim(v)
     elseif name == "--scaling";        o.scaling = parse_float(v, name)
     elseif name == "--detrend";        o.detrend = check_choice(v, name, DETRENDS)
@@ -261,6 +272,7 @@ function parse_args!(o::Options, args::Vector{String})
     o.value_col >= 1 || throw(usage_error("--value-col must be 1 or more"))
     o.header >= 0 || throw(usage_error("--header must be 0 or more"))
     isnan(o.tau0) || o.tau0 > 0 || throw(usage_error("--tau0 must be positive"))
+    isnan(o.nominal) || o.nominal > 0 || throw(usage_error("--nominal must be positive"))
     o.scaling != 0 || throw(usage_error("--scaling must not be 0"))
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
@@ -291,6 +303,7 @@ function print_help(io::IO)
     print(io, "  sigmatau analyze clock.dat --tau0 1 --devs adev,mdev,tdev\n")
     print(io, "  sigmatau analyze freq.txt --freq --m 1,10,100 --format json --out result.json\n")
     print(io, "  sigmatau check clock.dat --time-col 1 --value-col 3 --fillgaps\n")
+    print(io, "  sigmatau analyze trace.tim                      # TimeLab, τ₀ from the header\n")
     print(io, "  sigmatau spectrum --synth 65536\n")
     print(io, "  sigmatau dynamic clock.dat --dev dhdev --window 4096\n")
 end
