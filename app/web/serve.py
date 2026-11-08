@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local server for the SigmaTau web explorer (development shell).
 
-Serves app/web/ui/ and answers POST /api/analyze by running sigmatau-cli.
+Serves app/web/ui/ and answers POST /api/analyze by running the sigmatau binary.
 Standard library only.
 
     python3 app/web/serve.py               # http://127.0.0.1:9385
@@ -9,9 +9,9 @@ Standard library only.
     python3 app/web/serve.py --fetch-plotly   # save Plotly into ui/vendor for offline use
 
 Which analysis core it runs, in order:
-  1. $SIGMATAU_CLI, a path to a compiled sigmatau-cli
-  2. app/web/cli/build/bin/sigmatau-cli(.exe), the juliac bundle
-  3. julia --project=app/web/cli -m SigmaTauCLI (slow first call, no build)
+  1. $SIGMATAU_CLI, a path to a compiled sigmatau
+  2. cli/build/bin/sigmatau(.exe), the juliac bundle
+  3. julia --project=cli -m SigmaTauCLI (slow first call, no build)
 
 The request and response formats are in app/web/README.md.
 """
@@ -28,7 +28,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 UI = HERE / "ui"
-CLI_PROJECT = HERE / "cli"
+CLI_PROJECT = HERE.parent.parent / "cli"
 MAX_BODY = 512 * 1024 * 1024
 TIMEOUT_S = 600
 PLOTLY_URL = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"
@@ -38,7 +38,7 @@ def cli_command():
     env = os.environ.get("SIGMATAU_CLI")
     if env:
         return [env]
-    exe = "sigmatau-cli.exe" if os.name == "nt" else "sigmatau-cli"
+    exe = "sigmatau.exe" if os.name == "nt" else "sigmatau"
     built = CLI_PROJECT / "build" / "bin" / exe
     if built.exists():
         return [str(built)]
@@ -48,55 +48,26 @@ def cli_command():
     return None
 
 
+COMMANDS = {"check", "analyze", "spectrum", "dynamic"}
+
+
 def request_to_args(req, workdir):
-    """Translate a JSON request into sigmatau-cli flags."""
-    args = []
-    src = req.get("source") or {}
-    if src.get("type") == "synth":
-        args += ["--synth", str(int(src.get("n", 8192))), "--seed", str(int(src.get("seed", 42)))]
-    elif src.get("type") == "file":
-        name = Path(str(src.get("name") or "record.txt")).name
-        path = Path(workdir) / name
-        path.write_text(str(src.get("content", "")), encoding="utf-8")
-        args += ["--input", str(path)]
-    else:
-        raise ValueError("source.type must be 'file' or 'synth'")
-
-    def opt(key, flag, conv=str):
-        if req.get(key) is not None:
-            args.extend([flag, str(conv(req[key]))])
-
-    opt("kind", "--kind")
-    opt("tau0", "--tau0", float)
-    opt("time_col", "--time-col", int)
-    opt("value_col", "--value-col", int)
-    opt("reference_col", "--reference-col", int)
-    opt("header", "--header", int)
-    opt("scaling", "--scaling", float)
-    opt("detrend", "--detrend")
-    opt("grid", "--grid")
-    opt("series", "--series", int)
-    devs = req.get("devs")
-    if devs is not None:
-        args += ["--devs", ",".join(str(d) for d in devs) or "none"]
-    if req.get("fillgaps"):
-        args.append("--fillgaps")
-    if req.get("remove_outliers"):
-        args.append("--remove-outliers")
-    if req.get("confidence") is None and "confidence" in req:
-        args.append("--no-ci")
-    else:
-        opt("confidence", "--confidence", float)
-    if req.get("bias_correction") is False:
-        args.append("--no-bias-correction")
-    if req.get("spectrum"):
-        args.append("--spectrum")
-    opt("nperseg", "--nperseg", int)
-    if req.get("dynamic"):
-        args += ["--dynamic", str(req["dynamic"])]
-    opt("window", "--window", int)
-    opt("step", "--step", int)
-    return args
+    """Check a request {args: [command, flags...], file: {name, content} | null}
+    and return the sigmatau arguments, with the file saved under workdir."""
+    args = req.get("args")
+    if not isinstance(args, list) or not args or not all(isinstance(a, str) for a in args):
+        raise ValueError("args must be a non-empty list of strings")
+    if args[0] not in COMMANDS:
+        raise ValueError(f"unknown command {args[0]!r}")
+    if any(a == "--out" or a.startswith("--out=") for a in args):
+        raise ValueError("--out is not allowed here")
+    f = req.get("file")
+    if f is None:
+        return list(args)
+    name = Path(str(f.get("name") or "record.txt")).name or "record.txt"
+    path = Path(workdir) / name
+    path.write_text(str(f.get("content", "")), encoding="utf-8")
+    return [args[0], str(path), *args[1:]]
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -137,7 +108,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(400, {"error": f"bad JSON: {e}"})
         cmd = cli_command()
         if cmd is None:
-            return self.send_json(503, {"error": "no analysis core: build sigmatau-cli or put julia on PATH"})
+            return self.send_json(503, {"error": "no analysis core: build cli/ (see cli/README.md) or put julia on PATH"})
         with tempfile.TemporaryDirectory(prefix="sigmatau-web-") as work:
             try:
                 args = request_to_args(req, work)

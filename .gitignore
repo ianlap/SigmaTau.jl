@@ -25,8 +25,8 @@ bench/results/*
 *.swp
 .DS_Store
 
-# Web explorer: compiled core and local Plotly copy
-app/web/cli/build/
+# Command line build (juliac bundle) and the explorer's local Plotly copy
+cli/build/
 app/web/ui/vendor/
 
 # Python bytecode

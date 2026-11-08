@@ -280,7 +280,7 @@ exportMenu.addEventListener("click", async (e) => {
   } else if (!analysed.length) {
     ctx.status("warn", "Run the analysis first; there are no results to export.");
   } else if (kind === "json") {
-    const out = analysed.map((c) => ({ clock: c.name, ...c.result }));
+    const out = analysed.map((c) => ({ clock: c.name, ...c.result.doc }));
     saveFile("sigmatau-results.json", new Blob([JSON.stringify(analysed.length === 1 ? out[0] : out, null, 2)], { type: "application/json" }));
   } else {
     const lines = ["clock\testimator\ttau_s\tsigma\tci_lo\tci_hi\tedf\tnoise\tneff"];
