@@ -45,7 +45,25 @@ Throws `ArgumentError` on `nperseg < 2`, `nperseg > length(z)`, or
 """
 function _welch_psd(z::Vector{Float64}, fs::Float64;
                     nperseg::Int, noverlap::Int, window::Symbol)
-    N = length(z)
+    freq, psd, _, _, _ = _welch(z, z, fs; nperseg=nperseg, noverlap=noverlap, window=window)
+    return freq, psd
+end
+
+"""
+    _welch(a, b, fs; nperseg, noverlap, window) → (freq, Saa, Sbb, Sab, nseg)
+
+Welch auto- and cross-spectra of two equal-length real signals, with the
+segmenting, detrend, window and one-sided density scaling of
+[`_welch_psd`](@ref): `Sab[k]` averages `conj(A_k)·B_k` over the `nseg`
+segments. When `b === a` only one FFT per segment is taken, `Sbb` is
+`Saa` and `Sab` is empty.
+"""
+function _welch(a::Vector{Float64}, b::Vector{Float64}, fs::Float64;
+                nperseg::Int, noverlap::Int, window::Symbol)
+    same = a === b
+    N = length(a)
+    length(b) == N ||
+        throw(ArgumentError("spectral: the two signals differ in length ($N vs $(length(b)))"))
     nperseg >= 2 ||
         throw(ArgumentError("spectral: nperseg must be ≥ 2 (got $nperseg)"))
     nperseg <= N ||
@@ -64,37 +82,52 @@ function _welch_psd(z::Vector{Float64}, fs::Float64;
                             "reduce nperseg or noverlap"))
 
     nfreq = nperseg ÷ 2 + 1
-    scale = 1.0 / (fs * U)
-    psd   = zeros(Float64, nfreq)
+    Saa   = zeros(Float64, nfreq)
+    Sbb   = same ? Saa : zeros(Float64, nfreq)
+    Sab   = zeros(ComplexF64, same ? 0 : nfreq)
     seg   = Vector{Float64}(undef, nperseg)
 
-    for s in 0:nseg-1
-        off = s * step
-        @inbounds begin
-            μ = 0.0
-            for i in 1:nperseg
-                μ += z[off + i]
-            end
-            μ /= nperseg
-            for i in 1:nperseg
-                seg[i] = (z[off + i] - μ) * win[i]
-            end
+    function taper!(z, off)
+        μ = 0.0
+        @inbounds for i in 1:nperseg
+            μ += z[off + i]
         end
-        Z = rfft(seg)
-        @inbounds for k in 1:nfreq
-            psd[k] += abs2(Z[k]) * scale
+        μ /= nperseg
+        @inbounds for i in 1:nperseg
+            seg[i] = (z[off + i] - μ) * win[i]
+        end
+        return rfft(seg)
+    end
+
+    for s in 0:nseg-1
+        A = taper!(a, s * step)
+        if same
+            @inbounds for k in 1:nfreq
+                Saa[k] += abs2(A[k])
+            end
+        else
+            B = taper!(b, s * step)
+            @inbounds for k in 1:nfreq
+                Saa[k] += abs2(A[k])
+                Sbb[k] += abs2(B[k])
+                Sab[k] += conj(A[k]) * B[k]
+            end
         end
     end
-    psd ./= nseg
 
-    # Fold to one-sided: double all but DC and (for even nperseg) Nyquist.
+    # Average, scale to a density, and fold to one-sided: double all but DC
+    # and (for even nperseg) Nyquist.
     last_doubled = iseven(nperseg) ? nfreq - 1 : nfreq
-    @inbounds for k in 2:last_doubled
-        psd[k] *= 2
+    @inbounds for k in 1:nfreq
+        c = (2 <= k <= last_doubled ? 2.0 : 1.0) / (fs * U * nseg)
+        Saa[k] *= c
+        same && continue
+        Sbb[k] *= c
+        Sab[k] *= c
     end
 
     freq = [(k - 1) * fs / nperseg for k in 1:nfreq]
-    return freq, psd
+    return freq, Saa, Sbb, Sab, nseg
 end
 
 """

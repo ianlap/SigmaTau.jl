@@ -233,6 +233,19 @@ mktempdir() do dir
         @test findall(!, o.measured) == [24]
     end
 
+    @testset "cross" begin
+        X2 = X .+ 1e-11 .* sinpi.((1:256) ./ 3.1)
+        f2 = write_table(joinpath(dir, "second.csv"), X2)
+        r = run_cli("cross", pf, "--with", f2, "--m", "1,2,4")
+        @test r.code == 0
+        rows = csv_rows(r.out)
+        lib = cross_adev(PhaseData(X, 1.0), PhaseData(X2, 1.0), [1, 2, 4])
+        @test parse.(Float64, getindex.(rows, 2)) ≈ lib.covar
+        @test occursin("\"cross_spectrum\"", run_cli("cross", pf, "--with", f2, "--format", "json").out)
+        @test run_cli("cross", pf).code == 1
+        @test run_cli("cross", pf, "--with", joinpath(dir, "missing.csv")).code == 2
+    end
+
     @testset "reference column" begin
         rf = joinpath(dir, "three.csv")
         open(rf, "w") do io
@@ -436,6 +449,7 @@ mktempdir() do dir
                          ["analyze", pf, "--format", "json", "--spectrum", "--series", "100"],
                          ["check", pf, "--format", "json"],
                          ["spectrum", pf],
+                         ["cross", pf, "--with", pf, "--format", "json"],
                          ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],
