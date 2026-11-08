@@ -69,8 +69,11 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :htotdev
             # Same logic as :totdev: for WHPM/FLPM, fall back to HDEV-style EDF
             # (third-difference, F=m, S=m, the overlapped convention) since the
-            # FCS 2001 table only gives coefficients for α ∈ {0,-1,-2}.
-            if alpha == 2 || alpha == 1
+            # FCS 2001 table only gives coefficients for α ∈ {0,-1,-2}. At m = 1
+            # the HTOTDEV kernel *is* overlapping HDEV (SP1065, Stable32 and
+            # allantools all report HDEV there), so it takes HDEV's EDF too; the
+            # table formula would give an EDF above N.
+            if alpha == 2 || alpha == 1 || m == 1
                 edfs[k] = _calc_edf_core(alpha, 3, m, m, m, N)
             else
                 b0, b1 = _coeff_htot(alpha)

@@ -312,7 +312,8 @@ Table I unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
 α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0), so the
 correction raises σ, substantially for divergent FM. PM noises (α > 0) get
-B = 1 (no published model). Stable32 applies the same correction by default; `correct_bias=false`
+B = 1 (no published model), and so does `m = 1`, where the estimator is
+plain overlapping HDEV. Stable32 applies the same correction by default; `correct_bias=false`
 returns the raw kernel value, which is what allantools reports.
 """
 function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
@@ -325,7 +326,11 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, taus, T)) : raw_devs
+    # m = 1 is plain overlapping HDEV (see `_htotdev_core`), which is unbiased,
+    # so the TotHvar correction applies only from m = 2 on (as in Stable32).
+    B = need_noise ? bias_correction(noises, :htot, taus, T) : Float64[]
+    correct_bias && (B[m_values .== 1] .= 1.0)
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(B) : raw_devs
 
     if !ci
         return _result(data, confidence, :htotdev, taus, devs, noises, _CIBound[], Float64[], neff)
