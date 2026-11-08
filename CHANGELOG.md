@@ -26,6 +26,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `read_data` and `detect_format` read instrument files by layout: TimeLab
+  `.tim` (τ₀ and scale factor from the header), Stable32 `.phd`/`.frd`
+  (MJD time tags, `Type:` header), SCPI counter readings (Hz converted to
+  fractional frequency against a nominal frequency, `9.91E+37` as a missing
+  reading, time-interval readings as phase) and named-column logs (unit
+  suffixes such as `(ns)` or `ppb`, ISO 8601 or MJD timestamps). The CLI
+  detects them too (`--input-format`, `--column`, `--nominal`), the
+  explorer's import dialog recognises them, and Python has the same names.
+
 - Reference cross-check suite (`test/validation/`): every estimator on
   power-law records with α = +2 … −4, plus EDF, χ² intervals, noise ID,
   Welch spectra and dynamic maps, against allantools, scipy, Stable32's
