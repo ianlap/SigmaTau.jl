@@ -43,7 +43,7 @@ using Tables
     @test rows_ci[1].neff == result_ci.neff[1]
     @test [row.neff for row in rows_ci] == result_ci.neff
 
-    suite = stability(pd; devs=(:adev, :mdev), taus=Octave, ci=false)
+    suite = stability(pd; devs=(:adev, :mdev), m=Octave, ci=false)
     @test Tables.istable(typeof(suite))
     @test Tables.rowaccess(typeof(suite))
 

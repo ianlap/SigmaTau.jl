@@ -1,4 +1,4 @@
-# test/io/results.jl — save_result/load_result (v1) and save_suite/load_suite (v2).
+# test/io/results.jl — save/load of results (v1 format) and suites (v2).
 
 @testset "Result & suite I/O" begin
     tmpdir = mktempdir()
@@ -11,8 +11,8 @@
 
         # Round-trip with CI
         r  = adev(pd, ms; ci=true)
-        save_result(path, r)
-        r2 = load_result(path)
+        save(path, r)
+        r2 = load(path)
         @test r2.deviation_type === r.deviation_type
         @test r2.tau       ≈ r.tau
         @test r2.dev       ≈ r.dev
@@ -26,8 +26,8 @@
         # Round-trip without CI — empty vectors must survive the cycle,
         # but neff is always present.
         r_nci = adev(pd, ms; ci=false)
-        save_result(path, r_nci)
-        r3 = load_result(path)
+        save(path, r_nci)
+        r3 = load(path)
         @test r3.deviation_type === :adev
         @test r3.tau ≈ r_nci.tau
         @test r3.dev ≈ r_nci.dev
@@ -36,7 +36,7 @@
         @test isempty(r3.edf)
         @test r3.neff == r_nci.neff
 
-        @test save_result(path, r) == path
+        @test save(path, r) == path
     end
 
     @testset "legacy 6-column file (no neff) still loads" begin
@@ -51,7 +51,7 @@
             println(io, "1.0\t1.5e-9\tWHFM\t1.4e-9\t1.7e-9\t98.5")
             println(io, "2.0\t1.1e-9\tWHFM\t1.0e-9\t1.3e-9\t60.2")
         end
-        r = load_result(path)
+        r = load(path)
         @test r.deviation_type === :adev
         @test r.tau == [1.0, 2.0]
         @test r.dev == [1.5e-9, 1.1e-9]
@@ -65,10 +65,10 @@
         path = joinpath(tmpdir, "suite.tsv")
         Random.seed!(20260511)
         pd = PhaseData(cumsum(randn(1024)) .* 1e-9, 1.0)
-        s  = stability(pd; devs=(:adev, :mdev, :hdev), taus=Octave, ci=true, confidence=0.9)
+        s  = stability(pd; devs=(:adev, :mdev, :hdev), m=Octave, ci=true, confidence=0.9)
 
-        @test save_suite(path, s; source_file="clock_a.dat") == path
-        s2 = load_suite(path)
+        @test save(path, s; source_file="clock_a.dat") == path
+        s2 = load(path)
         @test s2 isa StabilitySuite
         @test keys(s2) == keys(s)
         @test s2.data_kind === s.data_kind
@@ -98,9 +98,9 @@
         path = joinpath(tmpdir, "suite_nci.tsv")
         Random.seed!(20260512)
         pd = PhaseData(cumsum(randn(256)) .* 1e-9, 1.0)
-        s  = stability(pd; devs=(:adev, :mtie), taus=Octave, ci=false)
-        save_suite(path, s)
-        s2 = load_suite(path)
+        s  = stability(pd; devs=(:adev, :mtie), m=Octave, ci=false)
+        save(path, s)
+        s2 = load(path)
         @test isnan(s2.confidence)
         @test isempty(s2[:adev].ci)
         @test isempty(s2[:mtie].ci)
@@ -109,14 +109,23 @@
         @test s2[:mtie].neff == s[:mtie].neff
     end
 
-    @testset "cross-format guards" begin
+    @testset "load picks the file type" begin
         rpath = joinpath(tmpdir, "single.tsv")
         spath = joinpath(tmpdir, "multi.tsv")
         Random.seed!(20260513)
         pd = PhaseData(cumsum(randn(128)) .* 1e-9, 1.0)
-        save_result(rpath, adev(pd, [1, 2, 4]; ci=false))
-        save_suite(spath, stability(pd; devs=(:adev,), ci=false))
-        @test_throws ErrorException load_suite(rpath)    # v1 file via load_suite
-        @test_throws ErrorException load_result(spath)   # v2 file via load_result
+        save(rpath, adev(pd, [1, 2, 4]; ci=false))
+        save(spath, stability(pd; devs=(:adev,), ci=false))
+        @test load(rpath) isa StabilityResult
+        @test load(spath) isa StabilitySuite
+        @test_throws ErrorException SigmaTau._load_suite(rpath)
+        @test_throws ErrorException SigmaTau._load_result(spath)
+        ppath = joinpath(tmpdir, "rec.txt")
+        save(ppath, pd)
+        @test load(ppath).x == pd.x
+        fpath = joinpath(tmpdir, "frec.txt")
+        save(fpath, FrequencyData(diff(pd.x), 2.0))
+        @test load(fpath) isa FrequencyData
+        @test load(fpath).tau0 == 2.0
     end
 end

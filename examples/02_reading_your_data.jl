@@ -102,7 +102,7 @@ read_phase(datafile).x ≈ wfm.x
 
 # The same `save` writes a `StabilityResult` or a `StabilitySuite` as a
 # self-describing tab-separated table that any spreadsheet can open;
-# `load_result` and `load_suite` read them back:
+# `load` reads them back:
 
 result = adev(pd_dat)
 resultpath = save(joinpath(dir, "adev.tsv"), result)
@@ -110,10 +110,10 @@ foreach(println, readlines(resultpath)[1:6])
 
 #-
 
-load_result(resultpath).dev ≈ result.dev
+load(resultpath).dev ≈ result.dev
 
 #-
 
 suite = stability(pd_dat)              # adev, mdev, hdev, mhdev
 suitepath = save(joinpath(dir, "session.tsv"), suite; source_file = "stable32gen.DAT")
-load_suite(suitepath)[:hdev].dev ≈ suite[:hdev].dev
+load(suitepath)[:hdev].dev ≈ suite[:hdev].dev

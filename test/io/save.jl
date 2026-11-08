@@ -137,14 +137,14 @@
             r     = adev(pd, [1, 2, 4]; ci=true)
             rpath = joinpath(dir, "r.tsv")
             @test save(rpath, r) == rpath
-            r2 = load_result(rpath)
+            r2 = load(rpath)
             @test r2.dev ≈ r.dev
             @test ci_upper(r2) ≈ ci_upper(r)
 
             s     = stability(pd; devs=(:adev, :hdev))
             spath = joinpath(dir, "s.tsv")
             @test save(spath, s; source_file="p.txt") == spath
-            s2 = load_suite(spath)
+            s2 = load(spath)
             @test s2[:hdev].dev ≈ s[:hdev].dev
             @test any(l -> l == "# source_file=p.txt", readlines(spath))
         end

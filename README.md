@@ -48,14 +48,15 @@ desktop explorer in `app/` has its own environment.
 | Time error | `mtie`, `tierms`, `pdev` |
 | Time-resolved | `dadev`, `dhdev` |
 | Real time | `StreamingStability` (`adev`, `mdev`, `hdev`, `mhdev`) |
-| Multi-clock | `nch` (N-cornered hat) |
-| Spectra and synthesis | `Sy`, `Sx`, `L`, `noise_gen` |
+| Multi-clock | `ncornered_hat` |
+| Spectra and synthesis | `psd_y`, `psd_x`, `ssb_phase_noise`, `noise_gen` |
 
 Every function accepts `PhaseData` or `FrequencyData`, an explicit vector of
 averaging factors or a `TauMode` grid (`Octave`, `Decade`, `AllTaus`, ...).
 `read_phase` / `read_frequency`, `detrend`, `fillgaps` and `remove_outliers`
-cover the usual preprocessing; `save` / `load_result` / `load_suite`
-round-trip results as plain text.
+cover the usual preprocessing; `save` / `load` round-trip records, results
+and suites as plain text. `estimators()` lists the estimators and
+`deviation(:adev, data, m)` runs one chosen by name.
 
 ## Compared with Stable32 and allantools
 

@@ -2,6 +2,12 @@
 # Wraps the kernels in kernels.jl with noise identification, EDF and
 # confidence intervals from noise.jl and edf.jl.
 
+# Every estimator builds its result through here so the record metadata
+# (τ₀, sample count, confidence level) rides along.
+_result(data::PhaseData, confidence::Real, dt::Symbol, tau, dev, noise, ci, edf, neff) =
+    StabilityResult(dt, tau, dev, noise, ci, edf, neff, data.tau0, length(data.x),
+                    isempty(ci) ? NaN : Float64(confidence))
+
 """
     adev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
@@ -35,14 +41,14 @@ function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     neff = _neff_counts(:adev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:adev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+        return _result(data, confidence, :adev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:adev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:adev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :adev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -74,14 +80,14 @@ function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     neff = _neff_counts(:mdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:mdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+        return _result(data, confidence, :mdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:mdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :mdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -95,10 +101,10 @@ function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     factor = res.tau ./ sqrt(3.0)
 
     if !ci
-        return StabilityResult(:tdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
+        return _result(data, confidence, :tdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
     end
 
-    return StabilityResult(:tdev, res.tau, res.dev .* factor, res.noise_type,
+    return _result(data, confidence, :tdev, res.tau, res.dev .* factor, res.noise_type,
                            _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
@@ -139,14 +145,14 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     neff = _neff_counts(:hdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:hdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+        return _result(data, confidence, :hdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=3)
     edfs = calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:hdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :hdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -164,14 +170,14 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     neff = _neff_counts(:mhdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:mhdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+        return _result(data, confidence, :mhdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=3)
     edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mhdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :mhdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -186,10 +192,10 @@ function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     factor = res.tau ./ sqrt(10.0 / 3.0)
 
     if !ci
-        return StabilityResult(:htdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
+        return _result(data, confidence, :htdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
     end
 
-    return StabilityResult(:htdev, res.tau, res.dev .* factor, res.noise_type,
+    return _result(data, confidence, :htdev, res.tau, res.dev .* factor, res.noise_type,
                            _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
@@ -252,13 +258,13 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:totdev, taus, devs, noises, _CIBound[], Float64[], neff)
+        return _result(data, confidence, :totdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:totdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:totdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :totdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -286,13 +292,13 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:mtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
+        return _result(data, confidence, :mtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:mtotdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :mtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -322,13 +328,13 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:htotdev, taus, devs, noises, _CIBound[], Float64[], neff)
+        return _result(data, confidence, :htotdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:htotdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:htotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :htotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -344,10 +350,10 @@ function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     factor = res.tau ./ sqrt(3.0)
 
     if !ci
-        return StabilityResult(:ttotdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
+        return _result(data, confidence, :ttotdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
     end
 
-    return StabilityResult(:ttotdev, res.tau, res.dev .* factor, res.noise_type,
+    return _result(data, confidence, :ttotdev, res.tau, res.dev .* factor, res.noise_type,
                            _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
@@ -391,13 +397,13 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mhtot, taus, T)) : raw_devs
 
     if !ci
-        return StabilityResult(:mhtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
+        return _result(data, confidence, :mhtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:mhtotdev, devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:mhtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :mhtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
@@ -467,7 +473,7 @@ function mtie(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     raw_devs = _mtie_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:mtie, length(data.x), m_values)
-    return StabilityResult(:mtie, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+    return _result(data, confidence, :mtie, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
 end
 
 mtie(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mtie(_freq_to_phase(data), m_values; kwargs...)
@@ -526,7 +532,7 @@ function tierms(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidenc
     raw_devs = _tierms_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:tierms, length(data.x), m_values)
-    return StabilityResult(:tierms, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+    return _result(data, confidence, :tierms, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
 end
 
 tierms(data::FrequencyData, m_values::Vector{Int}; kwargs...) = tierms(_freq_to_phase(data), m_values; kwargs...)
@@ -580,14 +586,14 @@ function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     neff = _neff_counts(:pdev, length(x), m_values)
 
     if !ci
-        return StabilityResult(:pdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
+        return _result(data, confidence, :pdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:pdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
 
-    return StabilityResult(:pdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :pdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 pdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = pdev(_freq_to_phase(data), m_values; kwargs...)
@@ -649,14 +655,14 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     devs = correct_bias ? raw_devs .* sqrt(_theobr_ratio(x, data.tau0)) : raw_devs
 
     if !ci
-        return StabilityResult(:theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)
+        return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:theo1, devs, noises, m_values, taus, N, T)
     lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
 
-    return StabilityResult(:theo1, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :theo1, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
@@ -719,7 +725,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     neff = _neff_counts(:theoh, N, m_values)
 
     if !ci
-        return StabilityResult(:theoh, taus, devs, Symbol[], _CIBound[], Float64[], neff)
+        return _result(data, confidence, :theoh, taus, devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
     # Per-segment noise ID and EDF: ADEV EDF below the crossover, Thêo1
@@ -740,7 +746,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     end
     lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
 
-    return StabilityResult(:theoh, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
+    return _result(data, confidence, :theoh, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.

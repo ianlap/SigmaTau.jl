@@ -54,6 +54,6 @@ using Test, Random, SigmaTau
         err = try stability(pd; devs=[:dadev]); nothing catch e; e end
         @test err isa ArgumentError
         @test occursin("dynamic", sprint(showerror, err))
-        @test stability(pd; devs=[:adev], taus=1:4)[:adev].tau == adev(pd, 1:4).tau
+        @test stability(pd; devs=[:adev], m=1:4)[:adev].tau == adev(pd, 1:4).tau
     end
 end

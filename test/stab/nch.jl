@@ -1,6 +1,6 @@
-# nch.jl — N-cornered-hat noise separation tests.
+# nch.jl — ncornered_hat (N-cornered-hat) noise separation tests.
 #
-# `nch` must reproduce a manual Gray–Allan three-cornered-hat solution on
+# `ncornered_hat` must reproduce a manual Gray–Allan three-cornered-hat solution on
 # a three-clock fixture (same NaN policy), plus exact-algebra recovery
 # checks for the general N-clock formula
 #   σ̂²ᵢ = (Rᵢ − S/(N−1)) / (N−2),  Rᵢ = Σ_{j≠i} s²ᵢⱼ,  S = Σ_{j<k} s²ⱼₖ.
@@ -17,7 +17,7 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
     StabilityResult(kind, collect(Float64, taus), collect(Float64, devs),
                     Symbol[], _CIBound[], Float64[], neff)
 
-@testset "N-cornered hat (nch)" begin
+@testset "N-cornered hat (ncornered_hat)" begin
 
     @testset "reproduces the manual three-cornered hat" begin
         # Three independent white-FM clocks, pairwise ADEV, manual TCH inversion.
@@ -46,7 +46,7 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
 
         # 3-arg convenience form: (A−B, B−C, C−A); x13 stands in for the
         # C−A record since the deviation is orientation-invariant.
-        clocks = nch(a12, a23, a13)
+        clocks = ncornered_hat(a12, a23, a13)
         @test length(clocks) == 3
         for (manual, got) in zip((s1, s2, s3), clocks)
             @test isnan.(manual) == isnan.(got.dev)
@@ -64,7 +64,7 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
         # Matrix form (upper triangle) agrees with the 3-arg form exactly.
         P = Matrix{StabilityResult}(undef, 3, 3)
         P[1, 2] = a12; P[1, 3] = a13; P[2, 3] = a23
-        clocks_m = nch(P)
+        clocks_m = ncornered_hat(P)
         for (a, b) in zip(clocks, clocks_m)
             @test isapprox(a.dev, b.dev; rtol = 0, nans = true)
         end
@@ -72,7 +72,7 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
         # Lower-triangle fill is accepted too (symmetric access).
         Q = Matrix{StabilityResult}(undef, 3, 3)
         Q[2, 1] = a12; Q[3, 1] = a13; Q[3, 2] = a23
-        clocks_q = nch(Q)
+        clocks_q = ncornered_hat(Q)
         @test isapprox(clocks_q[1].dev, clocks[1].dev; rtol = 0, nans = true)
 
         # Recovered deviations track the synthesised ground truth within
@@ -92,7 +92,7 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
             for i in 1:(n_clocks - 1), j in (i + 1):n_clocks
                 P[i, j] = _nch_mk(fill(sqrt(vars[i] + vars[j]), 3); taus)
             end
-            out = nch(P)
+            out = ncornered_hat(P)
             @test length(out) == n_clocks
             for i in 1:n_clocks
                 @test all(isapprox.(out[i].dev .^ 2, vars[i]; rtol = 1e-12))
@@ -101,7 +101,7 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
 
         # Explicit N=3 hand check of the classic formula.
         s2ab, s2bc, s2ca = 5.0, 13.0, 10.0
-        out = nch(_nch_mk([sqrt(s2ab)]; taus = [1.0]),
+        out = ncornered_hat(_nch_mk([sqrt(s2ab)]; taus = [1.0]),
                   _nch_mk([sqrt(s2bc)]; taus = [1.0]),
                   _nch_mk([sqrt(s2ca)]; taus = [1.0]))
         @test out[1].dev[1]^2 ≈ (s2ab + s2ca - s2bc) / 2   # var_A = 1
@@ -112,14 +112,14 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
     @testset "negative variance estimates become NaN" begin
         # v12 = v13 = 1, v23 = 4 → var₁ = (1 + 1 − 4)/2 = −1 → NaN;
         # var₂ = var₃ = 2 stay finite. NaN inputs also propagate to NaN.
-        out = nch(_nch_mk([1.0]; taus = [1.0]),     # A−B
+        out = ncornered_hat(_nch_mk([1.0]; taus = [1.0]),     # A−B
                   _nch_mk([2.0]; taus = [1.0]),     # B−C (dev 2 → var 4)
                   _nch_mk([1.0]; taus = [1.0]))     # C−A
         @test isnan(out[1].dev[1])
         @test out[2].dev[1]^2 ≈ 2.0
         @test out[3].dev[1]^2 ≈ 2.0
 
-        out_nan = nch(_nch_mk([NaN]; taus = [1.0]),
+        out_nan = ncornered_hat(_nch_mk([NaN]; taus = [1.0]),
                       _nch_mk([1.0]; taus = [1.0]),
                       _nch_mk([1.0]; taus = [1.0]))
         @test all(isnan(r.dev[1]) for r in out_nan)
@@ -128,23 +128,23 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
     @testset "argument validation" begin
         good = _nch_mk([1.0, 2.0])
         # Non-square / too-small matrices.
-        @test_throws ArgumentError nch(Matrix{StabilityResult}(undef, 3, 4))
+        @test_throws ArgumentError ncornered_hat(Matrix{StabilityResult}(undef, 3, 4))
         P2 = Matrix{StabilityResult}(undef, 2, 2)
         P2[1, 2] = good
-        @test_throws ArgumentError nch(P2)
+        @test_throws ArgumentError ncornered_hat(P2)
         # Missing pair.
         P = Matrix{StabilityResult}(undef, 3, 3)
         P[1, 2] = good; P[1, 3] = good            # (2,3) unassigned
-        @test_throws ArgumentError nch(P)
+        @test_throws ArgumentError ncornered_hat(P)
         # Mismatched deviation type.
         P[2, 3] = _nch_mk([1.0, 2.0]; kind = :hdev)
-        @test_throws ArgumentError nch(P)
+        @test_throws ArgumentError ncornered_hat(P)
         # Mismatched τ grid.
         P[2, 3] = _nch_mk([1.0, 2.0]; taus = [1.0, 3.0])
-        @test_throws ArgumentError nch(P)
+        @test_throws ArgumentError ncornered_hat(P)
         # neff propagates the elementwise minimum across all pairs.
         P[2, 3] = _nch_mk([1.0, 2.0]; neff = [7, 200])
-        out = nch(P)
+        out = ncornered_hat(P)
         @test all(r.neff == [7, 100] for r in out)
     end
 end
