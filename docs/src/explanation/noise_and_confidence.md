@@ -144,6 +144,6 @@ A linear frequency drift D adds a term Dτ/√2 to ADEV, which grows as τ¹ and
 hides everything else at long τ. The Hadamard family takes a third difference
 and does not see it. Otherwise remove it before the analysis:
 [`detrend`](@ref) with `method=:quadratic` fits and removes the quadratic
-phase term, which is the frequency drift. MHTOTDEV removes it by default
-(`remove_drift=true`), because its reflected record would otherwise let it
-back in.
+phase term, which is the frequency drift. MHTOTDEV removes a quadratic from
+every window before reflecting it, so drift never reaches its reflected
+record.

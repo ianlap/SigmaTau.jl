@@ -268,10 +268,10 @@ function mhtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     return total_sum / (nsubs * (m * tau0)^2)
 end
 
-# Canonical MHTOTDEV (Greenhall half-mean slope removal). Independent reference
-# for the kept `_mhtotdev_core` form. Identical to `mhtotdev_var` except the
-# per-window detrend is the half-mean slope (matching MTOTDEV/HTOTDEV), not a
-# full least-squares fit.
+# Canonical MHTOTDEV: per-window least-squares quadratic removal, then the
+# mirrored extension. Independent reference for `_mhtotdev_core`: a direct
+# Vandermonde least-squares solve on each window and explicit third
+# differences, where the kernel uses an orthogonal basis and prefix sums.
 function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     m >= 1 || throw(ArgumentError("averaging factor m must be >= 1"))
     N = length(x); nsubs = N - 4m + 1
@@ -287,14 +287,10 @@ function mhtotdev_var_greenhall(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     for n in 1:nsubs
         copyto!(pd, 1, x, n, Lp)
 
-        # Half-mean slope removal (matches `_mhtotdev_greenhall`).
-        half = floor(Int, Lp / 2)
-        s1 = sum(@view(pd[1:half])) / half
-        s2 = sum(@view(pd[half+1:Lp])) / (Lp - half)
-        slope = (s2 - s1) / ((Lp / 2.0) * tau0)
-        for j in 1:Lp
-            pd[j] -= slope * tau0 * (j - 1)
-        end
+        # Least-squares quadratic removal (matches `_mhtotdev_greenhall`).
+        t = Float64.(0:Lp-1) .- (Lp - 1) / 2
+        A = hcat(ones(Lp), t, t .^ 2)
+        pd .-= A * (A \ pd)
 
         for j in 1:Lp
             ext[j]        = pd[Lp - j + 1]

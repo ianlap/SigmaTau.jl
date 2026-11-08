@@ -277,22 +277,16 @@ end
 
 function _coeff_mhtot(alpha::Int)
     # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
-    # (tools/mc_mhtotdev.jl, full sweep at git e3ba9da with the L = 4m subsegment
-    # kernel and the Kasdin–Walter synthesis, seed 20260531, R=3000, N up to
-    # 32768) against the shipped
-    # mhtotdev pipeline INCLUDING its default global least-squares drift
-    # removal (remove_drift=true), so the calibration matches what users
-    # compute; all fits R² ≥ 0.9988. MHTOTDEV is novel to SigmaTau, so these
-    # have no external reference; see docs mhtotdev.md. Both
-    # the Mod-Totvar form below and the TotHvar form (T/τ)/(b0+b1·τ/T) were
-    # fit; TotHvar edges ahead at α = ±2 (ΔR² ≤ 8e-4) and Mod-Totvar fits
-    # better elsewhere, so the Mod-Totvar form is kept uniformly as in the
-    # original calibration.
-    alpha == 2  && return (1.6342, 3.8334)
-    alpha == 1  && return (1.1651, 3.1934)
-    alpha == 0  && return (1.0861, 3.3451)
-    alpha == -1 && return (1.0096, 3.3662)
-    alpha == -2 && return (0.7641, 2.4152)
+    # (tools/mc_mhtotdev.jl at git 9d7a408: per-window quadratic detrend,
+    # Kasdin–Walter synthesis, seed 20260531, R = 3000, N up to 32768); all
+    # fits R² ≥ 0.9988. The TotHvar form (T/τ)/(b0 + b1·τ/T) fits no better at
+    # any α. MHTOTDEV is novel to SigmaTau, so there is no external reference;
+    # see docs mhtotdev.md.
+    alpha == 2  && return (1.5429, 3.8504)
+    alpha == 1  && return (1.0409, 2.9661)
+    alpha == 0  && return (0.9355, 2.8108)
+    alpha == -1 && return (0.8780, 2.5258)
+    alpha == -2 && return (0.8580, 2.5361)
     return (NaN, NaN)
 end
 
@@ -454,10 +448,10 @@ Conventions per variance type:
 - `:mhtot`: measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
   `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
   external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
-  `:totvar`): `b0 ∈ {1.031, 0.988, 1.054, 1.295, 2.169}` and
-  `b1 ∈ {-0.120, -0.069, -0.171, -0.719, -5.588}` for α ∈ {2, 1, 0, -1, -2}.
-  MHTOTDEV is ≈ unbiased for white/flicker noise (B ≈ 1) and reads high
-  for redder FM (RWFM B ≈ 2.2 at small τ, falling toward 1 as τ→T).
+  `:totvar`): `b0 ∈ {0.901, 0.824, 0.793, 0.784, 0.788}` and
+  `b1 ∈ {-0.008, -0.054, -0.042, -0.036, -0.032}` for α ∈ {2, 1, 0, -1, -2}.
+  MHTOTDEV reads low (B ≈ 0.9 for WHPM, ≈ 0.79 for the FM noises) because
+  each window's quadratic detrend absorbs part of its variance.
   See docs `mhtotdev.md`.
 
 Anything unrecognised falls through to B = 1.
@@ -484,21 +478,13 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
                            -3=>-0.283, -4=>-0.321)
             B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
         elseif var_type == :mhtot
-            # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl,
-            # full sweep at git e3ba9da, the L = 4m subsegment kernel and the
-            # Kasdin–Walter synthesis) over the
-            # τ/τ0 ≥ 16 validity window (Howe et al. 2000), with the wrapper's
-            # default global drift removal (remove_drift=true) in the loop.
-            # Modeled as B = b0 + b1·(τ/T), the same τ/T-linear form as
-            # :totvar. For the PM noises b1 is small (B ≈ constant); for the FM
-            # noises the b1 term carries both the boundary bias and the
-            # drift-removal suppression near τ → T and cuts the fit residual by
-            # ~45 % (WHFM) to ~96 % (RWFM); for WHPM it is negligible. MHTOTDEV is ≈ unbiased for
-            # white/flicker PM (B ≈ 1) and reads high for redder FM
-            # (RWFM B ≈ 2.2 at small τ). MHTOTDEV is novel to SigmaTau;
-            # no external reference; see docs mhtotdev.md.
-            b0_t = Dict(2=>1.0249, 1=>0.9879, 0=>1.0545, -1=>1.2946, -2=>2.1678)
-            b1_t = Dict(2=>-0.0078, 1=>-0.0630, 0=>-0.1706, -1=>-0.7752, -2=>-5.6243)
+            # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl
+            # at git 9d7a408, the same sweep as _coeff_mhtot) over τ/τ0 ≥ 16,
+            # modeled as B = b0 + b1·(τ/T) like :totvar. The per-window
+            # quadratic detrend absorbs part of each window's variance, so
+            # MHTOTDEV reads low: B ≈ 0.90 for WHPM, ≈ 0.79 for the FM noises.
+            b0_t = Dict(2=>0.9005, 1=>0.8238, 0=>0.7933, -1=>0.7841, -2=>0.7879)
+            b1_t = Dict(2=>-0.0083, 1=>-0.0541, 0=>-0.0422, -1=>-0.0357, -2=>-0.0325)
             aa = clamp(alpha, -2, 2)
             B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
         end
