@@ -74,8 +74,12 @@ nsamples
 ```@docs
 TauMode
 tau_values
+tau_mode
 DEFAULT_DEVIATIONS
 stability
+estimators
+deviation
+summarize
 ```
 
 The exported [`TauMode`](@ref) instances are `AllTaus`, `Octave`,

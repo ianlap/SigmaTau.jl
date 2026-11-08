@@ -802,7 +802,7 @@ function _dynamic_dev(core::F, dev_sym::Symbol, data::PhaseData,
 end
 
 """
-    dadev(data, m_values; window, step=window÷2) → DynamicStabilityResult
+    dadev(data, m_values=Octave; window, step=window÷2) → DynamicStabilityResult
 
 Dynamic Allan deviation σ_y(t, τ), a time-resolved stability map
 (Galleani & Tavella 2009; McKelvy et al. 2025
@@ -821,6 +821,9 @@ window; entries the window cannot support (`window − 2m < 2`) yield `NaN`
 columns. Pass a [`TauMode`](@ref) instead to get a grid clamped to the
 *window* length (`tau_values(mode, window, :adev)`), not the record length.
 The result's rows are windows (centered at the times in `t`), columns are τ.
+`window` defaults to the largest power of two up to `N ÷ 8` (at least 16
+samples) and `step` to half the window; with no `m_values` the octave grid
+is used, so `dadev(pd)` gives a map with about fifteen windows.
 
 No confidence intervals are produced: the literature gives no EDF model for
 the time-resolved map (each window's value alone is an ordinary ADEV with
@@ -829,14 +832,14 @@ Each window is evaluated by a full `_adev_core` call on a copied buffer, so
 runtime scales with the window count: halving `step` doubles the cost.
 """
 function dadev(data::PhaseData, m_values::Vector{Int};
-               window::Int, step::Int = window ÷ 2)
+               window::Int = _default_window(length(data.x)), step::Int = window ÷ 2)
     # min window: _adev_core needs N_w − 2m ≥ 2 ⇒ window ≥ 4 at m = 1.
     return _dynamic_dev(_adev_core, :dadev, data, m_values;
                         window=window, step=step, min_window=4)
 end
 
 """
-    dhdev(data, m_values; window, step=window÷2) → DynamicStabilityResult
+    dhdev(data, m_values=Octave; window, step=window÷2) → DynamicStabilityResult
 
 Dynamic Hadamard deviation: the same sliding-window construction as
 [`dadev`](@ref) with the overlapping third-difference (Hadamard) kernel
@@ -850,7 +853,7 @@ Like `dadev`, no confidence intervals are produced; there is no published
 EDF model for the time-resolved map.
 """
 function dhdev(data::PhaseData, m_values::Vector{Int};
-               window::Int, step::Int = window ÷ 2)
+               window::Int = _default_window(length(data.x)), step::Int = window ÷ 2)
     # min window: _hdev_core needs N_w − 3m ≥ 2 ⇒ window ≥ 5 at m = 1.
     return _dynamic_dev(_hdev_core, :dhdev, data, m_values;
                         window=window, step=step, min_window=5)
@@ -862,10 +865,21 @@ dhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = dhdev(_freq_to_ph
 
 # TauMode grid selector: resolve against the *window* length (every window
 # computes the same m grid; the record length is irrelevant to the clamp).
-dadev(data::PhaseData,     taus::TauMode; window::Int, kwargs...) = dadev(data, tau_values(taus, window, :adev); window=window, kwargs...)
-dadev(data::FrequencyData, taus::TauMode; window::Int, kwargs...) = dadev(data, tau_values(taus, window, :adev); window=window, kwargs...)
-dhdev(data::PhaseData,     taus::TauMode; window::Int, kwargs...) = dhdev(data, tau_values(taus, window, :hdev); window=window, kwargs...)
-dhdev(data::FrequencyData, taus::TauMode; window::Int, kwargs...) = dhdev(data, tau_values(taus, window, :hdev); window=window, kwargs...)
+# With no grid, the octave grid; with no window, `_default_window`.
+dadev(data::AbstractTimingData, taus::TauMode = Octave; window::Int = _default_window(length(data)), kwargs...) =
+    dadev(data, tau_values(taus, window, :adev); window=window, kwargs...)
+dhdev(data::AbstractTimingData, taus::TauMode = Octave; window::Int = _default_window(length(data)), kwargs...) =
+    dhdev(data, tau_values(taus, window, :hdev); window=window, kwargs...)
+
+# Default dynamic window: the largest power of two up to N ÷ 8 (at least 16,
+# at most N), so the map has about fifteen half-overlapped windows.
+function _default_window(N::Int)
+    w = 16
+    while 2w <= N ÷ 8
+        w *= 2
+    end
+    return min(w, N)
+end
 
 # ── Any integer vector of averaging factors ──────────────────────────────
 # The methods above take `Vector{Int}`; these accept ranges (`1:10`), views

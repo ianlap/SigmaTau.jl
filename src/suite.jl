@@ -8,71 +8,36 @@ in seconds and must be requested explicitly.
 """
 const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 
-# Per-symbol routing with keyword filtering. The Allan/Hadamard families forward
-# only `ci`/`confidence`; the total family also forwards any extra kwargs
-# (`correct_bias`), letting each total function apply it; `pdev` forwards
-# `ci`/`confidence`; `mtie`/`tierms` forward only `ci`. The fallback rejects
-# unknown symbols.
-_dispatch_dev(::Val{:adev},  data, m; ci, confidence, kwargs...) = adev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:mdev},  data, m; ci, confidence, kwargs...) = mdev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:tdev},  data, m; ci, confidence, kwargs...) = tdev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:hdev},  data, m; ci, confidence, kwargs...) = hdev(data, m;  ci, confidence)
-_dispatch_dev(::Val{:mhdev}, data, m; ci, confidence, kwargs...) = mhdev(data, m; ci, confidence)
-_dispatch_dev(::Val{:htdev}, data, m; ci, confidence, kwargs...) = htdev(data, m; ci, confidence)
-
-_dispatch_dev(::Val{:totdev},   data, m; ci, confidence, kwargs...) = totdev(data, m;   ci, confidence, kwargs...)
-_dispatch_dev(::Val{:mtotdev},  data, m; ci, confidence, kwargs...) = mtotdev(data, m;  ci, confidence, kwargs...)
-_dispatch_dev(::Val{:ttotdev},  data, m; ci, confidence, kwargs...) = ttotdev(data, m;  ci, confidence, kwargs...)
-_dispatch_dev(::Val{:htotdev},  data, m; ci, confidence, kwargs...) = htotdev(data, m;  ci, confidence, kwargs...)
-_dispatch_dev(::Val{:mhtotdev}, data, m; ci, confidence, kwargs...) = mhtotdev(data, m; ci, confidence, kwargs...)
-
-_dispatch_dev(::Val{:mtie},   data, m; ci, confidence, kwargs...) = mtie(data, m; ci, confidence)
-_dispatch_dev(::Val{:tierms}, data, m; ci, confidence, kwargs...) = tierms(data, m; ci, confidence)
-_dispatch_dev(::Val{:pdev},   data, m; ci, confidence, kwargs...) = pdev(data, m; ci, confidence)
-
-# Theo family: `theo1` accepts `correct_bias` (ThêoBR removal, on by default)
-# so extra kwargs flow through; `theoh` is always bias-removed and gets only
-# `ci`/`confidence`. Note their grids differ: :theo1 uses even Thêo1 factors,
-# :theoh uses τ-grid factors (see `tau_values`).
-_dispatch_dev(::Val{:theo1}, data, m; ci, confidence, kwargs...) = theo1(data, m; ci, confidence, kwargs...)
-_dispatch_dev(::Val{:theoh}, data, m; ci, confidence, kwargs...) = theoh(data, m; ci, confidence)
-
-_dispatch_dev(::Val{S}, data, m; kwargs...) where {S} =
-    throw(ArgumentError("stability: unknown deviation :$S"))
-
 function _stability(data, N::Int, kind::Symbol, tau0::Float64;
                     devs = DEFAULT_DEVIATIONS, taus = Octave,
-                    ci::Bool = true, confidence::Float64 = DEFAULT_CONFIDENCE,
-                    kwargs...)
+                    ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
+                    correct_bias::Bool = true, remove_drift::Bool = true)
     results = StabilityResult[]
     for sym in devs
-        sym in (:dadev, :dhdev) && throw(ArgumentError(
-            "stability: :$sym is a dynamic deviation; call $sym(data; window, step) instead"))
-        m = taus isa TauMode ? tau_values(taus, N, sym) : collect(Int, taus)
-        push!(results, _dispatch_dev(Val(sym), data, m; ci, confidence, kwargs...))
+        name = Symbol(sym)
+        m = taus isa TauMode ? _resolve_m(name, taus, N) : collect(Int, taus)
+        push!(results, deviation(name, data, m; ci, confidence, correct_bias, remove_drift))
     end
     tau_mode = taus isa TauMode ? Symbol(string(taus)) : :explicit
-    return StabilitySuite(results, kind, tau0, N, ci ? confidence : NaN, tau_mode)
+    return StabilitySuite(results, kind, tau0, N, ci ? Float64(confidence) : NaN, tau_mode)
 end
 
 """
     stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, taus=Octave,
-              ci=true, confidence=DEFAULT_CONFIDENCE, kwargs...) → StabilitySuite
+              ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true,
+              remove_drift=true) → StabilitySuite
 
 Compute a suite of stability deviations from one record in a single call, the
-batch analog of `adev`, `mdev`, …. Each symbol in `devs` is dispatched to its
-public deviation function with a per-deviation averaging-factor grid derived from
+batch analog of `adev`, `mdev`, …. Each symbol in `devs` is run through
+[`deviation`](@ref) with a per-deviation averaging-factor grid derived from
 `taus`, so every deviation gets a grid valid for its own algorithmic m-max.
 Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 
-`devs` is any iterable of deviation symbols drawn from `(:adev, :mdev, :tdev,
-:hdev, :mhdev, :htdev, :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev, :mtie,
-:tierms, :pdev, :theo1, :theoh)`. `taus` is a [`TauMode`](@ref) (e.g. `Octave`,
-`Decade`) or an explicit `Vector{Int}` of averaging factors applied to every
-deviation. The extra keyword argument `correct_bias` is forwarded only to the
-deviations that accept it (the total family and `theo1`); `pdev` and `theoh`
-receive `ci`/`confidence`; `mtie`/`tierms` receive only `ci`. Note that an
-explicit `taus`
+`devs` is any iterable of estimator names from [`estimators`](@ref)
+(symbols or strings). `taus` is a [`TauMode`](@ref) (e.g. `Octave`, `Decade`)
+or an integer vector of averaging factors applied to every deviation.
+`correct_bias` reaches only the estimators that take it (the total family and
+`theo1`), and `remove_drift` only `mhtotdev`. Note that an explicit `taus`
 vector is passed to every deviation verbatim: `:theo1` interprets it as even
 Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
 prefer a `TauMode` when mixing the Theo family with others.

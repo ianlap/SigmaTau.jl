@@ -7,6 +7,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `Sy`, `Sx` and `L` default `nperseg` is now the largest power of two up to
+  `N ÷ 4` (at least 16) instead of `min(N, 256)`, matching the explorer. Long
+  records get finer low-frequency resolution by default; pass `nperseg=256`
+  for the old spectra.
+- `dadev` / `dhdev` `window` is now optional: the largest power of two up to
+  `N ÷ 8` (at least 16), with `step = window ÷ 2` as before.
+- `stability` takes `correct_bias` and `remove_drift` (for `mhtotdev`) as its only extra keywords; any other
+  keyword is now a `MethodError` instead of being passed to some estimators
+  and silently dropped for the rest.
 - `stability` passes `confidence` through to `mtie` and `tierms` like the
   other estimators (both still report no intervals), and asking it for
   `:dadev` / `:dhdev` now says to call those functions directly instead of
@@ -54,6 +63,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `estimators()`: the registry of the 16 estimators (name, label, family,
+  σ_y or σ_x axis, whether `correct_bias` applies, one-line description), for
+  menus, command lines and docs.
+- `deviation(name, data, m=Octave; ci, confidence, correct_bias)`: run an
+  estimator chosen at run time; written as plain branches so it compiles under
+  `juliac --trim`. `stability` now runs through it and accepts names as
+  strings too.
+- `tau_mode("half-octave")` and friends: parse a τ-grid name into a `TauMode`,
+  ignoring case and separators.
+- `summarize(data)`: samples, τ₀, span, `NaN` gaps, 5σ outlier indices and
+  linear frequency drift per day, as the explorer's Data page shows them.
+- `dadev(pd)` / `dhdev(pd)` work with no grid and no window: the octave grid
+  and a default window (see below).
 - Every estimator (and `dadev` / `dhdev`) accepts any integer vector of
   averaging factors: `adev(pd, 1:10)`, `adev(pd, 2 .^ (0:6))`, `Int32` or view
   vectors work like a `Vector{Int}`. `stability(pd; taus=1:10)` already did.
