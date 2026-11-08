@@ -112,13 +112,14 @@ mutable struct Options
     column::String            # "" = by name
     nominal::Float64          # NaN = from the readings
     columns_set::Bool         # --time-col, --value-col or --header given
+    measured::BitVector       # phase samples the format readers did not fill; empty = all
     model::String
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     Symbol[:adev, :mdev, :hdev, :mhdev], "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, "linear")
+                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "linear")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 

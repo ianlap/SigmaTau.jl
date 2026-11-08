@@ -160,7 +160,10 @@ export function openImport(file, prev = null) {
             </div>
           </div>
           <div class="imp-side">
-            ${s.format ? `<div><label class="lbl">Record type</label>
+            ${s.format === "table" ? `<div><label class="lbl">Record type</label>
+              <div class="seg" role="group"><button type="button" data-kind="phase" class="${st.kind === "phase" ? "on" : ""}">Phase (time error)</button><button type="button" data-kind="frequency" class="${st.kind === "frequency" ? "on" : ""}">Fractional frequency</button></div>
+              <div class="muted small" style="margin-top:6px">Units come from the column name, such as (ns) or ppb.</div></div>`
+            : s.format ? `<div><label class="lbl">Record type</label>
               <div class="muted small">${h(s.formatLabel)}: read as ${st.kind === "phase" ? "phase in seconds" : "fractional frequency"}${s.format === "counter" && st.kind === "frequency" ? " against the nominal frequency (the mean reading to 4 significant figures)" : ""}.</div></div>`
             : `<div><label class="lbl">Record type</label>
               <div class="seg" role="group"><button type="button" data-kind="phase" class="${st.kind === "phase" ? "on" : ""}">Phase (time error)</button><button type="button" data-kind="frequency" class="${st.kind === "frequency" ? "on" : ""}">Fractional frequency</button></div></div>

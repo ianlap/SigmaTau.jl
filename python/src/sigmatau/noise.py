@@ -61,9 +61,10 @@ def noise_gen(
 
     ``kind`` is the class ``PhaseData`` (integrated to phase) or ``FrequencyData``
     (raw ``y``). Specify the mixture by ``sigma1[α] = σ_y(τ₀)`` *or* ``h[α] = h_α``
-    (not both), with α ∈ {−2,−1,0,1,2} (and α = −4 through ``h`` only). Each
-    component is rescaled to hit its target σ exactly for the drawn realization;
-    components of different α are independent.
+    (not both), with α ∈ {−4,…,2} (white PM down to random-run FM). ``sigma1``
+    components are rescaled to hit their target σ exactly for the drawn
+    realization; ``h`` components have spectrum h_α (sin(πfτ₀)/(πτ₀))^α.
+    Components of different α are independent.
 
     ``rng`` is an int seed (drawn through Julia's ``Random.Xoshiro``) or ``None``
     (Julia's global RNG). Seed for reproducible output.
