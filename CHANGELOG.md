@@ -33,6 +33,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   workflow regenerates the allantools tables with a live install
   (`tools/validation/gen_allantools.py`); `tools/validation/report.jl`
   writes the agreement and discrepancy tables (`tools/validation/REPORT.md`).
+- `identify_noise(...; b1_length=:averaged)`: the B1 fallback (fewer than
+  30 averaged points) evaluates B1 theory at the averaged-point count
+  instead of the full record length. Random-walk FM at long τ is found far
+  more often (Monte Carlo, N = 1024, m = 40–128: 67 % vs 0 %); white FM
+  somewhat less often (63 % vs 82 %). The default `:record` keeps
+  Stable32's convention.
 
 ### Deprecated
 

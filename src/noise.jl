@@ -8,7 +8,7 @@ using StaticArrays
 const NEFF_RELIABLE = 30
 
 """
-    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true) → Vector{Symbol}
+    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true, b1_length::Symbol=:record) → Vector{Symbol}
     identify_noise(data::PhaseData, m_values; kwargs...) → Vector{Symbol}
     identify_noise(data::FrequencyData, m_values; kwargs...) → Vector{Symbol}
 
@@ -46,9 +46,26 @@ Stable32's noise-ID convention; use it when you need α values that line
 up with a Stable32-generated reference fixture point-for-point. (Before
 0.6 this keyword was called `detrend`; `detrend=false` still works, with a
 deprecation warning.)
+
+## `b1_length`
+
+Sets the record length `N` at which the B1 fallback (used when fewer than
+`NEFF_RELIABLE` averaged points remain) evaluates the theoretical
+B1(N, μ) values that separate the noise types.
+
+- `:record` (default): the full record's frequency-sample count, as
+  Stable32 does. α values line up with Stable32 point for point.
+- `:averaged`: the number of m-averaged frequency points the observed B1
+  is computed from. This is the length the B1 theory describes, and it
+  identifies random-walk FM far more reliably at long τ (in Monte Carlo
+  runs with N = 1024 and m = 40–128, 55–75 % correct instead of 1–4 %),
+  at the cost of somewhat weaker white-FM identification and less
+  agreement with Stable32.
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
-                        remove_drift::Bool=true, detrend::Bool=true)
+                        remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:record)
+    b1_length in (:record, :averaged) ||
+        throw(ArgumentError("b1_length must be :record or :averaged, got :$b1_length"))
     detrend || Base.depwarn("identify_noise: `detrend` is deprecated, use `remove_drift`", :identify_noise)
     detrend = remove_drift && detrend
     x_clean = _preprocess(x)
@@ -64,7 +81,7 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             if N_eff >= NEFF_RELIABLE
                 alpha, _, _, _ = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)
             else
-                alpha, _, _ = _noise_id_b1rn(x_clean, m; detrend=detrend)
+                alpha, _, _ = _noise_id_b1rn(x_clean, m; detrend=detrend, b1_length=b1_length)
             end
         catch
             alpha = NaN
@@ -235,20 +252,13 @@ function _lag1_acf(x::Vector{Float64})
     return num / ssx
 end
 
-function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true)
+function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_length::Symbol=:record)
     x_dec = x[1:m:end]
     if detrend
         x_dec = _detrend_quadratic(x_dec)
     end
 
     avar_val = _simple_avar(x_dec, 1) / Float64(m)^2
-    # Howe 2005 / Barnes 1971: the N in B1_theory(N, r=1, μ) refers to the
-    # input data run, not the post-averaging sample count. Using the latter
-    # collapses the dynamic range of the theoretical B1 values at small N_eff
-    # and misclassifies long-τ points. The original frequency-sample count
-    # `length(x) - 1` keeps the boundaries well-separated regardless of AF.
-    N_avar   = length(x) - 1
-
     dx = diff(x)
     Nd = (length(dx) ÷ m) * m
     Nd < m && return (NaN, -2, NaN)
@@ -260,6 +270,13 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true)
     # systematically understates B1 at small N_eff and pushes long-τ
     # classifications into the PM region. Matches Stable32 exactly.
     var_class = var(y_avg)
+
+    # N in B1_theory(N, μ). `:record` uses the full frequency-sample count
+    # `length(x) - 1`, as Stable32 does; `:averaged` uses the number of
+    # averaged points B1_obs is computed from, which is what the theory
+    # describes (see the `b1_length` docs of `identify_noise`).
+    N_avar = b1_length === :averaged ? length(y_avg) : length(x) - 1
+    N_avar < 2 && return (NaN, -2, NaN)
 
     (isnan(avar_val) || avar_val <= 0) && return (NaN, -2, NaN)
 
