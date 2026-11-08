@@ -97,13 +97,16 @@ function view(doc) {
       outlier_t: r.outlier_t ?? [], outlier_x: r.outlier_x ?? [], drift_per_day: r.drift_per_day,
     },
   };
-  const ci = doc.analysis?.ci === true;
   const results = (doc.results ?? []).map((res) => {
     const col = (k) => res.points.map((p) => p[k]);
+    // Columns an estimator does not report (no CI for MTIE and TIE rms, or
+    // --no-ci) are all null; the pages expect them empty.
+    const has = (k) => res.points.some((p) => p[k] !== null && p[k] !== undefined);
+    const ci = has("ci_lower");
     return {
       dev: res.deviation, label: res.label, axis: res.axis, tau: col("tau"), sigma: col("dev"),
       ci_lo: ci ? col("ci_lower") : [], ci_hi: ci ? col("ci_upper") : [],
-      edf: ci ? col("edf") : [], noise: ci ? col("noise_type") : [], neff: col("neff"),
+      edf: has("edf") ? col("edf") : [], noise: has("noise_type") ? col("noise_type") : [], neff: col("neff"),
     };
   });
   const d = doc.dynamic;
@@ -132,7 +135,7 @@ export function analyze(clock, signal) {
 
 // Settings that decide a clock's dynamic map; a change means recompute.
 export const dynamicKey = (clock) =>
-  JSON.stringify([recordArgs(clock), state.dyn.dev, state.dyn.frac, state.grid]);
+  JSON.stringify([request(clock, "dynamic", []), state.dyn.dev, state.dyn.frac, state.grid]);
 
 // Sliding-window deviation map for one clock (window = record / frac).
 export function dynamic(clock, signal) {

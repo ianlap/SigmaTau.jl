@@ -119,7 +119,7 @@ end
 
 function parse_float(s::String, flag::String)
     v = tryparse(Float64, s)
-    v === nothing && throw(usage_error(flag * " expects a number, got \"" * s * "\""))
+    (v === nothing || !isfinite(v)) && throw(usage_error(flag * " expects a finite number, got \"" * s * "\""))
     return v
 end
 
@@ -250,6 +250,11 @@ function parse_args!(o::Options, args::Vector{String})
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))
     o.reference_col >= 0 || throw(usage_error("--reference-col must be 1 or more"))
+    o.time_col >= 0 || throw(usage_error("--time-col must be 0 (no time column) or more"))
+    o.value_col >= 1 || throw(usage_error("--value-col must be 1 or more"))
+    o.header >= 0 || throw(usage_error("--header must be 0 or more"))
+    isnan(o.tau0) || o.tau0 > 0 || throw(usage_error("--tau0 must be positive"))
+    o.scaling != 0 || throw(usage_error("--scaling must not be 0"))
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
     return o

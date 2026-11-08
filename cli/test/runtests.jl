@@ -280,6 +280,11 @@ mktempdir() do dir
         @test run_cli("analyze", pf, "--synth", "64").code == 1
         @test run_cli("analyze", pf, "--tau0").code == 1
         @test run_cli("analyze", pf, "--no-ci=yes").code == 1
+        @test run_cli("analyze", pf, "--time-col", "-1", "--tau0", "1").code == 1
+        @test run_cli("analyze", pf, "--value-col", "0").code == 1
+        @test run_cli("analyze", pf, "--tau0", "Inf").code == 1
+        @test run_cli("analyze", pf, "--tau0", "-1").code == 1
+        @test run_cli("analyze", pf, "--scaling", "NaN").code == 1
     end
 
     @testset "errors in JSON when asked for JSON" begin
