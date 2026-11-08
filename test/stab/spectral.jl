@@ -106,8 +106,13 @@ end
         Random.seed!(19)
         p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(0 => 1e-12))
         r = Sy(p)
-        @test r.nperseg == 256                  # min(N, 256)
-        @test r.noverlap == 128                 # 50 % overlap
+        # Sy differences phase to N − 1 samples: 4095 ÷ 4 = 1023 → 512.
+        @test r.nperseg == 512                  # largest 2^k ≤ N ÷ 4
+        @test r.noverlap == 256                 # 50 % overlap
         @test r.window === :hann
+        @test Sx(p).nperseg == 1024
+        @test SigmaTau._default_nperseg(4095) == 512
+        @test SigmaTau._default_nperseg(40) == 16
+        @test SigmaTau._default_nperseg(10) == 10
     end
 end

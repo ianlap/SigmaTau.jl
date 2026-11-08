@@ -39,6 +39,7 @@ include("edf.jl")
 include("grids.jl")
 include("spectral.jl")
 include("deviations.jl")
+include("registry.jl")
 include("suite.jl")
 
 # ── Real-time streaming accumulators (Dobrogowski–Kasznia scheme) ───────
@@ -72,6 +73,7 @@ export dadev, dhdev
 export nch
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
+export estimators, deviation, tau_mode, summarize
 export StreamingStability, snapshot, nsamples
 
 export noise_gen

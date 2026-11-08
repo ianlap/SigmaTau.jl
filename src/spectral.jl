@@ -100,11 +100,19 @@ end
 """
     _default_nperseg(N::Int) → Int
 
-Default Welch segment length when the caller does not supply one: `min(N, 256)`,
-the scipy default. Tune upward for finer low-frequency resolution, downward for
-more segments (lower variance).
+Default Welch segment length when the caller does not supply one: the largest
+power of two up to `N ÷ 4`, at least 16 and at most `N`. The spectrum then
+reaches within a factor of four of the record's lowest frequency and still
+averages seven half-overlapped segments. Tune upward for finer low-frequency
+resolution, downward for more segments (lower variance).
 """
-_default_nperseg(N::Int) = min(N, 256)
+function _default_nperseg(N::Int)
+    np = 16
+    while 2np <= N ÷ 4
+        np *= 2
+    end
+    return min(np, N)
+end
 
 # Public API: `Sy` / `Sx` / `L` take `PhaseData` / `FrequencyData` and return a
 # `SpectralResult` wrapping the `_welch_psd` core.
@@ -127,8 +135,8 @@ One-sided power spectral density of the fractional frequency `y(t)`,
 method at sample rate `fs = 1/τ₀`.
 
 `PhaseData` input is differenced to fractional frequency
-(`y[k] = (x[k+1] − x[k])/τ₀`) first. `nperseg` / `noverlap` default to the
-scipy convention (`min(N, 256)` with 50 % overlap); raise `nperseg` for finer
+(`y[k] = (x[k+1] − x[k])/τ₀`) first. `nperseg` defaults to the largest
+power of two up to `N ÷ 4` (at least 16), `noverlap` to half of it; raise `nperseg` for finer
 low-frequency resolution, lower it for more averaging. `window` is `:hann`,
 `:hamming`, or `:rectangular`.
 
