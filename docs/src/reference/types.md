@@ -1,25 +1,28 @@
-# Shared types
+# Types
 
-Core data types used across the package and re-exported from
-`SigmaTau`.
+Records go in, results come out. Every estimator takes a
+[`PhaseData`](@ref) or [`FrequencyData`](@ref) and returns a
+[`StabilityResult`](@ref); [`stability`](@ref) returns a
+[`StabilitySuite`](@ref), the spectra a [`SpectralResult`](@ref) and the
+dynamic deviations a [`DynamicStabilityResult`](@ref).
 
-## Types
+## Records
 
 ```@docs
 AbstractTimingData
 PhaseData
 FrequencyData
+```
+
+## Results
+
+```@docs
 StabilityResult
+ci_lower
+ci_upper
 StabilitySuite
 SpectralResult
 DynamicStabilityResult
-```
-
-## Accessors
-
-```@docs
-ci_lower
-ci_upper
 ```
 
 ## Tables.jl
