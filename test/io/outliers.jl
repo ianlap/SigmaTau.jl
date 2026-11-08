@@ -78,4 +78,54 @@
         @test clean.source == "glitchy.dat"
         @test pd.x[40] == x[40]                     # input untouched
     end
+
+    @testset "remove_outliers removes a phase step (frequency space)" begin
+        # A persistent phase step is one outlying frequency sample. Cleaning in
+        # frequency space and reintegrating removes the step from every later
+        # sample; refilling the phase sample it lands on would leave it there.
+        step = 5e-9
+        xs   = copy(x_base)
+        xs[70:end] .+= step
+        clean = remove_outliers(PhaseData(xs, 1.0; source="step.dat"))
+        @test clean isa PhaseData
+        @test all(isfinite, clean.x)
+        @test clean.x[1:69] ≈ xs[1:69] rtol=1e-12      # before the step: unchanged
+        @test maximum(abs.(clean.x .- x_base)) < 1e-2 * step
+        @test isempty(find_outliers(clean))
+        @test clean.source == "step.dat"
+
+        # ADEV recovers to the clean record's level instead of carrying the step.
+        ms     = [1, 2, 4, 8]
+        a_base = adev(PhaseData(x_base, 1.0), ms; ci=false).dev
+        a_step = adev(PhaseData(xs, 1.0), ms; ci=false).dev
+        a_fix  = adev(clean, ms; ci=false).dev
+        @test all(a_step .> 100 .* a_base)
+        @test all(a_fix .< 2 .* a_base)
+    end
+
+    @testset "remove_outliers: phase result matches the frequency path" begin
+        # A frequency spike integrated to phase is a phase step. Cleaning the
+        # phase record must equal cleaning the frequency record and integrating.
+        tau0  = 2.0
+        y     = copy(y_base)
+        y[50] = 1e-9
+        x     = vcat(0.0, cumsum(y) .* tau0)
+        via_phase = remove_outliers(PhaseData(x, tau0))
+        fd_clean  = remove_outliers(FrequencyData(y, tau0))
+        via_freq  = vcat(0.0, cumsum(fd_clean.y) .* tau0)
+        @test via_phase.x ≈ via_freq rtol=1e-12 atol=1e-24
+        @test via_phase.tau0 == tau0
+    end
+
+    @testset "remove_outliers: phase record with gaps and a step" begin
+        xs = copy(x_base)
+        xs[90:end] .+= 5e-9
+        xs[20] = NaN
+        clean = remove_outliers(PhaseData(xs, 1.0))
+        @test all(isfinite, clean.x)
+        @test abs(clean.x[end] - x_base[end]) < 5e-11
+        # Nothing flagged ⇒ the input comes back as-is.
+        pd_ok = PhaseData(x_base, 1.0)
+        @test remove_outliers(pd_ok) === pd_ok
+    end
 end
