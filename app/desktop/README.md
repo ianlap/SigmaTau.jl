@@ -9,8 +9,9 @@ for working on the pages in a browser.
 ```
 app/desktop/
   src/main.rs         commands: health, analyze, cancel, save_file
-  tauri.conf.json     window and bundle settings
-  bundle.sh           cargo tauri build, then copies the core into the app
+  tauri.conf.json     window and bundle settings (tauri.linux.conf.json adds Linux's)
+  bundle.sh           builds the app with the core inside, signs it, writes dist/
+  entitlements.plist  hardened-runtime exceptions for a Developer ID build
   capabilities/       webview permissions (core window events only)
   icons/              app-icon.png and the sizes generated from it
 ```
@@ -24,14 +25,43 @@ app/desktop/
 3. With Rust and the Tauri CLI (`cargo install tauri-cli --version "^2"`):
 
 ```bash
-app/desktop/bundle.sh          # target/release/bundle/macos/SigmaTau Explorer.app
+app/desktop/bundle.sh               # writes app/desktop/dist/
 cd app/desktop && cargo tauri dev   # run from the source tree
 ```
 
-`bundle.sh` copies the core in after Tauri bundles, keeping its symlinks
-(Tauri's own resource copy turns them into files and the app grows from
-114 MB to 289 MB), then signs the app ad hoc. It does the macOS step only;
-on other systems put `cli/build/` next to the executable as `core/`.
+On macOS `bundle.sh` makes `SigmaTau Explorer.app` and puts a `.dmg` and a
+`.zip` of it in `dist/`. It copies the core in after Tauri bundles, keeping
+its symlinks (Tauri's own resource copy turns them into files and the app
+grows from 114 MB to 289 MB). On Linux it copies Tauri's `.deb` and
+`.AppImage` to `dist/`; there the core goes in as a Tauri resource
+(`tauri.linux.conf.json`), so those packages carry the duplicated libraries.
+The Linux build needs the WebKitGTK development packages
+(`libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf`).
+
+### Signing (macOS)
+
+Without a Developer ID the app is signed ad hoc. It runs on the Mac that
+built it; on another Mac, macOS blocks the first launch of a downloaded copy.
+Right-click the app and choose Open, then Open again (on macOS 15, open it
+once, then allow it under System Settings → Privacy & Security), or clear the
+download flag:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/SigmaTau Explorer.app"
+```
+
+With a Developer ID, set `APPLE_SIGNING_IDENTITY` to the
+"Developer ID Application: …" identity in your keychain. `bundle.sh` then
+signs every library of the core and the app with the hardened runtime
+(`entitlements.plist`), and notarizes and staples it when `APPLE_ID`,
+`APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID` are set too.
+
+### Releases
+
+`.github/workflows/DesktopRelease.yml` builds macOS (Apple silicon and Intel)
+and Linux packages on a manual run or a tag like `app-v0.1.0`; a tag also
+makes a draft GitHub release with the files. The workflow's header lists the
+secrets that turn on Developer ID signing.
 
 Measured on an Intel MacBook Pro (macOS 15, Julia 1.13.3): a 5.7 MB shell,
 a 114 MB app (30 MB zipped), the page loaded about 1.1 s after launch, and
