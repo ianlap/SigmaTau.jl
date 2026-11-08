@@ -52,7 +52,7 @@ the range are clamped to WHPM or RWFM, and a τ where the estimate fails takes
 the type of its nearest neighbour.
 
 Stable32 does not detrend before the lag-1 estimate. The difference only
-matters on records with drift; `identify_noise(...; detrend=false)` follows
+matters on records with drift; `identify_noise(...; remove_drift=false)` follows
 Stable32, and [Validation](validation.md) quantifies the effect.
 
 ## Equivalent degrees of freedom

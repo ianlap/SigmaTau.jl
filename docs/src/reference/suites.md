@@ -7,10 +7,23 @@ stability
 DEFAULT_DEVIATIONS
 ```
 
+## Estimators by name
+
+[`estimators`](@ref) describes every estimator (name, label, family, axis,
+whether it takes `correct_bias`, a one-line description), and
+[`deviation`](@ref) runs one chosen by its name. The explorer and the
+command-line tool use both, so they list the same estimators as the library.
+
+```@docs
+estimators
+deviation
+```
+
 ## τ grids
 
 ```@docs
 TauMode
+tau_mode
 tau_values
 ```
 

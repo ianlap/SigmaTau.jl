@@ -48,7 +48,8 @@ Each estimator has three call forms:
 ```@example start
 adev(p)                    # default: octave-spaced τ up to the estimator's limit
 adev(p, Decade)            # a named τ grid (a TauMode)
-r = adev(p, [1, 2, 4, 8, 16, 32, 64])   # explicit averaging factors m, τ = m·τ₀
+adev(p, 1:10)              # any integer range or vector of averaging factors m
+r = adev(p, [1, 2, 4, 8, 16, 32, 64])   # τ = m·τ₀
 ```
 
 The result is a [`StabilityResult`](@ref), shown above as a table. Its
@@ -100,13 +101,13 @@ overlays of several clocks, spectra and dynamic maps.
 ## 5. Save
 
 [`save`](@ref) writes records, results and suites as plain text that any
-tool can read; [`read_phase`](@ref), [`load_result`](@ref) and
-[`load_suite`](@ref) read them back.
+tool can read; [`read_phase`](@ref) reads records back and [`load`](@ref)
+reads results and suites.
 
 ```@example start
 dir = mktempdir()
 save(joinpath(dir, "adev.tsv"), r)
-load_result(joinpath(dir, "adev.tsv")).dev ≈ r.dev
+load(joinpath(dir, "adev.tsv")).dev ≈ r.dev
 ```
 
 ## Where next

@@ -7,7 +7,7 @@ single-sideband phase noise, returned as a [`SpectralResult`](@ref).
 power-law slope guides.
 
 ```@docs
-Sy
-Sx
-L
+psd_y
+psd_x
+ssb_phase_noise
 ```

@@ -95,6 +95,13 @@ end
 
 Time deviation σ_x(τ) = (τ/√3) · Mod σ_y(τ), per IEEE 1139-2022 §C.4. A σ_x
 quantity in seconds. Confidence bounds are MDEV's scaled by the same factor.
+TDEV is the usual measure of time stability for time transfer and network
+timing; for drifting clocks use [`htdev`](@ref).
+
+Like every estimator, `tdev` also takes `FrequencyData`, a `TauMode` grid in
+place of `m_values` (`tdev(data, Decade)`), or no grid at all (`tdev(data)`,
+octave-spaced up to the estimator's limit). See
+[Choosing an estimator](@ref) for when to use it.
 """
 function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mdev(data, m_values; ci=ci, confidence=confidence)
@@ -135,7 +142,15 @@ tdev(data::FrequencyData; kwargs...) = tdev(data, _default_m_values(length(data.
     hdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Overlapping Hadamard deviation of a phase record, per NIST SP1065 §5.2.6. The
-third difference removes linear frequency drift.
+third difference removes linear frequency drift, so `hdev` is the estimator to
+use on rubidium, quartz or any clock with a frequency drift that would turn
+ADEV into a τ¹ ramp. It cannot separate white from flicker PM; use
+[`mhdev`](@ref) for that.
+
+Like every estimator, `hdev` also takes `FrequencyData`, a `TauMode` grid in
+place of `m_values` (`hdev(data, Decade)`), or no grid at all (`hdev(data)`,
+octave-spaced up to the estimator's limit). See
+[Choosing an estimator](@ref) for when to use it.
 """
 function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -160,7 +175,13 @@ end
 
 Modified Hadamard deviation of a phase record: the phase-averaged third
 difference, drift-immune like `hdev` and able to separate white PM from
-flicker PM like `mdev`.
+flicker PM like `mdev`. Not defined by SP1065; the EDF uses the
+Greenhall–Riley algorithm with the MHDEV filter.
+
+Like every estimator, `mhdev` also takes `FrequencyData`, a `TauMode` grid in
+place of `m_values` (`mhdev(data, Decade)`), or no grid at all (`mhdev(data)`,
+octave-spaced up to the estimator's limit). See
+[Choosing an estimator](@ref) for when to use it.
 """
 function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _f64(data.x)
@@ -185,7 +206,14 @@ end
 
 Hadamard time deviation σ_x,HT(τ) = τ/√(10/3) · σ_y,MH(τ), the σ_x form of
 `mhdev` in seconds, as TDEV is of MDEV. The construction is original to this
-package; SP1065, IEEE 1139-2022 and NBS TN-1337 do not define it.
+package; SP1065, IEEE 1139-2022 and NBS TN-1337 do not define it. Use it in
+place of [`tdev`](@ref) when the clock drifts. Confidence bounds are MHDEV's
+scaled by the same factor.
+
+Like every estimator, `htdev` also takes `FrequencyData`, a `TauMode` grid in
+place of `m_values` (`htdev(data, Decade)`), or no grid at all (`htdev(data)`,
+octave-spaced up to the estimator's limit). See
+[Choosing an estimator](@ref) for when to use it.
 """
 function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mhdev(data, m_values; ci=ci, confidence=confidence)

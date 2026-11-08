@@ -18,10 +18,13 @@ compare the curves.
 | Telecom timing masks (ITU-T G.810 family) | `mtie`, `tierms` | Maximum and RMS time interval error over each window. |
 | Data from an averaging (Λ-type) frequency counter | `pdev` | The parabolic deviation is the matched estimator for averaged frequency readings. |
 | Does the stability change during the record? | `dadev`, `dhdev` | σ(t, τ) over sliding windows; see [Plotting](plotting.md#Dynamic-deviations). |
-| Several clocks compared in pairs, and you want each clock alone | `nch` | The N-cornered hat separates the pairwise variances, assuming independent clocks. |
+| Several clocks compared in pairs, and you want each clock alone | `ncornered_hat` | The N-cornered hat separates the pairwise variances, assuming independent clocks. |
 | Live data, updated sample by sample | `StreamingStability` | ADEV, MDEV, HDEV and MHDEV at O(1) cost per sample; equals the batch call at every step. |
 
 ## The estimators
+
+`estimators()` returns the same list as data (name, label, family, axis and a
+one-line description), and `deviation(:mdev, p, m)` runs any of them by name.
 
 ### σ\_y(τ): fractional-frequency stability
 
@@ -54,7 +57,7 @@ compare the curves.
 | Function | Returns |
 |:---|:---|
 | [`dadev`](@ref), [`dhdev`](@ref) | a [`DynamicStabilityResult`](@ref): ADEV or HDEV in each window of a sliding window |
-| [`nch`](@ref) | one [`StabilityResult`](@ref) per clock from the pairwise results |
+| [`ncornered_hat`](@ref) | one [`StabilityResult`](@ref) per clock from the pairwise results |
 | [`StreamingStability`](@ref) | an accumulator; [`snapshot`](@ref) gives the current [`StabilityResult`](@ref) |
 
 ## Reading the slope

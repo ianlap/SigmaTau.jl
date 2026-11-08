@@ -6,7 +6,7 @@ and has three call forms:
 ```julia
 adev(data)                    # octave τ grid up to the estimator's limit
 adev(data, Decade)            # a TauMode grid; see Suites, τ grids and streaming
-adev(data, [1, 10, 100])      # explicit averaging factors m, τ = m·τ₀
+adev(data, [1, 10, 100])      # explicit averaging factors m, τ = m·τ₀ (a range works too)
 ```
 
 They return a [`StabilityResult`](@ref). The common keywords are
@@ -71,5 +71,5 @@ dhdev
 ## N-cornered hat
 
 ```@docs
-nch
+ncornered_hat
 ```

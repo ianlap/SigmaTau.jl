@@ -14,12 +14,15 @@ read_phase
 read_frequency
 ```
 
+## Checking a record
+
+```@docs
+summarize
+```
+
 ## Writing and loading
 
 ```@docs
 save
-save_result
-load_result
-save_suite
-load_suite
+load
 ```

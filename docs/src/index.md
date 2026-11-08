@@ -65,7 +65,7 @@ pages say how.
 | Three-cornered hat | `ncornered_hat` |
 | Noise generation | `noise_gen` |
 | Drift, outlier and gap tools | `detrend`, `remove_outliers`, `fillgaps` |
-| PSD and phase noise | `Sy`, `Sx`, `L` |
+| PSD and phase noise | `psd_y`, `psd_x`, `ssb_phase_noise` |
 
 Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev` and the real-time
 `StreamingStability` accumulators. Two defaults differ from Stable32

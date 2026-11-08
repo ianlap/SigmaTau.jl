@@ -8,9 +8,20 @@ abstract type AbstractTimingData end
 
 
 """
-    PhaseData{T<:AbstractFloat}
+    PhaseData(x, tau0=1.0; source="user")
 
-Phase residuals `x(t)` sampled at uniform interval `tau0` (default `1.0` s).
+Phase residuals `x(t)` in seconds, sampled at uniform interval `tau0` (default
+`1.0` s). This is the record every estimator takes: wrap a vector once and the
+sample interval travels with the data. `x` can be any real vector (a view, a
+range, integers); it is copied to a `Vector` of floats. `NaN` marks a missing
+sample (see [`fillgaps`](@ref)). `length(data)` is the number of samples.
+
+```julia
+p = PhaseData(x, 1.0)          # x in seconds, τ₀ = 1 s
+adev(p)
+```
+
+[`read_phase`](@ref) builds one from a file.
 
 $(TYPEDFIELDS)
 """
@@ -40,9 +51,19 @@ PhaseData(x::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = 
 
 
 """
-    FrequencyData{T<:AbstractFloat}
+    FrequencyData(y, tau0=1.0; source="user")
 
-Fractional-frequency samples `y(t)` at uniform interval `tau0` (default `1.0` s).
+Fractional-frequency samples `y(t)` (dimensionless) at uniform interval `tau0`
+(default `1.0` s). Every estimator accepts it and integrates it to phase,
+`x = τ₀ · cumsum(y)`, before the analysis. Like [`PhaseData`](@ref) it
+takes any real vector and supports `length`.
+
+```julia
+f = FrequencyData(y, 10.0)     # one reading every 10 s
+mdev(f)
+```
+
+[`read_frequency`](@ref) builds one from a file.
 
 $(TYPEDFIELDS)
 """
