@@ -362,7 +362,7 @@ function welch_rows()
     end
     for ((ds, kind, nps), ref) in sort(collect(byk); by=first)
         p = get!(() -> dataset(ds), cache, ds)
-        res = kind == "Sy" ? Sy(p; nperseg=nps) : Sx(p; nperseg=nps)
+        res = kind == "Sy" ? psd_y(p; nperseg=nps) : psd_x(p; nperseg=nps)
         # Error relative to the spectral peak: FFT round-off scales with the
         # total power, and a random-run phase record spans ~20 decades of S_x.
         pk = maximum(ref)
