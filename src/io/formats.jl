@@ -226,18 +226,21 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
     return _Record(_equispace(t, v, fillgaps), t0, phase)
 end
 
-# Units in a column name: "(ns)", "[ps]", "_us", " ppb", "Hz"; NaN = Hz.
-const _UNITS = [(Regex("(^|[\\s(\\[_/-])" * u * "([\\s)\\]]|\$)"), f)
-                for (u, f) in (("ps", 1e-12), ("ns", 1e-9), ("us", 1e-6), ("µs", 1e-6), ("μs", 1e-6),
-                               ("ms", 1e-3), ("ppt", 1e-12), ("ppb", 1e-9), ("ppm", 1e-6),
-                               ("hz", NaN), ("s", 1.0))]
+# Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "Hz"): the
+# scale to SI, NaN for absolute Hz, and whether they are time units (phase,
+# +1) or frequency units (-1).
+const _UNITS = [(Regex("(^|[\\s(\\[_/-])" * u * "([\\s)\\]]|\$)"), f, k)
+                for (u, f, k) in (("ps", 1e-12, 1), ("ns", 1e-9, 1), ("us", 1e-6, 1), ("µs", 1e-6, 1),
+                                  ("μs", 1e-6, 1), ("ms", 1e-3, 1), ("ppt", 1e-12, -1), ("ppb", 1e-9, -1),
+                                  ("ppm", 1e-6, -1), ("hz", NaN, -1), ("s", 1.0, 1))]
 
-function _unit_scale(name::AbstractString)
+# (scale, kind) of a column name's unit; (1, 0) without one.
+function _unit(name::AbstractString)
     n = lowercase(name)
-    for (re, f) in _UNITS
-        occursin(re, n) && return f
+    for (re, f, k) in _UNITS
+        occursin(re, n) && return f, k
     end
-    return 1.0
+    return 1.0, 0
 end
 
 const _PHASE_NAMES = r"phase|time ?err|\btie\b|pps|time ?offset|time ?diff|\bx\b"i
@@ -320,7 +323,11 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
     end
     phase = phase_hint == 0 ? !occursin(_FREQ_NAMES, names[c]) || occursin(_PHASE_NAMES, names[c]) :
             phase_hint > 0
-    scale = _unit_scale(names[c])
+    scale, unit_kind = _unit(names[c])
+    # A unit in the name fixes the record type; an override must agree.
+    (phase_hint != 0 && unit_kind != 0 && phase_hint != unit_kind) && throw(ArgumentError(
+        "read_data: column \"" * names[c] * "\" is in " * (unit_kind > 0 ? "time" : "frequency") *
+        " units and cannot be read as " * (phase_hint > 0 ? "phase" : "frequency")))
     if isnan(scale)            # absolute frequency in Hz
         f0 = _nominal(v, nominal)
         v = (v .- f0) ./ f0

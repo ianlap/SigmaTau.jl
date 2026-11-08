@@ -60,6 +60,8 @@ fmt(f) = joinpath(FMT, f)
         o = read_data(fmt("gpsdo.csv"); column="OSC offset (ppb)")
         @test o isa FrequencyData && o.y ≈ parse.(Float64, getindex.(rows, 3)) .* 1e-9
         @test read_data(fmt("gpsdo.csv"); column=4, kind=:phase) isa PhaseData
+        @test_throws ArgumentError read_data(fmt("gpsdo.csv"); column="OSC offset (ppb)", kind=:phase)
+        @test_throws ArgumentError read_data(fmt("gpsdo.csv"); column="PPS offset (ns)", kind=:frequency)
         @test_throws ArgumentError read_data(fmt("gpsdo.csv"); column="nope")
         @test SigmaTau._read_data(fmt("gpsdo.csv"), :auto; fillgaps=true).filled == (1:41 .== 24)
         semi = tempname() * ".txt"
