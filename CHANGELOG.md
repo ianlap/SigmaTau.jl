@@ -9,6 +9,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `fillgaps` fills a gap at the start or end of a record, joined to the
+  data on its one side, instead of throwing `BoundsError`; a layout it
+  cannot fill now throws its "gap topology" error instead of looping
+  forever.
 - EDF for `adev`, `mdev`, `tdev`, `hdev`, `mhdev` (and every caller of the
   Greenhall EDF) now follows the full Greenhall & Riley 2003 algorithm:
   exact basic sum only while J ≤ 100, Tables 1–3 beyond that, the

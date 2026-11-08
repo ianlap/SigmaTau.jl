@@ -1,4 +1,8 @@
-# Figures
+# Paper and figures
+
+`paper.md` and `paper.bib` are a draft software paper in the Journal of Open
+Source Software format (not submitted). The `Paper` workflow renders it to PDF
+with the JOSS toolchain whenever either file changes.
 
 Figures about SigmaTau.jl, kept for papers and talks. They were drawn for
 a poster, so they use a large type size, the Carlito
