@@ -207,6 +207,22 @@ mktempdir() do dir
         @test r.out == replace(run_cli("analyze", pf, "--devs", "adev", "--no-ci").out, pf => sf)
     end
 
+    @testset "instrument formats" begin
+        fx(f) = joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", f)
+        tim = fx("timelab.tim")
+        a = csv_rows(run_cli("analyze", tim, "--devs", "adev", "--no-ci").out)
+        b = adev(read_data(tim); ci=false)
+        @test parse.(Float64, getindex.(a, 5)) ≈ b.dev
+        @test parse(Float64, a[1][4]) == 0.1                     # τ₀ from the header
+        @test occursin("frequency", run_cli("analyze", fx("counter_53230a_freq.csv"), "--tau0", "1",
+                                            "--devs", "adev", "--no-ci").out)
+        @test run_cli("analyze", fx("counter_53230a_freq.csv")).code == 2   # no gate time
+        g = run_cli("check", fx("gpsdo.csv"), "--column", "PPS offset (ns)", "--format", "json")
+        @test g.code == 0 && occursin("\"quantity\":\"phase\"", g.out)
+        @test run_cli("analyze", tim, "--input-format", "counter", "--tau0", "1").code == 2
+        @test run_cli("analyze", tim, "--reference-col", "2").code == 1
+    end
+
     @testset "reference column" begin
         rf = joinpath(dir, "three.csv")
         open(rf, "w") do io
@@ -410,6 +426,8 @@ mktempdir() do dir
                          ["analyze", pf, "--format", "json", "--spectrum", "--series", "100"],
                          ["check", pf, "--format", "json"],
                          ["spectrum", pf],
+                         ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
+                         ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],
