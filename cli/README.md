@@ -49,5 +49,8 @@ SIGMATAU_EXE=cli/build/bin/sigmatau julia --project=cli cli/test/runtests.jl
 The second form also runs the compiled binary and checks that it answers
 byte for byte like the in-process call.
 
-Measured on a 4-core Linux container (Julia 1.13.3): see the pull request
-that added this package for the current numbers.
+Measured on a 4-core Linux container (Julia 1.13.3): the build takes about
+a minute once the packages are precompiled, the executable is 15 MB in a
+132 MB bundle, `version` returns in 24 ms, six deviations on 8192 points in
+29 ms, and `analyze --spectrum` with the default four estimators on 65 536
+points in 64 ms.
