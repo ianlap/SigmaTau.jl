@@ -58,6 +58,13 @@ cover the usual preprocessing; `save` / `load` round-trip records, results
 and suites as plain text. `estimators()` lists the estimators and
 `deviation(:adev, data, m)` runs one chosen by name.
 
+## Python
+
+`python/` holds the `sigmatau` Python package, a juliacall wrapper with the
+same names (`st.adev(pd)`, `st.psd_y(pd)`, `st.deviation("mhtotdev", pd)`).
+Install it from a checkout with `pip install -e "python/[dev]"`; see
+[`python/README.md`](python/README.md).
+
 ## Compared with Stable32 and allantools
 
 | | Stable32 | allantools | SigmaTau |
