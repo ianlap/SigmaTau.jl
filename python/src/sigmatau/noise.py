@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from ._convert import data_from_jl, np_syms, to_jl_dict_int_f64, to_jl_f64, to_jl_ints
+from ._convert import data_from_jl, np_syms, to_jl_data, to_jl_dict_int_f64, to_jl_f64, to_jl_ints
 from ._julia import _map_errors, jl
 from .types import FrequencyData, PhaseData
 
@@ -21,7 +21,7 @@ _xoshiro = jl.seval("Random.Xoshiro")
 
 @_map_errors
 def identify_noise(
-    x: Sequence[float],
+    x: PhaseData | FrequencyData | Sequence[float],
     m_values: Sequence[int],
     *,
     dmin: int = 0,
@@ -30,14 +30,15 @@ def identify_noise(
 ) -> np.ndarray:
     """Identify the dominant power-law noise type at each averaging factor.
 
-    ``x`` is a raw sample vector (phase or frequency). Returns an object array of
+    ``x`` is a ``PhaseData`` or ``FrequencyData`` record (frequency is integrated
+    to phase first) or a raw vector of phase samples. Returns an object array of
     symbol strings (``"WHPM"``/``"FLPM"``/``"WHFM"``/``"FLFM"``/``"RWFM"`` or
     ``"unknown"``). ``remove_drift`` (default ``True``, matching allantools)
     quadratically detrends each decimated subseries before classification.
     """
     return np_syms(
         jl.identify_noise(
-            to_jl_f64(x),
+            to_jl_data(x) if isinstance(x, (PhaseData, FrequencyData)) else to_jl_f64(x),
             to_jl_ints(m_values),
             dmin=int(dmin),
             dmax=int(dmax),

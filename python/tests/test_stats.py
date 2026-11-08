@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 import sigmatau as st
-from sigmatau import PhaseData
+from sigmatau import FrequencyData, PhaseData
 
 MS = [1, 2, 4]
 
@@ -19,6 +19,15 @@ def test_identify_noise_white_fm():
     noises = st.identify_noise(rec.x, MS)
     assert noises[0] == "WHFM"
     assert all(str(n) for n in noises)
+
+
+def test_identify_noise_accepts_records():
+    rec = st.noise_gen(PhaseData, 2048, 1.0, sigma1={0: 1e-12}, rng=7)
+    assert list(st.identify_noise(rec, MS)) == list(st.identify_noise(rec.x, MS))
+    # Frequency records are integrated to phase, not read as phase.
+    y = np.diff(rec.x) / rec.tau0
+    from_freq = st.identify_noise(FrequencyData(y, rec.tau0), MS)
+    assert from_freq[0] == "WHFM"
 
 
 def test_calculate_edf_and_ci_reproduce_adev(small_phase):
