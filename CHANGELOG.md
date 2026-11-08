@@ -51,13 +51,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
-- `app/StabilityWeb.jl`: a browser edition of the explorer (Bonito + WGLMakie)
-  with native HTML controls for screen readers and keyboard use; shares
-  `app/ExplorerCore.jl` with the window.
-- `app/StabilityExplorer.jl`: a GLMakie desktop application covering file
-  import, synthesis, preprocessing, the deviation suite with χ² intervals,
-  the per-τ table, spectra, dynamic deviation waterfalls, and figure, table
-  and record export.
+- `app/web/`: a web explorer (HTML, CSS, Plotly.js) over an analysis core
+  compiled with `juliac --trim`, and `app/desktop/`, a Tauri window around it.
+
+### Removed
+
+- The GLMakie desktop explorer (`app/StabilityExplorer.jl`), its Bonito
+  browser edition (`app/StabilityWeb.jl`) and their shared `app/ExplorerCore.jl`
+  and environment, replaced by `app/web/`.
+- The unused `DelimitedFiles` dependency (the readers have their own parser).
 
 ## [0.5.0] - 2026-06-09
 
