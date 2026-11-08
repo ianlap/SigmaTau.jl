@@ -10,6 +10,8 @@ app/web/
   cli/        SigmaTauCLI: the analysis core, built with juliac --trim
   ui/         static page: index.html, theme.css, app.css, js/
   serve.py    local server: serves ui/ and runs the core (stdlib Python)
+
+app/desktop/  the Tauri window: the same pages, no Python (see its README)
 ```
 
 ## Run it
@@ -108,8 +110,8 @@ series, spectrum, nperseg, dynamic, window, step}` and returns the core's JSON.
 
 - `ui/theme.css` holds every color, font and size; restyle there.
 - `ui/js/core.js` is the only code that talks to the core, and
-  `ui/js/platform.js` the only code that opens or saves files. A Tauri
-  shell replaces those two and keeps the rest.
+  `ui/js/platform.js` the only code that opens or saves files. Inside the
+  desktop window (`app/desktop`) those two call its commands instead.
 - Layout: a side panel (clocks, estimators, options, Run analysis) and five
   pages. Data has the file card, the import dialog (pick the time and value
   columns, record type, units, τ₀; gaps flagged from the whole file), the

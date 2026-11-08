@@ -43,3 +43,7 @@ paper/figures/fig[0-9]_*.pdf
 # Local assistant settings and notes
 .claude/
 [Cc][Ll][Aa][Uu][Dd][Ee].md
+
+# Desktop shell: Rust build output and generated schemas
+app/desktop/target/
+app/desktop/gen/

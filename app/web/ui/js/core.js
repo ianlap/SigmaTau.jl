@@ -1,9 +1,29 @@
-// The only module that talks to the analysis core. Today that is serve.py
-// over local HTTP (it runs sigmatau-cli); a Tauri shell replaces the fetch
-// in post() with `invoke` on a sidecar command and keeps the same shapes.
+// The only module that talks to the analysis core: serve.py over local HTTP
+// in a browser, or the desktop shell's commands (app/desktop) inside its
+// window. Both run sigmatau-cli and take and return the same shapes.
 import { state, referenceColFor } from "./state.js";
 
+const tauri = window.__TAURI__?.core;
+let nextRun = 1;
+
+// One analysis through the desktop shell; aborting stops the core process.
+async function invokeAnalyze(body, signal) {
+  const id = nextRun++;
+  const abortError = () => new DOMException("The analysis was cancelled.", "AbortError");
+  if (signal?.aborted) throw abortError();
+  const cancelled = new Promise((_, reject) => signal?.addEventListener("abort", () => {
+    tauri.invoke("cancel", { id }).catch(() => {});
+    reject(abortError());
+  }, { once: true }));
+  const out = await Promise.race([tauri.invoke("analyze", { id, req: body }), cancelled]);
+  if (out.error) throw new Error(out.error);
+  return out;
+}
+
 export async function health() {
+  if (tauri) {
+    try { return await tauri.invoke("health"); } catch { return { ok: false, core: null }; }
+  }
   try {
     const r = await fetch("api/health");
     return r.ok ? await r.json() : { ok: false, core: null };
@@ -13,6 +33,13 @@ export async function health() {
 }
 
 async function post(body, signal) {
+  if (tauri) {
+    try {
+      return await invokeAnalyze(body, signal);
+    } catch (err) {
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+  }
   const r = await fetch("api/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
