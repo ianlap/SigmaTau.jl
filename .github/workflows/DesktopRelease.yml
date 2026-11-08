@@ -1,0 +1,118 @@
+name: Desktop release
+
+# Builds the desktop explorer (app/desktop) for macOS (Apple silicon and
+# Intel) and Linux (.deb and AppImage), with the trimmed sigmatau core inside.
+# A tag like app-v0.1.0 also publishes the files as a draft GitHub release; a
+# manual run or a pull request touching app/desktop only uploads them as
+# workflow artifacts.
+#
+# macOS signing is optional. With these repository secrets the app is signed
+# with a Developer ID and notarized; without them it is signed ad hoc:
+#   APPLE_CERTIFICATE           base64 of the "Developer ID Application" .p12
+#   APPLE_CERTIFICATE_PASSWORD  the .p12's password
+#   APPLE_SIGNING_IDENTITY      e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID, APPLE_PASSWORD    Apple ID and an app-specific password
+#   APPLE_TEAM_ID               the ten-character team ID
+
+on:
+  push:
+    tags: ['app-v*']
+  pull_request:
+    paths:
+      - 'app/desktop/**'
+      - '.github/workflows/DesktopRelease.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS (Apple silicon), os: macos-15 }
+          - { name: macOS (Intel), os: macos-15-intel }
+          - { name: Linux, os: ubuntu-22.04 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.13'
+      - uses: julia-actions/cache@v2
+
+      - name: Build the core with --trim=safe
+        run: |
+          julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'
+          julia --project=cli -e 'using Pkg; Pkg.instantiate()'
+          ~/.julia/bin/juliac --output-exe sigmatau --bundle cli/build --trim=safe --experimental cli
+          cli/build/bin/sigmatau analyze --synth 4096 --devs adev > /dev/null
+
+      - name: Linux packages for the webview
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev patchelf file
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/desktop
+      - name: Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
+
+      - name: Plotly for offline use
+        run: python3 app/web/serve.py --fetch-plotly
+
+      - name: Import the signing certificate
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/signing.keychain-db"; PW=$(uuidgen)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$PW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$PW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$PW" "$KC"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+
+      - name: Bundle
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: app/desktop/bundle.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SigmaTau-Explorer-${{ matrix.os }}
+          path: app/desktop/dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/app-v')
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: SigmaTau Explorer ${{ github.ref_name }}
+          files: dist/*
+          draft: true

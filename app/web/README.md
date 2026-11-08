@@ -34,7 +34,7 @@ points in under 70 ms.
 
 `ui/js/core.js` builds the command and its flags, always with
 `--format json`, and reshapes the answer (the versioned schema in
-`docs/src/cli.md`) into the columns the pages plot. `serve.py` exposes it as
+`docs/src/guide/cli.md`) into the columns the pages plot. `serve.py` exposes it as
 `POST /api/analyze` with the body
 
 ```json

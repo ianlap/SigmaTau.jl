@@ -152,7 +152,7 @@ end
 # subsegment in play at long τ and raising the equivalent degrees of
 # freedom. MHTOTDEV is original to this package, so its bias correction and
 # EDF model were measured by Monte Carlo (valid for `τ/τ₀ ≥ 16`); see
-# [MHTOTDEV bias and EDF](../mhtotdev.md).
+# [MHTOTDEV bias and EDF](../explanation/mhtotdev.md).
 #
 # The total kernel is not drift-immune by itself (the boundary extension
 # re-admits residual drift), so `mhtotdev` removes the record's
@@ -210,7 +210,7 @@ plot!(r_mht; label = "MHTOTDEV (3 h record)", ci_band = true, lw = 1.5)
 # Within the family:
 #
 # | Symptom | Reach for |
-# |---|---|
+# |:---|:---|
 # | Drift contaminates ADEV at long τ | `hdev` |
 # | Drift plus PM noise of unknown type (WHPM or FLPM) at short τ | `mhdev` |
 # | Time-error budget (σ_x) for a drifting clock | `htdev` |
