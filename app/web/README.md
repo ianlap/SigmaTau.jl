@@ -35,10 +35,26 @@ juliac --output-exe sigmatau-cli --bundle app/web/cli/build --trim=safe --experi
 ```
 
 Measured on a 4-core Linux container (Julia 1.13.3): an 11.6 MB executable in a
-128 MB bundle, 32 ms start-up, six deviations on 8192 points in 42 ms. A clean
-`--trim=safe` build needs a patched FFTW.jl (its plan cleanup dispatches
-dynamically); until that is upstreamed, build with `--trim=unsafe-warn`, whose
-output was identical in testing. The synthetic record in the core avoids FFTW.
+128 MB bundle, 32 ms start-up, six deviations on 8192 points in 42 ms. The
+`--trim=safe` build is clean because `cli/Project.toml` takes FFTW.jl from the
+`juliac-trim` branch of ianlap/FFTW.jl, with the `eager_library` preference
+set (upstream FFTW.jl's plan cleanup dispatches dynamically, and its lazy
+library handles crash a trimmed executable).
+
+## Test the core
+
+```bash
+SIGMATAU_CLI=app/web/cli/build/bin/sigmatau-cli python3 -m unittest discover -s app/web/cli/test -v
+```
+
+`test_core.py` checks the JSON of every flag group (deviations, files, gap
+filling, outliers, spectrum, dynamic) and the error exits, and compares ADEV,
+MDEV, HDEV and TDEV on `test/fixtures/validation/stable32gen.DAT` with
+Stable32's numbers. `test_serve.py` sends `serve.py` the page's requests. With
+`SIGMATAU_PARITY=1` and `julia` on the path, one test also checks that the
+compiled core prints the same numbers as plain Julia. The `Web core` workflow
+builds with `--trim=safe` and runs all of them on every change to `src/` or
+`app/web/`.
 
 ## Core interface
 
@@ -64,7 +80,7 @@ output was identical in testing. The synthetic record in the core avoids FFTW.
 | `--series N` | at most N record points in the output | 4000 |
 | `--spectrum` | add Welch S_y(f) and S_x(f) (Hann window, half overlap) | |
 | `--nperseg N` | Welch segment length | largest power of 2 ≤ N/4 |
-| `--dynamic adev\|hdev` | add a dynamic ADEV or HDEV map | |
+| `--dynamic dadev\|dhdev` | add a dynamic ADEV or HDEV map (`adev`, `hdev` also accepted) | |
 | `--window W`, `--step S` | dynamic window and step in samples | N/8, W/2 |
 
 Success (exit 0):
@@ -82,7 +98,7 @@ Success (exit 0):
       "ci_lo": [...], "ci_hi": [...], "edf": [...], "noise": ["WHFM", ...], "neff": [...] }
   ],
   "spectrum": { "nperseg": 4096, "f": [...], "sy": [...], "sx": [...] },
-  "dynamic": { "dev": "adev", "window": 2048, "step": 1024, "t": [...], "tau": [...],
+  "dynamic": { "dev": "dadev", "window": 2048, "step": 1024, "t": [...], "tau": [...],
                "map": [[...], ...] },
   "elapsed_ms": 41.7
 }

@@ -84,6 +84,13 @@ function parse_devs(s::String)
     return String[String(d) for d in split(s, ',') if !isempty(d)]
 end
 
+# The dynamic map's deviation; adev and hdev are accepted for dadev and dhdev.
+function parse_dynamic(s::String)
+    (s == "dadev" || s == "adev") && return "dadev"
+    (s == "dhdev" || s == "hdev") && return "dhdev"
+    throw(CLIError("--dynamic expects dadev or dhdev, got \"" * s * "\""))
+end
+
 function parse_args(args::Vector{String})
     o = Options()
     i = 1
@@ -111,7 +118,7 @@ function parse_args(args::Vector{String})
         elseif a == "--remove-outliers"; o.remove_outliers = true
         elseif a == "--spectrum";   o.spectrum = true
         elseif a == "--nperseg";    o.nperseg = parse_int(flag_value(args, i), a); i += 1
-        elseif a == "--dynamic";    o.dynamic = flag_value(args, i); i += 1
+        elseif a == "--dynamic";    o.dynamic = parse_dynamic(flag_value(args, i)); i += 1
         elseif a == "--window";     o.window = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--step";       o.step = parse_int(flag_value(args, i), a); i += 1
         else throw(CLIError("unknown option " * a))
