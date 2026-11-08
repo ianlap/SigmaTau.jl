@@ -30,7 +30,7 @@ until 0.7.
   for the old spectra.
 - `dadev` / `dhdev` `window` is now optional: the largest power of two up to
   `N ÷ 8` (at least 16), with `step = window ÷ 2` as before.
-- `stability` takes `correct_bias` as its only extra keyword; any other
+- `stability` takes `correct_bias` and `remove_drift` (for `mhtotdev`) as its only extra keywords; any other
   keyword is now a `MethodError` instead of being passed to some estimators
   and silently dropped for the rest.
 - `stability` passes `confidence` through to `mtie` and `tierms` like the

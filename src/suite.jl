@@ -11,7 +11,7 @@ const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 function _stability(data, N::Int, kind::Symbol, tau0::Float64;
                     devs = DEFAULT_DEVIATIONS, m = Octave, taus = nothing,
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
-                    correct_bias::Bool = true)
+                    correct_bias::Bool = true, remove_drift::Bool = true)
     if taus !== nothing
         Base.depwarn("stability: `taus` is deprecated, use `m`", :stability)
         m = taus
@@ -20,7 +20,7 @@ function _stability(data, N::Int, kind::Symbol, tau0::Float64;
     for sym in devs
         name = Symbol(sym)
         ms = m isa TauMode ? _resolve_m(name, m, N) : collect(Int, m)
-        push!(results, deviation(name, data, ms; ci, confidence, correct_bias))
+        push!(results, deviation(name, data, ms; ci, confidence, correct_bias, remove_drift))
     end
     tau_mode = m isa TauMode ? Symbol(string(m)) : :explicit
     return StabilitySuite(results, kind, tau0, N, ci ? Float64(confidence) : NaN, tau_mode)
@@ -28,7 +28,8 @@ end
 
 """
     stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, m=Octave,
-              ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true) → StabilitySuite
+              ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true,
+              remove_drift=true) → StabilitySuite
 
 Compute a suite of stability deviations from one record in a single call, the
 batch analog of `adev`, `mdev`, …. Each symbol in `devs` is run through
@@ -41,7 +42,8 @@ Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 or an integer vector of averaging factors applied to every deviation, as in
 the estimator functions (`taus=` before 0.6).
 `correct_bias` reaches only the estimators that take it (the total family and
-`theo1`). Note that an explicit `m` vector is passed to every deviation verbatim: `:theo1` interprets it as even
+`theo1`), and `remove_drift` only `mhtotdev`. Note that an explicit `m`
+vector is passed to every deviation verbatim: `:theo1` interprets it as even
 Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
 prefer a `TauMode` when mixing the Theo family with others.
 

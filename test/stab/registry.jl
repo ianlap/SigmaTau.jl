@@ -57,6 +57,10 @@ using Test, Random, SigmaTau
         @test keys(s) == [:adev, :totdev]
         @test s[:totdev].dev == totdev(pd; correct_bias = false).dev
         @test_throws ArgumentError stability(pd; devs = (:nope,))
+        s2 = stability(pd; devs = (:mhtotdev,), remove_drift = false)
+        @test s2[:mhtotdev].dev == mhtotdev(pd; remove_drift = false).dev
+        @test deviation(:mhtotdev, pd, [1, 2]; remove_drift = false).dev ==
+              mhtotdev(pd, [1, 2]; remove_drift = false).dev
     end
 
     @testset "tau_mode()" begin
