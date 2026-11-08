@@ -5,9 +5,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Deprecated
+
+Renames for 0.6. The old names keep working, with a deprecation warning,
+until 0.7.
+
+- `psd_y`, `psd_x`, `ssb_phase_noise` replace `Sy`, `Sx`, `L`, and their
+  `taper=` keyword replaces `window=` (which now only means the dynamic
+  deviations' window). `SpectralResult.window` is now `.taper`; `r.window`
+  still reads it.
+- `ncornered_hat` replaces `nch`.
+- `save(path, x)` writes records, results and suites, and `load(path)` reads
+  any of them back (records through `read_phase` / `read_frequency`).
+  `save_result`, `save_suite`, `load_result` and `load_suite` are deprecated.
+- `stability(data; m=...)` replaces `taus=`, the same name the estimators use.
+- `identify_noise(...; remove_drift=false)` replaces `detrend=false`, matching
+  `mhtotdev`'s keyword and freeing the name of the `detrend` function.
+
 ### Changed
 
-- `Sy`, `Sx` and `L` default `nperseg` is now the largest power of two up to
+- The spectra's default `nperseg` (`psd_y`, `psd_x`, `ssb_phase_noise`) is now the largest power of two up to
   `N ÷ 4` (at least 16) instead of `min(N, 256)`, matching the explorer. Long
   records get finer low-frequency resolution by default; pass `nperseg=256`
   for the old spectra.
@@ -63,6 +80,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `StabilityResult` carries the record's `tau0`, sample count `n` and the
+  interval `confidence` (`NaN` without intervals), and result files store
+  them. Files from earlier versions load with `NaN` / 0. The seven-argument
+  constructor still works and leaves them unknown.
 - `estimators()`: the registry of the 16 estimators (name, label, family,
   σ_y or σ_x axis, whether `correct_bias` applies, one-line description), for
   menus, command lines and docs.

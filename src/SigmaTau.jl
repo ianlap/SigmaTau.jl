@@ -44,12 +44,15 @@ include("suite.jl")
 # ── Real-time streaming accumulators (Dobrogowski–Kasznia scheme) ───────
 include("streaming.jl")
 
+# ── Names replaced in 0.6 (deprecated, exported until 0.7) ──────────────
+include("deprecated.jl")
+
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
 export SpectralResult, DynamicStabilityResult
 export ci_lower, ci_upper
 
-export save, save_result, load_result, save_suite, load_suite
+export save, load
 export read_phase, read_frequency
 export detrend, fillgaps
 export find_outliers, remove_outliers
@@ -69,14 +72,14 @@ export hdev, mhdev, htdev
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
 export dadev, dhdev
-export nch
+export ncornered_hat
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize
 export StreamingStability, snapshot, nsamples
 
 export noise_gen
-export Sy, Sx, L
+export psd_y, psd_x, ssb_phase_noise
 
 # Plot recipes for `StabilityResult` live in the `SigmaTauRecipesBaseExt`
 # package extension and load automatically when `RecipesBase` (or `Plots`) is.
@@ -108,14 +111,14 @@ using PrecompileTools: @setup_workload, @compile_workload
         detrend(fd; method=:quadratic)
         fillgaps(pd)
         noise_gen(PhaseData, 32, 1.0; sigma1=Dict(0 => 1e-12))
-        Sy(fd)
-        Sx(pd)
-        L(pd; f_carrier=10e6)
+        psd_y(fd)
+        psd_x(pd)
+        ssb_phase_noise(pd; f_carrier=10e6)
         r = adev(pd, ms)
         show(IOBuffer(), MIME"text/plain"(), r)
         _pc_path = joinpath(mktempdir(), "r.tsv")
-        save_result(_pc_path, r)
-        load_result(_pc_path)
+        save(_pc_path, r)
+        load(_pc_path)
         _pc_acc = StreamingStability(:adev, 1.0, ms)
         append!(_pc_acc, _pc_x[1:32])
         snapshot(_pc_acc)

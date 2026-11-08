@@ -10,7 +10,7 @@ using SigmaTau
     pd = PhaseData(cumsum(randn(1024)) .* 1e-9, 1.0)
 
     @testset "ordered results, indexing, keys, metadata" begin
-        s = stability(pd; devs=(:adev, :mdev, :hdev), taus=Octave, ci=false)
+        s = stability(pd; devs=(:adev, :mdev, :hdev), m=Octave, ci=false)
         @test s isa StabilitySuite
         @test length(s) == 3
         @test keys(s) == [:adev, :mdev, :hdev]        # request order preserved
@@ -28,7 +28,7 @@ using SigmaTau
     end
 
     @testset "matches individual calls on the per-deviation grid" begin
-        s = stability(pd; devs=(:adev, :hdev, :mtie), taus=Octave, ci=false)
+        s = stability(pd; devs=(:adev, :hdev, :mtie), m=Octave, ci=false)
         @test s[:adev].dev == adev(pd, tau_values(Octave, 1024, :adev); ci=false).dev
         @test s[:adev].tau == adev(pd, tau_values(Octave, 1024, :adev); ci=false).tau
         @test s[:hdev].dev == hdev(pd, tau_values(Octave, 1024, :hdev); ci=false).dev
@@ -52,7 +52,7 @@ using SigmaTau
         Random.seed!(2026)
         rw = PhaseData(cumsum(cumsum(randn(1024))) .* 1e-12, 1.0)
         ms = tau_values(Octave, 1024, :totdev)
-        s = stability(rw; devs=(:adev, :totdev), taus=Octave, ci=false, correct_bias=false)
+        s = stability(rw; devs=(:adev, :totdev), m=Octave, ci=false, correct_bias=false)
         @test s[:adev].dev   == adev(rw, tau_values(Octave, 1024, :adev); ci=false).dev
         @test s[:totdev].dev == totdev(rw, ms; ci=false, correct_bias=false).dev
         # correct_bias=false differs from the corrected default — confirms the
@@ -63,17 +63,17 @@ using SigmaTau
     @testset "default devs, explicit Vector{Int}, and TauMode taus" begin
         sd = stability(pd; ci=false)
         @test keys(sd) == collect(DEFAULT_DEVIATIONS)   # (:adev, :mdev, :hdev, :mhdev)
-        se = stability(pd; devs=(:adev,), taus=[1, 2, 4, 8], ci=false)
+        se = stability(pd; devs=(:adev,), m=[1, 2, 4, 8], ci=false)
         @test se[:adev].tau == [1.0, 2.0, 4.0, 8.0]
         @test se.tau_mode === :explicit
-        sde = stability(pd; devs=(:adev,), taus=Decade, ci=false)
+        sde = stability(pd; devs=(:adev,), m=Decade, ci=false)
         @test sde.tau_mode === :Decade
     end
 
     @testset "FrequencyData entry point" begin
         Random.seed!(12)
         fd = FrequencyData(randn(512) .* 1e-9, 1.0)
-        s = stability(fd; devs=(:adev, :hdev), taus=Octave, ci=false)
+        s = stability(fd; devs=(:adev, :hdev), m=Octave, ci=false)
         @test s.data_kind === :frequency
         @test s.n == 512
         @test s[:adev].dev == adev(fd, tau_values(Octave, 512, :adev); ci=false).dev
@@ -84,7 +84,7 @@ using SigmaTau
     end
 
     @testset "show summary" begin
-        s = stability(pd; devs=(:adev, :hdev), taus=Octave, ci=false)
+        s = stability(pd; devs=(:adev, :hdev), m=Octave, ci=false)
         compact = sprint(show, s)
         @test occursin("StabilitySuite", compact)
         @test occursin("2 devs", compact)

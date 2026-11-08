@@ -51,7 +51,7 @@ using RecipesBase
     end
 
     @testset "suite overlay: one series per result" begin
-        s = stability(pd; devs=(:adev, :hdev, :mdev), taus=Octave, ci=false)
+        s = stability(pd; devs=(:adev, :hdev, :mdev), m=Octave, ci=false)
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), s)
         @test length(rd) == 3
         # Decade ticks are set once at the suite level, shared by every series.
@@ -106,7 +106,7 @@ using RecipesBase
     @testset "spectral results" begin
         big = PhaseData(cumsum(randn(4096)) .* 1e-9, 1.0)
         # S_y / S_x render log-log with the DC bin (f = 0) dropped.
-        for res in (Sy(big; nperseg=512), Sx(big; nperseg=512))
+        for res in (psd_y(big; nperseg=512), psd_x(big; nperseg=512))
             rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), res)
             @test length(rd) == 1
             @test rd[1].plotattributes[:yscale] === :log10
@@ -116,7 +116,7 @@ using RecipesBase
         end
         # ℒ(f) renders with a linear (dB) ordinate: decade ticks and minor
         # grid on the frequency axis only.
-        rl = RecipesBase.apply_recipe(Dict{Symbol,Any}(), L(big; f_carrier=1e7, nperseg=512))
+        rl = RecipesBase.apply_recipe(Dict{Symbol,Any}(), ssb_phase_noise(big; f_carrier=1e7, nperseg=512))
         @test length(rl) == 1
         @test !haskey(rl[1].plotattributes, :yscale)
         @test haskey(rl[1].plotattributes, :xticks)

@@ -4,7 +4,7 @@
 const _IO_VERSION = "2"
 
 # Shared row writer: the `# calc_ci=` flag, the column header, and one tab-
-# delimited row per τ. Used by both `save_result` (v1) and `save_suite` (v2).
+# delimited row per τ. Used by both result files (v1) and suite files (v2).
 # The on-disk token stays `# calc_ci=` (not `# ci=`) on purpose: it is the v1/v2
 # file-format key, independent of the public `ci` kwarg, so result files written
 # by earlier versions keep loading. Do not rename it without bumping _IO_VERSION.
@@ -27,7 +27,8 @@ end
 # Accepts 6-column rows (files written before the neff column existed; neff
 # loads as 0) and 7-column rows (current format).
 function _parse_result_rows(deviation_type::Symbol, has_ci::Bool,
-                            data_lines::AbstractVector{<:AbstractString})
+                            data_lines::AbstractVector{<:AbstractString},
+                            tau0::Float64 = NaN, n::Int = 0, confidence::Float64 = NaN)
     N        = length(data_lines)
     tau      = Vector{Float64}(undef, N)
     dev      = Vector{Float64}(undef, N)
@@ -50,102 +51,54 @@ function _parse_result_rows(deviation_type::Symbol, has_ci::Bool,
     end
 
     has_ci || return StabilityResult(deviation_type, tau, dev,
-                                     Symbol[], _CIBound[], Float64[], neff)
+                                     Symbol[], _CIBound[], Float64[], neff, tau0, n, NaN)
     return StabilityResult(deviation_type, tau, dev,
-                           Symbol.(noise_s), _zip_ci(ci_lo, ci_hi), edf_vec, neff)
+                           Symbol.(noise_s), _zip_ci(ci_lo, ci_hi), edf_vec, neff,
+                           tau0, n, confidence)
 end
 
-"""
-    save_result(path::AbstractString, r::StabilityResult) → path
-
-Write a single `StabilityResult` to a tab-delimited text file at `path`.
-
-The file is self-describing: comment lines encode the format version, deviation
-type, and whether confidence intervals were computed (`calc_ci`), followed by a
-column-name header and one data row per τ value. All seven data columns are
-always present; the `ci` tuples flatten to numeric `ci_lower` / `ci_upper`
-columns, written as `""` / `NaN` (along with `noise_type` and `edf`) when
-`calc_ci=false`. `neff` is always written.
-
-Returns `path` so the call can be chained. For a whole [`stability`](@ref)
-session (multiple deviations + metadata) use [`save_suite`](@ref).
-
-[`save`](@ref) is the generic entry point; `save(path, r)` delegates here.
-
-# Examples
-
-```julia
-pd = PhaseData(randn(256), 1.0)
-r  = adev(pd, [1, 2, 4, 8, 16])
-save_result("my_adev.tsv", r)
-r2 = load_result("my_adev.tsv")
-r2.dev ≈ r.dev   # true
-```
-
-See also [`load_result`](@ref), [`save_suite`](@ref).
-"""
-function save_result(path::AbstractString, r::StabilityResult)
+function _save_result(path::AbstractString, r::StabilityResult)
     open(path, "w") do io
         println(io, "# SigmaTau StabilityResult v1")
         println(io, "# deviation_type=", r.deviation_type)
+        println(io, "# tau0=", r.tau0)
+        println(io, "# n=", r.n)
+        println(io, "# confidence=", r.confidence)
         _write_result_table(io, r)
     end
     return path
 end
 
-"""
-    load_result(path::AbstractString) → StabilityResult
-
-Read a single `StabilityResult` previously written by [`save_result`](@ref).
-
-The `# calc_ci=` header line determines whether confidence-interval fields are
-reconstructed; the on-disk `ci_lower` / `ci_upper` columns zip back into the
-`ci` tuple vector. When `calc_ci=false`, `noise_type`, `ci`, and `edf` are
-returned as empty vectors, matching the standard deviation API contract.
-Files written before the `neff` column existed load with `neff` filled with
-zeros. Files written by [`save_suite`](@ref) are rejected; use
-[`load_suite`](@ref) for those.
-
-See also [`save_result`](@ref).
-"""
-function load_result(path::AbstractString)
+function _load_result(path::AbstractString)
     lines = readlines(path)
     (!isempty(lines) && occursin("StabilitySuite", lines[1])) &&
-        error("load_result: \"$path\" is a StabilitySuite file; use `load_suite` instead.")
+        error("load: \"$path\" is a StabilitySuite file")
 
     deviation_type = :unknown
     has_ci         = true   # default: assume CI present if header is absent (v1 compat)
+    tau0, n, confidence = NaN, 0, NaN   # absent in files written before 0.6
 
     for line in lines
         if startswith(line, "# deviation_type=")
             deviation_type = Symbol(line[length("# deviation_type=") + 1 : end])
         elseif startswith(line, "# calc_ci=")
             has_ci = strip(line[length("# calc_ci=") + 1 : end]) == "true"
+        elseif startswith(line, "# tau0=")
+            tau0 = parse(Float64, strip(line[length("# tau0=") + 1 : end]))
+        elseif startswith(line, "# n=")
+            n = parse(Int, strip(line[length("# n=") + 1 : end]))
+        elseif startswith(line, "# confidence=")
+            confidence = parse(Float64, strip(line[length("# confidence=") + 1 : end]))
         end
     end
 
     data_lines = filter(l -> !startswith(l, '#') && !startswith(l, "tau"), lines)
-    isempty(data_lines) && error("load_result: no data rows found in \"$path\"")
+    isempty(data_lines) && error("load: no data rows found in \"$path\"")
 
-    return _parse_result_rows(deviation_type, has_ci, data_lines)
+    return _parse_result_rows(deviation_type, has_ci, data_lines, tau0, n, confidence)
 end
 
-"""
-    save_suite(path::AbstractString, suite::StabilitySuite; source_file="") → path
-
-Write a whole analysis session (multiple deviations + session metadata) to a
-self-describing tab-delimited text file at `path` (format v2). Round-trips via
-[`load_suite`](@ref).
-
-A key=value metadata header records the package version, an ISO-8601 timestamp,
-the (optional) `source_file`, the input kind/τ₀/N, the confidence level, the tau
-mode, and the deviation set; each result then follows as a `# --- result <sym>
----` block reusing the same seven-column table as [`save_result`](@ref).
-Returns `path`.
-
-[`save`](@ref) is the generic entry point; `save(path, suite)` delegates here.
-"""
-function save_suite(path::AbstractString, suite::StabilitySuite; source_file::AbstractString="")
+function _save_suite(path::AbstractString, suite::StabilitySuite; source_file::AbstractString="")
     open(path, "w") do io
         println(io, "# SigmaTau StabilitySuite v", _IO_VERSION)
         println(io, "# package_version=", pkgversion(@__MODULE__))
@@ -165,18 +118,10 @@ function save_suite(path::AbstractString, suite::StabilitySuite; source_file::Ab
     return path
 end
 
-"""
-    load_suite(path::AbstractString) → StabilitySuite
-
-Read a `StabilitySuite` previously written by [`save_suite`](@ref) (format v2),
-reconstructing every result block and the session metadata (`data_kind`, `tau0`,
-`n`, `confidence`, `tau_mode`). Files written by [`save_result`](@ref) are
-rejected; use [`load_result`](@ref) for those.
-"""
-function load_suite(path::AbstractString)
+function _load_suite(path::AbstractString)
     lines = readlines(path)
     (!isempty(lines) && occursin("StabilitySuite", lines[1])) ||
-        error("load_suite: \"$path\" is not a StabilitySuite file; use `load_result` for single results.")
+        error("load: \"$path\" is not a StabilitySuite file")
 
     meta       = Dict{String,String}()
     delim_idxs = Int[]
@@ -188,8 +133,11 @@ function load_suite(path::AbstractString)
             m === nothing || (meta[m.captures[1]] = String(strip(m.captures[2])))
         end
     end
-    isempty(delim_idxs) && error("load_suite: no result blocks found in \"$path\"")
+    isempty(delim_idxs) && error("load: no result blocks found in \"$path\"")
 
+    tau0 = parse(Float64, get(meta, "tau0", "NaN"))
+    n    = parse(Int,     get(meta, "n", "0"))
+    conf = parse(Float64, get(meta, "confidence", "NaN"))
     results = StabilityResult[]
     for (b, start) in enumerate(delim_idxs)
         stop     = b < length(delim_idxs) ? delim_idxs[b + 1] - 1 : length(lines)
@@ -198,13 +146,11 @@ function load_suite(path::AbstractString)
         ci_lines = filter(l -> startswith(l, "# calc_ci="), block)
         has_ci   = !isempty(ci_lines) && strip(split(ci_lines[1], "=")[2]) == "true"
         data     = filter(l -> !startswith(l, '#') && !startswith(l, "tau") && !isempty(strip(l)), block)
-        push!(results, _parse_result_rows(dev_type, has_ci, data))
+        push!(results, _parse_result_rows(dev_type, has_ci, data, tau0, n, conf))
     end
 
     return StabilitySuite(results,
                           Symbol(get(meta, "data_kind", "phase")),
-                          parse(Float64, get(meta, "tau0", "NaN")),
-                          parse(Int,     get(meta, "n", "0")),
-                          parse(Float64, get(meta, "confidence", "NaN")),
+                          tau0, n, conf,
                           Symbol(get(meta, "tau_mode", "explicit")))
 end

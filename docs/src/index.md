@@ -69,7 +69,7 @@ plot(stability(p))               # overlay a suite
 | Thêo1 / ThêoBR, ThêoH | `theo1` (`correct_bias=false` gives raw Thêo1), `theoh` |
 | MTIE, TIE rms | `mtie`, `tierms` |
 | Dynamic stability | `dadev`, `dhdev` |
-| Three-cornered hat | `nch` |
+| Three-cornered hat | `ncornered_hat` |
 | Noise generation | `noise_gen` |
 | Drift / outlier / gap tools | `detrend`, `remove_outliers`, `fillgaps` |
 

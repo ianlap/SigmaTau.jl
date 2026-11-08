@@ -11,7 +11,7 @@
 #
 # three equations in three unknowns, so for example
 # ``\sigma^2_1 = \tfrac{1}{2}(\sigma^2_{12} + \sigma^2_{13} - \sigma^2_{23})``.
-# `nch` solves this system, and its N-clock generalization, from the
+# `ncornered_hat` solves this system, and its N-clock generalization, from the
 # pairwise `StabilityResult`s. Because the inputs are synthesized here, the
 # recovery can be checked against each clock's true σ_y(τ).
 
@@ -45,12 +45,12 @@ r31 = adev(PhaseData(x3 .- x1, τ₀), m_values; ci = false)
 
 # ## Separation
 #
-# `nch` takes the pairs in cyclic order A−B, B−C, C−A (the sign of each
+# `ncornered_hat` takes the pairs in cyclic order A−B, B−C, C−A (the sign of each
 # difference is irrelevant) and returns one result per clock. A τ where the
 # inversion goes negative is reported as `NaN`: an invalid estimate, and the
 # usual sign that the independence assumption is failing.
 
-clock1, clock2, clock3 = nch(r12, r23, r31)
+clock1, clock2, clock3 = ncornered_hat(r12, r23, r31)
 
 # ## Check against the truth
 
@@ -86,4 +86,4 @@ plot!(p, clock3; label = "clock 3 recovered", ls = :dash)
 # two quiet recoveries ill-conditioned. Both are diagnosed the same way:
 # add a fourth, independent clock and check that each clock's recovered σ
 # is invariant to the choice of triplet. For N > 3 clocks, fill an
-# upper-triangular matrix of pairwise results and call `nch(pairwise)`.
+# upper-triangular matrix of pairwise results and call `ncornered_hat(pairwise)`.

@@ -95,12 +95,12 @@ plot!(r.tau, guide; ls = :dash, color = :gray, label = "τ^(-1/2), WHFM")
 
 ## Spectral densities
 
-`Sy`, `Sx` and `L` return a [`SpectralResult`](@ref). `S_y(f)` and `S_x(f)`
+`psd_y`, `psd_x` and `ssb_phase_noise` return a [`SpectralResult`](@ref). `S_y(f)` and `S_x(f)`
 render on log-log axes; `ℒ(f)` is in dBc/Hz and gets a log frequency axis
 with a linear ordinate. The DC bin is dropped.
 
 ```@example plotting
-plot(Sy(p))
+plot(psd_y(p))
 ```
 
 ## Dynamic deviations

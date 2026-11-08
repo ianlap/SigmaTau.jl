@@ -231,7 +231,8 @@ function snapshot(acc::StreamingStability)
             neff[k] = ok ? Ne : 0
         end
     end
-    return StabilityResult(dev, ms .* tau0, devs, Symbol[], _CIBound[], Float64[], neff)
+    return StabilityResult(dev, ms .* tau0, devs, Symbol[], _CIBound[], Float64[], neff,
+                           tau0, t, NaN)
 end
 
 """
