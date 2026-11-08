@@ -85,21 +85,27 @@ The `"dev": true` is load-bearing: without it, juliapkg `Pkg.add`s a git snapsho
 the path instead of dev-installing it, and local Julia edits become invisible to the
 Python package until the next resolve.
 
-For a PyPI release, this entry must instead pin a released SigmaTau.jl. Until
-SigmaTau.jl is registered in Julia's General registry:
+A wheel cannot use a path, so the release build rewrites this entry with
+`python/tools/pin_juliapkg.py`: `git` pins the matching SigmaTau.jl tag
+(`"url": "https://github.com/ianlap/SigmaTau.jl", "rev": "v0.6.0"`) and
+`registry` pins the General-registry release (`"version": "=0.6.0"`). The repo
+copy keeps the dev path.
 
-```json
-{ "url": "https://github.com/ianlap/SigmaTau.jl", "rev": "v0.5.0" }
-```
+`sigmatau.__version__` always equals SigmaTau.jl's version (a test checks it).
 
-and once it is registered:
+### Publishing to PyPI
 
-```json
-{ "version": "=0.5.0" }
-```
+`.github/workflows/PythonPublish.yml` runs on a `python-v*` tag, for example
+`python-v0.6.0`. It checks that the tag, `__version__` and `Project.toml` agree,
+pins SigmaTau.jl (the `v<version>` git tag, or the registry when the repository
+variable `SIGMATAU_JL_REGISTERED` is `true`), builds the sdist and wheel,
+installs the wheel on a clean runner and runs the tests, then uploads through
+PyPI trusted publishing. The SigmaTau.jl tag `v<version>` must exist before the
+`python-v<version>` tag is pushed.
 
-The wrapper's version stays in lockstep with SigmaTau.jl's; wrapper-only fixes append
-a `.postN` suffix rather than bumping the SigmaTau.jl version they track.
+One-time PyPI setup: add a pending trusted publisher for project `sigmatau`
+(owner `ianlap`, repository `SigmaTau.jl`, workflow `PythonPublish.yml`,
+environment `pypi`), and create the `pypi` environment in the repository settings.
 
 ## Differences from sigmatau.py (the retired pure-Python port)
 

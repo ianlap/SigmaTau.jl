@@ -18,8 +18,9 @@ def test_all_is_complete():
     assert len(st.__all__) == 56
 
 
-def test_version():
-    assert st.__version__ == "0.5.0"
+def test_version_matches_julia_package():
+    # The wrapper's version moves in lockstep with SigmaTau.jl's.
+    assert st.__version__ == sigmatau_jl_version()
 
 
 def test_julia_version_nonempty():
