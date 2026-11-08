@@ -1,0 +1,44 @@
+# Reference cross-check suite: every estimator, noise type α = +2 … −4, EDF,
+# χ² confidence interval, noise ID, Welch spectrum and dynamic map, against
+#
+#   * allantools (Python) on the committed records (fixtures/validation/
+#     allantools/*.csv, regenerated in CI by tools/validation/gen_allantools.py),
+#   * Stable32 runs on PHASE.DAT (fixtures/validation/stable32_phasedat/),
+#   * the NBS 1000-point published values (NIST SP1065 §12.3),
+#   * scipy.signal.welch for S_y / S_x.
+#
+# Each row carries the tolerance it is held to; rows with tol = Inf are
+# documented convention differences that are reported (by
+# tools/validation/report.jl) but not asserted. Point SIGMATAU_ALLANTOOLS_DIR
+# at a freshly generated directory to test against a live allantools run.
+using Test
+using SigmaTau
+
+isdefined(@__MODULE__, :CrossCheck) || include(joinpath(@__DIR__, "CrossCheck.jl"))
+using .CrossCheck: Row, relerr
+
+const _CC = CrossCheck
+
+@testset "reference cross-check" begin
+    for (label, f) in (
+            ("allantools σ, every estimator × α = +2…−4", _CC.allantools_dev_rows),
+            ("NBS 1000-point published values",          _CC.nbs14_rows),
+            ("Stable32 PHASE.DAT σ, α and CI",            _CC.stable32_rows),
+            ("Stable32 CI with Stable32's α",             _CC.stable32_ci_forced_alpha_rows),
+            ("allantools Greenhall / SP1065 EDF",         _CC.allantools_edf_rows),
+            ("allantools χ² interval factors",            _CC.allantools_ci_rows),
+            ("allantools lag-1 ACF noise ID",             _CC.allantools_noiseid_rows),
+            ("scipy Welch S_y / S_x",                     _CC.welch_rows),
+            ("allantools per-window dynamic maps",        _CC.dynamic_rows))
+        @testset "$label" begin
+            rows = f()
+            @test !isempty(rows)
+            for r in rows
+                isinf(r.tol) && continue
+                ok = _CC.passes(r)
+                ok || @info "cross-check miss" r.group r.dataset r.estimator r.m r.ref r.got relerr(r) r.tol
+                @test ok
+            end
+        end
+    end
+end

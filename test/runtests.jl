@@ -7,4 +7,5 @@ using Test
     @testset "umbrella" begin include("umbrella_smoke.jl") end
     @testset "recipes"  begin include("recipes.jl")        end
     @testset "tables"   begin include("tables.jl")         end
+    @testset "validation" begin include("validation/runtests.jl") end
 end

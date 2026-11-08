@@ -5,6 +5,34 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- EDF for `adev`, `mdev`, `tdev`, `hdev`, `mhdev` (and every caller of the
+  Greenhall EDF) now follows the full Greenhall & Riley 2003 algorithm:
+  exact basic sum only while J ≤ 100, Tables 1–3 beyond that, the
+  `m′ = J_max/r` substitution, F = ∞ once m(d+1) > 100, and the white-PM
+  closed form. Summing the whole series moved the EDF up to 3.5 % (CI bounds
+  up to 0.25 %) away from Stable32 and allantools wherever J > 100.
+- `htotdev` at `m = 1` (plain overlapping HDEV) no longer applies the
+  TotHvar bias factor or the FCS 2001 table EDF; σ was 0.25 % high there on
+  white FM.
+- `FrequencyData` input is integrated to `N + 1` phase points
+  (`x = [0; cumsum(y)]·τ₀`) as in SP1065, Stable32 and allantools. Every
+  estimator on `FrequencyData` used to drop the first frequency sample.
+- `mtotdev` / `ttotdev` at odd `m ≥ 3` remove the subsegment trend with
+  Stable32's half averages (first and last ⌊3m/2⌋ points); values move by
+  0.2–0.4 % at m = 3 and now match allantools.
+
+### Added
+
+- Reference cross-check suite (`test/validation/`): every estimator on
+  power-law records with α = +2 … −4, plus EDF, χ² intervals, noise ID,
+  Welch spectra and dynamic maps, against allantools, scipy, Stable32's
+  PHASE.DAT runs and the NBS 1000-point published values. A `Cross-check`
+  workflow regenerates the allantools tables with a live install
+  (`tools/validation/gen_allantools.py`); `tools/validation/report.jl`
+  writes the agreement and discrepancy tables (`tools/validation/REPORT.md`).
+
 ### Deprecated
 
 Renames for 0.6. The old names keep working, with a deprecation warning,
