@@ -16,8 +16,45 @@ function splitter(name) {
   return [fn, delim === "," ? "comma-separated" : delim === "\t" ? "tab-separated" : "whitespace-separated"];
 }
 
+const TIMELAB_FIELD = /^(STR|DBL|S32|BLN|S64|U32) 0x[0-9A-Fa-f]+ "/;
+// Keysight / Agilent SCPI real format, as counters log readings.
+const SCPI_REAL = /^[+-]\d\.\d+E[+-]\d+$/;
+
+// The instrument layout of a file, or null for plain columns.
+function formatOf(name, timelab, header, rows, columns) {
+  // Named columns with ISO 8601 timestamps (GPSDO logs) need the core's
+  // table reader; the plain column reader takes numbers only.
+  if (header && rows.some(({ f }) => f.some((x) => ISO_TIME.test(x)))) return { format: "table", label: "Named-column table", kind: null };
+  if (timelab) return { format: "timelab", label: "TimeLab file", kind: "phase" };
+  const ext = name.toLowerCase().split(".").pop();
+  if (ext === "phd") return { format: "stable32", label: "Stable32 phase file", kind: "phase" };
+  if (ext === "frd") return { format: "stable32", label: "Stable32 frequency file", kind: "frequency" };
+  if (header || !rows.length || columns.length > 2 || !rows.every(({ f }) => SCPI_REAL.test(f[f.length - 1]))) return null;
+  const v = columns[columns.length - 1].filter((x) => Number.isFinite(x) && x !== 9.91e37).map(Math.abs).sort((a, b) => a - b);
+  const freq = v.length && v[v.length >> 1] >= 1;
+  return freq ? { format: "counter", label: "Counter readings in Hz", kind: "frequency" }
+              : { format: "counter", label: "Counter time-interval readings", kind: "phase" };
+}
+
+// The record type a table's column names suggest, as the core's table reader
+// picks its default column: phase names first, then frequency.
+const tableKind = (names) =>
+  names.some((n) => /phase|time ?err|\btie\b|pps|time ?offset|time ?diff/i.test(n)) ? "phase"
+    : names.some((n) => /freq|\bffe\b|osc|fractional/i.test(n)) ? "frequency" : null;
+
 // NaN marks a missing sample; Julia's reader parses it as a Float64.
 const isNum = (x) => x !== "" && (Number.isFinite(Number(x)) || /^[+-]?nan$/i.test(x));
+
+// ISO 8601 timestamps, as SigmaTau's _iso_seconds reads them.
+const ISO_TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)(Z|([+-])(\d{2}):?(\d{2}))?$/;
+const isField = (x) => isNum(x) || ISO_TIME.test(x);
+// A field as a number: UTC seconds for a timestamp.
+function fieldValue(x) {
+  const m = ISO_TIME.exec(x);
+  if (!m) return Number(x);
+  const off = m[8] ? (m[8] === "+" ? 1 : -1) * (Number(m[9]) * 3600 + Number(m[10]) * 60) : 0;
+  return Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) / 1000 + Number(m[6]) - off;
+}
 
 export function sniff(name, text) {
   const lines = text.split(/\r?\n/);
@@ -27,11 +64,17 @@ export function sniff(name, text) {
   let comments = 0;
   while (comments < lines.length && lines[comments].trim().startsWith("#")) comments++;
 
+  // Instrument formats the core reads by layout (see SigmaTau.detect_format):
+  // a TimeLab log's samples start after its "TIC n" line.
+  const head = lines.slice(0, 400);
+  const tic = head.findIndex((l) => /^TIC \d+/.test(l));
+  const timelab = tic >= 0 && head.some((l) => TIMELAB_FIELD.test(l));
+
   // Non-numeric lines after the comments are header lines the reader skips.
-  let header = 0;
-  while (comments + header < lines.length && header < 40) {
+  let header = timelab ? tic + 1 - comments : 0;
+  while (!timelab && comments + header < lines.length && header < 40) {
     const f = split(lines[comments + header]);
-    if (f.length && f.every(isNum)) break;
+    if (f.length && f.every(isField)) break;
     header++;
   }
   const start = comments + header;
@@ -45,14 +88,16 @@ export function sniff(name, text) {
     const f = split(lines[j]);
     if (!f.length) continue;
     if (rows.length < PREVIEW_ROWS) rows.push({ ln: j + 1, f });
-    if (!bad && !f.every(isNum)) bad = j + 1;
-    for (let c = 0; c < f.length; c++) (columns[c] ??= []).push(Number(f[c]));
+    if (!bad && !f.every(isField)) bad = j + 1;
+    for (let c = 0; c < f.length; c++) (columns[c] ??= []).push(fieldValue(f[c]));
     nRows++;
   }
   const nCols = columns.length;
   // "# tau0: 1" (SigmaTau's save) or "Tau: 1" (Stable32-style headers).
   const tauComment = lines.slice(0, start).map((c) => /\btau0?\s*[:=]\s*([0-9.eE+-]+)/i.exec(c)).find(Boolean);
-  const names = nameFields.length === nCols ? nameFields : [];
+  const names = nameFields.length === nCols && !timelab ? nameFields : [];
+  const fmt = formatOf(name, timelab, header, rows, columns);
+  const interval = timelab && head.map((l) => /"Sample Interval"\s+([0-9.eE+-]+)/.exec(l)).find(Boolean);
 
   return {
     name,
@@ -68,7 +113,10 @@ export function sniff(name, text) {
     nCols,
     columns,
     bad,
-    tau0Hint: tauComment ? Number(tauComment[1]) : null,
+    tau0Hint: interval ? Number(interval[1]) : tauComment ? Number(tauComment[1]) : null,
+    format: fmt?.format ?? null,      // passed to the core as --input-format
+    formatLabel: fmt?.label ?? null,
+    kindHint: fmt?.format === "table" ? tableKind(names) : fmt?.kind ?? null,
     stable32: /stable32/i.test(lines.slice(0, start).join("\n")) || /\.dat$/i.test(name) && header > 0,
   };
 }

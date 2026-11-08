@@ -1,5 +1,6 @@
 # Reference cross-check suite: every estimator, noise type α = +2 … −4, EDF,
-# χ² confidence interval, noise ID, Welch spectrum and dynamic map, against
+# χ² confidence interval, noise ID, Welch spectrum, dynamic map and
+# gap-tolerant ADEV, against
 #
 #   * allantools (Python) on the committed records (fixtures/validation/
 #     allantools/*.csv, regenerated in CI by tools/validation/gen_allantools.py),
@@ -29,7 +30,8 @@ const _CC = CrossCheck
             ("allantools χ² interval factors",            _CC.allantools_ci_rows),
             ("allantools lag-1 ACF noise ID",             _CC.allantools_noiseid_rows),
             ("scipy Welch S_y / S_x",                     _CC.welch_rows),
-            ("allantools per-window dynamic maps",        _CC.dynamic_rows))
+            ("allantools per-window dynamic maps",        _CC.dynamic_rows),
+            ("allantools gradev on records with gaps",    _CC.gap_rows))
         @testset "$label" begin
             # One assertion per group; every row is still checked, and each
             # miss is logged with its reference value and tolerance.

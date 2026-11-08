@@ -54,6 +54,21 @@
         @test fd_f.tau0 == fd.tau0
     end
 
+    @testset "gaps at the record ends join the data they touch" begin
+        Random.seed!(20261108)
+        x = cumsum(randn(1000))
+        x[1:30] .= NaN; x[500:520] .= NaN; x[961:1000] .= NaN
+        f = fillgaps(PhaseData(x, 1.0)).x
+        @test all(isfinite, f)
+        @test abs(f[31] - f[30]) < 3 && abs(f[961] - f[960]) < 3
+    end
+
+    @testset "an unfillable layout throws instead of hanging" begin
+        # Neither gap has enough data on either side to mirror.
+        x = fill(NaN, 40); x[1:5] .= 1.0:5.0; x[30:32] .= 0.0
+        @test_throws ErrorException fillgaps(PhaseData(x, 1.0))
+    end
+
     @testset "_make_equispaced snap to min(diff)" begin
         # Irregular sampling, dt=1 nominal; one missing slot at index 5.
         t = [0.0, 1.0, 2.0, 3.0, 5.0, 6.0]

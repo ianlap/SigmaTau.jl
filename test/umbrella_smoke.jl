@@ -18,7 +18,8 @@ using SigmaTau
         :ncornered_hat, :StreamingStability, :snapshot, :nsamples,
         :identify_noise, :calculate_edf, :confidence_intervals, :bias_correction,
         :psd_y, :psd_x, :ssb_phase_noise, :noise_gen,
-        :read_phase, :read_frequency, :save, :load,
+        :read_phase, :read_frequency, :read_data, :detect_format, :INPUT_FORMATS,
+        :save, :load,
         :detrend, :fillgaps, :find_outliers, :remove_outliers])
     deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
                       :load_result, :load_suite])
