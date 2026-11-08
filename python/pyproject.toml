@@ -35,3 +35,7 @@ select = ["E", "F", "I", "UP", "B", "NPY"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Julia's threads use SIGSEGV for GC safepoints. pytest's faulthandler takes
+# that signal as a crash and kills the run, intermittently, whenever a
+# threaded kernel (mtotdev, htotdev, ...) is running.
+addopts = ["-p", "no:faulthandler"]

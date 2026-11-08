@@ -30,6 +30,10 @@ cores — the juliacall default is a single thread). Both respect values you set
 yourself; if `juliacall` is imported first, neither can take effect and
 `sigmatau` warns.
 
+Python's `faulthandler` mistakes the signals Julia's threads use internally
+for crashes. Leave it off with sigmatau (no `-X faulthandler`), and run
+pytest with `-p no:faulthandler`, as this package's own test config does.
+
 ## 30-second example
 
 ```python
