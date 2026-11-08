@@ -1,5 +1,4 @@
-# Save and load StabilityResult and StabilitySuite as
-# tab-separated text (stdlib only).
+# Save and load StabilityResult and StabilitySuite as tab-separated text.
 
 const _IO_VERSION = "2"
 
@@ -24,8 +23,7 @@ function _write_result_table(io::IO, r::StabilityResult)
 end
 
 # Shared row parser: turn tab-delimited data rows back into a StabilityResult.
-# Accepts 6-column rows (files written before the neff column existed; neff
-# loads as 0) and 7-column rows (current format).
+# Accepts 7-column rows and the 6-column rows of v0.4 files (neff loads as 0).
 function _parse_result_rows(deviation_type::Symbol, has_ci::Bool,
                             data_lines::AbstractVector{<:AbstractString},
                             tau0::Float64 = NaN, n::Int = 0, confidence::Float64 = NaN)
@@ -76,7 +74,7 @@ function _load_result(path::AbstractString)
 
     deviation_type = :unknown
     has_ci         = true   # default: assume CI present if header is absent (v1 compat)
-    tau0, n, confidence = NaN, 0, NaN   # absent in files written before 0.6
+    tau0, n, confidence = NaN, 0, NaN   # absent in v0.4 files
 
     for line in lines
         if startswith(line, "# deviation_type=")

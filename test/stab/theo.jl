@@ -18,9 +18,7 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
             Random.seed!(100 + alpha)
             p = noise_gen(PhaseData, 2048, 1.0; sigma1 = Dict(alpha => 1e-12))
             ms = [10, 16, 32, 64, 128, 256]
-            devs = _theo1_core(_f64(p.x), ms, 1.0)
-            @test all(isfinite, devs)
-            @test all(>(0.0), devs)
+            @test all(d -> isfinite(d) && d > 0, _theo1_core(_f64(p.x), ms, 1.0))
         end
 
         # Thêo1 has the same expected value as AVAR for white FM (SP1065
@@ -76,9 +74,7 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
                    4.24241065528329561e-02, 1.23509431294939673e-02,
                    3.88050646788194644e-03, 3.50353759490139739e-03]
             devs = _theo1_core(x, ms, 1.0)
-            for (d, r) in zip(devs, ref)
-                @test isapprox(d, r; rtol=1e-10)
-            end
+            @test all(isapprox.(devs, ref; rtol=1e-10))
 
             # τ convention: SigmaTau reports the SP1065 effective τ = 0.75·m·τ0
             # (allantools reports m·τ0 for the same values).
@@ -107,9 +103,7 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
                4.18605701646885126e-02, 2.73803955576344751e-02,
                1.91500560772033153e-02, 1.00433496067985177e-02]
         devs = _theo1_core(x, ms, 1.0)
-        for (d, r) in zip(devs, ref)
-            @test isapprox(d, r; rtol=1e-10)
-        end
+        @test all(isapprox.(devs, ref; rtol=1e-10))
     end
 
     @testset "ThêoBR bias-correction behavior" begin
@@ -167,17 +161,10 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         r = theoh(p, mh)
         @test r.deviation_type === :theoh
         @test all(isfinite, r.dev)
-        for (j, m) in enumerate(mh)
-            if _theoh_is_adev(m, N)
-                @test r.tau[j] == m * 1.0
-                @test r.neff[j] == N - 2m
-            else
-                mt = _theoh_theo_m(m)
-                @test iseven(mt)
-                @test r.tau[j] == 0.75 * mt
-                @test r.neff[j] == N - mt
-            end
-        end
+        rows = [_theoh_is_adev(m, N) ? (m * 1.0, N - 2m) :
+                (0.75 * _theoh_theo_m(m), N - _theoh_theo_m(m)) for m in mh]
+        @test (r.tau, r.neff) == (first.(rows), last.(rows))
+        @test all(iseven(_theoh_theo_m(m)) for m in mh if !_theoh_is_adev(m, N))
 
         # Continuity at the crossover: adjacent grid points either side of
         # k estimate the same AVAR on the same record, so the step between

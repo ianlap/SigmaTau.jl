@@ -55,7 +55,7 @@ PhaseData(x::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = 
 
 Fractional-frequency samples `y(t)` (dimensionless) at uniform interval `tau0`
 (default `1.0` s). Every estimator accepts it and integrates it to phase,
-`x = τ₀ · cumsum(y)`, before the analysis. Like [`PhaseData`](@ref) it
+`x = τ₀ · [0; cumsum(y)]`, before the analysis. Like [`PhaseData`](@ref) it
 takes any real vector and supports `length`.
 
 ```julia
@@ -152,7 +152,7 @@ struct StabilityResult
     confidence::Float64
 end
 
-# Results built without the record metadata (older files, hand-made results).
+# Without the record metadata (v0.4 files, hand-made results).
 StabilityResult(deviation_type::Symbol, tau, dev, noise_type, ci, edf, neff) =
     StabilityResult(deviation_type, tau, dev, noise_type, ci, edf, neff, NaN, 0, NaN)
 
@@ -323,12 +323,6 @@ struct SpectralResult
     noverlap::Int
     "Taper applied to each segment: `:hann`, `:hamming`, or `:rectangular`."
     taper::Symbol
-end
-
-# `r.window` was the field's name before 0.6.
-function Base.getproperty(r::SpectralResult, s::Symbol)
-    s === :window && return getfield(r, :taper)
-    return getfield(r, s)
 end
 
 function Base.show(io::IO, r::SpectralResult)

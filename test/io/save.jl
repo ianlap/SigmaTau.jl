@@ -1,6 +1,6 @@
 # test/io/save.jl — save(data) two-column text format, comment-header
 # round-trip through read_phase/read_frequency, tau0 pickup, source
-# propagation, and the save() delegation to the result/suite writers.
+# propagation. Result/suite files are in results.jl.
 
 @testset "save / data round-trip" begin
 
@@ -127,26 +127,6 @@
                                 tau0=1.0)
             @test length(pd_dat.x) == 8192
             @test pd_dat.source == datpath
-        end
-    end
-
-    @testset "save delegates to result / suite writers" begin
-        Random.seed!(20260610)
-        pd = PhaseData(randn(128) .* 1e-9, 1.0)
-        mktempdir() do dir
-            r     = adev(pd, [1, 2, 4]; ci=true)
-            rpath = joinpath(dir, "r.tsv")
-            @test save(rpath, r) == rpath
-            r2 = load(rpath)
-            @test r2.dev ≈ r.dev
-            @test ci_upper(r2) ≈ ci_upper(r)
-
-            s     = stability(pd; devs=(:adev, :hdev))
-            spath = joinpath(dir, "s.tsv")
-            @test save(spath, s; source_file="p.txt") == spath
-            s2 = load(spath)
-            @test s2[:hdev].dev ≈ s[:hdev].dev
-            @test any(l -> l == "# source_file=p.txt", readlines(spath))
         end
     end
 end

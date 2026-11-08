@@ -52,3 +52,7 @@ app/desktop/dist/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+
+# Python
+__pycache__/
+*.pyc
