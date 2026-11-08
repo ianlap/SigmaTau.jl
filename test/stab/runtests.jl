@@ -1141,9 +1141,9 @@ const LK = ReferenceKernels
                 r_explicit = fn(p, ms; ci = false)
                 @test r_default.tau == r_explicit.tau
                 @test r_default.dev == r_explicit.dev
-                # FrequencyData entry point resolves to its own default m-grid
-                # (computed from length(f.y) = N-1, not N).
-                ms_f = SigmaTau._default_m_values(length(f.y), kernel)
+                # FrequencyData entry point resolves its default m-grid from the
+                # length(f.y) + 1 phase points it integrates to.
+                ms_f = SigmaTau._default_m_values(length(f.y) + 1, kernel)
                 r_default_f = fn(f; ci = false)
                 @test r_default_f.tau == ms_f .* tau0
             end

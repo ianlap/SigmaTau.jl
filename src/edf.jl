@@ -108,7 +108,7 @@ end
 # `F` is the filter factor (1 for the modified variances, m for the unmodified
 # ones) and `S` the stride factor (m for the overlapped estimators). The exact
 # basic sum (their eq. 10) is evaluated whenever its length J is at most
-# J_MAX = 100; beyond that the paper's Tables 1–3 give the large-J asymptote,
+# J_MAX = 100; beyond that (with r = M/S ≥ d + 1) the paper's Tables 1–3 give the large-J asymptote,
 # and the "m′ = J_MAX/r" substitution covers short records. For unmodified
 # variances with α ≤ 0 the filter factor is taken as ∞ once m(d+1) > J_MAX,
 # as the paper prescribes (case 2.1b). Following every branch reproduces
@@ -153,7 +153,7 @@ function _calc_edf_core(alpha::Int, d::Int, m::Int, F::Int, S::Int, N::Int)
 
     if F == 1                                    # case 1: modified variances
         J <= Jm && return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), 1.0)
-        if r > d + 1
+        if r >= d + 1
             a0, a1 = _gr_table(_GR_TABLE1, alpha, d)
             return 1 / ((a0 - a1 / r) / r)
         end
@@ -166,7 +166,7 @@ function _calc_edf_core(alpha::Int, d::Int, m::Int, F::Int, S::Int, N::Int)
         if J <= Jm
             Fp = m * (d + 1) <= Jm ? Float64(m) : Inf
             return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), Fp)
-        elseif r > d + 1
+        elseif r >= d + 1
             a0, a1 = _gr_table(_GR_TABLE2, alpha, d)
             return 1 / ((a0 - a1 / r) / r)
         end
@@ -174,7 +174,7 @@ function _calc_edf_core(alpha::Int, d::Int, m::Int, F::Int, S::Int, N::Int)
     elseif alpha == 1                            # case 3: unmodified, flicker PM
         J <= Jm && return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), Float64(m))
         b0, b1 = _GR_TABLE3[d]
-        if r > d + 1
+        if r >= d + 1
             a0, a1 = _gr_table(_GR_TABLE2, alpha, d)
             return 1 / ((a0 - a1 / r) / ((b0 + b1 * log(m))^2 * r))
         end

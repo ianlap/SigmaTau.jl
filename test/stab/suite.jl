@@ -75,8 +75,11 @@ using SigmaTau
         fd = FrequencyData(randn(512) .* 1e-9, 1.0)
         s = stability(fd; devs=(:adev, :hdev), m=Octave, ci=false)
         @test s.data_kind === :frequency
-        @test s.n == 512
-        @test s[:adev].dev == adev(fd, tau_values(Octave, 512, :adev); ci=false).dev
+        @test s.n == 513   # 512 frequency samples integrate to 513 phase points
+        @test s[:adev].dev == adev(fd, tau_values(Octave, 513, :adev); ci=false).dev
+        # The grid comes from the N + 1 phase points: 1025 samples reach m = 512.
+        fd2 = FrequencyData(randn(1025) .* 1e-9, 1.0)
+        @test 512 in round.(Int, adev(fd2; ci=false).tau)
     end
 
     @testset "unknown deviation errors" begin
