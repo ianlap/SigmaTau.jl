@@ -11,12 +11,12 @@ const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 function _stability(data, N::Int, kind::Symbol, tau0::Float64;
                     devs = DEFAULT_DEVIATIONS, taus = Octave,
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
-                    correct_bias::Bool = true)
+                    correct_bias::Bool = true, remove_drift::Bool = true)
     results = StabilityResult[]
     for sym in devs
         name = Symbol(sym)
         m = taus isa TauMode ? _resolve_m(name, taus, N) : collect(Int, taus)
-        push!(results, deviation(name, data, m; ci, confidence, correct_bias))
+        push!(results, deviation(name, data, m; ci, confidence, correct_bias, remove_drift))
     end
     tau_mode = taus isa TauMode ? Symbol(string(taus)) : :explicit
     return StabilitySuite(results, kind, tau0, N, ci ? Float64(confidence) : NaN, tau_mode)
@@ -24,7 +24,8 @@ end
 
 """
     stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, taus=Octave,
-              ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true) → StabilitySuite
+              ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true,
+              remove_drift=true) → StabilitySuite
 
 Compute a suite of stability deviations from one record in a single call, the
 batch analog of `adev`, `mdev`, …. Each symbol in `devs` is run through
@@ -36,7 +37,8 @@ Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 (symbols or strings). `taus` is a [`TauMode`](@ref) (e.g. `Octave`, `Decade`)
 or an integer vector of averaging factors applied to every deviation.
 `correct_bias` reaches only the estimators that take it (the total family and
-`theo1`). Note that an explicit `taus` vector is passed to every deviation verbatim: `:theo1` interprets it as even
+`theo1`), and `remove_drift` only `mhtotdev`. Note that an explicit `taus`
+vector is passed to every deviation verbatim: `:theo1` interprets it as even
 Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
 prefer a `TauMode` when mixing the Theo family with others.
 
