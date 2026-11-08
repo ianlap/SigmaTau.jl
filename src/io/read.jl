@@ -69,14 +69,21 @@ function _read_columns(path::AbstractString; header::Int=0, delim::Union{Char,No
     return permutedims(reshape(vals, ncols, nrows))
 end
 
-# Median sample spacing of a time column. Hand-rolled instead of
-# `Statistics.median`, whose NaN error path prints the whole vector and so
-# blocks `juliac --trim` builds.
+# Median of a NaN-free vector. Hand-rolled instead of `Statistics.median`,
+# whose NaN error path prints the whole vector and so blocks
+# `juliac --trim` builds. Callers must filter or reject NaN first.
+function _median_nonan(v::AbstractVector{<:Real})
+    s = sort!(Float64.(v))
+    n = length(s)
+    n == 0 && throw(ArgumentError("median of an empty collection"))
+    return isodd(n) ? s[(n + 1) ÷ 2] : (s[n ÷ 2] + s[n ÷ 2 + 1]) / 2
+end
+
+# Median sample spacing of a time column.
 function _median_step(t::AbstractVector{<:Real})
-    dt = sort!(Float64.(diff(t)))
+    dt = diff(t)
     any(isnan, dt) && throw(ArgumentError("read: time column contains NaN"))
-    n = length(dt)
-    return isodd(n) ? dt[(n + 1) ÷ 2] : (dt[n ÷ 2] + dt[n ÷ 2 + 1]) / 2
+    return _median_nonan(dt)
 end
 
 """

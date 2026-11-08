@@ -1,63 +1,67 @@
-/* SigmaTau explorer theme. Every color, font and radius the UI uses is a
-   token here, so restyling is a one-file change. app.css only refers to
-   these variables; plot.js reads the --plot-* ones for Plotly. */
+/* SigmaTau explorer theme: the approved design tokens (sand + Alabama
+   crimson, Okabe-Ito series, IBM Plex). Every color and font the UI uses
+   comes from here; app.css and the plots only read these variables. */
 :root {
-  /* Surfaces: sand background, warm white panels */
-  --bg:            #f3eee4;
-  --panel:         #fffdf9;
-  --panel-sunken:  #f8f4ec;
-  --border:        #e2d9c8;
-  --border-strong: #cdbfa6;
+  /* Surfaces */
+  --bg-window:   #e9e0cf;
+  --bg-panel:    #f1eadc;
+  --bg-card:     #f6f1e6;
+  --bg-popover:  #fbf8f2;
+  --line:        #d9cbb2;
+  --line-strong: #cdbd9f;
+  --line-soft:   #e0d4bf;
+  --grid:        #e6dbc6;
+  --table-head:  #ece2cf;
+  --table-zebra: #f1eadd;
 
   /* Text */
-  --text:          #1f1a14;
-  --text-muted:    #6b6153;
-  --text-faint:    #978b78;
+  --ink:   #2a2419;
+  --ink-2: #4a4232;
+  --muted: #655b48;
 
-  /* Accent: Alabama crimson */
-  --accent:        #9e1b32;
-  --accent-hover:  #85152a;
-  --accent-soft:   #f6e3e6;
-  --accent-text:   #ffffff;
+  /* Accent and status */
+  --accent:       #9e1b32;
+  --accent-hover: #7a1426;
+  --accent-soft:  #f2ddd8;
+  --warn:         #9a5b00;
+  --warn-soft:    #f6e7c8;
+  --warn-dot:     #e0a33a;
+  --good:         #2c7a4b;
+  --error:        #b3261e;
 
-  /* Status */
-  --ok:            #2f7d4f;
-  --warn:          #b7791f;
-  --error:         #b3261e;
+  /* Data series (Okabe-Ito). One clock: colour = estimator. Several
+     clocks: colour = clock, line style = estimator. */
+  --s1: #0072b2;
+  --s2: #e69f00;
+  --s3: #009e73;
+  --s4: #cc79a7;
+  --s5: #56b4e9;
+  --s6: #d55e00;
+  --s7: #3d3d3d;
+  --s8: #a88f00;
+  --outlier: #e69f00;
+
+  /* Heatmap ramp, one scale shared across clocks */
+  --heat-lo:  #eef2fa;
+  --heat-mid: #2f4e90;
+  --heat-hi:  #14213f;
 
   /* Type */
-  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 15px;
-  --fs-lg: 17px;
-  --fs-xl: 22px;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 15px;
+  --fs-xl: 17px;
 
-  /* Shape and depth */
+  /* Shape and layout */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-pill: 999px;
-  --shadow-card: 0 1px 2px rgba(60, 40, 10, 0.06), 0 2px 8px rgba(60, 40, 10, 0.04);
-  --shadow-pop:  0 8px 28px rgba(40, 25, 5, 0.18);
-  --focus-ring:  0 0 0 3px rgba(158, 27, 50, 0.35);
-
-  /* Layout */
-  --header-h: 60px;
+  --shadow-pop: 0 12px 40px rgba(60, 45, 20, 0.22);
+  --focus-ring: 0 0 0 3px rgba(158, 27, 50, 0.3);
+  --header-h: 56px;
   --status-h: 34px;
-  --side-w:   320px;
-  --table-w:  380px;
-
-  /* Plots: estimator colors in order, then chrome */
-  --plot-1: #9e1b32;
-  --plot-2: #1f5f8b;
-  --plot-3: #c98a1b;
-  --plot-4: #2f7d5b;
-  --plot-5: #6a4c93;
-  --plot-6: #b5651d;
-  --plot-7: #3d7f8c;
-  --plot-8: #8c5a7a;
-  --plot-grid: #ebe4d6;
-  --plot-axis: #6b6153;
-  --plot-bg:   #fffdf9;
+  --panel-w: 320px;
 }

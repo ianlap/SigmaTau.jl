@@ -34,6 +34,7 @@ mutable struct Options
     tau0::Float64         # NaN = from the file
     time_col::Int
     value_col::Int
+    reference_col::Int    # 0 = none; else the value is taken against this column
     header::Int
     scaling::Float64
     detrend::String
@@ -43,10 +44,13 @@ mutable struct Options
     confidence::Float64
     bias::Bool
     series::Int           # max record points returned for plotting
+    fillgaps::Bool        # Howe gap filling (needs a time column; uses FFTW)
+    remove_outliers::Bool # replace 5σ outliers and fill (uses FFTW)
 end
 
-Options() = Options("", 0, 42, "phase", NaN, 1, 2, 0, 1.0, "none",
-                    ["adev", "mdev", "hdev", "mhdev"], "octave", true, 0.683, true, 4000)
+Options() = Options("", 0, 42, "phase", NaN, 1, 2, 0, 0, 1.0, "none",
+                    ["adev", "mdev", "hdev", "mhdev"], "octave", true, 0.683, true, 4000,
+                    false, false)
 
 # ── Argument parsing ──────────────────────────────────────────────────────
 
@@ -69,6 +73,12 @@ function flag_value(args::Vector{String}, i::Int)
     return args[i + 1]
 end
 
+# "none" (or an empty list) asks for the record and its check only.
+function parse_devs(s::String)
+    s == "none" && return String[]
+    return String[String(d) for d in split(s, ',') if !isempty(d)]
+end
+
 function parse_args(args::Vector{String})
     o = Options()
     i = 1
@@ -82,15 +92,18 @@ function parse_args(args::Vector{String})
         elseif a == "--tau0";       o.tau0 = parse_float(flag_value(args, i), a); i += 1
         elseif a == "--time-col";   o.time_col = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--value-col";  o.value_col = parse_int(flag_value(args, i), a); i += 1
+        elseif a == "--reference-col"; o.reference_col = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--header";     o.header = parse_int(flag_value(args, i), a); i += 1
         elseif a == "--scaling";    o.scaling = parse_float(flag_value(args, i), a); i += 1
         elseif a == "--detrend";    o.detrend = flag_value(args, i); i += 1
-        elseif a == "--devs";       o.devs = String[String(s) for s in split(flag_value(args, i), ',') if !isempty(s)]; i += 1
+        elseif a == "--devs";       o.devs = parse_devs(flag_value(args, i)); i += 1
         elseif a == "--grid";       o.grid = flag_value(args, i); i += 1
         elseif a == "--confidence"; o.confidence = parse_float(flag_value(args, i), a); i += 1
         elseif a == "--no-ci";      o.ci = false
         elseif a == "--no-bias-correction"; o.bias = false
         elseif a == "--series";     o.series = parse_int(flag_value(args, i), a); i += 1
+        elseif a == "--fillgaps";   o.fillgaps = true
+        elseif a == "--remove-outliers"; o.remove_outliers = true
         else throw(CLIError("unknown option " * a))
         end
         i += 1
@@ -126,24 +139,69 @@ function synth_record(o::Options)
 end
 
 function load_record(o::Options)
+    data = read_record(o)
+    o.remove_outliers && (data = deglitch(data))
+    return data
+end
+
+# Remove 5σ outliers in the frequency domain and integrate back. A glitch in a
+# phase record is a step, i.e. one bad frequency sample; SigmaTau's
+# remove_outliers(::PhaseData) refills the phase sample the step lands on,
+# which keeps the step. Going through FrequencyData removes it.
+function deglitch(data::PhaseData)
+    x = data.x
+    N = length(x)
+    N < 3 && return data
+    t0 = Float64(data.tau0)
+    y = Float64[(Float64(x[i + 1]) - Float64(x[i])) / t0 for i in 1:N-1]
+    fd = remove_outliers(FrequencyData(y, t0; source=data.source))
+    out = Vector{Float64}(undef, N)
+    out[1] = Float64(x[1])
+    for i in 1:N-1
+        out[i + 1] = out[i] + Float64(fd.y[i]) * t0
+    end
+    return PhaseData(out, t0; source=data.source)
+end
+
+# The value column, minus the reference column when one is chosen (several
+# clocks measured in one file against a common timebase). The readers' detrend
+# is linear, so detrending each column and subtracting equals detrending the
+# difference.
+function read_record(o::Options)
     o.synth > 0 && return synth_record(o)
     isfile(o.input) || throw(CLIError("no such file: " * o.input))
+    data = read_column(o, o.value_col)
+    o.reference_col > 0 || return data
+    o.reference_col == o.value_col && throw(CLIError("the reference column is the value column"))
+    o.reference_col >= 1 || throw(CLIError("--reference-col must be 1 or more"))
+    ref = try
+        read_column(o, o.reference_col)
+    catch err
+        err isa ArgumentError || rethrow()
+        throw(CLIError("--reference-col " * string(o.reference_col) * " is not a column of this file"))
+    end
+    length(ref.x) == length(data.x) || throw(CLIError("reference and value columns differ in length"))
+    return PhaseData(Float64[Float64(data.x[i]) - Float64(ref.x[i]) for i in eachindex(data.x)], data.tau0;
+                     source=data.source)
+end
+
+function read_column(o::Options, value_col::Int)
     det = detrend_symbol(o.detrend)
     # Two concrete call sites instead of `tau0 = isnan ? nothing : x`: a
     # Union{Nothing,Float64} keyword makes the kwcall dynamic under --trim.
     if o.kind == "frequency"
         fd = isnan(o.tau0) ?
-            read_frequency(o.input; time_col=o.time_col, value_col=o.value_col,
-                           header=o.header, scaling=o.scaling, detrend=det) :
-            read_frequency(o.input; tau0=o.tau0, time_col=o.time_col, value_col=o.value_col,
-                           header=o.header, scaling=o.scaling, detrend=det)
+            read_frequency(o.input; time_col=o.time_col, value_col=value_col,
+                           header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps) :
+            read_frequency(o.input; tau0=o.tau0, time_col=o.time_col, value_col=value_col,
+                           header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps)
         return PhaseData(cumsum(fd.y) .* fd.tau0, fd.tau0; source=fd.source)
     end
     return isnan(o.tau0) ?
-        read_phase(o.input; time_col=o.time_col, value_col=o.value_col,
-                   header=o.header, scaling=o.scaling, detrend=det) :
-        read_phase(o.input; tau0=o.tau0, time_col=o.time_col, value_col=o.value_col,
-                   header=o.header, scaling=o.scaling, detrend=det)
+        read_phase(o.input; time_col=o.time_col, value_col=value_col,
+                   header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps) :
+        read_phase(o.input; tau0=o.tau0, time_col=o.time_col, value_col=value_col,
+                   header=o.header, scaling=o.scaling, detrend=det, fillgaps=o.fillgaps)
 end
 
 # ── Estimators ────────────────────────────────────────────────────────────
@@ -264,6 +322,33 @@ function write_series(io::IO, data::PhaseData, maxpts::Int)
     print(io, '}')
 end
 
+# Record check for the Data page: gaps, 5σ outliers (SigmaTau's MAD test on
+# the phase steps) and the linear frequency drift, per day.
+function write_check(io::IO, data::PhaseData)
+    x = data.x
+    N = length(x)
+    gaps = count(isnan, x)
+    out = find_outliers(data; nsigma=5)
+    # Drift: least-squares slope of y = Δx/τ₀ against time, finite samples only.
+    sxy = 0.0; sxx = 0.0; st = 0.0; sy = 0.0; n = 0
+    for i in 1:N-1
+        yi = (Float64(x[i + 1]) - Float64(x[i])) / data.tau0
+        isfinite(yi) || continue
+        ti = (i - 1) * data.tau0
+        st += ti; sy += yi; sxy += ti * yi; sxx += ti * ti; n += 1
+    end
+    drift = n > 2 ? (n * sxy - st * sy) / (n * sxx - st * st) * 86400.0 : NaN
+    print(io, "{\"samples\":"); print(io, N)
+    print(io, ",\"span_s\":"); json_number(io, N * data.tau0)
+    print(io, ",\"gaps\":"); print(io, gaps)
+    print(io, ",\"outliers\":"); print(io, length(out))
+    keep = out[1:min(length(out), 500)]
+    print(io, ",\"outlier_t\":"); json_array(io, Float64[(i - 1) * data.tau0 for i in keep])
+    print(io, ",\"outlier_x\":"); json_array(io, Float64[Float64(x[i]) for i in keep])
+    print(io, ",\"drift_per_day\":"); json_number(io, drift)
+    print(io, '}')
+end
+
 function write_error(io::IO, msg::String)
     print(io, "{\"error\":"); json_string(io, msg); print(io, "}\n")
 end
@@ -274,7 +359,10 @@ function analyze(io::IO, o::Options)
     t_start = time_ns()
     data = load_record(o)
     N = length(data.x)
-    N >= 8 || throw(CLIError("the record has only " * string(N) * " samples"))
+    # Reading and checking a record (--devs none) needs only a few samples;
+    # the estimators need at least eight.
+    nmin = isempty(o.devs) ? 3 : 8
+    N >= nmin || throw(CLIError("the record has only " * string(N) * " samples"))
     mode = tau_mode(o.grid)
     buf = IOBuffer()
     print(buf, "{\"sigmatau\":"); json_string(buf, SIGMATAU_VERSION)
@@ -283,10 +371,13 @@ function analyze(io::IO, o::Options)
     print(buf, ",\"kind\":"); json_string(buf, o.kind)
     print(buf, ",\"source\":"); json_string(buf, data.source)
     print(buf, ",\"series\":"); write_series(buf, data, o.series)
+    print(buf, ",\"check\":"); write_check(buf, data)
     print(buf, "},\"options\":{\"grid\":"); json_string(buf, o.grid)
     print(buf, ",\"ci\":"); print(buf, o.ci ? "true" : "false")
     print(buf, ",\"confidence\":"); json_number(buf, o.confidence)
     print(buf, ",\"bias_correction\":"); print(buf, o.bias ? "true" : "false")
+    print(buf, ",\"fillgaps\":"); print(buf, o.fillgaps ? "true" : "false")
+    print(buf, ",\"remove_outliers\":"); print(buf, o.remove_outliers ? "true" : "false")
     print(buf, "},\"results\":[")
     first = true
     for d in o.devs

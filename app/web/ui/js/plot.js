@@ -1,5 +1,5 @@
-// Plotly loading and the shared look of every plot. Colors come from the
-// --plot-* tokens in theme.css.
+// Plotly loading, the series colours and line styles, and the shared look of
+// every plot. Colours come from theme.css.
 
 const PLOTLY_CDN = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js";
 
@@ -13,8 +13,7 @@ function loadScript(src) {
   });
 }
 
-// vendor/plotly.min.js first (offline; `serve.py --fetch-plotly` puts it
-// there), then the CDN.
+// ui/vendor/plotly.min.js first (offline; `serve.py --fetch-plotly`), then the CDN.
 export async function loadPlotly() {
   if (window.Plotly) return window.Plotly;
   try {
@@ -25,55 +24,77 @@ export async function loadPlotly() {
   return window.Plotly;
 }
 
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+export const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-export function palette() {
-  return [1, 2, 3, 4, 5, 6, 7, 8].map((i) => css(`--plot-${i}`));
+export const seriesColor = (i) => css(`--s${(i % 8) + 1}`);
+export const DASHES = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot"];
+const DASH_SVG = ["", "5 3", "1.5 3", "5 3 1.5 3", "9 3", "9 3 1.5 3"];
+
+// Small SVG of a line style, for panel rows and legends.
+export function strokeSvg(i, color = "currentColor", width = 22) {
+  return `<svg class="stroke" width="${width}" height="8" aria-hidden="true"><line x1="1" y1="4" x2="${width - 1}" y2="4" stroke="${color}" stroke-width="2" stroke-dasharray="${DASH_SVG[i % DASH_SVG.length]}"/></svg>`;
 }
 
-export const DASHES = ["solid", "dash", "dot", "dashdot", "longdash"];
-export const SYMBOLS = ["circle", "square", "diamond", "triangle-up", "cross"];
-
-export function baseLayout(extra = {}) {
-  const axis = {
-    gridcolor: css("--plot-grid"),
-    linecolor: css("--border-strong"),
+export function axisStyle() {
+  return {
+    gridcolor: css("--grid"),
+    linecolor: css("--line-strong"),
     zeroline: false,
     showline: true,
     mirror: true,
     ticks: "outside",
-    tickcolor: css("--border-strong"),
-    color: css("--plot-axis"),
+    ticklen: 4,
+    tickcolor: css("--line-strong"),
+    tickfont: { size: 11, color: css("--muted") },
+    title: { font: { size: 12.5, color: css("--ink-2") } },
   };
+}
+
+export function baseLayout() {
   return {
-    font: { family: css("--font-sans"), size: 13, color: css("--text") },
-    paper_bgcolor: css("--plot-bg"),
-    plot_bgcolor: css("--plot-bg"),
-    margin: { l: 72, r: 20, t: 34, b: 56 },
+    font: { family: css("--font-sans"), size: 12, color: css("--ink") },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: css("--bg-card"),
+    margin: { l: 62, r: 14, t: 26, b: 48 },
     hovermode: "closest",
-    hoverlabel: { font: { family: css("--font-mono"), size: 12 } },
+    hoverlabel: { font: { family: css("--font-mono"), size: 11.5 }, bgcolor: css("--bg-popover"), bordercolor: css("--line-strong") },
     legend: {
-      bgcolor: "rgba(255,253,249,0.9)",
-      bordercolor: css("--border"),
-      borderwidth: 1,
-      x: 0.99, xanchor: "right", y: 0.99, yanchor: "top",
+      bgcolor: css("--bg-card"), bordercolor: css("--line"), borderwidth: 1,
+      x: 0.98, xanchor: "right", y: 0.98, yanchor: "top", font: { size: 11.5 },
     },
-    xaxis: { ...axis },
-    yaxis: { ...axis },
-    _axis: axis,
-    ...extra,
+    showlegend: false,
   };
+}
+
+export function logAxis(title) {
+  return {
+    ...axisStyle(), type: "log", exponentformat: "power", dtick: 1,
+    title: { ...axisStyle().title, text: title, standoff: 6 },
+  };
+}
+
+export function linAxis(title) {
+  return { ...axisStyle(), title: { ...axisStyle().title, text: title, standoff: 6 } };
 }
 
 export const CONFIG = {
   displaylogo: false,
   responsive: true,
-  modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "toggleSpikelines"],
+  displayModeBar: "hover",
+  modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "toggleSpikelines", "zoomIn2d", "zoomOut2d"],
   toImageButtonOptions: { format: "png", scale: 2, filename: "sigmatau" },
 };
 
-// Log-axis tick labels as 10^n with superscripts.
-export function logAxis(title) {
-  return { type: "log", exponentformat: "power", dtick: 1, minor: { ticks: "outside", ticklen: 3, showgrid: false },
-    title: { text: title, standoff: 8 } };
+export function hexAlpha(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+// Pick an SI prefix for seconds so tick labels read like "20 ns".
+export function timeUnit(maxAbs) {
+  const units = [[1, "s"], [1e-3, "ms"], [1e-6, "µs"], [1e-9, "ns"], [1e-12, "ps"], [1e-15, "fs"]];
+  for (const [f, u] of units) if (maxAbs >= f) return [f, u];
+  return [1e-15, "fs"];
 }
