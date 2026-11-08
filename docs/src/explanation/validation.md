@@ -30,6 +30,12 @@ The Stable32 reference is `stable32out/stable32_data_full.csv` (σ, the
 identified noise exponent α, and the 68.3 % confidence bounds); the
 allantools reference is `allantools_out/allantools_data_full.csv`.
 
+This page walks through one fixture in detail. The
+[Cross-check report](crosscheck.md) summarizes every asserted comparison
+(against Stable32, allantools, the NBS 1000-point set and scipy),
+regenerated from the validation test group by
+`tools/validation/report.jl`.
+
 Default settings throughout; the total-family tables additionally show
 `correct_bias=false` ("raw") columns.
 
