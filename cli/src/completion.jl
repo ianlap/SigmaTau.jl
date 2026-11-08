@@ -15,6 +15,7 @@ function fill_template(tpl::String)
     s = replace(s, "@@GRIDS@@" => join(GRIDS, " "))
     s = replace(s, "@@FMT@@" => join(FORMATS, " "))
     s = replace(s, "@@DETREND@@" => join(DETRENDS, " "))
+    s = replace(s, "@@DRIFT@@" => join(DRIFTS, " "))
     s = replace(s, "@@VALUEOPTS@@" => join(value_options(), "|"))
     for c in COMMANDS
         s = replace(s, "@@OPTS_" * c * "@@" => join(cmd_options(c), " "))
@@ -36,6 +37,7 @@ _sigmatau() {
         --grid)    COMPREPLY=( $(compgen -W "@@GRIDS@@" -- "$cur") ); return ;;
         --format)  COMPREPLY=( $(compgen -W "@@FMT@@" -- "$cur") ); return ;;
         --detrend) COMPREPLY=( $(compgen -W "@@DETREND@@" -- "$cur") ); return ;;
+        --remove-drift) COMPREPLY=( $(compgen -W "@@DRIFT@@" -- "$cur") ); return ;;
         --out)     COMPREPLY=(); return ;;
         @@VALUEOPTS@@) COMPREPLY=(); return ;;
     esac
@@ -81,6 +83,7 @@ _sigmatau() {
             --grid)    _values 'grid' @@GRIDS@@ ;;
             --format)  _values 'format' @@FMT@@ ;;
             --detrend) _values 'mode' @@DETREND@@ ;;
+            --remove-drift) _values 'mode' @@DRIFT@@ ;;
             --out)     _files ;;
             *)
               if [[ $PREFIX == -* ]]; then
@@ -113,6 +116,7 @@ complete -c sigmatau -x -n '__fish_seen_subcommand_from dynamic' -l dev -a '@@DY
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze dynamic' -l grid -a '@@GRIDS@@' -d 'τ grid'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic' -l format -a '@@FMT@@' -d 'output format'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic' -l detrend -a '@@DETREND@@' -d 'detrend mode'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic' -l remove-drift -a '@@DRIFT@@' -d 'drift to fit and remove'
 complete -c sigmatau -r -F -n '__fish_seen_subcommand_from analyze check spectrum dynamic' -l out -d 'write to PATH'
 """
 
@@ -135,6 +139,7 @@ Register-ArgumentCompleter -Native -CommandName sigmatau -ScriptBlock {
         '--grid'    { return _res ('@@GRIDS@@' -split ' ') }
         '--format'  { return _res ('@@FMT@@' -split ' ') }
         '--detrend' { return _res ('@@DETREND@@' -split ' ') }
+        '--remove-drift' { return _res ('@@DRIFT@@' -split ' ') }
         '--out'     { return }
     }
     if ($elements.Count -le 2 -and -not $wordToComplete.StartsWith('-')) {

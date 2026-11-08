@@ -84,6 +84,8 @@ function json_record(io::IO, o::Options, data::PhaseData)
     json_key(io, "outlier_t"); json_array(io, Float64[(i - 1) * tau0 for i in keep])
     json_key(io, "outlier_x"); json_array(io, Float64[Float64(data.x[i]) for i in keep])
     json_key(io, "drift_per_day"); json_number(io, Float64(s.drift_per_day))
+    json_key(io, "removed_offset"); json_number(io, o.removed_offset)
+    json_key(io, "removed_drift_per_day"); json_number(io, o.removed_drift)
     if o.series > 0
         N = length(data.x)
         idx = collect(1:max(1, cld(N, o.series)):N)
@@ -98,6 +100,7 @@ end
 
 function json_preprocessing(io::IO, o::Options)
     json_key(io, "detrend"); json_string(io, o.detrend)
+    json_key(io, "remove_drift"); json_string(io, o.remove_drift)
     json_key(io, "fillgaps"); json_bool(io, o.fillgaps)
     json_key(io, "remove_outliers"); json_bool(io, o.remove_outliers)
     json_key(io, "reference_col"); print(io, o.reference_col)

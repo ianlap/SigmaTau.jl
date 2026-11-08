@@ -2,7 +2,7 @@
 // "Compare at τ" (several clocks, overlaid). Mounted once per visit;
 // refresh() redraws from state.
 import { state, update, visibleClocks, multi } from "../state.js";
-import { byId, label, gridName, CONFIDENCES, noiseLabel } from "../estimators.js";
+import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope, BIAS_CORRECTED } from "../estimators.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css } from "../plot.js";
 import { sci, num, escapeHtml as h } from "../format.js";
 
@@ -19,6 +19,10 @@ export function mount(el, ctx) {
         <div class="seg" role="group" aria-label="Quantity" data-ref="axis">${Object.entries(AXES).map(([k, v]) =>
           `<button type="button" data-axis="${k}">${v}</button>`).join("")}</div>
         <span class="caption" data-ref="caption"></span>
+        <span class="toggles">
+          <label class="check" title="Noise type identified at each τ (lag-1 autocorrelation), with the power-law slope it implies"><input type="checkbox" data-tog="noiseId">Noise ID</label>
+          <label class="check" title="Draw the confidence intervals as a shaded band instead of error bars"><input type="checkbox" data-tog="band">CI band</label>
+        </span>
       </div>
       <div class="card plot-card"><div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
     </div>
@@ -32,6 +36,8 @@ export function mount(el, ctx) {
     if (e.target.closest("[data-act=run]")) ctx.run();
   });
   root.addEventListener("change", (e) => {
+    const tog = e.target.dataset.tog;
+    if (tog) { update((s) => { s[tog] = e.target.checked; }); return; }
     const r = e.target.dataset.ref;
     if (r === "table-dev") update((s) => { s.tableDev = e.target.value; });
     if (r === "cmp-tau") update((s) => { s.compareTau = Number(e.target.value); });
@@ -56,7 +62,17 @@ export function refresh() {
   if (!root) return;
   root.querySelectorAll("[data-axis]").forEach((b) => b.classList.toggle("on", b.dataset.axis === state.axis));
   const conf = state.ci ? `${(CONFIDENCES.find(([v]) => v === state.confidence) ?? [0, state.confidence])[1]} confidence · ` : "";
-  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid`;
+  const biased = state.devs.some((d) => BIAS_CORRECTED.has(d));
+  const bias = biased ? (state.bias ? " · bias-corrected" : " · not bias-corrected") : "";
+  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}`;
+  // Both need the intervals: noise identification runs with them.
+  root.querySelectorAll("[data-tog]").forEach((el) => {
+    const lab = el.closest("label");
+    lab.dataset.tip ??= lab.title;
+    el.checked = !!state[el.dataset.tog];
+    el.disabled = !state.ci;
+    lab.title = state.ci ? lab.dataset.tip : "Turn on confidence intervals in the panel; noise identification runs with them";
+  });
 
   const clocks = visibleClocks();
   const devs = devsOnAxis();
@@ -121,7 +137,9 @@ function draw(clocks, devs) {
     layout.shapes.push({ type: "line", xref: "x", yref: "paper", x0: state.compareTau, x1: state.compareTau, y0: 0, y1: 1, line: { color: accent, width: 1.2, dash: "dash" } });
     layout.annotations.push({ xref: "x", yref: "paper", x: Math.log10(state.compareTau), y: 1, xanchor: "left", yanchor: "top", showarrow: false, text: `τ = ${num(state.compareTau, 4)} s`, font: { color: accent, size: 11.5 } });
   }
-  Plotly.react(plotEl, traces(clocks, devs), layout, CONFIG);
+  const tr = traces(clocks, devs);
+  if (state.noiseId && state.ci && state.axis === "sigma_y") noiseOverlay(layout, tr, clocks, devs);
+  Plotly.react(plotEl, tr, layout, CONFIG);
   if (!clickBound) {
     clickBound = true;
     plotEl.on("plotly_click", (ev) => {
@@ -133,6 +151,80 @@ function draw(clocks, devs) {
       update((s) => { s.compareTau = best; });
     });
   }
+}
+
+// ── Noise identification overlay ──
+// The strip along the top shows, per clock, the noise type identified at each
+// τ, as runs of equal type. With one clock, dashed guides show the slope each
+// run implies for the estimator the strip comes from.
+
+const NOISE_VAR = { WHPM: "--noise-wpm", FLPM: "--noise-fpm", WHFM: "--noise-wfm", FLFM: "--noise-ffm", RWFM: "--noise-rwfm" };
+const STRIP_PX = 18, STRIP_GAP = 3;
+
+// The first selected σ_y estimator with noise types: the strip's source.
+function noiseSource(clock, devs) {
+  for (const d of devs) {
+    const r = resultOf(clock, d);
+    if (r && r.noise.some((v) => v)) return r;
+  }
+  return null;
+}
+
+// Runs of equal noise type, with edges halfway (in log τ) between points.
+export function noiseRuns(r) {
+  const runs = [];
+  const n = r.tau.length;
+  const edge = (i) => (i <= 0 ? r.tau[0] / Math.SQRT2 : i >= n ? r.tau[n - 1] * Math.SQRT2 : Math.sqrt(r.tau[i - 1] * r.tau[i]));
+  for (let i = 0; i < n; i++) {
+    const v = r.noise[i];
+    if (!v) continue;
+    const last = runs[runs.length - 1];
+    if (last && last.noise === v && last.end === i) { last.end = i + 1; continue; }
+    runs.push({ noise: v, start: i, end: i + 1 });
+  }
+  for (const u of runs) { u.lo = edge(u.start); u.hi = edge(u.end); }
+  return runs;
+}
+
+function noiseOverlay(layout, tr, clocks, devs) {
+  const several = clocks.length > 1;
+  const withNoise = clocks.map((c) => [c, noiseSource(c, devs)]).filter(([, r]) => r);
+  if (!withNoise.length) return;
+  const ink = css("--ink-2");
+  // Strips sit above the plot area in the Clocks list's order (first on
+  // top), sized in pixels.
+  withNoise.forEach(([c, r], k) => {
+    const p0 = 4 + (withNoise.length - 1 - k) * (STRIP_PX + STRIP_GAP), p1 = p0 + STRIP_PX;
+    for (const u of noiseRuns(r)) {
+      layout.shapes.push({
+        type: "rect", xref: "x", yref: "paper", ysizemode: "pixel", yanchor: 1, x0: u.lo, x1: u.hi, y0: p0, y1: p1,
+        fillcolor: css(NOISE_VAR[u.noise] ?? "--table-head"), line: { width: several ? 1.5 : 0, color: several ? seriesColor(c.slot) : "rgba(0,0,0,0)" },
+      });
+      layout.annotations.push({
+        xref: "x", yref: "paper", x: Math.log10(Math.sqrt(u.lo * u.hi)), y: 1, yanchor: "middle", yshift: (p0 + p1) / 2, showarrow: false,
+        text: noiseLabel(u.noise), font: { size: 10.5, color: ink }, hovertext: `${several ? `${c.name}: ` : ""}${noiseTitle(u.noise)}`,
+      });
+      if (!several) {
+        // Faint run boundaries through the plot.
+        if (u.start > 0) layout.shapes.push({ type: "line", xref: "x", yref: "paper", x0: u.lo, x1: u.lo, y0: 0, y1: 1, layer: "below", line: { color: css("--line-strong"), width: 1, dash: "dot" } });
+        const slope = noiseSlope(r.dev, u.noise);
+        const pts = r.tau.slice(u.start, u.end).map((t, i) => [t, r.sigma[u.start + i]]).filter(([, v]) => v > 0);
+        if (slope === null || !pts.length) continue;
+        // Through the run's centre of mass in log-log, across the run.
+        const lx = pts.reduce((a, [t]) => a + Math.log10(t), 0) / pts.length;
+        const ly = pts.reduce((a, [, v]) => a + Math.log10(v), 0) / pts.length;
+        const at = (t) => 10 ** (ly + slope * (Math.log10(t) - lx)) * 1.6;
+        const a = pts.length > 1 ? pts[0][0] : u.lo, b = pts.length > 1 ? pts[pts.length - 1][0] : u.hi;
+        tr.push({
+          x: [a, b], y: [at(a), at(b)], mode: "lines", hoverinfo: "text", showlegend: false,
+          text: `${noiseTitle(u.noise)}: ${label(r.dev)} ∝ τ^${slope}`,
+          line: { color: css("--muted"), width: 1.2, dash: "dash" },
+        });
+      }
+    }
+  });
+  // Room for the strips above the curves.
+  layout.margin = { ...layout.margin, t: 10 + withNoise.length * (STRIP_PX + STRIP_GAP) };
 }
 
 function compareTaus(clocks, devs) {
@@ -155,7 +247,7 @@ function renderTable(clocks, devs) {
   const r = resultOf(c, state.tableDev);
   const rows = (r?.tau ?? []).map((t, i) => {
     const tip = r.ci_lo.length ? `${sci(r.ci_lo[i], 4)} … ${sci(r.ci_hi[i], 4)} (${(state.confidence * 100).toFixed(1)} %), n_eff ${r.neff[i] ?? "–"}` : `n_eff ${r.neff[i] ?? "–"}`;
-    return `<div class="tbl-row tbl-body" title="${tip}"><span>${num(t, 5)}</span><span>${sci(r.sigma[i])}</span><span>${r.edf.length ? num(r.edf[i], 4) : "–"}</span>${r.noise[i] ? `<span class="badge">${noiseLabel(r.noise[i])}</span>` : "<span></span>"}</div>`;
+    return `<div class="tbl-row tbl-body" title="${tip}"><span>${num(t, 5)}</span><span>${sci(r.sigma[i])}</span><span>${r.edf.length ? num(r.edf[i], 4) : "–"}</span>${r.noise[i] ? `<span class="badge" title="${noiseTitle(r.noise[i])}">${noiseLabel(r.noise[i])}</span>` : "<span></span>"}</div>`;
   }).join("");
   box.className = "card side-card per-tau";
   box.innerHTML = `

@@ -5,7 +5,13 @@ import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } f
 import { thousands, duration, sci, escapeHtml as h } from "../format.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
-const DETRENDS = [["none", "none"], ["mean", "mean"], ["endpoint", "endpoint"], ["linear", "linear"]];
+// Fitted to the phase and removed before every analysis. On phase a line is a
+// frequency offset and a parabola adds a linear frequency drift.
+const DRIFTS = [
+  ["none", "None", "Analyse the record as measured"],
+  ["linear", "Linear", "Remove a frequency offset (a straight line in phase)"],
+  ["quadratic", "Quadratic", "Remove a frequency offset and a linear frequency drift (a parabola in phase), as SP1065 asks before the total estimators"],
+];
 
 let root, plotEl, Plotly, ctx;
 
@@ -83,11 +89,24 @@ function checkCard(c) {
     <div class="kv"><span>Span</span><span class="mono">${duration(k.span_s)}</span></div>
     ${gapRow(c, k)}
     <div class="kv"><span>Points past 5σ</span>${out}</div>
-    <div class="kv"><span>Frequency drift</span><span class="mono">${drift}</span></div>
+    <div class="kv" title="Least-squares linear frequency drift of the record as analysed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
     <div class="rule"></div>
-    <label class="opt"><span>Detrend</span><select data-field="detrend">${DETRENDS.map(([v, l]) => `<option value="${v}" ${v === c.detrend ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    ${driftBlock(c, k)}
     <label class="check" title="${c.hasTimeCol ? "Put missing samples back on an even grid and fill them (Howe's method)" : "Needs a time column in the file"}">
       <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""} ${c.hasTimeCol ? "" : "disabled"}>Fill gaps by interpolation</label>
+  </div>`;
+}
+
+function driftBlock(c, k) {
+  const mode = c.drift ?? "none";
+  const removed = [];
+  if (Number.isFinite(k.removed_offset)) removed.push(`offset ${sci(k.removed_offset, 3)}`);
+  if (Number.isFinite(k.removed_drift)) removed.push(`drift ${sci(k.removed_drift, 3)} /day`);
+  return `<div class="drift-block">
+    <div class="opt"><span title="Fitted to the phase by least squares and removed before every analysis">Drift removal</span>
+      <div class="seg seg-sm" role="group" aria-label="Drift removal">${DRIFTS.map(([v, l, tip]) =>
+        `<button type="button" data-drift="${v}" class="${v === mode ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</div></div>
+    <div class="muted small drift-note">${mode === "none" ? "Frequency offset and drift stay in the record." : removed.length ? `Removed ${removed.join(" · ")}` : "Fitting…"}</div>
   </div>`;
 }
 
@@ -102,7 +121,8 @@ export function refresh() {
   const focus = document.activeElement?.dataset?.field === "name";
   if (!focus) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
   else root.querySelector(".check-card").outerHTML = checkCard(c);
-  root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `Phase x(t) · ${c.name}` : "Phase x(t)";
+  const title = c?.drift && c.drift !== "none" ? `Phase residual x(t), ${c.drift} drift removed` : "Phase x(t)";
+  root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
   drawRecord(c);
 }
 
@@ -138,6 +158,8 @@ function drawRecord(c) {
 }
 
 function onClick(e) {
+  const dr = e.target.closest("[data-drift]")?.dataset.drift;
+  if (dr) { const c = activeClock(); if (c && c.drift !== dr) ctx.setRecord(c, { drift: dr }); return; }
   const m = e.target.closest("[data-mode]")?.dataset.mode;
   if (m) { update((s) => { s.dataMode = m; }); return; }
   const act = e.target.closest("[data-act]")?.dataset.act;
@@ -160,7 +182,6 @@ function onChange(e) {
   const c = activeClock();
   if (!c || !f) return;
   if (f === "name") { const v = e.target.value.trim() || c.name; update(() => { c.name = v; }); }
-  else if (f === "detrend") ctx.setRecord(c, { detrend: e.target.value });
   else if (f === "fillgaps") ctx.setRecord(c, { fillgaps: e.target.checked });
 }
 

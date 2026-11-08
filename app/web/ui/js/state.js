@@ -13,7 +13,8 @@ export const state = {
   grid: "octave",
   ci: true,
   confidence: 0.683,
-  band: false,
+  band: true,              // intervals as a shaded band (else error bars)
+  noiseId: true,           // noise-type strip and slope guides on the Stability plot
   bias: true,
   optionsOpen: false,      // options section when several clocks are loaded
   axis: "sigma_y",         // "sigma_y" | "sigma_x"
@@ -22,7 +23,7 @@ export const state = {
   // Spectrum page (display settings, applied without a run)
   spec: { carrier: 10e6, carrierText: "10e6", phase: "L", avg: "log", guides: true },
   // Dynamic page: estimator, window = record / frac, map or 3D waterfall
-  dyn: { dev: "dadev", frac: 8, view: "map", cell: null },
+  dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
   dataMode: "file",        // "file" | "synth" on the Data page
   run: { state: "idle", stale: null, note: "" },  // stale: null | "record" | "inputs"
 };
@@ -47,7 +48,7 @@ export function newClock(fields = {}) {
     against: "",             // what the file says the clocks were measured against
     header: 0,
     scaling: 1,
-    detrend: "none",
+    drift: "none",           // drift fitted and removed: "none" | "linear" | "quadratic"
     fillgaps: false,
     remove_outliers: false,
     hasTimeCol: false,

@@ -63,8 +63,7 @@ function options() {
     <label class="opt"><span>τ grid</span><select class="wide" data-opt="grid">${GRIDS.map(([v, l]) => `<option value="${v}" ${v === state.grid ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <div class="opt"><label class="check"><input type="checkbox" data-opt="ci" ${state.ci ? "checked" : ""}>Confidence intervals</label>
       <select class="narrow" data-opt="confidence" ${state.ci ? "" : "disabled"}>${CONFIDENCES.map(([v, l]) => `<option value="${v}" ${v === state.confidence ? "selected" : ""}>${l}</option>`).join("")}</select></div>
-    <label class="check"><input type="checkbox" data-opt="band" ${state.band ? "checked" : ""} ${state.ci ? "" : "disabled"}>Show intervals as a band</label>
-    <label class="check"><input type="checkbox" data-opt="bias" ${state.bias ? "checked" : ""}>Bias-correct totals and Thêo1</label>
+    <label class="check" title="Divide out the known bias of TOTDEV, MTOTDEV, HTOTDEV, MHTOTDEV, TTOTDEV and Thêo1 for the identified noise type"><input type="checkbox" data-opt="bias" ${state.bias ? "checked" : ""}>Bias-correct totals and Thêo1</label>
   </div>`;
 }
 
@@ -141,6 +140,5 @@ function onChange(e) {
     if (opt === "confidence") { s.confidence = Number(v); markStale(s, "inputs"); }
     if (opt === "ci") { s.ci = v; markStale(s, "inputs"); }
     if (opt === "bias") { s.bias = v; markStale(s, "inputs"); }
-    if (opt === "band") s.band = v;       // display only
   });
 }
