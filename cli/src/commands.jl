@@ -169,7 +169,8 @@ end
 
 # The second channel, read like the first.
 function second_channel(o::Options)
-    first, measured = o.input, o.measured
+    # The primary record's settings and drift fit stay as they were.
+    first, measured, offset, drift = o.input, o.measured, o.removed_offset, o.removed_drift
     o.input, o.measured = o.with, falses(0)
     try
         return load_record(o)
@@ -177,7 +178,7 @@ function second_channel(o::Options)
         e isa CLIError && rethrow()
         throw(CLIError(EXIT_INPUT, "--with " * o.with * ": " * error_message(e)))
     finally
-        o.input, o.measured = first, measured
+        o.input, o.measured, o.removed_offset, o.removed_drift = first, measured, offset, drift
     end
 end
 

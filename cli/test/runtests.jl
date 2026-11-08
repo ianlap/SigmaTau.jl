@@ -242,6 +242,11 @@ mktempdir() do dir
         lib = cross_adev(PhaseData(X, 1.0), PhaseData(X2, 1.0), [1, 2, 4])
         @test parse.(Float64, getindex.(rows, 2)) ≈ lib.covar
         @test occursin("\"cross_spectrum\"", run_cli("cross", pf, "--with", f2, "--format", "json").out)
+        # --remove-drift reports the first channel's fit, not the second's.
+        j = run_cli("cross", pf, "--with", f2, "--remove-drift", "linear", "--format", "json").out
+        c = run_cli("check", pf, "--remove-drift", "linear", "--format", "json").out
+        offset(s) = match(r"\"removed_offset\":([^,}]+)", s)[1]
+        @test offset(j) == offset(c)
         @test run_cli("cross", pf).code == 1
         @test run_cli("cross", pf, "--with", joinpath(dir, "missing.csv")).code == 2
     end

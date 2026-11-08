@@ -41,9 +41,10 @@ s = cross_psd_y(a, b; nperseg=512)
 
 `cross_psd_y` returns the real part of the averaged cross-spectrum (`psd`),
 each channel's own spectrum (`psd_a`, `psd_b`) and the residual left by
-unshared noise after `nseg` averages, `floor = √(S_aa S_bb / nseg)`. The
-floor falls as the square root of the number of averages: four times the
-data halves it.
+unshared noise, `floor = √(S_aa S_bb / K)`. `K` is the number of
+independent averages: `nseg`, reduced for the overlap between segments,
+which adds segments faster than it adds information. The floor falls as the
+square root of `K`, so four times the data halves it.
 
 From the command line, `sigmatau cross a.dat --with b.dat` writes the cross
 Allan deviation as CSV, and `--format json` adds the cross-spectrum.

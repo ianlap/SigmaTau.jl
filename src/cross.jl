@@ -18,9 +18,11 @@ struct CrossSpectralResult
     freq::Vector{Float64}
     "Real part of the averaged cross-spectrum: the noise common to both channels."
     psd::Vector{Float64}
-    """Floor of `psd`, `√(S_aa S_bb / nseg)`: the residual left by noise the
-    channels do not share after `nseg` averages. Bins where `|psd|` is not
-    well above it are not resolved."""
+    """Floor of `psd`, `√(S_aa S_bb / K)`: the residual left by noise the
+    channels do not share after `K` independent averages, `K` being `nseg`
+    reduced for the correlation of overlapping segments (Welch 1967; ≈ `nseg`
+    at the default 50 % Hann overlap). Bins where `|psd|` is not well above
+    it are not resolved."""
     floor::Vector{Float64}
     "Spectrum of channel a alone."
     psd_a::Vector{Float64}
@@ -44,6 +46,8 @@ end
 function _cross_pair(a::AbstractTimingData, b::AbstractTimingData)
     (a isa PhaseData) == (b isa PhaseData) ||
         throw(ArgumentError("cross: pass two PhaseData or two FrequencyData records"))
+    (any(isnan, _samples(a)) || any(isnan, _samples(b))) &&
+        throw(ArgumentError("cross: the records have gaps (NaN); fill them first with fillgaps"))
     a.tau0 == b.tau0 ||
         throw(ArgumentError("cross: the channels have different τ₀ ($(a.tau0) vs $(b.tau0))"))
     length(a) == length(b) ||
@@ -54,7 +58,7 @@ function _cross_psd(type::Symbol, za::Vector{Float64}, zb::Vector{Float64}, tau0
                     nperseg, noverlap, taper::Symbol)
     np, no = _welch_params(length(za), nperseg, noverlap)
     freq, Saa, Sbb, Sab, nseg = _welch(za, zb, 1 / tau0; nperseg=np, noverlap=no, window=taper)
-    floor = sqrt.(Saa .* Sbb ./ nseg)
+    floor = sqrt.(Saa .* Sbb ./ _independent_averages(taper, np, np - no, nseg))
     psd = za === zb ? copy(Saa) : real.(Sab)       # one channel passed twice
     return CrossSpectralResult(type, freq, psd, floor, Saa, Sbb, nseg, np, no, taper)
 end
@@ -69,7 +73,8 @@ cross-periodogram `conj(A)·B` in place of `|A|²`.
 
 Noise present in both channels survives the average; noise in only one
 (each reference, each channel's electronics) averages toward zero, leaving a
-residual of about `floor = √(S_aa S_bb / nseg)`. Measuring a device against
+residual of about `floor = √(S_aa S_bb / K)`, `K` the number of independent
+averages. Measuring a device against
 two independent references gives its own spectrum below either reference's
 noise; splitting one signal into two channels gives the source's noise below
 the channels' floor.
@@ -93,6 +98,24 @@ function cross_psd_x(a::AbstractTimingData, b::AbstractTimingData;
     xa = _f64(_as_phase(a).x); xb = _f64(_as_phase(b).x)
     return _cross_psd(:Sx, xa, xb, a.tau0, nperseg, noverlap, taper)
 end
+
+# Welch's equivalent number of independent averages of nseg segments of
+# length L, `step` apart: nseg / (1 + 2 Σₖ (1 − k/nseg) ρ(k)²), with ρ(k) the
+# window's overlap correlation at a shift of k steps.
+function _independent_averages(taper::Symbol, L::Int, step::Int, nseg::Int)
+    w = _window(taper, L)
+    U = sum(abs2, w)
+    s = 0.0
+    for k in 1:nseg-1
+        k * step >= L && break
+        ρ = sum(w[i] * w[i+k*step] for i in 1:L-k*step) / U
+        s += (1 - k / nseg) * ρ^2
+    end
+    return nseg / (1 + 2s)
+end
+
+_samples(d::PhaseData) = d.x
+_samples(d::FrequencyData) = d.y
 
 _as_phase(d::PhaseData) = d
 _as_phase(d::FrequencyData) = _freq_to_phase(d)

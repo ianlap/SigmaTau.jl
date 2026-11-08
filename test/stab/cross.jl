@@ -5,12 +5,25 @@
 @testset "cross estimators" begin
     a = noise_gen(PhaseData, 4096, 1.0; h=Dict(0 => 1e-24, 2 => 1e-26), rng=Xoshiro(1))
 
+    @testset "gaps are rejected" begin
+        g = PhaseData([a.x[1:99]; NaN; a.x[101:end]], 1.0)
+        @test_throws ArgumentError cross_adev(g, a)
+        @test_throws ArgumentError cross_psd_x(a, g)
+    end
+
     @testset "a × a is the single-channel estimate" begin
         m = [1, 2, 4, 16, 64]
         @test cross_adev(a, a, m).covar ≈ adev(a, m; ci=false).dev .^ 2 rtol=1e-12
         c = cross_psd_y(a, a)
         @test c.psd ≈ psd_y(a).psd rtol=1e-12
-        @test c.floor ≈ c.psd ./ sqrt(c.nseg) rtol=1e-12
+        @test c.floor ≈ c.psd ./ sqrt(SigmaTau._independent_averages(:hann, c.nperseg, c.nperseg - c.noverlap, c.nseg)) rtol=1e-12
+        # Overlap adds segments, not independent averages: at 90 % the floor
+        # stays near the one without overlap.
+        k0 = cross_psd_y(a, a; nperseg=256, noverlap=0)
+        k9 = cross_psd_y(a, a; nperseg=256, noverlap=230)
+        @test k9.nseg > 8k0.nseg
+        @test SigmaTau._independent_averages(:hann, 256, 26, k9.nseg) < 2.5k0.nseg
+        @test SigmaTau._independent_averages(:hann, 256, 256, 16) == 16
         @test cross_psd_x(a, a).psd ≈ psd_x(a).psd rtol=1e-12
     end
 
