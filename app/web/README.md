@@ -49,6 +49,18 @@ returns the binary's JSON: status 200 on success and 422 with
 `{"error": …}` on failure. `GET /api/health` reports whether a core was
 found. The desktop shell takes the same request.
 
+## Tests
+
+```bash
+SIGMATAU_EXE=cli/build/bin/sigmatau julia --project=cli cli/test/runtests.jl
+SIGMATAU_CLI=cli/build/bin/sigmatau python3 -m unittest discover -s app/web/test -v
+```
+
+The first runs the CLI tests against the library and checks that the compiled
+binary prints the same output; the second sends `serve.py` the page's
+requests. The `Web core` workflow builds with `--trim=safe` and runs both on
+every change to `src/`, `cli/` or `app/web/`.
+
 ## Front end
 
 - `ui/theme.css` holds every color, font and size; restyle there.

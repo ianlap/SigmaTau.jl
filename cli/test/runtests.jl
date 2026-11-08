@@ -239,7 +239,7 @@ mktempdir() do dir
         @test length(rows) == 64 ÷ 2       # nperseg 64 = largest power of 2 ≤ 256/4, DC dropped
         r = run_cli("spectrum", pf, "--nperseg", "32", "--format", "json")
         @test occursin("\"spectrum\":{\"nperseg\":32,\"noverlap\":16,", r.out)
-        sy = Sy(PhaseData(X, 1.0); nperseg=32)
+        sy = psd_y(PhaseData(X, 1.0); nperseg=32)
         @test parse(Float64, csv_rows(run_cli("spectrum", pf, "--nperseg", "32").out)[1][2]) == sy.psd[2]
     end
 

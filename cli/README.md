@@ -15,7 +15,6 @@ cli/
   src/commands.jl     analyze, check, spectrum, dynamic
   src/output.jl       JSON and CSV writers
   src/completion.jl   bash, zsh, fish and PowerShell scripts
-  src/compat.jl       stand-ins for the library registry on older SigmaTau
   test/runtests.jl    tests (in process, and against a build with SIGMATAU_EXE)
 ```
 

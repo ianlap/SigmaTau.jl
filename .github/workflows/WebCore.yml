@@ -1,0 +1,87 @@
+name: Web core
+
+# Builds the sigmatau command line (cli/), which the explorer runs, with
+# juliac --trim=safe, runs its tests against the compiled binary, and checks
+# serve.py's requests. A trim error anywhere in SigmaTau's code path fails
+# the build step.
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'src/**'
+      - 'Project.toml'
+      - 'cli/**'
+      - 'app/web/**'
+      - '.github/workflows/WebCore.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'Project.toml'
+      - 'cli/**'
+      - 'app/web/**'
+      - '.github/workflows/WebCore.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  build-and-test:
+    name: trim=safe build and CLI checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.13'
+      - uses: julia-actions/cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install JuliaC
+        run: |
+          julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'
+          echo "$HOME/.julia/bin" >> "$GITHUB_PATH"
+
+      - name: Instantiate the CLI project
+        run: julia --project=cli -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
+
+      - name: Build with --trim=safe
+        run: |
+          juliac --output-exe sigmatau --bundle cli/build \
+                 --trim=safe --experimental cli 2>&1 | tee juliac.log
+          test -x cli/build/bin/sigmatau
+          {
+            echo "### sigmatau"
+            echo "- executable: $(du -h cli/build/bin/sigmatau | cut -f1)"
+            echo "- bundle: $(du -sh cli/build | cut -f1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke run
+        run: |
+          cli/build/bin/sigmatau version
+          cli/build/bin/sigmatau analyze --synth 8192 \
+            --devs adev,mdev,tdev,hdev,mhdev,totdev --spectrum --format json \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print("elapsed_ms", d["elapsed_ms"])'
+
+      - name: CLI tests (library and compiled binary)
+        env:
+          SIGMATAU_EXE: ${{ github.workspace }}/cli/build/bin/sigmatau
+        run: julia --project=cli cli/test/runtests.jl
+
+      - name: serve.py checks
+        env:
+          SIGMATAU_CLI: ${{ github.workspace }}/cli/build/bin/sigmatau
+        run: python3 -m unittest discover -s app/web/test -v
+
+      - name: Upload the juliac log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: juliac-log
+          path: juliac.log
+          if-no-files-found: ignore

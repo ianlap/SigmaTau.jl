@@ -106,7 +106,11 @@ function spectra(o::Options, data::PhaseData)
     need_samples(data, 16, "the spectrum")
     any(isnan, data.x) &&
         throw(CLIError(EXIT_ANALYSIS, "the spectrum needs a record without gaps; fill them with --fillgaps"))
-    return welch(Sy, data, o.nperseg), welch(Sx, data, o.nperseg)
+    N = length(data.x)
+    # One segment length for both spectra, from the phase record's length (the
+    # library's own default for psd_y counts the N − 1 frequency samples).
+    np = o.nperseg > 0 ? min(o.nperseg, N) : min(pow2_at_most(N ÷ 4), N)
+    return psd_y(data; nperseg=np), psd_x(data; nperseg=np)
 end
 
 function cmd_spectrum(io::IO, o::Options, data::PhaseData, t_start::UInt64)

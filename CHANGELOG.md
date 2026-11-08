@@ -85,7 +85,7 @@ until 0.7.
   `completion` and `version`, CSV or versioned JSON output
   (`schema_version: 1`), documented exit codes and shell completion for bash,
   zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
-  (`app/web/cli`), and the explorer now runs it with `--format json`. See
+  (`app/web/cli`), and the explorer now runs it with `--format json`. The `Web core` workflow now builds and tests it. See
   `docs/src/cli.md`.
 - `StabilityResult` carries the record's `tau0`, sample count `n` and the
   interval `confidence` (`NaN` without intervals), and result files store
