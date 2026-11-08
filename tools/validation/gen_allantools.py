@@ -20,6 +20,7 @@ Outputs (CSV, values at %.17e so Float64 round-trips):
   noiseid.csv  dataset, m, dmax, alpha_int, alpha, d, rho   lag-1 ACF noise ID
   welch.csv    dataset, kind, nperseg, f, psd           scipy.signal.welch S_y and S_x
   dynamic.csv  dataset, kind, window, start, m, dev     per-window OADEV / OHDEV
+  gaps.csv     dataset, m, n, dev                       gap-tolerant ADEV (gradev)
 """
 import argparse
 import csv
@@ -224,13 +225,32 @@ def gen_dynamic(w):
                     w.writerow([name, kind, win, s + 1, int(round(t)), fmt(float(d))])
 
 
+# Samples blanked for the gap-tolerant check, 1-based and inclusive; the same
+# spans are in test/validation/CrossCheck.jl.
+GAP_SPANS = [(101, 160), (777, 777), (1500, 1503), (3001, 3100)]
+
+
+def gen_gaps(w):
+    w.writerow(["dataset", "m", "n", "dev"])
+    for name, x in datasets():
+        if name not in ("alpha_+2", "alpha_+0", "alpha_-2"):
+            continue
+        x = x.copy()
+        for lo, hi in GAP_SPANS:
+            x[lo - 1:hi] = np.nan
+        taus, devs, _, ns = at.gradev(x, rate=1.0, data_type="phase", taus=[float(m) for m in octave(len(x) // 4)])
+        for t, d, n in zip(taus, devs, ns):
+            w.writerow([name, int(round(t)), int(n), fmt(float(d))])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(FIX, "allantools"))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     for fname, gen in (("edf.csv", gen_edf), ("ci.csv", gen_ci), ("noiseid.csv", gen_noiseid),
-                       ("welch.csv", gen_welch), ("dynamic.csv", gen_dynamic), ("devs.csv", gen_devs)):
+                       ("welch.csv", gen_welch), ("dynamic.csv", gen_dynamic), ("gaps.csv", gen_gaps),
+                       ("devs.csv", gen_devs)):
         with open(os.path.join(args.out, fname), "w", newline="") as f:
             gen(csv.writer(f, lineterminator="\n"))
         print("wrote", fname, file=sys.stderr)
