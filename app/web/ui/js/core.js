@@ -1,6 +1,7 @@
 // The only module that talks to the analysis core: serve.py over local HTTP
 // in a browser, or the desktop shell's commands (app/desktop) inside its
-// window. Both run sigmatau-cli and take and return the same shapes.
+// window. Both run the sigmatau binary (cli/) with the arguments built here
+// and hand back its JSON.
 import { state, referenceColFor } from "./state.js";
 
 const tauri = window.__TAURI__?.core;
@@ -56,56 +57,92 @@ async function post(body, signal) {
   return out;
 }
 
-function recordRequest(clock) {
-  return {
-    source: clock.source.type === "synth"
-      ? { type: "synth", n: clock.source.n, seed: clock.source.seed }
-      : { type: "file", name: clock.source.name, content: clock.source.content },
-    kind: clock.kind,
-    tau0: clock.source.type === "synth" ? clock.source.tau0 : clock.tau0,
-    time_col: clock.time_col,
-    value_col: clock.value_col,
-    reference_col: referenceColFor(clock),
-    header: clock.header,
-    scaling: clock.scaling,
-    detrend: clock.detrend,
-    fillgaps: clock.fillgaps,
-    remove_outliers: clock.remove_outliers,
-  };
+// Command-line flags that describe one clock's record. A file travels
+// separately (the shell saves it and passes its path as FILE).
+function recordArgs(clock) {
+  const synth = clock.source.type === "synth";
+  const a = synth ? ["--synth", clock.source.n, "--seed", clock.source.seed] : [];
+  const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
+  if (clock.kind === "frequency") a.push("--freq");
+  opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
+  opt("--time-col", clock.time_col);
+  opt("--value-col", clock.value_col);
+  const ref = referenceColFor(clock);
+  if (ref) opt("--reference-col", ref);
+  opt("--header", clock.header);
+  opt("--scaling", clock.scaling);
+  opt("--detrend", clock.detrend);
+  if (clock.fillgaps) a.push("--fillgaps");
+  if (clock.remove_outliers) a.push("--remove-outliers");
+  a.push("--format", "json");
+  return a;
 }
+
+// One run of the sigmatau binary: a command, its flags, and the record file.
+function request(clock, command, extra) {
+  const file = clock.source.type === "synth" ? null : { name: clock.source.name, content: clock.source.content };
+  return { args: [command, ...recordArgs(clock), ...extra].map(String), file };
+}
+
+// The core answers in its versioned JSON (schema_version 1, see cli/README.md).
+// The pages read columns, so it is reshaped once, here; `doc` keeps the
+// original for the JSON export.
+function view(doc) {
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  const r = doc.record ?? {};
+  const record = {
+    n: r.n, tau0: r.tau0, kind: r.quantity, source: doc.source, series: r.series,
+    check: {
+      samples: r.n, span_s: r.span_s, gaps: r.gaps, outliers: r.outliers,
+      outlier_t: r.outlier_t ?? [], outlier_x: r.outlier_x ?? [], drift_per_day: r.drift_per_day,
+    },
+  };
+  const results = (doc.results ?? []).map((res) => {
+    const col = (k) => res.points.map((p) => p[k]);
+    // Columns an estimator does not report (no CI for MTIE and TIE rms, or
+    // --no-ci) are all null; the pages expect them empty.
+    const has = (k) => res.points.some((p) => p[k] !== null && p[k] !== undefined);
+    const ci = has("ci_lower");
+    return {
+      dev: res.deviation, label: res.label, axis: res.axis, tau: col("tau"), sigma: col("dev"),
+      ci_lo: ci ? col("ci_lower") : [], ci_hi: ci ? col("ci_upper") : [],
+      edf: has("edf") ? col("edf") : [], noise: has("noise_type") ? col("noise_type") : [], neff: col("neff"),
+    };
+  });
+  const d = doc.dynamic;
+  const dynamic = d && { dev: d.deviation, window: d.window, step: d.step, t: d.t, tau: d.tau, map: d.dev };
+  return { record, results, spectrum: doc.spectrum, dynamic, elapsed_ms: doc.elapsed_ms, doc };
+}
+
+const run = async (body, signal) => view(await post(body, signal));
 
 // Read a record and its check (samples, span, gaps, outliers, drift),
 // without running any estimator.
 export function load(clock, signal) {
-  return post({ ...recordRequest(clock), devs: [], series: 4000 }, signal);
+  return run(request(clock, "check", ["--series", 4000]), signal);
 }
 
-// Run the selected estimators on one clock.
+// Run the selected estimators on one clock, with its spectrum.
 export function analyze(clock, signal) {
-  return post({
-    ...recordRequest(clock),
-    devs: state.devs,
-    grid: state.grid,
-    confidence: state.ci ? state.confidence : null,
-    bias_correction: state.bias,
-    series: 0,
-    spectrum: true,
-  }, signal);
+  return run(request(clock, "analyze", [
+    "--devs", state.devs.join(","),
+    "--grid", state.grid,
+    ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
+    ...(state.bias ? [] : ["--no-bias-correction"]),
+    "--spectrum",
+  ]), signal);
 }
 
 // Settings that decide a clock's dynamic map; a change means recompute.
 export const dynamicKey = (clock) =>
-  JSON.stringify([recordRequest(clock), state.dyn.dev, state.dyn.frac, state.grid]);
+  JSON.stringify([request(clock, "dynamic", []), state.dyn.dev, state.dyn.frac, state.grid]);
 
 // Sliding-window deviation map for one clock (window = record / frac).
 export function dynamic(clock, signal) {
   const n = clock.record?.n ?? 0;
-  return post({
-    ...recordRequest(clock),
-    devs: [],
-    grid: state.grid,
-    series: 0,
-    dynamic: state.dyn.dev,
-    window: Math.max(16, Math.floor(n / state.dyn.frac)),
-  }, signal);
+  return run(request(clock, "dynamic", [
+    "--grid", state.grid,
+    "--dev", state.dyn.dev,
+    "--window", Math.max(16, Math.floor(n / state.dyn.frac)),
+  ]), signal);
 }
