@@ -33,6 +33,11 @@ struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
     end
 end
 
+# Any real vector (a view, a range, integers): copied into a `Vector` of its
+# float type, so `PhaseData(view(x, 1:100), 1.0)` and `PhaseData(1:10)` work.
+PhaseData(x::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user") =
+    PhaseData(Vector{float(eltype(x))}(x), tau0; source=source)
+
 
 """
     FrequencyData{T<:AbstractFloat}
@@ -59,6 +64,17 @@ struct FrequencyData{T<:AbstractFloat} <: AbstractTimingData
         return new{T}(y, Float64(tau0), String(source))
     end
 end
+
+FrequencyData(y::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user") =
+    FrequencyData(Vector{float(eltype(y))}(y), tau0; source=source)
+
+"""
+    length(data::PhaseData) / length(data::FrequencyData) → Int
+
+Number of samples in the record.
+"""
+Base.length(p::PhaseData) = length(p.x)
+Base.length(f::FrequencyData) = length(f.y)
 
 # Compact one-line displays for the data records: sample count, τ₀, and the
 # provenance only when it is not the "user" default. Full-vector dumps would
