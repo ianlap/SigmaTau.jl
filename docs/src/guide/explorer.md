@@ -122,3 +122,17 @@ files like this"); **Import settings…** on the Data page reopens the dialog.
 | Esc | Close a dialog |
 
 On a plot, hover for values, drag to zoom and double-click to reset.
+
+## Part of a record, and comparing runs
+
+On the Data page, **Select range** turns a drag across the phase plot into
+the analysis range: Stability, Spectrum and Dynamic then use only that
+stretch (the record check and the plot still show the whole record, with the
+range shaded). **whole record** clears it. Each clock keeps its own range.
+**τ range** in the panel's options leaves out averaging times outside the
+limits.
+
+**Pin run** on the Stability page keeps the current curves on the plot,
+thin and dashed, so the next run (another range, drift removal or τ grid)
+can be compared with it. Hover a pin for the settings it was made with; ×
+removes it.

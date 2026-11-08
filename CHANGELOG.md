@@ -30,6 +30,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Analysis range: `--range A:B` (seconds from the first sample) and
+  `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
+  the Data page drags out the part of a record to analyse, the options take
+  τ limits, and **Pin run** on the Stability page keeps a run's curves to
+  compare with the next one.
 - `noise_gen` covers flicker-walk FM (α = −3) and random-run FM (α = −4), and
   takes noise-type names as keys (`Dict(:WHFM => 1e-12)`). Its spectrum,
   `h_α (sin(πfτ₀)/(πτ₀))^α`, is checked against theory for every α from +2
