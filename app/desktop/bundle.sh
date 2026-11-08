@@ -25,7 +25,11 @@ VERSION=$(python3 -c 'import json; print(json.load(open("tauri.conf.json"))["ver
 ARCH=$(uname -m)
 mkdir -p dist
 
-cargo tauri build "$@"
+# The app is signed below, after the core goes in. Keep Tauri from signing
+# it first: in CI the signing variables are set but empty when the secrets
+# are absent, and Tauri then fails looking for an identity named "".
+env -u APPLE_SIGNING_IDENTITY -u APPLE_ID -u APPLE_PASSWORD -u APPLE_TEAM_ID \
+  -u APPLE_CERTIFICATE -u APPLE_CERTIFICATE_PASSWORD cargo tauri build "$@"
 
 case "$(uname -s)" in
   Darwin)
