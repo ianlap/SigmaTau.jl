@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `groslambert`: the Groslambert covariance for three or more clocks, each
+  clock's Allan deviation from the cross Allan variance of the two
+  difference records that share it, with record-based EDF and χ² intervals.
+  `ncornered_hat` now fills `edf` and `ci` when its inputs carry EDF,
+  propagating each pair's χ² spread and the covariance of pairs that share
+  a clock.
 - Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
   cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
   (cross Allan variance with its statistical uncertainty from the record),

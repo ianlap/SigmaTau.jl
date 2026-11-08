@@ -41,6 +41,7 @@ include("drift.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
+include("ensemble.jl")
 
 # ── Real-time streaming accumulators (Dobrogowski–Kasznia scheme) ───────
 include("streaming.jl")
@@ -73,7 +74,7 @@ export hdev, mhdev, htdev
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
 export dadev, dhdev
-export ncornered_hat
+export ncornered_hat, groslambert
 export drift_fit, DriftFit
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS

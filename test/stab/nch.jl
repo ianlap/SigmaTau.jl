@@ -57,7 +57,7 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
         for r in clocks
             @test r.deviation_type == :adev          # input type is kept
             @test r.tau == a12.tau
-            @test isempty(r.ci) && isempty(r.edf) && isempty(r.noise_type)
+            @test isempty(r.ci) && isempty(r.edf) && isempty(r.noise_type)   # inputs without edf
             @test r.neff == min.(a12.neff, a13.neff, a23.neff)
         end
 

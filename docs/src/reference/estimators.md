@@ -68,8 +68,9 @@ dadev
 dhdev
 ```
 
-## N-cornered hat
+## Clock ensembles
 
 ```@docs
 ncornered_hat
+groslambert
 ```

@@ -186,13 +186,7 @@ function cross_adev(a::AbstractTimingData, b::AbstractTimingData, m_values::Vect
     covar = zeros(K); va = zeros(K); vb = zeros(K); unc = zeros(K); neff = zeros(Int, K)
     for (j, m) in enumerate(m_values)
         n = N - 2m
-        p = Vector{Float64}(undef, n)
-        saa = 0.0; sbb = 0.0
-        @inbounds for i in 1:n
-            da = xa[i+2m] - 2xa[i+m] + xa[i]
-            db = xb[i+2m] - 2xb[i+m] + xb[i]
-            p[i] = da * db; saa += da * da; sbb += db * db
-        end
+        p, saa, sbb = _second_diff_products(xa, xb, m)
         c = 2 * (m * τ₀)^2
         μ = sum(p) / n
         covar[j] = μ / c; va[j] = saa / (c * n); vb[j] = sbb / (c * n)
@@ -201,6 +195,20 @@ function cross_adev(a::AbstractTimingData, b::AbstractTimingData, m_values::Vect
     end
     dev = [v > 0 ? sqrt(v) : NaN for v in covar]
     return CrossStabilityResult(m_values .* τ₀, covar, dev, unc, sqrt.(va), sqrt.(vb), neff, τ₀, N)
+end
+
+# Products Δ²x_a(i) Δ²x_b(i) of the overlapping second differences at lag m,
+# and the two channels' sums of squares.
+function _second_diff_products(xa::Vector{Float64}, xb::Vector{Float64}, m::Int)
+    n = length(xa) - 2m
+    p = Vector{Float64}(undef, n)
+    saa = 0.0; sbb = 0.0
+    @inbounds for i in 1:n
+        da = xa[i+2m] - 2xa[i+m] + xa[i]
+        db = xb[i+2m] - 2xb[i+m] + xb[i]
+        p[i] = da * db; saa += da * da; sbb += db * db
+    end
+    return p, saa, sbb
 end
 
 # Variance of the mean of a zero-mean series whose autocovariance vanishes

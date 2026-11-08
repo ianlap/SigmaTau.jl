@@ -15,7 +15,7 @@ using SigmaTau
         :adev, :mdev, :tdev, :hdev, :mhdev, :htdev, :totdev, :mtotdev,
         :ttotdev, :htotdev, :mhtotdev, :mtie, :tierms, :pdev, :theo1, :theoh,
         :dadev, :dhdev, :stability, :deviation, :estimators, :summarize,
-        :ncornered_hat, :StreamingStability, :snapshot, :nsamples,
+        :ncornered_hat, :groslambert, :StreamingStability, :snapshot, :nsamples,
         :identify_noise, :noise_id_nnls, :calculate_edf, :confidence_intervals, :bias_correction,
         :psd_y, :psd_x, :ssb_phase_noise, :noise_gen,
         :cross_psd_y, :cross_psd_x, :cross_adev, :CrossSpectralResult, :CrossStabilityResult,
