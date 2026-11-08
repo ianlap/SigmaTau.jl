@@ -7,6 +7,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `remove_outliers(::PhaseData)` now cleans in frequency space: it
+  differences the phase, gaps and fills the outlying frequency samples, and
+  integrates back from `x[1]`. A phase step is now removed instead of being
+  carried through with only the sample it lands on refilled. Existing `NaN`
+  gaps in the phase record are filled first. `FrequencyData` is unchanged.
 - `read_phase` / `read_frequency` parse columns with a small typed reader
   instead of `DelimitedFiles.readdlm`, take the median time step with a local
   helper instead of `Statistics.median`, and no longer box locals in the

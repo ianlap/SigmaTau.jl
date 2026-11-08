@@ -145,9 +145,9 @@ function load_record(o::Options)
 end
 
 # Remove 5σ outliers in the frequency domain and integrate back. A glitch in a
-# phase record is a step, i.e. one bad frequency sample; SigmaTau's
-# remove_outliers(::PhaseData) refills the phase sample the step lands on,
-# which keeps the step. Going through FrequencyData removes it.
+# phase record is a step, i.e. one bad frequency sample. SigmaTau's
+# remove_outliers(::PhaseData) now does the same thing; this copy stays until
+# the trimmed build has been checked against the library version.
 function deglitch(data::PhaseData)
     x = data.x
     N = length(x)

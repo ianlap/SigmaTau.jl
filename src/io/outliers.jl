@@ -69,6 +69,13 @@ Schlossberger's reflect-and-filter algorithm, which preserves the local noise
 character). The `tau0` and `source` fields carry over; the input is left
 untouched. When nothing is flagged the input is returned as-is.
 
+`PhaseData` is cleaned in frequency space: the record is differenced to
+`yᵢ = (x[i+1] − x[i]) / τ₀`, the flagged frequency samples are gapped and
+filled, and the result is integrated back to phase from `x[1]`. A phase
+step is a single bad frequency sample, so this removes the step itself
+rather than refilling the phase sample it lands on (which would leave the
+step in place). Existing `NaN` gaps in the phase record are filled first.
+
 This is the Stable32 deglitching idiom [riley-2008-sp1065](@cite): flag
 samples more than `nsigma` scaled MADs from the median, gap them, and fill.
 
@@ -85,9 +92,20 @@ See also [`find_outliers`](@ref), [`fillgaps`](@ref).
 function remove_outliers(data::PhaseData; nsigma::Real=5)
     idx = find_outliers(data; nsigma=nsigma)
     isempty(idx) && return data
-    x = Vector{Float64}(data.x)
-    x[idx] .= NaN
-    return fillgaps(PhaseData(x, data.tau0; source=data.source))
+    # Work in frequency space: a phase step is one outlying frequency sample,
+    # so fix it there and integrate back, anchored at the first phase sample.
+    pd = any(isnan, data.x) ? fillgaps(data) : data
+    x  = pd.x
+    T  = eltype(x)
+    t0 = pd.tau0
+    y  = T[(x[i + 1] - x[i]) / t0 for i in 1:length(x) - 1]
+    fd = remove_outliers(FrequencyData(y, t0; source=pd.source); nsigma=nsigma)
+    out = Vector{T}(undef, length(x))
+    out[1] = x[1]
+    @inbounds for i in 1:length(x) - 1
+        out[i + 1] = out[i] + fd.y[i] * t0
+    end
+    return PhaseData(out, t0; source=pd.source)
 end
 
 function remove_outliers(data::FrequencyData; nsigma::Real=5)
