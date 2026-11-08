@@ -279,11 +279,15 @@ function _fill_one_gap!(x::Vector{Float64},
     fillvec = _howe_filter(fillvec)
 
     # Endpoint ramp: anchor to the filtered surrounding data so the joins
-    # don't kink off a single noisy boundary sample.
+    # don't kink off a single noisy boundary sample. A gap at either end of
+    # the record has data on one side only, so it is shifted to join that
+    # side.
     filt_data = _filter_all(x)
-    start_anchor = filt_data[curgap[1] - 1]
-    end_anchor   = filt_data[curgap[2] + 1]
-    ramp = range(start_anchor - fillvec[1], stop=end_anchor - fillvec[end], length=sizegap)
+    start_off = curgap[1] > 1         ? filt_data[curgap[1] - 1] - fillvec[1]   : NaN
+    end_off   = curgap[2] < length(x) ? filt_data[curgap[2] + 1] - fillvec[end] : NaN
+    isnan(start_off) && (start_off = end_off)
+    isnan(end_off)   && (end_off = start_off)
+    ramp = range(start_off, stop=end_off, length=sizegap)
 
     @inbounds for (k, idx) in enumerate(curgap[1]:curgap[2])
         x[idx] = fillvec[k] + ramp[k]
@@ -328,6 +332,7 @@ function _howe_fillgaps_core(x::AbstractVector{<:Real})
 
     # Outer loop: rightward sweep, then leftward sweep, repeat until empty.
     while !isempty(gaps)
+        remaining = length(gaps)
         # Rightward sweep
         while gap_num <= length(gaps) && gap_num >= 1
             status, gap_num = _fill_one_gap!(xv, gaps, gap_num, false)
@@ -345,6 +350,9 @@ function _howe_fillgaps_core(x::AbstractVector{<:Real})
         end
         isempty(gaps) && break
 
+        # A pass that filled nothing will never fill anything.
+        length(gaps) == remaining &&
+            error("fillgaps: gap topology cannot be filled (data record too short relative to gap span)")
         # Reset to the gap right of the largest remaining run, otherwise the
         # outer loop would spin forever.
         gap_num = _choose_initial_gap(gaps)

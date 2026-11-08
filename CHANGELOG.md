@@ -7,6 +7,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `fillgaps` fills a gap at the start or end of a record, joined to the
+  data on its one side, instead of throwing `BoundsError`; a layout it
+  cannot fill now throws its "gap topology" error instead of looping
+  forever.
 - EDF for `adev`, `mdev`, `tdev`, `hdev`, `mhdev` (and every caller of the
   Greenhall EDF) now follows the full Greenhall & Riley 2003 algorithm:
   exact basic sum only while J ≤ 100, Tables 1–3 beyond that, the
@@ -34,7 +38,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   suffixes such as `(ns)` or `ppb`, ISO 8601 or MJD timestamps). The CLI
   detects them too (`--input-format`, `--column`, `--nominal`), the
   explorer's import dialog recognises them, and Python has the same names.
-
+- Gap-tolerant `adev`, `mdev`, `tdev`, `hdev`, `mhdev`, `htdev`, `tierms`
+  and `mtie`: `NaN` samples are skipped instead of turning σ into `NaN` at
+  every τ. On phase a term counts when every sample it reads was measured;
+  on frequency, when no missing sample lies inside its span. `neff` counts
+  the terms used and the EDF and confidence interval follow from it. ADEV
+  matches allantools' `gradev` value and term count to 2e-15. The CLI and
+  the explorer pick this up without a flag.
 - Reference cross-check suite (`test/validation/`): every estimator on
   power-law records with α = +2 … −4, plus EDF, χ² intervals, noise ID,
   Welch spectra and dynamic maps, against allantools, scipy, Stable32's
