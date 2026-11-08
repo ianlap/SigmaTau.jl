@@ -36,7 +36,7 @@ in the REPL.
 ## Install
 
 ```julia-repl
-pkg> add https://github.com/ianlap/SigmaTau.jl
+pkg> add SigmaTau
 ```
 
 Julia 1.11 or later. `Plots` is optional: loading it turns on the plot

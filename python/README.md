@@ -10,7 +10,11 @@ is being deprecated; this package mirrors that port's public API and extends it.
 
 ## Install
 
-Not yet on PyPI. For now, install from a checkout of this repo:
+```bash
+pip install sigmatau
+```
+
+or, for development, from a checkout of this repo:
 
 ```bash
 pip install -e "python/[dev]"

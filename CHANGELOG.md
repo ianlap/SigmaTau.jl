@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-08
+
 ### Fixed
 
 - EDF for `adev`, `mdev`, `tdev`, `hdev`, `mhdev` (and every caller of the
@@ -48,7 +50,7 @@ until 0.7.
 - `psd_y`, `psd_x`, `ssb_phase_noise` replace `Sy`, `Sx`, `L`, and their
   `taper=` keyword replaces `window=` (which now only means the dynamic
   deviations' window). `SpectralResult.window` is now `.taper`; `r.window`
-  still reads it.
+  still reads it, with a warning.
 - `ncornered_hat` replaces `nch`.
 - `save(path, x)` writes records, results and suites, and `load(path)` reads
   any of them back (records through `read_phase` / `read_frequency`).
@@ -110,6 +112,14 @@ until 0.7.
   estimators). On a record with an uncorrected 1e-9 frequency offset the
   kernels previously lost about seven significant digits to cancellation;
   they now agree with BigFloat arithmetic to 1e-12.
+- Thêo1's ThêoBR bias correction (`theo1`, `theoh`) computes Thêo1 at 48
+  points of the eq. 33 ladder and interpolates the rest in log–log, within
+  0.5 % of the full average (0.25 % on the deviation); `theo1` at N = 65 536
+  drops from minutes to about 1 s. Short ladders are still averaged in full.
+- The total family, Thêo1 and ThêoBR run their averaging factors on all
+  Julia threads (`julia -t auto`); `mtotdev` / `htotdev` / `mhtotdev` at
+  N = 65 536 take about 1 s on four threads instead of 3 s. The compiled
+  `sigmatau` core uses every CPU core.
 - `plot(::DynamicStabilityResult)` draws the SP1065 waterfall (one σ(τ)
   curve per window, stacked along t) and no longer offers a heatmap.
 
@@ -155,7 +165,7 @@ until 0.7.
   and a default window (see below).
 - Every estimator (and `dadev` / `dhdev`) accepts any integer vector of
   averaging factors: `adev(pd, 1:10)`, `adev(pd, 2 .^ (0:6))`, `Int32` or view
-  vectors work like a `Vector{Int}`. `stability(pd; taus=1:10)` already did.
+  vectors work like a `Vector{Int}`, as do `stability(pd; m=1:10)`.
 - `PhaseData` / `FrequencyData` accept any real vector (views, ranges,
   integers), copied into a `Vector` of its float type.
 - `length(::PhaseData)` / `length(::FrequencyData)`.

@@ -10,10 +10,8 @@ the wrapper mirrors that port's public API and extends it.
 
 ## Install
 
-Not yet on PyPI. From a checkout of this repo:
-
 ```bash
-pip install -e "python/[dev]"
+pip install sigmatau                 # or, from a checkout: pip install -e "python/[dev]"
 ```
 
 The first `import sigmatau` performs a one-time juliapkg resolve — installing Julia
