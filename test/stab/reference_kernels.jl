@@ -120,15 +120,13 @@ function mtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     for n in 1:nsubs
         copyto!(seq, 1, x, n, seg_len)
 
-        half_n = seg_len / 2
-        if m == 1
-            slope = (seq[3] - seq[1]) / (2tau0)
-        else
-            hi = floor(Int, half_n)
-            s1 = sum(@view(seq[1:hi])) / hi
-            s2 = sum(@view(seq[hi+1:seg_len])) / (seg_len - hi)
-            slope = (s2 - s1) / (half_n * tau0)
-        end
+        # Half averages over the first and last k = ⌊3m/2⌋ points (the
+        # middle point of an odd-length segment belongs to neither), divided
+        # by the distance between them, 3m − k samples (Stable32 MTC.c).
+        k = seg_len ÷ 2
+        s1 = sum(@view(seq[1:k])) / k
+        s2 = sum(@view(seq[seg_len-k+1:seg_len])) / k
+        slope = (s2 - s1) / ((seg_len - k) * tau0)
         for j in 1:seg_len
             seq_det[j] = seq[j] - slope * tau0 * (j - 1)
         end

@@ -286,12 +286,14 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
         chunk_size = cld(nsubs, nchunks)
         chunk_sums = zeros(nchunks)
 
-        half_n = seg_len / 2.0
-        hi_half = floor(Int, half_n)
-        lo_half_len = seg_len - hi_half
-        inv_hi = 1.0 / hi_half
-        inv_lo = 1.0 / lo_half_len
-        inv_half_n_tau0 = 1.0 / (half_n * tau0)
+        # Linear-trend removal from the half averages (SP1065 eq. 27; Stable32's
+        # MTC.c, which allantools follows): average the first and the last
+        # k = ⌊3m/2⌋ points and divide their difference by the distance between
+        # the two averages, 3m − k samples. For odd m the middle point belongs
+        # to neither half (distance k + 1); for even m the halves meet (k).
+        k_half = seg_len ÷ 2
+        inv_k = 1.0 / k_half
+        inv_dist_tau0 = 1.0 / ((seg_len - k_half) * tau0)
 
         Threads.@threads :dynamic for c in 1:nchunks
             n_lo = (c - 1) * chunk_size + 1
@@ -304,21 +306,13 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
             # rather than re-summed over each window.
             s1 = 0.0
             s2 = 0.0
-            if m >= 2
-                @inbounds @simd for i in 1:hi_half
-                    s1 += x[n_lo - 1 + i]
-                end
-                @inbounds @simd for i in hi_half+1:seg_len
-                    s2 += x[n_lo - 1 + i]
-                end
+            @inbounds @simd for i in 1:k_half
+                s1 += x[n_lo - 1 + i]
+                s2 += x[n_lo - 1 + seg_len - k_half + i]
             end
 
             for n in n_lo:n_hi
-                if m == 1
-                    slope = (x[n+2] - x[n]) / (2.0 * tau0)
-                else
-                    slope = (s2 * inv_lo - s1 * inv_hi) * inv_half_n_tau0
-                end
+                slope = (s2 - s1) * inv_k * inv_dist_tau0
 
                 @inbounds for j in 1:seg_len
                     val = x[n-1+j] - slope * tau0 * (j - 1)
@@ -358,14 +352,13 @@ function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Flo
                 end
                 local_sum += block_sum / (6.0 * m)
 
-                # O(1) half-sum update for the next window: drop the head of
-                # each half and pick up the new tail. s1 covers x[n..n+hi_half-1],
-                # s2 covers x[n+hi_half..n+seg_len-1]; shifting by 1 swaps x[n]
-                # out of s1, x[n+hi_half] from s2 into s1, and x[n+seg_len] into s2.
-                if m >= 2 && n < n_hi
+                # O(1) half-sum update for the next window. s1 covers
+                # x[n .. n+k-1] and s2 covers x[n+3m-k .. n+3m-1]; shifting by
+                # one drops each head and adds the next sample to each tail.
+                if n < n_hi
                     @inbounds begin
-                        s1 += x[n + hi_half] - x[n]
-                        s2 += x[n + seg_len] - x[n + hi_half]
+                        s1 += x[n + k_half] - x[n]
+                        s2 += x[n + seg_len] - x[n + seg_len - k_half]
                     end
                 end
             end
