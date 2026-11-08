@@ -83,7 +83,13 @@ fn request_to_args(req: &Map<String, Value>, workdir: &Path) -> Result<Vec<Strin
 
 /// Run the core, polling so a cancel or the timeout can stop it.
 fn run_core(core: &Path, args: &[String], id: u64, runs: &Runs) -> Result<Value, String> {
-    let mut child = Command::new(core)
+    let mut cmd = Command::new(core);
+    // The compiled core runs on one thread unless told otherwise; the
+    // total deviations and Thêo1 split their work across all cores.
+    if std::env::var_os("JULIA_NUM_THREADS").is_none() {
+        cmd.env("JULIA_NUM_THREADS", "auto");
+    }
+    let mut child = cmd
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

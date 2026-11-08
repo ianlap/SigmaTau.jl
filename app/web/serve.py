@@ -115,7 +115,10 @@ class Handler(SimpleHTTPRequestHandler):
             except (ValueError, TypeError) as e:
                 return self.send_json(400, {"error": str(e)})
             try:
-                proc = subprocess.run(cmd + args, capture_output=True, timeout=TIMEOUT_S)
+                # The compiled core runs on one thread unless told otherwise.
+                env = dict(os.environ)
+                env.setdefault("JULIA_NUM_THREADS", "auto")
+                proc = subprocess.run(cmd + args, capture_output=True, timeout=TIMEOUT_S, env=env)
             except subprocess.TimeoutExpired:
                 return self.send_json(504, {"error": "analysis timed out"})
         out = proc.stdout.strip()
