@@ -6,11 +6,11 @@ the Tauri desktop window in `app/desktop/`.
 
 ```
 app/web/
-  cli/        SigmaTauCLI: the analysis core, built with juliac --trim
   ui/         static page: index.html, theme.css, app.css, js/
   serve.py    local server: serves ui/ and runs the core (stdlib Python)
 
 app/desktop/  the Tauri window: the same pages, no Python (see its README)
+cli/          the analysis core: the sigmatau command line (see its README)
 ```
 
 ## Run it
@@ -20,106 +20,46 @@ python3 app/web/serve.py --open          # http://127.0.0.1:9385
 ```
 
 `serve.py` looks for the core in this order: `$SIGMATAU_CLI`, then
-`app/web/cli/build/bin/sigmatau-cli`, then `julia --project=app/web/cli -m
-SigmaTauCLI` (no build needed, but each call pays Julia's start-up).
+`cli/build/bin/sigmatau`, then `julia --project=cli -m SigmaTauCLI` (no
+build needed, but each call pays Julia's start-up).
 Plotly loads from `ui/vendor/plotly.min.js` if present, else from jsDelivr;
 `python3 app/web/serve.py --fetch-plotly` saves a local copy for offline use.
 
-## Build the core
+## The core
 
-Julia 1.12 or newer, with JuliaC installed (`pkg> app add JuliaC`):
+The pages run the `sigmatau` command line (`cli/`); build it as its README
+says. Measured on a 4-core Linux container (Julia 1.13.3): a 15 MB
+executable in a 132 MB bundle, 24 ms to start, four estimators on 16 384
+points in under 70 ms.
 
-```bash
-julia --project=app/web/cli -e 'using Pkg; Pkg.instantiate()'
-juliac --output-exe sigmatau-cli --bundle app/web/cli/build --trim=safe --experimental app/web/cli
-```
-
-Measured on a 4-core Linux container (Julia 1.13.3): an 11.6 MB executable in a
-128 MB bundle, 32 ms start-up, six deviations on 8192 points in 42 ms. The
-`--trim=safe` build is clean because `cli/Project.toml` takes FFTW.jl from the
-`juliac-trim` branch of ianlap/FFTW.jl, with the `eager_library` preference
-set (upstream FFTW.jl's plan cleanup dispatches dynamically, and its lazy
-library handles crash a trimmed executable).
-
-## Test the core
-
-```bash
-SIGMATAU_CLI=app/web/cli/build/bin/sigmatau-cli python3 -m unittest discover -s app/web/cli/test -v
-```
-
-`test_core.py` checks the JSON of every flag group (deviations, files, gap
-filling, outliers, spectrum, dynamic) and the error exits, and compares ADEV,
-MDEV, HDEV and TDEV on `test/fixtures/validation/stable32gen.DAT` with
-Stable32's numbers. `test_serve.py` sends `serve.py` the page's requests. With
-`SIGMATAU_PARITY=1` and `julia` on the path, one test also checks that the
-compiled core prints the same numbers as plain Julia. The `Web core` workflow
-builds with `--trim=safe` and runs all of them on every change to `src/` or
-`app/web/`.
-
-## Core interface
-
-`sigmatau-cli` takes flags and prints one JSON document on stdout.
-
-| Flag | Meaning | Default |
-| --- | --- | --- |
-| `--input PATH` | read a record with SigmaTau's readers | |
-| `--synth N`, `--seed S` | synthetic white FM + random-walk FM record | seed 42 |
-| `--kind phase\|frequency` | what the value column holds | `phase` |
-| `--tau0 S` | sample interval; else from the file | |
-| `--time-col I`, `--value-col I` | 1-based columns; time 0 = none | 1, 2 |
-| `--reference-col J` | take the value against this column (several clocks in one file) | 0 = none |
-| `--header N` | header lines to skip; `#` lines and a Stable32 header block are skipped anyway | 0 |
-| `--scaling X` | multiply values (1e-9 for ns) | 1 |
-| `--detrend none\|mean\|endpoint\|linear` | | `none` |
-| `--fillgaps` | put the record on an even time grid and fill gaps (needs a time column) | |
-| `--remove-outliers` | remove 5σ outliers before the analysis | |
-| `--devs a,b,…` | any of adev mdev tdev hdev mhdev htdev totdev mtotdev ttotdev htotdev mhtotdev theo1 theoh pdev mtie tierms; `none` reads the record only | adev,mdev,hdev,mhdev |
-| `--grid octave\|half-octave\|quarter-octave\|decade\|half-decade\|all` | τ grid | `octave` |
-| `--confidence P` / `--no-ci` | interval level, or none | 0.683 |
-| `--no-bias-correction` | for the total estimators and Thêo1 | |
-| `--series N` | at most N record points in the output | 4000 |
-| `--spectrum` | add Welch S_y(f) and S_x(f) (Hann window, half overlap) | |
-| `--nperseg N` | Welch segment length | largest power of 2 ≤ N/4 |
-| `--dynamic dadev\|dhdev` | add a dynamic ADEV or HDEV map (`adev`, `hdev` also accepted) | |
-| `--window W`, `--step S` | dynamic window and step in samples | N/8, W/2 |
-
-Success (exit 0):
+`ui/js/core.js` builds the command and its flags, always with
+`--format json`, and reshapes the answer (the versioned schema in
+`docs/src/guide/cli.md`) into the columns the pages plot. `serve.py` exposes it as
+`POST /api/analyze` with the body
 
 ```json
-{
-  "sigmatau": "0.5.0",
-  "record": { "n": 16384, "tau0": 1.0, "kind": "phase", "source": "synthetic",
-              "series": { "t": [0.0, 4.0, ...], "x": [0.0, 1.2e-12, ...] },
-              "check": { "samples": 16384, "span_s": 16384.0, "gaps": 0, "outliers": 2,
-                         "outlier_t": [...], "outlier_x": [...], "drift_per_day": 3.1e-14 } },
-  "options": { "grid": "octave", "ci": true, "confidence": 0.683, "bias_correction": true },
-  "results": [
-    { "dev": "adev", "axis": "sigma_y", "tau": [1.0, 2.0, ...], "sigma": [...],
-      "ci_lo": [...], "ci_hi": [...], "edf": [...], "noise": ["WHFM", ...], "neff": [...] }
-  ],
-  "spectrum": { "nperseg": 4096, "f": [...], "sy": [...], "sx": [...] },
-  "dynamic": { "dev": "dadev", "window": 2048, "step": 1024, "t": [...], "tau": [...],
-               "map": [[...], ...] },
-  "elapsed_ms": 41.7
-}
+{ "args": ["analyze", "--devs", "adev,mdev", "--format", "json"],
+  "file": { "name": "clock.dat", "content": "0 0\n1 1.2e-9\n…" } }
 ```
 
-`spectrum` and `dynamic` appear only when asked for. The spectrum leaves out
-the DC bin and needs a record without gaps. In `dynamic`, `t` holds the
-window centres in seconds and `map` has one row per window, one column per τ.
+It checks that the first argument is `check`, `analyze`, `spectrum` or
+`dynamic` and that there is no `--out`, saves `file` (or nothing, for
+`--synth`) in a temporary folder, puts its path after the command and
+returns the binary's JSON: status 200 on success and 422 with
+`{"error": …}` on failure. `GET /api/health` reports whether a core was
+found. The desktop shell takes the same request.
 
-`axis` is `sigma_x` (seconds) for tdev, htdev, ttotdev, mtie and tierms.
-`ci_lo`, `ci_hi`, `edf` and `noise` are empty with `--no-ci`. `check` is
-the Data page's record check: NaN gaps, points past 5σ (at most 500 listed)
-and the linear frequency drift per day. Non-finite
-numbers are written as `null`. Failure (exit 2): `{"error": "message"}`.
+## Tests
 
-`serve.py` exposes it as `POST /api/analyze` with a JSON body
-`{source: {type: "file", name, content} | {type: "synth", n, seed}, kind,
-tau0, time_col, value_col, reference_col, header, scaling, detrend, fillgaps,
-remove_outliers, devs, grid, confidence (null for none), bias_correction,
-series, spectrum, nperseg, dynamic, window, step}` and returns the core's JSON.
-`GET /api/health` reports whether a core was found.
+```bash
+SIGMATAU_EXE=cli/build/bin/sigmatau julia --project=cli cli/test/runtests.jl
+SIGMATAU_CLI=cli/build/bin/sigmatau python3 -m unittest discover -s app/web/test -v
+```
+
+The first runs the CLI tests against the library and checks that the compiled
+binary prints the same output; the second sends `serve.py` the page's
+requests. The `Web core` workflow builds with `--trim=safe` and runs both on
+every change to `src/`, `cli/` or `app/web/`.
 
 ## Front end
 

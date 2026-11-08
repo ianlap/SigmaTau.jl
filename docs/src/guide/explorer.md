@@ -29,18 +29,20 @@ but pays Julia's start-up on every analysis. `--port N` changes the port and
 
 ## Build the analysis core
 
-The core is a command-line program compiled with `juliac --trim`. You need
-Julia 1.12 or newer and JuliaC (`pkg> app add JuliaC`):
+The pages run the [`sigmatau` command line](cli.md) with `--format json`, so
+the core is that program, compiled with `juliac --trim`. You need Julia 1.12
+or newer and JuliaC (`pkg> app add JuliaC`):
 
 ```bash
-julia --project=app/web/cli -e 'using Pkg; Pkg.instantiate()'
-juliac --output-exe sigmatau-cli --bundle app/web/cli/build --trim=safe --experimental app/web/cli
+julia --project=cli -e 'using Pkg; Pkg.instantiate()'
+juliac --output-exe sigmatau --bundle cli/build --trim=safe --experimental cli
 ```
 
-The build takes a few minutes and leaves a bundle of about 110–130 MB in
-`app/web/cli/build/`. The core starts in about 30 ms and runs six deviations
-on 8192 points in about 40 ms. The same program is the
-[command-line tool](cli.md).
+The build takes a few minutes and leaves a bundle of about 130 MB in
+`cli/build/`. `serve.py` looks for the core in `$SIGMATAU_CLI`, then
+`cli/build/bin/sigmatau`, then falls back to `julia --project=cli -m
+SigmaTauCLI`. The core starts in about 25 ms and runs four estimators on
+16 384 points in under 70 ms.
 
 ## Build the desktop app
 

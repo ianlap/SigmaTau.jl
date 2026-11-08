@@ -26,7 +26,7 @@ adev(p)
 |:---|:---|:---|
 | **Julia REPL** | scripts, notebooks, custom analysis, batch jobs | [Getting started](getting_started.md) |
 | **Explorer** | loading a file and reading the curves without writing code | [Using the explorer](guide/explorer.md) |
-| **Command line** | one-off runs and calling SigmaTau from other languages, with JSON output | [Command line](guide/cli.md) |
+| **Command line** | one-off runs, shell scripts and other languages, with CSV or JSON output | [Command line](guide/cli.md) |
 
 All three run the same library code, so a deviation computed in the explorer
 or on the command line equals the one `adev(p)` returns in the REPL.

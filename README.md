@@ -91,15 +91,28 @@ to 40 times faster than allantools, `totdev` about 70 times, and
 (0.46 s vs 30 min on a 407,000-sample record). The harness, method and both measurements are in
 [`bench/`](bench/README.md).
 
+## Command line
+
+`sigmatau` is a compiled command line over the same code (about 30 ms to
+start, no Julia needed to run it):
+
+```bash
+sigmatau analyze clock.dat --devs adev,mdev,tdev            # CSV on stdout
+sigmatau analyze clock.dat --format json --out result.json  # versioned JSON
+sigmatau spectrum clock.dat                                 # S_y(f), S_x(f)
+sigmatau dynamic clock.dat --dev dhdev                      # sliding-window HDEV
+```
+
+Build it from `cli/` with JuliaC; see [the docs page](docs/src/guide/cli.md).
+
 ## Explorer
 
 `app/web/` is a point-and-click explorer for the whole workflow. You can load a
 file (Stable32 `.DAT`, CSV, TSV or whitespace columns, several clocks per file)
 or synthesize a power-law record. It checks the record for gaps and outliers,
 then plots σ_y and σ_x with χ² intervals, the S_y and S_x spectra, and the
-dynamic σ(t, τ) map. The pages are plain HTML and JavaScript over a small
-analysis core compiled with `juliac --trim`, which answers in tens of
-milliseconds.
+dynamic σ(t, τ) map. The pages are plain HTML and JavaScript over the compiled
+`sigmatau` command line, which answers in tens of milliseconds.
 
 ```bash
 python3 app/web/serve.py --open          # http://127.0.0.1:9385

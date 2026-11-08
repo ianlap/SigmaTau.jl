@@ -17,8 +17,8 @@ app/desktop/
 
 ## Build
 
-1. Build the core (see `app/web/README.md`), which leaves the juliac bundle in
-   `app/web/cli/build/`.
+1. Build the core (see `cli/README.md`), which leaves the juliac bundle in
+   `cli/build/`.
 2. Optional, for offline use: `python3 app/web/serve.py --fetch-plotly`
    puts Plotly into `ui/vendor/`, which the app then ships.
 3. With Rust and the Tauri CLI (`cargo install tauri-cli --version "^2"`):
@@ -31,7 +31,7 @@ cd app/desktop && cargo tauri dev   # run from the source tree
 `bundle.sh` copies the core in after Tauri bundles, keeping its symlinks
 (Tauri's own resource copy turns them into files and the app grows from
 114 MB to 289 MB), then signs the app ad hoc. It does the macOS step only;
-on other systems put `app/web/cli/build/` next to the executable as `core/`.
+on other systems put `cli/build/` next to the executable as `core/`.
 
 Measured on an Intel MacBook Pro (macOS 15, Julia 1.13.3): a 5.7 MB shell,
 a 114 MB app (30 MB zipped), the page loaded about 1.1 s after launch, and
@@ -42,9 +42,9 @@ core in the source tree (debug builds) or through `$SIGMATAU_CLI`.
 
 ## How it finds the core
 
-`$SIGMATAU_CLI`, then `core/bin/sigmatau-cli` in the app's resources
+`$SIGMATAU_CLI`, then `core/bin/sigmatau` in the app's resources
 (`Contents/Resources/core` on macOS), then
-(debug builds only) `app/web/cli/build/bin/sigmatau-cli`.
+(debug builds only) `cli/build/bin/sigmatau`.
 
 ## Commands
 
@@ -60,5 +60,5 @@ The pages detect the shell through `window.__TAURI__` in `ui/js/core.js` and
 
 Each `analyze` writes the record to a fresh temporary folder, runs the core
 with a 10-minute limit and removes the folder. Set `SIGMATAU_DESKTOP_LOG=1`
-to print page-load times and each core call (flags, outcome, milliseconds)
+to print page-load times and each core call (arguments, outcome, milliseconds)
 on stderr.
