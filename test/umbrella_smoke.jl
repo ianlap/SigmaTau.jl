@@ -75,7 +75,7 @@ end
     tau0 = 1.0
     y = randn(200) .* 1e-9
     fd = FrequencyData(y, tau0)
-    pd_eq = PhaseData(cumsum(y) .* tau0, tau0)
+    pd_eq = PhaseData([0.0; cumsum(y)] .* tau0, tau0)
     ms = [1, 2, 4]
 
     for f in (adev, mdev, tdev, hdev, mhdev, htdev,

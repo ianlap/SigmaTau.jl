@@ -214,7 +214,7 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         Random.seed!(5)
         p = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12))
         fd = FrequencyData(diff(p.x) ./ 1.0, 1.0)
-        pd_eq = PhaseData(cumsum(diff(p.x)), 1.0)
+        pd_eq = PhaseData([0.0; cumsum(diff(p.x))], 1.0)
 
         # FrequencyData round-trips through _freq_to_phase.
         a = theo1(fd, [4, 8]; ci=false)

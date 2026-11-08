@@ -149,7 +149,7 @@
         tau0 = 0.5
         y  = randn(1024) .* 1e-9
         fd = FrequencyData(y, tau0)
-        pd = PhaseData(cumsum(y) .* tau0, tau0)
+        pd = PhaseData([0.0; cumsum(y)] .* tau0, tau0)
         ms = [1, 2, 4]
 
         rf = dadev(fd, ms; window=256)
