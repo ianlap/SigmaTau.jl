@@ -1,8 +1,5 @@
 # Equivalent degrees of freedom, bias factors and χ² confidence intervals.
 
-using Statistics
-using Distributions
-
 """
     calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64) → Vector{Float64}
 

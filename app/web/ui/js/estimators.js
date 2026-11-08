@@ -1,5 +1,6 @@
 // Estimator catalog. `family` is the short name shown in the panel rows,
 // `note` the one-line description in the Add estimators dialog.
+// id, label, group and axis must match `estimators()` (checked in test/stab/registry.jl).
 export const GROUPS = [
   { id: "allan", title: "Allan family", sub: "σ<sub>y</sub>" },
   { id: "total", title: "Total", sub: "tighter intervals at long τ" },

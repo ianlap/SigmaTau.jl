@@ -66,9 +66,7 @@ using SigmaTau: _tierms_core, _f64
                    1.81598469805780205e+00, 6.03698500637962354e+00,
                    1.67273413520060075e+01]
             devs = _tierms_core(x, ms, 1.0)
-            for (d, r) in zip(devs, ref)
-                @test isapprox(d, r; rtol=1e-12)
-            end
+            @test all(isapprox.(devs, ref; rtol=1e-12))
 
             # Wrapper: τ = m·τ0 (same convention as allantools) and the
             # n = N − m span count.
@@ -99,9 +97,7 @@ using SigmaTau: _tierms_core, _f64
                2.54740653677371887e+00, 2.89748300023606342e+00,
                3.95001034791551353e+00]
         devs = _tierms_core(x, ms, 1.0)
-        for (d, r) in zip(devs, ref)
-            @test isapprox(d, r; rtol=1e-12)
-        end
+        @test all(isapprox.(devs, ref; rtol=1e-12))
     end
 
     @testset "API wrapper conventions" begin

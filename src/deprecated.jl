@@ -24,3 +24,11 @@ Base.@deprecate save_result(path::AbstractString, r::StabilityResult) save(path,
 Base.@deprecate save_suite(path::AbstractString, s::StabilitySuite; kwargs...) save(path, s; kwargs...)
 Base.@deprecate load_result(path::AbstractString) load(path)
 Base.@deprecate load_suite(path::AbstractString) load(path)
+
+function Base.getproperty(r::SpectralResult, s::Symbol)
+    if s === :window
+        Base.depwarn("`SpectralResult.window` is deprecated, use `.taper`", :getproperty)
+        return getfield(r, :taper)
+    end
+    return getfield(r, s)
+end
