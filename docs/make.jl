@@ -42,6 +42,7 @@ makedocs(
             "Plotting and tables" => "guide/plotting.md",
             "Using the explorer" => "guide/explorer.md",
             "Command line" => "guide/cli.md",
+            "Python" => "guide/python.md",
         ],
         "Background" => [
             "Noise, EDF and confidence" => "explanation/noise_and_confidence.md",

@@ -20,16 +20,18 @@ p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14))
 adev(p)
 ```
 
-## Three ways to use it
+## Ways to use it
 
 | | Use it for | Start here |
 |:---|:---|:---|
 | **Julia REPL** | scripts, notebooks, custom analysis, batch jobs | [Getting started](getting_started.md) |
 | **Explorer** | loading a file and reading the curves without writing code | [Using the explorer](guide/explorer.md) |
 | **Command line** | one-off runs, shell scripts and other languages, with CSV or JSON output | [Command line](guide/cli.md) |
+| **Python** | the same API from Python, through an embedded Julia | [Python](guide/python.md) |
 
-All three run the same library code, so a deviation computed in the explorer
-or on the command line equals the one `adev(p)` returns in the REPL.
+All of them run the same library code, so a deviation computed in the
+explorer, on the command line or from Python equals the one `adev(p)` returns
+in the REPL.
 
 ## Install
 
@@ -46,7 +48,8 @@ pages say how.
 - **Tutorials** teach by example, from a first analysis to reading your own
   files and separating clocks with the N-cornered hat.
 - **How-to guides** answer one question each: which estimator to use, how to
-  plot and export, how to run the explorer or the command-line tool.
+  plot and export, how to run the explorer, the
+  command-line tool or the Python package.
 - **Background** explains the ideas the numbers rest on: noise types, EDF,
   confidence intervals and bias correction, plus the validation against
   Stable32 and allantools and the derivation of the MHTOTDEV coefficients.

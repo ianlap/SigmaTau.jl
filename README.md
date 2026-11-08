@@ -63,6 +63,13 @@ a guide to
 [choosing an estimator](https://ianlap.github.io/SigmaTau.jl/stable/guide/choosing/)
 and the full API reference.
 
+## Python
+
+`python/` holds the `sigmatau` Python package, a juliacall wrapper with the
+same names (`st.adev(pd)`, `st.psd_y(pd)`, `st.deviation("mhtotdev", pd)`).
+Install it from a checkout with `pip install -e "python/[dev]"`; see
+[`python/README.md`](python/README.md).
+
 ## Compared with Stable32 and allantools
 
 | | Stable32 | allantools | SigmaTau |

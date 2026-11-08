@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sigmatau"
+dynamic = ["version"]
+description = "Clock-stability analysis (Allan/Hadamard deviations and friends) — Python bindings for SigmaTau.jl via juliacall."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Ian Lapinski", email = "ianlapinski01@gmail.com" }]
+keywords = ["allan deviation", "frequency stability", "clock", "metrology", "time and frequency"]
+dependencies = ["juliacall>=0.9.24,<0.10", "numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/ianlap/SigmaTau.jl"
+Documentation = "https://ianlap.github.io/SigmaTau.jl"
+
+[tool.hatch.version]
+path = "src/sigmatau/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sigmatau"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "NPY"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
