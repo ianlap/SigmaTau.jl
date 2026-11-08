@@ -31,7 +31,7 @@
         <button role="menuitem" data-export="json">Results as JSON</button>
       </div>
     </div>
-    <button class="btn btn-round" id="help-btn" type="button" aria-label="Help">?</button>
+    <a class="btn btn-round" id="help-btn" href="#help" aria-label="Help">?</a>
   </header>
 
   <div class="body">
@@ -47,18 +47,6 @@
 
   <dialog id="picker-dialog" class="dialog picker-dialog" aria-label="Add estimators"></dialog>
   <dialog id="import-dialog" class="dialog import-dialog" aria-label="Import a record"></dialog>
-  <dialog id="help-dialog" class="dialog help-dialog">
-    <form method="dialog">
-      <h2>Using the explorer</h2>
-      <p>Load a record on <b>Data</b>, pick estimators in the panel, and press <b>Run analysis</b>. Add more clocks to compare them: colour then means clock and line style means estimator.</p>
-      <ul class="keys">
-        <li><kbd>F5</kbd> run the analysis</li>
-        <li><kbd>1</kbd>–<kbd>4</kbd> switch pages</li>
-        <li>Hover a point for its value, drag to zoom, double-click to reset.</li>
-      </ul>
-      <div class="dialog-actions"><button class="btn btn-primary">Close</button></div>
-    </form>
-  </dialog>
 
   <script type="module" src="js/main.js"></script>
 </body>

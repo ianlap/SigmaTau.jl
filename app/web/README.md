@@ -51,7 +51,7 @@ output was identical in testing. The synthetic record in the core avoids FFTW.
 | `--tau0 S` | sample interval; else from the file | |
 | `--time-col I`, `--value-col I` | 1-based columns; time 0 = none | 1, 2 |
 | `--reference-col J` | take the value against this column (several clocks in one file) | 0 = none |
-| `--header N` | non-comment header lines to skip | 0 |
+| `--header N` | header lines to skip; `#` lines and a Stable32 header block are skipped anyway | 0 |
 | `--scaling X` | multiply values (1e-9 for ns) | 1 |
 | `--detrend none\|mean\|endpoint\|linear` | | `none` |
 | `--fillgaps` | put the record on an even time grid and fill gaps (needs a time column) | |
@@ -61,6 +61,10 @@ output was identical in testing. The synthetic record in the core avoids FFTW.
 | `--confidence P` / `--no-ci` | interval level, or none | 0.683 |
 | `--no-bias-correction` | for the total estimators and Thêo1 | |
 | `--series N` | at most N record points in the output | 4000 |
+| `--spectrum` | add Welch S_y(f) and S_x(f) (Hann window, half overlap) | |
+| `--nperseg N` | Welch segment length | largest power of 2 ≤ N/4 |
+| `--dynamic adev\|hdev` | add a dynamic ADEV or HDEV map | |
+| `--window W`, `--step S` | dynamic window and step in samples | N/8, W/2 |
 
 Success (exit 0):
 
@@ -76,9 +80,16 @@ Success (exit 0):
     { "dev": "adev", "axis": "sigma_y", "tau": [1.0, 2.0, ...], "sigma": [...],
       "ci_lo": [...], "ci_hi": [...], "edf": [...], "noise": ["WHFM", ...], "neff": [...] }
   ],
+  "spectrum": { "nperseg": 4096, "f": [...], "sy": [...], "sx": [...] },
+  "dynamic": { "dev": "adev", "window": 2048, "step": 1024, "t": [...], "tau": [...],
+               "map": [[...], ...] },
   "elapsed_ms": 41.7
 }
 ```
+
+`spectrum` and `dynamic` appear only when asked for. The spectrum leaves out
+the DC bin and needs a record without gaps. In `dynamic`, `t` holds the
+window centres in seconds and `map` has one row per window, one column per τ.
 
 `axis` is `sigma_x` (seconds) for tdev, htdev, ttotdev, mtie and tierms.
 `ci_lo`, `ci_hi`, `edf` and `noise` are empty with `--no-ci`. `check` is
@@ -90,7 +101,7 @@ numbers are written as `null`. Failure (exit 2): `{"error": "message"}`.
 `{source: {type: "file", name, content} | {type: "synth", n, seed}, kind,
 tau0, time_col, value_col, reference_col, header, scaling, detrend, fillgaps,
 remove_outliers, devs, grid, confidence (null for none), bias_correction,
-series}` and returns the core's JSON.
+series, spectrum, nperseg, dynamic, window, step}` and returns the core's JSON.
 `GET /api/health` reports whether a core was found.
 
 ## Front end
@@ -99,12 +110,20 @@ series}` and returns the core's JSON.
 - `ui/js/core.js` is the only code that talks to the core, and
   `ui/js/platform.js` the only code that opens or saves files. A Tauri
   shell replaces those two and keeps the rest.
-- Layout: a side panel (clocks, estimators, options, Run analysis) and four
+- Layout: a side panel (clocks, estimators, options, Run analysis) and five
   pages. Data has the file card, the import dialog (pick the time and value
   columns, record type, units, τ₀; gaps flagged from the whole file), the
   record check and the phase plot with outliers marked. Stability has the
   σ(τ) plot with the per-τ table, or "Compare at τ" when several clocks are
-  loaded. Spectrum and Dynamic are placeholders until the core returns those.
+  loaded. Spectrum shows S_y(f) and ℒ(f) (or S_x(f)) with log-binned
+  averaging and power-law slope guides; carrier, view and averaging apply
+  without a rerun. Dynamic shows a DADEV or DHDEV map (or a 3D waterfall),
+  computed on its own when the page opens or its settings change; click a
+  cell to pin it. With several clocks Spectrum overlays them and Dynamic
+  draws one map per clock on a shared colour scale. Help explains the pages,
+  estimators, noise types and file formats.
+- With one clock the panel holds the current page's settings; with several
+  it keeps the clock list and the page settings move to a toolbar.
 - Analysis runs only on Run analysis (F5); changed inputs mark the results
   out of date in the panel and the status bar.
 - Several clocks can be loaded, with no limit. With more than one, colour
@@ -118,5 +137,5 @@ series}` and returns the core's JSON.
   and the reference itself leaves the plots. With "Remember for files like
   this" (on by default) a file with the same extension and header loads
   without the dialog; Import settings… reopens it.
-- Keys: F5 runs, 1 to 4 switch pages, a file dropped anywhere opens the
+- Keys: F5 or Ctrl+Enter runs, 1 to 4 switch pages, ? opens Help, a file dropped anywhere opens the
   import dialog.
