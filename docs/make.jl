@@ -34,6 +34,7 @@ makedocs(
         "Plotting and tables" => "plotting.md",
         "Validation" => "validation.md",
         "MHTOTDEV bias and EDF" => "mhtotdev.md",
+        "Command line" => "cli.md",
         "Tutorials"  => [
             "tutorials/01_drifting_clock_hadamard.md",
             "tutorials/02_reading_your_data.md",

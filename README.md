@@ -85,6 +85,20 @@ to 40 times faster than allantools, `totdev` about 70 times, and
 (0.46 s vs 30 min on a 407,000-sample record). The harness, method and both measurements are in
 [`bench/`](bench/README.md).
 
+## Command line
+
+`sigmatau` is a compiled command line over the same code (about 30 ms to
+start, no Julia needed to run it):
+
+```bash
+sigmatau analyze clock.dat --devs adev,mdev,tdev            # CSV on stdout
+sigmatau analyze clock.dat --format json --out result.json  # versioned JSON
+sigmatau spectrum clock.dat                                 # S_y(f), S_x(f)
+sigmatau dynamic clock.dat --dev dhdev                      # sliding-window HDEV
+```
+
+Build it from `cli/` with JuliaC; see [the docs page](docs/src/cli.md).
+
 ## Desktop explorer
 
 `app/StabilityExplorer.jl` opens a window for the whole workflow without

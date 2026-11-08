@@ -5,6 +5,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `sigmatau`, a compiled command line in `cli/` (package `SigmaTauCLI`, built
+  with `juliac --trim=safe`): `analyze`, `check`, `spectrum`, `dynamic`,
+  `completion` and `version`, CSV or versioned JSON output
+  (`schema_version: 1`), documented exit codes and shell completion for bash,
+  zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
+  (`app/web/cli`), and the explorer now runs it with `--format json`. See
+  `docs/src/cli.md`.
+
 ### Changed
 
 - `remove_outliers(::PhaseData)` now cleans in frequency space: it
