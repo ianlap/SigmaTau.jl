@@ -349,6 +349,16 @@ mktempdir() do dir
         @testset "compiled binary matches" begin
             # elapsed_ms differs between runs; compare everything before it.
             strip_t(s) = replace(s, r"\"elapsed_ms\":[^}]*}" => "")
+            # The compiled code may round the last bit differently from the JIT
+            # (another CPU target), so the text must match with every number
+            # replaced, and the numbers must agree to 1e-12 relative.
+            numre = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
+            function same_output(a, b)
+                replace(a, numre => "#") == replace(b, numre => "#") || return false
+                xs = [parse(Float64, m.match) for m in eachmatch(numre, a)]
+                ys = [parse(Float64, m.match) for m in eachmatch(numre, b)]
+                return all(isapprox(x, y; rtol=1e-12, atol=0) for (x, y) in zip(xs, ys))
+            end
             for args in (["analyze", pf, "--devs", "adev,mdev,tdev,totdev,theo1"],
                          ["analyze", pf, "--format", "json", "--spectrum", "--series", "100"],
                          ["check", pf, "--format", "json"],
@@ -360,7 +370,7 @@ mktempdir() do dir
                 o = IOBuffer()
                 p = run(pipeline(ignorestatus(`$exe $args`); stdout=o, stderr=devnull))
                 want = run_cli(args...)
-                @test strip_t(String(take!(o))) == strip_t(want.out)
+                @test same_output(strip_t(String(take!(o))), strip_t(want.out))
                 @test p.exitcode == want.code
             end
         end
