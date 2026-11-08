@@ -395,7 +395,7 @@ draws from the global RNG, so existing seeded callers are unaffected.
 function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
     # Kasdin–Walter discrete fractional filter (Kasdin & Walter 1992; the
     # method allantools uses): white Gaussian noise convolved with the impulse
-    # response of (1 - z⁻¹)^(-α/2), whose power spectrum is |2 sin(πf)|^α, the
+    # response of (1 - z⁻¹)^(α/2), whose power spectrum is |2 sin(πf)|^α, the
     # discrete-time counterpart of f^α. It is exact at the integer orders:
     # α = 2 is the first difference of white noise (so the integrated phase is
     # white), α = 0 is white, α = -2 is a cumulative sum. Shaping FFT bins by

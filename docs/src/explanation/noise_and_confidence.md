@@ -44,7 +44,7 @@ these noises, which is how the examples on this site are built.
 
 [`noise_gen`](@ref) draws each component with the Kasdin–Walter discrete
 fractional filter: white Gaussian noise convolved with the impulse response
-of ``(1 - z^{-1})^{-\alpha/2}``. It also covers the two steeper noises that the
+of ``(1 - z^{-1})^{\alpha/2}``. It also covers the two steeper noises that the
 Hadamard-class estimators converge on, flicker-walk FM (`:FWFM`, α = −3) and
 random-run FM (`:RRFM`, α = −4). A component requested by `h_α` has the
 spectrum
