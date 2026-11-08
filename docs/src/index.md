@@ -1,10 +1,37 @@
 # SigmaTau.jl
 
-Time-and-frequency stability analysis in Julia: the Allan, modified Allan,
-Hadamard, modified Hadamard and total deviation families, Thêo1/ThêoH, MTIE,
-TIE rms and PDEV, with per-τ noise identification and χ² confidence
-intervals computed in the same call. The core estimators are validated
-against Stable32 and allantools; see [Validation](validation.md).
+Time-and-frequency stability analysis in Julia. SigmaTau computes the Allan,
+modified Allan, Hadamard, modified Hadamard and total deviation families,
+Thêo1 and ThêoH, MTIE, TIE rms and PDEV. Every deviation call (except MTIE
+and TIE rms, which have no χ² model) also identifies the noise type at each τ
+and returns the equivalent degrees of freedom and a χ² confidence interval.
+The estimators that Stable32 and allantools also implement agree with Stable32
+to its printed precision and with allantools to machine precision; the others
+are checked against reference kernels and identities. See
+[Validation](explanation/validation.md).
+
+```@example home
+using SigmaTau, Random
+Random.seed!(42)
+
+# 8192 samples at τ₀ = 1 s: white FM at σ_y(1 s) = 1e-12 plus random-walk FM
+p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14))
+
+adev(p)
+```
+
+## Ways to use it
+
+| | Use it for | Start here |
+|:---|:---|:---|
+| **Julia REPL** | scripts, notebooks, custom analysis, batch jobs | [Getting started](getting_started.md) |
+| **Explorer** | loading a file and reading the curves without writing code | [Using the explorer](guide/explorer.md) |
+| **Command line** | one-off runs, shell scripts and other languages, with CSV or JSON output | [Command line](guide/cli.md) |
+| **Python** | the same API from Python, through an embedded Julia | [Python](guide/python.md) |
+
+All of them run the same library code, so a deviation computed in the
+explorer, on the command line or from Python equals the one `adev(p)` returns
+in the REPL.
 
 ## Install
 
@@ -12,57 +39,26 @@ against Stable32 and allantools; see [Validation](validation.md).
 pkg> add https://github.com/ianlap/SigmaTau.jl
 ```
 
-Julia 1.11 or later.
+Julia 1.11 or later. `Plots` is optional: loading it turns on the plot
+recipes. The explorer and the command-line tool are built separately; their
+pages say how.
 
-## First run
+## How these docs are organised
 
-```@example basic
-using SigmaTau, Random
-Random.seed!(42)
+- **Tutorials** teach by example, from a first analysis to reading your own
+  files and separating clocks with the N-cornered hat.
+- **How-to guides** answer one question each: which estimator to use, how to
+  plot and export, how to run the explorer, the
+  command-line tool or the Python package.
+- **Background** explains the ideas the numbers rest on: noise types, EDF,
+  confidence intervals and bias correction, plus the validation against
+  Stable32 and allantools and the derivation of the MHTOTDEV coefficients.
+- **Reference** lists every exported function and type, grouped by task.
 
-# White FM at σ_y(1 s) = 1e-12 plus random-walk FM, 8192 samples at τ₀ = 1 s
-p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14))
-
-r = adev(p)                      # octave τ grid, χ² CI, per-τ noise ID
-```
-
-Every deviation returns a [`StabilityResult`](@ref) with `tau`, `dev`,
-`neff`, and, when `ci=true` (the default), `noise_type`, `ci` (one `(lo, hi)`
-pair per τ) and `edf`.
-
-```@example basic
-suite = stability(p; devs=(:adev, :mdev, :hdev, :mhdev))   # several at once
-suite[:mdev]
-```
-
-Reading a file, choosing a τ grid and plotting:
-
-```julia
-p = read_phase("clock.DAT"; time_col=0, value_col=1, tau0=1.0)
-adev(p, [1, 2, 4, 8, 16, 32])    # explicit averaging factors
-adev(p, Decade)                  # decade-spaced grid
-
-using Plots
-plot(adev(p))                    # log-log σ(τ) with CI error bars
-plot(stability(p))               # overlay a suite
-```
-
-## Contents
-
-- [Plotting and tables](plotting.md): the plot recipes, confidence-band styles,
-  dynamic deviation waterfalls, and table export.
-- [Validation](validation.md): per-τ agreement with Stable32 and allantools.
-- [MHTOTDEV bias and EDF](mhtotdev.md): how the coefficients of the one
-  estimator with no published reference were measured.
-- Tutorials: a [drifting clock and the Hadamard family](tutorials/01_drifting_clock_hadamard.md),
-  [reading and saving data](tutorials/02_reading_your_data.md), and the
-  [three-cornered hat](tutorials/03_three_cornered_hat.md).
-- API reference: [types](reference/types.md) and [stability functions](reference/stab.md).
-
-## Stable32 run types
+## Coming from Stable32
 
 | Stable32 | SigmaTau |
-|---|---|
+|:---|:---|
 | OADEV, MDEV, TDEV | `adev`, `mdev`, `tdev` (the Allan estimators are always overlapping) |
 | OHDEV | `hdev` |
 | TOTDEV, MTOT, TTOT, HTOT | `totdev`, `mtotdev`, `ttotdev`, `htotdev` |
@@ -71,9 +67,14 @@ plot(stability(p))               # overlay a suite
 | Dynamic stability | `dadev`, `dhdev` |
 | Three-cornered hat | `ncornered_hat` |
 | Noise generation | `noise_gen` |
-| Drift / outlier / gap tools | `detrend`, `remove_outliers`, `fillgaps` |
+| Drift, outlier and gap tools | `detrend`, `remove_outliers`, `fillgaps` |
+| PSD and phase noise | `psd_y`, `psd_x`, `ssb_phase_noise` |
 
-Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev`, `StreamingStability`.
+Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev` and the real-time
+`StreamingStability` accumulators. Two defaults differ from Stable32
+(MTOTDEV bias correction and noise-ID detrending); the
+[validation page](explanation/validation.md) names the switch that reproduces
+Stable32 in each case.
 
 ## References
 

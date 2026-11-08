@@ -47,6 +47,7 @@ paper/figures/fig[0-9]_*.pdf
 # Desktop shell: Rust build output and generated schemas
 app/desktop/target/
 app/desktop/gen/
+app/desktop/dist/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/

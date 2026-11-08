@@ -4,7 +4,7 @@
 `analyze`, `check`, `spectrum`, `dynamic`, `completion` and `version`. The
 explorer (`app/web`, `app/desktop`) runs it with `--format json`. Usage, the
 CSV columns, the JSON schema and the exit codes are in
-[docs/src/cli.md](../docs/src/cli.md).
+[docs/src/guide/cli.md](../docs/src/guide/cli.md).
 
 ```
 cli/

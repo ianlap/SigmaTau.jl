@@ -91,7 +91,7 @@ until 0.7.
   (`schema_version: 1`), documented exit codes and shell completion for bash,
   zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
   (`app/web/cli`), and the explorer now runs it with `--format json`. The `Web core` workflow now builds and tests it. See
-  `docs/src/cli.md`.
+  `docs/src/guide/cli.md`.
 - `sigmatau --remove-drift none|linear|quadratic`: fits a line (frequency
   offset) or a parabola (offset and linear frequency drift) to the phase over
   the non-gap samples and removes it; the JSON reports `removed_offset` and

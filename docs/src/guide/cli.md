@@ -31,7 +31,7 @@ each call pays Julia's start-up.
 ## Commands
 
 | Command | Does |
-| --- | --- |
+|:---|:---|
 | `sigmatau analyze FILE` | stability deviations σ(τ), with confidence intervals, EDF and noise type per τ |
 | `sigmatau check FILE` | read the record and summarise it: samples, span, gaps, 5σ outliers, linear drift per day |
 | `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
@@ -51,7 +51,7 @@ white FM plus random-walk FM record for trying things out.
 The record (all four analysis commands):
 
 | Option | Meaning |
-| --- | --- |
+|:---|:---|
 | `--phase` / `--freq` | the value column is phase in seconds (default) or fractional frequency |
 | `--tau0 SECONDS` | sample interval; default from the file header or the time column |
 | `--time-col N`, `--value-col N` | 1-based columns; `--time-col 0` means no time column |
@@ -68,7 +68,7 @@ The record (all four analysis commands):
 `analyze`:
 
 | Option | Meaning |
-| --- | --- |
+|:---|:---|
 | `--devs LIST` | comma list (default `adev,mdev,hdev,mhdev`) of `adev mdev tdev hdev mhdev htdev totdev mtotdev ttotdev htotdev mhtotdev theo1 theoh pdev mtie tierms` |
 | `--grid GRID` | `octave` (default), `half-octave`, `quarter-octave`, `decade`, `half-decade` or `all`; `halfoctave` and the like work too |
 | `--m LIST` | explicit averaging factors, τ = m·τ₀, in place of `--grid` |
@@ -154,7 +154,7 @@ numbers are `null`.
 ## Exit codes
 
 | Code | Meaning |
-| --- | --- |
+|:---|:---|
 | 0 | success |
 | 1 | usage: unknown command or option, bad value, missing FILE |
 | 2 | input: missing file, unreadable or non-numeric content, bad column |
