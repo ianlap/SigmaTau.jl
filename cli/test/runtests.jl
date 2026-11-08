@@ -217,6 +217,49 @@ mktempdir() do dir
         @test run_cli("analyze", rf, "--reference-col", "2").code == 1
     end
 
+    @testset "--remove-drift" begin
+        # A known offset and drift on top of X: linear removes the offset,
+        # quadratic both, and what was removed is reported.
+        t = 0:length(X)-1
+        df = write_table(joinpath(dir, "drift.csv"), X .+ 1e-9 .+ 3e-11 .* t .+ 2e-12 .* t .^ 2)
+        r = run_cli("check", df, "--remove-drift", "quadratic", "--format", "json")
+        @test r.code == 0
+        @test occursin("\"remove_drift\":\"quadratic\"", r.out)
+        off = parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1])
+        dr = parse(Float64, match(r"\"removed_drift_per_day\":([^,}]+)", r.out)[1])
+        @test isapprox(off, 3e-11 + 2 * 2e-12 * (length(X) - 1) / 2; rtol=0.02)
+        @test isapprox(dr, 2 * 2e-12 * 86400; rtol=0.02)
+        # Removing a parabola leaves HDEV, which ignores drift, nearly alone
+        # and matches the library's quadratic detrend of the same record.
+        q = csv_rows(run_cli("analyze", df, "--remove-drift", "quadratic", "--devs", "adev", "--no-ci").out)
+        ref = adev(detrend(read_phase(df); method=:quadratic), [1, 2, 4, 8, 16, 32])
+        @test isapprox(parse.(Float64, getindex.(q, 5))[1:6], ref.dev; rtol=1e-6)
+        r = run_cli("check", df, "--remove-drift", "linear", "--format", "json")
+        @test occursin("\"removed_drift_per_day\":null", r.out)
+        @test occursin("\"removed_offset\":null", run_cli("check", df, "--format", "json").out)
+        @test run_cli("check", df, "--remove-drift", "cubic").code == 1
+        # Gaps (NaN) are skipped by the fit, not spread through it.
+        xg = copy(X); xg[100] = NaN
+        gf = write_table(joinpath(dir, "gap.csv"), xg .+ 3e-11 .* t)
+        r = run_cli("check", gf, "--remove-drift", "linear", "--format", "json")
+        @test r.code == 0
+        @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]), 3e-11; rtol=0.1)
+        # With --fillgaps, the slots put back by the gap filler stay out of
+        # the fit: it equals a least-squares fit over the measured rows only.
+        tg = setdiff(0:length(X)-1, 120:179)
+        xr = X[tg .+ 1] .+ 2e-12 .* tg .^ 2
+        hf = joinpath(dir, "holes.csv")
+        open(hf, "w") do io
+            for (ti, v) in zip(tg, xr); println(io, ti, ",", v); end
+        end
+        r = run_cli("check", hf, "--fillgaps", "--remove-drift", "quadratic", "--format", "json")
+        @test r.code == 0
+        c = (tg .- (length(X) - 1) / 2)
+        coef = [ones(length(c)) c c .^ 2] \ xr
+        @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]), coef[2]; rtol=1e-6)
+        @test isapprox(parse(Float64, match(r"\"removed_drift_per_day\":([^,}]+)", r.out)[1]), 2 * coef[3] * 86400; rtol=1e-6)
+    end
+
     @testset "check" begin
         r = run_cli("check", pf)
         @test r.code == 0

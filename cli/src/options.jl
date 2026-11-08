@@ -15,6 +15,7 @@ const COMMAND_HELP = [
 const SHELLS = ["bash", "zsh", "fish", "powershell"]
 const FORMATS = ["csv", "json"]
 const DETRENDS = ["none", "mean", "endpoint", "linear"]
+const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 
@@ -42,6 +43,7 @@ const OPTS = [
     Opt("--delim", "CHAR", String[], false, "field delimiter (default: from the extension; '\\t' for tab)", ALL),
     Opt("--scaling", "X", String[], false, "multiply the values by X (1e-9 for nanoseconds)", ALL),
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
+    Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps (needs a time column)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     # Analysis
@@ -96,11 +98,15 @@ mutable struct Options
     out::String
     quiet::Bool
     help::Bool
+    remove_drift::String
+    removed_offset::Float64   # fitted and removed by --remove-drift; NaN = none
+    removed_drift::Float64    # per day
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     Symbol[:adev, :mdev, :hdev, :mhdev], "octave", Int[], true,
-                    Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false)
+                    Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
+                    "none", NaN, NaN)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -178,6 +184,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--delim";          o.delim = parse_delim(v)
     elseif name == "--scaling";        o.scaling = parse_float(v, name)
     elseif name == "--detrend";        o.detrend = check_choice(v, name, DETRENDS)
+    elseif name == "--remove-drift";   o.remove_drift = check_choice(v, name, DRIFTS)
     elseif name == "--devs";           o.devs = parse_devs(v)
     elseif name == "--grid";           tau_mode(v); o.grid = v
     elseif name == "--m";              o.m = parse_m(v)
