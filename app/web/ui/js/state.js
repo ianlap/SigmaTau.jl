@@ -25,6 +25,9 @@ export const state = {
   // Dynamic page: estimator, window = record / frac, map or 3D waterfall
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
   dataMode: "file",        // "file" | "synth" on the Data page
+  dataView: "phase",       // "phase" | "drift": the Data page's plot
+  driftModel: "linear",    // frequency drift model fitted on the drift view
+  driftResid: false,       // drift view shows the residuals instead of the fit
   run: { state: "idle", stale: null, note: "" },  // stale: null | "record" | "inputs"
 };
 
@@ -55,6 +58,7 @@ export function newClock(fields = {}) {
     record: null,            // record + check from the core
     result: null,            // last analysis from the core (with the spectrum)
     dynamic: null,           // last dynamic-deviation map, with its settings key
+    driftFit: null,          // last frequency drift fit, with its settings key
     error: null,
     ...fields,
   };

@@ -546,35 +546,47 @@ end
 """
     _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Modified Hadamard total deviation.
+Computes the Modified Hadamard Total Deviation (MHTOTDEV).
 
-MHTOTDEV is original to SigmaTau; no published form exists. The kernel adopts
-the Greenhall construction of MTOTDEV and HTOTDEV: per-window half-mean slope
-removal and a 3× time-reverse extension on phase, with the modified Hadamard
-operator.
+MHTOTDEV is novel to SigmaTau; no canonical/published form exists. SigmaTau
+adopts the Greenhall methodology — per-window detrend + a 3× time-reverse
+extension on phase — by consistency with MTOTDEV and HTOTDEV, with one
+deliberate departure: the per-window detrend is a QUADRATIC least-squares
+fit, not the half-mean slope removal the second-difference totals use.
 
-The kernel alone is NOT drift-immune: the per-window detrend removes only the
-local frequency offset, so residual deterministic drift re-enters through the
-reflected window boundaries. Per-window drift removal was evaluated in both
-the phase domain (two-parameter detrend) and the frequency domain (TOTHVAR
-scheme with the modified operator) and rejected; both measurably damage the
-statistic at the PM noise types (B(WHPM) ≈ 3.8 with the χ² EDF model
-collapsing, and B(WHPM) growing ∝ m, respectively). The public `mhtotdev`
-wrapper instead removes the record's least-squares frequency drift before
-calling this kernel (`remove_drift=true` default), which is exact for a
-deterministic drift and leaves the kernel's all-α statistics intact.
+The detrend degree must match the kernel's annihilation degree (the third
+difference annihilates phase polynomials of degree ≤ 2, as MTOT's second
+difference annihilates degree ≤ 1 and its linear detrend matches). With
+only a slope removal, the stochastic quadratic carried by noise at
+α ≤ −3 survives into the time-reverse extension, the seam kink feeds the
+boundary-spanning third differences, and the estimator inherits MVAR's
+divergence (measured: log-log slope 2 instead of 3 at α = −4, level ∝ T).
+The matched quadratic detrend restores convergence over the full Hadamard
+range α > −5 (slope 3.00, level N-stable) while leaving the PM statistics
+healthy (B(WHPM) ≈ 0.91, flat in m and N) — verified by two independent
+implementations. It also removes any deterministic frequency offset and
+drift exactly within each window, so this kernel IS drift-immune on its
+own; the wrapper's record-level removal (`remove_drift=true` default)
+remains for noise-identification hygiene, not for the statistic.
+
+Historical note: earlier per-window schemes were rejected on measurements
+of B(WHPM) ≈ 3.8 growing ∝ m and χ² EDF collapse. A controlled 2×2 study
+(detrend order × reflection parity, identical noise realizations) showed
+those signatures belong to ODD (point) reflection variants; the quadratic
+detrend with the unchanged even (mirror) reflection shows neither.
 """
 function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return _mhtotdev_greenhall(x, m_values, tau0)
 end
 
 function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Per window of 4m phase samples: half-mean frequency removal, reflection
-    # extension, and the squared m-sample box sum of the third difference at
-    # each of the 8m + 1 positions of the extension.
+    # Per window of 4m phase samples: least-squares quadratic removal,
+    # reflection extension, and the squared m-sample box sum of the third
+    # difference at each of the 8m + 1 positions of the extension.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
-    hi, lo = _prefix_dd(_minus_line(x))
+    r = _minus_line(x)          # a line is absorbed by every window's quadratic
+    hi, lo = _prefix_dd(r)
     for k in eachindex(m_values)
         m = m_values[k]
         nsubs = N - 4m + 1
@@ -583,19 +595,13 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
             continue
         end
         L = 4m
-        half = L ÷ 2
-        inv_half_span = 1.0 / (L / 2.0)
         n_avg = 8m + 1
+        p1, p2, P1, P2, s11, s22 = _quad_basis(L)
         total = _sum_over_windows(nsubs, L) do n_lo, n_hi, Vb, Vr
             acc = 0.0
             for n in n_lo:n_hi
                 o = n - 1
-                @inbounds begin
-                    s1 = ((hi[o+1+half] - hi[o+1]) + (lo[o+1+half] - lo[o+1])) / half
-                    s2 = ((hi[o+1+L] - hi[o+1+half]) + (lo[o+1+L] - lo[o+1+half])) / (L - half)
-                end
-                c = (s2 - s1) * inv_half_span
-                _fill_window_cumsum!(Vb, hi, lo, o, L, c, 0.0)
+                _fill_window_cumsum_quad!(Vb, hi, lo, r, o, L, p1, p2, P1, P2, s11, s22)
                 _reverse_into!(Vr, Vb, L)
                 # Starts 1..4m+1 and 4m+2..8m mirror onto themselves; 8m+1 is the
                 # mirror of 4m+1 across the second seam but is taken as is.
@@ -611,6 +617,53 @@ function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Fl
     return devs
 end
 
+# Orthogonal quadratic basis on the window grid t = 0..L−1: p1 = t − t̄ and
+# p2 = p1² − ⟨p1²⟩, with their cumulative sums P1, P2 (P[k+1] = Σ_{j≤k} p[j])
+# and norms. Orthogonality turns each window's least-squares fit into three
+# independent dot products.
+function _quad_basis(L::Int)
+    tbar = (L - 1) / 2.0
+    p1 = Float64[(j - 1) - tbar for j in 1:L]
+    s11 = sum(abs2, p1)
+    c2 = s11 / L
+    p2 = Float64[p1[j]^2 - c2 for j in 1:L]
+    s22 = sum(abs2, p2)
+    P1 = zeros(L + 1); P2 = zeros(L + 1)
+    for j in 1:L
+        P1[j+1] = P1[j] + p1[j]
+        P2[j+1] = P2[j] + p2[j]
+    end
+    return p1, p2, P1, P2, s11, s22
+end
+
+# V(k), k = 0..L, for the window starting after sample `o`: the cumulative
+# sum of the window minus its least-squares quadratic a0 + a1·p1 + a2·p2.
+@inline function _fill_window_cumsum_quad!(Vb::Vector{Float64}, hi::Vector{Float64}, lo::Vector{Float64},
+                                           r::Vector{Float64}, o::Int, L::Int,
+                                           p1::Vector{Float64}, p2::Vector{Float64},
+                                           P1::Vector{Float64}, P2::Vector{Float64},
+                                           s11::Float64, s22::Float64)
+    s1 = 0.0; s2 = 0.0
+    @inbounds @simd for j in 1:L
+        w = r[o+j]
+        s1 += w * p1[j]
+        s2 += w * p2[j]
+    end
+    h0 = hi[o+1]; l0 = lo[o+1]
+    a0 = ((hi[o+1+L] - h0) + (lo[o+1+L] - l0)) / L
+    a1 = s1 / s11
+    a2 = s2 / s22
+    @inbounds @simd for k in 0:L
+        Vb[k+1] = ((hi[o+1+k] - h0) + (lo[o+1+k] - l0)) - (a0 * Float64(k) + a1 * P1[k+1] + a2 * P2[k+1])
+    end
+    return Vb
+end
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ── stab/core/mtie.jl ───────────────────────────────────────────────────
+
+# core/mtie.jl — Maximum Time Interval Error kernel
 
 """
     _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}

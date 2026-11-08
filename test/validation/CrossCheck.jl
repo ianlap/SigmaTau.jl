@@ -417,9 +417,37 @@ function gap_rows()
     return rows
 end
 
+# ── scipy least-squares drift fits ──────────────────────────────────────────
+
+function drift_rows()
+    rows = Row[]
+    y0 = diff(noise_record(0).x)
+    t = collect(0.0:length(y0)-1)
+    model_y = Dict(
+        "linear"    => (a, b, c) -> a .+ b .* t,
+        "quadratic" => (a, b, c) -> a .+ b .* t .+ c .* t .^ 2,
+        "log"       => (a, b, c) -> a .* log1p.(b .* t) .+ c,
+        "diffusion" => (a, b, c) -> a .+ b .* sqrt.(t .+ c))
+    cache = Dict{String,DriftFit}()
+    for r in _csv(joinpath(AT, "drift.csv"))
+        model = r["model"]
+        f = get!(cache, model) do
+            inj = (_f(r["inj_a"]), _f(r["inj_b"]), _f(r["inj_c"]))
+            drift_fit(FrequencyData(y0 .+ model_y[model](inj...), 1.0); model=Symbol(model))
+        end
+        k = findfirst(r["param"], "abc")[1]
+        # The nonlinear residual is flat to rounding near its minimum, so
+        # their parameters agree to ~1e-8 rather than to the last digit.
+        tol = model in ("linear", "quadratic") ? 1e-12 : 1e-7
+        push!(rows, Row("scipy least squares", "alpha_+0", model, 0, _f(r["value"]), f.coef[k], tol, r["param"]))
+        push!(rows, Row("scipy least squares", "alpha_+0", model, 0, _f(r["stderr"]), f.stderr[k], tol, "σ(" * r["param"] * ")"))
+    end
+    return rows
+end
+
 "Every comparison row, in report order."
 all_rows() = vcat(allantools_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
                   allantools_edf_rows(), allantools_ci_rows(), allantools_noiseid_rows(),
-                  welch_rows(), dynamic_rows(), gap_rows())
+                  welch_rows(), dynamic_rows(), gap_rows(), drift_rows())
 
 end # module
