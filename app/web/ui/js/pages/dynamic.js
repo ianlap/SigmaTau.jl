@@ -253,6 +253,12 @@ export function refresh() {
 
 const sameTau = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b));
 
+function nearestTau(taus, tau) {
+  let best = -1, err = Math.log(Math.SQRT2) + 1e-9;
+  taus.forEach((t, j) => { const e = Math.abs(Math.log(t / tau)); if (e <= err) { best = j; err = e; } });
+  return best;
+}
+
 function sliceTaus(ready) {
   const all = [];
   for (const c of ready) for (const t of c.dynamic.tau) if (!all.some((u) => sameTau(u, t))) all.push(t);
@@ -276,30 +282,33 @@ function drawSlice(area, ready) {
   const whole = state.dyn.dev === "dhdev" ? "hdev" : "adev";
   const traces = [];
   const shapes = [];
-  let windows = 0;
+  const missing = [];
   for (const c of ready) {
     const d = c.dynamic;
-    const j = d.tau.findIndex((t) => sameTau(t, tau));
-    if (j < 0) continue;
+    // Clocks with another τ₀ have no exact match: take the nearest τ within
+    // a half octave and name it in the legend; list the rest.
+    const j = nearestTau(d.tau, tau);
+    if (j < 0) { missing.push(c.name); continue; }
+    const exact = sameTau(d.tau[j], tau);
     const color = seriesColor(c.slot);
-    windows = Math.max(windows, d.t.length);
     traces.push({
-      x: d.t, y: d.map.map((row) => row[j]), name: c.name, mode: "lines+markers",
+      x: d.t, y: d.map.map((row) => row[j]), name: exact ? c.name : `${c.name} (τ = ${num(d.tau[j], 4)} s)`, mode: "lines+markers",
       line: { color, width: 2 }, marker: { color, size: 5 },
       hovertemplate: `<b>${h(c.name)}</b><br>t = %{x:.6g} s<br>${NAME[d.dev]} = %{y:.3e}<extra></extra>`,
     });
     const r = c.result?.results.find((x) => x.dev === whole);
-    const i = r ? r.tau.findIndex((t) => sameTau(t, tau)) : -1;
+    const i = r ? r.tau.findIndex((t) => sameTau(t, d.tau[j])) : -1;
     if (i >= 0 && r.sigma[i] > 0) {
       shapes.push({ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: r.sigma[i], y1: r.sigma[i], line: { color, width: 1, dash: "dot" } });
     }
   }
   for (const c of ready) {
     const plot = area.querySelector(`.dyn-card[data-clock="${c.id}"] .plot`);
-    const j = c.dynamic.tau.findIndex((t) => sameTau(t, tau));
+    const j = nearestTau(c.dynamic.tau, tau);
     if (plot?.layout) Plotly.relayout(plot, { shapes: j < 0 ? [] : [{ type: "rect", xref: "x", yref: "paper", x0: j - 0.5, x1: j + 0.5, y0: 0, y1: 1, line: { color: css("--accent"), width: 2 } }] });
   }
-  box.querySelector("[data-ref=slice-sub]").textContent = `${NAME[state.dyn.dev]} in each window · dotted = whole record (${whole.toUpperCase()}, last run) · click a map column to change τ`;
+  const none = missing.length ? `No τ near ${num(tau, 4)} s for ${missing.join(", ")} · ` : "";
+  box.querySelector("[data-ref=slice-sub]").textContent = `${none}${NAME[state.dyn.dev]} in each window · dotted = whole record (${whole.toUpperCase()}, last run) · click a map column to change τ`;
   Plotly.react(box.querySelector("[data-ref=slice]"), traces, {
     ...baseLayout(), margin: { l: 70, r: 14, t: 8, b: 44 },
     xaxis: linAxis("Window centre t (s)"), yaxis: { ...logAxis(`${NAME[state.dyn.dev]} at τ = ${num(tau, 4)} s`), dtick: undefined },

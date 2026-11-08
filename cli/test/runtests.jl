@@ -244,6 +244,20 @@ mktempdir() do dir
         r = run_cli("check", gf, "--remove-drift", "linear", "--format", "json")
         @test r.code == 0
         @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]), 3e-11; rtol=0.1)
+        # With --fillgaps, the slots put back by the gap filler stay out of
+        # the fit: it equals a least-squares fit over the measured rows only.
+        tg = setdiff(0:length(X)-1, 120:179)
+        xr = X[tg .+ 1] .+ 2e-12 .* tg .^ 2
+        hf = joinpath(dir, "holes.csv")
+        open(hf, "w") do io
+            for (ti, v) in zip(tg, xr); println(io, ti, ",", v); end
+        end
+        r = run_cli("check", hf, "--fillgaps", "--remove-drift", "quadratic", "--format", "json")
+        @test r.code == 0
+        c = (tg .- (length(X) - 1) / 2)
+        coef = [ones(length(c)) c c .^ 2] \ xr
+        @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]), coef[2]; rtol=1e-6)
+        @test isapprox(parse(Float64, match(r"\"removed_drift_per_day\":([^,}]+)", r.out)[1]), 2 * coef[3] * 86400; rtol=1e-6)
     end
 
     @testset "check" begin

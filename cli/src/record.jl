@@ -17,19 +17,54 @@ function load_record(o::Options)
     # Phase records are cleaned in frequency space: a glitch is a phase step,
     # i.e. one bad frequency sample, which is gapped, filled and integrated back.
     o.remove_outliers && (data = remove_outliers(data))
-    o.remove_drift == "none" || (data = remove_drift!(o, data))
+    o.remove_drift == "none" || (data = remove_drift!(o, data, measured_mask(o, length(data.x))))
     return data
+end
+
+# Which samples were measured, as opposed to put back by --fillgaps: the
+# readers snap the time column to an even grid of its smallest step (see
+# SigmaTau's _make_equispaced) and fill the empty slots, so the same snapping
+# of the raw time column finds the slots that held data. All true without
+# --fillgaps or when the grid does not line up with the record.
+function measured_mask(o::Options, N::Int)
+    keep = trues(N)
+    (o.fillgaps && o.synth <= 0 && o.time_col >= 1) || return keep
+    t = read_times(o)
+    length(t) >= 2 || return keep
+    dt = Inf
+    for i in 2:length(t)
+        d = t[i] - t[i - 1]
+        d < dt && (dt = d)
+    end
+    dt > 0 || return keep
+    round(Int, (t[end] - t[1]) / dt) + 1 == N || return keep
+    fill!(keep, false)
+    for ti in t
+        idx = round(Int, (ti - t[1]) / dt) + 1
+        1 <= idx <= N && (keep[idx] = true)
+    end
+    return keep
+end
+
+# The time column, read as a value column with the same header and delimiter.
+function read_times(o::Options)
+    kw = (time_col=0, value_col=o.time_col, header=o.header, scaling=1.0,
+          detrend=:none, fillgaps=false, tau0=1.0)
+    p = o.input
+    pd = o.delim == '\0' ? read_phase(p; kw...) : read_phase(p; delim=o.delim, kw...)
+    return Float64[Float64(v) for v in pd.x]
 end
 
 det3(a::Float64, b::Float64, c::Float64, d::Float64, e::Float64, f::Float64, g::Float64, h::Float64, k::Float64) =
     a * (e * k - f * h) - b * (d * k - f * g) + c * (d * h - e * g)
 
 # Least-squares fit of a line (frequency offset) or a parabola (offset and a
-# linear frequency drift) to the phase, over the finite samples only, so a
-# record with gaps can still be fitted. The fit is removed from the phase and
+# linear frequency drift) to the phase, over the finite, measured samples only
+# (`keep`), so a record with gaps can still be fitted and filled gaps do not
+# weigh on the fit. The fit is removed from the phase and
 # what it removed is kept on `o` for the JSON. Time is centred, which zeroes
 # the odd power sums and keeps the normal equations well conditioned.
-function remove_drift!(o::Options, data::PhaseData)
+function remove_drift!(o::Options, data::PhaseData, keep::BitVector)
     x = Float64[Float64(v) for v in data.x]
     N = length(x)
     tau0 = Float64(data.tau0)
@@ -37,7 +72,7 @@ function remove_drift!(o::Options, data::PhaseData)
     n = 0.0; S1 = 0.0; S2 = 0.0; S3 = 0.0; S4 = 0.0; Sy = 0.0; S1y = 0.0; S2y = 0.0
     for i in 1:N
         xi = x[i]
-        isfinite(xi) || continue
+        (keep[i] && isfinite(xi)) || continue
         t = (i - 1) - mu; t2 = t * t
         n += 1.0; S1 += t; S2 += t2; S3 += t2 * t; S4 += t2 * t2
         Sy += xi; S1y += t * xi; S2y += t2 * xi
