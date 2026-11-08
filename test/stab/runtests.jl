@@ -947,6 +947,33 @@ const LK = ReferenceKernels
         @test all(in(known), identify_noise(short, [1, 2, 4, 8, 13]))
     end
 
+    @testset "noise-ID B1 length (b1_length)" begin
+        # Long-τ points (N/m < NEFF_RELIABLE) go through the B1 fallback.
+        # `b1_length=:averaged` evaluates B1 theory at the averaged-point
+        # count and finds random-walk FM far more often than the
+        # Stable32-compatible default `:record`.
+        rng = MersenneTwister(20261108)
+        ms = [40, 64, 128]
+        hits = Dict(:record => 0, :averaged => 0)
+        trials = 60
+        for _ in 1:trials
+            x = _gen_powerlaw_phase(-2, 1024; rng=rng)
+            for mode in (:record, :averaged)
+                hits[mode] += count(==(:RWFM), identify_noise(x, ms; b1_length=mode))
+            end
+        end
+        total = trials * length(ms)
+        @test hits[:averaged] / total > 0.4
+        @test hits[:averaged] > 4 * hits[:record]
+        # Default is :record, and the lag-1 ACF path (N/m ≥ 30) ignores it.
+        x = _gen_powerlaw_phase(0, 1024; rng=rng)
+        @test identify_noise(x, ms) == identify_noise(x, ms; b1_length=:record)
+        @test identify_noise(x, [1, 4, 16]; b1_length=:averaged) == identify_noise(x, [1, 4, 16])
+        @test identify_noise(PhaseData(x, 1.0), ms; b1_length=:averaged) ==
+              identify_noise(x, ms; b1_length=:averaged)
+        @test_throws ArgumentError identify_noise(x, ms; b1_length=:bogus)
+    end
+
     @testset "noise-ID Stable32-fixture cross-check vs allantools" begin
         # Reference table generated with allantools 2024.06's
         # `autocorr_noise_id(x, m, data_type='phase', dmin=0, dmax=2)`
