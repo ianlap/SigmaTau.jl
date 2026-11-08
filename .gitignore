@@ -48,3 +48,6 @@ paper/figures/fig[0-9]_*.pdf
 app/desktop/target/
 app/desktop/gen/
 app/desktop/dist/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/

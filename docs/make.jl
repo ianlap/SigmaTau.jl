@@ -32,6 +32,7 @@ makedocs(
     pages = [
         "Home"       => "index.md",
         "Plotting and tables" => "plotting.md",
+        "Python" => "python.md",
         "Validation" => "validation.md",
         "MHTOTDEV bias and EDF" => "mhtotdev.md",
         "Command line" => "cli.md",

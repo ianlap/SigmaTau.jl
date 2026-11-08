@@ -1,0 +1,83 @@
+name: Python publish
+
+# Publishes the sigmatau Python package to PyPI when a python-v* tag is pushed
+# (for example python-v0.6.0). The tag must match sigmatau.__version__ and
+# Project.toml's version. Before the build, juliapkg.json is switched from the
+# checkout's dev path to a SigmaTau.jl that juliapkg can fetch: the v<version>
+# git tag by default, or the General registry once the repository variable
+# SIGMATAU_JL_REGISTERED is set to "true".
+#
+# PyPI side (once): add a trusted publisher for project "sigmatau" with
+# owner ianlap, repository SigmaTau.jl, workflow PythonPublish.yml and
+# environment pypi.
+
+on:
+  push:
+    tags: ['python-v*']
+
+jobs:
+  build:
+    name: Build sdist and wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check the tag matches the versions
+        run: |
+          tag="${GITHUB_REF_NAME#python-v}"
+          py=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' python/src/sigmatau/__init__.py)
+          jl=$(sed -n 's/^version = "\(.*\)"/\1/p' Project.toml)
+          echo "tag $tag, python $py, julia $jl"
+          [ "$tag" = "$py" ] && [ "$py" = "$jl" ]
+      - name: Pin SigmaTau.jl in juliapkg.json
+        run: python python/tools/pin_juliapkg.py ${{ vars.SIGMATAU_JL_REGISTERED == 'true' && 'registry' || 'git' }}
+      - name: Build
+        run: |
+          pip install build
+          python -m build python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: python/dist/
+
+  smoke:
+    name: Install the wheel and run the tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Install the wheel (fetches SigmaTau.jl as pinned)
+        timeout-minutes: 25
+        run: |
+          pip install dist/*.whl pytest
+          python -c "import sigmatau; print(sigmatau.__version__, sigmatau.sigmatau_jl_version())"
+      - name: Run the tests against the installed wheel
+        run: |
+          rm -rf python/src
+          pytest python/tests -q
+
+  publish:
+    name: Publish to PyPI
+    needs: smoke
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
