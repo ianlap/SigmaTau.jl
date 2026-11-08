@@ -30,7 +30,7 @@ until 0.7.
   for the old spectra.
 - `dadev` / `dhdev` `window` is now optional: the largest power of two up to
   `N ÷ 8` (at least 16), with `step = window ÷ 2` as before.
-- `stability` takes `correct_bias` as its only extra keyword; any other
+- `stability` takes `correct_bias` and `remove_drift` (for `mhtotdev`) as its only extra keywords; any other
   keyword is now a `MethodError` instead of being passed to some estimators
   and silently dropped for the rest.
 - `stability` passes `confidence` through to `mtie` and `tierms` like the
@@ -111,13 +111,15 @@ until 0.7.
 - `identify_noise(data::PhaseData, m)` and `identify_noise(data::FrequencyData, m)`,
   with `m` an integer vector or a `TauMode`.
 - `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
-- `app/StabilityWeb.jl`: a browser edition of the explorer (Bonito + WGLMakie)
-  with native HTML controls for screen readers and keyboard use; shares
-  `app/ExplorerCore.jl` with the window.
-- `app/StabilityExplorer.jl`: a GLMakie desktop application covering file
-  import, synthesis, preprocessing, the deviation suite with χ² intervals,
-  the per-τ table, spectra, dynamic deviation waterfalls, and figure, table
-  and record export.
+- `app/web/`: a web explorer (HTML, CSS, Plotly.js) over an analysis core
+  compiled with `juliac --trim`, and `app/desktop/`, a Tauri window around it.
+
+### Removed
+
+- The GLMakie desktop explorer (`app/StabilityExplorer.jl`), its Bonito
+  browser edition (`app/StabilityWeb.jl`) and their shared `app/ExplorerCore.jl`
+  and environment, replaced by `app/web/`.
+- The unused `DelimitedFiles` dependency (the readers have their own parser).
 
 ## [0.5.0] - 2026-06-09
 

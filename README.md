@@ -34,8 +34,8 @@ plot(suite)                 # log-log σ(τ) with CI error bars
 pkg> add https://github.com/ianlap/SigmaTau.jl
 ```
 
-Julia 1.11 or later. `Plots` is optional and enables the plot recipes; the
-desktop explorer in `app/` has its own environment.
+Julia 1.11 or later. `Plots` is optional and enables the plot recipes. The
+explorer in `app/web/` has its own environment.
 
 ## Estimators
 
@@ -93,32 +93,23 @@ to 40 times faster than allantools, `totdev` about 70 times, and
 (0.46 s vs 30 min on a 407,000-sample record). The harness, method and both measurements are in
 [`bench/`](bench/README.md).
 
-## Desktop explorer
+## Explorer
 
-`app/StabilityExplorer.jl` opens a window for the whole workflow without
-writing code: load a file or synthesize a power-law record, choose
-preprocessing, estimators, τ grid and confidence level, and read the σ_y and
-σ_x curves with χ² intervals, the per-τ table, the S_y, S_x and ℒ(f) spectra,
-and a dynamic σ(t, τ) waterfall. Export writes publication figures (PNG, PDF, SVG),
-the suite as TSV, and the record as text.
+`app/web/` is a point-and-click explorer for the whole workflow. You can load a
+file (Stable32 `.DAT`, CSV, TSV or whitespace columns, several clocks per file)
+or synthesize a power-law record. It checks the record for gaps and outliers,
+then plots σ_y and σ_x with χ² intervals, the S_y and S_x spectra, and the
+dynamic σ(t, τ) map. The pages are plain HTML and JavaScript over a small
+analysis core compiled with `juliac --trim`, which answers in tens of
+milliseconds.
 
 ```bash
-julia --project=app -e 'using Pkg; Pkg.instantiate()'   # first run only
-julia --project=app app/StabilityExplorer.jl
+python3 app/web/serve.py --open          # http://127.0.0.1:9385
 ```
 
-The first launch compiles GLMakie and takes a minute or two.
-
-A browser edition with the same analysis and plots serves on
-`http://127.0.0.1:9384`; its controls are native HTML (labelled inputs, a
-real table, a live status region, Tab order), so it works with screen
-readers and browser zoom; it passes an axe-core WCAG 2.1 AA audit:
-
-```bash
-julia --project=app app/StabilityWeb.jl            # --port=N to change the port
-``` `--fontsize=14`
-(or 16) enlarges every label for projection, `--size=WxH` sets the window,
-and `--smoke` runs the headless self-test that CI-style checks use.
+[`app/web/README.md`](app/web/README.md) shows how to build the core, and
+[`app/desktop/README.md`](app/desktop/README.md) wraps the same pages in a
+Tauri desktop window.
 
 ## Tests
 
