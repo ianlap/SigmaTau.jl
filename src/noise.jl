@@ -454,6 +454,14 @@ function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
     return _adev_core(x, [1], tau0)[1]
 end
 
+# Power-law exponent α of a noise_gen key: an integer α or a noise-type name.
+const _NOISE_ALPHA = Dict(:WHPM => 2, :FLPM => 1, :WHFM => 0, :FLFM => -1,
+                          :RWFM => -2, :FWFM => -3, :RRFM => -4)
+_noise_alpha(α::Integer) = Int(α)
+_noise_alpha(s::Symbol) = haskey(_NOISE_ALPHA, s) ? _NOISE_ALPHA[s] :
+    throw(ArgumentError("noise_gen: unknown noise type :$s; use one of " * join(keys(_NOISE_ALPHA), ", ")))
+_noise_alpha(k) = throw(ArgumentError("noise_gen: keys must be an Int α or a noise-type Symbol, got $(typeof(k))"))
+
 function _noise_gen_y(N::Int, tau0::Float64,
                      sigma1::AbstractDict, h::AbstractDict; rng=nothing)
     !isempty(sigma1) && !isempty(h) &&
@@ -464,10 +472,8 @@ function _noise_gen_y(N::Int, tau0::Float64,
     tau0 > 0 || throw(ArgumentError("noise_gen: tau0 must be > 0 (got $tau0)"))
 
     check(α, v, what) = begin
-        α isa Integer ||
-            throw(ArgumentError("noise_gen: α keys must be Int, got $(typeof(α))"))
-        -2 <= α <= 2 ||
-            throw(ArgumentError("noise_gen: α must be ∈ {-2,…,2}, got $α"))
+        -4 <= α <= 2 ||
+            throw(ArgumentError("noise_gen: α must be ∈ {-4,…,2}, got $α"))
         v >= 0 ||
             throw(ArgumentError("noise_gen: $what values must be ≥ 0, got $v for α=$α"))
     end
@@ -476,10 +482,11 @@ function _noise_gen_y(N::Int, tau0::Float64,
     if !isempty(sigma1)
         # Empirical calibration: rescale the realization so its overlapping
         # ADEV at τ₀ equals the request exactly.
-        for (α, s) in sigma1
+        for (key, s) in sigma1
+            α = _noise_alpha(key)
             check(α, s, "σ")
             s == 0 && continue
-            y_raw = _gen_powerlaw_y(Int(α), N; rng=rng)
+            y_raw = _gen_powerlaw_y(α, N; rng=rng)
             σ_raw = _measure_sigma1(y_raw, tau0)
             σ_raw > 0 || continue
             y_total .+= y_raw .* (Float64(s) / σ_raw)
@@ -489,11 +496,12 @@ function _noise_gen_y(N::Int, tau0::Float64,
         # filter driven by unit white noise sampled at τ₀ has one-sided PSD
         # 2τ₀·|2 sin(πfτ₀)|^α = 2τ₀·(2πτ₀f)^α at low frequency, so scaling by
         # √(h_α / (2τ₀(2πτ₀)^α)) gives S_y(f) = h_α f^α there.
-        for (α, hα) in h
+        for (key, hα) in h
+            α = _noise_alpha(key)
             check(α, hα, "h")
             hα == 0 && continue
-            y_raw = _gen_powerlaw_y(Int(α), N; rng=rng)
-            y_total .+= y_raw .* sqrt(Float64(hα) / (2 * tau0 * (2π * tau0)^Int(α)))
+            y_raw = _gen_powerlaw_y(α, N; rng=rng)
+            y_total .+= y_raw .* sqrt(Float64(hα) / (2 * tau0 * (2π * tau0)^α))
         end
     end
     return y_total
@@ -517,6 +525,10 @@ is a sum of user-specified power laws `S_y(f) = h_α f^α`. Returns either a
 |  0 | WHFM, white frequency      | 1/f²            |
 | -1 | FLFM, flicker frequency    | 1/f³            |
 | -2 | RWFM, random-walk frequency | 1/f⁴           |
+| -3 | FWFM, flicker-walk frequency | 1/f⁵          |
+| -4 | RRFM, random-run frequency  | 1/f⁶           |
+
+Keys are the integer α or the noise-type name (`Dict(:WHFM => 1e-12)`).
 
 # Specifying the mixture
 
@@ -533,8 +545,15 @@ realization equals the request exactly. `h` components are scaled
 analytically: the Kasdin–Walter filter driven by unit white noise has
 one-sided PSD `2τ₀ |2 sin(πfτ₀)|^α`, which is `2τ₀ (2πτ₀ f)^α` at low
 frequency, so the component is multiplied by `√(h_α / (2τ₀ (2πτ₀)^α))` and
-its spectrum is `h_α f^α` up to the sine-versus-linear roll-off near
-Nyquist. The empirical σ_y(τ₀) of an `h` component therefore fluctuates
+its spectrum is
+
+    S_y(f) = h_α · (sin(π f τ₀) / (π τ₀))^α,
+
+which is `h_α f^α` up to the sine-versus-linear roll-off near Nyquist. For
+α ≤ −1 the process is not stationary and this is the spectrum of its
+differences: the d-th difference of `y` has spectrum
+`(2 sin(π f τ₀))^(2d) S_y(f)`. The test suite checks the spectrum, through
+differences where needed, for every α from +2 to −4. The empirical σ_y(τ₀) of an `h` component therefore fluctuates
 with the realization (≈ √(2/N) relative), and for the coloured noises it is
 not the continuous-time SP1065 value, because a sampled discrete process is
 not a band-limited continuous one. Components from different α are
