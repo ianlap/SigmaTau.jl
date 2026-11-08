@@ -3,7 +3,7 @@
 # Writes paper/data/suite_fixture.csv  (every deviation on the validation fixture, with noise type, EDF, CI)
 #        paper/data/dynamic_map.csv    (dadev map of a synthesized record with a mid-record noise-level change)
 #        paper/data/streaming_check.csv (streamed vs batch ADEV/MDEV/HDEV/MHDEV at several sample counts)
-using SigmaTau, Random, DelimitedFiles, Printf
+using SigmaTau, Random, Printf
 root = normpath(joinpath(@__DIR__, ".."))
 out  = joinpath(@__DIR__, "data"); mkpath(out)
 

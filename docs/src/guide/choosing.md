@@ -90,6 +90,14 @@ linear drift does not appear in them at all.
   family is heavier but multithreaded (start Julia with `--threads=auto`).
   Thêo1 and ThêoH are O(N²) overall, so they are off by default in the
   explorer.
-- **Gaps and glitches.** Fill `NaN` gaps with [`fillgaps`](@ref) and remove
-  phase steps or frequency spikes with [`remove_outliers`](@ref) before the
-  analysis; see [Reading and saving data](../tutorials/02_reading_your_data.md).
+- **Gaps.** `adev`, `mdev`, `tdev`, `hdev`, `mhdev`, `htdev`, `tierms` and
+  `mtie` skip `NaN` gaps, as allantools' `gradev` does for ADEV: on phase, a
+  term counts when every sample it reads was measured; on frequency, when no
+  missing sample falls inside its span. `neff` is the number of terms used
+  and the EDF follows from it. The total estimators, Thêo1, PDEV and the
+  dynamic deviations still need a gap-free record: fill it with
+  [`fillgaps`](@ref) first. Filling changes the noise inside the gap, so
+  prefer skipping where the estimator allows it.
+- **Glitches.** Remove phase steps or frequency spikes with
+  [`remove_outliers`](@ref) before the analysis; see
+  [Reading and saving data](../tutorials/02_reading_your_data.md).

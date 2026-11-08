@@ -46,7 +46,7 @@ function fileCard(c) {
         <span class="muted small">${multi() ? `${h(c.source.name)} · ` : ""}${h(c.sourceInfo)}</span></div></div>
       <div class="file-actions"><button class="btn" data-act="import">Import settings…</button><button class="btn" data-act="open">Open another file…</button>${addClockBtn()}</div>`
     : `<div class="file-actions"><button class="btn btn-primary" data-act="open">Open a file…</button>${addClockBtn()}</div>`}
-    <div class="dropzone" data-ref="drop">Drop a .dat, .txt, .csv or .tsv file anywhere in the window</div>
+    <div class="dropzone" data-ref="drop">Drop a data file anywhere in the window</div>
     ${c?.error ? `<p class="error small">${h(c.error)}</p>` : ""}
   </div>`;
 }
@@ -116,7 +116,7 @@ export function refresh() {
   const mode = state.dataMode;
   root.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   root.querySelector("[data-ref=caption]").innerHTML = mode === "file"
-    ? "Phase or frequency records as text: .dat, .txt, .csv, .tsv"
+    ? "Phase or frequency records: text columns, Stable32, TimeLab .tim, counter logs"
     : "A test record with known noise, for trying estimators";
   const focus = document.activeElement?.dataset?.field === "name";
   if (!focus) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);

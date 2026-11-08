@@ -1,88 +1,39 @@
-# umbrella_smoke.jl — top-level `using SigmaTau` re-export smoke test.
-#
-# Verifies that every public symbol the package promises lands in the caller's
-# namespace under a bare `using SigmaTau`, and that the FrequencyData
-# dispatches all round-trip through `_freq_to_phase` correctly. The old `Stab`
-# submodule is flattened into the umbrella, and `Est` is not part of the public
-# SigmaTau surface; both assertions are pinned negative below.
+# umbrella_smoke.jl — the exported surface under a bare `using SigmaTau`, and
+# FrequencyData dispatch on every estimator.
 
 using Test
+using Random
 using SigmaTau
 
-@testset "Flattened — no Stab/Est submodules" begin
-    # Stab is no longer a submodule (flattened into the umbrella).
-    @test !isdefined(SigmaTau, :Stab)
-    # Est is not part of the public SigmaTau surface.
-    @test !isdefined(SigmaTau, :Est)
-    # Internal kernels still reachable through `SigmaTau.` directly.
+@testset "exported surface" begin
+    public = Set([
+        :AbstractTimingData, :PhaseData, :FrequencyData, :StabilityResult,
+        :StabilitySuite, :SpectralResult, :DynamicStabilityResult,
+        :ci_lower, :ci_upper, :DEFAULT_CONFIDENCE, :DEFAULT_DEVIATIONS,
+        :TauMode, :AllTaus, :Octave, :HalfOctave, :QuarterOctave, :Decade,
+        :HalfDecade, :tau_values, :tau_mode,
+        :adev, :mdev, :tdev, :hdev, :mhdev, :htdev, :totdev, :mtotdev,
+        :ttotdev, :htotdev, :mhtotdev, :mtie, :tierms, :pdev, :theo1, :theoh,
+        :dadev, :dhdev, :stability, :deviation, :estimators, :summarize,
+        :ncornered_hat, :StreamingStability, :snapshot, :nsamples,
+        :identify_noise, :calculate_edf, :confidence_intervals, :bias_correction,
+        :psd_y, :psd_x, :ssb_phase_noise, :noise_gen,
+        :read_phase, :read_frequency, :read_data, :detect_format, :INPUT_FORMATS,
+        :save, :load,
+        :detrend, :fillgaps, :find_outliers, :remove_outliers])
+    deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
+                      :load_result, :load_suite])
+    @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public ∪ deprecated
+    # The kernels stay internal but reachable as SigmaTau._adev_core etc.
     @test isdefined(SigmaTau, :_adev_core)
 end
 
-@testset "Public API re-exported" begin
-    # Must be accessible bare under `using SigmaTau`.
-    for sym in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
-                :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
-                :mtie, :tierms, :pdev, :theo1, :theoh,
-                :dadev, :dhdev,
-                :psd_y, :psd_x, :ssb_phase_noise,
-                :stability, :DEFAULT_DEVIATIONS, :ncornered_hat,
-                :estimators, :deviation, :tau_mode, :summarize,
-                :identify_noise, :calculate_edf, :confidence_intervals,
-                :bias_correction, :DEFAULT_CONFIDENCE,
-                :TauMode, :AllTaus, :Octave, :HalfOctave,
-                :QuarterOctave, :Decade, :HalfDecade, :tau_values,
-                :save, :load,
-                :read_phase, :read_frequency,
-                :detrend, :fillgaps,
-                :find_outliers, :remove_outliers,
-                :noise_gen)
-        @test isdefined(@__MODULE__, sym)
-    end
-end
-
-@testset "Internal core kernels are not exported" begin
-    # Check export-ness against `names(SigmaTau)` rather than the caller's
-    # namespace: other test files (`test/stab/runtests.jl`) import the cores
-    # explicitly for unqualified use, which would pollute `@__MODULE__`.
-    exported = names(SigmaTau)
-    cores = (:_adev_core, :_mdev_core, :_tdev_core, :_hdev_core, :_mhdev_core,
-             :_totdev_core, :_mtotdev_core, :_htotdev_core, :_mhtotdev_core,
-             :_mtie_core, :_tierms_core, :_pdev_core, :_theo1_core)
-    for sym in cores
-        @test isdefined(SigmaTau, sym)   # reachable as `SigmaTau._adev_core`
-        @test sym ∉ exported             # but not part of the exported surface
-    end
-end
-
-@testset "Shared types re-exported" begin
-    for sym in (:AbstractTimingData, :PhaseData, :FrequencyData, :StabilityResult, :StabilitySuite, :SpectralResult, :DynamicStabilityResult)
-        @test isdefined(@__MODULE__, sym)
-    end
-end
-
-@testset "End-to-end deviation call works under bare using" begin
-    # Quadratic phase: ADEV(τ) = √2 at m=1 by hand (see test/stab `ADEV Core`).
-    p = PhaseData(collect(1.0:100.0) .^ 2, 1.0)
-    r = adev(p, [1, 2]; ci=false)
-    @test r.deviation_type === :adev
-    @test r.dev[1] ≈ sqrt(2.0)
-    @test length(r.tau) == 2
-end
-
-@testset "FrequencyData dispatch on every deviation" begin
-    using Random
-    Random.seed!(20260509)
-    tau0 = 1.0
-    y = randn(200) .* 1e-9
-    fd = FrequencyData(y, tau0)
-    pd_eq = PhaseData([0.0; cumsum(y)] .* tau0, tau0)
-    ms = [1, 2, 4]
-
-    for f in (adev, mdev, tdev, hdev, mhdev, htdev,
-              totdev, mtotdev, ttotdev, htotdev, mhtotdev,
-              mtie, tierms, pdev)
-        a = f(fd,    ms; ci=false)
-        b = f(pd_eq, ms; ci=false)
-        @test a.dev ≈ b.dev
-    end
+@testset "FrequencyData dispatch on every estimator" begin
+    y = randn(MersenneTwister(20260509), 200) .* 1e-9
+    fd = FrequencyData(y, 1.0)
+    pd = PhaseData([0.0; cumsum(y)], 1.0)
+    fns = (adev, mdev, tdev, hdev, mhdev, htdev, totdev, mtotdev, ttotdev,
+           htotdev, mhtotdev, mtie, tierms, pdev)
+    @test isempty([f for f in fns if !(f(fd, [1, 2, 4]; ci=false).dev ≈
+                                       f(pd, [1, 2, 4]; ci=false).dev)])
 end

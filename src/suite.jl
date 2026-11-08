@@ -40,7 +40,7 @@ Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 `devs` is any iterable of estimator names from [`estimators`](@ref)
 (symbols or strings). `m` is a [`TauMode`](@ref) (e.g. `Octave`, `Decade`)
 or an integer vector of averaging factors applied to every deviation, as in
-the estimator functions (`taus=` before 0.6).
+the estimator functions.
 `correct_bias` reaches only the estimators that take it (the total family and
 `theo1`), and `remove_drift` only `mhtotdev`. Note that an explicit `m`
 vector is passed to every deviation verbatim: `:theo1` interprets it as even
@@ -173,8 +173,7 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
         end
     end
 
-    # Per-clock separation: σ̂²ᵢ = (Rᵢ − S/(N−1)) / (N−2); non-positive
-    # estimates → NaN (as in the three-cornered-hat example).
+    # σ̂²ᵢ = (Rᵢ − S/(N−1)) / (N−2); non-positive estimates become NaN.
     results = Vector{StabilityResult}(undef, n_clocks)
     for i in 1:n_clocks
         dev_i = Vector{Float64}(undef, n_tau)
@@ -189,9 +188,8 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
     return results
 end
 
-# Three-cornered-hat convenience form: pairwise results in the cyclic
-# order A−B, B−C, C−A (the three-cornered-hat example's labeling with A=1, B=2, C=3; the
-# C−A record maps to pairwise[1, 3] since orientation is irrelevant).
+# Three-cornered hat from A−B, B−C, C−A; C−A fills pairwise[1, 3] since
+# orientation is irrelevant.
 function ncornered_hat(r_ab::StabilityResult, r_bc::StabilityResult, r_ca::StabilityResult)
     pairwise = Matrix{StabilityResult}(undef, 3, 3)
     pairwise[1, 2] = r_ab

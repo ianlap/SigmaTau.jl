@@ -14,6 +14,21 @@ read_phase
 read_frequency
 ```
 
+## Instrument files
+
+[`read_data`](@ref) reads the files instruments and their software write,
+detecting the layout: TimeLab `.tim` logs (which is how the Microchip
+53100A, 5120A/5125A and TimePod are usually recorded), Stable32 `.phd` /
+`.frd`, Keysight 53230A-style counter readings, and logs with named
+columns such as GPSDO exports. `sigmatau --input-format` and the explorer's
+import dialog use the same readers.
+
+```@docs
+read_data
+detect_format
+INPUT_FORMATS
+```
+
 ## Checking a record
 
 ```@docs

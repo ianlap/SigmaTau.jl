@@ -35,6 +35,7 @@ julia> round.(r.dev; sigdigits=4)
 ```
 """
 function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:adev, _gap_record(data), m_values; ci=ci, confidence=confidence)
     x = _f64(data.x)
     raw_devs = _adev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -74,6 +75,7 @@ julia> round.(r.dev; sigdigits=4)
 ```
 """
 function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:mdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
     x = _f64(data.x)
     raw_devs = _mdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -115,10 +117,14 @@ function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
                            _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
-# FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
-adev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = adev(_freq_to_phase(data), m_values; kwargs...)
-mdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mdev(_freq_to_phase(data), m_values; kwargs...)
-tdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = tdev(_freq_to_phase(data), m_values; kwargs...)
+# FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData;
+# a record with gaps goes to the gap-tolerant path (src/gaps.jl).
+adev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:adev, _gap_record(data), m_values; kwargs...) : adev(_freq_to_phase(data), m_values; kwargs...)
+mdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:mdev, _gap_record(data), m_values; kwargs...) : mdev(_freq_to_phase(data), m_values; kwargs...)
+tdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:tdev, _gap_record(data), m_values; kwargs...) : tdev(_freq_to_phase(data), m_values; kwargs...)
 
 # TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
 adev(data::PhaseData,     taus::TauMode; kwargs...) = adev(data, tau_values(taus, length(data.x), :adev); kwargs...)
@@ -153,6 +159,7 @@ octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
 function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
     x = _f64(data.x)
     raw_devs = _hdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -184,6 +191,7 @@ octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
 function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
     x = _f64(data.x)
     raw_devs = _mhdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -227,10 +235,14 @@ function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
                            _scale_ci(res.ci, factor), res.edf, res.neff)
 end
 
-# FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData.
-hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = hdev(_freq_to_phase(data),  m_values; kwargs...)
-mhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhdev(_freq_to_phase(data), m_values; kwargs...)
-htdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = htdev(_freq_to_phase(data), m_values; kwargs...)
+# FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData;
+# a record with gaps goes to the gap-tolerant path (src/gaps.jl).
+hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:hdev, _gap_record(data), m_values; kwargs...) : hdev(_freq_to_phase(data), m_values; kwargs...)
+mhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:mhdev, _gap_record(data), m_values; kwargs...) : mhdev(_freq_to_phase(data), m_values; kwargs...)
+htdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:htdev, _gap_record(data), m_values; kwargs...) : htdev(_freq_to_phase(data), m_values; kwargs...)
 
 # TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
 hdev(data::PhaseData,      taus::TauMode; kwargs...) = hdev(data,  tau_values(taus, length(data.x), :hdev);  kwargs...)
@@ -500,13 +512,15 @@ julia> r.dev
 ```
 """
 function mtie(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:mtie, _gap_record(data), m_values; ci=ci, confidence=confidence)
     raw_devs = _mtie_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:mtie, length(data.x), m_values)
     return _result(data, confidence, :mtie, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
 end
 
-mtie(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mtie(_freq_to_phase(data), m_values; kwargs...)
+mtie(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:mtie, _gap_record(data), m_values; kwargs...) : mtie(_freq_to_phase(data), m_values; kwargs...)
 
 # TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
 mtie(data::PhaseData,     taus::TauMode; kwargs...) = mtie(data, tau_values(taus, length(data.x), :mtie); kwargs...)
@@ -559,13 +573,15 @@ julia> round.(r.dev; sigdigits=4)
 ```
 """
 function tierms(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:tierms, _gap_record(data), m_values; ci=ci, confidence=confidence)
     raw_devs = _tierms_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:tierms, length(data.x), m_values)
     return _result(data, confidence, :tierms, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
 end
 
-tierms(data::FrequencyData, m_values::Vector{Int}; kwargs...) = tierms(_freq_to_phase(data), m_values; kwargs...)
+tierms(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+    _has_gaps(data) ? _gap_result(:tierms, _gap_record(data), m_values; kwargs...) : tierms(_freq_to_phase(data), m_values; kwargs...)
 
 # TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
 tierms(data::PhaseData,     taus::TauMode; kwargs...) = tierms(data, tau_values(taus, length(data.x), :tierms); kwargs...)

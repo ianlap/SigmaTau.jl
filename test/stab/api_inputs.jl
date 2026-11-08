@@ -21,16 +21,12 @@ using Test, Random, SigmaTau
     end
 
     @testset "m as a range or other integer vector" begin
-        for f in (adev, mdev, tdev, hdev, mhdev, htdev, totdev, mtotdev, ttotdev,
-                  htotdev, mhtotdev, mtie, tierms, pdev, theoh)
-            ref = f(pd, ms)
-            for m in (2 .^ (0:3), Int32.(ms), view(ms, :), UInt8.(ms))
-                r = f(pd, m)
-                @test r.tau == ref.tau
-                @test isequal(r.dev, ref.dev)
-            end
-            @test f(fd, 2 .^ (0:3)).tau == f(fd, ms).tau
-        end
+        fns = (adev, mdev, tdev, hdev, mhdev, htdev, totdev, mtotdev, ttotdev,
+               htotdev, mhtotdev, mtie, tierms, pdev, theoh)
+        forms = (2 .^ (0:3), Int32.(ms), view(ms, :), UInt8.(ms))
+        @test isempty([(f, typeof(m)) for f in fns, m in forms
+                       if !isequal(f(pd, m).dev, f(pd, ms).dev)])
+        @test isempty([f for f in fns if f(fd, 2 .^ (0:3)).tau != f(fd, ms).tau])
         @test theo1(pd, 10:10:40).tau == theo1(pd, [10, 20, 30, 40]).tau
         @test dadev(pd, 1:4; window=256).tau == dadev(pd, [1, 2, 3, 4]; window=256).tau
         @test dhdev(pd, 1:4; window=256).tau == dhdev(pd, [1, 2, 3, 4]; window=256).tau

@@ -63,19 +63,32 @@ function recordArgs(clock) {
   const synth = clock.source.type === "synth";
   const a = synth ? ["--synth", clock.source.n, "--seed", clock.source.seed] : [];
   const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
-  if (clock.kind === "frequency") a.push("--freq");
   opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
+  // An instrument file (TimeLab, Stable32 .phd/.frd, counter log) is read by
+  // its layout, which fixes the record type, units and columns.
+  if (clock.format) {
+    a.push("--input-format", clock.format);
+    // A table is read by column name; its kind is the user's pick.
+    if (clock.format === "table") {
+      opt("--column", clock.column_name);
+      if (clock.kind === "frequency") a.push("--freq");
+    }
+  } else recordColumns(clock, a, opt);
+  if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
+  if (clock.fillgaps) a.push("--fillgaps");
+  if (clock.remove_outliers) a.push("--remove-outliers");
+  a.push("--format", "json");
+  return a;
+}
+
+function recordColumns(clock, a, opt) {
+  if (clock.kind === "frequency") a.push("--freq");
   opt("--time-col", clock.time_col);
   opt("--value-col", clock.value_col);
   const ref = referenceColFor(clock);
   if (ref) opt("--reference-col", ref);
   opt("--header", clock.header);
   opt("--scaling", clock.scaling);
-  if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
-  if (clock.fillgaps) a.push("--fillgaps");
-  if (clock.remove_outliers) a.push("--remove-outliers");
-  a.push("--format", "json");
-  return a;
 }
 
 // One run of the sigmatau binary: a command, its flags, and the record file.

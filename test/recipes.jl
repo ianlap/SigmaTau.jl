@@ -78,23 +78,16 @@ using RecipesBase
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), res)   # default rendering
         cs = curves(rd)
         @test length(cs) == length(res.t) == 4        # one line per window
-        for (i, sd) in enumerate(cs)
-            pa = sd.plotattributes
-            @test pa[:seriestype] === :path3d
-            @test !haskey(pa, :yscale)                # 3-D axes get no log scale…
-            x, y, z = sd.args
-            @test x ≈ log10.(res.tau)                 # …so τ is plotted as log10(τ)
-            @test all(y .== res.t[i])                 # the curve sits at its t
-            @test z ≈ log10.(res.dev[i, :])           # σ plotted as log10(σ)
-            @test pa[:label] == "t = $(round(res.t[i]; sigdigits=4)) s"
-            # Decade tick positions are integers labelled in plain-text 1e<k>
-            # form (TeX-safe under the PGFPlotsX docs build).
-            for key in (:xticks, :zticks)
-                ticks, labels = pa[key]
-                @test all(t -> t == round(t), ticks)
-                @test all(startswith.(labels, "1e"))
-            end
-        end
+        attrs = [sd.plotattributes for sd in cs]
+        @test all(pa -> pa[:seriestype] === :path3d && !haskey(pa, :yscale), attrs)
+        # 3-D axes get no log scale, so τ and σ are plotted as log10; each
+        # curve sits at its window time.
+        @test all(cs[i].args[1] ≈ log10.(res.tau) && all(cs[i].args[2] .== res.t[i]) &&
+                  cs[i].args[3] ≈ log10.(res.dev[i, :]) for i in eachindex(cs))
+        @test [pa[:label] for pa in attrs] == ["t = $(round(t; sigdigits=4)) s" for t in res.t]
+        # Decade ticks are integers labelled 1e<k> (TeX-safe in the docs build).
+        @test all(all(t -> t == round(t), pa[k][1]) && all(startswith.(pa[k][2], "1e"))
+                  for pa in attrs, k in (:xticks, :zticks))
 
         # Many-window maps suppress the per-curve legend.
         wide = dadev(big, [1, 2]; window=128, step=64)

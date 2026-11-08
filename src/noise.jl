@@ -395,7 +395,7 @@ draws from the global RNG, so existing seeded callers are unaffected.
 function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
     # Kasdin–Walter discrete fractional filter (Kasdin & Walter 1992; the
     # method allantools uses): white Gaussian noise convolved with the impulse
-    # response of (1 - z⁻¹)^(-α/2), whose power spectrum is |2 sin(πf)|^α, the
+    # response of (1 - z⁻¹)^(α/2), whose power spectrum is |2 sin(πf)|^α, the
     # discrete-time counterpart of f^α. It is exact at the integer orders:
     # α = 2 is the first difference of white noise (so the integrated phase is
     # white), α = 0 is white, α = -2 is a cumulative sum. Shaping FFT bins by
@@ -447,52 +447,20 @@ end
 # frequency PSD coefficient h_α. Contributions for different α are drawn
 # independently and summed.
 
-# α = -4 (RRFM, random-run FM) generator — h-coefficient path only.
-#
-# The f^(α/2) spectral shaper cannot be used here: it zeroes the DC bin of a
-# periodic record, which caps the lowest Fourier component exactly where an f⁻⁴
-# law puts nearly all of its power. Double discrete integration of white noise
-# realizes the law down to the record's own fundamental instead.
-#
-# Amplitude derivation. Let w[k] be white Gaussian with per-sample variance q,
-# sampled at τ₀, and y = cumsum(cumsum(w)). One discrete integrator has transfer
-# function H₁(z) = 1/(1 − z⁻¹), so on the unit circle z = exp(i2πfτ₀)
-#
-#     |H₁(f)|² = 1 / |1 − e^{-i2πfτ₀}|² = 1 / (4 sin²(π f τ₀)),
-#
-# and the cascade of two gives |H₂(f)|² = 1 / (16 sin⁴(π f τ₀)). White w has the
-# one-sided PSD S_w(f) = 2 q τ₀ on 0 ≤ f ≤ 1/(2τ₀) (its integral over that band
-# is q, the sample variance), so
-#
-#     S_y(f) = 2 q τ₀ / (16 sin⁴(π f τ₀)) = q τ₀ / (8 sin⁴(π f τ₀)).
-#
-# As f → 0, sin(π f τ₀) → π f τ₀ and therefore
-#
-#     S_y(f) → [q / (8 π⁴ τ₀³)] · f⁻⁴,
-#
-# so matching S_y(f) = h₋₄ f⁻⁴ fixes the white driver variance at
-#
-#     q = 8 π⁴ τ₀³ h₋₄.
-#
-# The same algebra at α = -2 gives h₋₂ = q/(2π²τ₀); as there, the discrete
-# construction reproduces the continuous power law for f ≪ 1/(2τ₀) — i.e. at
-# τ ≫ τ₀, which is the only regime where an f⁻⁴ specification is meaningful.
-# The record mean is removed: every stability estimator is a difference
-# operator, so the mean of y is unobservable, and dropping it keeps the
-# synthesized series centred.
-function _gen_rrfm_y(N::Int, tau0::Float64, h::Float64; rng=nothing)
-    q = 8 * π^4 * tau0^3 * h
-    w = rng === nothing ? randn(N) : randn(rng, N)
-    y = cumsum(cumsum(w)) .* sqrt(q)
-    return y .- mean(y)
-end
-
 # Empirical σ_y(τ=τ₀) of a fractional-frequency vector via overlapping ADEV
 # at m=1. Used to rescale a raw filter realization to a known level.
 function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
     x = cumsum(y) .* tau0
     return _adev_core(x, [1], tau0)[1]
 end
+
+# Power-law exponent α of a noise_gen key: an integer α or a noise-type name.
+const _NOISE_ALPHA = Dict(:WHPM => 2, :FLPM => 1, :WHFM => 0, :FLFM => -1,
+                          :RWFM => -2, :FWFM => -3, :RRFM => -4)
+_noise_alpha(α::Integer) = Int(α)
+_noise_alpha(s::Symbol) = haskey(_NOISE_ALPHA, s) ? _NOISE_ALPHA[s] :
+    throw(ArgumentError("noise_gen: unknown noise type :$s; use one of " * join(keys(_NOISE_ALPHA), ", ")))
+_noise_alpha(k) = throw(ArgumentError("noise_gen: keys must be an Int α or a noise-type Symbol, got $(typeof(k))"))
 
 function _noise_gen_y(N::Int, tau0::Float64,
                      sigma1::AbstractDict, h::AbstractDict; rng=nothing)
@@ -504,10 +472,8 @@ function _noise_gen_y(N::Int, tau0::Float64,
     tau0 > 0 || throw(ArgumentError("noise_gen: tau0 must be > 0 (got $tau0)"))
 
     check(α, v, what) = begin
-        α isa Integer ||
-            throw(ArgumentError("noise_gen: α keys must be Int, got $(typeof(α))"))
-        -2 <= α <= 2 ||
-            throw(ArgumentError("noise_gen: α must be ∈ {-2,…,2}, got $α"))
+        -4 <= α <= 2 ||
+            throw(ArgumentError("noise_gen: α must be ∈ {-4,…,2}, got $α"))
         v >= 0 ||
             throw(ArgumentError("noise_gen: $what values must be ≥ 0, got $v for α=$α"))
     end
@@ -516,15 +482,11 @@ function _noise_gen_y(N::Int, tau0::Float64,
     if !isempty(sigma1)
         # Empirical calibration: rescale the realization so its overlapping
         # ADEV at τ₀ equals the request exactly.
-        for (α, s) in sigma1
-            α isa Integer && α <= -3 && throw(ArgumentError(
-                "noise_gen: σ_y(τ₀) diverges for α = $α (the Allan-variance integral " *
-                "diverges at low frequency for α ≤ -3), so it cannot be a target. " *
-                (α == -4 ? "Give random-run FM by its PSD coefficient: h = Dict(-4 => h₋₄)." :
-                           "Supported: α ∈ {-2, …, 2}, and α = -4 through `h`.")))
+        for (key, s) in sigma1
+            α = _noise_alpha(key)
             check(α, s, "σ")
             s == 0 && continue
-            y_raw = _gen_powerlaw_y(Int(α), N; rng=rng)
+            y_raw = _gen_powerlaw_y(α, N; rng=rng)
             σ_raw = _measure_sigma1(y_raw, tau0)
             σ_raw > 0 || continue
             y_total .+= y_raw .* (Float64(s) / σ_raw)
@@ -534,16 +496,12 @@ function _noise_gen_y(N::Int, tau0::Float64,
         # filter driven by unit white noise sampled at τ₀ has one-sided PSD
         # 2τ₀·|2 sin(πfτ₀)|^α = 2τ₀·(2πτ₀f)^α at low frequency, so scaling by
         # √(h_α / (2τ₀(2πτ₀)^α)) gives S_y(f) = h_α f^α there.
-        for (α, hα) in h
-            if α == -4
-                hα >= 0 || throw(ArgumentError("noise_gen: h values must be ≥ 0, got $hα for α=-4"))
-                hα == 0 || (y_total .+= _gen_rrfm_y(N, tau0, Float64(hα); rng=rng))
-                continue
-            end
+        for (key, hα) in h
+            α = _noise_alpha(key)
             check(α, hα, "h")
             hα == 0 && continue
-            y_raw = _gen_powerlaw_y(Int(α), N; rng=rng)
-            y_total .+= y_raw .* sqrt(Float64(hα) / (2 * tau0 * (2π * tau0)^Int(α)))
+            y_raw = _gen_powerlaw_y(α, N; rng=rng)
+            y_total .+= y_raw .* sqrt(Float64(hα) / (2 * tau0 * (2π * tau0)^α))
         end
     end
     return y_total
@@ -567,7 +525,10 @@ is a sum of user-specified power laws `S_y(f) = h_α f^α`. Returns either a
 |  0 | WHFM, white frequency      | 1/f²            |
 | -1 | FLFM, flicker frequency    | 1/f³            |
 | -2 | RWFM, random-walk frequency | 1/f⁴           |
-| -4 | RRFM, random-run frequency | 1/f⁶ (`h` only) |
+| -3 | FWFM, flicker-walk frequency | 1/f⁵          |
+| -4 | RRFM, random-run frequency  | 1/f⁶           |
+
+Keys are the integer α or the noise-type name (`Dict(:WHFM => 1e-12)`).
 
 # Specifying the mixture
 
@@ -584,17 +545,19 @@ realization equals the request exactly. `h` components are scaled
 analytically: the Kasdin–Walter filter driven by unit white noise has
 one-sided PSD `2τ₀ |2 sin(πfτ₀)|^α`, which is `2τ₀ (2πτ₀ f)^α` at low
 frequency, so the component is multiplied by `√(h_α / (2τ₀ (2πτ₀)^α))` and
-its spectrum is `h_α f^α` up to the sine-versus-linear roll-off near
-Nyquist. The empirical σ_y(τ₀) of an `h` component therefore fluctuates
+its spectrum is
+
+    S_y(f) = h_α · (sin(π f τ₀) / (π τ₀))^α,
+
+which is `h_α f^α` up to the sine-versus-linear roll-off near Nyquist. For
+α ≤ −1 the process is not stationary and this is the spectrum of its
+differences: the d-th difference of `y` has spectrum
+`(2 sin(π f τ₀))^(2d) S_y(f)`. The test suite checks the spectrum, through
+differences where needed, for every α from +2 to −4. The empirical σ_y(τ₀) of an `h` component therefore fluctuates
 with the realization (≈ √(2/N) relative), and for the coloured noises it is
 not the continuous-time SP1065 value, because a sampled discrete process is
 not a band-limited continuous one. Components from different α are
 statistically independent.
-
-Random-run FM (α = -4) is available through `h` only, since σ_y(τ₀) diverges
-for α ≤ -3. It is drawn by integrating white noise twice, with driver variance
-`8π⁴τ₀³h₋₄`, which gives `S_y(f) → h₋₄ f⁻⁴` down to the record's
-fundamental (the record mean is removed).
 
 Seed the global RNG (`Random.seed!`) before calling for reproducible output,
 or pass an `AbstractRNG` as `rng` to draw from a specific stream (e.g. for a
@@ -632,347 +595,4 @@ function noise_gen(::Type{FrequencyData}, N::Int, tau0::Real;
     τ₀ = Float64(tau0)
     y  = _noise_gen_y(N, τ₀, sigma1, h; rng=rng)
     return FrequencyData(y, τ₀)
-end
-
-# ── NNLS power-law decomposition ────────────────────────────────────────
-
-# noise/nnls.jl — nonnegative least-squares decomposition of a measured
-# variance profile σ̂²(τ) into per-α power-law components.
-#
-# Where `identify_noise` answers "which single α dominates at this τ", this
-# answers "how much of each α is present across the whole τ range" — one fit to
-# the entire profile rather than an independent classification per point. The
-# nonnegativity constraint is what makes it well posed: variance contributions
-# cannot be negative, and without the constraint the near-collinear power-law
-# columns trade large positive and negative amplitudes.
-#
-# The deviation API this dispatches into lives in deviations.jl, which is
-# included after this file; that is fine, the call is resolved at run time.
-
-"""
-    _nnls_exact(A, b) → (a, rss)
-
-Exact nonnegative least squares — minimize ‖Aa − b‖² subject to `a ≥ 0` — by
-exhaustive active-set enumeration. Every one of the `2ⁿ − 1` nonempty supports
-is solved as an unconstrained least-squares problem restricted to that support
-and kept only if the solution is feasible; `a = 0` seeds the search.
-
-This is exact, not heuristic: the optimum restricted to its own support *is*
-the unconstrained minimizer over that subspace, so the optimum appears among
-the candidates, and every candidate is a feasible point of the constrained
-problem. Cost is exponential in the number of columns, which is why the caller
-is capped at 20 — the intended `n` here is 5–7 power laws.
-
-The restricted solves go through `\\` (QR) rather than explicit normal
-equations: power-law columns are near-collinear and squaring the condition
-number would lose the smallest amplitudes.
-"""
-function _nnls_exact(A::AbstractMatrix{<:Real}, b::AbstractVector{<:Real})
-    n = size(A, 2)
-    n <= 20 || throw(ArgumentError(
-        "_nnls_exact: $n columns exceeds the exhaustive-enumeration cap of 20"))
-    size(A, 1) == length(b) || throw(DimensionMismatch(
-        "_nnls_exact: A has $(size(A, 1)) rows but b has $(length(b)) entries"))
-    Af = Matrix{Float64}(A)
-    bf = Vector{Float64}(b)
-    best_a = zeros(n)
-    best_r = sum(abs2, bf)             # empty support — always feasible
-    for mask in 1:((1 << n) - 1)
-        S = [j for j in 1:n if (mask >> (j - 1)) & 1 == 1]
-        AS = Af[:, S]
-        aS = try
-            AS \ bf
-        catch
-            continue                   # rank-deficient support — skip
-        end
-        (all(isfinite, aS) && all(>=(0.0), aS)) || continue
-        r = sum(abs2, AS * aS .- bf)
-        if r < best_r
-            best_r = r
-            fill!(best_a, 0.0)
-            best_a[S] = aS
-        end
-    end
-    return best_a, best_r
-end
-
-# Estimator family: `:modified` for the phase-averaged (modified) kernels,
-# `:unmodified` for the plain second/third-difference kernels.
-function _nnls_family(deviation::Symbol)
-    (deviation === :mdev || deviation === :mhdev || deviation === :mhtotdev) &&
-        return :modified
-    deviation === :hdev && return :unmodified
-    throw(ArgumentError(
-        "noise_id_nnls: unsupported deviation $deviation; " *
-        "expected :mdev, :mhdev, :hdev or :mhtotdev"))
-end
-
-# Difference order: 2 for the Allan family (converges for α > -3), 3 for the
-# Hadamard family (converges for α > -5).
-_nnls_diff_order(deviation::Symbol) = deviation === :mdev ? 2 : 3
-
-"""
-    _nnls_mu(family, alpha) → Float64
-
-Response exponent μ of the *variance*: σ²_D(τ) ∝ τ^μ for a pure α power law.
-
-- Modified family (MDEV / MHDEV / MHTOTDEV): the phase pre-average separates
-  the two PM noises, so a single relation covers the whole range,
-  `μ = -α - 1` — α=2 → -3, α=1 → -2, α=0 → -1, α=-1 → 0, α=-2 → 1, α=-3 → 2,
-  α=-4 → 3.
-- Unmodified family (ADEV / HDEV): `μ = -α - 1` for α ≤ 0, but WPM and FPM are
-  *degenerate* at μ = -2. AVAR/HVAR of white PM is exactly τ⁻² (with a
-  bandwidth factor) and of flicker PM is τ⁻² times a slowly varying
-  `ln(2π f_h τ)`, which no power-law column can resolve. A basis for an
-  unmodified estimator therefore carries at most one of α ∈ {1, 2}.
-"""
-function _nnls_mu(family::Symbol, alpha::Int)
-    family === :modified && return -alpha - 1.0
-    return alpha >= 1 ? -2.0 : -alpha - 1.0
-end
-
-# Convergent, non-degenerate default basis per estimator.
-function _nnls_default_alphas(deviation::Symbol)
-    # MHTOTDEV's per-window detrend is quadratic, matched to the third
-    # difference, so it converges over the full Hadamard range like MHDEV.
-    family = _nnls_family(deviation)
-    if _nnls_diff_order(deviation) == 2
-        # Allan family: the second-difference kernel diverges for α ≤ -3.
-        return family === :modified ? [2, 1, 0, -1, -2] : [2, 0, -1, -2]
-    end
-    # Hadamard family: third differences converge down to α = -4.
-    return family === :modified ? [2, 1, 0, -1, -2, -3, -4] : [2, 0, -1, -2, -3, -4]
-end
-
-# Smallest averaging factor kept by the default grid — see `noise_id_nnls`.
-const NNLS_M_MIN = 4
-
-function _nnls_symbol(alpha::Int)
-    alpha == 2  && return :WHPM
-    alpha == 1  && return :FLPM
-    alpha == 0  && return :WHFM
-    alpha == -1 && return :FLFM
-    alpha == -2 && return :RWFM
-    alpha == -3 && return :FWFM       # flicker-walk FM
-    alpha == -4 && return :RRFM       # random-run FM
-    return :unknown
-end
-
-# Deviation dispatch: the RAW profile, uniform kwargs. `ci=false` skips the
-# lag-1/B1 classifier and `correct_bias=false` skips MHTOTDEV's bias divisor —
-# both of which are functions of `identify_noise`, i.e. of exactly the
-# classification this routine is meant to replace. Fitting a bias-corrected
-# profile would make the decomposition depend on the answer it is computing.
-function _nnls_deviation(deviation::Symbol, data::PhaseData, m_values::Vector{Int})
-    deviation === :mdev  && return mdev(data, m_values; ci=false)
-    deviation === :mhdev && return mhdev(data, m_values; ci=false)
-    deviation === :hdev  && return hdev(data, m_values; ci=false)
-    deviation === :mhtotdev &&
-        return mhtotdev(data, m_values; ci=false, correct_bias=false)
-    throw(ArgumentError("noise_id_nnls: unsupported deviation $deviation"))
-end
-
-# The shipped EDF tables stop at α = -2 (`_alpha_from_noise` maps anything else
-# to α = 0), so the α ≤ -3 rows borrow the RWFM model — the closest available.
-# This only sets the χ² weights; it does not enter the fitted amplitudes.
-_nnls_edf_symbol(alpha::Int) = alpha <= -3 ? :RWFM : _nnls_symbol(alpha)
-
-"""
-    noise_id_nnls(data::PhaseData [, m_values]; deviation=:mhdev, alphas=…, weights=:edf)
-    noise_id_nnls(data::FrequencyData [, m_values]; …)
-
-Decompose a record's measured variance profile into nonnegative power-law
-components. One weighted nonnegative least-squares fit over the whole τ range
-returns the amplitude of every α in the basis, plus the dominant noise type at
-each τ.
-
-Returns a `NamedTuple`:
-
-| field | meaning |
-|:------|:--------|
-| `deviation` | estimator used |
-| `tau` | τ grid actually fitted (s) |
-| `var` | measured σ̂²(τ) |
-| `fit` | fitted Σᵢ aᵢ (τ/τ₀)^μᵢ |
-| `alphas` | basis exponents |
-| `noise_types` | `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`, `:FWFM`, `:RRFM` per α |
-| `amplitudes` | aᵢ ≥ 0 — the α-component's *variance at τ = τ₀* |
-| `contributions` | `length(tau) × length(alphas)` matrix aᵢ (τ/τ₀)^μᵢ |
-| `dominant` | dominant noise type at each τ |
-| `residual` | weighted sum of squared residuals |
-| `weights` | weight vector used |
-
-!!! warning "Experimental return shape"
-    The set and naming of these fields is experimental and may change in a
-    minor release; `amplitudes`, `alphas` and `dominant` are the stable core.
-
-The fit runs on the **raw** deviation profile: `ci=false` and, for MHTOTDEV,
-`correct_bias=false`. Both the CI machinery and the total-family bias divisor
-are functions of `identify_noise`, so fitting a corrected profile would make
-the decomposition depend on the classification it is computing.
-
-# Basis
-
-The columns are analytic power laws `Kᵢ(τ) = (τ/τ₀)^μ(αᵢ)`, with μ the
-*variance* response exponent — `μ = -α-1` for the modified family
-(MDEV/MHDEV/MHTOTDEV) and, for the unmodified family (HDEV), `μ = -α-1` for
-α ≤ 0 with WPM and FPM both collapsing onto μ = -2. The defaults therefore
-carry α ∈ {2, 1, 0, -1, -2} for `:mdev`, {2, 0, -1, -2, -3, -4} for `:hdev`,
-and {2, 1, 0, -1, -2, -3, -4} for `:mhdev` and `:mhtotdev`. The convergence
-condition per estimator is:
-
-| estimator | converges for | reason |
-|:----------|:--------------|:-------|
-| `:mdev` | α > -3 | second-difference kernel |
-| `:mhdev`, `:hdev`, `:mhtotdev` | α > -5 | third-difference kernel (MHTOTDEV's per-window quadratic detrend matches it, so the boundary extension keeps the range) |
-
-An unmodified basis additionally cannot carry both PM columns — they are the
-same column. Passing a basis that violates either rule is an error.
-
-# Weights
-
-- `:edf` (default) — `wₖ = νₖ / (2 σ̂⁴ₖ)`, the inverse of the χ² sampling
-  variance of a variance estimator with νₖ degrees of freedom. The per-τ noise
-  type that the EDF model needs comes from a first `:relative`-weighted pass of
-  this same fit, not from [`identify_noise`](@ref) — the routine is meant to
-  replace that classifier, so it does not lean on it. Points where the EDF model
-  returns a non-finite or non-positive ν fall back to the `:relative` weight,
-  and α ≤ -3 rows borrow the RWFM EDF (the shipped tables stop at α = -2).
-- `:relative` — `wₖ = 1 / σ̂⁴ₖ`, i.e. equal *fractional* weight per τ.
-- any `AbstractVector` of per-τ weights.
-
-# Caveats
-
-The analytic basis assumes each component is in its asymptotic power-law
-regime over the whole fitted range. Two things break that:
-
-- **Total estimators.** MHTOTDEV's reflected/extended windows bend the response
-  away from τ^μ as τ → T, which distorts the last octaves. An *empirical*
-  basis (ensemble-mean σ̂²(τ) of synthesized unit noises) avoids this; prefer
-  it, or `:mhdev`, when the long-τ octaves matter.
-- **Flicker PM under an unmodified estimator.** The `ln(2π f_h τ)` factor is
-  absorbed into the α=2 column, so an FPM record fitted with `:hdev` reports
-  white PM.
-- **Small τ.** Every estimator is still in transition toward its asymptotic
-  power law at m = 1–2 (the modified family runs 2–3× high there, settling by
-  m ≈ 8), so the default grid starts at m = 4. Fitting the dropped octaves
-  lets a pure WFM record buy off its m = 1 excess with a spurious WPM column.
-
-Amplitudes are variances at τ = τ₀; `sqrt.(result.amplitudes)` is the
-corresponding σ_y(τ₀) per component.
-
-# Examples
-
-```julia
-using SigmaTau, Random
-Random.seed!(0)
-
-p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14))
-r = noise_id_nnls(p)
-collect(zip(r.noise_types, r.amplitudes))   # amplitude per α
-r.dominant                                  # dominant type per τ
-```
-
-See also [`identify_noise`](@ref) for the per-τ lag-1 ACF classifier and
-[`noise_gen`](@ref) for the matching synthesizer.
-"""
-function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
-                       deviation::Symbol = :mhdev,
-                       alphas::AbstractVector{<:Integer} = _nnls_default_alphas(deviation),
-                       weights::Union{Symbol, AbstractVector{<:Real}} = :edf)
-    x  = _f64(data.x)
-    τ₀ = data.tau0
-    # Default grid: the estimator's own octave grid with the first two octaves
-    # dropped. Every estimator's response to a power law is still in transition
-    # at m = 1–2 (the modified family runs 2–3× above its asymptotic τ^μ there,
-    # converging by m ≈ 8), and those are exactly the points the EDF weighting
-    # trusts most — leaving them in lets a pure WFM record buy off its m = 1
-    # excess with a spurious WPM column. Pass `m_values` explicitly to override.
-    ms = isempty(m_values) ? filter(>=(NNLS_M_MIN), _default_m_values(length(x), deviation)) :
-                             m_values
-    isempty(ms) && throw(ArgumentError(
-        "noise_id_nnls: record of $(length(x)) samples is too short for the default " *
-        "m ≥ $NNLS_M_MIN grid; pass `m_values` explicitly"))
-
-    family = _nnls_family(deviation)
-    αs     = Int.(collect(alphas))
-    isempty(αs) && throw(ArgumentError("noise_id_nnls: `alphas` is empty"))
-    αmin   = _nnls_diff_order(deviation) == 2 ? -2 : -4
-    for α in αs
-        α <= 2 || throw(ArgumentError("noise_id_nnls: α = $α exceeds the α = 2 ceiling"))
-        α >= αmin || throw(ArgumentError(
-            "noise_id_nnls: $deviation does not converge at α = $α — its " *
-            "$(_nnls_diff_order(deviation))-difference kernel requires α ≥ $αmin. " *
-            "Use a Hadamard-family estimator (:hdev, :mhdev, :mhtotdev) for α < -2."))
-    end
-    μs = [_nnls_mu(family, α) for α in αs]
-    if length(unique(μs)) != length(μs)
-        throw(ArgumentError(
-            "noise_id_nnls: the requested basis is degenerate for $deviation — " *
-            "α = $αs map to response exponents μ = $μs. The unmodified family " *
-            "cannot separate WPM (α=2) from FPM (α=1); drop one of them."))
-    end
-
-    res  = _nnls_deviation(deviation, PhaseData(x, τ₀), ms)
-    keep = findall(k -> isfinite(res.dev[k]) && res.dev[k] > 0, eachindex(res.dev))
-    length(keep) >= length(αs) || throw(ArgumentError(
-        "noise_id_nnls: only $(length(keep)) usable τ points for a " *
-        "$(length(αs))-column basis; shorten `alphas` or lengthen the record"))
-
-    taus = res.tau[keep]
-    v    = res.dev[keep] .^ 2
-
-    # Weighted, column-equilibrated design matrix. The power-law columns span
-    # many orders of magnitude over a wide τ grid; equilibrating to unit 2-norm
-    # keeps the restricted QR solves well scaled, and the amplitudes are
-    # unscaled afterwards.
-    K = [(taus[k] / τ₀) ^ μs[j] for k in eachindex(taus), j in eachindex(μs)]
-    function solve(w)
-        sw = sqrt.(w)
-        A  = sw .* K
-        b  = sw .* v
-        d  = [sqrt(sum(abs2, @view A[:, j])) for j in eachindex(μs)]
-        all(dj -> isfinite(dj) && dj > 0, d) ||
-            throw(ArgumentError("noise_id_nnls: degenerate basis column (norms $d)"))
-        â, rss = _nnls_exact(A ./ d', b)
-        return â ./ d, rss
-    end
-
-    w = if weights isa AbstractVector
-        length(weights) == length(keep) || throw(DimensionMismatch(
-            "noise_id_nnls: `weights` has $(length(weights)) entries, expected $(length(keep))"))
-        Float64.(collect(weights))
-    elseif weights === :relative
-        1.0 ./ v .^ 2
-    elseif weights === :edf
-        # Self-consistent χ² weights: a first pass with equal fractional weight
-        # supplies the per-τ noise type, the EDF model turns that into ν, and the
-        # second pass uses wₖ = νₖ/(2 σ̂⁴ₖ). Deriving the types from the fit rather
-        # than from `identify_noise` keeps the whole routine independent of the
-        # classifier it is meant to replace.
-        a0, _ = solve(1.0 ./ v .^ 2)
-        syms  = [_nnls_edf_symbol(αs[argmax(vec(K[k, :]) .* a0)]) for k in eachindex(taus)]
-        ν     = calculate_edf(deviation, sqrt.(v), syms, ms[keep], taus,
-                              length(x), (length(x) - 1) * τ₀)
-        [(isfinite(ν[k]) && ν[k] > 0 ? ν[k] / 2 : 1.0) / v[k] ^ 2 for k in eachindex(v)]
-    else
-        throw(ArgumentError(
-            "noise_id_nnls: unknown weights $weights; expected :edf, :relative or a vector"))
-    end
-    all(wk -> isfinite(wk) && wk > 0, w) ||
-        throw(ArgumentError("noise_id_nnls: weights must be finite and positive"))
-
-    a, rss = solve(w)
-
-    contributions = K .* a'
-    dominant = [_nnls_symbol(αs[argmax(@view contributions[k, :])])
-                for k in eachindex(taus)]
-
-    return (; deviation, tau = taus, var = v, fit = vec(sum(contributions; dims=2)),
-            alphas = αs, noise_types = _nnls_symbol.(αs), amplitudes = a,
-            contributions, dominant, residual = rss, weights = w)
-end
-
-function noise_id_nnls(data::FrequencyData, m_values::Vector{Int} = Int[]; kwargs...)
-    return noise_id_nnls(_freq_to_phase(data), m_values; kwargs...)
 end

@@ -49,8 +49,8 @@ _nch_mk(devs; taus = Float64.(eachindex(devs)), kind = :adev,
         clocks = ncornered_hat(a12, a23, a13)
         @test length(clocks) == 3
         for (manual, got) in zip((s1, s2, s3), clocks)
-            @test isnan.(manual) == isnan.(got.dev)
-            @test isapprox(got.dev, manual; rtol = 1e-12, nans = true)
+            @test isnan.(manual) == isnan.(got.dev) &&
+                  isapprox(got.dev, manual; rtol = 1e-12, nans = true)
         end
 
         # Output conventions on the realistic fixture.

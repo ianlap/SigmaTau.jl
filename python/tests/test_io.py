@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -21,6 +23,18 @@ def test_read_phase_carries_source(tmp_path):
     pd = st.read_phase(str(csv_path), tau0=1.0, value_col=2)
     assert pd.source == str(csv_path)
     assert pd.x.size == 20
+
+
+FORMATS = Path(__file__).resolve().parents[2] / "test" / "fixtures" / "formats"
+
+
+def test_read_data_instrument_files():
+    tim = str(FORMATS / "timelab.tim")
+    assert st.detect_format(tim) == "timelab"
+    pd = st.read_data(tim)
+    assert isinstance(pd, PhaseData) and pd.tau0 == 0.1 and pd.x.size == 64
+    gps = st.read_data(str(FORMATS / "gpsdo.csv"), column="OSC offset (ppb)")
+    assert isinstance(gps, st.FrequencyData) and gps.tau0 == 1.0
 
 
 def test_detrend_changes_values_preserves_n_and_source(small_phase):

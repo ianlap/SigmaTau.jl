@@ -7,6 +7,7 @@ LocalPreferences.toml
 # Docs build output and Literate-generated tutorial pages
 docs/build/
 docs/src/tutorials/
+docs/src/explanation/crosscheck.md
 
 # Monte Carlo run outputs (the full-sweep JSON is tracked as provenance)
 tools/artifacts/*
@@ -52,3 +53,7 @@ app/desktop/dist/
 .ruff_cache/
 *.egg-info/
 tools/artifacts/cache/
+
+# Python
+__pycache__/
+*.pyc

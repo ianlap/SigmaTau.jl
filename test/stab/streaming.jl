@@ -27,30 +27,25 @@ using SigmaTau
     ms          = [1, 2, 5, 8, 33, 64]
     checkpoints = (2, 3, 7, 50, 132, 133, 257, 400, N)
     batch_fns   = Dict(:adev => adev, :mdev => mdev, :hdev => hdev, :mhdev => mhdev)
+    # NaN exactly where the batch gives NaN, equal to 1e-10 elsewhere.
+    same(a, b) = isequal(isnan.(a), isnan.(b)) &&
+                 all(isapprox(p, q; rtol=1e-10) for (p, q) in zip(a, b) if !isnan(q))
 
     @testset "sample-by-sample batch equivalence: $dev" for dev in
             (:adev, :mdev, :hdev, :mhdev)
         acc = StreamingStability(dev, tau0, ms)
+        bad = Int[]
         for k in 1:N
             push!(acc, x[k])
             k in checkpoints || continue
-            @test nsamples(acc) == k
             r  = snapshot(acc)
             rb = batch_fns[dev](PhaseData(x[1:k], tau0), ms; ci=false)
-            @test r.deviation_type == dev
-            @test r.tau == rb.tau
-            @test r.neff == rb.neff
-            for j in eachindex(ms)
-                if isnan(rb.dev[j])
-                    @test isnan(r.dev[j])
-                else
-                    @test isapprox(r.dev[j], rb.dev[j]; rtol=1e-10)
-                end
-            end
-            # snapshot() carries no CI machinery (on-demand EDF/CI is future
-            # work) — those fields are empty, exactly like ci=false batch.
-            @test isempty(r.ci) && isempty(r.edf) && isempty(r.noise_type)
+            ok = nsamples(acc) == k && r.deviation_type == dev && r.tau == rb.tau &&
+                 r.neff == rb.neff && same(r.dev, rb.dev) &&
+                 isempty(r.ci) && isempty(r.edf) && isempty(r.noise_type)   # no CI in snapshots
+            ok || push!(bad, k)
         end
+        @test isempty(bad)    # checkpoints where the snapshot and the batch differ
     end
 
     @testset "append! chunked feeding ≡ sample-by-sample: $dev" for dev in
@@ -78,14 +73,7 @@ using SigmaTau
         @test r_chunked.neff == r_single.neff
 
         # And both match the batch kernel on the full record.
-        rb = batch_fns[dev](PhaseData(x, tau0), ms; ci=false)
-        for j in eachindex(ms)
-            if isnan(rb.dev[j])
-                @test isnan(r_chunked.dev[j])
-            else
-                @test isapprox(r_chunked.dev[j], rb.dev[j]; rtol=1e-10)
-            end
-        end
+        @test same(r_chunked.dev, batch_fns[dev](PhaseData(x, tau0), ms; ci=false).dev)
     end
 
     @testset "do-nothing accumulator: defined empty/NaN behavior" begin
@@ -107,10 +95,8 @@ using SigmaTau
     end
 
     @testset "memory bound: ring buffer sized to the kernel's deepest lag" begin
-        for (dev, lag) in ((:adev, 2), (:mdev, 3), (:hdev, 3), (:mhdev, 4))
-            acc = StreamingStability(dev, 1.0, [1, 5, 64])
-            @test length(acc.buf) == lag * 64 + 1
-        end
+        @test [length(StreamingStability(d, 1.0, [1, 5, 64]).buf) for d in (:adev, :mdev, :hdev, :mhdev)] ==
+              [2, 3, 3, 4] .* 64 .+ 1
     end
 
     @testset "constructor validation" begin
