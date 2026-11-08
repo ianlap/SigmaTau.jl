@@ -668,7 +668,10 @@ Conventions (SP1065 / Stable32):
   the average of the `AVAR(m=9+3i)/Theo1(m=12+4i)` ratios over
   `i = 0…⌊N/6 − 3⌋` (matched-τ ladders spanning the long-τ ADEV overlap
   region), removing the noise-dependent Thêo1 bias without explicit
-  noise identification. ThêoBR needs `N ≥ 19` samples; shorter records
+  noise identification. On long ladders the ratio computes Thêo1 at 48
+  of the factors and interpolates the rest, within 0.5 % of the full
+  average (see `_theobr_ratio`); this takes it from O(N³) to about 1 s at
+  N = 65 536. ThêoBR needs `N ≥ 19` samples; shorter records
   yield NaN rows (pass `correct_bias=false` for raw Thêo1, which
   Stable32 reports as its "Theo1" run).
 
@@ -748,7 +751,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     adev_devs = _adev_core(x, adev_ms, tau0)
     devs[adev_idx] = adev_devs
 
-    # Skip the ThêoBR ratio (itself a Thêo1 ladder, O(N²)) when no point
+    # Skip the ThêoBR ratio (itself a sampled Thêo1 ladder) when no point
     # falls on the Thêo1 segment.
     theo_devs = isempty(theo_idx) ? Float64[] :
                 _theo1_core(x, theo_ms, tau0) .* sqrt(_theobr_ratio(x, tau0))

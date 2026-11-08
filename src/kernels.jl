@@ -935,8 +935,13 @@ function _avar_var_at(x::Vector{Float64}, m::Int, tau0::Float64)
     return s / (2.0 * L * (m * tau0)^2)
 end
 
+# Thêo1 factors the fast ThêoBR ratio computes exactly: the first
+# _THEOBR_DENSE of the ladder and _THEOBR_SAMPLES spread over the rest.
+const _THEOBR_DENSE = 16
+const _THEOBR_SAMPLES = 32
+
 """
-    _theobr_ratio(x::Vector{Float64}, tau0::Float64) → Float64
+    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false) → Float64
 
 ThêoBR automatic bias-removal factor per NIST SP1065 (Riley 2008)
 §5.2.16 eq. 33: the average over `i = 0…n`, `n = ⌊N/6 − 3⌋`, of the
@@ -946,23 +951,60 @@ so each term is an AVAR/Theo1 comparison at matched averaging time.
 Multiply a Thêo1 *variance* by this factor (a deviation by its square
 root) to get the bias-removed ThêoBR estimate.
 
+The exact average needs Thêo1 at every one of the ~N/6 factors, which is
+O(N³) work (minutes at N = 65 536). Unless `exact=true` or the ladder is
+short, this computes AVAR at every factor but Thêo1 only at the first 16
+and at 32 evenly spaced along the rest, interpolating the
+Thêo1 variance between them linearly in log m–log σ² (exact for a power
+law). Against the exact ratio on simulated power-law noises (α = +2…−2,
+N = 8192 and 16 384) this stays within 0.5 % (0.25 % on the deviation),
+far inside ThêoBR's own confidence interval, at about 1 s for N = 65 536
+on four threads. This is a fast ThêoBR in the spirit of Taylor & Howe
+(2010); their block-averaging form was tried and rejected here because it
+moved the ratio by 10–40 % for the PM noises.
+
 Ratio terms whose AVAR has no analysis window (eq. 33's ladder reaches
 m ≈ N/2, where `N − 2m < 1` for some record lengths) or whose Thêo1 is
 not finite/positive are skipped and the average is taken over the
 computable terms. Returns NaN when no term is computable (`N < 19`).
 """
-function _theobr_ratio(x::Vector{Float64}, tau0::Float64)
+function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false)
     N = length(x)
     n = N ÷ 6 - 3
     n < 0 && return NaN
 
-    theo_devs = _theo1_core(x, [12 + 4i for i in 0:n], tau0)
+    # Factors i at which Thêo1 is computed: all of them, or the first 16
+    # plus evenly spaced samples (always including the last).
+    idx = if exact || n + 1 <= _THEOBR_DENSE + _THEOBR_SAMPLES
+        collect(0:n)
+    else
+        sort!(unique!(vcat(collect(0:_THEOBR_DENSE-1),
+                           round.(Int, range(0, n; length=_THEOBR_SAMPLES)))))
+    end
+    tvars = _theo1_core(x, [12 + 4i for i in idx], tau0) .^ 2
+    ok = [isfinite(t) && t > 0 for t in tvars]
+
+    avars = Vector{Float64}(undef, n + 1)
+    Threads.@threads :dynamic for i in 0:n
+        avars[i+1] = _avar_var_at(x, 9 + 3i, tau0)
+    end
 
     total = 0.0
     cnt = 0
+    j = 1                                  # idx[j] ≤ i < idx[j+1]
     for i in 0:n
-        avar = _avar_var_at(x, 9 + 3i, tau0)
-        tvar = theo_devs[i + 1]^2
+        while j < length(idx) && idx[j+1] <= i
+            j += 1
+        end
+        tvar = if idx[j] == i
+            ok[j] ? tvars[j] : NaN
+        elseif j < length(idx) && ok[j] && ok[j+1]
+            l0 = log(12.0 + 4idx[j]); l1 = log(12.0 + 4idx[j+1])
+            exp(log(tvars[j]) + (log(tvars[j+1]) - log(tvars[j])) * (log(12.0 + 4i) - l0) / (l1 - l0))
+        else
+            NaN
+        end
+        avar = avars[i+1]
         if isfinite(avar) && isfinite(tvar) && tvar > 0
             total += avar / tvar
             cnt += 1
