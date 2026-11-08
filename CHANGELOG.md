@@ -18,7 +18,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   white FM.
 - `FrequencyData` input is integrated to `N + 1` phase points
   (`x = [0; cumsum(y)]·τ₀`) as in SP1065, Stable32 and allantools. Every
-  estimator on `FrequencyData` used to drop the first frequency sample.
+  estimator on `FrequencyData` used to drop the first frequency sample;
+  so did `sigmatau --freq`.
 - `mtotdev` / `ttotdev` at odd `m ≥ 3` remove the subsegment trend with
   Stable32's half averages (first and last ⌊3m/2⌋ points); values move by
   0.2–0.4 % at m = 3 and now match allantools.
