@@ -36,6 +36,7 @@ each call pays Julia's start-up.
 | `sigmatau check FILE` | read the record and summarise it: samples, span, gaps, 5σ outliers, linear drift per day |
 | `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
+| `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
 | `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
 | `sigmatau version` | the SigmaTau version |
 | `sigmatau help [COMMAND]` | usage, or one command's options (also `COMMAND --help`) |
@@ -86,6 +87,9 @@ The record (all four analysis commands):
 `--window N` (default: the largest power of two ≤ N/8, at least 16) and
 `--step N` (default half the window).
 
+`drift`: `--model linear|quadratic|log|diffusion` (default `linear`); see
+[`drift_fit`](@ref).
+
 Output (all commands): `--format csv|json` (default `csv`), `--out PATH`
 in place of stdout, `--series N` to include up to N record points in the
 JSON, and `--quiet` to drop the "wrote PATH" note.
@@ -103,7 +107,9 @@ undefined) `ci_lower`, `ci_upper`, `edf` and `noise_type` are blank; a value
 is never written as `NaN`. `check` writes
 `source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day`, `spectrum`
 writes `f,sy,sx` (without the DC bin), and `dynamic` writes `t,tau,dev`, one
-row per window and τ, with `t` the window centre in seconds.
+row per window and τ, with `t` the window centre in seconds. `drift` writes
+one row, `source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n`,
+with `c` blank for the linear model.
 
 ## JSON
 
@@ -150,6 +156,9 @@ numbers are `null`.
 - `sigmatau dynamic` adds `"dynamic": {"deviation", "window", "step", "t",
   "tau", "dev"}`, where `dev` has one row per window (centre time `t`, in
   seconds) and one column per τ.
+- `sigmatau drift` adds `"drift": {"model", "coef", "stderr",
+  "drift_per_day", "drift_per_day_err", "rms", "n"}`, and with `--series N`
+  a `series` of `t`, `y` and `fit`.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 

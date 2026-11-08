@@ -1,6 +1,8 @@
 // Data page: load a file (with the import dialog) or synthesize a record,
-// the record check, and the phase plot with outliers in orange.
+// the record check, and the phase plot with outliers in orange, or the
+// frequency with a fitted drift model.
 import { state, update, activeClock, multi, markStale } from "../state.js";
+import { drift as fetchDrift, driftKey } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
 import { thousands, duration, sci, escapeHtml as h } from "../format.js";
 
@@ -13,7 +15,16 @@ const DRIFTS = [
   ["quadratic", "Quadratic", "Remove a frequency offset and a linear frequency drift (a parabola in phase), as SP1065 asks before the total estimators"],
 ];
 
+// Frequency drift models fitted on the "Frequency drift" view.
+const MODELS = [
+  ["linear", "Linear", "y = a + b·t"],
+  ["quadratic", "Quadratic", "y = a + b·t + c·t²"],
+  ["log", "Log", "y = a·ln(1 + b·t) + c, the MIL-PRF-55310 aging model"],
+  ["diffusion", "Diffusion", "y = a + b·√(t + c)"],
+];
+
 let root, plotEl, Plotly, ctx, relayoutBound = false;
+const inflight = new Map();   // clock id → drift key being fitted
 
 export function mount(el, c) {
   root = el; ctx = c;
@@ -26,7 +37,11 @@ export function mount(el, c) {
       </div>
       <div class="data-top" data-ref="top"></div>
       <div class="card record-card">
-        <div class="card-row"><h2 data-ref="plot-title">Phase x(t)</h2><span class="range-bar" data-ref="range"></span></div>
+        <div class="card-row">
+          <div class="seg seg-sm" role="group" aria-label="Plot" data-ref="view">
+            <button type="button" data-view="phase">Phase</button><button type="button" data-view="drift">Frequency drift</button></div>
+          <h2 data-ref="plot-title">Phase x(t)</h2><span class="muted small" data-ref="plot-hint"></span><span class="range-bar" data-ref="range"></span></div>
+        <div class="drift-bar" data-ref="drift-bar" hidden></div>
         <div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div>
       </div>
     </div>`;
@@ -34,6 +49,8 @@ export function mount(el, c) {
   relayoutBound = false;
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
+  // The drift view's toolbar takes height from the plot; follow its size.
+  new ResizeObserver(() => { if (Plotly && plotEl.data) Plotly.Plots.resize(plotEl); }).observe(plotEl);
   loadPlotly().then((P) => { Plotly = P; refresh(); }).catch(() => {});
 }
 
@@ -122,10 +139,87 @@ export function refresh() {
   const focus = document.activeElement?.dataset?.field === "name";
   if (!focus) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
   else root.querySelector(".check-card").outerHTML = checkCard(c);
-  const title = c?.drift && c.drift !== "none" ? `Phase residual x(t), ${c.drift} drift removed` : "Phase x(t)";
+  const driftView = state.dataView === "drift";
+  root.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === state.dataView));
+  const removed = c?.drift && c.drift !== "none" ? `, ${c.drift} drift removed` : "";
+  const title = driftView ? `Frequency y(t)${removed}` : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
   root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
-  root.querySelector("[data-ref=range]").innerHTML = rangeBar(c);
-  drawRecord(c);
+  root.querySelector("[data-ref=plot-hint]").textContent = driftView ? "Fit in crimson · drag to zoom" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
+  root.querySelector("[data-ref=range]").innerHTML = driftView ? "" : rangeBar(c);
+  const bar = root.querySelector("[data-ref=drift-bar]");
+  bar.hidden = !driftView;
+  if (driftView) {
+    ensureFit(c);
+    bar.innerHTML = driftBar(c);
+    drawDrift(c);
+  } else {
+    drawRecord(c);
+  }
+}
+
+// Ask the core for the drift fit when it is missing or out of date.
+function ensureFit(c) {
+  if (!c?.record) return;
+  const key = driftKey(c);
+  if (c.driftFit?.key === key || inflight.get(c.id) === key) return;
+  inflight.set(c.id, key);
+  fetchDrift(c).then((out) => {
+    if (inflight.get(c.id) !== key) return;
+    inflight.delete(c.id);
+    update(() => { c.driftFit = { key, ...out.drift }; });
+  }).catch((err) => {
+    if (inflight.get(c.id) !== key) return;
+    inflight.delete(c.id);
+    update(() => { c.driftFit = { key, error: err.message }; });
+  });
+}
+
+const fitReady = (c) => c?.record && c.driftFit?.key === driftKey(c) && !c.driftFit.error;
+
+function driftBar(c) {
+  const f = fitReady(c) ? c.driftFit : null;
+  const err = c?.driftFit?.key === driftKey(c) ? c.driftFit.error : null;
+  const names = ["a", "b", "c"];
+  const coef = f ? f.coef.map((v, i) => `${names[i]} = ${sci(v, 4)} ± ${sci(f.stderr[i], 2)}`).join(" · ") : "";
+  const result = err ? `<span class="error">${h(err)}</span>`
+    : f ? `<span title="${h(coef)}"><b class="mono">${sci(f.drift_per_day, 3)} ± ${sci(f.drift_per_day_err, 2)} /day</b> at the end of the record
+        <span class="muted">· rms residual ${sci(f.rms, 3)}</span></span>`
+    : `<span class="muted">Fitting…</span>`;
+  return `<div class="seg seg-sm" role="group" aria-label="Drift model">${MODELS.map(([v, l, tip]) =>
+      `<button type="button" data-model="${v}" class="${v === state.driftModel ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</div>
+    <label class="check"><input type="checkbox" data-ref="resid" ${state.driftResid ? "checked" : ""}>Residuals</label>
+    <span class="drift-result small">${result}</span>`;
+}
+
+function drawDrift(c) {
+  const empty = root.querySelector("[data-ref=empty]");
+  const f = fitReady(c) ? c.driftFit : null;
+  const s = f?.series;
+  if (!s || !s.t.length) {
+    empty.hidden = false;
+    empty.innerHTML = `<p>${c?.record ? (c.driftFit?.error ? "No fit for this record." : "Fitting the drift model…") : "Open a file or drop one anywhere in the window."}</p>`;
+    plotEl.style.visibility = "hidden";
+    return;
+  }
+  empty.hidden = true;
+  plotEl.style.visibility = "visible";
+  if (!Plotly) return;
+  const resid = state.driftResid;
+  const y = resid ? s.y.map((v, i) => (Number.isFinite(v) ? v - s.fit[i] : null)) : s.y.map((v) => (Number.isFinite(v) ? v : null));
+  const traces = [{
+    x: s.t, y, mode: "lines", name: resid ? "residual" : "frequency",
+    line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.2 },
+    hovertemplate: `t = %{x:.6g} s<br>${resid ? "y − fit" : "y"} = %{y:.5g}<extra></extra>`,
+  }];
+  if (!resid) {
+    traces.push({
+      x: s.t, y: s.fit, mode: "lines", name: `${state.driftModel} fit`,
+      line: { color: css("--accent"), width: 2 },
+      hovertemplate: `t = %{x:.6g} s<br>fit = %{y:.5g}<extra></extra>`,
+    });
+  }
+  const yaxis = { ...linAxis(resid ? "y − fit" : "Fractional frequency y"), exponentformat: "e" };
+  Plotly.react(plotEl, traces, { ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis("Time t (s)"), yaxis, showlegend: false, uirevision: `${c.id}-drift` }, CONFIG);
 }
 
 // The analysis range: drag across the plot in "Select range" mode. The check
@@ -133,7 +227,7 @@ export function refresh() {
 function rangeBar(c) {
   if (!c?.record) return "";
   const r = c.range;
-  return `${r ? `<span class="small">Analysing <span class="mono">${duration(r[0])} – ${duration(r[1])}</span> · <button class="link-btn" data-act="clear-range">whole record</button></span>` : `<span class="muted small">Outliers in orange</span>`}
+  return `${r ? `<span class="small">Analysing <span class="mono">${duration(r[0])} – ${duration(r[1])}</span> · <button class="link-btn" data-act="clear-range">whole record</button></span>` : ""}
     <span class="seg seg-sm" role="group" aria-label="Drag on the plot to">${[["zoom", "Zoom", "Drag to zoom"], ["range", "Select range", "Drag across the plot to analyse only that part of the record"]].map(([v, l, tip]) =>
       `<button type="button" data-drag="${v}" class="${state.dataDrag === v ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</span>`;
 }
@@ -183,7 +277,7 @@ function drawRecord(c) {
     plotEl.on("plotly_relayout", (ev) => {
       const k = activeClock();
       const a = ev["xaxis.range[0]"], b = ev["xaxis.range[1]"];
-      if (state.dataDrag !== "range" || !k?.record || a === undefined || b === undefined) return;
+      if (state.dataDrag !== "range" || state.dataView === "drift" || !k?.record || a === undefined || b === undefined) return;
       const end = (k.record.n - 1) * k.record.tau0;
       const t0 = Math.max(0, Math.min(a, b)), t1 = Math.min(end, Math.max(a, b));
       const snap = (t) => Math.round(t / k.record.tau0) * k.record.tau0;
@@ -195,6 +289,10 @@ function drawRecord(c) {
 }
 
 function onClick(e) {
+  const v = e.target.closest("[data-view]")?.dataset.view;
+  if (v) { update((s) => { s.dataView = v; }); return; }
+  const md = e.target.closest("[data-model]")?.dataset.model;
+  if (md) { update((s) => { s.driftModel = md; }); return; }
   const dr = e.target.closest("[data-drift]")?.dataset.drift;
   if (dr) { const c = activeClock(); if (c && c.drift !== dr) ctx.setRecord(c, { drift: dr }); return; }
   const dg = e.target.closest("[data-drag]")?.dataset.drag;
@@ -218,6 +316,7 @@ function onClick(e) {
 }
 
 function onChange(e) {
+  if (e.target.dataset.ref === "resid") { update((s) => { s.driftResid = e.target.checked; }); return; }
   const f = e.target.dataset.field;
   const c = activeClock();
   if (!c || !f) return;
