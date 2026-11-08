@@ -180,20 +180,22 @@ end
 
 function _mtie_window_max(x::Vector{Float64}, measured::Vector{Bool}, lo::Int, hi::Int, m::Int)
     best, count = 0.0, 0
-    hi - lo < 1 && return best, count
-    maxq = Int[]; minq = Int[]
-    nmeas = 0
+    hi - lo < m && return best, count
+    # Monotone deques of indices, popped from the front by moving a head.
+    maxq = Vector{Int}(undef, hi - lo + 1); minq = similar(maxq)
+    h1 = h2 = 1; t1 = t2 = 0
     for j in lo:hi
         # Window [j − m, j]; drop what has left it.
-        while !isempty(maxq) && first(maxq) < j - m; popfirst!(maxq); end
-        while !isempty(minq) && first(minq) < j - m; popfirst!(minq); end
+        while h1 <= t1 && maxq[h1] < j - m; h1 += 1; end
+        while h2 <= t2 && minq[h2] < j - m; h2 += 1; end
         if measured[j]
-            while !isempty(maxq) && x[last(maxq)] <= x[j]; pop!(maxq); end
-            push!(maxq, j)
-            while !isempty(minq) && x[last(minq)] >= x[j]; pop!(minq); end
-            push!(minq, j)
+            while h1 <= t1 && x[maxq[t1]] <= x[j]; t1 -= 1; end
+            maxq[t1 += 1] = j
+            while h2 <= t2 && x[minq[t2]] >= x[j]; t2 -= 1; end
+            minq[t2 += 1] = j
         end
-        isempty(maxq) || (best = max(best, x[first(maxq)] - x[first(minq)]))
+        # Only full windows count; a partial one lies inside the first full one.
+        j - lo >= m && h1 <= t1 && (best = max(best, x[maxq[h1]] - x[minq[h2]]))
     end
     # Windows [i, i + m] inside lo..hi with at least two measured samples.
     cm = cumsum([measured[j] for j in lo:hi])
