@@ -10,7 +10,7 @@ import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
-import { openFile, saveFile } from "./platform.js";
+import { openFile, saveFile, readFile } from "./platform.js";
 import { buildReport } from "./report.js";
 import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly } from "./plot.js";
@@ -84,7 +84,7 @@ async function importFile(file, clock, prev) {
         c.name = settings.value_cols.length > 1 ? colName : baseName(file.name);
       }
       Object.assign(c, {
-        source: { type: "file", name: file.name, content: file.text }, group,
+        source: { type: "file", name: file.name, content: file.text, sha256: file.sha256 ?? "" }, group,
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo,
@@ -176,12 +176,15 @@ async function openSession(file) {
   let doc, clocks;
   try { doc = parseSession(file.text); } catch (err) { return ctx.status("error", `${file.name}: ${err.message}`); }
   for (const c of state.clocks) controllers.get(c.id)?.abort();
-  update((s) => { clocks = applySession(s, doc); markRecordStale(s); });
+  runCtl?.abort();     // a run in flight belongs to the clocks being replaced
+  update((s) => { clocks = applySession(s, doc); markRecordStale(s); s.run.state = "idle"; });
   nextGroup = Math.max(nextGroup, ...clocks.map((c) => (c.group ?? 0) + 1));
   go("stability");
   await Promise.all(clocks.map(loadClock));
   await run();
-  ctx.status("good", `Opened the session ${file.name}.`);
+  const failed = clocks.find((c) => c.error);
+  if (failed) ctx.status("error", `Opened ${file.name}, but ${failed.name} failed: ${failed.error}`);
+  else ctx.status("good", `Opened the session ${file.name}.`);
 }
 
 function selectClock(id) {
@@ -352,7 +355,7 @@ document.addEventListener("drop", async (e) => {
   document.body.classList.remove("dragging");
   const f = e.dataTransfer.files[0];
   if (!f) return;
-  const file = { name: f.name, text: await f.text() };
+  const file = await readFile(f);
   await (isSession(file.text) ? openSession(file) : importFile(file, activeClock()));
 });
 

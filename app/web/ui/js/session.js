@@ -15,7 +15,7 @@ export function sessionText() {
   const sources = [];
   const sourceIndex = (s) => {
     let k = sources.findIndex((o) => o.name === s.name && o.content === s.content);
-    if (k < 0) k = sources.push({ name: s.name, content: s.content }) - 1;
+    if (k < 0) k = sources.push({ name: s.name, content: s.content, sha256: s.sha256 ?? "" }) - 1;
     return k;
   };
   const clocks = state.clocks.map((c) => {

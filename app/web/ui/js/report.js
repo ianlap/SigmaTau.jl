@@ -50,7 +50,8 @@ async function recordRows(clocks) {
   const rows = [];
   for (const c of clocks) {
     const r = c.record, k = r.check;
-    const hash = c.source.type === "file" ? await sha256(c.source.content) : "";
+    // The file's own bytes when it was opened here; a session keeps that hash.
+    const hash = c.source.type === "file" ? c.source.sha256 || await sha256(c.source.content) : "";
     const prep = [`drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, c.fillgaps ? "gaps filled" : "", c.remove_outliers ? "outliers removed" : "",
       ref && ref !== c && ref.group === c.group ? `minus ${h(ref.name)}` : ""].filter(Boolean).join(", ");
     rows.push(`<tr><th>${h(c.name)}</th><td>${sourceText(c)}${hash ? `<br><code class="hash">SHA-256 ${hash}</code>` : ""}</td>
@@ -90,6 +91,8 @@ const STYLE = `
 export async function buildReport() {
   const clocks = visibleClocks().filter((c) => c.result && c.record);
   if (!clocks.length) throw new Error("Run the analysis first; there are no results to report.");
+  // The report states the current settings, so the results must come from them.
+  if (state.run.stale || state.run.state === "running") throw new Error("The results are out of date; run the analysis (F5), then export the report.");
   const doc = clocks[0].result.doc;
   const when = new Date();
   const conf = state.ci ? `${num(state.confidence * 100, 3)} %` : "off";

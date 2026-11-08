@@ -337,6 +337,8 @@ mktempdir() do dir
         @test occursin(String(take!(io)), r.out)
         @test occursin("<pre>sigmatau report " * pf, r.out)
         @test run_cli("report", pf, "--format", "csv").code == 1
+        sp = joinpath(dir, "it's here.csv"); cp(pf, sp; force=true)
+        @test occursin("<pre>sigmatau report '" * replace(dirname(sp), "'" => "") * "/it'\\''s here.csv'", run_cli("report", sp).out)
     end
 
     @testset "synthetic record" begin

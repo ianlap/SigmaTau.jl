@@ -11,6 +11,12 @@ function html_escape(io::IO, s::AbstractString)
     end
 end
 
+# A POSIX shell word for `a`: as is when it is plainly safe, else single-quoted.
+function shell_quote(a::String)
+    !isempty(a) && all(c -> isletter(c) || isdigit(c) || c in "-_.,:/=+@%", a) && return a
+    return "'" * replace(a, "'" => "'\\''") * "'"
+end
+
 # x to `d` significant figures in e-notation (1.234e-12), "–" if not finite.
 function sci(io::IO, x::Float64, d::Int=4)
     isfinite(x) || return print(io, "–")
@@ -190,7 +196,7 @@ function cmd_report(io::IO, o::Options, data::PhaseData, args::Vector{String})
     print(io, "<h2>Reproduce</h2><pre>sigmatau")
     for i in eachindex(args)
         (args[i] == "--out" || (i > 1 && args[i-1] == "--out")) && continue
-        print(io, ' '); html_escape(io, args[i])
+        print(io, ' '); html_escape(io, shell_quote(args[i]))
     end
     print(io, "</pre>\n</body></html>\n")
     return nothing
