@@ -11,7 +11,7 @@ SigmaTau is checked against two independent references:
    precision.
 
 Estimators that neither reference implements (`mhdev`, `htdev`, `mhtotdev`,
-`theoh`, `nch`, the dynamic and streaming variants) are tested against
+`theoh`, `ncornered_hat`, the dynamic and streaming variants) are tested against
 inlined textbook kernels and algebraic identities in `test/stab/`.
 
 Where the references disagree with each other, or with SigmaTau's default
@@ -77,8 +77,8 @@ Three per-estimator facts behind those rows:
 At τ = 256 s (every estimator) Stable32 assigns α = +2 where SigmaTau's
 default identification assigns α = 0. This is a convention difference in
 the lag-1 ACF identifier: SigmaTau quadratically detrends each decimated
-subseries before classifying (`detrend=true` default); Stable32 does not.
-`identify_noise(x, m_values; detrend=false)` reproduces Stable32's α at
+subseries before classifying (`remove_drift=true` default); Stable32 does not.
+`identify_noise(x, m_values; remove_drift=false)` reproduces Stable32's α at
 all 12 τ on this fixture. Because the EDF (and, for the total family,
 the bias factor) depend on α, the flipped row carries different CI
 bounds (and, for HTOTDEV, a 0.25 % σ difference). The rows are marked ¹

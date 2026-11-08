@@ -8,7 +8,7 @@ using StaticArrays
 const NEFF_RELIABLE = 30
 
 """
-    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, detrend::Bool=true) → Vector{Symbol}
+    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true) → Vector{Symbol}
     identify_noise(data::PhaseData, m_values; kwargs...) → Vector{Symbol}
     identify_noise(data::FrequencyData, m_values; kwargs...) → Vector{Symbol}
 
@@ -32,7 +32,7 @@ The full record always passes through a 5σ outlier filter before the
 per-m loop; that step is unconditional and unrelated to the polynomial
 detrend below.
 
-## `detrend`
+## `remove_drift`
 
 When `true` (default), each decimated-by-m subseries is quadratically
 detrended before the lag-1 ACF / B1 ratio is computed. Allantools'
@@ -43,9 +43,14 @@ phase term) from the slow content of each averaging window.
 
 When `false`, the per-m polynomial fit is skipped. This matches
 Stable32's noise-ID convention; use it when you need α values that line
-up with a Stable32-generated reference fixture point-for-point.
+up with a Stable32-generated reference fixture point-for-point. (Before
+0.6 this keyword was called `detrend`; `detrend=false` still works, with a
+deprecation warning.)
 """
-function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, detrend::Bool=true)
+function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
+                        remove_drift::Bool=true, detrend::Bool=true)
+    detrend || Base.depwarn("identify_noise: `detrend` is deprecated, use `remove_drift`", :identify_noise)
+    detrend = remove_drift && detrend
     x_clean = _preprocess(x)
     N = length(x_clean)
     alphas = Vector{Int}(undef, length(m_values))

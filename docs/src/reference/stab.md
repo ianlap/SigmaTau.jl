@@ -74,8 +74,12 @@ nsamples
 ```@docs
 TauMode
 tau_values
+tau_mode
 DEFAULT_DEVIATIONS
 stability
+estimators
+deviation
+summarize
 ```
 
 The exported [`TauMode`](@ref) instances are `AllTaus`, `Octave`,
@@ -84,7 +88,7 @@ The exported [`TauMode`](@ref) instances are `AllTaus`, `Octave`,
 ## N-cornered hat
 
 ```@docs
-nch
+ncornered_hat
 ```
 
 ## Noise identification
@@ -97,9 +101,9 @@ noise_gen
 ## Spectral densities
 
 ```@docs
-Sy
-Sx
-L
+psd_y
+psd_x
+ssb_phase_noise
 ```
 
 ## EDF, bias, and confidence intervals
@@ -121,8 +125,5 @@ fillgaps
 find_outliers
 remove_outliers
 save
-save_result
-load_result
-save_suite
-load_suite
+load
 ```

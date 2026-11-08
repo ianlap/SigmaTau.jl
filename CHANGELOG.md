@@ -5,18 +5,34 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+### Deprecated
 
-- `sigmatau`, a compiled command line in `cli/` (package `SigmaTauCLI`, built
-  with `juliac --trim=safe`): `analyze`, `check`, `spectrum`, `dynamic`,
-  `completion` and `version`, CSV or versioned JSON output
-  (`schema_version: 1`), documented exit codes and shell completion for bash,
-  zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
-  (`app/web/cli`), and the explorer now runs it with `--format json`. See
-  `docs/src/cli.md`.
+Renames for 0.6. The old names keep working, with a deprecation warning,
+until 0.7.
+
+- `psd_y`, `psd_x`, `ssb_phase_noise` replace `Sy`, `Sx`, `L`, and their
+  `taper=` keyword replaces `window=` (which now only means the dynamic
+  deviations' window). `SpectralResult.window` is now `.taper`; `r.window`
+  still reads it.
+- `ncornered_hat` replaces `nch`.
+- `save(path, x)` writes records, results and suites, and `load(path)` reads
+  any of them back (records through `read_phase` / `read_frequency`).
+  `save_result`, `save_suite`, `load_result` and `load_suite` are deprecated.
+- `stability(data; m=...)` replaces `taus=`, the same name the estimators use.
+- `identify_noise(...; remove_drift=false)` replaces `detrend=false`, matching
+  `mhtotdev`'s keyword and freeing the name of the `detrend` function.
 
 ### Changed
 
+- The spectra's default `nperseg` (`psd_y`, `psd_x`, `ssb_phase_noise`) is now the largest power of two up to
+  `N ÷ 4` (at least 16) instead of `min(N, 256)`, matching the explorer. Long
+  records get finer low-frequency resolution by default; pass `nperseg=256`
+  for the old spectra.
+- `dadev` / `dhdev` `window` is now optional: the largest power of two up to
+  `N ÷ 8` (at least 16), with `step = window ÷ 2` as before.
+- `stability` takes `correct_bias` and `remove_drift` (for `mhtotdev`) as its only extra keywords; any other
+  keyword is now a `MethodError` instead of being passed to some estimators
+  and silently dropped for the rest.
 - `stability` passes `confidence` through to `mtie` and `tierms` like the
   other estimators (both still report no intervals), and asking it for
   `:dadev` / `:dhdev` now says to call those functions directly instead of
@@ -64,6 +80,30 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `sigmatau`, a compiled command line in `cli/` (package `SigmaTauCLI`, built
+  with `juliac --trim=safe`): `analyze`, `check`, `spectrum`, `dynamic`,
+  `completion` and `version`, CSV or versioned JSON output
+  (`schema_version: 1`), documented exit codes and shell completion for bash,
+  zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
+  (`app/web/cli`), and the explorer now runs it with `--format json`. See
+  `docs/src/cli.md`.
+- `StabilityResult` carries the record's `tau0`, sample count `n` and the
+  interval `confidence` (`NaN` without intervals), and result files store
+  them. Files from earlier versions load with `NaN` / 0. The seven-argument
+  constructor still works and leaves them unknown.
+- `estimators()`: the registry of the 16 estimators (name, label, family,
+  σ_y or σ_x axis, whether `correct_bias` applies, one-line description), for
+  menus, command lines and docs.
+- `deviation(name, data, m=Octave; ci, confidence, correct_bias)`: run an
+  estimator chosen at run time; written as plain branches so it compiles under
+  `juliac --trim`. `stability` now runs through it and accepts names as
+  strings too.
+- `tau_mode("half-octave")` and friends: parse a τ-grid name into a `TauMode`,
+  ignoring case and separators.
+- `summarize(data)`: samples, τ₀, span, `NaN` gaps, 5σ outlier indices and
+  linear frequency drift per day, as the explorer's Data page shows them.
+- `dadev(pd)` / `dhdev(pd)` work with no grid and no window: the octave grid
+  and a default window (see below).
 - Every estimator (and `dadev` / `dhdev`) accepts any integer vector of
   averaging factors: `adev(pd, 1:10)`, `adev(pd, 2 .^ (0:6))`, `Int32` or view
   vectors work like a `Vector{Int}`. `stability(pd; taus=1:10)` already did.

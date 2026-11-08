@@ -123,7 +123,17 @@ struct StabilityResult
     edf::Vector{Float64}
     "Number of analysis windows averaged at each τ (0 where the kernel returns NaN)."
     neff::Vector{Int}
+    "Sample interval τ₀ of the record, in seconds (`NaN` if unknown)."
+    tau0::Float64
+    "Number of samples in the record (0 if unknown)."
+    n::Int
+    "Confidence level of `ci` (`NaN` when no intervals were computed)."
+    confidence::Float64
 end
+
+# Results built without the record metadata (older files, hand-made results).
+StabilityResult(deviation_type::Symbol, tau, dev, noise_type, ci, edf, neff) =
+    StabilityResult(deviation_type, tau, dev, noise_type, ci, edf, neff, NaN, 0, NaN)
 
 # Element type of `StabilityResult.ci`.
 const _CIBound = @NamedTuple{lo::Float64, hi::Float64}
@@ -256,7 +266,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", s::StabilitySuite)
     ci = isnan(s.confidence) ? "no CI" : "CI @ $(s.confidence)"
     print(io, "StabilitySuite: ", length(s), " deviation(s), ", s.data_kind,
-              " data, N=", s.n, ", τ₀=", _show4g(s.tau0), " s, taus=", s.tau_mode, ", ", ci)
+              " data, N=", s.n, ", τ₀=", _show4g(s.tau0), " s, m=", s.tau_mode, ", ", ci)
     for r in s.results
         n = length(r.tau)
         rng = n == 0 ? "" : "  τ∈[$(_show4g(r.tau[1])), $(_show4g(r.tau[end]))] s"
@@ -268,7 +278,8 @@ end
 """
     SpectralResult
 
-Unified return type for every spectral-density estimate (`Sy`, `Sx`, `L`).
+Unified return type for every spectral-density estimate ([`psd_y`](@ref),
+[`psd_x`](@ref), [`ssb_phase_noise`](@ref)).
 
 Mirrors [`StabilityResult`](@ref): a flat, non-parametric record carrying the
 one-sided frequency grid, the estimated spectrum, and the Welch parameters that
@@ -277,7 +288,7 @@ produced it, so a saved or plotted result is self-describing.
 $(TYPEDFIELDS)
 """
 struct SpectralResult
-    "Which estimate produced this result: `:Sy`, `:Sx`, or `:L`."
+    "Which estimate produced this result: `:Sy` (S_y(f)), `:Sx` (S_x(f)) or `:L` (ℒ(f))."
     spectral_type::Symbol
     "One-sided frequency grid `f` in Hz."
     freq::Vector{Float64}
@@ -289,8 +300,14 @@ struct SpectralResult
     nperseg::Int
     "Welch segment overlap (samples)."
     noverlap::Int
-    "Window applied to each segment: `:hann`, `:hamming`, or `:rectangular`."
-    window::Symbol
+    "Taper applied to each segment: `:hann`, `:hamming`, or `:rectangular`."
+    taper::Symbol
+end
+
+# `r.window` was the field's name before 0.6.
+function Base.getproperty(r::SpectralResult, s::Symbol)
+    s === :window && return getfield(r, :taper)
+    return getfield(r, s)
 end
 
 function Base.show(io::IO, r::SpectralResult)

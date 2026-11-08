@@ -1,4 +1,4 @@
-# test/stab/spectral.jl — Sy / Sx / L spectral-density coverage.
+# test/stab/spectral.jl — psd_y / psd_x / ssb_phase_noise coverage.
 #
 # Validates the Welch core's variance normalization, the S_x ↔ S_y conversion
 # identity, ℒ(f) carrier scaling, and power-law slope recovery via noise_gen.
@@ -17,7 +17,7 @@ function _loglog_slope(freq, psd, idx)
     (n * sum(lf .* ls) - sum(lf) * sum(ls)) / (n * sum(lf .^ 2) - sum(lf)^2)
 end
 
-@testset "Spectral (Sy / Sx / L)" begin
+@testset "Spectral (psd_y / psd_x / ssb_phase_noise)" begin
 
     @testset "Welch window helper" begin
         @test _window(:rectangular, 8) == ones(8)
@@ -51,7 +51,7 @@ end
         Random.seed!(7)
         for α in (2, 0, -2)
             p = noise_gen(PhaseData, 16384, 1.0; h = Dict(α => 1.0))
-            r = Sy(p; nperseg=2048)
+            r = psd_y(p; nperseg=2048)
             @test r.spectral_type === :Sy
             @test r.units === :per_Hz
             idx = filter(k -> r.freq[k] > 0 && r.psd[k] > 0, eachindex(r.freq))[2:end-3]
@@ -62,8 +62,8 @@ end
     @testset "S_x ↔ S_y identity at low frequency" begin
         Random.seed!(11)
         p  = noise_gen(PhaseData, 16384, 1.0; sigma1 = Dict(0 => 1e-12))
-        ry = Sy(p; nperseg=2048)
-        rx = Sx(p; nperseg=2048)
+        ry = psd_y(p; nperseg=2048)
+        rx = psd_x(p; nperseg=2048)
         @test rx.units === :s2_per_Hz
         @test ry.freq == rx.freq
         lo   = 2:50
@@ -75,15 +75,15 @@ end
         Random.seed!(13)
         p  = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(2 => 1e-11))
         fc = 1e7
-        rx = Sx(p; nperseg=1024)
-        rl = L(p; f_carrier=fc, nperseg=1024)
+        rx = psd_x(p; nperseg=1024)
+        rl = ssb_phase_noise(p; f_carrier=fc, nperseg=1024)
         @test rl.spectral_type === :L
         @test rl.units === :dBc_per_Hz
         @test length(rl.freq) == length(rx.freq) - 1        # DC dropped
         @test rl.freq == rx.freq[2:end]
         expected = 10 .* log10.(0.5 .* (2π * fc)^2 .* rx.psd[2:end])
         @test rl.psd ≈ expected
-        @test_throws ArgumentError L(p; f_carrier=0.0)
+        @test_throws ArgumentError ssb_phase_noise(p; f_carrier=0.0)
     end
 
     @testset "PhaseData / FrequencyData entry points agree" begin
@@ -91,23 +91,28 @@ end
         y  = randn(8192) .* 1e-10
         fd = FrequencyData(y, 1.0)
         pd = _freq_to_phase(fd)
-        # Sy on the frequency record vs the integrated-then-differenced phase
+        # psd_y on the frequency record vs the integrated-then-differenced phase
         # record differ only by the dropped first sample; spectra should match.
-        a = Sy(fd; nperseg=1024)
-        b = Sy(pd; nperseg=1024)
+        a = psd_y(fd; nperseg=1024)
+        b = psd_y(pd; nperseg=1024)
         @test a.units === b.units === :per_Hz
         @test isapprox(median(a.psd[2:end] ./ b.psd[2:end]), 1.0; rtol=0.1)
-        # Sx via either input is the phase spectrum.
-        @test Sx(pd; nperseg=1024).units === :s2_per_Hz
-        @test Sx(fd; nperseg=1024).spectral_type === :Sx
+        # psd_x via either input is the phase spectrum.
+        @test psd_x(pd; nperseg=1024).units === :s2_per_Hz
+        @test psd_x(fd; nperseg=1024).spectral_type === :Sx
     end
 
     @testset "default Welch parameters" begin
         Random.seed!(19)
         p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(0 => 1e-12))
-        r = Sy(p)
-        @test r.nperseg == 256                  # min(N, 256)
-        @test r.noverlap == 128                 # 50 % overlap
+        r = psd_y(p)
+        # psd_y differences phase to N − 1 samples: 4095 ÷ 4 = 1023 → 512.
+        @test r.nperseg == 512                  # largest 2^k ≤ N ÷ 4
+        @test r.noverlap == 256                 # 50 % overlap
         @test r.window === :hann
+        @test psd_x(p).nperseg == 1024
+        @test SigmaTau._default_nperseg(4095) == 512
+        @test SigmaTau._default_nperseg(40) == 16
+        @test SigmaTau._default_nperseg(10) == 10
     end
 end
