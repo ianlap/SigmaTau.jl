@@ -1,4 +1,4 @@
-# The four analysis commands. Each computes first, then writes CSV or JSON.
+# The analysis commands. Each computes first, then writes CSV or JSON.
 
 source_name(o::Options, data::PhaseData) = o.synth > 0 ? "synthetic" : o.input
 
@@ -27,6 +27,7 @@ function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     c == "spectrum" && return cmd_spectrum(io, o, data, t_start)
     c == "dynamic"  && return cmd_dynamic(io, o, data, t_start)
     c == "cross"    && return cmd_cross(io, o, data, t_start)
+    c == "drift"    && return cmd_drift(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
 
@@ -227,6 +228,52 @@ function cmd_cross(io::IO, o::Options, a::PhaseData, t_start::UInt64)
     json_key(io, "floor"); json_array(io, view(s.floor, 2:length(s.freq)))
     json_key(io, "sy_a"); json_array(io, view(s.psd_a, 2:length(s.freq)))
     json_key(io, "sy_b"); json_array(io, view(s.psd_b, 2:length(s.freq)))
+    print(io, '}')
+    return elapsed(io, t_start)
+end
+
+# ── drift ─────────────────────────────────────────────────────────────────
+
+const CSV_DRIFT = "source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
+
+function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+    need_samples(data, 3, "a drift fit")   # drift_fit checks each model's own minimum
+    f = drift_fit(data; model=Symbol(o.model))
+    src = source_name(o, data)
+    n = count(isfinite, f.y)
+    if o.format != "json"
+        print(io, CSV_DRIFT); print(io, '\n')
+        csv_field(io, src); print(io, ','); print(io, quantity(o)); print(io, ','); print(io, o.model)
+        for k in 1:3
+            print(io, ','); k <= length(f.coef) && csv_number(io, f.coef[k])
+            print(io, ','); k <= length(f.coef) && csv_number(io, f.stderr[k])
+        end
+        print(io, ','); csv_number(io, f.rate); print(io, ','); csv_number(io, f.rate_stderr)
+        print(io, ','); csv_number(io, f.rms); print(io, ','); print(io, n); print(io, '\n')
+        return nothing
+    end
+    json_head(io, o, src)
+    json_key(io, "record"); json_record(io, o, data)
+    json_key(io, "analysis"); print(io, '{')
+    json_key(io, "quantity", true); json_string(io, quantity(o))
+    json_key(io, "model"); json_string(io, o.model)
+    json_preprocessing(io, o); print(io, '}')
+    json_key(io, "drift"); print(io, '{')
+    json_key(io, "model", true); json_string(io, o.model)
+    json_key(io, "coef"); json_array(io, f.coef)
+    json_key(io, "stderr"); json_array(io, f.stderr)
+    json_key(io, "drift_per_day"); json_number(io, f.rate)
+    json_key(io, "drift_per_day_err"); json_number(io, f.rate_stderr)
+    json_key(io, "rms"); json_number(io, f.rms)
+    json_key(io, "n"); print(io, n)
+    if o.series > 0
+        idx = collect(1:max(1, cld(length(f.t), o.series)):length(f.t))
+        json_key(io, "series"); print(io, '{')
+        json_key(io, "t", true); json_array(io, f.t[idx])
+        json_key(io, "y"); json_array(io, f.y[idx])
+        json_key(io, "fit"); json_array(io, f.fit[idx])
+        print(io, '}')
+    end
     print(io, '}')
     return elapsed(io, t_start)
 end

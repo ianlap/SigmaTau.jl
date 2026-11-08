@@ -37,6 +37,7 @@ include("grids.jl")
 include("spectral.jl")
 include("gaps.jl")
 include("cross.jl")
+include("drift.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
@@ -65,7 +66,7 @@ export tau_values
 # The deviation kernels (`_*_core`) are not exported. They are reachable as
 # `SigmaTau._adev_core` etc.; the leading underscore marks them unsupported.
 
-export identify_noise, calculate_edf, confidence_intervals, bias_correction
+export identify_noise, noise_id_nnls, calculate_edf, confidence_intervals, bias_correction
 
 export adev, mdev, tdev
 export hdev, mhdev, htdev
@@ -73,6 +74,7 @@ export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
 export dadev, dhdev
 export ncornered_hat
+export drift_fit, DriftFit
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize

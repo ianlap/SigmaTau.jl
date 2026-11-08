@@ -10,9 +10,11 @@ the FCS 2001 paper). MHTOTDEV has none, so SigmaTau
 This page documents the methodology; it is the reproducible basis for the
 shipped `_coeff_mhtot` EDF coefficients and the `bias_correction(:mhtot, …)`
 table. The harness is [`tools/mc_mhtotdev.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/mc_mhtotdev.jl).
-The estimator under test is the shipped `mhtotdev` pipeline, including its
-default global least-squares drift removal (`remove_drift=true`), so the coefficients calibrate
-exactly the statistic users compute.
+The estimator under test is the shipped `mhtotdev` kernel, which removes each
+window's least-squares quadratic before the reflection, so the coefficients
+calibrate exactly the statistic users compute. That per-window detrend makes
+MHTOTDEV immune to linear frequency drift on its own and lets it converge for
+power laws down to α = −4, like HDEV and MHDEV.
 
 The procedure follows the NIST total-variance literature: Howe, Beard,
 Greenhall, Vernotte & Riley, *A Total Estimator of the Hadamard Function Used
@@ -126,33 +128,29 @@ result). The authoritative full-sweep JSON is tracked at
 ## Result
 
 Full sweep (N = 1024 … 32768, R = 3000, both bias and EDF over `τ/τ_0 ≥ 16`,
-with the wrapper's default `remove_drift=true` global drift removal in the
-loop, Kasdin–Walter synthesis, git `e3ba9da`). All EDF fits have
-R² ≥ 0.9988:
+per-window quadratic detrend, Kasdin–Walter synthesis, git `9d7a408`). All
+EDF fits have R² ≥ 0.9988:
 
 | α  | Noise | EDF `b`, `c` | bias `b0` | `b1` |
 |---:|:------|:-------------|:----------|:-----|
-|  2 | WHPM  | 1.6342, 3.8334 | 1.0249 | −0.0078 |
-|  1 | FLPM  | 1.1651, 3.1934 | 0.9879 | −0.0630 |
-|  0 | WHFM  | 1.0861, 3.3451 | 1.0545 | −0.1706 |
-| −1 | FLFM  | 1.0096, 3.3662 | 1.2946 | −0.7752 |
-| −2 | RWFM  | 0.7641, 2.4152 | 2.1678 | −5.6243 |
+|  2 | WHPM  | 1.5429, 3.8504 | 0.9005 | −0.0083 |
+|  1 | FLPM  | 1.0409, 2.9661 | 0.8238 | −0.0541 |
+|  0 | WHFM  | 0.9355, 2.8108 | 0.7933 | −0.0422 |
+| −1 | FLFM  | 0.8780, 2.5258 | 0.7841 | −0.0357 |
+| −2 | RWFM  | 0.8580, 2.5361 | 0.7879 | −0.0325 |
 
-MHTOTDEV is **≈ unbiased for the PM noises** (`b0 ≈ 1`, `b1` small) and reads
-**progressively high for redder FM** at small τ; for random-walk FM,
-`B ≈ 2.2`. The bias is modeled τ/T-linearly, `B = b0 + b1·(τ/T)`. The `b1`
-term now carries two physical effects with the same sign: the
-boundary-extension bias falling off toward the record length, and the
-suppression of totalized low-frequency power by the global least-squares
-drift removal as τ → T (the well-known effect of drift removal on red
-noise). Together they cut the bias-fit residual by ~2.5 % (WHPM), ~36.5 %
-(FLPM), ~44.7 % (WHFM), ~65.3 % (FLFM), and ~96.0 % (RWFM); for white PM
-the τ/T term is negligible.
+MHTOTDEV **reads low** for every noise type: `B ≈ 0.90` for white PM and
+`B ≈ 0.79` for the FM noises. Removing a quadratic from each `4m`-sample
+window absorbs part of that window's variance before the reflection, and the
+loss is nearly the same for every FM noise, so the correction is close to a
+constant factor. The bias is modeled τ/T-linearly, `B = b0 + b1·(τ/T)`; the
+`b1` term is small and cuts the bias-fit residual by 4 % (WHPM) to 17 %
+(FLPM).
 
 Two methodology points matter for reproducing the table: (1) restricting the
 bias to the same
 `τ/τ_0 ≥ 16` window as the EDF, since the near-degenerate `m = 1` cell otherwise
-dominates the weighted ratio and pulls the apparent bias spuriously below 1; and
+dominates the weighted ratio and pulls the apparent bias spuriously low; and
 (2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.9988 across
 all noise types. The tracked full-sweep artifact records the git SHA, seed,
 grid, and per-α fits.
@@ -160,7 +158,7 @@ grid, and per-α fits.
 !!! warning "Edge zone at the reach limit"
     The kernel needs `N − 4m + 1 ≥ 1`, so MHTOTDEV's reach limit is `τ = T/4`
     (`T/τ ≥ 4`). The fitted linear form crosses `ν = 1` near
-    `T/τ ≈ 3.2–4.5` depending on α (lowest at α = +2, highest at α = −2).
+    `T/τ ≈ 3.1–4.1` depending on α (lowest at α = +2, highest at α = −2).
     Below `ν = 1` the χ² interval is degenerate, so `confidence_intervals`
     falls back to the Gaussian `±K_α σ z/√N` approximation there (lower bound
     floored at zero). Treat confidence intervals as valid for `T/τ ≳ 5–6` and
@@ -168,14 +166,8 @@ grid, and per-α fits.
     themselves are valid all the way to `τ = T/4`.
 
 !!! note "Degrees-of-freedom gain over MHDEV"
-    The extension buys degrees of freedom for the phase noises and white FM
-    but not for the reddest noise. At the same τ the fitted MHTOTDEV EDF is
-    about 1.5× the Greenhall–Riley MHDEV EDF for WHPM, 1.3× for WHFM, 1.2×
-    for FLFM, and 0.9× for RWFM, and the RWFM deficit is a property of the
-    estimator rather than of the fit: a direct Monte Carlo (N = 4096,
-    m = 64, 300 realizations, Kasdin–Walter synthesis) gives an empirical
-    EDF of 47 for MHTOTDEV against 58 for MHDEV, with the fitted value at
-    46. For random-walk FM the reflected extension re-uses the record's
-    low-frequency content and the bias correction divides by `B ≈ 2.1`, so
-    MHTOTDEV's advantage there is reach (`τ = T/4`), not precision; prefer
-    MHDEV where both exist.
+    The extension buys the most degrees of freedom for the phase noises. At
+    the same τ (N ≥ 4096, 16 ≤ m ≤ N/32) the measured MHTOTDEV EDF is about
+    1.36× the Greenhall–Riley MHDEV EDF for WHPM, 1.18× for FLPM, 1.11× for
+    WHFM, 1.04× for FLFM and 1.0× for RWFM. For the red FM noises MHTOTDEV's
+    advantage is reach (`τ = T/4`) and drift immunity, not precision.

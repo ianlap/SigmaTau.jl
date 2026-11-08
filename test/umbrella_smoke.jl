@@ -16,12 +16,13 @@ using SigmaTau
         :ttotdev, :htotdev, :mhtotdev, :mtie, :tierms, :pdev, :theo1, :theoh,
         :dadev, :dhdev, :stability, :deviation, :estimators, :summarize,
         :ncornered_hat, :StreamingStability, :snapshot, :nsamples,
-        :identify_noise, :calculate_edf, :confidence_intervals, :bias_correction,
+        :identify_noise, :noise_id_nnls, :calculate_edf, :confidence_intervals, :bias_correction,
         :psd_y, :psd_x, :ssb_phase_noise, :noise_gen,
         :cross_psd_y, :cross_psd_x, :cross_adev, :CrossSpectralResult, :CrossStabilityResult,
         :read_phase, :read_frequency, :read_data, :detect_format, :INPUT_FORMATS,
         :save, :load,
-        :detrend, :fillgaps, :find_outliers, :remove_outliers])
+        :detrend, :fillgaps, :find_outliers, :remove_outliers,
+        :drift_fit, :DriftFit])
     deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
                       :load_result, :load_suite])
     @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public ∪ deprecated
