@@ -2,10 +2,12 @@
 
 Time-and-frequency stability analysis in Julia. SigmaTau computes the Allan,
 modified Allan, Hadamard, modified Hadamard and total deviation families,
-Thêo1 and ThêoH, MTIE, TIE rms and PDEV. Every call also identifies the noise
-type at each τ and returns the equivalent degrees of freedom and a χ²
-confidence interval. The estimators agree with Stable32 to its printed
-precision and with allantools to machine precision; see
+Thêo1 and ThêoH, MTIE, TIE rms and PDEV. Every deviation call (except MTIE
+and TIE rms, which have no χ² model) also identifies the noise type at each τ
+and returns the equivalent degrees of freedom and a χ² confidence interval.
+The estimators that Stable32 and allantools also implement agree with Stable32
+to its printed precision and with allantools to machine precision; the others
+are checked against reference kernels and identities. See
 [Validation](explanation/validation.md).
 
 ```@example home

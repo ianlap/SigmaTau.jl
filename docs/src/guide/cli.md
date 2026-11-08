@@ -26,7 +26,7 @@ paying Julia's start-up on each call.
 sigmatau-cli --input clock.dat
 
 # Frequency data with no time column, sampled every 10 s, at 95 %
-sigmatau-cli --input freq.txt --kind frequency --time-col 0 --tau0 10 --confidence 0.95
+sigmatau-cli --input freq.txt --kind frequency --time-col 0 --value-col 1 --tau0 10 --confidence 0.95
 
 # Clock in column 3 against the reference in column 4, values in ns
 sigmatau-cli --input pair.csv --value-col 3 --reference-col 4 --scaling 1e-9
@@ -82,7 +82,7 @@ shortened):
       "ci_lo": [...], "ci_hi": [...], "edf": [...], "noise": ["WHFM", ...], "neff": [...] }
   ],
   "spectrum": { "nperseg": 4096, "f": [...], "sy": [...], "sx": [...] },
-  "dynamic": { "dev": "adev", "window": 2048, "step": 1024, "t": [...], "tau": [...],
+  "dynamic": { "dev": "dadev", "window": 2048, "step": 1024, "t": [...], "tau": [...],
                "map": [[...], ...] },
   "elapsed_ms": 41.7
 }

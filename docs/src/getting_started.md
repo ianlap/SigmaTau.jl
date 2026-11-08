@@ -35,7 +35,7 @@ from the time column or the header:
 ```julia
 p = read_phase("clock.dat")                          # time and phase columns
 p = read_phase("counter.csv"; value_col=3, scaling=1e-9)   # ns → s
-p = read_phase("phase.txt"; time_col=0, tau0=1.0)    # one column, no time
+p = read_phase("phase.txt"; time_col=0, value_col=1, tau0=1.0)   # one column, no time
 ```
 
 [Reading and saving data](tutorials/02_reading_your_data.md) covers the
@@ -62,8 +62,9 @@ r.dev[1], r.noise_type[1], r.ci[1]
 `r.edf` holds the equivalent degrees of freedom behind each interval and
 `r.neff` the number of terms averaged. Intervals default to 68.3 %
 (`DEFAULT_CONFIDENCE`); pass `confidence=0.95` for wider ones, or
-`ci=false` to skip noise identification and intervals when you only want the
-deviation.
+`ci=false` to skip the intervals when you only want the deviation (the
+total estimators still identify the noise for their bias correction unless
+you also pass `correct_bias=false`).
 
 ```@example start
 adev(p; confidence=0.95).ci[1]

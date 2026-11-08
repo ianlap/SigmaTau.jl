@@ -42,7 +42,7 @@ these noises, which is how the examples on this site are built.
 
 ## Noise identification
 
-With `ci=true` (the default) every estimator identifies the dominant noise
+With `ci=true` (the default) every estimator except MTIE and TIE rms identifies the dominant noise
 type at each τ ([`identify_noise`](@ref)), because the interval depends on it.
 SigmaTau uses the lag-1 autocorrelation of the phase decimated by m, after a
 quadratic detrend of each decimated series, which is reliable while at least
