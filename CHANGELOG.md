@@ -5,6 +5,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `noise_id_nnls(data[, m]; deviation=:mhdev, alphas, weights=:edf)`: a
+  weighted nonnegative least-squares fit of the measured σ̂²(τ) profile to
+  power-law components. One fit over the whole τ range gives the amplitude of
+  every α in the basis and the dominant noise type at each τ; it sits beside
+  the per-τ lag-1 ACF classifier `identify_noise`, which is unchanged. The
+  NNLS problem is solved exactly by enumerating active sets. Default bases:
+  α ≥ -2 for `:mdev` and `:mhtotdev`, down to α = -4 for `:mhdev` and
+  `:hdev`, one PM column for the unmodified `:hdev`.
+- `noise_gen` draws random-run FM (α = -4) through `h = Dict(-4 => h₋₄)`, by
+  double integration of white noise with driver variance `8π⁴τ₀³h₋₄`.
+  `sigma1` refuses α ≤ -3, where σ_y(τ₀) diverges.
+
 ### Changed
 
 - `remove_outliers(::PhaseData)` now cleans in frequency space: it

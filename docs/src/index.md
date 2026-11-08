@@ -73,7 +73,7 @@ plot(stability(p))               # overlay a suite
 | Noise generation | `noise_gen` |
 | Drift / outlier / gap tools | `detrend`, `remove_outliers`, `fillgaps` |
 
-Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev`, `StreamingStability`.
+Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev`, `noise_id_nnls`, `StreamingStability`.
 
 ## References
 
