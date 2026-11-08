@@ -9,7 +9,8 @@ for working on the pages in a browser.
 ```
 app/desktop/
   src/main.rs         commands: health, analyze, cancel, save_file
-  tauri.conf.json     window, bundle; ships app/web/cli/build/ as core/
+  tauri.conf.json     window and bundle settings
+  bundle.sh           cargo tauri build, then copies the core into the app
   capabilities/       webview permissions (core window events only)
   icons/              app-icon.png and the sizes generated from it
 ```
@@ -23,17 +24,26 @@ app/desktop/
 3. With Rust and the Tauri CLI (`cargo install tauri-cli --version "^2"`):
 
 ```bash
-cd app/desktop
-cargo tauri build      # target/release/bundle/macos/SigmaTau Explorer.app
-cargo tauri dev        # run from the source tree
+app/desktop/bundle.sh          # target/release/bundle/macos/SigmaTau Explorer.app
+cd app/desktop && cargo tauri dev   # run from the source tree
 ```
+
+`bundle.sh` copies the core in after Tauri bundles, keeping its symlinks
+(Tauri's own resource copy turns them into files and the app grows from
+114 MB to 289 MB), then signs the app ad hoc. It does the macOS step only;
+on other systems put `app/web/cli/build/` next to the executable as `core/`.
+
+Measured on an Intel MacBook Pro (macOS 15, Julia 1.13.3): a 5.7 MB shell,
+a 114 MB app (30 MB zipped), the page loaded about 1.1 s after launch, and
+the first analysis back 0.1 s after that.
 
 `cargo build` alone also works and gives a bare executable that finds the
 core in the source tree (debug builds) or through `$SIGMATAU_CLI`.
 
 ## How it finds the core
 
-`$SIGMATAU_CLI`, then `core/bin/sigmatau-cli` in the app's resources, then
+`$SIGMATAU_CLI`, then `core/bin/sigmatau-cli` in the app's resources
+(`Contents/Resources/core` on macOS), then
 (debug builds only) `app/web/cli/build/bin/sigmatau-cli`.
 
 ## Commands
