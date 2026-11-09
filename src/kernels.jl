@@ -172,10 +172,6 @@ eq. 25 endpoint mean-flip extension and no per-window detrend (the canonical
 form; matches allantools).
 """
 function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    return _totdev_howe(x, m_values, tau0)
-end
-
-function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     # NIST SP1065 eqn 25 / Greenhall-Howe-Percival 1998 eq (3):
     #   Totvar = (1 / (2(m·τ₀)²(N−2))) · Σ_{n=2}^{N-1} (x*_{n-m} − 2x*_n + x*_{n+m})²
     # Mean-flip endpoint reflection (SP1065 eq 2):
@@ -242,17 +238,6 @@ function _totdev_howe(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     end
 
     return devs
-end
-
-"""
-    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
-
-Modified total deviation, using Greenhall 2003's
-per-window time-reverse extension with half-mean slope removal, the canonical
-MTOTDEV form.
-"""
-function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    return _mtotdev_greenhall(x, m_values, tau0)
 end
 
 # ── Shared machinery for the Greenhall total deviations ──────────────────
@@ -429,7 +414,14 @@ function _sum_over_windows(window_sum::F, nwin::Int, Lmax::Int) where {F}
     return sum(chunk_sums)
 end
 
-function _mtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+"""
+    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+
+Modified total deviation, using Greenhall 2003's
+per-window time-reverse extension with half-mean slope removal, the canonical
+MTOTDEV form.
+"""
+function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     # Greenhall 2003: per window of 3m phase samples, remove the half-mean
     # frequency, extend by reflection, and average the squared second
     # difference of m-sample means over the 6m positions of the extension.
@@ -480,10 +472,6 @@ Hadamard total deviation on the frequency series
 with half-mean slope removal on `y`, the canonical HTOTDEV form.
 """
 function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    return _htotdev_greenhall(x, m_values, tau0)
-end
-
-function _htotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
     Ny = N - 1
@@ -569,17 +557,10 @@ drift exactly within each window, so this kernel IS drift-immune on its
 own; the wrapper's record-level removal (`remove_drift=true` default)
 remains for noise-identification hygiene, not for the statistic.
 
-Historical note: earlier per-window schemes were rejected on measurements
-of B(WHPM) ≈ 3.8 growing ∝ m and χ² EDF collapse. A controlled 2×2 study
-(detrend order × reflection parity, identical noise realizations) showed
-those signatures belong to ODD (point) reflection variants; the quadratic
-detrend with the unchanged even (mirror) reflection shows neither.
+Point (odd) reflection is not used: with it B(WHPM) grows ∝ m (≈ 3.8) and
+the χ² EDF collapses; the even (mirror) reflection shows neither.
 """
 function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    return _mhtotdev_greenhall(x, m_values, tau0)
-end
-
-function _mhtotdev_greenhall(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     # Per window of 4m phase samples: least-squares quadratic removal,
     # reflection extension, and the squared m-sample box sum of the third
     # difference at each of the 8m + 1 positions of the extension.
@@ -1112,15 +1093,15 @@ function _neff_count(dev_sym::Symbol, N::Int, m::Int)
         Ne = N - 4m + 1
         return Ne >= 2 ? Ne : 0
     elseif dev_sym === :totdev
-        # _totdev_howe: n in 2:N−1 for every m (the reflected extension
+        # _totdev_core: n in 2:N−1 for every m (the reflected extension
         # supplies the tails); NaN only when N ≤ 2.
         return N > 2 ? N - 2 : 0
     elseif dev_sym === :mtotdev
-        # _mtotdev_greenhall: nsubs = N−3m+1 subsequences, NaN when < 1.
+        # _mtotdev_core: nsubs = N−3m+1 subsequences, NaN when < 1.
         nsubs = N - 3m + 1
         return nsubs >= 1 ? nsubs : 0
     elseif dev_sym === :htotdev
-        # _htotdev_greenhall: m = 1 falls back to the HDEV sum over N−3
+        # _htotdev_core: m = 1 falls back to the HDEV sum over N−3
         # terms (NaN when ≤ 0); m ≥ 2 iterates n_iter = (N−1)−3m+1
         # subsequences of y = diff(x)/τ₀ (NaN when < 1).
         if m == 1
@@ -1130,7 +1111,7 @@ function _neff_count(dev_sym::Symbol, N::Int, m::Int)
         n_iter = (N - 1) - 3m + 1
         return n_iter >= 1 ? n_iter : 0
     elseif dev_sym === :mhtotdev
-        # _mhtotdev_greenhall: nsubs = N−4m+1 subsequences, NaN when < 1
+        # _mhtotdev_core: nsubs = N−4m+1 subsequences, NaN when < 1
         # (or m < 1). The public wrapper's global drift removal does not
         # change the record length, so the count is unaffected.
         nsubs = N - 4m + 1
