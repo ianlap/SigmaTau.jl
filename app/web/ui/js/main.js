@@ -205,9 +205,11 @@ function selectClock(id) {
 
 // ── Run ──
 let runCtl = null;
+let rerun = false;   // asked to run while a run was going: run again when it ends
 async function run() {
   const clocks = state.clocks.filter((c) => c.record && !isReference(c));
-  if (!clocks.length || !state.devs.length || state.run.state === "running") return;
+  if (state.run.state === "running") { rerun = true; return; }
+  if (!clocks.length || !state.devs.length) return;
   runCtl?.abort();
   runCtl = new AbortController();
   transient = null;
@@ -235,6 +237,7 @@ async function run() {
     st.run.note = `Ran ${nd} estimator${nd === 1 ? "" : "s"} on ${what} in ${num(s, 2)} s`;
   });
   if (failed) ctx.status("error", `${failed} of ${clocks.length} clocks failed: ${clocks.find((c) => c.error)?.error}`);
+  if (rerun) { rerun = false; run(); }
 }
 
 // ── Header chip and status bar ──
