@@ -78,6 +78,7 @@ function json_record(io::IO, o::Options, data::PhaseData)
     json_key(io, "n"); print(io, s.n)
     json_key(io, "tau0"); json_number(io, tau0)
     json_key(io, "span_s"); json_number(io, Float64(s.span))
+    json_key(io, "start"); json_string(io, isnan(data.start) ? "" : SigmaTau._iso_text(data.start))
     json_key(io, "gaps"); print(io, s.gaps)
     json_key(io, "outliers"); print(io, length(s.outliers))
     keep = s.outliers[1:min(length(s.outliers), 500)]

@@ -66,7 +66,6 @@ export function openImport(file, prev = null) {
       tau0,
       hasTimeCol: st.time > 0 || !!s.format,  // instrument readers can fill gaps without one
       gaps: ts ? ts.gaps : 0,
-      missing: ts ? ts.missing : 0,         // samples missing from the time column
       sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind} · τ₀ ${num(tau0, 4)} s` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
       unitName: (units.find(([f]) => f === st.scaling) ?? units[0])[1],
@@ -135,7 +134,7 @@ export function openImport(file, prev = null) {
       const spark = lines ? `<svg viewBox="0 0 330 92" preserveAspectRatio="none" width="100%" height="100%">${lines}</svg>` : "";
 
       const gap = ts && ts.gaps
-        ? `<div class="gap-card"><b>${ts.gaps} gap${ts.gaps > 1 ? "s" : ""} in the time column</b>${thousands(ts.missing)} missing sample${ts.missing === 1 ? "" : "s"}. Turn on <i>Fill gaps</i> on the Data page to put them back on an even grid.</div>`
+        ? `<div class="gap-card"><b>${ts.gaps} gap${ts.gaps > 1 ? "s" : ""} in the time column</b>${thousands(ts.missing)} missing sample${ts.missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to interpolate them.</div>`
         : "";
       const tauLine = ts && ts.tau0 > 0
         ? `<div class="tau-line"><span class="mono">${num(ts.tau0, 4)} s</span><span class="ok">✓ from the time column${ts.even ? ", evenly spaced" : ", median step"}</span></div>`

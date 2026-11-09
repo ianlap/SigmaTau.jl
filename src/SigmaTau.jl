@@ -14,6 +14,7 @@ include("types.jl")
 include("io/results.jl")
 include("io/detrend.jl")
 include("io/fillgaps.jl")
+include("io/scan.jl")
 include("io/read.jl")
 include("io/formats.jl")
 include("io/save.jl")
@@ -57,7 +58,7 @@ export SpectralResult, DynamicStabilityResult
 export ci_lower, ci_upper
 
 export save, load
-export read_phase, read_frequency, read_data, detect_format, INPUT_FORMATS
+export read_phase, read_frequency, read_data, detect_format, INPUT_FORMATS, start_time
 export detrend, fillgaps
 export find_outliers, remove_outliers
 

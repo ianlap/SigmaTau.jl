@@ -1,3 +1,4 @@
+using Dates
 # test/io/save.jl — save(data) two-column text format, comment-header
 # round-trip through read_phase/read_frequency, tau0 pickup, source
 # propagation. Result/suite files are in results.jl.
@@ -31,6 +32,12 @@
             @test pd2.x ≈ x
             @test pd2.tau0 == 0.5
             @test pd2.source == path
+
+            # The start time round-trips through a "# start:" line.
+            t = save(joinpath(dir, "start.txt"), PhaseData(x, 0.5; start=846_000_000.125))
+            @test readlines(t)[4] == "# start: 2026-10-22T16:00:00.125Z"
+            @test read_phase(t).start == 846_000_000.125
+            @test start_time(detrend(read_phase(t))) == DateTime(2026, 10, 22, 16, 0, 0, 125)
         end
     end
 

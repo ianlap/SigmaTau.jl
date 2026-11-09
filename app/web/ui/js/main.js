@@ -88,7 +88,7 @@ async function importFile(file, clock, prev) {
         source: { type: "file", name: file.name, content: file.text, sha256: file.sha256 ?? "" }, group,
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
-        hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo,
+        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo,
         fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, range: null, result: null,
       });
       touched.push(c);
@@ -144,7 +144,7 @@ async function reimport(c) {
       Object.assign(k, {
         group: c.group, kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[i] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
-        hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo, source: c.source,
+        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo, source: c.source,
         fillgaps: settings.hasTimeCol ? k.fillgaps : false, result: null,
       });
       touched.push(k);
@@ -159,7 +159,7 @@ async function useSynth(c, { n, tau0, seed }) {
     if (!c) { c = newClock(); s.clocks.push(c); s.activeClock = c.id; }
     Object.assign(c, {
       source: { type: "synth", n, seed, tau0 }, sourceInfo: "white + random-walk FM", kind: "phase",
-      tau0, hasTimeCol: false, missing: 0, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
+      tau0, hasTimeCol: false, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
     });
     if (c.name === "Clock" || !multi()) c.name = "Synthetic record";
   });
