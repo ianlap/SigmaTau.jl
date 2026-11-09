@@ -23,6 +23,7 @@ export function mount(el, ctx) {
         <span class="toggles">
           <label class="check" title="Noise type identified at each τ (lag-1 autocorrelation), with the power-law slope it implies"><input type="checkbox" data-tog="noiseId">Noise ID</label>
           <label class="check" title="Draw the confidence intervals as a shaded band instead of error bars"><input type="checkbox" data-tog="band">CI band</label>
+          <label class="check" title="The power-law noise model fitted to MHDEV: its curve for each estimator, and h_α with the ADEV it gives at round τ"><input type="checkbox" data-tog="fit">Fit</label>
         </span>
       </div>
       <div class="card plot-card"><div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
@@ -69,13 +70,14 @@ export function refresh() {
   const biased = state.devs.some((d) => BIAS_CORRECTED.has(d));
   const bias = biased ? (state.bias ? " · bias-corrected" : " · not bias-corrected") : "";
   root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}`;
-  // Both need the intervals: noise identification runs with them.
+  // Noise ID and the band need the intervals: noise identification runs with them.
   root.querySelectorAll("[data-tog]").forEach((el) => {
     const lab = el.closest("label");
     lab.dataset.tip ??= lab.title;
     el.checked = !!state[el.dataset.tog];
-    el.disabled = !state.ci;
-    lab.title = state.ci ? lab.dataset.tip : "Turn on confidence intervals in the panel; noise identification runs with them";
+    const off = !state.ci && el.dataset.tog !== "fit";
+    el.disabled = off;
+    lab.title = off ? "Turn on confidence intervals in the panel; noise identification runs with them" : lab.dataset.tip;
   });
 
   const clocks = visibleClocks();
@@ -173,6 +175,13 @@ function traces(clocks, devs) {
         } : undefined,
         customdata: r.tau.map((_, i) => [r.edf[i], noiseLabel(r.noise[i] ?? "")]),
         hovertemplate: `<b>${h(name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}${r.edf.length ? "<br>EDF %{customdata[0]:.4g} · %{customdata[1]}" : ""}<extra></extra>`,
+      });
+      // The power-law model's curve, dotted under the measurement.
+      const fit = state.fit && c.result.powerlaw?.curves?.find((k) => k.deviation === d);
+      if (fit) out.splice(out.length - 1, 0, {
+        x: fit.tau, y: fit.dev, name: `${name} model`, mode: "lines", showlegend: false,
+        line: { color, width: 1.6, dash: "dot" },
+        hovertemplate: `<b>${h(name)}, noise model</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}<extra></extra>`,
       });
     });
   }
@@ -317,7 +326,24 @@ function renderTable(clocks, devs) {
     <div class="card-head"><h2>Per-τ results</h2>
       <select data-ref="table-dev" aria-label="Estimator">${devs.map((d) => `<option value="${d}" ${d === state.tableDev ? "selected" : ""}>${label(d)}</option>`).join("")}</select></div>
     <div class="tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>σ</span><span>EDF</span><span>noise</span></div>${rows || `<div class="tbl-row muted">No result for ${label(state.tableDev)}.</div>`}</div>
+    ${state.fit ? modelBox(c) : ""}
     <div class="card-foot">Hover a row for its confidence interval. Every value is in the TSV and JSON exports.</div>`;
+}
+
+// The power-law model fitted to MHDEV: the h_α it found and the ADEV it
+// gives at round τ, the numbers a datasheet quotes.
+function modelBox(c) {
+  const p = c.result?.powerlaw;
+  if (!p) return "";
+  if (p.error) return `<div class="model-box muted">No noise model: ${h(p.error)}</div>`;
+  const comps = p.alphas.map((a, i) => [a, p.h[i], p.noise_types[i]]).filter(([, v]) => v > 0);
+  const at = p.sigma_at;
+  return `<div class="model-box">
+    <h3>Noise model <span class="muted">· S<sub>y</sub>(f) = Σ h<sub>α</sub> f<sup>α</sup>, fitted to MHDEV</span></h3>
+    <div class="model-grid">${comps.map(([a, v, n]) => `<span class="badge" title="${noiseTitle(n)}">${noiseLabel(n)}</span><span>h<sub>${a}</sub></span><span>${sci(v, 3)}</span>`).join("")}</div>
+    ${at.tau.length ? `<h3>ADEV from the model</h3>
+    <div class="model-grid">${at.tau.map((t, i) => `<span>τ = ${t >= 86400 ? `${num(t / 86400, 3)} d` : `${num(t, 4)} s`}</span><span></span><span>${sci(at.adev[i], 3)}</span>`).join("")}</div>` : ""}
+  </div>`;
 }
 
 function renderCompare(box, clocks, devs) {

@@ -152,6 +152,13 @@ mktempdir() do dir
         @test r.code == 0
         @test occursin("\"spectrum\":{\"nperseg\":64", r.out)
         @test occursin("\"series\":{\"t\":[0.0,26.0,", r.out)
+        r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,totdev", "--fit")
+        @test r.code == 0
+        @test occursin("\"powerlaw\":{\"deviation\":\"mhdev\",\"alphas\":[2,1,0,-1,-2]", r.out)
+        @test occursin("\"curves\":[{\"deviation\":\"adev\"", r.out)
+        @test occursin("{\"deviation\":\"tdev\"", r.out) && !occursin("{\"deviation\":\"totdev\",\"tau\"", r.out)
+        @test occursin("\"sigma_at\":{\"tau\":[1.0,10.0,100.0]", r.out)
+        @test run_cli("analyze", pf, "--fit").code != 0
     end
 
     @testset "no CI: nulls in JSON, blanks in CSV, never NaN" begin

@@ -132,6 +132,51 @@ function json_result(io::IO, r::StabilityResult, label::String, axis::String)
     print(io, "]}")
 end
 
+# The power-law model fitted to MHDEV (α = 2…−2): h_α, the model curve of
+# each result it covers, and the model ADEV at round averaging times within
+# half the record. A record the fit cannot take answers {"error": …}.
+const SPEC_TAUS = [1.0, 10.0, 100.0, 1000.0, 1.0e4, 86400.0]
+
+function json_powerlaw(io::IO, data::PhaseData, results::Vector{StabilityResult})
+    f = try
+        powerlaw_fit(data)
+    catch err
+        err isa ArgumentError || rethrow()
+        print(io, '{'); json_key(io, "error", true); json_string(io, error_message(err)); print(io, '}')
+        return nothing
+    end
+    print(io, '{')
+    json_key(io, "deviation", true); json_string(io, String(f.source))
+    json_key(io, "alphas"); json_array(io, f.alphas)
+    json_key(io, "h"); json_array(io, f.h)
+    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._nnls_symbol(a)) for a in f.alphas])
+    json_key(io, "curves"); print(io, '[')
+    k = 0
+    for r in results
+        d = r.deviation_type
+        base = d === :tdev ? :mdev : d
+        base in SigmaTau.POWERLAW_DEVIATIONS || continue
+        model = powerlaw_sigma(f, r.tau; deviation=base)
+        d === :tdev && (model .*= r.tau ./ sqrt(3.0))
+        (k += 1) > 1 && print(io, ',')
+        print(io, '{')
+        json_key(io, "deviation", true); json_string(io, String(d))
+        json_key(io, "tau"); json_array(io, r.tau)
+        json_key(io, "dev"); json_array(io, model)
+        print(io, '}')
+    end
+    print(io, ']')
+    τ₀ = f.tau0
+    half = (length(data.x) - 1) * τ₀ / 2
+    taus = unique(Float64[max(1, round(Int, t / τ₀)) * τ₀ for t in SPEC_TAUS])
+    filter!(t -> t <= half, taus)
+    json_key(io, "sigma_at"); print(io, '{')
+    json_key(io, "tau", true); json_array(io, taus)
+    json_key(io, "adev"); json_array(io, powerlaw_sigma(f, taus; deviation=:adev))
+    print(io, "}}")
+    return nothing
+end
+
 function json_spectrum(io::IO, sy::SpectralResult, sx::SpectralResult)
     n = min(length(sy.freq), length(sx.freq))
     print(io, '{')
