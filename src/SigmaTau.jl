@@ -41,6 +41,7 @@ include("drift.jl")
 include("powerlaw.jl")
 include("clockmodel.jl")
 include("kalman.jl")
+include("comparisons.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
@@ -83,6 +84,7 @@ export drift_fit, DriftFit
 export powerlaw_fit, PowerLawFit, powerlaw_sigma, powerlaw_psd
 export ClockModel, clock_model, state_transition, process_noise
 export KalmanResult, kalman_filter, kalman_smooth, holdover_error, innovation_check, simulate_clock
+export ClockComparisons, simulate_ensemble
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize

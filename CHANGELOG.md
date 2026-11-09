@@ -19,6 +19,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   `innovation_check` tests the normalized innovations for unit variance and
   whiteness. `simulate_clock` draws a record and its true states from a
   model.
+- Clock ensembles: `ClockComparisons` holds several clocks read against one
+  reference (`cc[i]` one clock, `cc[i, j]` a difference), and
+  `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
+  states.
 
 ## [0.6.0] - 2026-11-08
 

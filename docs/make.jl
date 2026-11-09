@@ -68,6 +68,7 @@ makedocs(
             "Preprocessing" => "reference/preprocessing.md",
             "Spectra" => "reference/spectra.md",
             "Kalman filter" => "reference/kalman.md",
+            "Clock ensembles" => "reference/ensemble.md",
             "Noise and statistics" => "reference/statistics.md",
         ],
         "Bibliography" => "bibliography.md",
