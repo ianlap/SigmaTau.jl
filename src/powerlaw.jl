@@ -239,8 +239,9 @@ end
 
 σ(τ) that the power-law model `h` gives in `deviation` (`:adev`, `:mdev`,
 `:hdev` or `:mhdev`) for a record sampled at `tau0`. `h` is a
-[`PowerLawFit`](@ref) (whose `tau0` is the default) or a `Dict` of h_α keyed
-by α or noise type, as in [`noise_gen`](@ref). Every τ must be a whole
+[`PowerLawFit`](@ref) or a [`ClockModel`](@ref) (whose `tau0` is the
+default), or a `Dict` of h_α keyed by α or noise type, as in
+[`noise_gen`](@ref). Every τ must be a whole
 multiple of `tau0`.
 
 The model is the spectrum of a sampled record, `h_α (sin(πfτ₀)/(πτ₀))^α` up
@@ -258,7 +259,7 @@ powerlaw_sigma(Dict(:WHFM => 2e-24), [1.0, 10.0, 100.0]; tau0=1.0)   # ≈ 1e-12
 ```
 """
 function powerlaw_sigma(h, tau::AbstractVector{<:Real}; deviation::Symbol=:adev,
-                        tau0::Real=(h isa PowerLawFit ? h.tau0 : NaN))
+                        tau0::Real=(h isa Union{PowerLawFit,ClockModel} ? h.tau0 : NaN))
     deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
         "powerlaw_sigma: deviation must be one of $(join(POWERLAW_DEVIATIONS, ", ")), got :$deviation"))
     τ₀ = Float64(tau0)
@@ -279,7 +280,8 @@ end
 The power-law model `h` as a spectrum at the frequencies `f` (Hz):
 `:Sy`, `S_y(f) = Σ h_α f^α` in 1/Hz; `:Sx`, `S_x(f) = S_y(f)/(2πf)²` in
 s²/Hz; or `:L`, `ℒ(f) = ½ (2π f_carrier)² S_x(f)` in dBc/Hz. `h` is a
-[`PowerLawFit`](@ref) or a `Dict` of h_α keyed by α or noise type.
+[`PowerLawFit`](@ref), a [`ClockModel`](@ref) or a `Dict` of h_α keyed by
+α or noise type.
 """
 function powerlaw_psd(h, f::AbstractVector{<:Real}; quantity::Symbol=:Sy, f_carrier=nothing)
     hd = _powerlaw_h(h)

@@ -30,6 +30,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Clock model: `ClockModel` holds the white PM, white FM, random-walk FM and
+  random-run FM levels of a 2- or 3-state clock, `clock_model` builds one
+  from a `powerlaw_fit`, and `state_transition` and `process_noise` give its
+  Φ(δ) and Q(δ) over any step. `powerlaw_sigma` and `powerlaw_psd` accept a
+  model. A new background page derives the mapping.
 - `groslambert`: the Groslambert covariance for three or more clocks, each
   clock's Allan deviation from the cross Allan variance of the two
   difference records that share it, with χ² intervals from the covariance

@@ -58,6 +58,7 @@ makedocs(
             "Validation" => "explanation/validation.md",
             "Cross-check report" => "explanation/crosscheck.md",
             "MHTOTDEV bias and EDF" => "explanation/mhtotdev.md",
+            "The clock model" => "explanation/clock_model.md",
         ],
         "Reference" => [
             "Types" => "reference/types.md",
