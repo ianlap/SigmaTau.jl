@@ -104,6 +104,8 @@ function json_preprocessing(io::IO, o::Options)
     json_key(io, "fillgaps"); json_bool(io, o.fillgaps)
     json_key(io, "remove_outliers"); json_bool(io, o.remove_outliers)
     json_key(io, "reference_col"); print(io, o.reference_col)
+    json_key(io, "range"); print(io, '[')
+    json_number(io, o.range_start); print(io, ','); json_number(io, o.range_end); print(io, ']')
 end
 
 function json_result(io::IO, r::StabilityResult, label::String, axis::String)

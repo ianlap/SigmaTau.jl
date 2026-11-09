@@ -63,6 +63,9 @@ function options() {
     <label class="opt"><span>τ grid</span><select class="wide" data-opt="grid">${GRIDS.map(([v, l]) => `<option value="${v}" ${v === state.grid ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <div class="opt"><label class="check"><input type="checkbox" data-opt="ci" ${state.ci ? "checked" : ""}>Confidence intervals</label>
       <select class="narrow" data-opt="confidence" ${state.ci ? "" : "disabled"}>${CONFIDENCES.map(([v, l]) => `<option value="${v}" ${v === state.confidence ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div class="opt" title="Leave out averaging times outside these limits (seconds); empty = no limit"><span>τ range (s)</span>
+      <span class="tau-range"><input type="number" min="0" step="any" placeholder="min" data-opt="tauMin" value="${state.tauMin ?? ""}" aria-label="Smallest τ in seconds">
+      <span class="muted">–</span><input type="number" min="0" step="any" placeholder="max" data-opt="tauMax" value="${state.tauMax ?? ""}" aria-label="Largest τ in seconds"></span></div>
     <label class="check" title="Divide out the known bias of TOTDEV, MTOTDEV, HTOTDEV, MHTOTDEV, TTOTDEV and Thêo1 for the identified noise type"><input type="checkbox" data-opt="bias" ${state.bias ? "checked" : ""}>Bias-correct totals and Thêo1</label>
   </div>`;
 }
@@ -140,5 +143,6 @@ function onChange(e) {
     if (opt === "confidence") { s.confidence = Number(v); markStale(s, "inputs"); }
     if (opt === "ci") { s.ci = v; markStale(s, "inputs"); }
     if (opt === "bias") { s.bias = v; markStale(s, "inputs"); }
+    if (opt === "tauMin" || opt === "tauMax") { s[opt] = Number(v) > 0 ? Number(v) : null; markStale(s, "inputs"); }
   });
 }
