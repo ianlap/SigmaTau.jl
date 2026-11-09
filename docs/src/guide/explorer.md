@@ -81,7 +81,7 @@ the core.
 | Page | Shows |
 |:---|:---|
 | **Data** | The file, the import settings, the record check and the phase plot. |
-| **Stability** | σ(τ) on log-log axes with confidence intervals as bars or a band. With one clock, the per-τ table (τ, deviation, interval, noise type, EDF); with several, "Compare at τ" with the most stable clock in bold. Click the plot to move τ. |
+| **Stability** | σ(τ) on log-log axes with confidence intervals as bars or a band. With one clock, the per-τ table (τ, deviation, interval, noise type, EDF); with several, "Compare at τ" with the most stable clock in bold. Click the plot to move τ. On the time axis, the mask menu draws an ITU-T wander mask (G.811, G.813, G.8262, G.823) over MTIE and TDEV and says whether each passes. |
 | **Spectrum** | S\_y(f) and either ℒ(f) at a carrier you choose or S\_x(f), Welch estimates with log-binned averaging and power-law slope guides. Changes here apply without a rerun. |
 | **Dynamic** | A DADEV or DHDEV map σ(t, τ), or a 3D waterfall: does the stability change during the record? Recomputes when its settings change; click a cell to pin it. |
 | **Live** | Readings from an instrument or the simulator as they arrive, with the running σ(τ); see below. |

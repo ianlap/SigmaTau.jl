@@ -57,6 +57,21 @@ mtie
 tierms
 ```
 
+## Telecom masks
+
+The ITU-T recommendations specify a clock's or an interface's wander as
+limits on MTIE and TDEV over the observation interval τ. `mask_check`
+compares an [`mtie`](@ref) or [`tdev`](@ref) result with one; `sigmatau
+analyze --mask` and the explorer's Stability page draw the same limits.
+Measure the way the recommendations do: phase against a reference better
+than the mask, sampled at 1/30 s or faster through a 10 Hz low-pass filter.
+
+```@docs
+TELECOM_MASKS
+telecom_mask
+mask_check
+```
+
 ## Dynamic (time-resolved)
 
 `dadev` and `dhdev` slide a window across the record and return σ(t, τ) as a

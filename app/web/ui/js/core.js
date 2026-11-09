@@ -125,7 +125,7 @@ function view(doc) {
   });
   const d = doc.dynamic;
   const dynamic = d && { dev: d.deviation, window: d.window, step: d.step, t: d.t, tau: d.tau, map: d.dev };
-  return { record, results, spectrum: doc.spectrum, powerlaw: doc.powerlaw, dynamic, drift: doc.drift, elapsed_ms: doc.elapsed_ms, doc };
+  return { record, results, spectrum: doc.spectrum, powerlaw: doc.powerlaw, masks: doc.masks ?? [], dynamic, drift: doc.drift, elapsed_ms: doc.elapsed_ms, doc };
 }
 
 const run = async (body, signal) => view(await post(body, signal));
@@ -151,7 +151,7 @@ const analyzeRequest = (clock) => request(clock, "analyze", [
   "--grid", state.grid,
   ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
   ...(state.bias ? [] : ["--no-bias-correction"]),
-  "--spectrum", "--fit",
+  "--spectrum", "--fit", "--mask", "all",
 ]);
 
 export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
@@ -160,7 +160,8 @@ export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
 // for reports.
 export function analyzeCommand(clock) {
   const { args, file } = analyzeRequest(clock);
-  const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--fit" && a !== "--format" && args[i - 1] !== "--format");
+  const extra = new Set(["--spectrum", "--fit", "--mask", "--format"]);
+  const kept = args.filter((a, i) => !extra.has(a) && !["--format", "--mask"].includes(args[i - 1]));
   const q = (a) => (/^[\w.,:+\/=-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
   return ["sigmatau", kept[0], ...(file ? [file.name] : []), ...kept.slice(1)].map(q).join(" ");
 }

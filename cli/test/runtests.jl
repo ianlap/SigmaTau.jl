@@ -159,6 +159,12 @@ mktempdir() do dir
         @test occursin("{\"deviation\":\"tdev\"", r.out) && !occursin("{\"deviation\":\"totdev\",\"tau\"", r.out)
         @test occursin("\"sigma_at\":{\"tau\":[1.0,10.0,100.0]", r.out)
         @test run_cli("analyze", pf, "--fit").code != 0
+        r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,mtie", "--mask", "G8262_opt1")
+        @test r.code == 0 && occursin("\"masks\":[{\"name\":\"G8262_opt1\"", r.out)
+        @test occursin("\"checks\":[{\"deviation\":\"tdev\"", r.out) && occursin("{\"deviation\":\"mtie\"", r.out)
+        @test run_cli("analyze", pf, "--mask", "G8262_opt1").code != 0      # JSON only
+        @test run_cli("analyze", pf, "--format=json", "--mask", "G999").code != 0
+        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 9
     end
 
     @testset "no CI: nulls in JSON, blanks in CSV, never NaN" begin
