@@ -7,6 +7,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Docs: "Coming from Stable32" and "Coming from allantools" guides, mapping
+  their statistics, options and defaults onto SigmaTau.
 - `PhaseData` / `FrequencyData` carry the UTC time of their first sample
   (`start`, read with `start_time`), set by the readers from ISO 8601 and
   MJD timestamps, kept by `detrend`, `fillgaps`, `remove_outliers` and
