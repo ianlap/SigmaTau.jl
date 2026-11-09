@@ -132,7 +132,7 @@ pd_zero  = detrend(pd; method=:mean)
 ```
 """
 detrend(pd::PhaseData; method::Symbol=:linear) =
-    PhaseData(_detrend_core!(Vector{Float64}(pd.x), method), pd.tau0; source=pd.source)
+    PhaseData(_detrend_core!(Vector{Float64}(pd.x), method), pd.tau0; source=pd.source, start=pd.start)
 
 detrend(fd::FrequencyData; method::Symbol=:linear) =
-    FrequencyData(_detrend_core!(Vector{Float64}(fd.y), method), fd.tau0; source=fd.source)
+    FrequencyData(_detrend_core!(Vector{Float64}(fd.y), method), fd.tau0; source=fd.source, start=fd.start)

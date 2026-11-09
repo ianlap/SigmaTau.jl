@@ -222,7 +222,11 @@ mktempdir() do dir
         @test parse.(Float64, getindex.(a, 5)) ≈ b.dev
         @test parse(Float64, a[1][4]) == 0.1                     # τ₀ from the header
         @test occursin("frequency", run_cli("analyze", fx("counter_53230a_freq.csv"), "--tau0", "1",
-                                            "--devs", "adev", "--no-ci").out)
+                                            "--devs", "adev", "--no-ci", "--fillgaps").out)
+        # A missing frequency reading (9.91E+37) must be filled, not integrated as NaN.
+        @test run_cli("analyze", fx("counter_53230a_freq.csv"), "--tau0", "1").code == 2
+        @test occursin("\"start\":\"2026-11-08T12:00:00Z\",\"gaps\":1",
+                       run_cli("check", fx("gpsdo.csv"), "--format", "json").out)
         @test run_cli("analyze", fx("counter_53230a_freq.csv")).code == 2   # no gate time
         g = run_cli("check", fx("gpsdo.csv"), "--column", "PPS offset (ns)", "--format", "json")
         @test g.code == 0 && occursin("\"quantity\":\"phase\"", g.out)

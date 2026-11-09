@@ -14,7 +14,8 @@ call can be chained.
 
 For `PhaseData` / `FrequencyData` the file is two delimited columns, sample
 time `(i-1)·τ₀` in seconds and the sample value, preceded by a comment
-header recording the provenance:
+header recording the provenance (and, when the record knows it, the UTC
+time of its first sample as `# start: 2026-11-08T21:41:03Z`):
 
 ```
 # SigmaTau phase data
@@ -30,7 +31,7 @@ originating file path for records that came from [`read_phase`](@ref) /
 [`read_frequency`](@ref). The delimiter follows the extension convention of
 the readers: `,` for `.csv`, tab otherwise. [`read_phase`](@ref) /
 [`read_frequency`](@ref) skip the comment header automatically and pick up
-`# tau0:` when no `tau0` keyword is given, so `read_phase(save(path, pd))`
+`# tau0:` when no `tau0` keyword is given (and `# start:`), so `read_phase(save(path, pd))`
 reproduces `pd` exactly, and any external tool can consume the file as a
 plain two-column table. Typical use: generate noise with [`noise_gen`](@ref)
 and hand it to software outside SigmaTau.
@@ -63,9 +64,9 @@ load("white_pm_adev.tsv").dev == r.dev   # true
 See also [`load`](@ref), [`read_phase`](@ref), [`read_frequency`](@ref).
 """
 save(path::AbstractString, data::PhaseData) =
-    _save_data(path, data.x, data.tau0, data.source, "phase")
+    _save_data(path, data.x, data.tau0, data.source, data.start, "phase")
 save(path::AbstractString, data::FrequencyData) =
-    _save_data(path, data.y, data.tau0, data.source, "frequency")
+    _save_data(path, data.y, data.tau0, data.source, data.start, "frequency")
 save(path::AbstractString, r::StabilityResult) = _save_result(path, r)
 save(path::AbstractString, s::StabilitySuite; source_file::AbstractString="") =
     _save_suite(path, s; source_file=source_file)
@@ -95,12 +96,13 @@ function load(path::AbstractString)
 end
 
 function _save_data(path::AbstractString, v::AbstractVector{<:Real},
-                    tau0::Float64, source::String, kind::String)
+                    tau0::Float64, source::String, start::Float64, kind::String)
     d = lowercase(splitext(path)[2]) == ".csv" ? ',' : '\t'
     open(path, "w") do io
         println(io, "# SigmaTau ", kind, " data")
         println(io, "# source: ", source)
         println(io, "# tau0: ", tau0)
+        isnan(start) || println(io, "# start: ", _iso_text(start))
         for (i, val) in enumerate(v)
             println(io, (i - 1) * tau0, d, val)
         end

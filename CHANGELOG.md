@@ -12,6 +12,21 @@ versions follow [Semantic Versioning](https://semver.org/).
   the explorer's `.AppImage`, `.deb` and `.dmg`. The desktop release
   workflow now also runs on TagBot's `v…` tags and adds the files to that
   release; a manual run lists its artifacts in the run summary.
+- `PhaseData` / `FrequencyData` carry the UTC time of their first sample
+  (`start`, read with `start_time`), set by the readers from ISO 8601 and
+  MJD timestamps, kept by `detrend`, `fillgaps`, `remove_outliers` and
+  `sigmatau --range`, and written by `save` as a `# start:` line. The CLI's
+  record JSON and the explorer's record check show it.
+
+### Changed
+
+- The readers stream files line by line and keep only the columns they
+  return: a 2-million-line two-column file reads in a third of the time and
+  a quarter of the memory, a named-column table in a quarter of the time
+  and a twentieth of the memory.
+- `fillgaps=true` places samples on the grid of the regular time steps
+  instead of the smallest step, so jittered timestamps no longer scatter
+  the record.
 
 ### Fixed
 
@@ -19,6 +34,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   AppImage launcher's `LD_LIBRARY_PATH` made the core load the AppImage's
   copy of libjulia, which then looked for `libgcc_s.so.1` beside it. The app
   now starts the core without that variable.
+- A reading missing from a timestamped file is a `NaN` sample in its slot,
+  which the gap-tolerant estimators skip. Without `fillgaps` the samples
+  around it used to be joined end to end, shortening the record and moving
+  every τ after the gap. `sigmatau --freq` asks for `--fillgaps` on a
+  frequency record with missing samples instead of integrating `NaN` into
+  the rest of the phase.
 
 ## [0.6.0] - 2026-11-08
 
