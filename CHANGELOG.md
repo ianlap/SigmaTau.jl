@@ -18,6 +18,16 @@ versions follow [Semantic Versioning](https://semver.org/).
   `mode`, `components`, `residual` and `clock_model`. In the explorer,
   **Edit** in the noise model panel does the same, with the MHDEV the model
   leaves drawn dashed; the components are saved with the session.
+- Single-clock Kalman filter: `kalman_filter` runs a `ClockModel` over a
+  phase record (gaps predicted across, Joseph-form update, least-squares
+  start), `kalman_smooth` is the Rauch–Tung–Striebel smoother,
+  `holdover_error` gives the 1σ time error after free-running for τ, and
+  `innovation_check` tests the normalized innovations for unit variance and
+  whiteness. `simulate_clock` draws a record and its true states from a
+  model.
+- `tune_q` retunes a model's white and random-walk FM levels on a log grid
+  for the smallest phase prediction error at chosen horizons, and
+  `prediction_error` reports that error for any filter run.
 
 ## [0.6.0] - 2026-11-08
 
