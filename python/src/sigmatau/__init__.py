@@ -8,6 +8,7 @@ via juliacall, so results are bit-identical to the Julia oracle.
 __version__ = "0.6.0"
 
 from ._julia import julia_version, sigmatau_jl_version
+from .cross import cross_adev, cross_psd_x, cross_psd_y
 from .deviations import (
     DEFAULT_CONFIDENCE,
     adev,
@@ -29,6 +30,7 @@ from .deviations import (
     totdev,
     ttotdev,
 )
+from .drift import DRIFT_MODELS, drift_fit
 from .dynamic import dadev, dhdev
 from .edf import bias_correction, calculate_edf, confidence_intervals
 from .grids import (
@@ -54,12 +56,17 @@ from .io import (
     save,
 )
 from .noise import identify_noise, noise_gen
+from .powerlaw import powerlaw_fit, powerlaw_psd, powerlaw_sigma
 from .spectral import psd_x, psd_y, ssb_phase_noise
-from .suite import DEFAULT_DEVIATIONS, ncornered_hat, stability
+from .suite import DEFAULT_DEVIATIONS, groslambert, ncornered_hat, stability
 from .types import (
+    CrossSpectralResult,
+    CrossStabilityResult,
+    DriftFit,
     DynamicStabilityResult,
     FrequencyData,
     PhaseData,
+    PowerLawFit,
     SpectralResult,
     StabilityResult,
     StabilitySuite,
@@ -73,6 +80,10 @@ __all__ = [
     "StabilitySuite",
     "SpectralResult",
     "DynamicStabilityResult",
+    "DriftFit",
+    "PowerLawFit",
+    "CrossSpectralResult",
+    "CrossStabilityResult",
     # tau grids
     "TauMode",
     "AllTaus",
@@ -105,10 +116,21 @@ __all__ = [
     # dynamic deviations
     "dadev",
     "dhdev",
-    # compute-all suite + cornered hat
+    # compute-all suite + clock ensembles
     "stability",
     "DEFAULT_DEVIATIONS",
     "ncornered_hat",
+    "groslambert",
+    # two channels
+    "cross_adev",
+    "cross_psd_y",
+    "cross_psd_x",
+    # drift and power-law models
+    "drift_fit",
+    "DRIFT_MODELS",
+    "powerlaw_fit",
+    "powerlaw_sigma",
+    "powerlaw_psd",
     # statistics
     "calculate_edf",
     "confidence_intervals",

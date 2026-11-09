@@ -1,4 +1,4 @@
-# Suites, τ grids and streaming
+# Suites, grids, streaming and live
 
 ## Several estimators at once
 

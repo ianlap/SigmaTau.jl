@@ -84,7 +84,7 @@ using SigmaTau
         hits = Dict(:record => 0, :averaged => 0)
         trials = 60
         for _ in 1:trials
-            x = _gen_powerlaw_phase(-2, 1024; rng=rng)
+            x = noise_gen(PhaseData, 1024, 1.0; h=Dict(-2 => 1.0), rng).x
             for mode in (:record, :averaged)
                 hits[mode] += count(==(:RWFM), identify_noise(x, ms; b1_length=mode))
             end
@@ -93,7 +93,7 @@ using SigmaTau
         @test hits[:averaged] / total > 0.4
         @test hits[:averaged] > 4 * hits[:record]
         # Default is :record, and the lag-1 ACF path (N/m ≥ 30) ignores it.
-        x = _gen_powerlaw_phase(0, 1024; rng=rng)
+        x = noise_gen(PhaseData, 1024, 1.0; h=Dict(0 => 1.0), rng).x
         @test identify_noise(x, ms) == identify_noise(x, ms; b1_length=:record)
         @test identify_noise(x, [1, 4, 16]; b1_length=:averaged) == identify_noise(x, [1, 4, 16])
         @test identify_noise(PhaseData(x, 1.0), ms; b1_length=:averaged) ==

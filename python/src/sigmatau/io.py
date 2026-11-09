@@ -116,8 +116,12 @@ def read_data(
     picks the clock column of a named-column file, ``nominal`` the nominal
     frequency (Hz) for readings in Hz. See the Julia ``read_data`` docstring.
     """
-    kwargs = {"format": jl.Symbol(str(format)), "kind": jl.Symbol(str(kind)),
-              "scaling": float(scaling), "fillgaps": bool(fillgaps)}
+    kwargs = {
+        "format": jl.Symbol(str(format)),
+        "kind": jl.Symbol(str(kind)),
+        "scaling": float(scaling),
+        "fillgaps": bool(fillgaps),
+    }
     if tau0 is not None:
         kwargs["tau0"] = float(tau0)
     if column is not None:

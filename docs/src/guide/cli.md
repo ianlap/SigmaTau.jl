@@ -37,6 +37,7 @@ each call pays Julia's start-up.
 | `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
+| `sigmatau cross FILE --with FILE2` | two channels measuring one device: cross Allan deviation and cross-spectrum ([two-channel measurements](cross.md)) |
 | `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
 | `sigmatau report FILE` | a self-contained HTML report: record, settings, σ(τ) plots, per-τ tables and the command line (prints to PDF) |
 | `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
@@ -93,6 +94,10 @@ The record (all four analysis commands):
 `drift`: `--model linear|quadratic|log|diffusion` (default `linear`); see
 [`drift_fit`](@ref).
 
+`cross`: `--with FILE2`, the second channel, read with the same options as
+`FILE`; `--grid` or `--m` for the τ values and `--nperseg N` for the
+cross-spectrum. Both records must have the same length and τ₀ and no gaps.
+
 Output (all commands): `--format csv|json` (default `csv`), `--out PATH`
 in place of stdout, `--series N` to include up to N record points in the
 JSON, and `--quiet` to drop the "wrote PATH" note.
@@ -112,7 +117,9 @@ is never written as `NaN`. `check` writes
 writes `f,sy,sx` (without the DC bin), and `dynamic` writes `t,tau,dev`, one
 row per window and τ, with `t` the window centre in seconds. `drift` writes
 one row, `source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n`,
-with `c` blank for the linear model.
+with `c` blank for the linear model. `cross` writes
+`tau,covar,dev,uncertainty,dev_a,dev_b,neff`, one row per τ (see
+[`cross_adev`](@ref)).
 
 ## JSON
 
@@ -123,7 +130,7 @@ numbers are `null`.
 ```json
 {
   "schema_version": 1,
-  "sigmatau": "0.5.0",
+  "sigmatau": "0.6.0",
   "command": "analyze",
   "source": "clock.dat",
   "record": {
@@ -168,6 +175,10 @@ numbers are `null`.
 - `sigmatau drift` adds `"drift": {"model", "coef", "stderr",
   "drift_per_day", "drift_per_day_err", "rms", "n"}`, and with `--series N`
   a `series` of `t`, `y` and `fit`.
+- `sigmatau cross` adds `"with"` (the second file), `"cross_adev": {"tau",
+  "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
+  `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`
+  without the DC bin.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 

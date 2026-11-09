@@ -1,8 +1,11 @@
-"""Compute-all entry point and the N-cornered-hat separation — mirrors ``suite.jl``.
+"""Compute-all entry point and the clock-ensemble separations — mirrors ``suite.jl``
+and ``ensemble.jl``.
 
 ``stability`` runs a set of deviations on one record in a single Julia call and
-collects them into a ``StabilitySuite``; ``ncornered_hat`` separates per-clock deviations
-from a set of pairwise measurements (the classic three-cornered hat at N=3).
+collects them into a ``StabilitySuite``; ``ncornered_hat`` separates per-clock
+deviations from pairwise results (the classic three-cornered hat at N=3) and
+``groslambert`` does the same from the pairwise difference records without
+subtracting variances.
 """
 
 from __future__ import annotations
@@ -28,7 +31,24 @@ DEFAULT_DEVIATIONS = tuple(str(s) for s in jl.DEFAULT_DEVIATIONS)
 # form: unassigned cells stay ``undef`` (the oracle reads the upper or lower
 # triangle, so only the measured pairs need filling).
 _new_result_matrix = jl.seval("n -> Matrix{StabilityResult}(undef, n, n)")
+_new_data_matrix = jl.seval("n -> Matrix{AbstractTimingData}(undef, n, n)")
 _assign_result = jl.seval("(M, r, i, j) -> (M[i, j] = r; nothing)")
+
+
+def _fill_matrix(new, convert, matrix, name):
+    """A part-filled square Julia matrix from a list of lists with ``None`` holes."""
+    n = len(matrix)
+    jl_matrix = new(n)
+    for i, row in enumerate(matrix):
+        if len(row) != n:
+            raise ValueError(
+                f"{name}: pairwise matrix must be square, got a {n}-row matrix "
+                f"with a length-{len(row)} row"
+            )
+        for j, entry in enumerate(row):
+            if entry is not None:
+                _assign_result(jl_matrix, convert(entry), i + 1, j + 1)
+    return jl_matrix
 
 
 @_map_errors
@@ -88,18 +108,7 @@ def ncornered_hat(
         return [result_from_jl(r) for r in separated]
 
     if len(results) == 1:
-        matrix = results[0]
-        n = len(matrix)
-        jl_matrix = _new_result_matrix(n)
-        for i, row in enumerate(matrix):
-            if len(row) != n:
-                raise ValueError(
-                    f"ncornered_hat: pairwise matrix must be square, got a {n}-row matrix "
-                    f"with a length-{len(row)} row"
-                )
-            for j, entry in enumerate(row):
-                if entry is not None:
-                    _assign_result(jl_matrix, result_to_jl(entry), i + 1, j + 1)
+        jl_matrix = _fill_matrix(_new_result_matrix, result_to_jl, results[0], "ncornered_hat")
         return [result_from_jl(r) for r in jl.ncornered_hat(jl_matrix)]
 
     raise TypeError(
@@ -108,4 +117,43 @@ def ncornered_hat(
     )
 
 
-__all__ = ["stability", "DEFAULT_DEVIATIONS", "ncornered_hat"]
+@_map_errors
+def groslambert(
+    *records: PhaseData | FrequencyData | Sequence[Sequence[PhaseData | FrequencyData | None]],
+    m: TauMode | Sequence[int] = Octave,
+    confidence: float = DEFAULT_CONFIDENCE,
+) -> list[StabilityResult]:
+    """Groslambert covariance: each clock's Allan deviation from the pairwise records.
+
+    Two call forms, as for ``ncornered_hat`` but on the difference records
+    themselves (``PhaseData`` or ``FrequencyData``, same τ₀ and length):
+
+    - ``groslambert(x_ab, x_bc, x_ca)`` — the records A−B, B−C, C−A. Returns ``[A, B, C]``.
+    - ``groslambert(matrix)`` — ``matrix[i][j]`` is the record x_i − x_j (0-based),
+      ``None`` where a pair is missing; the transposed entry, negated, stands in.
+
+    Each result is an ``"adev"`` ``StabilityResult`` with χ² intervals at
+    ``confidence`` from the covariance model of Vernotte & Lantz (2019).
+    """
+    kwargs = {"confidence": float(confidence)}
+    if len(records) == 3:
+        separated = jl.groslambert(
+            to_jl_data(records[0]),
+            to_jl_data(records[1]),
+            to_jl_data(records[2]),
+            resolve_m(m),
+            **kwargs,
+        )
+        return [result_from_jl(r) for r in separated]
+
+    if len(records) == 1:
+        jl_matrix = _fill_matrix(_new_data_matrix, to_jl_data, records[0], "groslambert")
+        return [result_from_jl(r) for r in jl.groslambert(jl_matrix, resolve_m(m), **kwargs)]
+
+    raise TypeError(
+        "groslambert: pass three difference records (x_ab, x_bc, x_ca) "
+        "or one square matrix of records"
+    )
+
+
+__all__ = ["stability", "DEFAULT_DEVIATIONS", "ncornered_hat", "groslambert"]

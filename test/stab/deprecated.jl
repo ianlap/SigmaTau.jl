@@ -24,7 +24,7 @@ using Test, Random, SigmaTau
 
     @testset "taper and identify_noise remove_drift" begin
         @test psd_y(pd; taper = :hamming).taper === :hamming
-        @test psd_y(pd).window === :hann                 # old field name still reads
+        @test (@test_deprecated psd_y(pd).window) === :hann   # old field name still reads
         ms = [1, 2, 4]
         @test identify_noise(x, ms; remove_drift = false) ==
               (@test_deprecated identify_noise(x, ms; detrend = false))

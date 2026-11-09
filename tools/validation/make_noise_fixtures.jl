@@ -16,7 +16,7 @@ name(α) = α > 0 ? "alpha_p$(α).txt" : (α == 0 ? "alpha_0.txt" : "alpha_m$(-�
 
 for α in 2:-1:-4
     rng = Xoshiro(20261108 + 17 * (α + 4))
-    x = SigmaTau._gen_powerlaw_phase(α, N; rng=rng)
+    x = noise_gen(PhaseData, N, 1.0; h=Dict(α => 1.0), rng).x
     x ./= maximum(abs, x)                # unit-scale so %.12e keeps full meaning
     open(joinpath(OUT, name(α)), "w") do io
         println(io, "# SigmaTau cross-check fixture: phase, tau0 = 1 s, N = $N, alpha = $α")

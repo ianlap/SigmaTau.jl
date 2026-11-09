@@ -62,7 +62,7 @@ makedocs(
         "Reference" => [
             "Types" => "reference/types.md",
             "Estimators" => "reference/estimators.md",
-            "Suites, τ grids and streaming" => "reference/suites.md",
+            "Suites, grids, streaming and live" => "reference/suites.md",
             "Data and files" => "reference/data.md",
             "Preprocessing" => "reference/preprocessing.md",
             "Spectra" => "reference/spectra.md",

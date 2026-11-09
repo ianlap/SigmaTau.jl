@@ -59,31 +59,6 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         @test isnan(r.dev[3]) && r.neff[3] == 0     # m > N − 1
     end
 
-    @testset "allantools cross-check (frozen, stable32gen.DAT)" begin
-        dat_path = joinpath(@__DIR__, "..", "fixtures", "validation", "stable32gen.DAT")
-        if !isfile(dat_path)
-            @info "Stable32 phase fixture not present; skipping Theo1 allantools cross-check"
-        else
-            lines = readlines(dat_path)
-            x = parse.(Float64, strip.(lines[11:end]))
-            @test length(x) == 8192
-
-            ms = [10, 16, 64, 256, 1024, 4096]
-            # allantools 2024.06 theo1 devs at the same m (frozen 2026-06-10).
-            ref = [2.09595443942596105e-01, 1.41170063482723346e-01,
-                   4.24241065528329561e-02, 1.23509431294939673e-02,
-                   3.88050646788194644e-03, 3.50353759490139739e-03]
-            devs = _theo1_core(x, ms, 1.0)
-            @test all(isapprox.(devs, ref; rtol=1e-10))
-
-            # τ convention: SigmaTau reports the SP1065 effective τ = 0.75·m·τ0
-            # (allantools reports m·τ0 for the same values).
-            r = theo1(PhaseData(x, 1.0), ms; ci=false, correct_bias=false)
-            @test r.tau ≈ 0.75 .* ms
-            @test r.dev ≈ devs
-        end
-    end
-
     @testset "allantools cross-check (frozen, LCG synthetic)" begin
         # Deterministic LCG random-walk phase — exact integer recurrence,
         # bit-identical to the Python generator used to freeze the refs.

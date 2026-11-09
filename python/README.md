@@ -72,6 +72,20 @@ Dynamic (time-resolved) deviation:
 st.dadev(pd, window=512)
 ```
 
+Drift and noise models, two channels, clock ensembles:
+
+```python
+st.drift_fit(pd, model="log").rate            # aging per day, MIL-PRF-55310 log model
+f = st.powerlaw_fit(pd)                        # h_α of S_y(f) = Σ h_α f^α, from MHDEV
+st.powerlaw_sigma(f, [1.0, 10.0, 100.0])      # the model's ADEV
+st.cross_adev(a, b)                            # two channels measuring one device
+st.groslambert(x_ab, x_bc, x_ca)               # each clock's ADEV with χ² intervals
+```
+
+Julia only, not wrapped here: live measurement (`LiveStability` and the
+instrument sources, see `sigmatau live`), `noise_id_nnls` and the
+`StreamingStability` accumulator.
+
 ## Development configuration vs release
 
 `python/src/sigmatau/juliapkg.json` currently points at this checkout:
@@ -126,9 +140,10 @@ settings.
    samples than the port's NumPy stream — draws are reproducible within this wrapper,
    not bit-compatible with the port.
 5. New API the port never had: `tierms`, `theo1`, `theoh`, `dadev`, `dhdev`,
-   `ncornered_hat`, `deviation(name, ...)` and `estimators()`, `find_outliers`
-   (returns 0-based indices), `remove_outliers`, plus `tau_values` grids for the new
-   kernels.
+   `ncornered_hat`, `groslambert`, `drift_fit`, `powerlaw_fit` / `powerlaw_sigma` /
+   `powerlaw_psd`, `cross_adev` / `cross_psd_y` / `cross_psd_x`, `read_data`,
+   `deviation(name, ...)` and `estimators()`, `find_outliers` (returns 0-based
+   indices), `remove_outliers`, plus `tau_values` grids for the new kernels.
 6. `theo1` reports τ = 0.75·m·τ₀ (the Julia/SP1065 convention), not τ = m·τ₀.
 7. Names follow SigmaTau.jl 0.6: `psd_y` / `psd_x` / `ssb_phase_noise` (with
    `taper=`) for the port's `Sy` / `Sx` / `L` (`window=`); `ncornered_hat` for

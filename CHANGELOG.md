@@ -3,7 +3,30 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.6.0] - 2026-11-08
+
+### Fixed
+
+- `fillgaps` fills a gap at the start or end of a record, joined to the
+  data on its one side, instead of throwing `BoundsError`; a layout it
+  cannot fill now throws its "gap topology" error instead of looping
+  forever.
+- EDF for `adev`, `mdev`, `tdev`, `hdev`, `mhdev` (and every caller of the
+  Greenhall EDF) now follows the full Greenhall & Riley 2003 algorithm:
+  exact basic sum only while J ≤ 100, Tables 1–3 beyond that, the
+  `m′ = J_max/r` substitution, F = ∞ once m(d+1) > 100, and the white-PM
+  closed form. Summing the whole series moved the EDF up to 3.5 % (CI bounds
+  up to 0.25 %) away from Stable32 and allantools wherever J > 100.
+- `htotdev` at `m = 1` (plain overlapping HDEV) no longer applies the
+  TotHvar bias factor or the FCS 2001 table EDF; σ was 0.25 % high there on
+  white FM.
+- `FrequencyData` input is integrated to `N + 1` phase points
+  (`x = [0; cumsum(y)]·τ₀`) as in SP1065, Stable32 and allantools. Every
+  estimator on `FrequencyData` used to drop the first frequency sample;
+  so did `sigmatau --freq`.
+- `mtotdev` / `ttotdev` at odd `m ≥ 3` remove the subsegment trend with
+  Stable32's half averages (first and last ⌊3m/2⌋ points); values move by
+  0.2–0.4 % at m = 3 and now match allantools.
 
 ### Added
 
@@ -39,34 +62,6 @@ versions follow [Semantic Versioning](https://semver.org/).
   model and each channel's noise-type EDF),
   for a device measured against two references or one signal split into two
   channels. `sigmatau cross FILE --with FILE2` on the command line.
-
-## [0.6.0] - 2026-11-08
-
-### Fixed
-
-- `fillgaps` fills a gap at the start or end of a record, joined to the
-  data on its one side, instead of throwing `BoundsError`; a layout it
-  cannot fill now throws its "gap topology" error instead of looping
-  forever.
-- EDF for `adev`, `mdev`, `tdev`, `hdev`, `mhdev` (and every caller of the
-  Greenhall EDF) now follows the full Greenhall & Riley 2003 algorithm:
-  exact basic sum only while J ≤ 100, Tables 1–3 beyond that, the
-  `m′ = J_max/r` substitution, F = ∞ once m(d+1) > 100, and the white-PM
-  closed form. Summing the whole series moved the EDF up to 3.5 % (CI bounds
-  up to 0.25 %) away from Stable32 and allantools wherever J > 100.
-- `htotdev` at `m = 1` (plain overlapping HDEV) no longer applies the
-  TotHvar bias factor or the FCS 2001 table EDF; σ was 0.25 % high there on
-  white FM.
-- `FrequencyData` input is integrated to `N + 1` phase points
-  (`x = [0; cumsum(y)]·τ₀`) as in SP1065, Stable32 and allantools. Every
-  estimator on `FrequencyData` used to drop the first frequency sample;
-  so did `sigmatau --freq`.
-- `mtotdev` / `ttotdev` at odd `m ≥ 3` remove the subsegment trend with
-  Stable32's half averages (first and last ⌊3m/2⌋ points); values move by
-  0.2–0.4 % at m = 3 and now match allantools.
-
-### Added
-
 - Reports: `sigmatau report FILE` writes one self-contained HTML file with
   the record summary, the settings, σ(τ) plots, per-τ tables and the
   command that reproduces it; a browser prints it to PDF. The explorer's

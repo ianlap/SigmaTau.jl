@@ -66,12 +66,15 @@ pages say how.
 | MTIE, TIE rms | `mtie`, `tierms` |
 | Dynamic stability | `dadev`, `dhdev` |
 | Three-cornered hat | `ncornered_hat` |
+| Drift | `drift_fit` (linear, quadratic, log, diffusion) |
 | Noise generation | `noise_gen` |
 | Drift, outlier and gap tools | `detrend`, `remove_outliers`, `fillgaps` |
 | PSD and phase noise | `psd_y`, `psd_x`, `ssb_phase_noise` |
 
-Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev`, `noise_id_nnls` and the real-time
-`StreamingStability` accumulators. Two defaults differ from Stable32
+Not in Stable32: `mhdev`, `htdev`, `mhtotdev`, `pdev`, `noise_id_nnls`, the
+power-law model `powerlaw_fit`, the Groslambert covariance `groslambert`,
+the two-channel `cross_adev` and `cross_psd_y`, and the real-time
+`StreamingStability` and `LiveStability` accumulators. Two defaults differ from Stable32
 (MTOTDEV bias correction and noise-ID detrending); the
 [validation page](explanation/validation.md) names the switch that reproduces
 Stable32 in each case.

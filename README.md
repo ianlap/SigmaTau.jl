@@ -47,14 +47,17 @@ explorer in `app/web/` has its own environment.
 | Thêo | `theo1` (ThêoBR by default), `theoh` |
 | Time error | `mtie`, `tierms`, `pdev` |
 | Time-resolved | `dadev`, `dhdev` |
-| Real time | `StreamingStability` (`adev`, `mdev`, `hdev`, `mhdev`) |
-| Multi-clock | `ncornered_hat` |
+| Real time | `StreamingStability`, `LiveStability` (`adev`, `mdev`, `hdev`, `mhdev` from an instrument) |
+| Multi-clock | `ncornered_hat`, `groslambert` |
+| Two channels | `cross_adev`, `cross_psd_y`, `cross_psd_x` |
+| Noise and drift models | `identify_noise`, `noise_id_nnls`, `powerlaw_fit` (`powerlaw_sigma`, `powerlaw_psd`), `drift_fit` |
 | Spectra and synthesis | `psd_y`, `psd_x`, `ssb_phase_noise`, `noise_gen` |
 
 Every function accepts `PhaseData` or `FrequencyData`, an explicit vector of
 averaging factors or a `TauMode` grid (`Octave`, `Decade`, `AllTaus`, ...).
-`read_phase` / `read_frequency`, `detrend`, `fillgaps` and `remove_outliers`
-cover the usual preprocessing; `save` / `load` round-trip records, results
+`read_phase` / `read_frequency` read plain columns and `read_data` the
+instrument formats (TimeLab, Stable32, counter logs); `detrend`, `fillgaps`
+and `remove_outliers` cover the usual preprocessing; `save` / `load` round-trip records, results
 and suites as plain text. `estimators()` lists the estimators and
 `deviation(:adev, data, m)` runs one chosen by name. The
 [documentation](https://ianlap.github.io/SigmaTau.jl/stable/) has a
@@ -110,8 +113,13 @@ start, no Julia needed to run it):
 ```bash
 sigmatau analyze clock.dat --devs adev,mdev,tdev            # CSV on stdout
 sigmatau analyze clock.dat --format json --out result.json  # versioned JSON
+sigmatau check clock.dat                                    # samples, gaps, outliers, drift
 sigmatau spectrum clock.dat                                 # S_y(f), S_x(f)
 sigmatau dynamic clock.dat --dev dhdev                      # sliding-window HDEV
+sigmatau drift clock.dat --model log                        # aging model and rate per day
+sigmatau cross a.dat --with b.dat                           # two channels, one device
+sigmatau live tcp://192.168.1.20:5025 --hz                  # running σ(τ) from a counter
+sigmatau report clock.dat --out clock.html                  # self-contained HTML report
 ```
 
 Build it from `cli/` with JuliaC; see [the docs page](docs/src/guide/cli.md).
@@ -119,11 +127,15 @@ Build it from `cli/` with JuliaC; see [the docs page](docs/src/guide/cli.md).
 ## Explorer
 
 `app/web/` is a point-and-click explorer for the whole workflow. You can load a
-file (Stable32 `.DAT`, CSV, TSV or whitespace columns, several clocks per file)
-or synthesize a power-law record. It checks the record for gaps and outliers,
-then plots σ_y and σ_x with χ² intervals, the S_y and S_x spectra, and the
-dynamic σ(t, τ) map. The pages are plain HTML and JavaScript over the compiled
-`sigmatau` command line, which answers in tens of milliseconds.
+file (Stable32 `.DAT`, CSV, TSV, whitespace columns or an instrument format,
+several clocks per file), synthesize a power-law record, or stream readings
+from an instrument on the Live page. It checks the record for gaps, outliers
+and drift, lets you pick the range to analyse, then plots σ_y and σ_x with χ²
+intervals and the fitted power-law model, the S_y and S_x spectra and the
+dynamic σ(t, τ) map; pinned runs stay on the plot for comparison. The File
+menu writes a self-contained HTML report and saves or restores a session. The
+pages are plain HTML and JavaScript over the compiled `sigmatau` command
+line, which answers in tens of milliseconds.
 
 ```bash
 python3 app/web/serve.py --open          # http://127.0.0.1:9385
