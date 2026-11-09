@@ -10,7 +10,11 @@ is being deprecated; this package mirrors that port's public API and extends it.
 
 ## Install
 
-Not yet on PyPI. For now, install from a checkout of this repo:
+```bash
+pip install sigmatau
+```
+
+or, for development, from a checkout of this repo:
 
 ```bash
 pip install -e "python/[dev]"
@@ -89,11 +93,10 @@ The `"dev": true` is load-bearing: without it, juliapkg `Pkg.add`s a git snapsho
 the path instead of dev-installing it, and local Julia edits become invisible to the
 Python package until the next resolve.
 
-A wheel cannot use a path, so the release build rewrites this entry with
-`python/tools/pin_juliapkg.py`: `git` pins the matching SigmaTau.jl tag
-(`"url": "https://github.com/ianlap/SigmaTau.jl", "rev": "v0.6.0"`) and
-`registry` pins the General-registry release (`"version": "=0.6.0"`). The repo
-copy keeps the dev path.
+A wheel cannot use a path, so the release build runs
+`python/tools/pin_juliapkg.py`, which replaces this entry with the
+General-registry release of the same version (`"version": "=0.6.0"`) and stops
+if that version is not registered yet. The repo copy keeps the dev path.
 
 `sigmatau.__version__` always equals SigmaTau.jl's version (a test checks it).
 
@@ -101,15 +104,15 @@ copy keeps the dev path.
 
 `.github/workflows/PythonPublish.yml` runs on a `python-v*` tag, for example
 `python-v0.6.0`. It checks that the tag, `__version__` and `Project.toml` agree,
-pins SigmaTau.jl (the `v<version>` git tag, or the registry when the repository
-variable `SIGMATAU_JL_REGISTERED` is `true`), builds the sdist and wheel,
-installs the wheel on a clean runner and runs the tests, then uploads through
-PyPI trusted publishing. The SigmaTau.jl tag `v<version>` must exist before the
-`python-v<version>` tag is pushed.
+pins SigmaTau.jl to the registry release, builds the sdist and wheel, installs
+the wheel on a clean runner and runs the tests, then uploads through PyPI
+trusted publishing. Push the `python-v<version>` tag only after SigmaTau.jl
+`<version>` is merged into the General registry.
 
-One-time PyPI setup: add a pending trusted publisher for project `sigmatau`
+One-time setup: on PyPI, add a pending trusted publisher for project `sigmatau`
 (owner `ianlap`, repository `SigmaTau.jl`, workflow `PythonPublish.yml`,
-environment `pypi`), and create the `pypi` environment in the repository settings.
+environment `pypi`); on GitHub, create the `pypi` environment in the repository
+settings.
 
 ## Differences from sigmatau.py (the retired pure-Python port)
 

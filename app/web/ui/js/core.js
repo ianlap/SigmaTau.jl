@@ -68,10 +68,10 @@ function recordArgs(clock) {
   // its layout, which fixes the record type, units and columns.
   if (clock.format) {
     a.push("--input-format", clock.format);
-    // A table is read by column name; its kind is the user's pick.
+    // A table is read by column name, as the record type the user picked.
     if (clock.format === "table") {
       opt("--column", clock.column_name);
-      if (clock.kind === "frequency") a.push("--freq");
+      a.push(clock.kind === "frequency" ? "--freq" : "--phase");
     }
   } else recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
@@ -137,14 +137,23 @@ export function load(clock, signal) {
 }
 
 // Run the selected estimators on one clock, with its spectrum.
-export function analyze(clock, signal) {
-  return run(request(clock, "analyze", [
-    "--devs", state.devs.join(","),
-    "--grid", state.grid,
-    ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
-    ...(state.bias ? [] : ["--no-bias-correction"]),
-    "--spectrum",
-  ]), signal);
+const analyzeRequest = (clock) => request(clock, "analyze", [
+  "--devs", state.devs.join(","),
+  "--grid", state.grid,
+  ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
+  ...(state.bias ? [] : ["--no-bias-correction"]),
+  "--spectrum",
+]);
+
+export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
+
+// The sigmatau command line that reproduces a clock's analysis (CSV out),
+// for reports.
+export function analyzeCommand(clock) {
+  const { args, file } = analyzeRequest(clock);
+  const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--format" && args[i - 1] !== "--format");
+  const q = (a) => (/^[\w.,:+\/=-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
+  return ["sigmatau", kept[0], ...(file ? [file.name] : []), ...kept.slice(1)].map(q).join(" ");
 }
 
 // Fit a frequency drift model (linear, quadratic, log, diffusion) to one clock.

@@ -86,8 +86,16 @@ the core.
 | **Dynamic** | A DADEV or DHDEV map σ(t, τ), or a 3D waterfall: does the stability change during the record? Recomputes when its settings change; click a cell to pin it. |
 | **Help** | The pages, estimators, noise types, file formats and keyboard shortcuts. |
 
-The **Export** menu saves the current plot as PNG or SVG and every number as
-TSV or JSON.
+The **File** menu saves the current plot as PNG or SVG and every number as
+TSV or JSON. **Report (HTML)** writes one self-contained page with the
+analysis settings, each record (source file and its SHA-256, samples, τ₀,
+span, gaps, outliers, drift, preprocessing), the σ_y and σ_x plots, a table
+per clock and estimator, and the `sigmatau` command lines that reproduce
+it; print it from a browser for a PDF.
+
+**Save session** writes the clocks, their file contents, import settings and
+analysis settings to one JSON file. **Open session…**, or dropping a session
+file on the window, replaces what is loaded and reruns the analysis.
 
 ## Several clocks
 

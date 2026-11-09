@@ -219,6 +219,9 @@ mktempdir() do dir
         @test run_cli("analyze", fx("counter_53230a_freq.csv")).code == 2   # no gate time
         g = run_cli("check", fx("gpsdo.csv"), "--column", "PPS offset (ns)", "--format", "json")
         @test g.code == 0 && occursin("\"quantity\":\"phase\"", g.out)
+        o = run_cli("check", fx("gpsdo.csv"), "--column", "Temperature (C)", "--phase", "--format", "json")
+        @test o.code == 0 && occursin("\"quantity\":\"phase\"", o.out)
+        @test run_cli("check", fx("gpsdo.csv"), "--column", "OSC offset (ppb)", "--phase").code == 2
         @test run_cli("analyze", tim, "--input-format", "counter", "--tau0", "1").code == 2
         @test run_cli("analyze", tim, "--reference-col", "2").code == 1
         semi = joinpath(dir, "semi.txt")
@@ -343,6 +346,19 @@ mktempdir() do dir
         @test parse(Float64, rows[1][3]) == ref.dev[1, 1]
         r = run_cli("dynamic", pf, "--dev", "dhdev", "--format", "json")
         @test occursin("\"deviation\":\"dhdev\",\"window\":32,", r.out)
+    end
+
+    @testset "report" begin
+        r = run_cli("report", pf, "--devs", "adev,tdev", "--m", "1,2,4")
+        @test r.code == 0 && startswith(r.out, "<!doctype html>") && endswith(r.out, "</html>\n")
+        @test count("<svg", r.out) == 2                       # one plot per axis
+        ref = adev(PhaseData(X, 1.0), [1, 2, 4])
+        io = IOBuffer(); SigmaTauCLI.sci(io, ref.dev[2], 4)
+        @test occursin(String(take!(io)), r.out)
+        @test occursin("<pre>sigmatau report " * pf, r.out)
+        @test run_cli("report", pf, "--format", "csv").code == 1
+        sp = joinpath(dir, "it's here.csv"); cp(pf, sp; force=true)
+        @test occursin("<pre>sigmatau report '" * replace(dirname(sp), "'" => "") * "/it'\\''s here.csv'", run_cli("report", sp).out)
     end
 
     @testset "synthetic record" begin
