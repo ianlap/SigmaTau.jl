@@ -7,6 +7,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Analysis range: `--range A:B` (seconds from the first sample) and
+  `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
+  the Data page drags out the part of a record to analyse, the options take
+  τ limits, and **Pin run** on the Stability page keeps a run's curves to
+  compare with the next one.
 - Power-law noise model: `powerlaw_fit` fits the h_α of
   S_y(f) = Σ h_α f^α to a record's σ(τ) (ADEV, MDEV, HDEV or MHDEV, with
   each component's exact response for a sampled record, from m = 1) or to a
