@@ -117,14 +117,6 @@ function _independent_averages(taper::Symbol, L::Int, step::Int, nseg::Int)
     return nseg / (1 + 2s)
 end
 
-_samples(d::PhaseData) = d.x
-_samples(d::FrequencyData) = d.y
-
-_as_phase(d::PhaseData) = d
-_as_phase(d::FrequencyData) = _freq_to_phase(d)
-_as_freq(d::FrequencyData) = d
-_as_freq(d::PhaseData) = _phase_to_freq(d)
-
 """
     CrossStabilityResult
 
@@ -193,7 +185,8 @@ function cross_adev(a::AbstractTimingData, b::AbstractTimingData, m_values::Vect
         covar[j] = sum(p) / (c * n); va[j] = saa / (c * n); vb[j] = sbb / (c * n)
         neff[j] = n
     end
-    ν = sqrt.(_adev_edf(xa, τ₀, m_values) .* _adev_edf(xb, τ₀, m_values))
+    # Each channel's Allan-variance EDF for its identified noise type.
+    ν = sqrt.(adev(PhaseData(xa, τ₀), m_values).edf .* adev(PhaseData(xb, τ₀), m_values).edf)
     unc = sqrt.((va .* vb .+ covar .^ 2) ./ ν)
     dev = [v > 0 ? sqrt(v) : NaN for v in covar]
     return CrossStabilityResult(m_values .* τ₀, covar, dev, unc, sqrt.(va), sqrt.(vb), neff, τ₀, N)
@@ -212,10 +205,6 @@ function _second_diff_products(xa::Vector{Float64}, xb::Vector{Float64}, m::Int)
     end
     return p, saa, sbb
 end
-
-# Allan-variance EDF of a phase record at each m, for its identified noise type.
-_adev_edf(x::Vector{Float64}, τ₀::Float64, m_values::Vector{Int}) =
-    adev(PhaseData(x, τ₀), m_values).edf
 
 cross_adev(a::AbstractTimingData, b::AbstractTimingData, taus::TauMode) =
     cross_adev(a, b, tau_values(taus, length(_as_phase(a).x), :adev))

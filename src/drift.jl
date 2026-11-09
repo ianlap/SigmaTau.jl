@@ -149,44 +149,12 @@ function _drift_rate_grad(model::Symbol, c::Vector{Float64}, t::Float64)
     return [0.0, 1 / (2s), -c[2] / (4s^3)]
 end
 
-# Column norms of X over the measured rows, used to scale the columns to
-# unit length so a t² column in seconds does not wreck the conditioning.
-_col_scale(X::Matrix{Float64}, ok::BitVector) =
-    [max(sqrt(sum(abs2(X[i, j]) for i in eachindex(ok) if ok[i])), floatmin()) for j in 1:size(X, 2)]
-
-# Inverse of the scaled normal matrix XᵀX (p = 2 or 3) over the measured rows.
-function _normal_inv(X::Matrix{Float64}, ok::BitVector, sc::Vector{Float64})
-    p = size(X, 2)
-    A = [sum(X[i, j] * X[i, k] for i in eachindex(ok) if ok[i]) / (sc[j] * sc[k]) for j in 1:p, k in 1:p]
-    return p == 2 ? Matrix(inv(SMatrix{2,2,Float64}(A))) : Matrix(inv(SMatrix{3,3,Float64}(A)))
-end
-
-# (JᵀJ)⁻¹ over the measured rows, for the parameter covariance.
+# (JᵀJ)⁻¹ over the measured rows, for the parameter covariance; the fit
+# itself is `_lsq` (src/io/detrend.jl).
 function _inv_normal(J::Matrix{Float64}, ok::BitVector)
     sc = _col_scale(J, ok)
     Ainv = _normal_inv(J, ok, sc)
     return [Ainv[j, k] / (sc[j] * sc[k]) for j in axes(Ainv, 1), k in axes(Ainv, 2)]
-end
-
-# Least squares on the columns of X over the measured rows; returns the
-# coefficients and the residual sum of squares.
-function _lsq(X::Matrix{Float64}, y::Vector{Float64}, ok::BitVector)
-    p = size(X, 2)
-    sc = _col_scale(X, ok)
-    Ainv = _normal_inv(X, ok, sc)
-    beta = zeros(p)
-    r = [ok[i] ? y[i] : 0.0 for i in eachindex(y)]
-    # A second pass on the residual recovers the digits the normal
-    # equations lose.
-    for _ in 1:2
-        b = [sum(X[i, j] * r[i] for i in eachindex(ok) if ok[i]) / sc[j] for j in 1:p]
-        step = [sum(Ainv[j, k] * b[k] for k in 1:p) for j in 1:p]
-        beta .+= step
-        for i in eachindex(r)
-            ok[i] && (r[i] -= sum(X[i, j] * step[j] / sc[j] for j in 1:p))
-        end
-    end
-    return beta ./ sc, sum(abs2(r[i]) for i in eachindex(r) if ok[i])
 end
 
 # Polynomials are fitted in t/T (T the record span) for conditioning and

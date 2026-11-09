@@ -1,7 +1,6 @@
 # live: readings from an instrument or the simulator turned into running
 # σ(τ), written as one JSON object per line while the measurement runs.
 
-const LIVE_DEVS = (:adev, :mdev, :hdev, :mhdev)
 # The τ grid when --count is not given: m up to 2^16, a ring buffer of
 # 4·2^16 samples per deviation.
 const LIVE_GRID_N = 1 << 17
@@ -13,7 +12,7 @@ simulator(o::Options, tau0::Float64) =
 
 function run_live(out::IO, o::Options)::Int
     for d in o.devs
-        d in LIVE_DEVS || throw(usage_error("live streams adev, mdev, hdev and mhdev, not " * String(d)))
+        haskey(SigmaTau._STREAMING_LAG, d) || throw(usage_error("live streams adev, mdev, hdev and mhdev, not " * String(d)))
     end
     tau0 = isnan(o.tau0) ? 1.0 : o.tau0
     ms = isempty(o.m) ? tau_values(tau_mode(o.grid), o.count > 0 ? max(o.count, 4) : LIVE_GRID_N, :adev) : o.m
