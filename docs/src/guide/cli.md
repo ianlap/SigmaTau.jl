@@ -37,6 +37,7 @@ each call pays Julia's start-up.
 | `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
+| `sigmatau report FILE` | a self-contained HTML report: record, settings, σ(τ) plots, per-τ tables and the command line (prints to PDF) |
 | `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
 | `sigmatau version` | the SigmaTau version |
 | `sigmatau help [COMMAND]` | usage, or one command's options (also `COMMAND --help`) |
@@ -161,6 +162,21 @@ numbers are `null`.
   a `series` of `t`, `y` and `fit`.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
+
+## Report
+
+`sigmatau report` takes the same record and analysis options as `analyze`
+and writes HTML instead of CSV or JSON (so `--format` does not apply):
+
+```sh
+sigmatau report clock.dat --devs adev,mdev,tdev --out clock-report.html
+```
+
+The file has no outside references: styles and SVG plots are inline. It
+lists the record (samples, τ₀, span, gaps, outliers, drift, preprocessing),
+the settings, one plot per axis (σ_y and σ_x) with the confidence band, a
+table per estimator (τ, σ, interval, EDF, noise type, terms) and the command
+that produced it.
 
 ## Exit codes
 

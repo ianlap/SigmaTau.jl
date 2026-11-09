@@ -57,7 +57,7 @@ function _delim_for(path::AbstractString, line::AbstractString, delim::Char='\0'
 end
 
 """
-    detect_format(path) → Symbol
+    detect_format(path; delim=nothing) → Symbol
 
 Name the layout of a data file from its extension and first lines, one of
 [`INPUT_FORMATS`](@ref):
@@ -74,8 +74,14 @@ Name the layout of a data file from its extension and first lines, one of
   most GPSDO and logging-script output).
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
   [`read_frequency`](@ref).
+
+`delim` is the field delimiter, by default comma for `.csv`, tab for
+`.tsv`, else whitespace.
 """
-function detect_format(path::AbstractString)
+detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing) =
+    _detect_format(path, delim === nothing ? '\0' : Char(delim))
+
+function _detect_format(path::AbstractString, delim::Char)
     isfile(path) || throw(ArgumentError("detect_format: file not found: " * String(path)))
     lines = _head_lines(path, 200)
     any(l -> startswith(l, "TIC "), lines) &&
@@ -92,7 +98,7 @@ function detect_format(path::AbstractString)
         length(data) >= 8 && break
     end
     isempty(data) && return :columns
-    d = _delim_for(path, data[1])
+    d = _delim_for(path, data[1], delim)
     first_fields = _split_fields(data[1], d)
     if length(data) >= 2 && !all(_isnumfield, first_fields)
         next = _split_fields(data[2], d)
@@ -220,18 +226,21 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
     return _Record(_equispace(t, v, fillgaps), t0, phase)
 end
 
-# Units in a column name: "(ns)", "[ps]", "_us", " ppb", "Hz"; NaN = Hz.
-const _UNITS = [(Regex("(^|[\\s(\\[_/-])" * u * "([\\s)\\]]|\$)"), f)
-                for (u, f) in (("ps", 1e-12), ("ns", 1e-9), ("us", 1e-6), ("µs", 1e-6), ("μs", 1e-6),
-                               ("ms", 1e-3), ("ppt", 1e-12), ("ppb", 1e-9), ("ppm", 1e-6),
-                               ("hz", NaN), ("s", 1.0))]
+# Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "Hz"): the
+# scale to SI, NaN for absolute Hz, and whether they are time units (phase,
+# +1) or frequency units (-1).
+const _UNITS = [(Regex("(^|[\\s(\\[_/-])" * u * "([\\s)\\]]|\$)"), f, k)
+                for (u, f, k) in (("ps", 1e-12, 1), ("ns", 1e-9, 1), ("us", 1e-6, 1), ("µs", 1e-6, 1),
+                                  ("μs", 1e-6, 1), ("ms", 1e-3, 1), ("ppt", 1e-12, -1), ("ppb", 1e-9, -1),
+                                  ("ppm", 1e-6, -1), ("hz", NaN, -1), ("s", 1.0, 1))]
 
-function _unit_scale(name::AbstractString)
+# (scale, kind) of a column name's unit; (1, 0) without one.
+function _unit(name::AbstractString)
     n = lowercase(name)
-    for (re, f) in _UNITS
-        occursin(re, n) && return f
+    for (re, f, k) in _UNITS
+        occursin(re, n) && return f, k
     end
-    return 1.0
+    return 1.0, 0
 end
 
 const _PHASE_NAMES = r"phase|time ?err|\btie\b|pps|time ?offset|time ?diff|\bx\b"i
@@ -292,7 +301,9 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         push!(rows, String[String(strip(f, '"')) for f in _split_fields(s, d)])
     end
     length(rows) >= 2 || throw(ArgumentError("read_data: fewer than 2 rows under the column names in " * String(path)))
-    time = something(findfirst(n -> occursin(_TIME_NAMES, n), names), 0)
+    # The time column by name, else the first one holding ISO timestamps.
+    time = something(findfirst(n -> occursin(_TIME_NAMES, n), names),
+                     findfirst(f -> !isnan(_iso_seconds(f)), rows[1]), 0)
     c = _pick_column(names, column, column_name, time)
     v = Float64[]
     for (k, r) in enumerate(rows)
@@ -312,7 +323,11 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
     end
     phase = phase_hint == 0 ? !occursin(_FREQ_NAMES, names[c]) || occursin(_PHASE_NAMES, names[c]) :
             phase_hint > 0
-    scale = _unit_scale(names[c])
+    scale, unit_kind = _unit(names[c])
+    # A unit in the name fixes the record type; an override must agree.
+    (phase_hint != 0 && unit_kind != 0 && phase_hint != unit_kind) && throw(ArgumentError(
+        "read_data: column \"" * names[c] * "\" is in " * (unit_kind > 0 ? "time" : "frequency") *
+        " units and cannot be read as " * (phase_hint > 0 ? "phase" : "frequency")))
     if isnan(scale)            # absolute frequency in Hz
         f0 = _nominal(v, nominal)
         v = (v .- f0) ./ f0
@@ -332,7 +347,7 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     isfile(path) || throw(ArgumentError("read_data: file not found: " * String(path)))
     kind in (:auto, :phase, :frequency) ||
         throw(ArgumentError("read_data: kind must be :auto, :phase or :frequency, got :" * String(kind)))
-    fmt = format === :auto ? detect_format(path) : format
+    fmt = format === :auto ? _detect_format(path, delim) : format
     hint = kind === :phase ? 1 : kind === :frequency ? -1 : 0
     r = if fmt === :timelab
         _read_timelab(path, tau0)

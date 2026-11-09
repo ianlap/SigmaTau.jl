@@ -23,12 +23,16 @@
       <span class="dot" id="record-dot" aria-hidden="true"></span><span id="record-chip-text">No record</span>
     </button>
     <div class="menu-wrap">
-      <button class="btn" id="export-btn" type="button" aria-haspopup="menu" aria-expanded="false">Export ▾</button>
+      <button class="btn" id="export-btn" type="button" aria-haspopup="menu" aria-expanded="false">File ▾</button>
       <div class="menu" id="export-menu" role="menu" hidden>
         <button role="menuitem" data-export="png">Plot as PNG</button>
         <button role="menuitem" data-export="svg">Plot as SVG</button>
         <button role="menuitem" data-export="tsv">Results as TSV</button>
         <button role="menuitem" data-export="json">Results as JSON</button>
+        <button role="menuitem" data-export="report">Report (HTML, prints to PDF)</button>
+        <hr>
+        <button role="menuitem" data-export="save-session">Save session…</button>
+        <button role="menuitem" data-export="open-session">Open session…</button>
       </div>
     </div>
     <a class="btn btn-round" id="help-btn" href="#help" aria-label="Help">?</a>

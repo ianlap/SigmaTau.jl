@@ -10,7 +10,9 @@ import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
-import { openFile, saveFile } from "./platform.js";
+import { openFile, saveFile, readFile } from "./platform.js";
+import { buildReport } from "./report.js";
+import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
@@ -82,7 +84,7 @@ async function importFile(file, clock, prev) {
         c.name = settings.value_cols.length > 1 ? colName : baseName(file.name);
       }
       Object.assign(c, {
-        source: { type: "file", name: file.name, content: file.text }, group,
+        source: { type: "file", name: file.name, content: file.text, sha256: file.sha256 ?? "" }, group,
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo,
@@ -167,6 +169,22 @@ async function setRecord(c, fields) {
   if (!c) return;
   update(() => Object.assign(c, fields));
   await loadClock(c);
+}
+
+// Replace everything with a saved session, read its records and rerun.
+async function openSession(file) {
+  let doc, clocks;
+  try { doc = parseSession(file.text); } catch (err) { return ctx.status("error", `${file.name}: ${err.message}`); }
+  for (const c of state.clocks) controllers.get(c.id)?.abort();
+  runCtl?.abort();     // a run in flight belongs to the clocks being replaced
+  update((s) => { clocks = applySession(s, doc); markRecordStale(s); s.run.state = "idle"; });
+  nextGroup = Math.max(nextGroup, ...clocks.map((c) => (c.group ?? 0) + 1));
+  go("stability");
+  await Promise.all(clocks.map(loadClock));
+  await run();
+  const failed = clocks.find((c) => c.error);
+  if (failed) ctx.status("error", `Opened ${file.name}, but ${failed.name} failed: ${failed.error}`);
+  else ctx.status("good", `Opened the session ${file.name}.`);
 }
 
 function selectClock(id) {
@@ -257,7 +275,7 @@ function render() {
 }
 subscribe(() => { if (transient && Date.now() > transient.until) transient = null; render(); });
 
-// ── Export ──
+// ── File menu: exports, report, session ──
 const exportBtn = document.getElementById("export-btn");
 const exportMenu = document.getElementById("export-menu");
 exportBtn.addEventListener("click", () => {
@@ -272,6 +290,22 @@ exportMenu.addEventListener("click", async (e) => {
   if (!kind) return;
   exportMenu.hidden = true;
   const analysed = state.clocks.filter((c) => c.result);
+  if (kind === "save-session") {
+    if (!state.clocks.length) return ctx.status("warn", "There is nothing to save yet.");
+    return saveFile("sigmatau-session.json", new Blob([sessionText()], { type: "application/json" }));
+  }
+  if (kind === "open-session") {
+    const f = await openFile(".json,application/json");
+    return f && openSession(f);
+  }
+  if (kind === "report") {
+    try {
+      const html = await buildReport();
+      return saveFile("sigmatau-report.html", new Blob([html], { type: "text/html" }));
+    } catch (err) {
+      return ctx.status("warn", err.message);
+    }
+  }
   if (kind === "png" || kind === "svg") {
     const el = page?.plotElement();
     if (!el?.data) return ctx.status("warn", "Nothing to export on this page yet.");
@@ -320,7 +354,9 @@ document.addEventListener("drop", async (e) => {
   dragDepth = 0;
   document.body.classList.remove("dragging");
   const f = e.dataTransfer.files[0];
-  if (f) await importFile({ name: f.name, text: await f.text() }, activeClock());
+  if (!f) return;
+  const file = await readFile(f);
+  await (isSession(file.text) ? openSession(file) : importFile(file, activeClock()));
 });
 
 // ── Start ──

@@ -179,24 +179,30 @@ function traces(clocks, devs) {
   return out;
 }
 
-function draw(clocks, devs) {
-  const several = multi();
+// The σ(τ) figure for one axis: traces, layout and the noise overlay. The
+// report export draws the same figure off screen.
+export function figure(clocks, devs, axis = state.axis) {
   const layout = {
     ...baseLayout(),
     xaxis: logAxis("Averaging time τ (s)"),
-    yaxis: logAxis(Y_TITLE[state.axis]),
-    showlegend: !several,
+    yaxis: logAxis(Y_TITLE[axis]),
+    showlegend: !multi(),
     shapes: [], annotations: [],
-    uirevision: `${state.axis}`,
+    uirevision: `${axis}`,
   };
-  if (several && state.compareTau) {
+  const data = traces(clocks, devs);
+  if (state.noiseId && state.ci && axis === "sigma_y") noiseOverlay(layout, data, clocks, devs);
+  return { data, layout };
+}
+
+function draw(clocks, devs) {
+  const { data, layout } = figure(clocks, devs);
+  if (multi() && state.compareTau) {
     const accent = css("--accent");
     layout.shapes.push({ type: "line", xref: "x", yref: "paper", x0: state.compareTau, x1: state.compareTau, y0: 0, y1: 1, line: { color: accent, width: 1.2, dash: "dash" } });
     layout.annotations.push({ xref: "x", yref: "paper", x: Math.log10(state.compareTau), y: 1, xanchor: "left", yanchor: "top", showarrow: false, text: `τ = ${num(state.compareTau, 4)} s`, font: { color: accent, size: 11.5 } });
   }
-  const tr = traces(clocks, devs);
-  if (state.noiseId && state.ci && state.axis === "sigma_y") noiseOverlay(layout, tr, clocks, devs);
-  Plotly.react(plotEl, tr, layout, CONFIG);
+  Plotly.react(plotEl, data, layout, CONFIG);
   if (!clickBound) {
     clickBound = true;
     plotEl.on("plotly_click", (ev) => {
