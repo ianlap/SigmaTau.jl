@@ -65,7 +65,7 @@ function _initial_variance(cc::ClockComparisons, n::Int)
     k = size(cc.x, 2)
     k >= 3 || return ones(k)
     head = ClockComparisons(cc.x[1:n, :], cc.tau0; names=cc.names)
-    pairs = Matrix{AbstractTimingData}(undef, k, k)
+    pairs = Matrix{PhaseData{Float64}}(undef, k, k)
     for i in 1:k, j in i+1:k
         pairs[i, j] = head[i, j]
     end

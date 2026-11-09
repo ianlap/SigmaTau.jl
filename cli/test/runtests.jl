@@ -9,6 +9,7 @@
 using Test
 using SigmaTau
 using SigmaTauCLI
+using Random
 
 function run_cli(args...)
     o = IOBuffer()
@@ -280,6 +281,30 @@ mktempdir() do dir
         @test isapprox(parse.(Float64, getindex.(a, 5)), parse.(Float64, getindex.(b, 5)); rtol=1e-6)
         @test run_cli("analyze", rf, "--reference-col", "9").code == 2
         @test run_cli("analyze", rf, "--reference-col", "2").code == 1
+    end
+
+    @testset "timescale" begin
+        # Three clocks in columns 2–4 against one reference, the third twice as noisy.
+        cc, _ = simulate_ensemble([ClockModel(; tau0=1.0, q1=q) for q in (1e-24, 1e-24, 4e-24)], 4096;
+                                  reference=0, rng=Random.Xoshiro(3))
+        tf = joinpath(dir, "clocks.csv")
+        open(tf, "w") do io
+            for k in 1:4096
+                println(io, k - 1, ",", join(cc.x[k, :], ","))
+            end
+        end
+        rows = csv_rows(run_cli("timescale", tf, "--value-cols", "2,3,4").out)
+        @test getindex.(rows, 1) == ["column 2", "column 3", "column 4"]
+        w = parse.(Float64, getindex.(rows, 3))
+        @test sum(w) ≈ 1 && w[3] < w[1] / 2
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "ewfa", "--format=json", "--series", "8")
+        @test r.code == 0
+        @test occursin("\"algorithm\":\"ewfa\"", r.out) && occursin("\"weight\":[0.3333333333333333,", r.out)
+        @test occursin("\"adev\":{\"tau\":[1.0,", r.out) && occursin("\"series\":{\"t\":[0.0,", r.out)
+        @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
+        @test run_cli("timescale", tf).code == 1                       # no --value-cols
+        @test run_cli("timescale", tf, "--value-cols", "2,2").code == 1
+        @test run_cli("timescale", tf, "--value-cols", "2,9").code == 2
     end
 
     @testset "drift" begin

@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
@@ -9,6 +9,7 @@ const COMMAND_HELP = [
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
+    ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
@@ -24,6 +25,7 @@ const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
+const TIMESCALES = ["at1", "ewfa"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 
 struct Opt
@@ -37,7 +39,7 @@ end
 
 const ALL = filter(!=("live"), COMMANDS)   # the commands that read a FILE
 const ANY = COMMANDS
-const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift"]   # CSV or JSON out (report writes HTML)
+const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale"]   # CSV or JSON out (report writes HTML)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
@@ -76,6 +78,10 @@ const OPTS = [
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
+    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble of four clocks)", ["timescale"]),
+    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights) or ewfa (equal weights)", ["timescale"]),
+    Opt("--tau-y", "SECONDS", String[], false, "frequency averaging time of each clock (default 100 τ₀)", ["timescale"]),
+    Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
     Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal (default: the first reading to 4 significant figures)", ["live"]),
@@ -144,6 +150,10 @@ mutable struct Options
     tau_min::Float64          # NaN = no limit
     tau_max::Float64
     fit::Bool                 # --fit: power-law model in the JSON
+    value_cols::Vector{Int}   # timescale: one value column per clock
+    algorithm::String
+    tau_y::Float64            # NaN = 100 τ₀
+    wmax::Float64
     components::Vector{Tuple{Int,Float64,Float64}}   # --component: α, τ from, τ to (NaN = open)
 end
 
@@ -151,7 +161,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
-                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false,
+                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
                     Tuple{Int,Float64,Float64}[])
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
@@ -229,6 +239,18 @@ function parse_devs(s::String)
     return devs
 end
 
+# "2,3,5": value columns in the order given.
+function parse_cols(s::String)
+    cols = Int[]
+    for tok in split(s, ',')
+        v = tryparse(Int, strip(tok))
+        (v === nothing || v < 1) && throw(usage_error("--value-cols expects column numbers, got \"" * s * "\""))
+        push!(cols, v)
+    end
+    length(cols) >= 2 && allunique(cols) || throw(usage_error("--value-cols needs two or more different columns"))
+    return cols
+end
+
 function parse_m(s::String)
     ms = Int[]
     for tok in split(s, ',')
@@ -276,6 +298,10 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--window";         o.window = parse_int(v, name)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
+    elseif name == "--value-cols";     o.value_cols = parse_cols(v)
+    elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
+    elseif name == "--tau-y";          o.tau_y = parse_float(v, name)
+    elseif name == "--wmax";           o.wmax = parse_float(v, name)
     elseif name == "--series";         o.series = parse_int(v, name)
     elseif name == "--query";          o.query = v
     elseif name == "--every";          o.every = parse_int(v, name)

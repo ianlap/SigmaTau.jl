@@ -163,7 +163,7 @@ function json_powerlaw(io::IO, o::Options, data::PhaseData, results::Vector{Stab
         return nothing
     end
     τ₀ = data.tau0
-    αs = sort!(collect(keys(h)); rev=true)
+    αs = reverse!(sort!(collect(keys(h))))   # sort!(…; rev) is not trim-safe
     print(io, '{')
     json_key(io, "deviation", true); json_string(io, "mhdev")
     json_key(io, "alphas"); json_array(io, αs)
