@@ -11,6 +11,7 @@ import importlib.util
 import json
 import os
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -46,6 +47,11 @@ class RequestToArgsTests(unittest.TestCase):
                     {"args": ["analyze", 3]}):
             with self.assertRaises(ValueError, msg=req):
                 serve.request_to_args(req, "/nonexistent")
+
+    def test_live_rejects(self):
+        for args in (None, "live", [], ["analyze"], ["live", "sim", "--out", "x"], ["live", 3]):
+            with self.assertRaises(ValueError, msg=args):
+                serve.Live(["true"], args)
 
 
 @unittest.skipUnless(serve.cli_command(), "no sigmatau binary and no julia on PATH")
@@ -114,6 +120,37 @@ class ServeTests(unittest.TestCase):
                                           "--format", "json"]})
         self.assertEqual(status, 200, doc)
         self.assertIn("dynamic", doc)
+
+    def test_live(self):
+        status, doc = self.post({"args": ["live", "sim", "--fast", "--count", "20", "--every", "10", "--m", "1"]},
+                                path="/api/live/start")
+        self.assertEqual(status, 200, doc)
+        lines, since = [], 0
+        for _ in range(200):
+            status, out = self.request(f"/api/live/poll?id={doc['id']}&since={since}")
+            poll = json.loads(out)
+            lines += poll["lines"]
+            since = poll["next"]
+            if not poll["running"] and not poll["lines"]:
+                break
+            time.sleep(0.05)
+        self.assertIsNone(poll["error"])
+        self.assertEqual([json.loads(l)["n"] for l in lines], [10, 20])
+        self.assertTrue(json.loads(lines[-1])["done"])
+        status, _ = self.post({}, path="/api/live/stop")
+        self.assertEqual(status, 200)
+        status, _ = self.request(f"/api/live/poll?id={doc['id']}")
+        self.assertEqual(status, 404)
+
+    def test_live_error(self):
+        status, doc = self.post({"args": ["live", "tcp://127.0.0.1:1"]}, path="/api/live/start")
+        self.assertEqual(status, 200, doc)
+        for _ in range(100):
+            poll = json.loads(self.request(f"/api/live/poll?id={doc['id']}")[1])
+            if not poll["running"]:
+                break
+            time.sleep(0.05)
+        self.assertIn("could not connect", poll["error"])
 
     def test_core_error_is_422(self):
         status, doc = self.post({"args": ["analyze", "--synth", "4", "--format", "json"]})

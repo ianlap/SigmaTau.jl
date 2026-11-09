@@ -24,6 +24,9 @@ export const state = {
   spec: { carrier: 10e6, carrierText: "10e6", phase: "L", avg: "log", guides: true },
   // Dynamic page: estimator, window = record / frac, map or 3D waterfall
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
+  // Live page: where the readings come from and what they are
+  live: { source: "sim", address: "192.168.1.20:5025", device: "/dev/ttyUSB0", query: "READ?", reading: "hz",
+          nominal: "", tau0: 0.1, devs: ["adev", "mdev"] },
   dataMode: "file",        // "file" | "synth" on the Data page
   dataView: "phase",       // "phase" | "drift": the Data page's plot
   driftModel: "linear",    // frequency drift model fitted on the drift view

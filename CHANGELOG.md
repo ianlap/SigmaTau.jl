@@ -30,6 +30,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Live measurement: `LiveStability` keeps ADEV, MDEV, HDEV and MHDEV up to
+  date as readings arrive (phase, fractional frequency or counter Hz), equal
+  to the batch estimators at every reading. Sources: `InstrumentSource` for
+  any line-based stream (an LXI SCPI socket, a serial port, a log being
+  written) and `SimulatedSource`. `sigmatau live SOURCE` streams the running
+  σ(τ) as JSON lines, and the explorer's Live page plots it and hands the
+  readings to the full analysis.
 - `noise_id_nnls(data[, m]; deviation=:mhdev, alphas, weights=:edf)`: a
   weighted nonnegative least-squares fit of the measured σ̂²(τ) profile to
   power-law components. One fit over the whole τ range gives the amplitude of

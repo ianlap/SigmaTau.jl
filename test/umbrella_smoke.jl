@@ -17,6 +17,7 @@ using SigmaTau
         :dadev, :dhdev, :stability, :deviation, :estimators, :summarize,
         :ncornered_hat, :StreamingStability, :snapshot, :nsamples,
         :identify_noise, :noise_id_nnls, :calculate_edf, :confidence_intervals, :bias_correction,
+        :LiveStability, :SimulatedSource, :InstrumentSource, :read_reading,
         :psd_y, :psd_x, :ssb_phase_noise, :noise_gen,
         :read_phase, :read_frequency, :read_data, :detect_format, :INPUT_FORMATS,
         :save, :load,

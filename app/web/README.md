@@ -49,6 +49,13 @@ returns the binary's JSON: status 200 on success and 422 with
 `{"error": …}` on failure. `GET /api/health` reports whether a core was
 found. The desktop shell takes the same request.
 
+The Live page runs `sigmatau live` for as long as a measurement lasts:
+`POST /api/live/start` with `{"args": ["live", SOURCE, flags…]}` starts it
+(stopping any other) and answers `{"id": n}`; `GET /api/live/poll?id=n&since=k`
+answers `{"lines": [JSON lines from k on], "next", "running", "error"}`; and
+`POST /api/live/stop` ends it. The desktop shell has the same three as the
+commands `live_start`, `live_poll` and `live_stop`.
+
 ## Tests
 
 ```bash
@@ -67,7 +74,7 @@ every change to `src/`, `cli/` or `app/web/`.
 - `ui/js/core.js` is the only code that talks to the core, and
   `ui/js/platform.js` the only code that opens or saves files. Inside the
   desktop window (`app/desktop`) those two call its commands instead.
-- Layout: a side panel (clocks, estimators, options, Run analysis) and five
+- Layout: a side panel (clocks, estimators, options, Run analysis) and six
   pages. Data has the file card, the import dialog (pick the time and value
   columns, record type, units, τ₀; gaps flagged from the whole file), the
   record check and the phase plot with outliers marked. Stability has the
@@ -77,10 +84,14 @@ every change to `src/`, `cli/` or `app/web/`.
   without a rerun. Dynamic shows a DADEV or DHDEV map (or a 3D waterfall),
   computed on its own when the page opens or its settings change; click a
   cell to pin it. With several clocks Spectrum overlays them and Dynamic
-  draws one map per clock on a shared colour scale. Help explains the pages,
+  draws one map per clock on a shared colour scale. Live reads an
+  instrument (LXI socket, serial port or file) or the simulator and redraws
+  σ(τ) and the frequency as readings arrive; "Analyse readings" loads them
+  as a clock for the full analysis. Help explains the pages,
   estimators, noise types and file formats.
 - With one clock the panel holds the current page's settings; with several
-  it keeps the clock list and the page settings move to a toolbar.
+  it keeps the clock list and the page settings move to a toolbar (Live
+  keeps its settings in the panel).
 - Analysis runs only on Run analysis (F5); changed inputs mark the results
   out of date in the panel and the status bar.
 - Several clocks can be loaded, with no limit. With more than one, colour

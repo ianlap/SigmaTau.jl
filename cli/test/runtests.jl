@@ -46,7 +46,7 @@ csv_rows(s) = [split(l, ',') for l in split(strip(s), '\n')[2:end]]
     for h in (["help"], ["--help"], ["-h"], String[])
         r = run_cli(h...)
         @test r.code == 0
-        for c in ("analyze", "check", "spectrum", "dynamic", "completion")
+        for c in ("analyze", "check", "spectrum", "dynamic", "live", "completion")
             @test occursin(c, r.out)
         end
     end
@@ -345,6 +345,55 @@ mktempdir() do dir
         @test occursin("\"deviation\":\"dhdev\",\"window\":32,", r.out)
     end
 
+    @testset "live" begin
+        floats(s) = [parse(Float64, v) for v in split(s, ',') if !isempty(v)]
+        readings(out) = reduce(vcat, [floats(m[1]) for m in eachmatch(r"\"readings\":\[([^\]]*)\]", out)])
+        adevs(out) = floats(match(r"\"adev\",\"dev\":\[([^\]]*)\]", split(strip(out), '\n')[end])[1])
+
+        r = run_cli("live", "sim", "--fast", "--count", "64", "--every", "32", "--m", "1,2", "--devs", "adev")
+        @test r.code == 0
+        lines = split(strip(r.out), '\n')
+        @test length(lines) == 2
+        @test occursin("\"n\":32,", lines[1]) && occursin("\"done\":false", lines[1])
+        @test occursin("\"n\":64,", lines[2]) && occursin("\"done\":true", lines[2])
+        @test adevs(r.out) ≈ adev(PhaseData(readings(r.out), 1.0), [1, 2]; ci=false).dev
+
+        # A counter log replayed from a file: Hz readings against the first one.
+        y = 1e-11 .* sinpi.((1:40) ./ 3.7)
+        hf = joinpath(dir, "counter.txt")
+        write(hf, join(string.(10e6 .* (1 .+ y)), "\n"))
+        r = run_cli("live", hf, "--hz", "--tau0", "2", "--every", "100", "--m", "1,2,4")
+        @test r.code == 0
+        @test occursin("\"nominal\":1.0e7,", r.out)
+        @test adevs(r.out) ≈ adev(FrequencyData(y, 2.0), [1, 2, 4]; ci=false).dev rtol = 1e-5
+
+        # An LXI instrument: the SCPI query goes out before every reading. The
+        # instrument runs in its own process, since the CLI blocks while it reads.
+        instrument = open(`$(Base.julia_cmd()) --startup-file=no -e '
+            using Sockets
+            server = listen(Sockets.localhost, 0)
+            println(Int(getsockname(server)[2])); flush(stdout)
+            c = accept(server)
+            while readline(c) == "MEAS:FREQ?"
+                println(c, "+1.0000000001E+07")
+            end'`)
+        port = readline(instrument)
+        r = run_cli("live", "tcp://127.0.0.1:" * port, "--query", "MEAS:FREQ?", "--hz",
+                    "--nominal", "1e7", "--count", "5", "--m", "1")
+        wait(instrument)
+        @test r.code == 0
+        @test readings(r.out) == fill(1.0000000001e7, 5)
+
+        @test run_cli("live").code == 1
+        @test run_cli("live", "sim", "--freq").code == 1
+        @test run_cli("live", "sim", "--devs", "totdev").code == 1
+        @test run_cli("live", "sim", "--fillgaps").code == 1
+        @test run_cli("live", "tcp://nowhere").code == 1
+        r = run_cli("live", "tcp://127.0.0.1:" * port, "--count", "1")
+        @test r.code == 2
+        @test occursin("\"exit_code\":2}", r.out)
+    end
+
     @testset "synthetic record" begin
         r = run_cli("analyze", "--synth", "1024", "--seed", "7", "--devs", "adev", "--format", "json")
         @test r.code == 0
@@ -456,6 +505,7 @@ mktempdir() do dir
                          ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],
+                         ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],
                          ["version"])

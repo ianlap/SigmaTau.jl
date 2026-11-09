@@ -55,6 +55,7 @@ _sigmatau() {
         spectrum)   opts="@@OPTS_spectrum@@" ;;
         dynamic)    opts="@@OPTS_dynamic@@" ;;
         drift)      opts="@@OPTS_drift@@" ;;
+        live)       opts="@@OPTS_live@@" ;;
     esac
     if [[ "$cur" == -* ]]; then
         COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
@@ -79,7 +80,7 @@ _sigmatau() {
       case $words[1] in
         completion) _values 'shell' @@SHELLS@@ ;;
         help)       _values 'command' @@SUBCMDS@@ ;;
-        analyze|check|spectrum|dynamic|drift)
+        analyze|check|spectrum|dynamic|drift|live)
           case $words[CURRENT-1] in
             --devs)    _values -s , 'deviation' @@DEVS@@ ;;
             --dev)     _values 'deviation' @@DYN@@ ;;
@@ -98,6 +99,7 @@ _sigmatau() {
                   spectrum) opts=(@@OPTS_spectrum@@) ;;
                   dynamic)  opts=(@@OPTS_dynamic@@) ;;
                   drift)    opts=(@@OPTS_drift@@) ;;
+                  live)     opts=(@@OPTS_live@@) ;;
                 esac
                 compadd -a opts
               else
@@ -116,10 +118,10 @@ const FISH = raw"""
 complete -c sigmatau -f -n '__fish_use_subcommand' -a '@@SUBCMDS@@'
 complete -c sigmatau -f -n '__fish_seen_subcommand_from completion' -a '@@SHELLS@@'
 complete -c sigmatau -f -n '__fish_seen_subcommand_from help' -a '@@SUBCMDS@@'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze' -l devs -a '@@DEVS@@' -d 'comma list of deviations'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze live' -l devs -a '@@DEVS@@' -d 'comma list of deviations'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from dynamic' -l dev -a '@@DYN@@' -d 'dynamic deviation'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from drift' -l model -a '@@MODELS@@' -d 'drift model'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze dynamic' -l grid -a '@@GRIDS@@' -d 'τ grid'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze dynamic live' -l grid -a '@@GRIDS@@' -d 'τ grid'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift' -l format -a '@@FMT@@' -d 'output format'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift' -l detrend -a '@@DETREND@@' -d 'detrend mode'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift' -l remove-drift -a '@@DRIFT@@' -d 'drift to fit and remove'
@@ -161,6 +163,7 @@ Register-ArgumentCompleter -Native -CommandName sigmatau -ScriptBlock {
             'spectrum' { return _res ('@@OPTS_spectrum@@' -split ' ') }
             'dynamic'  { return _res ('@@OPTS_dynamic@@' -split ' ') }
             'drift'    { return _res ('@@OPTS_drift@@' -split ' ') }
+            'live'     { return _res ('@@OPTS_live@@' -split ' ') }
         }
     }
 }

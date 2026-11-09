@@ -52,3 +52,29 @@ Base.append!(::StreamingStability, ::AbstractVector{<:Real})
 snapshot
 nsamples
 ```
+
+## Live measurement
+
+[`LiveStability`](@ref) holds one accumulator per deviation and takes
+readings as an instrument gives them: phase, fractional frequency, or a
+counter frequency in hertz. A source is anything with
+[`read_reading`](@ref), which returns `NaN` once the stream ends.
+
+```julia
+using Sockets
+counter = InstrumentSource(Sockets.connect("192.168.1.20", 5025); query="READ?")
+live = LiveStability([:adev, :mdev], 1.0, [1, 2, 4, 8, 16]; quantity=:hz, nominal=10e6)
+for _ in 1:3600
+    push!(live, read_reading(counter))
+end
+snapshot(live)            # one StabilityResult per deviation
+```
+
+`SimulatedSource()` stands in for the instrument when trying a setup out.
+
+```@docs
+LiveStability
+SimulatedSource
+InstrumentSource
+read_reading
+```

@@ -35,6 +35,7 @@ include("options.jl")
 include("record.jl")
 include("output.jl")
 include("commands.jl")
+include("live.jl")
 include("completion.jl")
 
 # The message for an exception that is not a CLIError. No showerror: it
@@ -97,6 +98,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
 
     o = Options()
     o.command = cmd
+    cmd == "live" && (o.format = "json")    # live writes JSON lines only
     for a in args
         a == "--format=json" && (o.format = "json")   # so a usage error can still answer in JSON
     end
@@ -113,6 +115,14 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         print_command_help(cmd_buf, cmd)
         write(out, take!(cmd_buf))
         return EXIT_OK
+    end
+
+    if cmd == "live"
+        try
+            return run_live(out, o)
+        catch e
+            return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))
+        end
     end
 
     t_start = time_ns()
