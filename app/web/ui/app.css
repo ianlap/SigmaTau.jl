@@ -69,6 +69,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--bg-popover); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow-pop); padding: 4px; z-index: 40; min-width: 180px; }
 .menu button { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; padding: 7px 10px; border-radius: 5px; cursor: pointer; color: var(--ink); }
 .menu button:hover { background: var(--accent-soft); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
 
 /* ── Body and side panel ── */
 .body { display: flex; min-height: 0; }

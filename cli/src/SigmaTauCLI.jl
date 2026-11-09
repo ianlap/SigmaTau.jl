@@ -35,6 +35,7 @@ include("options.jl")
 include("record.jl")
 include("output.jl")
 include("commands.jl")
+include("report.jl")
 include("live.jl")
 include("completion.jl")
 
@@ -133,7 +134,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     end
     buf = IOBuffer()
     try
-        run_command(buf, o, data, t_start)
+        run_command(buf, o, data, t_start, args)
     catch e
         return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
     end

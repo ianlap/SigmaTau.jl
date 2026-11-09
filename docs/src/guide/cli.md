@@ -38,6 +38,7 @@ each call pays Julia's start-up.
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
 | `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
+| `sigmatau report FILE` | a self-contained HTML report: record, settings, σ(τ) plots, per-τ tables and the command line (prints to PDF) |
 | `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
 | `sigmatau version` | the SigmaTau version |
 | `sigmatau help [COMMAND]` | usage, or one command's options (also `COMMAND --help`) |
@@ -199,6 +200,20 @@ Every `--every N` readings (default 1) it writes one JSON object on a line:
 `--count N` readings or when the source ends, with a last line that has
 `"done": true`; until then it runs until stopped. The values carry no
 confidence intervals: run `analyze` on the saved readings for those.
+## Report
+
+`sigmatau report` takes the same record and analysis options as `analyze`
+and writes HTML instead of CSV or JSON (so `--format` does not apply):
+
+```sh
+sigmatau report clock.dat --devs adev,mdev,tdev --out clock-report.html
+```
+
+The file has no outside references: styles and SVG plots are inline. It
+lists the record (samples, τ₀, span, gaps, outliers, drift, preprocessing),
+the settings, one plot per axis (σ_y and σ_x) with the confidence band, a
+table per estimator (τ, σ, interval, EDF, noise type, terms) and the command
+that produced it.
 
 ## Exit codes
 
