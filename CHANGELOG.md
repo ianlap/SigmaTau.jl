@@ -5,6 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Analysis range: `--range A:B` (seconds from the first sample) and
+  `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
+  the Data page drags out the part of a record to analyse, the options take
+  τ limits, and **Pin run** on the Stability page keeps a run's curves to
+  compare with the next one.
+
 ## [0.6.0] - 2026-11-08
 
 ### Fixed
@@ -32,11 +40,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Analysis range: `--range A:B` (seconds from the first sample) and
-  `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
-  the Data page drags out the part of a record to analyse, the options take
-  τ limits, and **Pin run** on the Stability page keeps a run's curves to
-  compare with the next one.
 - Reports: `sigmatau report FILE` writes one self-contained HTML file with
   the record summary, the settings, σ(τ) plots, per-τ tables and the
   command that reproduces it; a browser prints it to PDF. The explorer's
