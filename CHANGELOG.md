@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Clock models, the Kalman filter and timescales.
+
 ### Added
 
 - Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
@@ -13,21 +15,15 @@ versions follow [Semantic Versioning](https://semver.org/).
   confidence intervals as weights, `undo!` takes the last one back, and
   `noise_residual` shows what is left. The model feeds `powerlaw_sigma`,
   `powerlaw_psd` and `clock_model`.
-- `sigmatau analyze --component NOISE:A:B` builds the `--fit` model by hand,
-  one noise type over a τ span at a time, and the JSON `powerlaw` gains
-  `mode`, `components`, `residual` and `clock_model`. In the explorer,
-  **Edit** in the noise model panel does the same, with the MHDEV the model
-  leaves drawn dashed; the components are saved with the session.
 - Single-clock Kalman filter: `kalman_filter` runs a `ClockModel` over a
   phase record (gaps predicted across, Joseph-form update, least-squares
   start), `kalman_smooth` is the Rauch–Tung–Striebel smoother,
   `holdover_error` gives the 1σ time error after free-running for τ, and
   `innovation_check` tests the normalized innovations for unit variance and
-  whiteness. `simulate_clock` draws a record and its true states from a
-  model.
-- `tune_q` retunes a model's white and random-walk FM levels on a log grid
-  for the smallest phase prediction error at chosen horizons, and
-  `prediction_error` reports that error for any filter run.
+  whiteness. `tune_q` retunes the white and random-walk FM levels for the
+  smallest phase prediction error at chosen horizons, `prediction_error`
+  reports that error, and `simulate_clock` draws a record and its true
+  states from a model.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -35,19 +31,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Timescales: `timescale(cc; algorithm=:ewfa | :at1)` forms a scale from
   the clocks' predicted phases, with equal weights (EWFA) or AT1's learned
   inverse-variance weights, capped by `wmax`, outliers and missing readings
-  left out; `timescale_phase` gives the scale against the reference.
-  AT1 starts each clock from its Groslambert ADEV, or from its ADEV against
-  the reference where that estimate fails, so a short record no longer
-  leaves it at equal weights.
-  `sigmatau timescale FILE --value-cols 2,3,4` does the same from the
-  command line (`--algorithm`, `--tau-y`, `--wmax`; `--synth N` simulates
-  four clocks). The explorer's new **Ensemble** page forms the scale from
-  the clocks of one loaded file, or simulated ones, and plots each clock's
-  weight and the ADEV of the scale and of each clock against it.
+  left out; `timescale_phase` gives the scale against the reference. AT1
+  starts each clock from its Groslambert ADEV, or from its ADEV against the
+  reference where that estimate fails.
+- Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
+  model by hand, and the JSON `powerlaw` gains `mode`, `components`,
+  `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`
+  forms a timescale (`--algorithm`, `--tau-y`, `--wmax`; `--synth N`
+  simulates four clocks).
+- Explorer: **Edit** in the noise model panel builds the model by hand, with
+  the MHDEV it leaves drawn dashed, and is saved with the session. The new
+  **Ensemble** page forms a timescale from the clocks of one loaded file, or
+  simulated ones, and plots each clock's weight and the ADEV of the scale
+  and of each clock against it.
 - Python: `ClockModel`, `clock_model`, `noise_fit`, `kalman_filter`,
   `kalman_smooth`, `holdover_error`, `innovation_check`, `tune_q`,
   `simulate_clock`, `ClockComparisons`, `simulate_ensemble`, `timescale` and
   `timescale_phase` wrap the Julia calls of the same names.
+- Tutorial "From one clock to an ensemble": noise fit, Kalman filter,
+  holdover and an AT1 timescale on simulated clocks.
 
 ## [0.6.0] - 2026-11-08
 

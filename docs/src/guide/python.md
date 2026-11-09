@@ -35,11 +35,17 @@ st.psd_y(pd)                         # Welch S_y(f)
 st.drift_fit(pd).rate                # frequency drift per day
 st.powerlaw_fit(pd)                  # h_α of the power-law noise model
 st.save("adev.tsv", r)               # st.load("adev.tsv") reads it back
+
+m = st.clock_model(st.powerlaw_fit(pd), tau0=1.0)
+kf = st.kalman_filter(pd, m)         # phase and frequency estimates
+cc, _ = st.simulate_ensemble([m] * 4, 10_000)
+st.timescale(cc).weights             # AT1 weights over time
 ```
 
 The Python names and keywords match the Julia ones on this site (`psd_y`,
 `ncornered_hat`, `groslambert`, `cross_adev`, `save`/`load`, `m=` for the τ
-grid). Indices returned to Python, such as `find_outliers`, are 0-based. Live
+grid). Indices into and out of Python, such as `find_outliers` and
+`simulate_ensemble(reference=)`, are 0-based. Live
 measurement ([`LiveStability`](@ref) and `sigmatau live`), `noise_id_nnls` and
 [`StreamingStability`](@ref) are Julia only.
 
