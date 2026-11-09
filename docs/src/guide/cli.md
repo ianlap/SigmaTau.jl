@@ -3,6 +3,10 @@
 `sigmatau` is one compiled program with a subcommand per task. It runs the
 same library code as the Julia API, starts in about 30 ms, and needs no Julia
 install. The stability explorer runs the same binary with `--format json`.
+Each [release](https://github.com/ianlap/SigmaTau.jl/releases) carries it
+prebuilt as `sigmatau-<version>-<linux|macos>-<arch>.tar.gz`; unpack it and
+run `bin/sigmatau` (on macOS, clear the download flag first with
+`xattr -dr com.apple.quarantine sigmatau-*`).
 
 ```bash
 sigmatau analyze clock.dat --tau0 1 --devs adev,mdev,tdev

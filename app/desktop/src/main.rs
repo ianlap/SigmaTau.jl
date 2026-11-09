@@ -76,6 +76,22 @@ fn core_path(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
+/// A command for the core. The AppImage launcher points LD_LIBRARY_PATH at
+/// the AppImage's own usr/lib, which holds copies of libjulia; the core
+/// would load those instead of its own and then look for Julia's private
+/// libraries (libgcc_s and the rest) next to them, where there are none.
+/// The core's RUNPATH already names its libraries. The compiled core also
+/// runs on one thread unless told otherwise; the total deviations and Thêo1
+/// split their work across all cores.
+fn core_command(core: &Path) -> Command {
+    let mut cmd = Command::new(core);
+    cmd.env_remove("LD_LIBRARY_PATH");
+    if std::env::var_os("JULIA_NUM_THREADS").is_none() {
+        cmd.env("JULIA_NUM_THREADS", "auto");
+    }
+    cmd
+}
+
 const COMMANDS: [&str; 5] = ["check", "analyze", "spectrum", "dynamic", "drift"];
 
 /// Check a request `{args: [command, flags...], file: {name, content} | null}`
@@ -107,13 +123,7 @@ fn request_to_args(req: &Map<String, Value>, workdir: &Path) -> Result<Vec<Strin
 
 /// Run the core, polling so a cancel or the timeout can stop it.
 fn run_core(core: &Path, args: &[String], id: u64, runs: &Runs) -> Result<Value, String> {
-    let mut cmd = Command::new(core);
-    // The compiled core runs on one thread unless told otherwise; the
-    // total deviations and Thêo1 split their work across all cores.
-    if std::env::var_os("JULIA_NUM_THREADS").is_none() {
-        cmd.env("JULIA_NUM_THREADS", "auto");
-    }
-    let mut child = cmd
+    let mut child = core_command(core)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -223,7 +233,7 @@ fn live_start(app: AppHandle, args: Vec<String>, slot: State<'_, LiveSlot>) -> R
         return Err("--out is not allowed here".into());
     }
     stop_live(&slot);
-    let mut child = Command::new(core)
+    let mut child = core_command(&core)
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
