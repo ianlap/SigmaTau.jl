@@ -26,6 +26,7 @@ using SigmaTau
         :drift_fit, :DriftFit,
         :powerlaw_fit, :PowerLawFit, :powerlaw_sigma, :powerlaw_psd,
         :ClockModel, :clock_model, :state_transition, :process_noise,
+        :NoiseFit, :noise_fit, :add_component!, :undo!, :noise_residual,
         :KalmanResult, :kalman_filter, :kalman_smooth, :holdover_error, :innovation_check, :simulate_clock,
         :prediction_error, :tune_q])
     deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
