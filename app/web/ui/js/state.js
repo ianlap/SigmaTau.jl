@@ -16,6 +16,7 @@ export const state = {
   band: true,              // intervals as a shaded band (else error bars)
   noiseId: true,           // noise-type strip and slope guides on the Stability plot
   fit: true,               // power-law model lines and the noise model table on Stability
+  fitEdit: false,          // the noise model box shows the component editor
   bias: true,
   tauMin: null,            // averaging-time limits in seconds, null = none
   tauMax: null,
@@ -68,6 +69,7 @@ export function newClock(fields = {}) {
     result: null,            // last analysis from the core (with the spectrum)
     dynamic: null,           // last dynamic-deviation map, with its settings key
     driftFit: null,          // last frequency drift fit, with its settings key
+    components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
     error: null,
     ...fields,
   };

@@ -13,6 +13,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   confidence intervals as weights, `undo!` takes the last one back, and
   `noise_residual` shows what is left. The model feeds `powerlaw_sigma`,
   `powerlaw_psd` and `clock_model`.
+- `sigmatau analyze --component NOISE:A:B` builds the `--fit` model by hand,
+  one noise type over a τ span at a time, and the JSON `powerlaw` gains
+  `mode`, `components`, `residual` and `clock_model`. In the explorer,
+  **Edit** in the noise model panel does the same, with the MHDEV the model
+  leaves drawn dashed; the components are saved with the session.
 
 ## [0.6.0] - 2026-11-08
 

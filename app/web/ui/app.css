@@ -357,3 +357,9 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .btn.btn-sm { padding: 3px 9px; font-size: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; background: var(--bg-card); }
 .chip .link-btn { padding: 0 4px; }
+.model-box h3 .link-btn { float: right; font-weight: 400; }
+.model-edit { margin: 8px 0 4px; display: grid; gap: 6px; }
+.model-steps { margin: 0; padding-left: 18px; font-family: var(--font-mono); }
+.model-steps li { margin: 2px 0; }
+.model-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.model-add input { width: 70px; font-family: var(--font-mono); font-size: 12px; }
