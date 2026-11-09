@@ -50,16 +50,35 @@ pd_dat = read_phase(datpath; header = 10, time_col = 0, value_col = 1, tau0 = 1.
 # `read_frequency` takes the same keywords and returns a `FrequencyData`.
 # Every deviation function accepts either container.
 
+# ## Timestamps and gaps
+#
+# A reading missing from a timestamped log is not dropped: the readers put
+# every sample on the grid of its time column (jittered timestamps round to
+# their slot), and a missing timestamp leaves a `NaN` sample where it
+# belongs. Here twelve rows are missing:
+
+gaplog = joinpath(dir, "gaps.DAT")
+open(gaplog, "w") do io
+    for k in eachindex(x)
+        k in 1001:1012 && continue
+        println(io, (k - 1) * τ₀, "  ", x[k])
+    end
+end
+pd_gap = read_phase(gaplog)
+length(pd_gap), count(isnan, pd_gap.x)
+
+# ADEV, MDEV, HDEV, MHDEV, TDEV, MTIE and TIE rms skip the terms that touch a
+# missing sample; the totals, Theo1 and the spectra need the gaps filled
+# first. ISO 8601 or MJD timestamps also give the record its
+# [`start_time`](@ref), which `save` keeps. The readers stream the file line
+# by line and keep only the columns they return, so a multi-day log at a high
+# rate costs the memory of its samples.
+#
 # ## Cleaning
 #
-# The kernels need an equispaced, gap-free record; one `NaN` poisons every
-# σ(τ) whose sums touch it. `fillgaps` imputes missing samples with the
-# Howe–Schlossberger reflect-and-filter method, which preserves the local
-# noise character instead of flattening it:
-
-xg = copy(x)
-xg[1001:1012] .= NaN
-pd_gap = PhaseData(xg, τ₀)
+# `fillgaps` imputes missing samples with the Howe–Schlossberger
+# reflect-and-filter method, which preserves the local noise character
+# instead of flattening it:
 
 adev(pd_gap, [8]; ci = false).dev[1], adev(fillgaps(pd_gap), [8]; ci = false).dev[1]
 
@@ -84,7 +103,7 @@ adev(fd_drift, [512]; ci = false).dev[1], adev(detrend(fd_drift), [512]; ci = fa
 
 # All three are also keywords on the readers: `read_phase(path; fillgaps = true,
 # detrend = :linear)` cleans on the way in. `fillgaps = true` needs a time
-# column, since it is how missing rows are detected.
+# column, since it is how missing rows are found.
 
 # ## Saving
 #

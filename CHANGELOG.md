@@ -3,6 +3,35 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `PhaseData` / `FrequencyData` carry the UTC time of their first sample
+  (`start`, read with `start_time`), set by the readers from ISO 8601 and
+  MJD timestamps, kept by `detrend`, `fillgaps`, `remove_outliers` and
+  `sigmatau --range`, and written by `save` as a `# start:` line. The CLI's
+  record JSON and the explorer's record check show it.
+
+### Changed
+
+- The readers stream files line by line and keep only the columns they
+  return: a 2-million-line two-column file reads in a third of the time and
+  a quarter of the memory, a named-column table in a quarter of the time
+  and a twentieth of the memory.
+- `fillgaps=true` places samples on the grid of the regular time steps
+  instead of the smallest step, so jittered timestamps no longer scatter
+  the record.
+
+### Fixed
+
+- A reading missing from a timestamped file is a `NaN` sample in its slot,
+  which the gap-tolerant estimators skip. Without `fillgaps` the samples
+  around it used to be joined end to end, shortening the record and moving
+  every τ after the gap. `sigmatau --freq` asks for `--fillgaps` on a
+  frequency record with missing samples instead of integrating `NaN` into
+  the rest of the phase.
+
 ## [0.6.0] - 2026-11-08
 
 ### Fixed

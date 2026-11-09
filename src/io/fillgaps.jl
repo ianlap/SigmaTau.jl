@@ -363,32 +363,6 @@ function _howe_fillgaps_core(x::AbstractVector{<:Real})
 end
 
 """
-    _make_equispaced(t::AbstractVector, x::AbstractVector) → (tfilled, xfilled)
-
-Snap an irregular `(t, x)` series to a uniform grid with spacing
-`dt = minimum(diff(t))`, populating gaps with `NaN`. The grid spans
-`t[1]:dt:t[end]`. Used by `read_phase` / `read_frequency` when `fillgaps=true`.
-"""
-function _make_equispaced(t::AbstractVector{<:Real}, x::AbstractVector{<:Real})
-    length(t) == length(x) || throw(ArgumentError("_make_equispaced: t and x must have equal length"))
-    length(t) >= 2 || throw(ArgumentError("_make_equispaced: need at least 2 samples"))
-    dt = minimum(diff(t))
-    dt > 0 || throw(ArgumentError("_make_equispaced: time vector is not strictly increasing"))
-    # Size the grid with the same rounding used to place samples below, so
-    # the last sample's index never lands past the grid end; a plain
-    # `t[1]:dt:t[end]` truncates when the span is not an exact multiple of
-    # `dt` and would let `idx` overrun `xfilled`.
-    n = round(Int, (t[end] - t[1]) / dt) + 1
-    tfilled = collect(range(t[1]; step=dt, length=n))
-    xfilled = fill(NaN, n)
-    for i in eachindex(t)
-        idx = round(Int, (t[i] - t[1]) / dt) + 1
-        xfilled[idx] = x[i]
-    end
-    return tfilled, xfilled
-end
-
-"""
     fillgaps(pd::PhaseData) → PhaseData
     fillgaps(fd::FrequencyData) → FrequencyData
 
@@ -396,8 +370,8 @@ Impute `NaN` samples using Howe & Schlossberger's reflect-and-FFT-filter
 algorithm, which preserves the local noise character and the AVAR/MDEV
 curves of the surrounding data. Returns a new `PhaseData` /
 `FrequencyData` with the same `tau0`. The input is treated as already
-equispaced; for raw `(t, x)` tables with irregular sampling, use
-[`read_phase`](@ref) with `fillgaps=true`.
+equispaced; the readers put timestamped samples on their grid first, so
+`read_phase(path; fillgaps=true)` fills the readings a file is missing.
 
 Single-sample gaps are filled with the mean of their neighbours; multi-sample
 gaps are filled by reflecting `sizegap` points from the larger neighbouring
@@ -408,10 +382,10 @@ Returns the input unchanged if there are no `NaN` samples.
 """
 function fillgaps(pd::PhaseData)
     xfilled, _ = _howe_fillgaps_core(pd.x)
-    return PhaseData(xfilled, pd.tau0; source=pd.source)
+    return PhaseData(xfilled, pd.tau0; source=pd.source, start=pd.start)
 end
 
 function fillgaps(fd::FrequencyData)
     yfilled, _ = _howe_fillgaps_core(fd.y)
-    return FrequencyData(yfilled, fd.tau0; source=fd.source)
+    return FrequencyData(yfilled, fd.tau0; source=fd.source, start=fd.start)
 end

@@ -24,7 +24,8 @@ function load_record(o::Options)
     keep = o.remove_drift == "none" ? trues(0) : measured_mask(o, length(data.x))
     if ranged
         idx = range_indices(o, data)
-        data = PhaseData(detrended(o, data.x[idx], data.tau0), data.tau0; source=data.source)
+        start = isnan(data.start) ? NaN : data.start + (first(idx) - 1) * data.tau0
+        data = PhaseData(detrended(o, data.x[idx], data.tau0), data.tau0; source=data.source, start=start)
         isempty(keep) || (keep = keep[idx])
     end
     # Phase records are cleaned in frequency space: a glitch is a phase step,
@@ -59,29 +60,19 @@ function range_indices(o::Options, data::PhaseData)
 end
 
 # Which samples were measured, as opposed to put back by --fillgaps: the
-# readers snap the time column to an even grid of its smallest step (see
-# SigmaTau's _make_equispaced) and fill the empty slots, so the same snapping
-# of the raw time column finds the slots that held data. All true without
-# --fillgaps or when the grid does not line up with the record. Instrument
-# formats report their filled samples directly (read_instrument).
+# readers place the samples on the grid of their time column (SigmaTau's
+# _time_grid) and fill the empty slots, so the same slots of the raw time
+# column are the measured ones. All true without --fillgaps or when the time
+# column is no time axis. Instrument formats report their filled samples
+# directly (read_instrument).
 function measured_mask(o::Options, N::Int)
     length(o.measured) == N && return copy(o.measured)
     keep = trues(N)
     (o.fillgaps && o.synth <= 0 && o.time_col >= 1 && input_format(o) === :columns) || return keep
-    t = read_times(o)
-    length(t) >= 2 || return keep
-    dt = Inf
-    for i in 2:length(t)
-        d = t[i] - t[i - 1]
-        d < dt && (dt = d)
-    end
-    dt > 0 || return keep
-    round(Int, (t[end] - t[1]) / dt) + 1 == N || return keep
+    slots = SigmaTau._time_grid(read_times(o))[1]
+    (isempty(slots) || slots[end] != N) && return keep
     fill!(keep, false)
-    for ti in t
-        idx = round(Int, (ti - t[1]) / dt) + 1
-        1 <= idx <= N && (keep[idx] = true)
-    end
+    keep[slots] .= true
     return keep
 end
 
@@ -114,7 +105,7 @@ function remove_drift!(o::Options, data::PhaseData, keep::BitVector)
     # dx/dt at the record's centre is the frequency offset; d²x/dt² the drift.
     o.removed_offset = c[2] / tau0
     o.removed_drift = quad ? 2.0 * c[3] / (tau0 * tau0) * 86400.0 : NaN
-    return PhaseData(x, data.tau0; source=data.source)
+    return PhaseData(x, data.tau0; source=data.source, start=data.start)
 end
 
 # The value column, minus the reference column when one is chosen (several
@@ -137,7 +128,7 @@ function read_record(o::Options)
     end
     length(ref.x) == length(data.x) || throw(CLIError(EXIT_INPUT, "reference and value columns differ in length"))
     return PhaseData(Float64[Float64(data.x[i]) - Float64(ref.x[i]) for i in eachindex(data.x)], data.tau0;
-                     source=data.source)
+                     source=data.source, start=data.start)
 end
 
 # Every keyword is concrete at each call site: a Union{Nothing,Float64} (or
@@ -148,11 +139,19 @@ function read_column(o::Options, value_col::Int)
           detrend=detrend_symbol(o.detrend), fillgaps=o.fillgaps)
     if o.freq
         fd = read_freq(o, kw)
-        # Same integration as SigmaTau's FrequencyData methods: N frequency
-        # samples give N + 1 phase points starting at 0, so no sample is lost.
-        return PhaseData([0.0; cumsum(fd.y)] .* fd.tau0, fd.tau0; source=fd.source)
+        return PhaseData(integrated(fd.y, fd.tau0), fd.tau0; source=fd.source, start=fd.start)
     end
     return read_phase_col(o, kw)
+end
+
+# Same integration as SigmaTau's FrequencyData methods: N frequency samples
+# give N + 1 phase points starting at 0, so no sample is lost. A missing
+# frequency sample leaves every later phase unknown, so it must be filled.
+function integrated(y::Vector{Float64}, tau0::Float64)
+    n = count(isnan, y)
+    n == 0 || throw(CLIError(EXIT_INPUT, "the frequency record is missing " * string(n) *
+                                         " samples; fill them with --fillgaps"))
+    return [0.0; cumsum(y)] .* tau0
 end
 
 function read_phase_col(o::Options, kw)
@@ -196,6 +195,6 @@ function read_instrument(o::Options, fmt::Symbol)
     detrend = detrend_symbol(o.detrend)
     v = r.v
     detrend === :none || SigmaTau._detrend_core!(v, detrend)
-    r.phase && return PhaseData(v, r.tau0; source=o.input)
-    return PhaseData([0.0; cumsum(v)] .* r.tau0, r.tau0; source=o.input)
+    r.phase && return PhaseData(v, r.tau0; source=o.input, start=r.start)
+    return PhaseData(integrated(v, r.tau0), r.tau0; source=o.input, start=r.start)
 end
