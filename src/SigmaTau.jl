@@ -42,6 +42,7 @@ include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
 include("ensemble.jl")
+include("masks.jl")
 
 # ── Real-time streaming accumulators and live sources ──────────────────
 include("streaming.jl")
@@ -74,6 +75,7 @@ export adev, mdev, tdev
 export hdev, mhdev, htdev
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
+export TELECOM_MASKS, telecom_mask, mask_check
 export dadev, dhdev
 export ncornered_hat, groslambert
 export drift_fit, DriftFit

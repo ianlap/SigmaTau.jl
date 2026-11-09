@@ -3,6 +3,17 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- ITU-T wander masks for MTIE and TDEV: `TELECOM_MASKS` (G.811 PRC,
+  G.813 SEC and G.8262 EEC options 1 and 2, and the G.823 network limits at
+  PRC, SSU, SEC and PDH interfaces), `telecom_mask` for the limit at any τ
+  and `mask_check` for pass or fail with the margin. `sigmatau analyze
+  --mask NAME|all` adds them to the JSON, and the explorer's Stability page
+  draws the chosen mask over MTIE and TDEV with pass or fail.
+
 ## [0.6.0] - 2026-11-08
 
 ### Fixed

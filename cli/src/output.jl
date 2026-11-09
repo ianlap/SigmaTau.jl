@@ -177,6 +177,41 @@ function json_powerlaw(io::IO, data::PhaseData, results::Vector{StabilityResult}
     return nothing
 end
 
+# ITU-T wander masks (one, or every one for "all"): each one's MTIE and TDEV
+# limits on a log τ grid (null where the recommendation does not reach), and
+# its check of each MTIE / TDEV result.
+const MASK_TAUS = [10.0^(k / 20) for k in -20:120]
+
+function json_masks(io::IO, name::String, results::Vector{StabilityResult})
+    names = name == "all" ? collect(Symbol, SigmaTau.TELECOM_MASKS) : [Symbol(name)]
+    print(io, '[')
+    for (j, m) in enumerate(names)
+        j > 1 && print(io, ',')
+        print(io, '{')
+        json_key(io, "name", true); json_string(io, String(m))
+        json_key(io, "title"); json_string(io, SigmaTau._MASKS[m][1])
+        json_key(io, "tau"); json_array(io, MASK_TAUS)
+        json_key(io, "mtie"); json_array(io, telecom_mask(m, :mtie, MASK_TAUS))
+        json_key(io, "tdev"); json_array(io, telecom_mask(m, :tdev, MASK_TAUS))
+        json_key(io, "checks"); print(io, '[')
+        k = 0
+        for r in results
+            r.deviation_type in (:mtie, :tdev) || continue
+            c = mask_check(r, m)
+            (k += 1) > 1 && print(io, ',')
+            print(io, '{')
+            json_key(io, "deviation", true); json_string(io, String(r.deviation_type))
+            json_key(io, "limit"); json_array(io, c.limit)
+            json_key(io, "pass"); json_bool(io, c.pass)
+            json_key(io, "margin"); json_number(io, c.margin)
+            print(io, '}')
+        end
+        print(io, "]}")
+    end
+    print(io, ']')
+    return nothing
+end
+
 function json_spectrum(io::IO, sy::SpectralResult, sx::SpectralResult)
     n = min(length(sy.freq), length(sx.freq))
     print(io, '{')

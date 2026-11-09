@@ -169,6 +169,11 @@ numbers are `null`.
   `sigma_at`, the model's ADEV at 1 s, 10 s, 100 s, 1000 s, 10⁴ s and one day
   (those within half the record). A record the fit cannot use gives
   `{"error": "…"}` there instead.
+- `masks` comes from `analyze --mask NAME` (or `all`): for each ITU-T
+  mask (see [`TELECOM_MASKS`](@ref)) its `name`, `title`, the `mtie` and
+  `tdev` limits in seconds over `tau` (0.1 s to 10⁶ s, `null` outside the
+  recommendation's range), and in `checks` each MTIE / TDEV result's
+  `limit` at its τ, `pass` and `margin` (see [`mask_check`](@ref)).
 - `sigmatau dynamic` adds `"dynamic": {"deviation", "window", "step", "t",
   "tau", "dev"}`, where `dev` has one row per window (centre time `t`, in
   seconds) and one column per τ.
