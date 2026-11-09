@@ -105,7 +105,7 @@ function remove_outliers(data::PhaseData; nsigma::Real=5)
     @inbounds for i in 1:length(x) - 1
         out[i + 1] = out[i] + fd.y[i] * t0
     end
-    return PhaseData(out, t0; source=pd.source)
+    return PhaseData(out, t0; source=pd.source, start=pd.start)
 end
 
 function remove_outliers(data::FrequencyData; nsigma::Real=5)
@@ -113,5 +113,5 @@ function remove_outliers(data::FrequencyData; nsigma::Real=5)
     isempty(idx) && return data
     y = Vector{Float64}(data.y)
     y[idx] .= NaN
-    return fillgaps(FrequencyData(y, data.tau0; source=data.source))
+    return fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
 end
