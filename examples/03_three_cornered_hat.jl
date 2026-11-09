@@ -87,3 +87,16 @@ plot!(p, clock3; label = "clock 3 recovered", ls = :dash)
 # add a fourth, independent clock and check that each clock's recovered σ
 # is invariant to the choice of triplet. For N > 3 clocks, fill an
 # upper-triangular matrix of pairwise results and call `ncornered_hat(pairwise)`.
+#
+# ## The Groslambert covariance
+#
+# When the difference records themselves are at hand, `groslambert` is the
+# alternative that does not subtract variances: it multiplies the second
+# differences of two records that share a clock, so only that clock's noise
+# survives the average. Its estimates scatter about the truth instead of
+# turning negative, and each comes with a χ² interval from the covariance
+# model of Vernotte & Lantz (2019).
+
+g1, g2, g3 = groslambert(PhaseData(x1 .- x2, τ₀), PhaseData(x2 .- x3, τ₀),
+                         PhaseData(x3 .- x1, τ₀), m_values)
+[g2.tau g2.dev ci_lower(g2) ci_upper(g2) truth2.dev]
