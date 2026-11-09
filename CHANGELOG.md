@@ -5,6 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
+  cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
+  (cross Allan variance with its statistical uncertainty from the record),
+  for a device measured against two references or one signal split into two
+  channels. `sigmatau cross FILE --with FILE2` on the command line.
+
 ## [0.6.0] - 2026-11-08
 
 ### Fixed
