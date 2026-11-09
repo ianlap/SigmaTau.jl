@@ -36,6 +36,7 @@ include("edf.jl")
 include("grids.jl")
 include("spectral.jl")
 include("gaps.jl")
+include("drift.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
@@ -72,6 +73,7 @@ export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
 export dadev, dhdev
 export ncornered_hat
+export drift_fit, DriftFit
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize
