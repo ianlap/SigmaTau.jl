@@ -740,6 +740,35 @@ end
 # This only sets the χ² weights; it does not enter the fitted amplitudes.
 _nnls_edf_symbol(alpha::Int) = alpha <= -3 ? :RWFM : _nnls_symbol(alpha)
 
+# Weighted NNLS of v ≈ K·a. The power-law columns span many orders of
+# magnitude over a wide τ grid; equilibrating them to unit 2-norm keeps the
+# restricted QR solves well scaled, and the amplitudes are unscaled afterwards.
+function _nnls_weighted(K::Matrix{Float64}, v::Vector{Float64}, w::Vector{Float64})
+    sw = sqrt.(w)
+    A  = sw .* K
+    d  = [sqrt(sum(abs2, @view A[:, j])) for j in axes(A, 2)]
+    all(dj -> isfinite(dj) && dj > 0, d) ||
+        throw(ArgumentError("degenerate power-law basis column"))
+    â, rss = _nnls_exact(A ./ d', sw .* v)
+    return â ./ d, rss
+end
+
+# Self-consistent χ² weights wₖ = νₖ/(2 σ̂⁴ₖ): a first pass with equal
+# fractional weight supplies the per-τ noise type, and the EDF model turns
+# that into ν, with `Ns[k]` the record length at the k-th τ. Deriving the types from the fit rather than from
+# `identify_noise` keeps the fit independent of that classifier. Points where
+# the EDF model gives no finite positive ν keep the fractional weight.
+function _nnls_edf_weights(deviation::Symbol, K::Matrix{Float64}, v::Vector{Float64},
+                           αs::Vector{Int}, ms::Vector{Int}, taus::Vector{Float64},
+                           Ns::Vector{Int}, τ₀::Float64)
+    a0, _ = _nnls_weighted(K, v, 1.0 ./ v .^ 2)
+    map(eachindex(v)) do k
+        sym = _nnls_edf_symbol(αs[argmax(vec(K[k, :]) .* a0)])
+        ν = only(calculate_edf(deviation, [sqrt(v[k])], [sym], [ms[k]], [taus[k]], Ns[k], (Ns[k] - 1) * τ₀))
+        (isfinite(ν) && ν > 0 ? ν / 2 : 1.0) / v[k] ^ 2
+    end
+end
+
 """
     noise_id_nnls(data::PhaseData [, m_values]; deviation=:mhdev, alphas=…, weights=:edf)
     noise_id_nnls(data::FrequencyData [, m_values]; …)
@@ -885,21 +914,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
     taus = res.tau[keep]
     v    = res.dev[keep] .^ 2
 
-    # Weighted, column-equilibrated design matrix. The power-law columns span
-    # many orders of magnitude over a wide τ grid; equilibrating to unit 2-norm
-    # keeps the restricted QR solves well scaled, and the amplitudes are
-    # unscaled afterwards.
     K = [(taus[k] / τ₀) ^ μs[j] for k in eachindex(taus), j in eachindex(μs)]
-    function solve(w)
-        sw = sqrt.(w)
-        A  = sw .* K
-        b  = sw .* v
-        d  = [sqrt(sum(abs2, @view A[:, j])) for j in eachindex(μs)]
-        all(dj -> isfinite(dj) && dj > 0, d) ||
-            throw(ArgumentError("noise_id_nnls: degenerate basis column (norms $d)"))
-        â, rss = _nnls_exact(A ./ d', b)
-        return â ./ d, rss
-    end
 
     w = if weights isa AbstractVector
         length(weights) == length(keep) || throw(DimensionMismatch(
@@ -908,16 +923,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
     elseif weights === :relative
         1.0 ./ v .^ 2
     elseif weights === :edf
-        # Self-consistent χ² weights: a first pass with equal fractional weight
-        # supplies the per-τ noise type, the EDF model turns that into ν, and the
-        # second pass uses wₖ = νₖ/(2 σ̂⁴ₖ). Deriving the types from the fit rather
-        # than from `identify_noise` keeps the whole routine independent of the
-        # classifier it is meant to replace.
-        a0, _ = solve(1.0 ./ v .^ 2)
-        syms  = [_nnls_edf_symbol(αs[argmax(vec(K[k, :]) .* a0)]) for k in eachindex(taus)]
-        ν     = calculate_edf(deviation, sqrt.(v), syms, ms[keep], taus,
-                              length(x), (length(x) - 1) * τ₀)
-        [(isfinite(ν[k]) && ν[k] > 0 ? ν[k] / 2 : 1.0) / v[k] ^ 2 for k in eachindex(v)]
+        _nnls_edf_weights(deviation, K, v, αs, ms[keep], taus, fill(length(x), length(keep)), τ₀)
     else
         throw(ArgumentError(
             "noise_id_nnls: unknown weights $weights; expected :edf, :relative or a vector"))
@@ -925,7 +931,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
     all(wk -> isfinite(wk) && wk > 0, w) ||
         throw(ArgumentError("noise_id_nnls: weights must be finite and positive"))
 
-    a, rss = solve(w)
+    a, rss = _nnls_weighted(K, v, w)
 
     contributions = K .* a'
     dominant = [_nnls_symbol(αs[argmax(@view contributions[k, :])])
