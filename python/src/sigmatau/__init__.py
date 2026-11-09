@@ -5,7 +5,7 @@ estimators it never had); all computation runs in an embedded Julia runtime
 via juliacall, so results are bit-identical to the Julia oracle.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from ._julia import julia_version, sigmatau_jl_version
 from .deviations import (

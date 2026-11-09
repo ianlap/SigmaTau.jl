@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "report"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
@@ -9,6 +9,7 @@ const COMMAND_HELP = [
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
+    ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
     ("version",    "",     "print the version"),
     ("help",       "[COMMAND]", "print this help, or a command's options"),
@@ -33,6 +34,7 @@ struct Opt
 end
 
 const ALL = COMMANDS
+const TABULAR = ["analyze", "check", "spectrum", "dynamic", "drift"]   # CSV or JSON out (report writes HTML)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
@@ -54,12 +56,12 @@ const OPTS = [
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps (needs a time column)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     # Analysis
-    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze"]),
-    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross"]),
-    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross"]),
-    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze"]),
-    Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze"]),
-    Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze"]),
+    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report"]),
+    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "report"]),
+    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "report"]),
+    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze", "report"]),
+    Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
+    Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
     Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE", ["cross"]),
@@ -68,8 +70,8 @@ const OPTS = [
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Output
-    Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", ALL),
-    Opt("--format", "FMT", FORMATS, false, "csv (default) or json", ALL),
+    Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
+    Opt("--format", "FMT", FORMATS, false, "csv (default) or json", TABULAR),
     Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", ALL),
     Opt("--quiet", "", String[], false, "no informational messages on stderr", ALL),
     Opt("--help", "", String[], false, "show this command's options", ALL),
@@ -121,7 +123,7 @@ mutable struct Options
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
-                    Symbol[:adev, :mdev, :hdev, :mhdev], "octave", Int[], true,
+                    collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear")
 
@@ -320,6 +322,7 @@ function print_help(io::IO)
     print(io, "  sigmatau spectrum --synth 65536\n")
     print(io, "  sigmatau dynamic clock.dat --dev dhdev --window 4096\n")
     print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
+    print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
 end
 
 function print_command_help(io::IO, cmd::String)
@@ -345,7 +348,7 @@ function print_command_help(io::IO, cmd::String)
         k += 1
         print(io, "  "); padded(io, sigs[k], w); print(io, op.help, "\n")
     end
-    if cmd == "analyze"
+    if cmd == "analyze" || cmd == "report"
         print(io, "\nDeviations: ", join(estimator_names(), ", "), "\n")
     end
 end

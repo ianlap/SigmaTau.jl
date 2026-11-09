@@ -5,6 +5,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
+  cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
+  (cross Allan variance with its statistical uncertainty from the record),
+  for a device measured against two references or one signal split into two
+  channels. `sigmatau cross FILE --with FILE2` on the command line.
+
+## [0.6.0] - 2026-11-08
+
 ### Fixed
 
 - `fillgaps` fills a gap at the start or end of a record, joined to the
@@ -30,12 +40,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
-  cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
-  (cross Allan variance with its statistical uncertainty from the record),
-  for a device measured against two references or one signal split into two
-  channels. `sigmatau cross FILE --with FILE2` on the command line.
-
+- Reports: `sigmatau report FILE` writes one self-contained HTML file with
+  the record summary, the settings, σ(τ) plots, per-τ tables and the
+  command that reproduces it; a browser prints it to PDF. The explorer's
+  **File** menu (formerly Export) writes the same kind of report for every
+  loaded clock, with the SHA-256 of each input file.
+- Explorer sessions: **File → Save session** stores the clocks, their files,
+  import settings and analysis settings in one JSON file; **Open session**
+  (or dropping the file on the window) restores it and reruns.
 - `noise_id_nnls(data[, m]; deviation=:mhdev, alphas, weights=:edf)`: a
   weighted nonnegative least-squares fit of the measured σ̂²(τ) profile to
   power-law components. One fit over the whole τ range gives the amplitude of
@@ -48,7 +60,6 @@ versions follow [Semantic Versioning](https://semver.org/).
   takes noise-type names as keys (`Dict(:WHFM => 1e-12)`). Its spectrum,
   `h_α (sin(πfτ₀)/(πτ₀))^α`, is checked against theory for every α from +2
   to −4 in the test suite.
-
 - `read_data` and `detect_format` read instrument files by layout: TimeLab
   `.tim` (τ₀ and scale factor from the header), Stable32 `.phd`/`.frd`
   (MJD time tags, `Type:` header), SCPI counter readings (Hz converted to
@@ -84,6 +95,57 @@ versions follow [Semantic Versioning](https://semver.org/).
   more often (Monte Carlo, N = 1024, m = 40–128: 67 % vs 0 %); white FM
   somewhat less often (63 % vs 82 %). The default `:record` keeps
   Stable32's convention.
+- Python bindings, the `sigmatau` package in `python/`. Every call runs in an
+  embedded Julia through juliacall, so results match the Julia API exactly.
+  The names and keywords are the 0.6 ones (`psd_y`, `ncornered_hat`,
+  `save`/`load`, `m=`), plus `deviation(name, ...)` and `estimators()`.
+  Tested by a pytest suite in its own CI workflow. A `python-v*` tag
+  publishes it to PyPI (`pip install sigmatau`), pinned to the same
+  SigmaTau.jl version from the General registry.
+- `sigmatau`, a compiled command line in `cli/` (package `SigmaTauCLI`, built
+  with `juliac --trim=safe`): `analyze`, `check`, `spectrum`, `dynamic`,
+  `completion` and `version`, CSV or versioned JSON output
+  (`schema_version: 1`), documented exit codes and shell completion for bash,
+  zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
+  (`app/web/cli`), and the explorer now runs it with `--format json`. The `Web core` workflow now builds and tests it. See
+  `docs/src/guide/cli.md`.
+- `sigmatau --remove-drift none|linear|quadratic`: fits a line (frequency
+  offset) or a parabola (offset and linear frequency drift) to the phase over
+  the non-gap samples and removes it; the JSON reports `removed_offset` and
+  `removed_drift_per_day`.
+- Explorer: a noise-identification strip (one per clock) and power-law slope
+  guides on the Stability plot, confidence bands by default with a plot toggle
+  and a bias-correction note in the caption, drift-removal controls with the
+  phase residual on the Data page, and a "Compare at τ" chart under the
+  multi-clock Dynamic maps (each clock's deviation over time at one τ).
+- `StabilityResult` carries the record's `tau0`, sample count `n` and the
+  interval `confidence` (`NaN` without intervals), and result files store
+  them. Files from earlier versions load with `NaN` / 0. The seven-argument
+  constructor still works and leaves them unknown.
+- `estimators()`: the registry of the 16 estimators (name, label, family,
+  σ_y or σ_x axis, whether `correct_bias` applies, one-line description), for
+  menus, command lines and docs.
+- `deviation(name, data, m=Octave; ci, confidence, correct_bias)`: run an
+  estimator chosen at run time; written as plain branches so it compiles under
+  `juliac --trim`. `stability` now runs through it and accepts names as
+  strings too.
+- `tau_mode("half-octave")` and friends: parse a τ-grid name into a `TauMode`,
+  ignoring case and separators.
+- `summarize(data)`: samples, τ₀, span, `NaN` gaps, 5σ outlier indices and
+  linear frequency drift per day, as the explorer's Data page shows them.
+- `dadev(pd)` / `dhdev(pd)` work with no grid and no window: the octave grid
+  and a default window (see below).
+- Every estimator (and `dadev` / `dhdev`) accepts any integer vector of
+  averaging factors: `adev(pd, 1:10)`, `adev(pd, 2 .^ (0:6))`, `Int32` or view
+  vectors work like a `Vector{Int}`, as do `stability(pd; m=1:10)`.
+- `PhaseData` / `FrequencyData` accept any real vector (views, ranges,
+  integers), copied into a `Vector` of its float type.
+- `length(::PhaseData)` / `length(::FrequencyData)`.
+- `identify_noise(data::PhaseData, m)` and `identify_noise(data::FrequencyData, m)`,
+  with `m` an integer vector or a `TauMode`.
+- `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
+- `app/web/`: a web explorer (HTML, CSS, Plotly.js) over an analysis core
+  compiled with `juliac --trim`, and `app/desktop/`, a Tauri window around it.
 
 ### Deprecated
 
@@ -93,7 +155,7 @@ until 0.7.
 - `psd_y`, `psd_x`, `ssb_phase_noise` replace `Sy`, `Sx`, `L`, and their
   `taper=` keyword replaces `window=` (which now only means the dynamic
   deviations' window). `SpectralResult.window` is now `.taper`; `r.window`
-  still reads it.
+  still reads it, with a warning.
 - `ncornered_hat` replaces `nch`.
 - `save(path, x)` writes records, results and suites, and `load(path)` reads
   any of them back (records through `read_phase` / `read_frequency`).
@@ -155,60 +217,16 @@ until 0.7.
   estimators). On a record with an uncorrected 1e-9 frequency offset the
   kernels previously lost about seven significant digits to cancellation;
   they now agree with BigFloat arithmetic to 1e-12.
+- Thêo1's ThêoBR bias correction (`theo1`, `theoh`) computes Thêo1 at 48
+  points of the eq. 33 ladder and interpolates the rest in log–log, within
+  0.5 % of the full average (0.25 % on the deviation); `theo1` at N = 65 536
+  drops from minutes to about 1 s. Short ladders are still averaged in full.
+- The total family, Thêo1 and ThêoBR run their averaging factors on all
+  Julia threads (`julia -t auto`); `mtotdev` / `htotdev` / `mhtotdev` at
+  N = 65 536 take about 1 s on four threads instead of 3 s. The compiled
+  `sigmatau` core uses every CPU core.
 - `plot(::DynamicStabilityResult)` draws the SP1065 waterfall (one σ(τ)
   curve per window, stacked along t) and no longer offers a heatmap.
-
-### Added
-
-- Python bindings, the `sigmatau` package in `python/`. Every call runs in an
-  embedded Julia through juliacall, so results match the Julia API exactly.
-  The names and keywords are the 0.6 ones (`psd_y`, `ncornered_hat`,
-  `save`/`load`, `m=`), plus `deviation(name, ...)` and `estimators()`.
-  Tested by a pytest suite in its own CI workflow.
-- `sigmatau`, a compiled command line in `cli/` (package `SigmaTauCLI`, built
-  with `juliac --trim=safe`): `analyze`, `check`, `spectrum`, `dynamic`,
-  `completion` and `version`, CSV or versioned JSON output
-  (`schema_version: 1`), documented exit codes and shell completion for bash,
-  zsh, fish and PowerShell. It replaces the explorer's `sigmatau-cli`
-  (`app/web/cli`), and the explorer now runs it with `--format json`. The `Web core` workflow now builds and tests it. See
-  `docs/src/guide/cli.md`.
-- `sigmatau --remove-drift none|linear|quadratic`: fits a line (frequency
-  offset) or a parabola (offset and linear frequency drift) to the phase over
-  the non-gap samples and removes it; the JSON reports `removed_offset` and
-  `removed_drift_per_day`.
-- Explorer: a noise-identification strip (one per clock) and power-law slope
-  guides on the Stability plot, confidence bands by default with a plot toggle
-  and a bias-correction note in the caption, drift-removal controls with the
-  phase residual on the Data page, and a "Compare at τ" chart under the
-  multi-clock Dynamic maps (each clock's deviation over time at one τ).
-- `StabilityResult` carries the record's `tau0`, sample count `n` and the
-  interval `confidence` (`NaN` without intervals), and result files store
-  them. Files from earlier versions load with `NaN` / 0. The seven-argument
-  constructor still works and leaves them unknown.
-- `estimators()`: the registry of the 16 estimators (name, label, family,
-  σ_y or σ_x axis, whether `correct_bias` applies, one-line description), for
-  menus, command lines and docs.
-- `deviation(name, data, m=Octave; ci, confidence, correct_bias)`: run an
-  estimator chosen at run time; written as plain branches so it compiles under
-  `juliac --trim`. `stability` now runs through it and accepts names as
-  strings too.
-- `tau_mode("half-octave")` and friends: parse a τ-grid name into a `TauMode`,
-  ignoring case and separators.
-- `summarize(data)`: samples, τ₀, span, `NaN` gaps, 5σ outlier indices and
-  linear frequency drift per day, as the explorer's Data page shows them.
-- `dadev(pd)` / `dhdev(pd)` work with no grid and no window: the octave grid
-  and a default window (see below).
-- Every estimator (and `dadev` / `dhdev`) accepts any integer vector of
-  averaging factors: `adev(pd, 1:10)`, `adev(pd, 2 .^ (0:6))`, `Int32` or view
-  vectors work like a `Vector{Int}`. `stability(pd; taus=1:10)` already did.
-- `PhaseData` / `FrequencyData` accept any real vector (views, ranges,
-  integers), copied into a `Vector` of its float type.
-- `length(::PhaseData)` / `length(::FrequencyData)`.
-- `identify_noise(data::PhaseData, m)` and `identify_noise(data::FrequencyData, m)`,
-  with `m` an integer vector or a `TauMode`.
-- `bench/`: a reproducible SigmaTau-vs-allantools timing harness.
-- `app/web/`: a web explorer (HTML, CSS, Plotly.js) over an analysis core
-  compiled with `juliac --trim`, and `app/desktop/`, a Tauri window around it.
 
 ### Removed
 
