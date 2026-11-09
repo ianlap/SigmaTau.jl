@@ -47,6 +47,7 @@ makedocs(
         ],
         "How-to guides" => [
             "Choosing an estimator" => "guide/choosing.md",
+            "Two-channel measurements" => "guide/cross.md",
             "Plotting and tables" => "guide/plotting.md",
             "Using the explorer" => "guide/explorer.md",
             "Command line" => "guide/cli.md",
