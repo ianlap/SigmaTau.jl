@@ -132,31 +132,69 @@ function json_result(io::IO, r::StabilityResult, label::String, axis::String)
     print(io, "]}")
 end
 
-# The power-law model fitted to MHDEV (α = 2…−2): h_α, the model curve of
-# each result it covers, and the model ADEV at round averaging times within
-# half the record. A record the fit cannot take answers {"error": …}.
+# The power-law model on MHDEV: fitted to every α from 2 to −2, or with
+# --component built by hand one noise type at a time. Written: h_α, the model
+# curve of each result it covers, the model ADEV at round averaging times
+# within half the record, and the clock model it gives. With components, also
+# each component's τ span and the MHDEV left after them. A record or a
+# component the fit cannot take answers {"error": …}.
 const SPEC_TAUS = [1.0, 10.0, 100.0, 1000.0, 1.0e4, 86400.0]
 
-function json_powerlaw(io::IO, data::PhaseData, results::Vector{StabilityResult})
-    f = try
-        powerlaw_fit(data)
+function json_powerlaw(io::IO, o::Options, data::PhaseData, results::Vector{StabilityResult})
+    hand = !isempty(o.components)
+    nf = NoiseFit[]
+    h = try
+        if hand
+            f = noise_fit(mhdev(data, SigmaTau._default_m_values(length(data.x), :mhdev)))
+            for (α, a, b) in o.components
+                k = findall(t -> !(t < a) && !(t > b), f.result.tau)   # NaN bounds are open
+                isempty(k) && throw(ArgumentError("--component: no MHDEV averaging time in that span"))
+                add_component!(f, α, first(k):last(k))
+            end
+            push!(nf, f)
+            Dict{Int,Float64}(c.alpha => c.h for c in f.components)
+        else
+            pf = powerlaw_fit(data)
+            Dict{Int,Float64}(zip(pf.alphas, pf.h))
+        end
     catch err
         err isa ArgumentError || rethrow()
         print(io, '{'); json_key(io, "error", true); json_string(io, error_message(err)); print(io, '}')
         return nothing
     end
+    τ₀ = data.tau0
+    αs = reverse!(sort!(collect(keys(h))))   # sort!(…; rev) is not trim-safe
     print(io, '{')
-    json_key(io, "deviation", true); json_string(io, String(f.source))
-    json_key(io, "alphas"); json_array(io, f.alphas)
-    json_key(io, "h"); json_array(io, f.h)
-    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._nnls_symbol(a)) for a in f.alphas])
+    json_key(io, "deviation", true); json_string(io, "mhdev")
+    json_key(io, "alphas"); json_array(io, αs)
+    json_key(io, "h"); json_array(io, Float64[h[α] for α in αs])
+    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._nnls_symbol(a)) for a in αs])
+    json_key(io, "mode"); json_string(io, hand ? "components" : "fit")
+    if hand
+        f = nf[1]
+        json_key(io, "components"); print(io, '[')
+        for (i, c) in enumerate(f.components)
+            i > 1 && print(io, ',')
+            print(io, '{')
+            json_key(io, "alpha", true); print(io, c.alpha)
+            json_key(io, "h"); json_number(io, c.h)
+            json_key(io, "tau_from"); json_number(io, f.result.tau[first(c.range)])
+            json_key(io, "tau_to"); json_number(io, f.result.tau[last(c.range)])
+            print(io, '}')
+        end
+        print(io, ']')
+        json_key(io, "residual"); print(io, '{')
+        json_key(io, "tau", true); json_array(io, f.result.tau)
+        json_key(io, "dev"); json_array(io, Float64[v > 0 ? sqrt(v) : 0.0 for v in noise_residual(f)])
+        print(io, '}')
+    end
     json_key(io, "curves"); print(io, '[')
     k = 0
     for r in results
         d = r.deviation_type
         base = d === :tdev ? :mdev : d
         base in SigmaTau.POWERLAW_DEVIATIONS || continue
-        model = powerlaw_sigma(f, r.tau; deviation=base)
+        model = powerlaw_sigma(h, r.tau; deviation=base, tau0=τ₀)
         d === :tdev && (model .*= r.tau ./ sqrt(3.0))
         (k += 1) > 1 && print(io, ',')
         print(io, '{')
@@ -166,13 +204,19 @@ function json_powerlaw(io::IO, data::PhaseData, results::Vector{StabilityResult}
         print(io, '}')
     end
     print(io, ']')
-    τ₀ = f.tau0
     half = (length(data.x) - 1) * τ₀ / 2
     taus = unique(Float64[max(1, round(Int, t / τ₀)) * τ₀ for t in SPEC_TAUS])
     filter!(t -> t <= half, taus)
     json_key(io, "sigma_at"); print(io, '{')
     json_key(io, "tau", true); json_array(io, taus)
-    json_key(io, "adev"); json_array(io, powerlaw_sigma(f, taus; deviation=:adev))
+    json_key(io, "adev"); json_array(io, powerlaw_sigma(h, taus; deviation=:adev, tau0=τ₀))
+    print(io, '}')
+    m = clock_model(h; tau0=τ₀)
+    json_key(io, "clock_model"); print(io, '{')
+    json_key(io, "R", true); json_number(io, m.R)
+    json_key(io, "q1"); json_number(io, m.q1)
+    json_key(io, "q2"); json_number(io, m.q2)
+    json_key(io, "q3"); json_number(io, m.q3)
     print(io, "}}")
     return nothing
 end

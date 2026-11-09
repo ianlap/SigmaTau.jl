@@ -85,6 +85,7 @@ The record (all four analysis commands):
 | `--spectrum` | add the spectrum to the JSON output |
 | `--nperseg N` | Welch segment length for `--spectrum` |
 | `--fit` | add the power-law noise model fitted to MHDEV to the JSON output |
+| `--component NOISE:A:B` | build that model by hand instead: fit NOISE (`WHFM`, `RWFM`, … or an α) on MHDEV between A and B seconds after the components before it; repeat, in order (see [`noise_fit`](@ref)) |
 
 `spectrum`: `--nperseg N` (default: the largest power of two ≤ N/4, at least 16).
 
@@ -168,8 +169,12 @@ numbers are `null`.
   (`deviation`, `alphas`, `h`, `noise_types`; see [`powerlaw_fit`](@ref)),
   its σ(τ) for each ADEV, MDEV, TDEV, HDEV and MHDEV result in `curves`, and
   `sigma_at`, the model's ADEV at 1 s, 10 s, 100 s, 1000 s, 10⁴ s and one day
-  (those within half the record). A record the fit cannot use gives
-  `{"error": "…"}` there instead.
+  (those within half the record), and `clock_model`, the `R`, `q1`, `q2`,
+  `q3` of [`clock_model`](@ref). `mode` is `"fit"`, or `"components"` with
+  `--component`, which adds `components` (each one's `alpha`, `h`,
+  `tau_from`, `tau_to`) and `residual`, the MHDEV the components leave. A
+  record or a component the fit cannot use gives `{"error": "…"}` there
+  instead.
 - `sigmatau dynamic` adds `"dynamic": {"deviation", "window", "step", "t",
   "tau", "dev"}`, where `dev` has one row per window (centre time `t`, in
   seconds) and one column per τ.

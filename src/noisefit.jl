@@ -105,7 +105,7 @@ function add_component!(f::NoiseFit, noise, range::AbstractUnitRange{<:Integer})
         num += w * log(res[k] / _noisefit_unit(f, α, k))
         den += w
     end
-    den > 0 || throw(ArgumentError("add_component!: no τ in $range has a positive residual"))
+    den > 0 || throw(ArgumentError("add_component!: no τ in the chosen range has a positive residual"))
     push!(f.components, (alpha=α, h=exp(num / den), range=UnitRange{Int}(range)))
     return f
 end

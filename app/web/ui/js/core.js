@@ -152,6 +152,7 @@ const analyzeRequest = (clock) => request(clock, "analyze", [
   ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
   ...(state.bias ? [] : ["--no-bias-correction"]),
   "--spectrum", "--fit",
+  ...clock.components.flatMap((k) => ["--component", `${k.noise}:${k.from ?? ""}:${k.to ?? ""}`]),
 ]);
 
 export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
@@ -160,7 +161,8 @@ export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
 // for reports.
 export function analyzeCommand(clock) {
   const { args, file } = analyzeRequest(clock);
-  const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--fit" && a !== "--format" && args[i - 1] !== "--format");
+  const valued = new Set(["--format", "--component"]);   // JSON-only options and their values
+  const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--fit" && !valued.has(a) && !valued.has(args[i - 1]));
   const q = (a) => (/^[\w.,:+\/=-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
   return ["sigmatau", kept[0], ...(file ? [file.name] : []), ...kept.slice(1)].map(q).join(" ");
 }

@@ -104,9 +104,12 @@ end
 The matrix Φ(δ) that carries the state over a step of δ seconds:
 `[1 δ; 0 1]`, or `[1 δ δ²/2; 0 1 δ; 0 0 1]` with drift.
 """
+# Filled in place rather than as matrix literals, which the trim build cannot compile.
 function state_transition(m::ClockModel, δ::Real)
-    m.drift || return [1.0 δ; 0.0 1.0]
-    return [1.0 δ δ^2/2; 0.0 1.0 δ; 0.0 0.0 1.0]
+    Φ = Matrix{Float64}(I, m.drift ? 3 : 2, m.drift ? 3 : 2)
+    Φ[1, 2] = δ
+    m.drift && (Φ[1, 3] = δ^2 / 2; Φ[2, 3] = δ)
+    return Φ
 end
 
 """
@@ -126,7 +129,12 @@ function process_noise(m::ClockModel, δ::Real)
     q11 = q1 * δ + q2 * δ^3 / 3 + q3 * δ^5 / 20
     q12 = q2 * δ^2 / 2 + q3 * δ^4 / 8
     q22 = q2 * δ + q3 * δ^3 / 3
-    m.drift || return [q11 q12; q12 q22]
-    q13, q23, q33 = q3 * δ^3 / 6, q3 * δ^2 / 2, q3 * δ
-    return [q11 q12 q13; q12 q22 q23; q13 q23 q33]
+    Q = zeros(m.drift ? 3 : 2, m.drift ? 3 : 2)
+    Q[1, 1], Q[1, 2], Q[2, 1], Q[2, 2] = q11, q12, q12, q22
+    if m.drift
+        Q[1, 3] = Q[3, 1] = q3 * δ^3 / 6
+        Q[2, 3] = Q[3, 2] = q3 * δ^2 / 2
+        Q[3, 3] = q3 * δ
+    end
+    return Q
 end

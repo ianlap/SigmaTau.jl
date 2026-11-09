@@ -1,7 +1,7 @@
 // Stability page: σ(τ) plot and, on the right, the per-τ table (one clock) or
 // "Compare at τ" (several clocks, overlaid). Mounted once per visit;
 // refresh() redraws from state.
-import { state, update, visibleClocks, multi } from "../state.js";
+import { state, update, visibleClocks, multi, markStale } from "../state.js";
 import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope, BIAS_CORRECTED } from "../estimators.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css } from "../plot.js";
 import { sci, num, escapeHtml as h } from "../format.js";
@@ -37,6 +37,8 @@ export function mount(el, ctx) {
     if (e.target.closest("[data-act=load]")) ctx.goData();
     if (e.target.closest("[data-act=run]")) ctx.run();
     if (e.target.closest("[data-act=pin]")) pinRun();
+    const act = e.target.closest("[data-fit]")?.dataset.fit;
+    if (act) editModel(act, ctx);
     const un = e.target.closest("[data-unpin]")?.dataset.unpin;
     if (un) update((s) => { s.pins = s.pins.filter((p) => p.id !== Number(un)); });
   });
@@ -175,6 +177,13 @@ function traces(clocks, devs) {
         } : undefined,
         customdata: r.tau.map((_, i) => [r.edf[i], noiseLabel(r.noise[i] ?? "")]),
         hovertemplate: `<b>${h(name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}${r.edf.length ? "<br>EDF %{customdata[0]:.4g} · %{customdata[1]}" : ""}<extra></extra>`,
+      });
+      // While the model is built by hand: the MHDEV its components leave.
+      const res = state.fit && state.fitEdit && !several && d === "mhdev" && c.result.powerlaw?.residual;
+      if (res) out.push({
+        x: res.tau, y: res.dev.map((v) => v || null), name: "MHDEV left by the model", mode: "lines+markers", showlegend: false,
+        line: { color: css("--muted"), width: 1.2, dash: "dash" }, marker: { color: css("--muted"), size: 4 },
+        hovertemplate: `<b>MHDEV left by the model</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}<extra></extra>`,
       });
       // The power-law model's curve, dotted under the measurement.
       const fit = state.fit && c.result.powerlaw?.curves?.find((k) => k.deviation === d);
@@ -330,20 +339,63 @@ function renderTable(clocks, devs) {
     <div class="card-foot">Hover a row for its confidence interval. Every value is in the TSV and JSON exports.</div>`;
 }
 
-// The power-law model fitted to MHDEV: the h_α it found and the ADEV it
-// gives at round τ, the numbers a datasheet quotes.
+// The power-law model on MHDEV: the h_α it found and the ADEV it gives at
+// round τ, the numbers a datasheet quotes. Edit builds it by hand instead,
+// one noise type over a τ span at a time, each fitted to what the ones
+// before it leave.
+const NOISES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"];
+
 function modelBox(c) {
   const p = c.result?.powerlaw;
   if (!p) return "";
-  if (p.error) return `<div class="model-box muted">No noise model: ${h(p.error)}</div>`;
+  const hand = c.components.length > 0;
+  const head = `<h3>Noise model <span class="muted">· S<sub>y</sub>(f) = Σ h<sub>α</sub> f<sup>α</sup>, ${hand ? "built by hand" : "fitted"} on MHDEV</span>
+    <button type="button" class="link-btn" data-fit="toggle">${state.fitEdit ? "Done" : "Edit"}</button></h3>`;
+  const editor = state.fitEdit ? modelEditor(c) : "";
+  if (p.error) return `<div class="model-box">${head}<p class="muted">No noise model: ${h(p.error)}</p>${editor}</div>`;
   const comps = p.alphas.map((a, i) => [a, p.h[i], p.noise_types[i]]).filter(([, v]) => v > 0);
   const at = p.sigma_at;
-  return `<div class="model-box">
-    <h3>Noise model <span class="muted">· S<sub>y</sub>(f) = Σ h<sub>α</sub> f<sup>α</sup>, fitted to MHDEV</span></h3>
+  return `<div class="model-box">${head}
     <div class="model-grid">${comps.map(([a, v, n]) => `<span class="badge" title="${noiseTitle(n)}">${noiseLabel(n)}</span><span>h<sub>${a}</sub></span><span>${sci(v, 3)}</span>`).join("")}</div>
+    ${editor}
     ${at.tau.length ? `<h3>ADEV from the model</h3>
     <div class="model-grid">${at.tau.map((t, i) => `<span>τ = ${t >= 86400 ? `${num(t / 86400, 3)} d` : `${num(t, 4)} s`}</span><span></span><span>${sci(at.adev[i], 3)}</span>`).join("")}</div>` : ""}
   </div>`;
+}
+
+function modelEditor(c) {
+  const span = (k) => `${k.from ?? "start"} – ${k.to ?? "end"} s`;
+  const used = new Set(c.components.map((k) => k.noise));
+  return `<div class="model-edit">
+    ${c.components.length ? `<ol class="model-steps">${c.components.map((k) => `<li><span class="badge">${noiseLabel(k.noise)}</span> ${span(k)}</li>`).join("")}</ol>`
+      : `<p class="muted">Pick the noise that dominates a stretch of MHDEV and fit its level there. The dashed line is what is left for the next one.</p>`}
+    <div class="model-add">
+      <select data-ref="fit-noise" aria-label="Noise type">${NOISES.filter((n) => !used.has(n)).map((n) => `<option value="${n}" title="${noiseTitle(n)}">${noiseLabel(n)}</option>`).join("")}</select>
+      <input data-ref="fit-from" inputmode="decimal" placeholder="from τ" aria-label="From τ in seconds">
+      <input data-ref="fit-to" inputmode="decimal" placeholder="to τ" aria-label="To τ in seconds"><span class="muted">s</span>
+      <button type="button" class="btn btn-sm" data-fit="add">Add</button>
+    </div>
+    ${c.components.length ? `<div class="model-add"><button type="button" class="btn btn-sm" data-fit="undo">Undo</button>
+      <button type="button" class="link-btn" data-fit="auto">Back to the automatic fit</button></div>` : ""}
+  </div>`;
+}
+
+function editModel(act, ctx) {
+  const c = visibleClocks().find((k) => k.result);
+  if (!c) return;
+  if (act === "toggle") return update((s) => { s.fitEdit = !s.fitEdit; });
+  const value = (ref) => {
+    const v = root.querySelector(`[data-ref=${ref}]`)?.value.trim();
+    return v && Number.isFinite(Number(v)) ? Number(v) : null;
+  };
+  if (act === "add") {
+    const noise = root.querySelector("[data-ref=fit-noise]")?.value;
+    if (!noise) return;
+    update((s) => { c.components = [...c.components, { noise, from: value("fit-from"), to: value("fit-to") }]; markStale(s, "inputs"); });
+  }
+  if (act === "undo") update((s) => { c.components = c.components.slice(0, -1); markStale(s, "inputs"); });
+  if (act === "auto") update((s) => { c.components = []; markStale(s, "inputs"); });
+  ctx.run();
 }
 
 function renderCompare(box, clocks, devs) {

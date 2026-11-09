@@ -26,6 +26,7 @@ const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const TIMESCALES = ["at1", "ewfa"]
+const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 
 struct Opt
     long::String
@@ -71,6 +72,7 @@ const OPTS = [
     Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only)", ["analyze"]),
+    Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
     Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE", ["cross"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
@@ -152,13 +154,15 @@ mutable struct Options
     algorithm::String
     tau_y::Float64            # NaN = 100 τ₀
     wmax::Float64
+    components::Vector{Tuple{Int,Float64,Float64}}   # --component: α, τ from, τ to (NaN = open)
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
-                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0)
+                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
+                    Tuple{Int,Float64,Float64}[])
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -179,6 +183,23 @@ function parse_float(s::String, flag::String)
     v = tryparse(Float64, s)
     (v === nothing || !isfinite(v)) && throw(usage_error(flag * " expects a finite number, got \"" * s * "\""))
     return v
+end
+
+# "NOISE:A:B", A and B in seconds; an empty side is open.
+function parse_component!(o::Options, s::String)
+    parts = split(s, ':')
+    length(parts) == 3 || throw(usage_error("--component expects NOISE:A:B, got \"" * s * "\""))
+    name = String(parts[1])
+    α = tryparse(Int, name)
+    if α === nothing
+        k = findfirst(==(uppercase(name)), NOISE_NAMES)
+        k === nothing && throw(usage_error("--component: unknown noise \"" * name * "\"; use " * join(NOISE_NAMES, ", ") * " or an α"))
+        α = 3 - k
+    end
+    a = isempty(parts[2]) ? NaN : parse_float(String(parts[2]), "--component")
+    b = isempty(parts[3]) ? NaN : parse_float(String(parts[3]), "--component")
+    push!(o.components, (α, a, b))
+    o.fit = true
 end
 
 # "A:B" in seconds; an empty side is open.
@@ -269,6 +290,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--m";              o.m = parse_m(v)
     elseif name == "--confidence";     o.confidence = parse_float(v, name)
     elseif name == "--range";          parse_range!(o, v)
+    elseif name == "--component";      parse_component!(o, v)
     elseif name == "--tau-min";        o.tau_min = parse_float(v, name)
     elseif name == "--tau-max";        o.tau_max = parse_float(v, name)
     elseif name == "--nperseg";        o.nperseg = parse_int(v, name)
@@ -366,7 +388,7 @@ function parse_args!(o::Options, args::Vector{String})
     o.scaling != 0 || throw(usage_error("--scaling must not be 0"))
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
-    o.fit && o.format != "json" && throw(usage_error("--fit adds to the JSON output; use --format json"))
+    o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
     return o
 end
 

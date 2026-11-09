@@ -164,3 +164,10 @@ intervals.
 HDEV and MHDEV curve. The panel under the per-τ table lists the h_α and the
 model's ADEV at round averaging times (1 s to one day), the numbers a
 datasheet quotes.
+
+**Edit** in that panel builds the model by hand (see [`noise_fit`](@ref)):
+pick a noise type and the τ span where it dominates MHDEV, **Add**, and its
+level is fitted there with the slope fixed. A dashed grey line shows the
+MHDEV the model leaves, for the next component. **Undo** drops the last
+one, and **Back to the automatic fit** clears them. The components are
+saved with the session.

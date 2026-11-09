@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
+  MDEV, HDEV or MHDEV result (or a total form), `add_component!` fits one
+  noise type's level on a chosen τ range with the slope fixed and the
+  confidence intervals as weights, `undo!` takes the last one back, and
+  `noise_residual` shows what is left. The model feeds `powerlaw_sigma`,
+  `powerlaw_psd` and `clock_model`.
+- `sigmatau analyze --component NOISE:A:B` builds the `--fit` model by hand,
+  one noise type over a τ span at a time, and the JSON `powerlaw` gains
+  `mode`, `components`, `residual` and `clock_model`. In the explorer,
+  **Edit** in the noise model panel does the same, with the MHDEV the model
+  leaves drawn dashed; the components are saved with the session.
 - Single-clock Kalman filter: `kalman_filter` runs a `ClockModel` over a
   phase record (gaps predicted across, Joseph-form update, least-squares
   start), `kalman_smooth` is the Rauch–Tung–Striebel smoother,
