@@ -27,6 +27,7 @@ function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args:
     c == "check"    && return cmd_check(io, o, data, t_start)
     c == "spectrum" && return cmd_spectrum(io, o, data, t_start)
     c == "dynamic"  && return cmd_dynamic(io, o, data, t_start)
+    c == "cross"    && return cmd_cross(io, o, data, t_start)
     c == "drift"    && return cmd_drift(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
@@ -169,6 +170,72 @@ function cmd_dynamic(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "tau_mode"); json_string(io, o.grid)
     json_preprocessing(io, o); print(io, '}')
     json_key(io, "dynamic"); json_dynamic(io, r, st)
+    return elapsed(io, t_start)
+end
+
+# ── cross ─────────────────────────────────────────────────────────────────
+
+# The second channel, read like the first.
+function second_channel(o::Options)
+    # The primary record's settings and drift fit stay as they were.
+    first, measured, offset, drift = o.input, o.measured, o.removed_offset, o.removed_drift
+    o.input, o.measured = o.with, falses(0)
+    try
+        return load_record(o)
+    catch e
+        e isa CLIError && rethrow()
+        throw(CLIError(EXIT_INPUT, "--with " * o.with * ": " * error_message(e)))
+    finally
+        o.input, o.measured, o.removed_offset, o.removed_drift = first, measured, offset, drift
+    end
+end
+
+function cmd_cross(io::IO, o::Options, a::PhaseData, t_start::UInt64)
+    b = second_channel(o)
+    need_samples(a, 16, "a cross analysis")
+    length(a.x) == length(b.x) && a.tau0 == b.tau0 ||
+        throw(CLIError(EXIT_INPUT, "the two channels differ in length or τ₀"))
+    (any(isnan, a.x) || any(isnan, b.x)) &&
+        throw(CLIError(EXIT_ANALYSIS, "cross analysis needs records without gaps; fill them with --fillgaps"))
+    N = length(a.x)
+    ms = isempty(o.m) ? tau_values(tau_mode(o.grid), N, :adev) : o.m
+    r = cross_adev(a, b, ms)
+    np = o.nperseg > 0 ? min(o.nperseg, N - 1) : SigmaTau._default_nperseg(N - 1)
+    s = cross_psd_y(a, b; nperseg=np)
+    if o.format != "json"
+        print(io, "tau,covar,dev,uncertainty,dev_a,dev_b,neff\n")
+        for i in eachindex(r.tau)
+            csv_number(io, r.tau[i]); print(io, ',')
+            csv_number(io, r.covar[i]); print(io, ',')
+            csv_number(io, r.dev[i]); print(io, ',')
+            csv_number(io, r.uncertainty[i]); print(io, ',')
+            csv_number(io, r.dev_a[i]); print(io, ',')
+            csv_number(io, r.dev_b[i]); print(io, ',')
+            print(io, r.neff[i]); print(io, '\n')
+        end
+        return nothing
+    end
+    json_head(io, o, o.input)
+    json_key(io, "with"); json_string(io, o.with)
+    json_key(io, "record"); json_record(io, o, a)
+    json_key(io, "cross_adev"); print(io, '{')
+    json_key(io, "tau", true); json_array(io, r.tau)
+    json_key(io, "covar"); json_array(io, r.covar)
+    json_key(io, "dev"); json_array(io, r.dev)
+    json_key(io, "uncertainty"); json_array(io, r.uncertainty)
+    json_key(io, "dev_a"); json_array(io, r.dev_a)
+    json_key(io, "dev_b"); json_array(io, r.dev_b)
+    json_key(io, "neff"); json_array(io, r.neff)
+    print(io, '}')
+    json_key(io, "cross_spectrum"); print(io, '{')
+    json_key(io, "nperseg", true); print(io, s.nperseg)
+    json_key(io, "nseg"); print(io, s.nseg)
+    json_key(io, "f"); json_array(io, view(s.freq, 2:length(s.freq)))
+    json_key(io, "sy"); json_array(io, view(s.psd, 2:length(s.freq)))
+    json_key(io, "floor"); json_array(io, view(s.floor, 2:length(s.freq)))
+    json_key(io, "sy_a"); json_array(io, view(s.psd_a, 2:length(s.freq)))
+    json_key(io, "sy_b"); json_array(io, view(s.psd_b, 2:length(s.freq)))
+    print(io, '}')
     return elapsed(io, t_start)
 end
 
