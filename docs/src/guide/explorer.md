@@ -144,3 +144,9 @@ limits.
 thin and dashed, so the next run (another range, drift removal or τ grid)
 can be compared with it. Hover a pin for the settings it was made with; ×
 removes it.
+
+**Fit** draws the power-law noise model, S_y(f) = Σ h_α f^α fitted to MHDEV
+(see [`powerlaw_fit`](@ref)), as a dotted line beside each ADEV, MDEV, TDEV,
+HDEV and MHDEV curve. The panel under the per-τ table lists the h_α and the
+model's ADEV at round averaging times (1 s to one day), the numbers a
+datasheet quotes.

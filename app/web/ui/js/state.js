@@ -15,6 +15,7 @@ export const state = {
   confidence: 0.683,
   band: true,              // intervals as a shaded band (else error bars)
   noiseId: true,           // noise-type strip and slope guides on the Stability plot
+  fit: true,               // power-law model lines and the noise model table on Stability
   bias: true,
   tauMin: null,            // averaging-time limits in seconds, null = none
   tauMax: null,
