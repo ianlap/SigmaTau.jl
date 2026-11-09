@@ -141,6 +141,18 @@
             @test read_phase(path; fillgaps=true).x[[1, 2, 4]] == [1.0, 2.0, 4.0]
             @test read_phase(path; time_col=0, tau0=1.0, value_col=2).x == [1.0, 2.0, 4.0]
 
+            # One column is the values; the value column is never its own time
+            # axis; a blank-separated .csv still splits on blanks.
+            path = joinpath(dir, "one.txt")
+            write(path, "# phase data, unit: s\n# data interval 2.0 s\n1.0\n2.0\n4.0\n")
+            p = read_phase(path)
+            @test p.x == [1.0, 2.0, 4.0] && p.tau0 == 2.0
+            @test read_phase(path; value_col=1).tau0 == 2.0
+            @test read_data(path).x == [1.0, 2.0, 4.0]
+            path = joinpath(dir, "blank.csv")
+            write(path, "0 1.0\n1 2.0\n2 4.0\n")
+            @test read_phase(path).x == [1.0, 2.0, 4.0]
+
             # '#' lines inside the data are comments.
             path = joinpath(dir, "mid.txt")
             write(path, "0 1.0\n# note\n1 2.0\n  # indented note\n2 3.0\n")

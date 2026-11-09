@@ -55,29 +55,15 @@ function _howe_filter(x::AbstractVector{<:Real})
     return ypad[lo:hi]
 end
 
-"""
-    _filter_all(x::Vector{Float64}) → Vector{Float64}
-
-Apply `_howe_filter` to every contiguous run of finite samples in `x`,
-leaving the `NaN` slots alone. Mirrors the MATLAB `filter_all` helper.
-"""
-function _filter_all(x::AbstractVector{<:Real})
-    y = fill(NaN, length(x))
-    i = 1
-    n = length(x)
-    while i <= n
-        if isnan(x[i])
-            i += 1
-            continue
-        end
-        j = i
-        while j <= n && !isnan(x[j])
-            j += 1
-        end
-        y[i:j-1] .= _howe_filter(@view x[i:j-1])
-        i = j
+# The filtered value at `i`, the end of a run of samples, from up to `w`
+# samples of that run reaching away from the gap (`dir` -1 leftward, +1 rightward).
+function _edge_filtered(x::Vector{Float64}, i::Int, dir::Int, w::Int)
+    j = i
+    while abs(j - i) + 1 < w && 1 <= j + dir <= length(x) && !isnan(x[j + dir])
+        j += dir
     end
-    return y
+    f = _howe_filter(view(x, min(i, j):max(i, j)))
+    return dir < 0 ? f[end] : f[1]
 end
 
 """
@@ -278,13 +264,13 @@ function _fill_one_gap!(x::Vector{Float64},
 
     fillvec = _howe_filter(fillvec)
 
-    # Endpoint ramp: anchor to the filtered surrounding data so the joins
-    # don't kink off a single noisy boundary sample. A gap at either end of
-    # the record has data on one side only, so it is shifted to join that
-    # side.
-    filt_data = _filter_all(x)
-    start_off = curgap[1] > 1         ? filt_data[curgap[1] - 1] - fillvec[1]   : NaN
-    end_off   = curgap[2] < length(x) ? filt_data[curgap[2] + 1] - fillvec[end] : NaN
+    # Endpoint ramp: anchor to the filtered data beside the gap, at most
+    # `sizegap` samples of it (the scale the fill is built at), so the joins
+    # don't kink off a single noisy boundary sample and each gap costs its
+    # own length, not the record's. A gap at either end of the record has
+    # data on one side only, so it is shifted to join that side.
+    start_off = curgap[1] > 1         ? _edge_filtered(x, curgap[1] - 1, -1, sizegap) - fillvec[1]   : NaN
+    end_off   = curgap[2] < length(x) ? _edge_filtered(x, curgap[2] + 1, 1, sizegap) - fillvec[end] : NaN
     isnan(start_off) && (start_off = end_off)
     isnan(end_off)   && (end_off = start_off)
     ramp = range(start_off, stop=end_off, length=sizegap)

@@ -16,8 +16,11 @@ read_frequency
 
 ## Timestamps and gaps
 
-A time column places the samples. Each step between timestamps is rounded
-to a whole number of grid steps (the median of the regular steps), so
+A time column places the samples. The grid step is the mean of the
+regular steps, rounded to the shortest value that keeps every timestamp
+within a quarter step of its slot, so timestamps rounded to a coarse
+resolution (MJD to six decimals is 0.0864 s) still give the true τ₀. Each
+step between timestamps is rounded to a whole number of grid steps, so
 jittered timestamps keep every reading in order and a reading missing from
 the log leaves a `NaN` sample in its slot instead of joining the samples
 around it end to end. [`adev`](@ref), [`mdev`](@ref), [`hdev`](@ref),
@@ -27,7 +30,9 @@ deviations, Theo1 and the spectra return `NaN` until the gaps are filled
 with [`fillgaps`](@ref) (or `fillgaps=true` on the readers). A record with
 no missing timestamps is read exactly as written, and a column whose steps
 fit no grid (not increasing, or steps a quarter or more off a whole multiple)
-leaves the samples in file order.
+leaves the samples in file order. In a table, a row with no reading in the
+clock column is a missing reading too, so a column logged every 5 minutes
+in a 30-second table keeps its 5-minute step.
 
 ISO 8601 timestamps (`2026-11-08T21:41:03.5Z`, with a `±hh:mm` offset or
 none for UTC) and MJD time tags also give the record its UTC start time,
