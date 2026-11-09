@@ -3,6 +3,17 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
+  MDEV, HDEV or MHDEV result (or a total form), `add_component!` fits one
+  noise type's level on a chosen τ range with the slope fixed and the
+  confidence intervals as weights, `undo!` takes the last one back, and
+  `noise_residual` shows what is left. The model feeds `powerlaw_sigma`,
+  `powerlaw_psd` and `clock_model`.
+
 ## [0.6.0] - 2026-11-08
 
 ### Fixed
@@ -30,11 +41,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Clock model: `ClockModel` holds the white PM, white FM, random-walk FM and
-  random-run FM levels of a 2- or 3-state clock, `clock_model` builds one
-  from a `powerlaw_fit`, and `state_transition` and `process_noise` give its
-  Φ(δ) and Q(δ) over any step. `powerlaw_sigma` and `powerlaw_psd` accept a
-  model. A new background page derives the mapping.
 - `groslambert`: the Groslambert covariance for three or more clocks, each
   clock's Allan deviation from the cross Allan variance of the two
   difference records that share it, with χ² intervals from the covariance
