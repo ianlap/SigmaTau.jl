@@ -348,6 +348,19 @@ mktempdir() do dir
         @test occursin("\"deviation\":\"dhdev\",\"window\":32,", r.out)
     end
 
+    @testset "report" begin
+        r = run_cli("report", pf, "--devs", "adev,tdev", "--m", "1,2,4")
+        @test r.code == 0 && startswith(r.out, "<!doctype html>") && endswith(r.out, "</html>\n")
+        @test count("<svg", r.out) == 2                       # one plot per axis
+        ref = adev(PhaseData(X, 1.0), [1, 2, 4])
+        io = IOBuffer(); SigmaTauCLI.sci(io, ref.dev[2], 4)
+        @test occursin(String(take!(io)), r.out)
+        @test occursin("<pre>sigmatau report " * pf, r.out)
+        @test run_cli("report", pf, "--format", "csv").code == 1
+        sp = joinpath(dir, "it's here.csv"); cp(pf, sp; force=true)
+        @test occursin("<pre>sigmatau report '" * replace(dirname(sp), "'" => "") * "/it'\\''s here.csv'", run_cli("report", sp).out)
+    end
+
     @testset "synthetic record" begin
         r = run_cli("analyze", "--synth", "1024", "--seed", "7", "--devs", "adev", "--format", "json")
         @test r.code == 0

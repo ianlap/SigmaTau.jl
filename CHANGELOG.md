@@ -30,6 +30,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Reports: `sigmatau report FILE` writes one self-contained HTML file with
+  the record summary, the settings, σ(τ) plots, per-τ tables and the
+  command that reproduces it; a browser prints it to PDF. The explorer's
+  **File** menu (formerly Export) writes the same kind of report for every
+  loaded clock, with the SHA-256 of each input file.
+- Explorer sessions: **File → Save session** stores the clocks, their files,
+  import settings and analysis settings in one JSON file; **Open session**
+  (or dropping the file on the window) restores it and reruns.
 - `noise_id_nnls(data[, m]; deviation=:mhdev, alphas, weights=:edf)`: a
   weighted nonnegative least-squares fit of the measured σ̂²(τ) profile to
   power-law components. One fit over the whole τ range gives the amplitude of
@@ -42,7 +50,6 @@ versions follow [Semantic Versioning](https://semver.org/).
   takes noise-type names as keys (`Dict(:WHFM => 1e-12)`). Its spectrum,
   `h_α (sin(πfτ₀)/(πτ₀))^α`, is checked against theory for every α from +2
   to −4 in the test suite.
-
 - `read_data` and `detect_format` read instrument files by layout: TimeLab
   `.tim` (τ₀ and scale factor from the header), Stable32 `.phd`/`.frd`
   (MJD time tags, `Type:` header), SCPI counter readings (Hz converted to
