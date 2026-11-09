@@ -26,9 +26,13 @@ from ._julia import (
 )
 from .grids import _JL_TAUMODE, TauMode
 from .types import (
+    CrossSpectralResult,
+    CrossStabilityResult,
+    DriftFit,
     DynamicStabilityResult,
     FrequencyData,
     PhaseData,
+    PowerLawFit,
     SpectralResult,
     StabilityResult,
     StabilitySuite,
@@ -52,9 +56,21 @@ def to_jl_syms(ss: object) -> Any:
     return _to_syms(juliacall.convert(VecStr, [str(s) for s in ss]))
 
 
+_NOISE_ALPHA = {"WHPM": 2, "FLPM": 1, "WHFM": 0, "FLFM": -1, "RWFM": -2, "FWFM": -3, "RRFM": -4}
+
+
 def to_jl_dict_int_f64(d: dict) -> Any:
-    """``{int: float}`` mapping → ``Dict{Int,Float64}`` (noise_gen exponents)."""
-    return juliacall.convert(DictIntF64, {int(k): float(v) for k, v in d.items()})
+    """``{α: value}`` mapping → ``Dict{Int,Float64}``; keys are the integer α or a noise type."""
+    return juliacall.convert(
+        DictIntF64, {int(_NOISE_ALPHA.get(k, k)): float(v) for k, v in d.items()}
+    )
+
+
+def powerlaw_to_jl(h: PowerLawFit | dict) -> Any:
+    """Power-law model (a ``PowerLawFit`` or an ``{α: h_α}`` mapping) → ``Dict{Int,Float64}``."""
+    if isinstance(h, PowerLawFit):
+        return to_jl_dict_int_f64(dict(zip(h.alphas.tolist(), h.h.tolist(), strict=True)))
+    return to_jl_dict_int_f64(h)
 
 
 def resolve_m(m: TauMode | object) -> Any:
@@ -113,6 +129,9 @@ def suite_to_jl(s: StabilitySuite) -> Any:
 
 
 # ── Julia → Python ─────────────────────────────────────────────────────
+
+# juliacall reads a trailing `_b` as `!`, so fields named `*_b` need getfield.
+_field = jl.seval("(r, s) -> getfield(r, Symbol(s))")
 
 
 def np_f64(v: Any) -> np.ndarray:
@@ -187,4 +206,59 @@ def dynamic_from_jl(r: Any) -> DynamicStabilityResult:
         dev=np.array(r.dev, dtype=np.float64),
         window=int(r.window),
         tau0=float(r.tau0),
+    )
+
+
+def driftfit_from_jl(f: Any) -> DriftFit:
+    return DriftFit(
+        model=str(f.model),
+        coef=np_f64(f.coef),
+        stderr=np_f64(f.stderr),
+        rate=float(f.rate),
+        rate_stderr=float(f.rate_stderr),
+        t=np_f64(f.t),
+        y=np_f64(f.y),
+        fit=np_f64(f.fit),
+        rms=float(f.rms),
+    )
+
+
+def powerlaw_from_jl(f: Any) -> PowerLawFit:
+    return PowerLawFit(
+        alphas=np_int(f.alphas),
+        h=np_f64(f.h),
+        source=str(f.source),
+        tau0=float(f.tau0),
+        x=np_f64(f.x),
+        y=np_f64(f.y),
+        fit=np_f64(f.fit),
+    )
+
+
+def cross_spectral_from_jl(r: Any) -> CrossSpectralResult:
+    return CrossSpectralResult(
+        spectral_type=str(r.spectral_type),
+        freq=np_f64(r.freq),
+        psd=np_f64(r.psd),
+        floor=np_f64(r.floor),
+        psd_a=np_f64(r.psd_a),
+        psd_b=np_f64(_field(r, "psd_b")),
+        nseg=int(r.nseg),
+        nperseg=int(r.nperseg),
+        noverlap=int(r.noverlap),
+        taper=str(r.taper),
+    )
+
+
+def cross_stability_from_jl(r: Any) -> CrossStabilityResult:
+    return CrossStabilityResult(
+        tau=np_f64(r.tau),
+        covar=np_f64(r.covar),
+        dev=np_f64(r.dev),
+        uncertainty=np_f64(r.uncertainty),
+        dev_a=np_f64(r.dev_a),
+        dev_b=np_f64(_field(r, "dev_b")),
+        neff=np_int(r.neff),
+        tau0=float(r.tau0),
+        n=int(r.n),
     )

@@ -32,12 +32,16 @@ suite["adev"].dev
 
 st.deviation("mhtotdev", pd)         # any estimator by name; see st.estimators()
 st.psd_y(pd)                         # Welch S_y(f)
+st.drift_fit(pd).rate                # frequency drift per day
+st.powerlaw_fit(pd)                  # h_α of the power-law noise model
 st.save("adev.tsv", r)               # st.load("adev.tsv") reads it back
 ```
 
 The Python names and keywords match the Julia ones on this site (`psd_y`,
-`ncornered_hat`, `save`/`load`, `m=` for the τ grid). Indices returned to Python,
-such as `find_outliers`, are 0-based.
+`ncornered_hat`, `groslambert`, `cross_adev`, `save`/`load`, `m=` for the τ
+grid). Indices returned to Python, such as `find_outliers`, are 0-based. Live
+measurement ([`LiveStability`](@ref) and `sigmatau live`), `noise_id_nnls` and
+[`StreamingStability`](@ref) are Julia only.
 
 ## More
 
