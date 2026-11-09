@@ -387,6 +387,11 @@ mktempdir() do dir
         @test r.code == 0
         @test readings(r.out) == fill(1.0000000001e7, 5)
 
+        mf = joinpath(dir, "missed.txt")
+        write(mf, "10000000.1\n9.91E+37\n10000000.2\n")
+        r = run_cli("live", mf, "--hz")
+        @test r.code == 2 && occursin("missed gate", r.err)
+
         @test run_cli("live").code == 1
         @test run_cli("live", "sim", "--freq").code == 1
         @test run_cli("live", "sim", "--devs", "totdev").code == 1

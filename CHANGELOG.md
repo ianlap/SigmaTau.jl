@@ -10,10 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Live measurement: `LiveStability` keeps ADEV, MDEV, HDEV and MHDEV up to
   date as readings arrive (phase, fractional frequency or counter Hz), equal
   to the batch estimators at every reading. Sources: `InstrumentSource` for
-  any line-based stream (an LXI SCPI socket, a serial port, a log being
-  written) and `SimulatedSource`. `sigmatau live SOURCE` streams the running
-  σ(τ) as JSON lines, and the explorer's Live page plots it and hands the
-  readings to the full analysis.
+  any line-based stream (an LXI SCPI socket, a serial port, a log file) and
+  `SimulatedSource`. `sigmatau live SOURCE` streams the running σ(τ) as JSON
+  lines, and the explorer's Live page plots it and hands the readings to the
+  full analysis.
 
 ## [0.6.0] - 2026-11-08
 

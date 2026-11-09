@@ -172,8 +172,11 @@ reading. `SOURCE` is
   one phase reading per τ₀ (`--fast` runs it flat out);
 - `tcp://HOST:PORT`, an LXI instrument's SCPI socket (usually port 5025),
   sent `--query` (default `READ?`) before every reading;
-- a path: a serial port set up with `stty` first, or a file another program
-  is writing. Without `--query` the instrument is expected to stream.
+- a path: a serial port set up with `stty` first, or a log file, read to its
+  end. Without `--query` the instrument is expected to stream.
+
+`tcp://` needs macOS or Linux. A reading of `9.91E+37` (SCPI's missed gate)
+stops the run with exit code 2: a running estimate cannot bridge a gap.
 
 The first number on each line is the reading: phase in seconds by default,
 fractional frequency with `--freq`, or a counter frequency in Hz with `--hz`

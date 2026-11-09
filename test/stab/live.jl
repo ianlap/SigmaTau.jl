@@ -54,6 +54,7 @@ using SigmaTau
         @test [read_reading(src) for _ in 1:3] == [1.000000000012e7, 10000000.5, 9.9999999e6]
         @test isnan(read_reading(src))
         @test_throws ArgumentError read_reading(InstrumentSource(IOBuffer("OVLD\n")))
+        @test_throws ArgumentError read_reading(InstrumentSource(IOBuffer("+9.91000000E+37\n")))
 
         # An LXI-style SCPI socket: the query goes out before every reading.
         server = listen(Sockets.localhost, 0)

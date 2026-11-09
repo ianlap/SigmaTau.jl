@@ -63,6 +63,8 @@ first number on a line (SCPI replies such as `+1.000000000012E+07`, or
 comma-separated fields). With a `query` such as `"READ?"`, the query is
 written before every line is read; without one the instrument is expected
 to stream on its own. Blank lines are skipped and the stream ends at EOF.
+SCPI's no-reading value `9.91E+37` (a missed gate) throws: a running
+estimate cannot bridge a gap.
 
 `io` is any open stream:
 
@@ -71,7 +73,7 @@ to stream on its own. Blank lines are skipped and the stream ends at EOF.
 - a serial port, opened as a file after setting its line speed, e.g.
   `stty -F /dev/ttyUSB0 9600 raw` (Linux; `stty -f` on macOS) and then
   `open("/dev/ttyUSB0", "r+")`;
-- a pipe or a file being written, for replaying a log.
+- a pipe, or a log file, replayed to its end.
 """
 struct InstrumentSource{T<:IO}
     io::T
@@ -89,6 +91,9 @@ function read_reading(s::InstrumentSource)
         isempty(fields) && continue
         v = tryparse(Float64, fields[1])
         v === nothing && throw(ArgumentError("InstrumentSource: not a reading: \"" * fields[1] * "\""))
+        # A missed gate is a gap, and a running estimate cannot bridge one.
+        isnan(_scpi_nan(v)) && throw(ArgumentError(
+            "InstrumentSource: the instrument returned no reading (9.91E+37, a missed gate)"))
         return v
     end
     return NaN

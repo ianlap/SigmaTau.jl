@@ -24,6 +24,7 @@ function run_live(out::IO, o::Options)::Int
         quantity === :phase || throw(usage_error("the simulator reads phase; drop --freq and --hz"))
         return live_loop(out, o, live, simulator(o, tau0), !o.fast)
     elseif startswith(src, "tcp://")
+        Sys.iswindows() && throw(usage_error("tcp:// sources need macOS or Linux; on Windows use a serial port"))
         host, port = host_port(src)
         sock = tcp_connect(host, port)
         try

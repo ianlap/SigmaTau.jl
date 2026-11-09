@@ -30,8 +30,8 @@ export function controls() {
   const field = (k, label, v, hint = "") => `<label class="opt live-field"><span>${label}</span><input type="text" data-ctl="${k}" value="${h(v)}" ${dis} spellcheck="false" ${hint ? `placeholder="${h(hint)}"` : ""}></label>`;
   const where = L.source === "tcp" ? `${field("address", "Address", L.address, "host:port")}${field("query", "Query", L.query, "none")}
       <p class="muted small">An LXI instrument's SCPI socket, usually port 5025. The query is sent before every reading.</p>`
-    : L.source === "device" ? `${field("device", "Path", L.device)}${field("query", "Query", L.source === "device" && L.query === "READ?" ? "" : L.query, "none")}
-      <p class="muted small">A serial port set up with <code>stty</code> first, or a file being written. One reading per line.</p>`
+    : L.source === "device" ? `${field("device", "Path", L.device)}${field("deviceQuery", "Query", L.deviceQuery, "none")}
+      <p class="muted small">A serial port set up with <code>stty</code> first, or a log file, read to its end. One reading per line.</p>`
     : `<p class="muted small">A simulated clock: white PM, then white FM, then random-walk FM, one reading per τ₀.</p>`;
   return `<h2>Live measurement</h2>
     <div class="ctl-block"><label class="lbl">Source</label>${seg("source", SOURCES, L.source)}</div>
@@ -59,7 +59,7 @@ export function onControl(e) {
   });
   if (e.type !== "change") return;
   if (k === "reading") update((s) => { s.live.reading = t.value; });
-  if (["address", "device", "query", "nominal"].includes(k)) update((s) => { s.live[k] = t.value.trim(); });
+  if (["address", "device", "query", "deviceQuery", "nominal"].includes(k)) update((s) => { s.live[k] = t.value.trim(); });
   if (k === "tau0") {
     const v = Number(t.value);
     if (v > 0) update((s) => { s.live.tau0 = v; });
@@ -72,7 +72,7 @@ function args() {
   const a = ["live"];
   if (L.source === "sim") a.push("sim");
   else if (L.source === "tcp") a.push(`tcp://${L.address}`, "--query", L.query);
-  else a.push(L.device, ...(L.query ? ["--query", L.query] : []));
+  else a.push(L.device, ...(L.deviceQuery ? ["--query", L.deviceQuery] : []));
   if (L.source !== "sim") {
     if (L.reading === "hz") a.push("--hz", ...(L.nominal ? ["--nominal", L.nominal] : []));
     if (L.reading === "frequency") a.push("--freq");
@@ -99,25 +99,40 @@ async function start() {
 
 async function stop() {
   clearTimeout(run.timer);
+  await drain();          // the lines the core wrote before it is stopped
   await liveStop().catch(() => {});
   run.running = false;
   update(() => {});
 }
 
-async function poll() {
-  const id = run.id;
-  let out;
+async function drain() {
   try {
-    out = await livePoll(id, run.since);
-  } catch (err) {
-    out = { lines: [], running: false, error: err.message };
-  }
-  if (id !== run.id) return;
+    const since = run.since;
+    take(await livePoll(run.id, since), since);
+  } catch { /* the measurement already ended */ }
+}
+
+// Lines from `since` on, unless another poll has taken them already.
+function take(out, since) {
+  if (since !== run.since) return;
   for (const line of out.lines) {
     run.readings.push(...line.readings);
     Object.assign(run, { last: line, quantity: line.quantity, tau0: line.tau0 });
   }
   run.since = out.next ?? run.since;
+}
+
+async function poll() {
+  const id = run.id;
+  const since = run.since;
+  let out;
+  try {
+    out = await livePoll(id, since);
+  } catch (err) {
+    out = { lines: [], running: false, error: err.message };
+  }
+  if (id !== run.id || !run.running) return;
+  take(out, since);
   if (out.lines.length && state.page === "live") draw();
   if (out.running && run.running) {
     run.timer = setTimeout(poll, POLL_MS);

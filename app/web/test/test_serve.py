@@ -142,6 +142,20 @@ class ServeTests(unittest.TestCase):
         status, _ = self.request(f"/api/live/poll?id={doc['id']}")
         self.assertEqual(status, 404)
 
+    def test_live_paths_only_on_loopback(self):
+        server = ThreadingHTTPServer(("0.0.0.0", 0), serve.Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{server.server_address[1]}/api/live/start",
+                                         data=json.dumps({"args": ["live", "/etc/hosts"]}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(req, timeout=60)
+            self.assertEqual(e.exception.code, 403)
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_live_error(self):
         status, doc = self.post({"args": ["live", "tcp://127.0.0.1:1"]}, path="/api/live/start")
         self.assertEqual(status, 200, doc)

@@ -175,9 +175,14 @@ class Handler(SimpleHTTPRequestHandler):
         if cmd is None:
             return self.send_json(503, {"error": "no analysis core: build cli/ (see cli/README.md) or put julia on PATH"})
         if self.path == "/api/live/start":
+            args = req.get("args")
+            # Device and file paths read this machine: only for a page on this machine.
+            local = self.server.server_address[0] in ("127.0.0.1", "::1", "localhost")
+            if not local and isinstance(args, list) and len(args) > 1 and args[1] != "sim" and not str(args[1]).startswith("tcp://"):
+                return self.send_json(403, {"error": "device and file sources are only served on 127.0.0.1"})
             stop_live()
             try:
-                live = Live(cmd, req.get("args"))
+                live = Live(cmd, args)
             except (ValueError, TypeError) as e:
                 return self.send_json(400, {"error": str(e)})
             live_id = next(LIVE_IDS)
