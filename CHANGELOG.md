@@ -5,6 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Power-law noise model: `powerlaw_fit` fits the h_α of
+  S_y(f) = Σ h_α f^α to a record's σ(τ) (ADEV, MDEV, HDEV or MHDEV, with
+  each component's exact response for a sampled record, from m = 1) or to a
+  spectrum, including a datasheet's ℒ(f) points; `powerlaw_sigma` and
+  `powerlaw_psd` convert a model to σ(τ), S_y(f), S_x(f) or ℒ(f).
+
 ## [0.6.0] - 2026-11-08
 
 ### Fixed
@@ -32,11 +40,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Power-law noise model: `powerlaw_fit` fits the h_α of
-  S_y(f) = Σ h_α f^α to a record's σ(τ) (ADEV, MDEV, HDEV or MHDEV, with
-  each component's exact response for a sampled record, from m = 1) or to a
-  spectrum, including a datasheet's ℒ(f) points; `powerlaw_sigma` and
-  `powerlaw_psd` convert a model to σ(τ), S_y(f), S_x(f) or ℒ(f).
 - Reports: `sigmatau report FILE` writes one self-contained HTML file with
   the record summary, the settings, σ(τ) plots, per-τ tables and the
   command that reproduces it; a browser prints it to PDF. The explorer's
