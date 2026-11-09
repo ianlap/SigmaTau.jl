@@ -50,7 +50,7 @@ pd_dat = read_phase(datpath; header = 10, time_col = 0, value_col = 1, tau0 = 1.
 # `read_frequency` takes the same keywords and returns a `FrequencyData`.
 # Every deviation function accepts either container.
 
-# ## Timestamps and gaps
+# ## Missing readings
 #
 # A reading missing from a timestamped log is not dropped: the readers put
 # every sample on the grid of its time column (jittered timestamps round to
