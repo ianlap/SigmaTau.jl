@@ -31,7 +31,7 @@ plot(suite)                 # log-log σ(τ) with CI error bars
 ## Install
 
 ```julia
-pkg> add https://github.com/ianlap/SigmaTau.jl
+pkg> add SigmaTau
 ```
 
 Julia 1.11 or later. `Plots` is optional and enables the plot recipes. The
@@ -67,7 +67,7 @@ and the full API reference.
 
 `python/` holds the `sigmatau` Python package, a juliacall wrapper with the
 same names (`st.adev(pd)`, `st.psd_y(pd)`, `st.deviation("mhtotdev", pd)`).
-Install it from a checkout with `pip install -e "python/[dev]"`; see
+Install it with `pip install sigmatau`; see
 [`python/README.md`](python/README.md).
 
 ## Compared with Stable32 and allantools
@@ -86,7 +86,11 @@ Install it from a checkout with `pip install -e "python/[dev]"`; see
 
 Validation: the core estimators match Stable32 to ≤ 0.005 % (its
 five-significant-figure output) and allantools to ≤ 1e-13 relative on the
-shipped fixture; raw total kernels match allantools to ≤ 4.4e-15. Where a
+shipped fixture; raw total kernels match allantools to ≤ 4.4e-15. The
+cross-check suite in `test/validation/` repeats this for every estimator on
+records from white PM to random-run FM, plus EDF, intervals, noise ID and
+spectra (about 7,000 comparisons;
+[`tools/validation/REPORT.md`](tools/validation/REPORT.md)). Where a
 default differs from a reference (MTOTDEV bias correction, noise-ID
 detrending), the per-τ tables in the
 [validation page](https://ianlap.github.io/SigmaTau.jl/stable/explanation/validation/)
@@ -142,7 +146,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
   author  = {Lapinski, Ian},
   title   = {{SigmaTau.jl}: time-and-frequency stability analysis in {Julia}},
   url     = {https://github.com/ianlap/SigmaTau.jl},
-  version = {0.5.0},
+  version = {0.6.0},
   year    = {2026},
 }
 ```

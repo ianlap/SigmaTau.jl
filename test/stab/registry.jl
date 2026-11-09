@@ -104,5 +104,9 @@ using Test, Random, SigmaTau
         row = r"id: \"(\w+)\",\s*label: \"([^\"]+)\",\s*group: \"(\w+)\",\s*axis: \"(\w+)\""
         @test [Tuple(m.captures) for m in eachmatch(row, js)] ==
               [(String(e.name), e.label, String(e.family), String(e.axis)) for e in estimators()]
+        st = read(joinpath(pkgdir(SigmaTau), "app", "web", "ui", "js", "state.js"), String)
+        devs = match(r"devs: \[([^\]]*)\]", st).captures[1]
+        @test Symbol.(strip.(split(devs, ','), Ref([' ', '"']))) == collect(DEFAULT_DEVIATIONS)
+        @test match(r"confidence: ([0-9.]+)", st).captures[1] == string(DEFAULT_CONFIDENCE)
     end
 end
