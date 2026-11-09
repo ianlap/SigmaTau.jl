@@ -6,7 +6,6 @@
 using Test
 using Random
 using Statistics
-using FFTW                                  # AbstractFFTs backend
 using SigmaTau
 using SigmaTau: _welch_psd, _window, _phase_to_freq, _freq_to_phase
 
@@ -109,7 +108,7 @@ end
         # psd_y differences phase to N − 1 samples: 4095 ÷ 4 = 1023 → 512.
         @test r.nperseg == 512                  # largest 2^k ≤ N ÷ 4
         @test r.noverlap == 256                 # 50 % overlap
-        @test r.window === :hann
+        @test r.taper === :hann
         @test psd_x(p).nperseg == 1024
         @test SigmaTau._default_nperseg(4095) == 512
         @test SigmaTau._default_nperseg(40) == 16

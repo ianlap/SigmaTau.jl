@@ -14,12 +14,12 @@ using SigmaTau
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
         # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
-        # is via the Kasdin–Walter helper (`_gen_powerlaw_phase`).
+        # is via `noise_gen`.
         ms = [1, 2, 4, 8, 16]
         bad = []
-        for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
+        for alpha in (2, 1, 0, -1, -2)
             Random.seed!(20260507)
-            x = _gen_powerlaw_phase(alpha, 1024; tau0=1.0)
+            x = noise_gen(PhaseData, 1024, 1.0; h=Dict(alpha => 1.0)).x
             for m in ms
                 isapprox(SigmaTau._mtotdev_core(x, [m], 1.0)[1], sqrt(LK.mtotdev_var(x, m, 1.0));
                          atol=1e-25, rtol=1e-12) || push!(bad, (alpha, m, :kernel))
@@ -39,7 +39,7 @@ using SigmaTau
         Random.seed!(20260513)
         N    = 1024
         tau0 = 1.0
-        x    = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+        x    = noise_gen(PhaseData, N, tau0; h=Dict(0 => 1.0)).x
         pd   = PhaseData(x, tau0)
         ms   = [1, 2, 4, 8, 16, 32]
 
@@ -72,8 +72,8 @@ using SigmaTau
     @testset "MHTOTDEV finite and positive on every noise type" begin
         # MHTOTDEV has no external reference; this is its smoke test.
         @test all(all(d -> isfinite(d) && d > 0,
-                      _mhtotdev_core(_gen_powerlaw_phase(alpha, 1024; tau0=1.0), [1, 2, 4, 8], 1.0))
-                  for alpha in (2.0, 1.0, 0.0, -1.0, -2.0))
+                      _mhtotdev_core(noise_gen(PhaseData, 1024, 1.0; h=Dict(alpha => 1.0)).x, [1, 2, 4, 8], 1.0))
+                  for alpha in (2, 1, 0, -1, -2))
     end
 
     @testset "MHTOTDEV deterministic-trend invariance (wrapper)" begin
@@ -89,7 +89,7 @@ using SigmaTau
         ms   = [1, 2, 4, 8, 16, 32]
 
         Random.seed!(20260509)
-        x = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+        x = noise_gen(PhaseData, N, tau0; h=Dict(0 => 1.0)).x
         t = collect(0:N-1) .* tau0
 
         # The synthetic noise is unit-scale (y has unit variance), so the
@@ -121,9 +121,9 @@ using SigmaTau
         # phase (α = −2, excursions ~10³ against unit second differences)
         # bounds them at ~1e-11 over many seeds, hence 1e-10.
         bad = []
-        for alpha in (2.0, 1.0, 0.0, -1.0, -2.0)
+        for alpha in (2, 1, 0, -1, -2)
             Random.seed!(123)
-            x  = _gen_powerlaw_phase(alpha, 1024; tau0=1.0)
+            x  = noise_gen(PhaseData, 1024, 1.0; h=Dict(alpha => 1.0)).x
             xb = BigFloat.(x)
             cs = pushfirst!(cumsum(xb), big(0.0))
             pairs = ((_adev_core, m -> LK.adev_var(xb, m, big(1.0))),
