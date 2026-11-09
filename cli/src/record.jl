@@ -216,7 +216,7 @@ function read_instrument(o::Options, fmt::Symbol)
                             fillgaps=o.fillgaps)
     o.freq = !r.phase
     # A filled frequency sample leaves the phase sample after it unmeasured.
-    isempty(r.filled) || (o.measured = r.phase ? .!r.filled : [true; .!r.filled])
+    o.measured = isempty(r.filled) ? falses(0) : r.phase ? .!r.filled : [true; .!r.filled]
     detrend = detrend_symbol(o.detrend)
     v = r.v
     detrend === :none || SigmaTau._detrend_core!(v, detrend)

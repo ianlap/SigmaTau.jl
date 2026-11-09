@@ -36,6 +36,7 @@ include("edf.jl")
 include("grids.jl")
 include("spectral.jl")
 include("gaps.jl")
+include("cross.jl")
 include("drift.jl")
 include("deviations.jl")
 include("registry.jl")
@@ -81,6 +82,7 @@ export StreamingStability, snapshot, nsamples
 
 export noise_gen
 export psd_y, psd_x, ssb_phase_noise
+export cross_psd_y, cross_psd_x, cross_adev, CrossSpectralResult, CrossStabilityResult
 
 # Plot recipes for `StabilityResult` live in the `SigmaTauRecipesBaseExt`
 # package extension and load automatically when `RecipesBase` (or `Plots`) is.
