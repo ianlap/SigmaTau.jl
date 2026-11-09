@@ -304,11 +304,6 @@ function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
     return y .- (sum(y) / N)
 end
 
-# Phase x = τ₀ · cumsum(y) of a `_gen_powerlaw_y` draw.
-function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0, rng=nothing)
-    return cumsum(_gen_powerlaw_y(alpha, N; rng=rng)) .* tau0
-end
-
 
 # σ_y(τ₀) of a fractional-frequency vector, to rescale a raw draw to a level.
 function _measure_sigma1(y::Vector{Float64}, tau0::Float64)

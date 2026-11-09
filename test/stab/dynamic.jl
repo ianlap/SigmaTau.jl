@@ -46,7 +46,7 @@
         Random.seed!(42)
         N      = 8192
         window = 1024
-        pd = PhaseData(_gen_powerlaw_phase(0.0, N; tau0=1.0), 1.0)
+        pd = PhaseData(noise_gen(PhaseData, N, 1.0; h=Dict(0 => 1.0)).x, 1.0)
         ms = [1, 2, 4]
 
         for r in (dadev(pd, ms; window=window), dhdev(pd, ms; window=window))

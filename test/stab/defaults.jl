@@ -43,7 +43,7 @@ using SigmaTau
             @test maximum(ms) <= (1536 - 1) ÷ 3
             @test 512 ∉ ms
             Random.seed!(2026)
-            p = PhaseData(_gen_powerlaw_phase(0.0, 1536; tau0=1.0), 1.0)
+            p = PhaseData(noise_gen(PhaseData, 1536, 1.0; h=Dict(0 => 1.0)).x, 1.0)
             r = htotdev(p; ci = false)
             @test all(isfinite, r.dev)
         end
@@ -55,7 +55,7 @@ using SigmaTau
             Random.seed!(2026)
             N    = 512
             tau0 = 1.0
-            x    = _gen_powerlaw_phase(0.0, N; tau0=tau0)
+            x    = noise_gen(PhaseData, N, tau0; h=Dict(0 => 1.0)).x
             p    = PhaseData(x, tau0)
             f    = FrequencyData(diff(x) ./ tau0, tau0)
 
@@ -69,7 +69,7 @@ using SigmaTau
 
         @testset "kwargs pass through (ci, confidence)" begin
             Random.seed!(7)
-            p = PhaseData(_gen_powerlaw_phase(0.0, 512; tau0=1.0), 1.0)
+            p = PhaseData(noise_gen(PhaseData, 512, 1.0; h=Dict(0 => 1.0)).x, 1.0)
             # ci=true populates CI; ci=false leaves them empty (neff stays).
             r_ci = adev(p; ci = true)
             r_no = adev(p; ci = false)
@@ -123,7 +123,7 @@ using SigmaTau
             # rounding.
             Random.seed!(2026)
             τ₀ = 1.0
-            p_full = PhaseData(_gen_powerlaw_phase(0.0, 4096; tau0=τ₀), τ₀)
+            p_full = PhaseData(noise_gen(PhaseData, 4096, τ₀; h=Dict(0 => 1.0)).x, τ₀)
             f_diff = SigmaTau._phase_to_freq(p_full)
             @test length(f_diff.y) == length(p_full.x) - 1
             ms = [1, 4, 16, 64]

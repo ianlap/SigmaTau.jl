@@ -13,7 +13,6 @@
 using Test
 using Random
 using Statistics
-using FFTW                                  # AbstractFFTs backend for synthesis
 using SigmaTau
 using SigmaTau: _gen_powerlaw_y, _coeff_mhtot, bias_correction
 
