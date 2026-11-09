@@ -83,6 +83,7 @@ export drift_fit, DriftFit
 export powerlaw_fit, PowerLawFit, powerlaw_sigma, powerlaw_psd
 export ClockModel, clock_model, state_transition, process_noise
 export KalmanResult, kalman_filter, kalman_smooth, holdover_error, innovation_check, simulate_clock
+export prediction_error, tune_q
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize

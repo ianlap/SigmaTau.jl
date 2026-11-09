@@ -49,6 +49,17 @@ using Statistics
         @test rms(k3.x[2000:end, 3] .- X3[2000:end, 3]) < sqrt(mean(k3.P[3, 3, 2000:end]))
     end
 
+    @testset "prediction error and tuning" begin
+        line = PhaseData(1e-9 .+ 2e-12 .* (0:999), 1.0)
+        @test prediction_error(kalman_filter(line, m), line, [1, 10]; burnin=100) ≈ [0, 0] atol=1e-18
+        start = ClockModel(; tau0=1.0, R=1e-20, q1=1e-21, q2=1e-29)
+        t = tune_q(p, start; horizons=[10, 100], points=5)
+        @test t.model.q1 ≈ 1e-22 rtol=1e-9                 # on the grid, one decade down
+        @test (t.model.R, size(t.cost)) == (1e-20, (5, 5))
+        @test minimum(t.cost) == t.cost[argmin(t.cost)] <= t.cost[3, 3]
+        @test_throws ArgumentError tune_q(p, ClockModel(; tau0=1.0, q1=1e-22))
+    end
+
     @test_throws ArgumentError kalman_filter(PhaseData(p.x, 2.0), m)
     @test_throws ArgumentError kalman_filter(p, m; x0=[0.0, 0.0, 0.0], P0=zeros(3, 3))
 end

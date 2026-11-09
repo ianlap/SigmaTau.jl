@@ -209,3 +209,56 @@ function _psd_sqrt(Q::AbstractMatrix)
     F = eigen(Symmetric(Q))
     return F.vectors * Diagonal(sqrt.(max.(F.values, 0.0)))
 end
+
+"""
+    prediction_error(kf::KalmanResult, data::PhaseData, horizons; burnin=0) → Vector{Float64}
+
+RMS error (s) of the filter's phase predictions `horizons` samples ahead:
+from the estimate at each sample k past `burnin`, extrapolate the phase to
+k + h and compare it with the reading there. Gaps are skipped.
+"""
+function prediction_error(kf::KalmanResult, data::PhaseData, horizons::AbstractVector{<:Integer}; burnin::Integer=0)
+    z, X, n = data.x, kf.x, size(kf.x, 2)
+    return map(horizons) do h
+        δ = h * kf.model.tau0
+        w = [δ^(j - 1) / factorial(j - 1) for j in 1:n]
+        s, c = 0.0, 0
+        for k in burnin+1:length(z)-h
+            isfinite(z[k+h]) && isfinite(z[k]) || continue
+            s += abs2(z[k+h] - sum(X[k, j] * w[j] for j in 1:n)); c += 1
+        end
+        c > 0 || throw(ArgumentError("prediction_error: no readings $h samples past the burn-in"))
+        sqrt(s / c)
+    end
+end
+
+"""
+    tune_q(data::PhaseData, m::ClockModel; horizons=[10, 100, 1000], decades=2, points=9, burnin)
+        → (model, q1, q2, cost)
+
+Retune the white FM and random-walk FM levels of `m` for prediction: run
+the filter over a log grid of `points` values spanning ± `decades` around
+`m.q1` and `m.q2`, and keep the pair whose phase predictions
+`horizons` samples ahead have the smallest summed log RMS error (see
+[`prediction_error`](@ref)). `R` and `q3` stay as they are. The burn-in
+defaults to a tenth of the record. Returns the tuned model, the grid axes
+and the cost on the grid (rows q1, columns q2).
+
+A noise fit gives levels that match σ(τ); tuning gives the ones that
+predict best, which differ when the record has noise the model lacks, such
+as flicker FM.
+"""
+function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integer}=[10, 100, 1000],
+                decades::Real=2, points::Integer=9, burnin::Integer=length(data.x) ÷ 10)
+    m.q1 > 0 && m.q2 > 0 || throw(ArgumentError("tune_q: needs a model with q1 > 0 and q2 > 0 to centre the grid"))
+    hs = filter(h -> h < length(data.x) - burnin, horizons)
+    isempty(hs) && throw(ArgumentError("tune_q: every horizon is longer than the record past the burn-in"))
+    grid(q) = q .* exp10.(range(-decades, decades; length=points))
+    q1s, q2s = grid(m.q1), grid(m.q2)
+    cost = [begin
+                mi = ClockModel(m.tau0, m.R, a, b, m.q3, m.drift)
+                sum(log, prediction_error(kalman_filter(data, mi), data, hs; burnin))
+            end for a in q1s, b in q2s]
+    i = argmin(cost)
+    return (model=ClockModel(m.tau0, m.R, q1s[i[1]], q2s[i[2]], m.q3, m.drift), q1=q1s, q2=q2s, cost=cost)
+end
