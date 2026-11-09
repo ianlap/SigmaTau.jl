@@ -15,16 +15,17 @@ const _DETREND_MODES_STR = string(_DETREND_MODES)
 _col_scale(X::Matrix{Float64}, ok::BitVector) =
     [max(sqrt(sum(abs2(X[i, j]) for i in eachindex(ok) if ok[i])), floatmin()) for j in 1:size(X, 2)]
 
-# Inverse of a symmetric 2×2 or 3×3 matrix, by cofactors.
+# Inverse of a symmetric 2×2 or 3×3 matrix, by cofactors (no hvcat literal:
+# that call is not resolved under juliac --trim).
 function _sym_inv(A::Matrix{Float64})
     if size(A, 1) == 2
         a, b, d = A[1, 1], A[1, 2], A[2, 2]
-        return [d -b; -b a] ./ (a * d - b^2)
+        return reshape([d, -b, -b, a], 2, 2) ./ (a * d - b^2)
     end
     a, b, c, d, e, f = A[1, 1], A[1, 2], A[1, 3], A[2, 2], A[2, 3], A[3, 3]
     C11 = d * f - e^2; C12 = c * e - b * f; C13 = b * e - c * d
     C22 = a * f - c^2; C23 = b * c - a * e; C33 = a * d - b^2
-    return [C11 C12 C13; C12 C22 C23; C13 C23 C33] ./ (a * C11 + b * C12 + c * C13)
+    return reshape([C11, C12, C13, C12, C22, C23, C13, C23, C33], 3, 3) ./ (a * C11 + b * C12 + c * C13)
 end
 
 # Inverse of the scaled normal matrix XᵀX (two or three columns) over the
