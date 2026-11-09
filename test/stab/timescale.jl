@@ -23,6 +23,10 @@ using Statistics
     @test adev1(at) < sqrt(q[1])                            # better than the best clock
     @test all(sum(at.weights; dims=2) .≈ 1)
     @test timescale_phase(at).x ≈ at.x[:, 3] .- cc.x[:, 3]   # the same through any clock
+    # A short record where the Groslambert start fails for the best clock.
+    rw = [ClockModel(; tau0=1.0, q1=1e-24 * 4.0^k, q2=1e-30 * 4.0^k) for k in 0:3]
+    short, _ = simulate_ensemble(rw, 4096; reference=0, rng=Xoshiro(42))
+    @test all(<(0), diff(vec(mean(timescale(short).weights[2048:end, :]; dims=1))))
 
     @testset "caps, gaps and outliers" begin
         capped = timescale(cc; wmax=0.4)

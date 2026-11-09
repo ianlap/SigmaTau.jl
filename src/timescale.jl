@@ -59,18 +59,25 @@ function _cap_weights!(w::Vector{Float64}, wmax::Float64)
     end
 end
 
-# A clock's starting prediction-error variance from the Groslambert ADEV of
-# the first samples at τ₀ (three or more clocks), else the same for all.
+# A clock's starting prediction-error variance from its ADEV at τ₀ over the
+# first samples: the Groslambert estimate with three or more clocks, else (or
+# where that comes out negative) its ADEV against the reference, which has the
+# right scale but includes the reference's noise.
 function _initial_variance(cc::ClockComparisons, n::Int)
     k = size(cc.x, 2)
-    k >= 3 || return ones(k)
     head = ClockComparisons(cc.x[1:n, :], cc.tau0; names=cc.names)
-    pairs = Matrix{PhaseData{Float64}}(undef, k, k)
-    for i in 1:k, j in i+1:k
-        pairs[i, j] = head[i, j]
+    σ = Float64[adev(head[i], [1]; ci=false).dev[1] for i in 1:k]
+    if k >= 3
+        pairs = Matrix{PhaseData{Float64}}(undef, k, k)
+        for i in 1:k, j in i+1:k
+            pairs[i, j] = head[i, j]
+        end
+        g = Float64[r.dev[1] for r in groslambert(pairs, [1])]
+        σ = Float64[isfinite(g[i]) && g[i] > 0 ? g[i] : σ[i] for i in 1:k]
     end
-    σ = [r.dev[1] for r in groslambert(pairs, [1])]
-    all(s -> isfinite(s) && s > 0, σ) || return ones(k)
+    ok = filter(s -> isfinite(s) && s > 0, σ)
+    isempty(ok) && return ones(k)
+    σ = Float64[isfinite(s) && s > 0 ? s : maximum(ok) for s in σ]    # the reference itself reads zero
     return (σ .* cc.tau0) .^ 2
 end
 
@@ -90,6 +97,10 @@ of the average for that sample.
   by 1/(1 − wᵢ) for the clock's own pull on the scale. Weights are capped
   at `wmax`, and a clock whose error passes `outlier` σᵢ is left out of
   that sample and of its variance.
+
+With two clocks the comparisons alone cannot tell which clock is the better
+one, and AT1's weights wander toward either; cap them with `wmax` or use
+EWFA.
 
 Each clock's frequency is an exponential average of its phase steps over
 `tau_y` seconds (default 100 τ₀); `tau_w` defaults to 10 `tau_y`. With
