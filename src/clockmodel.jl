@@ -90,6 +90,8 @@ function clock_model(h::AbstractDict; tau0::Real, drift::Union{Bool,Nothing}=not
                       q3, drift=drift === nothing ? q3 > 0 : drift)
 end
 
+_powerlaw_tau0(m::ClockModel) = m.tau0
+
 function _powerlaw_h(m::ClockModel)
     h = Dict(2 => 8π^2 * m.tau0 * m.R, 0 => 2m.q1, -2 => m.q2 / (2π^2))
     m.drift && (h[-4] = m.q3 / (8π^4))

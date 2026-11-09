@@ -39,6 +39,7 @@ include("cross.jl")
 include("drift.jl")
 include("powerlaw.jl")
 include("clockmodel.jl")
+include("noisefit.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
@@ -80,6 +81,7 @@ export ncornered_hat, groslambert
 export drift_fit, DriftFit
 export powerlaw_fit, PowerLawFit, powerlaw_sigma, powerlaw_psd
 export ClockModel, clock_model, state_transition, process_noise
+export NoiseFit, noise_fit, add_component!, undo!, noise_residual
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize

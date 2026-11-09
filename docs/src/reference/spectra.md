@@ -33,6 +33,30 @@ powerlaw_sigma
 powerlaw_psd
 ```
 
+## Interactive fit
+
+[`noise_fit`](@ref) builds the model by hand, one noise type at a time:
+pick a type and the τ where it dominates, fit its level with the slope
+fixed, and the next component is fitted to what is left. This is the way
+to go when you know which noise sits where, or when [`powerlaw_fit`](@ref)
+spends a component on a bump.
+
+```julia
+f = noise_fit(mhdev(p))
+add_component!(f, :WHPM, 1:2)
+add_component!(f, :WHFM, 6:9)
+noise_residual(f)                  # σ² the model leaves at each τ
+undo!(f)
+```
+
+```@docs
+noise_fit
+NoiseFit
+add_component!
+undo!
+noise_residual
+```
+
 ## Clock model
 
 [`clock_model`](@ref) turns a power-law fit into the state-space
