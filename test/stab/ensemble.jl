@@ -42,6 +42,8 @@ end
     P = Matrix{PhaseData}(undef, 3, 3)
     P[1, 2] = d(1, 2); P[3, 2] = d(3, 2); P[1, 3] = d(1, 3)   # mixed orientation
     @test all(groslambert(P, [1, 2, 4])[i].dev ≈ g3[i].dev for i in 1:3)
+    P[1, 1] = PhaseData(zeros(16), 1.0)                         # ignored, also for the grid
+    @test groslambert(P)[1].tau == groslambert(d(1, 2), d(2, 3), d(3, 1))[1].tau
     g32 = groslambert(d(1, 2), PhaseData(Float32.(x[2] .- x[3]), 1.0), d(3, 1), [1, 2, 4])
     @test isapprox(g32[1].dev, g3[1].dev; rtol=1e-5)
     # CI without noise types: shown and saved with an empty noise column.

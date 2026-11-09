@@ -235,10 +235,10 @@ groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, taus::TauMode; kw...
 groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}; kw...) =
     groslambert(pairwise, _default_m_values(_gl_n(pairwise), :adev); kw...)
 
-# Phase samples per record: those of the first record in the matrix.
+# Phase samples per record: those of the first off-diagonal record.
 function _gl_n(pairwise)
-    for i in eachindex(pairwise)
-        isassigned(pairwise, i) && return length(_as_phase(pairwise[i]).x)
+    for I in CartesianIndices(pairwise)
+        I[1] != I[2] && isassigned(pairwise, I) && return length(_as_phase(pairwise[I]).x)
     end
     throw(ArgumentError("groslambert: the pairwise matrix is empty"))
 end
