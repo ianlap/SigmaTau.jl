@@ -80,8 +80,8 @@ or `:tdev`) at observation interval `τ` in seconds, or a vector of limits for
 a vector of `τ`. `NaN` outside the τ range the recommendation covers.
 
 ```jldoctest
-julia> telecom_mask(:G8262_opt1, :tdev, 10.0)
-3.2e-9
+julia> round(telecom_mask(:G8262_opt1, :tdev, 10.0) * 1e9; digits=6)   # ns
+3.2
 ```
 """
 telecom_mask(mask::Symbol, stat::Symbol, τ::Real) = _mask_limit(_mask_pieces(mask, stat), Float64(τ))
