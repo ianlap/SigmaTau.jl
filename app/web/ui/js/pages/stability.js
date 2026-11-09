@@ -19,6 +19,7 @@ export function mount(el, ctx) {
         <div class="seg" role="group" aria-label="Quantity" data-ref="axis">${Object.entries(AXES).map(([k, v]) =>
           `<button type="button" data-axis="${k}">${v}</button>`).join("")}</div>
         <span class="caption" data-ref="caption"></span>
+        <span class="pin-list" data-ref="pins"></span>
         <span class="toggles">
           <label class="check" title="Noise type identified at each τ (lag-1 autocorrelation), with the power-law slope it implies"><input type="checkbox" data-tog="noiseId">Noise ID</label>
           <label class="check" title="Draw the confidence intervals as a shaded band instead of error bars"><input type="checkbox" data-tog="band">CI band</label>
@@ -34,6 +35,9 @@ export function mount(el, ctx) {
     if (ax) update((s) => { s.axis = ax; });
     if (e.target.closest("[data-act=load]")) ctx.goData();
     if (e.target.closest("[data-act=run]")) ctx.run();
+    if (e.target.closest("[data-act=pin]")) pinRun();
+    const un = e.target.closest("[data-unpin]")?.dataset.unpin;
+    if (un) update((s) => { s.pins = s.pins.filter((p) => p.id !== Number(un)); });
   });
   root.addEventListener("change", (e) => {
     const tog = e.target.dataset.tog;
@@ -86,13 +90,66 @@ export function refresh() {
   else if (!clocks.length) showEmpty(`<h2>All clocks are hidden</h2><p>Show a clock with ◉ in the panel.</p>`);
   else showEmpty("");
 
+  renderPins();
   renderTable(clocks, devs);
   if (Plotly && hasResult && devs.length && clocks.length) draw(clocks, devs);
 }
 
+// Pinned runs: earlier results kept for comparison, drawn thin and dashed
+// under the current ones.
+const PIN_DASH = ["dot", "dashdot", "longdash", "longdashdot"];
+function pinTraces(devs) {
+  const out = [];
+  state.pins.forEach((p, k) => {
+    for (const c of p.clocks) for (const r of c.results) {
+      if (!devs.includes(r.dev)) continue;
+      const di = state.devs.indexOf(r.dev);
+      const color = hexAlpha(seriesColor(multi() ? c.slot : Math.max(di, 0)), 0.75);
+      const name = `${p.label} · ${multi() ? `${c.name} · ` : ""}${label(r.dev)}`;
+      out.push({
+        x: r.tau, y: r.sigma, name, mode: "lines", line: { color, width: 1.3, dash: PIN_DASH[k % PIN_DASH.length] },
+        hovertemplate: `<b>${h(name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}<extra></extra>`,
+      });
+    }
+  });
+  return out;
+}
+
+// What a run was, from the core's own record of it (the settings may have
+// changed since): shown on its pin.
+function runSummary(c) {
+  const a = c.result.doc.analysis ?? {};
+  const parts = [(a.deviations ?? []).map(label).join(", "), a.tau_mode === "m" ? "explicit m" : `${gridName(a.tau_mode ?? "").toLowerCase()} τ`];
+  const [r0, r1] = a.range ?? [null, null];
+  if (r0 !== null || r1 !== null) parts.push(`range ${r0 === null ? "start" : `${num(r0, 4)} s`} – ${r1 === null ? "end" : `${num(r1, 4)} s`}`);
+  if (a.remove_drift && a.remove_drift !== "none") parts.push(`${a.remove_drift} drift removed`);
+  if (a.tau_min !== null && a.tau_min !== undefined || a.tau_max !== null && a.tau_max !== undefined) parts.push(`τ ${a.tau_min ?? "…"}–${a.tau_max ?? "…"} s`);
+  return parts.join(" · ");
+}
+
+export function pinRun() {
+  const clocks = visibleClocks().filter((c) => c.result);
+  if (!clocks.length) return false;
+  update((s) => {
+    const n = (s.pinCount = (s.pinCount ?? 0) + 1);
+    s.pins.push({
+      id: n, label: `Pin ${n}`, title: clocks.map((c) => `${c.name}: ${runSummary(c)}`).join("\n"),
+      clocks: clocks.map((c) => ({ name: c.name, slot: c.slot, results: c.result.results.map((r) => ({ dev: r.dev, tau: r.tau, sigma: r.sigma })) })),
+    });
+  });
+  return true;
+}
+
+function renderPins() {
+  const el = root.querySelector("[data-ref=pins]");
+  const has = visibleClocks().some((c) => c.result);
+  el.innerHTML = `<button class="btn btn-sm" data-act="pin" ${has ? "" : "disabled"} title="Keep these results on the plot to compare with the next run">Pin run</button>${state.pins.map((p) =>
+    `<span class="chip" title="${h(p.title)}">${h(p.label)}<button class="link-btn" data-unpin="${p.id}" aria-label="Remove ${h(p.label)}">×</button></span>`).join("")}`;
+}
+
 function traces(clocks, devs) {
   const several = multi();
-  const out = [];
+  const out = pinTraces(devs);
   for (const c of clocks) {
     devs.forEach((d) => {
       const r = resultOf(c, d);

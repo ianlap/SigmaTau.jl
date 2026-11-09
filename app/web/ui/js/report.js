@@ -52,7 +52,7 @@ async function recordRows(clocks) {
     const r = c.record, k = r.check;
     // The file's own bytes when it was opened here; a session keeps that hash.
     const hash = c.source.type === "file" ? c.source.sha256 || await sha256(c.source.content) : "";
-    const prep = [`drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, c.fillgaps ? "gaps filled" : "", c.remove_outliers ? "outliers removed" : "",
+    const prep = [c.range ? `seconds ${num(c.range[0], 6)} to ${num(c.range[1], 6)}` : "", `drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, c.fillgaps ? "gaps filled" : "", c.remove_outliers ? "outliers removed" : "",
       ref && ref !== c && ref.group === c.group ? `minus ${h(ref.name)}` : ""].filter(Boolean).join(", ");
     rows.push(`<tr><th>${h(c.name)}</th><td>${sourceText(c)}${hash ? `<br><code class="hash">SHA-256 ${hash}</code>` : ""}</td>
       <td>${h(r.kind)}</td><td class="n">${thousands(r.n)}</td><td class="n">${num(r.tau0, 6)} s</td><td class="n">${duration(r.n * r.tau0)}</td>
@@ -108,7 +108,7 @@ export async function buildReport() {
 <h2>Analysis</h2>
 <dl>
   <dt>Estimators</dt><dd>${state.devs.map((d) => h(label(d))).join(", ")}</dd>
-  <dt>τ grid</dt><dd>${h(gridName(state.grid))}</dd>
+  <dt>τ grid</dt><dd>${h(gridName(state.grid))}${state.tauMin ? `, from ${h(state.tauMin)} s` : ""}${state.tauMax ? `, up to ${h(state.tauMax)} s` : ""}</dd>
   <dt>Confidence</dt><dd>${conf}${state.ci ? " (Greenhall EDF, χ² intervals)" : ""}</dd>
   <dt>Bias correction</dt><dd>${state.bias ? "on" : "off"}</dd>
   <dt>Reference clock</dt><dd>${ref ? h(ref.name) : "none (as measured)"}</dd>

@@ -16,6 +16,10 @@ export const state = {
   band: true,              // intervals as a shaded band (else error bars)
   noiseId: true,           // noise-type strip and slope guides on the Stability plot
   bias: true,
+  tauMin: null,            // averaging-time limits in seconds, null = none
+  tauMax: null,
+  dataDrag: "zoom",        // Data plot drag: "zoom" | "range" (pick the analysis range)
+  pins: [],                // pinned runs on Stability: { id, label, clocks: [{ name, slot, results }] }
   optionsOpen: false,      // options section when several clocks are loaded
   axis: "sigma_y",         // "sigma_y" | "sigma_x"
   tableDev: null,          // estimator in the per-τ table
@@ -56,6 +60,7 @@ export function newClock(fields = {}) {
     scaling: 1,
     drift: "none",           // drift fitted and removed: "none" | "linear" | "quadratic"
     fillgaps: false,
+    range: null,             // [start, end] in seconds from the first sample, or null = all
     remove_outliers: false,
     hasTimeCol: false,
     record: null,            // record + check from the core

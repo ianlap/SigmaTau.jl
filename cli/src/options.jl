@@ -57,10 +57,13 @@ const OPTS = [
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps (needs a time column)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
+    Opt("--range", "A:B", String[], false, "analyse only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
     Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live"]),
     Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "report", "live"]),
     Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "report", "live"]),
+    Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
+    Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
     Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze", "report"]),
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze", "report"]),
@@ -133,13 +136,17 @@ mutable struct Options
     every::Int
     count::Int                # 0 = until the source ends
     fast::Bool
+    range_start::Float64      # --range, seconds from the first sample; NaN = open
+    range_end::Float64
+    tau_min::Float64          # NaN = no limit
+    tau_max::Float64
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
-                    false, " ", 1, 0, false)
+                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -160,6 +167,18 @@ function parse_float(s::String, flag::String)
     v = tryparse(Float64, s)
     (v === nothing || !isfinite(v)) && throw(usage_error(flag * " expects a finite number, got \"" * s * "\""))
     return v
+end
+
+# "A:B" in seconds; an empty side is open.
+function parse_range!(o::Options, s::String)
+    k = findfirst(==(':'), s)
+    k === nothing && throw(usage_error("--range expects START:END in seconds, got \"" * s * "\""))
+    a, b = s[1:prevind(s, k)], s[nextind(s, k):end]
+    o.range_start = isempty(a) ? NaN : parse_float(String(a), "--range")
+    o.range_end = isempty(b) ? NaN : parse_float(String(b), "--range")
+    !isnan(o.range_start) && !isnan(o.range_end) && o.range_end <= o.range_start &&
+        throw(usage_error("--range end must be after its start"))
+    return o
 end
 
 function check_choice(s::String, flag::String, choices::Vector{String})
@@ -225,6 +244,9 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--grid";           tau_mode(v); o.grid = v
     elseif name == "--m";              o.m = parse_m(v)
     elseif name == "--confidence";     o.confidence = parse_float(v, name)
+    elseif name == "--range";          parse_range!(o, v)
+    elseif name == "--tau-min";        o.tau_min = parse_float(v, name)
+    elseif name == "--tau-max";        o.tau_max = parse_float(v, name)
     elseif name == "--nperseg";        o.nperseg = parse_int(v, name)
     elseif name == "--dev";            o.dev = check_choice(v, name, DYNAMIC_DEVS)
     elseif name == "--window";         o.window = parse_int(v, name)

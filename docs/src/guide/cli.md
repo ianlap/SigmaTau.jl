@@ -66,6 +66,7 @@ The record (all four analysis commands):
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
 | `--fillgaps` | put the record on an even time grid and fill the gaps (needs a time column) |
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
+| `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
 
 `analyze`:
@@ -75,6 +76,7 @@ The record (all four analysis commands):
 | `--devs LIST` | comma list (default `adev,mdev,hdev,mhdev`) of `adev mdev tdev hdev mhdev htdev totdev mtotdev ttotdev htotdev mhtotdev theo1 theoh pdev mtie tierms` |
 | `--grid GRID` | `octave` (default), `half-octave`, `quarter-octave`, `decade`, `half-decade` or `all`; `halfoctave` and the like work too |
 | `--m LIST` | explicit averaging factors, τ = m·τ₀, in place of `--grid` |
+| `--tau-min S`, `--tau-max S` | leave out averaging times below or above S seconds |
 | `--confidence P` | interval level (default 0.683, one sigma) |
 | `--no-ci` | skip intervals, EDF and noise identification |
 | `--no-bias-correction` | leave the total estimators and Thêo1 uncorrected |

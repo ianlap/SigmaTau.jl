@@ -136,8 +136,17 @@ export function load(clock, signal) {
   return run(request(clock, "check", ["--series", 4000]), signal);
 }
 
+// --range (seconds from the first sample) for runs on part of a record. The
+// record check reads the whole record, so the Data page can show the range.
+const rangeArgs = (clock) => clock.range ? ["--range", `${clock.range[0]}:${clock.range[1]}`] : [];
+const tauArgs = () => [
+  ...(state.tauMin ? ["--tau-min", state.tauMin] : []),
+  ...(state.tauMax ? ["--tau-max", state.tauMax] : []),
+];
+
 // Run the selected estimators on one clock, with its spectrum.
 const analyzeRequest = (clock) => request(clock, "analyze", [
+  ...rangeArgs(clock), ...tauArgs(),
   "--devs", state.devs.join(","),
   "--grid", state.grid,
   ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
@@ -166,12 +175,13 @@ export const driftKey = (clock) => JSON.stringify([request(clock, "drift", []), 
 
 // Settings that decide a clock's dynamic map; a change means recompute.
 export const dynamicKey = (clock) =>
-  JSON.stringify([request(clock, "dynamic", []), state.dyn.dev, state.dyn.frac, state.grid]);
+  JSON.stringify([request(clock, "dynamic", rangeArgs(clock)), state.dyn.dev, state.dyn.frac, state.grid]);
 
 // Sliding-window deviation map for one clock (window = record / frac).
 export function dynamic(clock, signal) {
-  const n = clock.record?.n ?? 0;
+  const n = clock.range ? Math.floor((clock.range[1] - clock.range[0]) / clock.record.tau0) + 1 : clock.record?.n ?? 0;
   return run(request(clock, "dynamic", [
+    ...rangeArgs(clock),
     "--grid", state.grid,
     "--dev", state.dyn.dev,
     "--window", Math.max(16, Math.floor(n / state.dyn.frac)),

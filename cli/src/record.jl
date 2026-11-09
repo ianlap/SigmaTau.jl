@@ -13,12 +13,50 @@ function synth_record(o::Options)
 end
 
 function load_record(o::Options)
-    data = read_record(o)
+    ranged = !(isnan(o.range_start) && isnan(o.range_end))
+    # With --range the detrend is fitted to the range alone, after the cut.
+    mode = o.detrend
+    ranged && (o.detrend = "none")
+    data = try
+        read_record(o)
+    finally
+        o.detrend = mode
+    end
+    keep = o.remove_drift == "none" ? trues(0) : measured_mask(o, length(data.x))
+    if ranged
+        idx = range_indices(o, data)
+        data = PhaseData(detrended(o, data.x[idx], data.tau0), data.tau0; source=data.source)
+        isempty(keep) || (keep = keep[idx])
+    end
     # Phase records are cleaned in frequency space: a glitch is a phase step,
     # i.e. one bad frequency sample, which is gapped, filled and integrated back.
     o.remove_outliers && (data = remove_outliers(data))
-    o.remove_drift == "none" || (data = remove_drift!(o, data, measured_mask(o, length(data.x))))
+    o.remove_drift == "none" || (data = remove_drift!(o, data, keep))
     return data
+end
+
+# The readers' detrend, on a phase slice: frequency records are detrended in
+# frequency, as the readers do, and integrated back.
+function detrended(o::Options, x::Vector{Float64}, tau0::Float64)
+    mode = detrend_symbol(o.detrend)
+    mode === :none && return x
+    o.freq || return SigmaTau._detrend_core!(x, mode)
+    y = SigmaTau._detrend_core!(diff(x) ./ tau0, mode)
+    return [0.0; cumsum(y)] .* tau0
+end
+
+# Seconds from the record's first sample to the first sample of --range.
+range_offset(o::Options, tau0::Float64) =
+    isnan(o.range_start) ? 0.0 : max(0, ceil(Int, o.range_start / tau0 - 1e-9)) * tau0
+
+# Phase samples inside --range: sample i is at (i − 1)·τ₀.
+function range_indices(o::Options, data::PhaseData)
+    N = length(data.x)
+    tau0 = Float64(data.tau0)
+    i0 = round(Int, range_offset(o, tau0) / tau0) + 1
+    i1 = isnan(o.range_end) ? N : min(N, floor(Int, o.range_end / tau0 + 1e-9) + 1)
+    i1 - i0 >= 1 || throw(CLIError(EXIT_ANALYSIS, "--range holds fewer than 2 samples of the record"))
+    return i0:i1
 end
 
 # Which samples were measured, as opposed to put back by --fillgaps: the

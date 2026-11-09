@@ -10,6 +10,7 @@ const SECTIONS = [
   ["noise", "Noise types"],
   ["intervals", "Confidence intervals"],
   ["drift", "Drift removal"],
+  ["range", "Range and pinned runs"],
   ["spectrum", "Spectra"],
   ["dynamic", "Dynamic deviation"],
   ["live", "Live measurement"],
@@ -80,6 +81,8 @@ export function mount(root) {
         <p>Intervals use the χ² distribution with the equivalent degrees of freedom (EDF) for the identified noise type and the number of samples at each τ, at the confidence level in Options (68.3 % is ±1σ). EDF falls as τ grows, so the last points carry wide intervals. n<sub>eff</sub> and the interval bounds are in the row tooltips and in every export.</p>
       </section>
 
+      <section id="help-range"><h2>Range and pinned runs</h2>
+        <p>On the Data page, <b>Select range</b> makes a drag across the phase plot set the part of the record to analyse; the range is shaded and <b>whole record</b> clears it. <b>τ range</b> in the options leaves out averaging times outside its limits. <b>Pin run</b> on the Stability page keeps the current curves, dashed, to compare with the next run; hover a pin for its settings.</p></section>
       <section id="help-drift"><h2>Drift removal</h2>
         <p><b>Frequency drift</b> on the Data plot fits a model to the fractional frequency by least squares and reports the drift rate at the end of the record per day, with its standard error: <b>Linear</b> a + b·t, <b>Quadratic</b> a + b·t + c·t², <b>Log</b> a·ln(1 + b·t) + c (the MIL-PRF-55310 aging model) and <b>Diffusion</b> a + b·√(t + c). <b>Residuals</b> plots what the model leaves. The standard error assumes white residuals, so it is optimistic when flicker or random-walk FM dominates. Hover the rate for the fitted coefficients.</p>
         <p><b>Drift removal</b> in the record check fits the phase by least squares, over the samples that are not gaps, and removes the fit before every analysis. <b>Linear</b> removes a frequency offset (a straight line in phase); <b>Quadratic</b> also removes a linear frequency drift (a parabola in phase), which SP1065 asks for before the total estimators. The check lists what was removed, and the phase plot shows the residual. HDEV and its relatives ignore a linear drift anyway; ADEV, MDEV and the totals rise as τ<sup>+1</sup> when one is left in.</p>

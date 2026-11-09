@@ -14,6 +14,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   `SimulatedSource`. `sigmatau live SOURCE` streams the running σ(τ) as JSON
   lines, and the explorer's Live page plots it and hands the readings to the
   full analysis.
+- Analysis range: `--range A:B` (seconds from the first sample) and
+  `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
+  the Data page drags out the part of a record to analyse, the options take
+  τ limits, and **Pin run** on the Stability page keeps a run's curves to
+  compare with the next one.
 - Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
   cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
   (cross Allan variance with its statistical uncertainty from the record),

@@ -346,3 +346,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .live-field input { width: 100%; font-family: var(--font-mono); font-size: 12.5px; }
 .live-devs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .live-go { width: 100%; justify-content: center; }
+.tau-range { display: inline-flex; align-items: center; gap: 4px; }
+.tau-range input { width: 76px; }
+.range-bar { display: flex; margin-left: auto; align-items: center; gap: 8px; }
+.pin-list { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; white-space: nowrap; }
+.btn.btn-sm { padding: 3px 9px; font-size: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; background: var(--bg-card); }
+.chip .link-btn { padding: 0 4px; }
