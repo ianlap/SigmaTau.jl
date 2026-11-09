@@ -44,14 +44,14 @@ pytest with `-p no:faulthandler`, as this package's own test config does.
 import sigmatau as st
 
 pd = st.noise_gen(st.PhaseData, 4096, 1.0, sigma1={0: 1e-12}, rng=42)
-r = st.adev(pd)                      # Octave grid, noise ID + 68.3% CIs
+r = st.adev(pd)  # Octave grid, noise ID + 68.3% CIs
 print(r.tau, r.dev, r.ci_lower, r.ci_upper, r.noise_type)
 
-suite = st.stability(pd)             # adev+mdev+hdev+mhdev in one call
+suite = st.stability(pd)  # adev+mdev+hdev+mhdev in one call
 suite["adev"].dev
 
-st.deviation("mhtotdev", pd)         # any estimator by name; see st.estimators()
-st.save("adev.tsv", r)               # results, suites and records; st.load reads them back
+st.deviation("mhtotdev", pd)  # any estimator by name; see st.estimators()
+st.save("adev.tsv", r)  # results, suites and records; st.load reads them back
 ```
 
 Explicit τ (averaging factors instead of a named grid):
@@ -75,11 +75,16 @@ st.dadev(pd, window=512)
 Drift and noise models, two channels, clock ensembles:
 
 ```python
-st.drift_fit(pd, model="log").rate            # aging per day, MIL-PRF-55310 log model
-f = st.powerlaw_fit(pd)                        # h_α of S_y(f) = Σ h_α f^α, from MHDEV
-st.powerlaw_sigma(f, [1.0, 10.0, 100.0])      # the model's ADEV
-st.cross_adev(a, b)                            # two channels measuring one device
-st.groslambert(x_ab, x_bc, x_ca)               # each clock's ADEV with χ² intervals
+st.drift_fit(pd, model="log").rate  # aging per day, MIL-PRF-55310 log model
+f = st.powerlaw_fit(pd)  # h_α of S_y(f) = Σ h_α f^α, from MHDEV
+st.powerlaw_sigma(f, [1.0, 10.0, 100.0])  # the model's ADEV
+st.cross_adev(a, b)  # two channels measuring one device
+st.groslambert(x_ab, x_bc, x_ca)  # each clock's ADEV with χ² intervals
+m = st.clock_model(f, tau0=1.0)  # Kalman model from the h_α fit
+kf = st.kalman_smooth(st.kalman_filter(pd, m))  # phase, frequency (, drift) estimates
+st.holdover_error(kf, [3600.0, 86400.0])  # 1σ time error after free-running
+cc, _ = st.simulate_ensemble([m, m, m], 10000)  # three clocks against one reference
+st.timescale(cc, algorithm="at1").weights  # AT1 weights over time
 ```
 
 Julia only, not wrapped here: live measurement (`LiveStability` and the

@@ -44,6 +44,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   four clocks). The explorer's new **Ensemble** page forms the scale from
   the clocks of one loaded file, or simulated ones, and plots each clock's
   weight and the ADEV of the scale and of each clock against it.
+- Python: `ClockModel`, `clock_model`, `noise_fit`, `kalman_filter`,
+  `kalman_smooth`, `holdover_error`, `innovation_check`, `tune_q`,
+  `simulate_clock`, `ClockComparisons`, `simulate_ensemble`, `timescale` and
+  `timescale_phase` wrap the Julia calls of the same names.
 
 ## [0.6.0] - 2026-11-08
 
