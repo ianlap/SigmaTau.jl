@@ -142,7 +142,7 @@ function json_powerlaw(io::IO, data::PhaseData, results::Vector{StabilityResult}
         powerlaw_fit(data)
     catch err
         err isa ArgumentError || rethrow()
-        print(io, '{'); json_key(io, "error", true); json_string(io, err.msg); print(io, '}')
+        print(io, '{'); json_key(io, "error", true); json_string(io, error_message(err)); print(io, '}')
         return nothing
     end
     print(io, '{')
