@@ -127,7 +127,7 @@ mutable struct Options
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
-                    Symbol[:adev, :mdev, :hdev, :mhdev], "octave", Int[], true,
+                    collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), false, "linear", NaN, NaN, NaN, NaN)
 
