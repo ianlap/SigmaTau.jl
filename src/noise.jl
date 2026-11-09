@@ -748,7 +748,7 @@ function _nnls_weighted(K::Matrix{Float64}, v::Vector{Float64}, w::Vector{Float6
     A  = sw .* K
     d  = [sqrt(sum(abs2, @view A[:, j])) for j in axes(A, 2)]
     all(dj -> isfinite(dj) && dj > 0, d) ||
-        throw(ArgumentError("degenerate power-law basis column (norms $d)"))
+        throw(ArgumentError("degenerate power-law basis column"))
     â, rss = _nnls_exact(A ./ d', sw .* v)
     return â ./ d, rss
 end

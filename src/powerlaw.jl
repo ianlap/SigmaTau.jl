@@ -107,7 +107,7 @@ end
 
 function _powerlaw_alphas(alphas, deviation::Symbol)
     all(isinteger, alphas) || throw(ArgumentError("powerlaw: α must be whole numbers, got $(collect(alphas))"))
-    αs = sort!(unique(Int.(collect(alphas))); rev=true)
+    αs = reverse!(sort!(unique(Int.(collect(alphas)))))
     isempty(αs) && throw(ArgumentError("powerlaw: `alphas` is empty"))
     αmin = deviation === :adev || deviation === :mdev ? -2 : -4
     for α in αs
