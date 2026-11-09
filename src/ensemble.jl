@@ -59,7 +59,8 @@ Returned conventions (one `StabilityResult` per clock, in clock order):
   are filled at the inputs' confidence level. Each pairwise variance is
   χ² with its own `edf`; two pairs that share clock `c` covary by
   `2σ_c⁴/√(ν₁ν₂)`. Propagating these through the separation gives the
-  variance of each `σ̂²ᵢ`, reported as the equivalent `edf = 2σ̂⁴ᵢ / Var(σ̂²ᵢ)`.
+  variance of each `σ̂²ᵢ`, reported as the equivalent `edf = 2σ̂⁴ᵢ / Var(σ̂²ᵢ)`
+  (the covariance model of [vernotte-2019-tch-gcov-uncertainty](@cite)).
   The intervals widen sharply for a clock much quieter than the others.
 - `noise_type` is empty; `neff` is the elementwise minimum over the inputs.
 
@@ -178,11 +179,15 @@ only the clock both channels see.
 negated, stands in where one is missing. The 3-argument form takes the
 records A−B, B−C, C−A and returns `[A, B, C]`.
 
-Each result is an `:adev` `StabilityResult`. `edf` is `2σ̂⁴ / u²`, with `u`
-the record's own 1σ uncertainty of the covariance (the variance of the mean
-of the products, their autocovariance summed out to lag 2m, as in
-[`cross_adev`](@ref)), and `ci` the χ² interval for it. A non-positive
-covariance gives `NaN`.
+Each result is an `:adev` `StabilityResult` with an EDF from the covariance
+model of [vernotte-2019-tch-gcov-uncertainty](@cite): each record's Allan
+variance carries its EDF for the identified noise type
+[greenhall-2003-edf-stability](@cite) (as in [`adev`](@ref)), the products of
+Gaussian second differences give the variance of every covariance estimate in
+closed form, and `edf = 2σ̂⁴/Var(σ̂²)` sets a χ² interval `ci`. The paper finds
+these intervals reliable from about 5 EDF; at the longest τ, where fewer
+remain, the Bayesian KLTS intervals of [lantz-2019-klts](@cite) are exact. A
+non-positive covariance gives `NaN`.
 """
 function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::Vector{Int};
                      confidence::Real=DEFAULT_CONFIDENCE)
@@ -205,29 +210,51 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
     τ₀ = Float64(ref.tau0); N = length(x[1, 2])
     all(m -> 1 <= m && 2m < N, m_values) ||
         throw(ArgumentError("groslambert: every m must satisfy 1 ≤ m < N/2 (N = $N)"))
+    K = length(m_values)
+    # Each record's Allan variance and its EDF for the identified noise type.
+    s2 = Matrix{Vector{Float64}}(undef, n_clocks, n_clocks)
+    ν = Matrix{Vector{Float64}}(undef, n_clocks, n_clocks)
+    for i in 1:n_clocks, j in (i + 1):n_clocks
+        r = adev(PhaseData(x[i, j], τ₀), m_values)
+        s2[i, j] = s2[j, i] = r.dev .^ 2
+        ν[i, j] = ν[j, i] = r.edf
+    end
     results = Vector{StabilityResult}(undef, n_clocks)
     for i in 1:n_clocks
         others = [j for j in 1:n_clocks if j != i]
         couples = [(j, k) for j in others for k in others if j < k]
-        covar = zeros(length(m_values)); edf = zeros(length(m_values))
+        covar = zeros(K)
         for (q, m) in enumerate(m_values)
             p = zeros(N - 2m)
             for (j, k) in couples
                 p .+= _second_diff_products(x[i, j], x[i, k], m)[1]
             end
-            p ./= length(couples)
-            c = 2 * (m * τ₀)^2
-            μ = sum(p) / length(p)
-            covar[q] = μ / c
-            u2 = _mean_variance(p .- μ, 2m) / c^2
-            edf[q] = covar[q] > 0 ? 2 * covar[q]^2 / u2 : NaN
+            covar[q] = sum(p) / (length(p) * length(couples) * 2 * (m * τ₀)^2)
         end
+        edf = [_gl_edf(i, q, couples, covar[q], s2, ν) for q in 1:K]
         dev = [v > 0 ? sqrt(v) : NaN for v in covar]
         results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[],
                                      _edf_ci(dev, edf, Float64(confidence)), edf,
                                      N .- 2 .* m_values, τ₀, N, Float64(confidence))
     end
     return results
+end
+
+# Equivalent EDF of clock i's Groslambert covariance at τ index q, the mean
+# over `couples` of Ĝ_jk = ⟨z_ij z_ik⟩. For Gaussian records
+# Cov(z_ij z_ik, z_il z_in) = E[z_ij z_il] E[z_ik z_in] + E[z_ij z_in] E[z_ik z_il],
+# where E[z_ij z_il] is record (i, j)'s Allan variance for l = j and clock i's
+# own for l ≠ j; each term is divided by the geometric mean of the EDF of the
+# records involved (Vernotte & Lantz 2019, appendix B).
+function _gl_edf(i, q, couples, v, s2, ν)
+    v > 0 || return NaN
+    e(j, l) = j == l ? s2[i, j][q] : v
+    total = 0.0
+    for (j, k) in couples, (l, n) in couples
+        c = e(j, l) * e(k, n) + e(j, n) * e(k, l)
+        total += c / sqrt(sqrt(ν[i, j][q] * ν[i, k][q] * ν[i, l][q] * ν[i, n][q]))
+    end
+    return 2 * v^2 * length(couples)^2 / total
 end
 
 groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, taus::TauMode; kw...) =

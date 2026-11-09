@@ -37,7 +37,9 @@ confidence interval. It covers the Allan (`adev`, `mdev`, `tdev`), Hadamard
 `mhtotdev`) [@greenhall-1999-totvar; @howe-1999-modtotvar;
 @howe-2005-tothvar-ieee] and Thêo families, time-error statistics (`mtie`,
 `tierms`, `pdev`), dynamic deviations, streaming accumulators
-[@dobrogowski-2007-realtime-adev], N-cornered-hat separation, spectral
+[@dobrogowski-2007-realtime-adev], N-cornered-hat and Groslambert-covariance
+separation with confidence intervals [@vernotte-2019-tch-gcov-uncertainty;
+@lantz-2019-klts], cross-spectra [@baudiquez-2020-cross-spectrum-statistics], spectral
 estimates and power-law noise synthesis. The same core is compiled into a
 stand-alone command line, `sigmatau`, which starts in about 30 ms, and drives a
 desktop explorer and a Python wrapper.

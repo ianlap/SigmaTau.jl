@@ -9,10 +9,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - `groslambert`: the Groslambert covariance for three or more clocks, each
   clock's Allan deviation from the cross Allan variance of the two
-  difference records that share it, with record-based EDF and χ² intervals.
-  `ncornered_hat` now fills `edf` and `ci` when its inputs carry EDF,
-  propagating each pair's χ² spread and the covariance of pairs that share
-  a clock.
+  difference records that share it, with χ² intervals from the covariance
+  model of Vernotte & Lantz (2019): each record's Allan-variance EDF for its
+  noise type, propagated in closed form. `ncornered_hat` now fills `edf` and
+  `ci` the same way when its inputs carry EDF.
 - Analysis range: `--range A:B` (seconds from the first sample) and
   `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
   the Data page drags out the part of a record to analyse, the options take
@@ -28,7 +28,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   model's ADEV at round τ.
 - Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
   cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
-  (cross Allan variance with its statistical uncertainty from the record),
+  (cross Allan variance with its 1σ uncertainty from the same covariance
+  model and each channel's noise-type EDF),
   for a device measured against two references or one signal split into two
   channels. `sigmatau cross FILE --with FILE2` on the command line.
 

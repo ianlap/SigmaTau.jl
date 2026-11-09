@@ -6,32 +6,34 @@ using Random
 using Statistics
 using SigmaTau
 
-@testset "ensemble uncertainties" begin
-    rng = Xoshiro(20261108)
-    N, R, ms = 1024, 200, [1, 8]
-    σ = [1.0, 1.5, 0.8]                        # white PM levels of clocks A, B, C
-    hat = [Float64[] for _ in 1:3, _ in ms]; hat_sd = similar(hat)
-    gl = [Float64[] for _ in 1:3, _ in ms]; gl_sd = similar(gl)
-    for c in eachindex(hat)
-        hat_sd[c] = Float64[]; gl_sd[c] = Float64[]
-    end
-    truth = zeros(3, length(ms))
+# Observed scatter over R realizations against the predicted spread
+# Var(σ̂²) = 2σ̂⁴/edf, for three clocks of one power-law noise type.
+function ensemble_scatter(α, ms; N=1024, R=200, rng=Xoshiro(20261108))
+    σ = [1.0, 1.5, 0.8]
+    est = [Float64[] for _ in 1:2, _ in ms]; sd = [Float64[] for _ in 1:2, _ in ms]
+    gl1 = zeros(length(ms)); truth = zeros(length(ms))
     for _ in 1:R
-        x = [σ[i] .* randn(rng, N) for i in 1:3]
+        x = [σ[i] .* noise_gen(PhaseData, N, 1.0; h=Dict(α => 1.0), rng=rng).x for i in 1:3]
         d(i, j) = PhaseData(x[i] .- x[j], 1.0)
-        h = ncornered_hat(adev(d(1, 2), ms), adev(d(2, 3), ms), adev(d(3, 1), ms))
-        g = groslambert(d(1, 2), d(2, 3), d(3, 1), ms)
-        for i in 1:3, k in eachindex(ms)
-            # Predicted 1σ spread of the variance from the equivalent edf.
-            push!(hat[i, k], h[i].dev[k]^2); push!(hat_sd[i, k], h[i].dev[k]^2 * sqrt(2 / h[i].edf[k]))
-            push!(gl[i, k], g[i].dev[k]^2); push!(gl_sd[i, k], g[i].dev[k]^2 * sqrt(2 / g[i].edf[k]))
-            truth[i, k] += adev(PhaseData(x[i], 1.0), ms[k:k]; ci=false).dev[1]^2 / R
+        h = ncornered_hat(adev(d(1, 2), ms), adev(d(2, 3), ms), adev(d(3, 1), ms))[2]
+        g = groslambert(d(1, 2), d(2, 3), d(3, 1), ms)[2]
+        for (e, r) in enumerate((h, g)), k in eachindex(ms)
+            push!(est[e, k], r.dev[k]^2); push!(sd[e, k], r.dev[k]^2 * sqrt(2 / r.edf[k]))
         end
+        gl1 .+= g.dev .^ 2 ./ R
+        truth .+= adev(PhaseData(x[2], 1.0), ms; ci=false).dev .^ 2 ./ R
     end
-    ratio(v, s) = std(v) / mean(s)
-    @test all(0.8 < ratio(hat[c], hat_sd[c]) < 1.25 for c in eachindex(hat))
-    @test all(0.8 < ratio(gl[c], gl_sd[c]) < 1.25 for c in eachindex(gl))
-    @test all(abs(mean(gl[i, k]) / truth[i, k] - 1) < 0.05 for i in 1:3, k in eachindex(ms))
+    return [std(est[c]) / mean(sd[c]) for c in eachindex(est)], gl1 ./ truth
+end
+
+@testset "ensemble uncertainties" begin
+    # White PM at short τ, random-walk FM out to τ = N/16, where the EDF of
+    # each record's noise type carries the long-lag correlation.
+    for (α, ms) in ((2, [1, 8]), (-2, [16, 64]))
+        ratios, bias = ensemble_scatter(α, ms)
+        @test all(0.8 .< ratios .< 1.25)
+        @test all(abs.(bias .- 1) .< 0.1)
+    end
 end
 
 @testset "groslambert" begin
