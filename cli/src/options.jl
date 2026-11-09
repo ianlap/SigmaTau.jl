@@ -113,13 +113,14 @@ mutable struct Options
     nominal::Float64          # NaN = from the readings
     columns_set::Bool         # --time-col, --value-col or --header given
     measured::BitVector       # phase samples the format readers did not fill; empty = all
+    phase_given::Bool         # --phase given (else instrument readers pick the kind)
     model::String
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     Symbol[:adev, :mdev, :hdev, :mhdev], "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "linear")
+                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), false, "linear")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -219,7 +220,7 @@ function set_option!(o::Options, name::String, v::String)
 end
 
 function set_flag!(o::Options, name::String)
-    if name == "--phase";                  o.freq = false
+    if name == "--phase";                  o.freq = false; o.phase_given = true
     elseif name == "--freq";               o.freq = true
     elseif name == "--fillgaps";           o.fillgaps = true
     elseif name == "--remove-outliers";    o.remove_outliers = true
