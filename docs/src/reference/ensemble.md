@@ -32,6 +32,17 @@ r.weights[end, :]                     # each clock's weight now
 adev(timescale_phase(r))              # the scale's stability
 ```
 
+`:rkt` is the reduced Kalman timescale. One Kalman filter tracks every
+clock's phase and frequency from the clock models; after each update the
+phase part of its covariance is reduced about a weighted mean of the
+corrected clocks, which keeps the frequency estimates and makes each step
+of the scale as small as it can be. Unlike AT1 it needs a model per clock,
+and it uses each clock's white PM level `R`.
+
+```julia
+timescale(cc; algorithm=:rkt, models=ms)
+```
+
 ```@docs
 timescale
 TimescaleResult

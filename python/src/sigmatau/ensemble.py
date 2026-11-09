@@ -393,11 +393,15 @@ def timescale(
     tau_w: float | None = None,
     wmax: float = 1.0,
     outlier: float = 4.0,
+    models: Sequence[ClockModel] | None = None,
 ) -> TimescaleResult:
     """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock
-    the same, ``"at1"`` by inverse prediction-error variance learned as it runs.
-    ``tau_y`` defaults to 100 τ₀ and ``tau_w`` to 10 ``tau_y``."""
+    the same, ``"at1"`` by inverse prediction-error variance learned as it runs,
+    ``"rkt"`` runs the reduced Kalman timescale on one ``ClockModel`` per clock
+    in ``models``. ``tau_y`` defaults to 100 τ₀ and ``tau_w`` to 10 ``tau_y``."""
     kw = {"algorithm": jl.Symbol(str(algorithm)), "wmax": float(wmax), "outlier": float(outlier)}
+    if models is not None:
+        kw["models"] = juliacall.convert(_VecModel, [m._jl() for m in models])
     if tau_y is not None:
         kw["tau_y"] = float(tau_y)
     if tau_w is not None:
@@ -410,10 +414,13 @@ def timescale(
 
 def timescale_phase(r: TimescaleResult) -> PhaseData:
     """The scale against the comparisons' reference, ready for ``adev`` and the
-    other estimators."""
-    return PhaseData(
-        r.x[:, 0] - r.comparisons.x[:, 0], r.comparisons.tau0, source=r.algorithm.upper()
-    )
+    other estimators; ``nan`` where no clock was read."""
+    c = r.comparisons.x
+    ok = np.isfinite(c)
+    first = ok.argmax(axis=1)
+    rows = np.arange(c.shape[0])
+    u = np.where(ok.any(axis=1), r.x[rows, first] - c[rows, first], np.nan)
+    return PhaseData(u, r.comparisons.tau0, source=r.algorithm.upper())
 
 
 __all__ = [

@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Clock models, the Kalman filter and timescales.
 
+### Fixed
+
+- `timescale_phase` reads the scale through any clock with a reading at
+  each sample, instead of returning `NaN` wherever the first clock has a
+  gap.
+
 ### Added
 
 - Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
@@ -34,6 +40,10 @@ Clock models, the Kalman filter and timescales.
   left out; `timescale_phase` gives the scale against the reference. AT1
   starts each clock from its Groslambert ADEV, or from its ADEV against the
   reference where that estimate fails.
+- Reduced Kalman timescale: `timescale(cc; algorithm=:rkt, models)` runs
+  one Kalman filter over every clock, with Greenhall's IEMx covariance
+  reduction after each step, so the scale is quiet at short τ as well as
+  long; without white PM its weights are the optimal 1/q1 ones.
 - Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
   model by hand, and the JSON `powerlaw` gains `mode`, `components`,
   `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`
