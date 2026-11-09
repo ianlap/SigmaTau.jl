@@ -28,6 +28,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 - `tune_q` retunes a model's white and random-walk FM levels on a log grid
   for the smallest phase prediction error at chosen horizons, and
   `prediction_error` reports that error for any filter run.
+- Clock ensembles: `ClockComparisons` holds several clocks read against one
+  reference (`cc[i]` one clock, `cc[i, j]` a difference), and
+  `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
+  states.
+- Timescales: `timescale(cc; algorithm=:ewfa | :at1)` forms a scale from
+  the clocks' predicted phases, with equal weights (EWFA) or AT1's learned
+  inverse-variance weights, capped by `wmax`, outliers and missing readings
+  left out; `timescale_phase` gives the scale against the reference.
 
 ## [0.6.0] - 2026-11-08
 
