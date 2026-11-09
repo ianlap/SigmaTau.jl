@@ -106,6 +106,7 @@ function _powerlaw_var(dev::Symbol, α::Int, m::Int, τ₀::Float64)
 end
 
 function _powerlaw_alphas(alphas, deviation::Symbol)
+    all(isinteger, alphas) || throw(ArgumentError("powerlaw: α must be whole numbers, got $(collect(alphas))"))
     αs = sort!(unique(Int.(collect(alphas))); rev=true)
     isempty(αs) && throw(ArgumentError("powerlaw: `alphas` is empty"))
     αmin = deviation === :adev || deviation === :mdev ? -2 : -4
@@ -127,15 +128,16 @@ _powerlaw_h(f::PowerLawFit) = Dict(zip(f.alphas, f.h))
 Fit the power-law coefficients h_α of `S_y(f) = Σ h_α f^α` by nonnegative
 least squares, either to a record's σ(τ) or to a spectrum.
 
-**From a record** (`PhaseData` or `FrequencyData`): the deviation (`:adev`,
-`:mdev`, `:hdev` or `:mhdev`, without bias correction) is computed on the
-octave grid, or at `m_values`, and each α contributes its exact σ²(τ) for a
-record sampled at τ₀ (see [`powerlaw_sigma`](@ref)). The response is exact
-down to m = 1, so every point is fitted, and white and flicker PM stay
-apart even under ADEV. The weights are the χ² ones, νₖ/(2σ⁴ₖ), with the EDF
-from each point's dominant component and σ²ₖ from the model. The Allan pair takes α from −2 to 2;
-the Hadamard pair, which also tolerates a linear frequency drift, from −4
-to 2.
+**From a record** (`PhaseData` or `FrequencyData`, `NaN` gaps allowed): the
+deviation (`:adev`, `:mdev`, `:hdev` or `:mhdev`, without bias correction)
+is computed on the octave grid, or at `m_values`, and each α contributes
+its exact σ²(τ) for a record sampled at τ₀ (see [`powerlaw_sigma`](@ref)).
+The response is exact down to m = 1, so every point is fitted, and white
+and flicker PM stay apart even under ADEV. The weights are the χ² ones,
+νₖ/(2σ⁴ₖ), with σ²ₖ from the model and the EDF from each point's dominant
+component and its term count, so a τ that gaps cost terms counts for less.
+The Allan pair takes α from −2 to 2; the Hadamard pair, which also
+tolerates a linear frequency drift, from −4 to 2.
 
 **From a spectrum:** a [`SpectralResult`](@ref) of [`psd_y`](@ref),
 [`psd_x`](@ref) or [`ssb_phase_noise`](@ref) (which needs `f_carrier`), or
@@ -160,14 +162,15 @@ f = powerlaw_fit(p)                 # from MHDEV
 powerlaw_sigma(f, [1.0, 100.0])     # ADEV the model predicts at 1 s and 100 s
 ```
 """
-function powerlaw_fit(data::PhaseData, m_values::Vector{Int}=Int[];
+function powerlaw_fit(data::AbstractTimingData, m_values::Vector{Int}=Int[];
                       deviation::Symbol=:mhdev, alphas=2:-1:-2)
     deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
         "powerlaw_fit: deviation must be one of $(join(POWERLAW_DEVIATIONS, ", ")), got :$deviation"))
     αs = _powerlaw_alphas(alphas, deviation)
-    x  = _f64(data.x)
     τ₀ = data.tau0
-    ms = isempty(m_values) ? _default_m_values(length(x), deviation) : m_values
+    N  = data isa PhaseData ? length(data.x) : length(data.y) + 1
+    ms = isempty(m_values) ? _default_m_values(N, deviation) : m_values
+    # The estimators skip gaps, phase or frequency alike.
     res = deviation === :adev ? adev(data, ms; ci=false) :
           deviation === :mdev ? mdev(data, ms; ci=false) :
           deviation === :hdev ? hdev(data, ms; ci=false) : mhdev(data, ms; ci=false)
@@ -177,9 +180,12 @@ function powerlaw_fit(data::PhaseData, m_values::Vector{Int}=Int[];
         "pass fewer `alphas` or a longer record"))
     mk, τ, v = ms[keep], res.tau[keep], res.dev[keep] .^ 2
     K = [_powerlaw_var(deviation, α, m, τ₀) for m in mk, α in αs]
+    # The record length each τ's term count stands for: N without gaps, less
+    # where gaps cost terms.
+    Ns = [_gap_equivalent_n(deviation, mk[k], res.neff[keep[k]]) for k in eachindex(keep)]
     # χ² weights νₖ/(2σ²ₖ) taken at the model, not the measured σ̂²ₖ, which
     # would favour the points that happened to come out low.
-    halfν = _nnls_edf_weights(deviation, K, v, αs, mk, τ, length(x), τ₀) .* v .^ 2
+    halfν = _nnls_edf_weights(deviation, K, v, αs, mk, τ, Ns, τ₀) .* v .^ 2
     h, _ = _nnls_weighted(K, v, halfν ./ v .^ 2)
     for _ in 1:3
         model = max.(K * h, 1e-3 .* v)
@@ -187,9 +193,6 @@ function powerlaw_fit(data::PhaseData, m_values::Vector{Int}=Int[];
     end
     return PowerLawFit(αs, h, deviation, τ₀, τ, sqrt.(v), sqrt.(K * h))
 end
-
-powerlaw_fit(data::FrequencyData, m_values::Vector{Int}=Int[]; kwargs...) =
-    powerlaw_fit(_freq_to_phase(data), m_values; kwargs...)
 
 function powerlaw_fit(s::SpectralResult; alphas=2:-1:-2, f_carrier=nothing)
     τ₀ = 1 / (s.nperseg * (s.freq[2] - s.freq[1]))

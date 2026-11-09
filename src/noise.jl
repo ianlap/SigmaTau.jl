@@ -755,16 +755,18 @@ end
 
 # Self-consistent χ² weights wₖ = νₖ/(2 σ̂⁴ₖ): a first pass with equal
 # fractional weight supplies the per-τ noise type, and the EDF model turns
-# that into ν. Deriving the types from the fit rather than from
+# that into ν, with `Ns[k]` the record length at the k-th τ. Deriving the types from the fit rather than from
 # `identify_noise` keeps the fit independent of that classifier. Points where
 # the EDF model gives no finite positive ν keep the fractional weight.
 function _nnls_edf_weights(deviation::Symbol, K::Matrix{Float64}, v::Vector{Float64},
                            αs::Vector{Int}, ms::Vector{Int}, taus::Vector{Float64},
-                           N::Int, τ₀::Float64)
+                           Ns::Vector{Int}, τ₀::Float64)
     a0, _ = _nnls_weighted(K, v, 1.0 ./ v .^ 2)
-    syms  = [_nnls_edf_symbol(αs[argmax(vec(K[k, :]) .* a0)]) for k in eachindex(taus)]
-    ν     = calculate_edf(deviation, sqrt.(v), syms, ms, taus, N, (N - 1) * τ₀)
-    return [(isfinite(ν[k]) && ν[k] > 0 ? ν[k] / 2 : 1.0) / v[k] ^ 2 for k in eachindex(v)]
+    map(eachindex(v)) do k
+        sym = _nnls_edf_symbol(αs[argmax(vec(K[k, :]) .* a0)])
+        ν = only(calculate_edf(deviation, [sqrt(v[k])], [sym], [ms[k]], [taus[k]], Ns[k], (Ns[k] - 1) * τ₀))
+        (isfinite(ν) && ν > 0 ? ν / 2 : 1.0) / v[k] ^ 2
+    end
 end
 
 """
@@ -921,7 +923,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
     elseif weights === :relative
         1.0 ./ v .^ 2
     elseif weights === :edf
-        _nnls_edf_weights(deviation, K, v, αs, ms[keep], taus, length(x), τ₀)
+        _nnls_edf_weights(deviation, K, v, αs, ms[keep], taus, fill(length(x), length(keep)), τ₀)
     else
         throw(ArgumentError(
             "noise_id_nnls: unknown weights $weights; expected :edf, :relative or a vector"))

@@ -47,12 +47,19 @@ using Random
         f = powerlaw_fit(p)
         @test powerlaw_sigma(f, [1.0, 100.0]) ≈ adev(p, [1, 100]; ci=false).dev rtol=0.02
         @test powerlaw_fit(FrequencyData(diff(p.x), 1.0); deviation=:hdev, alphas=0:-1:-4).alphas == [0, -1, -2, -3, -4]
+        # Gaps cost terms, not the record: a gap near the start leaves the fit
+        # close, for phase and frequency alike.
+        xg = copy(p.x); xg[1000:1100] .= NaN
+        yg = diff(p.x); yg[1000:1100] .= NaN
+        @test powerlaw_fit(PhaseData(xg, 1.0)).h[3] ≈ f.h[3] rtol=0.05
+        @test powerlaw_fit(FrequencyData(yg, 1.0)).h[3] ≈ f.h[3] rtol=0.05
     end
 
     @testset "bad input" begin
         p = noise_gen(PhaseData, 1024, 1.0; h=Dict(0 => 1e-24), rng=MersenneTwister(2))
         @test_throws ArgumentError powerlaw_fit(p; deviation=:totdev)
         @test_throws ArgumentError powerlaw_fit(p; deviation=:mdev, alphas=[0, -3])
+        @test_throws ArgumentError powerlaw_fit(p; alphas=[0, -1.5])
         @test_throws ArgumentError powerlaw_sigma(Dict(0 => 1e-24), [1.5]; tau0=1.0)
         @test_throws ArgumentError powerlaw_sigma(Dict(0 => 1e-24), [1.0])
         @test_throws ArgumentError powerlaw_psd(Dict(0 => 1e-24), [1.0]; quantity=:L)
