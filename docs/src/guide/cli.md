@@ -38,6 +38,7 @@ each call pays Julia's start-up.
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
 | `sigmatau cross FILE --with FILE2` | two channels measuring one device: cross Allan deviation and cross-spectrum ([two-channel measurements](cross.md)) |
+| `sigmatau timescale FILE --value-cols LIST` | a timescale (AT1 or EWFA) from several clocks read against one reference: each clock's weight and prediction error, and with JSON the ADEV of the scale and of each clock against it |
 | `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
 | `sigmatau report FILE` | a self-contained HTML report: record, settings, σ(τ) plots, per-τ tables and the command line (prints to PDF) |
 | `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
@@ -179,6 +180,11 @@ numbers are `null`.
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`
   without the DC bin.
+- `timescale`: `"timescale": {"algorithm", "tau0", "n", "reference", "tau_y", "wmax", "clocks", "weight", "weight_mean", "error_rms", "adev": {"tau", "scale", "clocks"}}`.
+  `weight` is the last sample's, while `weight_mean` and `error_rms` cover the
+  second half of the record. `adev.scale` is the scale against the reference.
+  `--series N` adds `"series": {"t", "scale", "weights"}`. The CSV form has
+  one row per clock: `clock,weight,weight_mean,error_rms`.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 

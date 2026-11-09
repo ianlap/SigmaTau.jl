@@ -25,6 +25,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   the clocks' predicted phases, with equal weights (EWFA) or AT1's learned
   inverse-variance weights, capped by `wmax`, outliers and missing readings
   left out; `timescale_phase` gives the scale against the reference.
+  `sigmatau timescale FILE --value-cols 2,3,4` does the same from the
+  command line (`--algorithm`, `--tau-y`, `--wmax`; `--synth N` simulates
+  four clocks).
 
 ## [0.6.0] - 2026-11-08
 
