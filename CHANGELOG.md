@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- ITU-T wander masks for MTIE and TDEV: `TELECOM_MASKS` (G.811 PRC,
+  G.813 SEC and G.8262 EEC options 1 and 2, and the G.823 network limits at
+  PRC, SSU, SEC and PDH interfaces), `telecom_mask` for the limit at any τ
+  and `mask_check` for pass or fail with the margin. `sigmatau analyze
+  --mask NAME|all` adds them to the JSON, and the explorer's Stability page
+  draws the chosen mask over MTIE and TDEV with pass or fail.
 - Docs: "Coming from Stable32" and "Coming from allantools" guides, mapping
   their statistics, options and defaults onto SigmaTau.
 - `PhaseData` / `FrequencyData` carry the UTC time of their first sample
