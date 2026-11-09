@@ -348,6 +348,33 @@ mktempdir() do dir
         @test occursin("\"deviation\":\"dhdev\",\"window\":32,", r.out)
     end
 
+    @testset "--range and τ limits" begin
+        # Seconds 10 to 200 of a τ₀ = 1 s record are samples 11 to 201.
+        rows = csv_rows(run_cli("analyze", pf, "--range", "10:200", "--devs", "adev", "--no-ci").out)
+        ref = adev(PhaseData(X[11:201], 1.0), tau_values(Octave, 191, :adev); ci=false)
+        @test parse.(Float64, getindex.(rows, 5)) == ref.dev
+        r = run_cli("check", pf, "--range", "100:", "--format", "json")
+        @test occursin("\"n\":$(length(X) - 100),", r.out) && occursin("\"range\":[100.0,null]", r.out)
+        rows = csv_rows(run_cli("analyze", pf, "--devs", "adev", "--tau-min", "2", "--tau-max", "16").out)
+        @test parse.(Float64, getindex.(rows, 4)) == [2.0, 4.0, 8.0, 16.0]
+        @test run_cli("analyze", pf, "--range", "5").code == 1
+        @test run_cli("analyze", pf, "--range", "9:3").code == 1
+        @test run_cli("analyze", pf, "--range", "1e9:").code == 3
+        @test run_cli("analyze", pf, "--tau-min", "16", "--tau-max", "2").code == 1
+        @test run_cli("analyze", pf, "--devs", "adev", "--tau-min", "1.5", "--tau-max", "1.9").code == 3
+        # The detrend is fitted to the range alone.
+        rows = csv_rows(run_cli("analyze", pf, "--range", "10:200", "--detrend", "linear", "--devs", "adev", "--no-ci").out)
+        ref = adev(detrend(PhaseData(X[11:201], 1.0); method=:linear), tau_values(Octave, 191, :adev); ci=false)
+        @test parse.(Float64, getindex.(rows, 5)) ≈ ref.dev rtol=1e-12
+        # Dynamic window centres stay in the whole record's time.
+        whole = run_cli("dynamic", pf, "--window", "64", "--format", "json").out
+        part = run_cli("dynamic", pf, "--window", "64", "--range", "64:", "--format", "json").out
+        t(s) = parse(Float64, match(r"\"t\":\[([^,\]]+)", s)[1])
+        @test t(part) == t(whole) + 64
+        r = run_cli("report", pf, "--range", "10:200", "--tau-max", "16").out
+        @test occursin("seconds 10 to 200", r) && occursin("up to 16 s", r)
+    end
+
     @testset "report" begin
         r = run_cli("report", pf, "--devs", "adev,tdev", "--m", "1,2,4")
         @test r.code == 0 && startswith(r.out, "<!doctype html>") && endswith(r.out, "</html>\n")
