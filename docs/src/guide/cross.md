@@ -30,8 +30,8 @@ x = cross_adev(a, b, [1, 4, 16, 64])
 The device alone has σ_y(1 s) ≈ 7.1e-13 (white FM, h₀ = 1e-24); either
 channel reads 2.4e-12 (`dev_a`), set by its reference. `cross_adev` recovers
 7.1e-13 at τ = 1 s and follows the device down the τ⁻¹ᐟ² line. `uncertainty` is the 1σ
-statistical uncertainty of `covar` (the cross variance) from the record
-itself, and `covar` can come out negative where the shared noise is below it;
+statistical uncertainty of `covar` (the cross variance), `√((σ²_a σ²_b + covar²)/ν)`
+with `ν` from each channel's noise type (Vernotte & Lantz 2019), and `covar` can come out negative where the shared noise is below it;
 `dev` is `NaN` there.
 
 ```@example cross

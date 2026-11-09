@@ -42,6 +42,7 @@ include("powerlaw.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
+include("ensemble.jl")
 
 # ── Real-time streaming accumulators and live sources ──────────────────
 include("streaming.jl")
@@ -75,7 +76,7 @@ export hdev, mhdev, htdev
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
 export dadev, dhdev
-export ncornered_hat
+export ncornered_hat, groslambert
 export drift_fit, DriftFit
 export powerlaw_fit, PowerLawFit, powerlaw_sigma, powerlaw_psd
 export theo1, theoh

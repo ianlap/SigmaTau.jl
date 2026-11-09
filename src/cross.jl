@@ -74,7 +74,10 @@ cross-periodogram `conj(A)·B` in place of `|A|²`.
 Noise present in both channels survives the average; noise in only one
 (each reference, each channel's electronics) averages toward zero, leaving a
 residual of about `floor = √(S_aa S_bb / K)`, `K` the number of independent
-averages. Measuring a device against
+averages; the full distribution of the estimate (a variance-gamma for two
+channels) is derived in [baudiquez-2020-cross-spectrum-statistics](@cite) and,
+for more instruments, [baudiquez-2022-cross-spectrum-multiple](@cite).
+Measuring a device against
 two independent references gives its own spectrum below either reference's
 noise; splitting one signal into two channels gives the source's noise below
 the channels' floor.
@@ -136,12 +139,11 @@ struct CrossStabilityResult
     covar::Vector{Float64}
     "`√covar` where `covar > 0`, else `NaN`: the deviation common to both channels."
     dev::Vector{Float64}
-    """1σ statistical uncertainty of `covar`, from the record itself: the
-    variance of the mean of the products `Δ²x_a Δ²x_b`, with their
-    autocovariance summed out to lag 2m (beyond which the second differences
-    of white, white-FM and random-walk-FM noise share no samples). Where the
-    channels share nothing this is the floor; `covar` well above it is
-    resolved."""
+    """1σ statistical uncertainty of `covar`: `√((σ²_a σ²_b + covar²)/ν)`, the
+    variance of a cross variance of Gaussian records with `ν` the geometric
+    mean of the two channels' Allan-variance EDF for their identified noise
+    types [vernotte-2019-tch-gcov-uncertainty](@cite). Where the channels share
+    nothing this is the floor; `covar` well above it is resolved."""
     uncertainty::Vector{Float64}
     "Allan deviation of channel a alone."
     dev_a::Vector{Float64}
@@ -183,39 +185,37 @@ function cross_adev(a::AbstractTimingData, b::AbstractTimingData, m_values::Vect
     all(m -> 1 <= m && 2m < N, m_values) ||
         throw(ArgumentError("cross_adev: every m must satisfy 1 ≤ m < N/2 (N = $N)"))
     K = length(m_values)
-    covar = zeros(K); va = zeros(K); vb = zeros(K); unc = zeros(K); neff = zeros(Int, K)
+    covar = zeros(K); va = zeros(K); vb = zeros(K); neff = zeros(Int, K)
     for (j, m) in enumerate(m_values)
         n = N - 2m
-        p = Vector{Float64}(undef, n)
-        saa = 0.0; sbb = 0.0
-        @inbounds for i in 1:n
-            da = xa[i+2m] - 2xa[i+m] + xa[i]
-            db = xb[i+2m] - 2xb[i+m] + xb[i]
-            p[i] = da * db; saa += da * da; sbb += db * db
-        end
+        p, saa, sbb = _second_diff_products(xa, xb, m)
         c = 2 * (m * τ₀)^2
-        μ = sum(p) / n
-        covar[j] = μ / c; va[j] = saa / (c * n); vb[j] = sbb / (c * n)
-        unc[j] = sqrt(_mean_variance(p .- μ, 2m)) / c
+        covar[j] = sum(p) / (c * n); va[j] = saa / (c * n); vb[j] = sbb / (c * n)
         neff[j] = n
     end
+    ν = sqrt.(_adev_edf(xa, τ₀, m_values) .* _adev_edf(xb, τ₀, m_values))
+    unc = sqrt.((va .* vb .+ covar .^ 2) ./ ν)
     dev = [v > 0 ? sqrt(v) : NaN for v in covar]
     return CrossStabilityResult(m_values .* τ₀, covar, dev, unc, sqrt.(va), sqrt.(vb), neff, τ₀, N)
 end
 
-# Variance of the mean of a zero-mean series whose autocovariance vanishes
-# beyond lag L: (1/n²) Σ_{|k|≤L} (n − |k|) γ_k, with γ from an FFT
-# autocorrelation (O(n log n) for any L).
-function _mean_variance(p::Vector{Float64}, L::Int)
-    n = length(p)
-    P = rfft([p; zeros(n)])
-    γ = irfft(abs2.(P), 2n)                      # γ[k+1] = Σᵢ pᵢ pᵢ₊ₖ
-    v = γ[1]
-    for k in 1:min(L, n - 1)
-        v += 2γ[k+1]
+# Products Δ²x_a(i) Δ²x_b(i) of the overlapping second differences at lag m,
+# and the two channels' sums of squares.
+function _second_diff_products(xa::Vector{Float64}, xb::Vector{Float64}, m::Int)
+    n = length(xa) - 2m
+    p = Vector{Float64}(undef, n)
+    saa = 0.0; sbb = 0.0
+    @inbounds for i in 1:n
+        da = xa[i+2m] - 2xa[i+m] + xa[i]
+        db = xb[i+2m] - 2xb[i+m] + xb[i]
+        p[i] = da * db; saa += da * da; sbb += db * db
     end
-    return max(v, γ[1] / n) / n^2
+    return p, saa, sbb
 end
+
+# Allan-variance EDF of a phase record at each m, for its identified noise type.
+_adev_edf(x::Vector{Float64}, τ₀::Float64, m_values::Vector{Int}) =
+    adev(PhaseData(x, τ₀), m_values).edf
 
 cross_adev(a::AbstractTimingData, b::AbstractTimingData, taus::TauMode) =
     cross_adev(a, b, tau_values(taus, length(_as_phase(a).x), :adev))

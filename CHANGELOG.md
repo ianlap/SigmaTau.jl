@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `groslambert`: the Groslambert covariance for three or more clocks, each
+  clock's Allan deviation from the cross Allan variance of the two
+  difference records that share it, with χ² intervals from the covariance
+  model of Vernotte & Lantz (2019): each record's Allan-variance EDF for its
+  noise type, propagated in closed form. `ncornered_hat` now fills `edf` and
+  `ci` the same way when its inputs carry EDF.
 - Live measurement: `LiveStability` keeps ADEV, MDEV, HDEV and MHDEV up to
   date as readings arrive (phase, fractional frequency or counter Hz), equal
   to the batch estimators at every reading. Sources: `InstrumentSource` for
@@ -29,7 +35,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   model's ADEV at round τ.
 - Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
   cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
-  (cross Allan variance with its statistical uncertainty from the record),
+  (cross Allan variance with its 1σ uncertainty from the same covariance
+  model and each channel's noise-type EDF),
   for a device measured against two references or one signal split into two
   channels. `sigmatau cross FILE --with FILE2` on the command line.
 
