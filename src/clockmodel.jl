@@ -104,8 +104,8 @@ end
 The matrix Φ(δ) that carries the state over a step of δ seconds:
 `[1 δ; 0 1]`, or `[1 δ δ²/2; 0 1 δ; 0 0 1]` with drift.
 """
-# Filled in place rather than as matrix literals, which the trim build cannot compile.
 function state_transition(m::ClockModel, δ::Real)
+    # Filled in place: matrix literals are not trim-safe.
     Φ = Matrix{Float64}(I, m.drift ? 3 : 2, m.drift ? 3 : 2)
     Φ[1, 2] = δ
     m.drift && (Φ[1, 3] = δ^2 / 2; Φ[2, 3] = δ)
