@@ -113,6 +113,7 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         json_spectrum(io, sy, sx)
     end
     o.fit && (json_key(io, "powerlaw"); json_powerlaw(io, data, results))
+    isempty(o.mask) || (json_key(io, "masks"); json_masks(io, o.mask, results))
     return elapsed(io, t_start)
 end
 
