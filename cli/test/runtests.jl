@@ -159,6 +159,13 @@ mktempdir() do dir
         @test occursin("{\"deviation\":\"tdev\"", r.out) && !occursin("{\"deviation\":\"totdev\",\"tau\"", r.out)
         @test occursin("\"sigma_at\":{\"tau\":[1.0,10.0,100.0]", r.out)
         @test run_cli("analyze", pf, "--fit").code != 0
+        r = run_cli("analyze", "--synth", "4096", "--format=json", "--devs", "mhdev", "--component", "WHFM::64", "--component", "-2:256:")
+        @test r.code == 0
+        @test occursin("\"alphas\":[0,-2],\"h\":[", r.out) && occursin("\"mode\":\"components\"", r.out)
+        @test occursin("\"components\":[{\"alpha\":0,", r.out) && occursin("\"residual\":{\"tau\":[", r.out)
+        @test occursin("\"clock_model\":{\"R\":0.0,\"q1\":", r.out) && occursin("\"q2\":", r.out)
+        @test occursin("\"error\":", run_cli("analyze", pf, "--format=json", "--component", "WHFM:1e9:").out)
+        @test run_cli("analyze", pf, "--format=json", "--component", "PINK:1:2").code == 1
     end
 
     @testset "no CI: nulls in JSON, blanks in CSV, never NaN" begin
