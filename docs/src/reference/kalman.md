@@ -18,8 +18,14 @@ ks = kalman_smooth(kf)
 
 Gaps (`NaN` samples) are predicted across without an update. Flicker noise
 has no state in the model, so on a record dominated by it the innovation
-check fails; fit the nearest white and random-walk levels over the τ you
-need instead.
+check fails. [`tune_q`](@ref) then retunes the white and random-walk FM
+levels for the best phase prediction over the horizons you care about,
+starting from the fit.
+
+```julia
+t = tune_q(p, m; horizons=[10, 100, 1000])
+kalman_filter(p, t.model)
+```
 
 ```@docs
 kalman_filter
@@ -28,4 +34,6 @@ kalman_smooth
 holdover_error
 innovation_check
 simulate_clock
+prediction_error
+tune_q
 ```
