@@ -119,6 +119,8 @@ end
 
 _powerlaw_h(h::AbstractDict) = Dict(_noise_alpha(k) => Float64(v) for (k, v) in h)
 _powerlaw_h(f::PowerLawFit) = Dict(zip(f.alphas, f.h))
+_powerlaw_tau0(h) = NaN
+_powerlaw_tau0(f::PowerLawFit) = f.tau0
 
 """
     powerlaw_fit(data [, m_values]; deviation=:mhdev, alphas=2:-1:-2) → PowerLawFit
@@ -259,7 +261,7 @@ powerlaw_sigma(Dict(:WHFM => 2e-24), [1.0, 10.0, 100.0]; tau0=1.0)   # ≈ 1e-12
 ```
 """
 function powerlaw_sigma(h, tau::AbstractVector{<:Real}; deviation::Symbol=:adev,
-                        tau0::Real=(h isa Union{PowerLawFit,ClockModel} ? h.tau0 : NaN))
+                        tau0::Real=_powerlaw_tau0(h))
     deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
         "powerlaw_sigma: deviation must be one of $(join(POWERLAW_DEVIATIONS, ", ")), got :$deviation"))
     τ₀ = Float64(tau0)
