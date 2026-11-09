@@ -81,6 +81,7 @@ The record (all four analysis commands):
 | `--no-bias-correction` | leave the total estimators and Thêo1 uncorrected |
 | `--spectrum` | add the spectrum to the JSON output |
 | `--nperseg N` | Welch segment length for `--spectrum` |
+| `--fit` | add the power-law noise model fitted to MHDEV to the JSON output |
 
 `spectrum`: `--nperseg N` (default: the largest power of two ≤ N/4, at least 16).
 
@@ -154,6 +155,12 @@ numbers are `null`.
   the factors.
 - `spectrum` comes from `sigmatau spectrum`, or `analyze --spectrum`. Its
   arrays leave out the DC bin.
+- `powerlaw` comes from `analyze --fit`: the fitted model
+  (`deviation`, `alphas`, `h`, `noise_types`; see [`powerlaw_fit`](@ref)),
+  its σ(τ) for each ADEV, MDEV, TDEV, HDEV and MHDEV result in `curves`, and
+  `sigma_at`, the model's ADEV at 1 s, 10 s, 100 s, 1000 s, 10⁴ s and one day
+  (those within half the record). A record the fit cannot use gives
+  `{"error": "…"}` there instead.
 - `sigmatau dynamic` adds `"dynamic": {"deviation", "window", "step", "t",
   "tau", "dev"}`, where `dev` has one row per window (centre time `t`, in
   seconds) and one column per τ.

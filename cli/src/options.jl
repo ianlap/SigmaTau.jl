@@ -65,6 +65,7 @@ const OPTS = [
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
+    Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only)", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
@@ -124,12 +125,13 @@ mutable struct Options
     range_end::Float64
     tau_min::Float64          # NaN = no limit
     tau_max::Float64
+    fit::Bool                 # --fit: power-law model in the JSON
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), false, "linear", NaN, NaN, NaN, NaN)
+                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), false, "linear", NaN, NaN, NaN, NaN, false)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -251,6 +253,7 @@ function set_flag!(o::Options, name::String)
     elseif name == "--no-ci";              o.ci = false
     elseif name == "--no-bias-correction"; o.bias = false
     elseif name == "--spectrum";           o.spectrum = true
+    elseif name == "--fit";                o.fit = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end
@@ -307,6 +310,7 @@ function parse_args!(o::Options, args::Vector{String})
     o.scaling != 0 || throw(usage_error("--scaling must not be 0"))
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
+    o.fit && o.format != "json" && throw(usage_error("--fit adds to the JSON output; use --format json"))
     return o
 end
 

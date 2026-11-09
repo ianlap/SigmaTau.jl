@@ -12,6 +12,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   each component's exact response for a sampled record, from m = 1) or to a
   spectrum, including a datasheet's ℒ(f) points; `powerlaw_sigma` and
   `powerlaw_psd` convert a model to σ(τ), S_y(f), S_x(f) or ℒ(f).
+  `sigmatau analyze --fit` adds the model to the JSON, and the explorer's
+  **Fit** toggle draws it as dotted lines with a panel of the h_α and the
+  model's ADEV at round τ.
 - Analysis range: `--range A:B` (seconds from the first sample) and
   `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
   the Data page drags out the part of a record to analyse, the options take
