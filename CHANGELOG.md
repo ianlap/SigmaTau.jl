@@ -7,12 +7,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Docs: "Coming from Stable32" and "Coming from allantools" guides, mapping
+  their statistics, options and defaults onto SigmaTau.
 - ITU-T wander masks for MTIE and TDEV: `TELECOM_MASKS` (G.811 PRC,
   G.813 SEC and G.8262 EEC options 1 and 2, and the G.823 network limits at
   PRC, SSU, SEC and PDH interfaces), `telecom_mask` for the limit at any τ
   and `mask_check` for pass or fail with the margin. `sigmatau analyze
   --mask NAME|all` adds them to the JSON, and the explorer's Stability page
   draws the chosen mask over MTIE and TDEV with pass or fail.
+- Prebuilt downloads on each release: the `sigmatau` command line as a
+  `.tar.gz` for Linux x86_64 and macOS (Apple silicon and Intel), next to
+  the explorer's `.AppImage`, `.deb` and `.dmg`. The desktop release
+  workflow now also runs on TagBot's `v…` tags and adds the files to that
+  release; a manual run lists its artifacts in the run summary.
 - `PhaseData` / `FrequencyData` carry the UTC time of their first sample
   (`start`, read with `start_time`), set by the readers from ISO 8601 and
   MJD timestamps, kept by `detrend`, `fillgaps`, `remove_outliers` and
@@ -31,6 +38,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The Linux AppImage of the explorer could not run its analysis core: the
+  AppImage launcher's `LD_LIBRARY_PATH` made the core load the AppImage's
+  copy of libjulia, which then looked for `libgcc_s.so.1` beside it. The app
+  now starts the core without that variable.
 - A reading missing from a timestamped file is a `NaN` sample in its slot,
   which the gap-tolerant estimators skip. Without `fillgaps` the samples
   around it used to be joined end to end, shortening the record and moving
