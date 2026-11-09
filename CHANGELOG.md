@@ -7,11 +7,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Clock model: `ClockModel` holds the white PM, white FM, random-walk FM and
-  random-run FM levels of a 2- or 3-state clock, `clock_model` builds one
-  from a `powerlaw_fit`, and `state_transition` and `process_noise` give its
-  Φ(δ) and Q(δ) over any step. `powerlaw_sigma` and `powerlaw_psd` accept a
-  model. A new background page derives the mapping.
 - Single-clock Kalman filter: `kalman_filter` runs a `ClockModel` over a
   phase record (gaps predicted across, Joseph-form update, least-squares
   start), `kalman_smooth` is the Rauch–Tung–Striebel smoother,
@@ -19,6 +14,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   `innovation_check` tests the normalized innovations for unit variance and
   whiteness. `simulate_clock` draws a record and its true states from a
   model.
+- `tune_q` retunes a model's white and random-walk FM levels on a log grid
+  for the smallest phase prediction error at chosen horizons, and
+  `prediction_error` reports that error for any filter run.
 
 ## [0.6.0] - 2026-11-08
 
