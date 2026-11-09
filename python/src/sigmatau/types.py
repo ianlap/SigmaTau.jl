@@ -196,6 +196,106 @@ class DynamicStabilityResult:
         )
 
 
+@dataclass(frozen=True)
+class DriftFit:
+    """Return type of ``drift_fit``: a frequency drift model fitted to y(t).
+
+    ``coef`` holds the model parameters with ``t`` in seconds from the first
+    sample (``[a, b]`` for ``"linear"``, ``[a, b, c]`` otherwise; see the Julia
+    docstring for each model's form), ``stderr`` their one-σ errors, ``rate``
+    the drift dy/dt at the end of the record per day with ``rate_stderr``, and
+    ``fit`` the model at each ``t``. The residuals are ``y - fit``.
+    """
+
+    model: str
+    coef: np.ndarray
+    stderr: np.ndarray
+    rate: float
+    rate_stderr: float
+    t: np.ndarray
+    y: np.ndarray
+    fit: np.ndarray
+    rms: float
+
+    def __repr__(self) -> str:
+        return f"DriftFit({self.model}, {self.t.size} pts, rate={self.rate:.4g}/day)"
+
+
+@dataclass(frozen=True)
+class PowerLawFit:
+    """Return type of ``powerlaw_fit``: the coefficients h_α of S_y(f) = Σ h_α f^α.
+
+    ``source`` names what was fitted (a deviation such as ``"mhdev"``, or a
+    spectrum ``"Sy"``/``"Sx"``/``"L"``); ``x`` is τ in seconds or f in Hz
+    accordingly, ``y`` the measured values and ``fit`` the model at each ``x``.
+    ``tau0`` is the record's sample interval (``nan`` for a spectrum given as
+    points).
+    """
+
+    alphas: np.ndarray
+    h: np.ndarray
+    source: str
+    tau0: float
+    x: np.ndarray
+    y: np.ndarray
+    fit: np.ndarray
+
+    def __repr__(self) -> str:
+        terms = ", ".join(f"h{a}={v:.3g}" for a, v in zip(self.alphas, self.h, strict=True))
+        return f"PowerLawFit({self.source}, {self.x.size} pts, {terms})"
+
+
+@dataclass(frozen=True)
+class CrossSpectralResult:
+    """Return type of ``cross_psd_y`` / ``cross_psd_x``.
+
+    ``psd`` is the real part of the averaged cross-spectrum (the noise common to
+    both channels) and ``floor`` its residual √(S_aa S_bb / K) after ``K``
+    independent averages; ``psd_a`` and ``psd_b`` are the channels alone.
+    """
+
+    spectral_type: str
+    freq: np.ndarray
+    psd: np.ndarray
+    floor: np.ndarray
+    psd_a: np.ndarray
+    psd_b: np.ndarray
+    nseg: int
+    nperseg: int
+    noverlap: int
+    taper: str
+
+    def __repr__(self) -> str:
+        return (
+            f"CrossSpectralResult({self.spectral_type}, {self.freq.size} bins, "
+            f"{self.nseg} averages, nperseg={self.nperseg})"
+        )
+
+
+@dataclass(frozen=True)
+class CrossStabilityResult:
+    """Return type of ``cross_adev``: the cross Allan variance of two channels.
+
+    ``covar`` keeps its sign (negative where the shared noise is below the
+    floor) and ``dev`` is √covar where positive, else ``nan``; ``uncertainty``
+    is the 1σ statistical uncertainty of ``covar``; ``dev_a`` and ``dev_b`` are
+    the channels' own Allan deviations.
+    """
+
+    tau: np.ndarray
+    covar: np.ndarray
+    dev: np.ndarray
+    uncertainty: np.ndarray
+    dev_a: np.ndarray
+    dev_b: np.ndarray
+    neff: np.ndarray
+    tau0: float
+    n: int
+
+    def __repr__(self) -> str:
+        return f"CrossStabilityResult({self.tau.size} τ, {self.n} samples per channel)"
+
+
 __all__ = [
     "PhaseData",
     "FrequencyData",
@@ -203,4 +303,8 @@ __all__ = [
     "StabilitySuite",
     "SpectralResult",
     "DynamicStabilityResult",
+    "DriftFit",
+    "PowerLawFit",
+    "CrossSpectralResult",
+    "CrossStabilityResult",
 ]

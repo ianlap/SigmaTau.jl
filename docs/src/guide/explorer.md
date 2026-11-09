@@ -84,6 +84,7 @@ the core.
 | **Stability** | σ(τ) on log-log axes with confidence intervals as bars or a band. With one clock, the per-τ table (τ, deviation, interval, noise type, EDF); with several, "Compare at τ" with the most stable clock in bold. Click the plot to move τ. |
 | **Spectrum** | S\_y(f) and either ℒ(f) at a carrier you choose or S\_x(f), Welch estimates with log-binned averaging and power-law slope guides. Changes here apply without a rerun. |
 | **Dynamic** | A DADEV or DHDEV map σ(t, τ), or a 3D waterfall: does the stability change during the record? Recomputes when its settings change; click a cell to pin it. |
+| **Live** | Readings from an instrument or the simulator as they arrive, with the running σ(τ); see below. |
 | **Help** | The pages, estimators, noise types, file formats and keyboard shortcuts. |
 
 The **File** menu saves the current plot as PNG or SVG and every number as
@@ -125,7 +126,7 @@ files like this"); **Import settings…** on the Data page reopens the dialog.
 | Key | Action |
 |:---|:---|
 | F5 or Ctrl+Enter | Run the analysis |
-| 1, 2, 3, 4 | Data, Stability, Spectrum, Dynamic |
+| 1, 2, 3, 4, 5 | Data, Stability, Spectrum, Dynamic, Live |
 | ? | Help |
 | Esc | Close a dialog |
 
@@ -144,6 +145,19 @@ limits.
 thin and dashed, so the next run (another range, drift removal or τ grid)
 can be compared with it. Hover a pin for the settings it was made with; ×
 removes it.
+
+## Live measurement
+
+The **Live** page runs [`sigmatau live`](cli.md) and plots what it streams.
+In the panel, pick the source (the simulator, an instrument's SCPI socket
+by address, or a serial port or log file by path), what each reading is
+(phase in seconds, fractional frequency, or a counter frequency in Hz
+against a nominal), τ₀ and the estimators (ADEV, MDEV, HDEV, MHDEV), then
+**Start**. The upper plot shows the fractional frequency so far, the lower
+one σ(τ) updated at every reading. **Stop** ends the run; **Load the
+readings as a clock** then adds them to the Data page and runs the full
+analysis with confidence intervals. The running estimates carry no
+intervals.
 
 **Fit** draws the power-law noise model, S_y(f) = Σ h_α f^α fitted to MHDEV
 (see [`powerlaw_fit`](@ref)), as a dotted line beside each ADEV, MDEV, TDEV,
