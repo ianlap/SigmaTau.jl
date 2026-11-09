@@ -40,11 +40,13 @@ function _bf_dev(est, x, m, tau0; ybad=nothing)
     return sqrt(s / (c * n * (est === :tierms ? 1 : tau0^2))), n
 end
 
+# Pairs at most m apart inside a run that holds a full window of m + 1 samples.
 function _bf_mtie(x, m; ybad=nothing)
     best = 0.0
+    run = ybad === nothing ? zeros(Int, length(x)) : [0; cumsum(ybad)]
     for a in eachindex(x), b in a+1:min(a + m, length(x))
-        isfinite(x[a]) && isfinite(x[b]) || continue
-        ybad === nothing || !any(ybad[a:b-1]) || continue
+        isfinite(x[a]) && isfinite(x[b]) && run[a] == run[b] || continue
+        count(==(run[a]), run) > m || continue
         best = max(best, abs(x[b] - x[a]))
     end
     return best
@@ -76,6 +78,11 @@ end
     @testset "mtie over the measured samples" begin
         @test mtie(pg, ms).dev ≈ [_bf_mtie(xg, m) for m in ms]
         @test mtie(fg, ms).dev ≈ [_bf_mtie(xy, m; ybad=ybad) for m in ms]
+        # A run shorter than the window adds nothing, however large its swing.
+        ys = copy(yg); ys[300:303] .= NaN; ys[305:307] .= NaN; ys[304] = 1.0
+        sbad = isnan.(ys)
+        xs = [0.0; cumsum(replace(ys, NaN => 0.0))] .* tau0
+        @test mtie(FrequencyData(ys, tau0), ms).dev ≈ [_bf_mtie(xs, m; ybad=sbad) for m in ms]
     end
 
     @testset "tdev and htdev scale the gap-tolerant mdev and mhdev" begin

@@ -66,8 +66,14 @@ function recordArgs(clock) {
   opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
   // An instrument file (TimeLab, Stable32 .phd/.frd, counter log) is read by
   // its layout, which fixes the record type, units and columns.
-  if (clock.format) a.push("--input-format", clock.format);
-  else recordColumns(clock, a, opt);
+  if (clock.format) {
+    a.push("--input-format", clock.format);
+    // A table is read by column name; its kind is the user's pick.
+    if (clock.format === "table") {
+      opt("--column", clock.column_name);
+      if (clock.kind === "frequency") a.push("--freq");
+    }
+  } else recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
   if (clock.fillgaps) a.push("--fillgaps");
   if (clock.remove_outliers) a.push("--remove-outliers");
@@ -119,7 +125,7 @@ function view(doc) {
   });
   const d = doc.dynamic;
   const dynamic = d && { dev: d.deviation, window: d.window, step: d.step, t: d.t, tau: d.tau, map: d.dev };
-  return { record, results, spectrum: doc.spectrum, dynamic, elapsed_ms: doc.elapsed_ms, doc };
+  return { record, results, spectrum: doc.spectrum, dynamic, drift: doc.drift, elapsed_ms: doc.elapsed_ms, doc };
 }
 
 const run = async (body, signal) => view(await post(body, signal));
@@ -140,6 +146,14 @@ export function analyze(clock, signal) {
     "--spectrum",
   ]), signal);
 }
+
+// Fit a frequency drift model (linear, quadratic, log, diffusion) to one clock.
+export function drift(clock, signal) {
+  return run(request(clock, "drift", ["--model", state.driftModel, "--series", 2000]), signal);
+}
+
+// Settings that decide a clock's drift fit; a change means refit.
+export const driftKey = (clock) => JSON.stringify([request(clock, "drift", []), state.driftModel]);
 
 // Settings that decide a clock's dynamic map; a change means recompute.
 export const dynamicKey = (clock) =>

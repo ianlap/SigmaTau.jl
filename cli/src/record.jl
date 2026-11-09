@@ -25,8 +25,10 @@ end
 # readers snap the time column to an even grid of its smallest step (see
 # SigmaTau's _make_equispaced) and fill the empty slots, so the same snapping
 # of the raw time column finds the slots that held data. All true without
-# --fillgaps or when the grid does not line up with the record.
+# --fillgaps or when the grid does not line up with the record. Instrument
+# formats report their filled samples directly (read_instrument).
 function measured_mask(o::Options, N::Int)
+    length(o.measured) == N && return copy(o.measured)
     keep = trues(N)
     (o.fillgaps && o.synth <= 0 && o.time_col >= 1 && input_format(o) === :columns) || return keep
     t = read_times(o)
@@ -172,8 +174,11 @@ end
 function read_instrument(o::Options, fmt::Symbol)
     o.reference_col > 0 && throw(usage_error("--reference-col applies to column files only"))
     r = SigmaTau._read_data(o.input, fmt; tau0=o.tau0, column_name=o.column, nominal=o.nominal,
-                            kind=o.freq ? :frequency : :auto, scaling=o.scaling, fillgaps=o.fillgaps)
+                            kind=o.freq ? :frequency : :auto, scaling=o.scaling, delim=o.delim,
+                            fillgaps=o.fillgaps)
     o.freq = !r.phase
+    # A filled frequency sample leaves the phase sample after it unmeasured.
+    isempty(r.filled) || (o.measured = r.phase ? .!r.filled : [true; .!r.filled])
     detrend = detrend_symbol(o.detrend)
     v = r.v
     detrend === :none || SigmaTau._detrend_core!(v, detrend)

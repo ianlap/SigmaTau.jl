@@ -40,6 +40,28 @@ be read off a stability plot; [Choosing an estimator](../guide/choosing.md#Readi
 tabulates the slopes. [`noise_gen`](@ref) synthesizes records with any mix of
 these noises, which is how the examples on this site are built.
 
+### Synthesized noise
+
+[`noise_gen`](@ref) draws each component with the Kasdin–Walter discrete
+fractional filter: white Gaussian noise convolved with the impulse response
+of ``(1 - z^{-1})^{\alpha/2}``. It also covers the two steeper noises that the
+Hadamard-class estimators converge on, flicker-walk FM (`:FWFM`, α = −3) and
+random-run FM (`:RRFM`, α = −4). A component requested by `h_α` has the
+spectrum
+
+```math
+S_y(f) = h_\alpha \left(\frac{\sin \pi f \tau_0}{\pi \tau_0}\right)^{\alpha},
+```
+
+which is ``h_\alpha f^\alpha`` below about a tenth of the sampling rate and
+rolls off as ``\sin`` toward Nyquist. For α ≤ −1 the process is not
+stationary; its d-th difference is, with spectrum
+``(2 \sin \pi f \tau_0)^{2d} S_y(f)``. The test suite generates 40
+records per α from +2 to −4, differences where needed, and checks the
+averaged Welch spectrum against this formula bin by bin across the band: the
+band-average ratio is 1 to within 1 % and no bin is off by more than 12 %,
+the scatter expected of the estimate.
+
 ## Noise identification
 
 With `ci=true` (the default) every estimator except MTIE and TIE rms identifies the dominant noise
@@ -122,6 +144,6 @@ A linear frequency drift D adds a term Dτ/√2 to ADEV, which grows as τ¹ and
 hides everything else at long τ. The Hadamard family takes a third difference
 and does not see it. Otherwise remove it before the analysis:
 [`detrend`](@ref) with `method=:quadratic` fits and removes the quadratic
-phase term, which is the frequency drift. MHTOTDEV removes it by default
-(`remove_drift=true`), because its reflected record would otherwise let it
-back in.
+phase term, which is the frequency drift. MHTOTDEV removes a quadratic from
+every window before reflecting it, so drift never reaches its reflected
+record.

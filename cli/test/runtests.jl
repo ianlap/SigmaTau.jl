@@ -221,6 +221,16 @@ mktempdir() do dir
         @test g.code == 0 && occursin("\"quantity\":\"phase\"", g.out)
         @test run_cli("analyze", tim, "--input-format", "counter", "--tau0", "1").code == 2
         @test run_cli("analyze", tim, "--reference-col", "2").code == 1
+        semi = joinpath(dir, "semi.txt")
+        write(semi, "time;phase (ns)\n" * join(string.(0:63, ";", X[1:64] .* 1e9), "\n"))
+        d = csv_rows(run_cli("analyze", semi, "--input-format", "table", "--delim", ";",
+                             "--devs", "adev", "--no-ci").out)
+        @test parse.(Float64, getindex.(d, 5)) ≈ adev(PhaseData(X[1:64], 1.0); ci=false).dev rtol=1e-9
+        # The filled second of the GPSDO log stays out of the drift fit.
+        o = SigmaTauCLI.Options()
+        o.input, o.fillgaps = fx("gpsdo.csv"), true
+        SigmaTauCLI.read_record(o)
+        @test findall(!, o.measured) == [24]
     end
 
     @testset "reference column" begin
@@ -235,6 +245,23 @@ mktempdir() do dir
         @test isapprox(parse.(Float64, getindex.(a, 5)), parse.(Float64, getindex.(b, 5)); rtol=1e-6)
         @test run_cli("analyze", rf, "--reference-col", "9").code == 2
         @test run_cli("analyze", rf, "--reference-col", "2").code == 1
+    end
+
+    @testset "drift" begin
+        # Frequency with an injected aging of 2e-15 per second.
+        y = 1e-11 .* sinpi.((1:400) ./ 13) .+ 2e-15 .* (0:399) .* 60
+        ff = write_table(joinpath(dir, "aging.csv"), y; tau0=60.0)
+        ref = drift_fit(FrequencyData(y, 60.0))
+        rows = csv_rows(run_cli("drift", ff, "--freq").out)
+        @test rows[1][3] == "linear" && isempty(rows[1][8])
+        @test parse(Float64, rows[1][10]) ≈ ref.rate rtol=1e-9
+        r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
+        @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
+        @test run_cli("drift", ff, "--model", "cubic").code == 1
+        # Four phase samples: three frequency steps fit a line but not a log.
+        sf = write_table(joinpath(dir, "short.csv"), [0.0, 1.0, 3.0, 6.0] .* 1e-9)
+        @test run_cli("drift", sf).code == 0
+        @test run_cli("drift", sf, "--model", "log").code == 3
     end
 
     @testset "--remove-drift" begin

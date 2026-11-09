@@ -1,12 +1,13 @@
 # Reference cross-check suite: every estimator, noise type α = +2 … −4, EDF,
-# χ² confidence interval, noise ID, Welch spectrum, dynamic map and
-# gap-tolerant ADEV, against
+# χ² confidence interval, noise ID, Welch spectrum, dynamic map, gap-tolerant
+# ADEV and drift fits, against
 #
 #   * allantools (Python) on the committed records (fixtures/validation/
 #     allantools/*.csv, regenerated in CI by tools/validation/gen_allantools.py),
 #   * Stable32 runs on PHASE.DAT (fixtures/validation/stable32_phasedat/),
 #   * the NBS 1000-point published values (NIST SP1065 §12.3),
-#   * scipy.signal.welch for S_y / S_x.
+#   * scipy.signal.welch for S_y / S_x and scipy.optimize.least_squares for
+#     the drift fits.
 #
 # Each row carries the tolerance it is held to; rows with tol = Inf are
 # documented convention differences that are reported (by
@@ -31,7 +32,8 @@ const _CC = CrossCheck
             ("allantools lag-1 ACF noise ID",             _CC.allantools_noiseid_rows),
             ("scipy Welch S_y / S_x",                     _CC.welch_rows),
             ("allantools per-window dynamic maps",        _CC.dynamic_rows),
-            ("allantools gradev on records with gaps",    _CC.gap_rows))
+            ("allantools gradev on records with gaps",    _CC.gap_rows),
+            ("scipy least-squares drift fits",            _CC.drift_rows))
         @testset "$label" begin
             # One assertion per group; every row is still checked, and each
             # miss is logged with its reference value and tolerance.
