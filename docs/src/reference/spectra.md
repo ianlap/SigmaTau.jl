@@ -33,6 +33,27 @@ powerlaw_sigma
 powerlaw_psd
 ```
 
+## Clock model
+
+[`clock_model`](@ref) turns a power-law fit into the state-space
+[`ClockModel`](@ref) the Kalman filters run on: white PM becomes the
+measurement noise, white, random-walk and random-run FM drive the phase,
+frequency and drift states. [The clock model](../explanation/clock_model.md)
+derives the mapping and the matrices.
+
+```julia
+m = clock_model(powerlaw_fit(p; alphas=[2, 0, -2]))
+state_transition(m, 1.0), process_noise(m, 1.0)
+powerlaw_sigma(m, [1.0, 100.0])    # σ(τ) the model stands for
+```
+
+```@docs
+ClockModel
+clock_model
+state_transition
+process_noise
+```
+
 ## Two channels
 
 [`cross_psd_y`](@ref) and [`cross_psd_x`](@ref) average the cross-spectrum

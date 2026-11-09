@@ -24,7 +24,8 @@ using SigmaTau
         :save, :load,
         :detrend, :fillgaps, :find_outliers, :remove_outliers,
         :drift_fit, :DriftFit,
-        :powerlaw_fit, :PowerLawFit, :powerlaw_sigma, :powerlaw_psd])
+        :powerlaw_fit, :PowerLawFit, :powerlaw_sigma, :powerlaw_psd,
+        :ClockModel, :clock_model, :state_transition, :process_noise])
     deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
                       :load_result, :load_suite])
     @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public ∪ deprecated
