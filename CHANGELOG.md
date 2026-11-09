@@ -36,9 +36,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   the clocks' predicted phases, with equal weights (EWFA) or AT1's learned
   inverse-variance weights, capped by `wmax`, outliers and missing readings
   left out; `timescale_phase` gives the scale against the reference.
+  AT1 starts each clock from its Groslambert ADEV, or from its ADEV against
+  the reference where that estimate fails, so a short record no longer
+  leaves it at equal weights.
   `sigmatau timescale FILE --value-cols 2,3,4` does the same from the
   command line (`--algorithm`, `--tau-y`, `--wmax`; `--synth N` simulates
-  four clocks).
+  four clocks). The explorer's new **Ensemble** page forms the scale from
+  the clocks of one loaded file, or simulated ones, and plots each clock's
+  weight and the ADEV of the scale and of each clock against it.
 
 ## [0.6.0] - 2026-11-08
 
