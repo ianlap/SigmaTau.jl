@@ -34,7 +34,7 @@ struct Opt
 end
 
 const ALL = COMMANDS
-const TABULAR = ["analyze", "check", "spectrum", "dynamic", "drift"]   # CSV or JSON out (report writes HTML)
+const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift"]   # CSV or JSON out (report writes HTML)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
