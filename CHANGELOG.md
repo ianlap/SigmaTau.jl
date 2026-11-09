@@ -168,7 +168,9 @@ until 0.7.
   embedded Julia through juliacall, so results match the Julia API exactly.
   The names and keywords are the 0.6 ones (`psd_y`, `ncornered_hat`,
   `save`/`load`, `m=`), plus `deviation(name, ...)` and `estimators()`.
-  Tested by a pytest suite in its own CI workflow.
+  Tested by a pytest suite in its own CI workflow. A `python-v*` tag
+  publishes it to PyPI (`pip install sigmatau`), pinned to the same
+  SigmaTau.jl version from the General registry.
 - `sigmatau`, a compiled command line in `cli/` (package `SigmaTauCLI`, built
   with `juliac --trim=safe`): `analyze`, `check`, `spectrum`, `dynamic`,
   `completion` and `version`, CSV or versioned JSON output
