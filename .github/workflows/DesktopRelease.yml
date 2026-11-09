@@ -1,11 +1,13 @@
 name: Desktop release
 
 # Builds the desktop explorer (app/desktop) for macOS (Apple silicon and
-# Intel) and Linux (.deb and AppImage), with the trimmed sigmatau core inside.
-# It runs only on a tag like app-v0.1.0, which also publishes the files as a
-# draft GitHub release, or by hand (Actions > Desktop release > Run workflow),
-# which only uploads them as workflow artifacts. It takes 20 to 30 minutes,
-# so it does not run on pull requests.
+# Intel) and Linux (.deb and AppImage), with the trimmed sigmatau core inside,
+# and the sigmatau command line on its own as a .tar.gz for each. It runs
+# only on a tag, or by hand (Actions > Desktop release > Run workflow), and
+# takes 20 to 30 minutes, so it does not run on pull requests:
+#   v0.7.0       (TagBot's release tag) adds the files to that release;
+#   app-v0.1.0   makes a draft release of its own with them;
+#   by hand      uploads them as workflow artifacts, listed in the run summary.
 #
 # macOS signing is optional. With these repository secrets the app is signed
 # with a Developer ID and notarized; without them it is signed ad hoc:
@@ -17,7 +19,7 @@ name: Desktop release
 
 on:
   push:
-    tags: ['app-v*']
+    tags: ['v*', 'app-v*']
   workflow_dispatch:
 
 permissions:
@@ -93,6 +95,14 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: app/desktop/bundle.sh
 
+      - name: Command-line archive
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Project.toml)
+          OS=$([ "$RUNNER_OS" = macOS ] && echo macos || echo linux)
+          NAME="sigmatau-$VERSION-$OS-$(uname -m)"
+          cp -a cli/build "$RUNNER_TEMP/$NAME"
+          tar -czf "app/desktop/dist/$NAME.tar.gz" -C "$RUNNER_TEMP" "$NAME"
+
       - uses: actions/upload-artifact@v4
         with:
           name: SigmaTau-Explorer-${{ matrix.os }}
@@ -100,7 +110,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/app-v')
+    if: startsWith(github.ref, 'refs/tags/')
     needs: bundle
     runs-on: ubuntu-latest
     steps:
@@ -108,8 +118,33 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      # TagBot has made (or is making) the release for a v* tag: add the files.
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+      - if: startsWith(github.ref, 'refs/tags/app-v')
+        uses: softprops/action-gh-release@v2
         with:
           name: SigmaTau Explorer ${{ github.ref_name }}
           files: dist/*
           draft: true
+
+  summary:
+    if: github.event_name == 'workflow_dispatch'
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Where the files are
+        run: |
+          {
+            echo "## Downloads"
+            echo
+            echo "Under **Artifacts** at the bottom of this page, one zip per platform:"
+            echo
+            echo "| Artifact | Holds |"
+            echo "|---|---|"
+            echo "| SigmaTau-Explorer-ubuntu-22.04 | Linux x86_64: .AppImage, .deb, sigmatau CLI .tar.gz |"
+            echo "| SigmaTau-Explorer-macos-15 | macOS Apple silicon: .dmg, .zip, sigmatau CLI .tar.gz |"
+            echo "| SigmaTau-Explorer-macos-15-intel | macOS Intel: .dmg, .zip, sigmatau CLI .tar.gz |"
+          } >> "$GITHUB_STEP_SUMMARY"

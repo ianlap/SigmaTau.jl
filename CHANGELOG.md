@@ -3,6 +3,23 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Prebuilt downloads on each release: the `sigmatau` command line as a
+  `.tar.gz` for Linux x86_64 and macOS (Apple silicon and Intel), next to
+  the explorer's `.AppImage`, `.deb` and `.dmg`. The desktop release
+  workflow now also runs on TagBot's `v…` tags and adds the files to that
+  release; a manual run lists its artifacts in the run summary.
+
+### Fixed
+
+- The Linux AppImage of the explorer could not run its analysis core: the
+  AppImage launcher's `LD_LIBRARY_PATH` made the core load the AppImage's
+  copy of libjulia, which then looked for `libgcc_s.so.1` beside it. The app
+  now starts the core without that variable.
+
 ## [0.6.0] - 2026-11-08
 
 ### Fixed
