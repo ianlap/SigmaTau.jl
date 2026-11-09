@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "report"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
@@ -9,6 +9,7 @@ const COMMAND_HELP = [
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
+    ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
     ("version",    "",     "print the version"),
@@ -33,18 +34,19 @@ struct Opt
     cmds::Vector{String}     # commands that accept it
 end
 
-const ALL = COMMANDS
+const ALL = filter(!=("live"), COMMANDS)   # the commands that read a FILE
+const ANY = COMMANDS
 const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift"]   # CSV or JSON out (report writes HTML)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
-    Opt("--seed", "S", String[], false, "random seed for --synth (default 42)", ALL),
-    Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ALL),
-    Opt("--freq", "", String[], false, "FILE holds fractional frequency", ALL),
+    Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", ANY),
+    Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ANY),
+    Opt("--freq", "", String[], false, "FILE holds fractional frequency", ANY),
     Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns)", ALL),
     Opt("--column", "NAME", String[], false, "clock column of a table file, by name (default: the column named phase / PPS / time error, else frequency)", ALL),
-    Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean to 4 significant figures)", ALL),
-    Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column)", ALL),
+    Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean to 4 significant figures)", ANY),
+    Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column)", ANY),
     Opt("--time-col", "N", String[], false, "1-based time column, 0 = none (default 1)", ALL),
     Opt("--value-col", "N", String[], false, "1-based value column (default 2)", ALL),
     Opt("--reference-col", "N", String[], false, "subtract this column from the value column (clocks measured against one reference)", ALL),
@@ -57,9 +59,9 @@ const OPTS = [
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyse only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
-    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report"]),
-    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "report"]),
-    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "report"]),
+    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live"]),
+    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "report", "live"]),
+    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
     Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
     Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze", "report"]),
@@ -73,12 +75,18 @@ const OPTS = [
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
+    # Live
+    Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal (default: the first reading to 4 significant figures)", ["live"]),
+    Opt("--query", "CMD", String[], false, "SCPI query sent before every reading, e.g. READ? (default: READ? for tcp://, none otherwise)", ["live"]),
+    Opt("--every", "N", String[], false, "write a line every N readings (default 1)", ["live"]),
+    Opt("--count", "N", String[], false, "stop after N readings (default: when the source ends)", ["live"]),
+    Opt("--fast", "", String[], false, "run the simulator flat out instead of one reading per τ₀", ["live"]),
     # Output
     Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
     Opt("--format", "FMT", FORMATS, false, "csv (default) or json", TABULAR),
     Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", ALL),
-    Opt("--quiet", "", String[], false, "no informational messages on stderr", ALL),
-    Opt("--help", "", String[], false, "show this command's options", ALL),
+    Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY),
+    Opt("--help", "", String[], false, "show this command's options", ANY),
 ]
 
 mutable struct Options
@@ -124,6 +132,11 @@ mutable struct Options
     with::String              # cross: the second channel's file
     phase_given::Bool         # --phase given (else instrument readers pick the kind)
     model::String
+    hz::Bool
+    query::String             # "\0" = the default for the source
+    every::Int
+    count::Int                # 0 = until the source ends
+    fast::Bool
     range_start::Float64      # --range, seconds from the first sample; NaN = open
     range_end::Float64
     tau_min::Float64          # NaN = no limit
@@ -134,7 +147,8 @@ end
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear", NaN, NaN, NaN, NaN, false)
+                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
+                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -241,6 +255,9 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
     elseif name == "--series";         o.series = parse_int(v, name)
+    elseif name == "--query";          o.query = v
+    elseif name == "--every";          o.every = parse_int(v, name)
+    elseif name == "--count";          o.count = parse_int(v, name)
     elseif name == "--format";         o.format = check_choice(v, name, FORMATS)
     elseif name == "--out";            o.out = v
     elseif name == "--with";           o.with = v
@@ -257,6 +274,8 @@ function set_flag!(o::Options, name::String)
     elseif name == "--no-ci";              o.ci = false
     elseif name == "--no-bias-correction"; o.bias = false
     elseif name == "--spectrum";           o.spectrum = true
+    elseif name == "--hz";                 o.hz = true
+    elseif name == "--fast";               o.fast = true
     elseif name == "--fit";                o.fit = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
@@ -297,7 +316,12 @@ function parse_args!(o::Options, args::Vector{String})
     end
     o.help && return o
     ("--phase" in args && "--freq" in args) && throw(usage_error("give only one of --phase and --freq"))
-    if isempty(o.input) && o.synth <= 0
+    if o.command == "live"
+        isempty(o.input) && throw(usage_error("live: give a SOURCE: sim, tcp://HOST:PORT or a device path"))
+        o.hz && o.freq && throw(usage_error("give only one of --freq and --hz"))
+        o.every >= 1 || throw(usage_error("--every must be 1 or more"))
+        o.count >= 0 || throw(usage_error("--count must be 0 or more"))
+    elseif isempty(o.input) && o.synth <= 0
         throw(usage_error(o.command * ": give a FILE or --synth N (see `sigmatau help " * o.command * "`)"))
     end
     !isempty(o.input) && o.synth > 0 && throw(usage_error("give either a FILE or --synth, not both"))
@@ -348,6 +372,7 @@ function print_help(io::IO)
     print(io, "  sigmatau spectrum --synth 65536\n")
     print(io, "  sigmatau dynamic clock.dat --dev dhdev --window 4096\n")
     print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
+    print(io, "  sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1\n")
     print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
 end
 
@@ -362,7 +387,13 @@ function print_command_help(io::IO, cmd::String)
     for (c, arg, h) in COMMAND_HELP
         c == cmd && print(io, "Usage: sigmatau ", c, " ", arg, " [options]\n\n", uppercasefirst(h), ".\n")
     end
-    print(io, "FILE is a whitespace, comma or tab separated table (time, value by default).\n\nOptions:\n")
+    if cmd == "live"
+        print(io, "SOURCE is sim (a simulated clock), tcp://HOST:PORT (an LXI instrument's SCPI socket,\n",
+              "usually port 5025) or a serial device path set up with stty. Each reading is the first\n",
+              "number on a line: phase in seconds by default. Every line of output is one JSON object.\n\nOptions:\n")
+    else
+        print(io, "FILE is a whitespace, comma or tab separated table (time, value by default).\n\nOptions:\n")
+    end
     sigs = String[]
     for op in OPTS
         cmd in op.cmds && push!(sigs, isempty(op.metavar) ? op.long : op.long * " " * op.metavar)
@@ -374,7 +405,9 @@ function print_command_help(io::IO, cmd::String)
         k += 1
         print(io, "  "); padded(io, sigs[k], w); print(io, op.help, "\n")
     end
-    if cmd == "analyze" || cmd == "report"
+    if cmd == "live"
+        print(io, "\nDeviations: adev, mdev, hdev, mhdev\n")
+    elseif cmd == "analyze" || cmd == "report"
         print(io, "\nDeviations: ", join(estimator_names(), ", "), "\n")
     end
 end

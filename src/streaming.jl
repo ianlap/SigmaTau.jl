@@ -77,7 +77,7 @@ mutable struct StreamingStability
         isempty(m_values) && throw(ArgumentError(
             "StreamingStability: m_values must be non-empty"))
         all(>=(1), m_values) || throw(ArgumentError(
-            "StreamingStability: every m must be ≥ 1, got $(m_values)"))
+            "StreamingStability: every m must be ≥ 1, got $(minimum(m_values))"))
         ms = Vector{Int}(m_values)
         cap = _STREAMING_LAG[dev] * maximum(ms) + 1
         return new(dev, Float64(tau0), ms, zeros(Float64, cap), cap,

@@ -19,7 +19,7 @@ compare the curves.
 | Data from an averaging (Λ-type) frequency counter | `pdev` | The parabolic deviation is the matched estimator for averaged frequency readings. |
 | Does the stability change during the record? | `dadev`, `dhdev` | σ(t, τ) over sliding windows; see [Plotting](plotting.md#Dynamic-deviations). |
 | Several clocks compared in pairs, and you want each clock alone | `ncornered_hat` | The N-cornered hat separates the pairwise variances, assuming independent clocks. |
-| Live data, updated sample by sample | `StreamingStability` | ADEV, MDEV, HDEV and MHDEV at O(1) cost per sample; equals the batch call at every step. |
+| Live data, updated sample by sample | `StreamingStability`, `LiveStability` | ADEV, MDEV, HDEV and MHDEV at O(1) cost per sample; equals the batch call at every step. `LiveStability` takes instrument readings (phase, frequency or Hz) from an `InstrumentSource`. |
 
 ## The estimators
 
