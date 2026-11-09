@@ -7,6 +7,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Docs: "Coming from Stable32" and "Coming from allantools" guides, mapping
+  their statistics, options and defaults onto SigmaTau.
 - ITU-T wander masks for MTIE and TDEV: `TELECOM_MASKS` (G.811 PRC,
   G.813 SEC and G.8262 EEC options 1 and 2, and the G.823 network limits at
   PRC, SSU, SEC and PDH interfaces), `telecom_mask` for the limit at any τ
