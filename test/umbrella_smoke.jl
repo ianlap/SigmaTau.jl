@@ -26,7 +26,8 @@ using SigmaTau
         :drift_fit, :DriftFit,
         :powerlaw_fit, :PowerLawFit, :powerlaw_sigma, :powerlaw_psd,
         :ClockModel, :clock_model, :state_transition, :process_noise,
-        :NoiseFit, :noise_fit, :add_component!, :undo!, :noise_residual])
+        :NoiseFit, :noise_fit, :add_component!, :undo!, :noise_residual,
+        :KalmanResult, :kalman_filter, :kalman_smooth, :holdover_error, :innovation_check, :simulate_clock])
     deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
                       :load_result, :load_suite])
     @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public ∪ deprecated
