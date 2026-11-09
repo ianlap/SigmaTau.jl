@@ -110,13 +110,17 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
     w(i, (j, k)) = ((i == j || i == k) - 1 / (n_clocks - 1)) / (n_clocks - 2)
     var = [sum(w(i, pairs[p]) * s2[p, k] for p in eachindex(pairs)) for i in 1:n_clocks, k in 1:n_tau]
     with_ci = !any(isnan, ν)
+    # Pairs covary only through a shared clock: list, for each pair, the
+    # other pairs that share one with it and that clock.
+    nbrs = [[(q, only(intersect(pairs[p], pairs[q]))) for q in eachindex(pairs)
+             if q != p && !isempty(intersect(pairs[p], pairs[q]))] for p in eachindex(pairs)]
     confidence = isnan(ref.confidence) ? DEFAULT_CONFIDENCE : ref.confidence
     results = Vector{StabilityResult}(undef, n_clocks)
     for i in 1:n_clocks
         dev = [v > 0 ? sqrt(v) : NaN for v in var[i, :]]
         edf = Float64[]
         if with_ci
-            edf = [_nch_edf(i, k, pairs, s2, ν, var, w) for k in 1:n_tau]
+            edf = [_nch_edf(i, k, pairs, nbrs, s2, ν, var, w) for k in 1:n_tau]
         end
         results[i] = StabilityResult(ref.deviation_type, copy(ref.tau), dev, Symbol[],
                                      with_ci ? _edf_ci(dev, edf, confidence) : _CIBound[], edf,
@@ -126,20 +130,17 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
 end
 
 # Equivalent edf of clock i's separated variance at τ index k.
-function _nch_edf(i, k, pairs, s2, ν, var, w)
+function _nch_edf(i, k, pairs, nbrs, s2, ν, var, w)
     v = var[i, k]
     v > 0 || return NaN
     total = 0.0
-    for p in eachindex(pairs), q in eachindex(pairs)
-        if p == q
-            c = 2 * s2[p, k]^2 / ν[p, k]
-        else
-            shared = intersect(pairs[p], pairs[q])
-            isempty(shared) && continue
-            σ2 = max(var[only(shared), k], 0.0)
-            c = 2 * σ2^2 / sqrt(ν[p, k] * ν[q, k])
+    for p in eachindex(pairs)
+        wp = w(i, pairs[p])
+        total += wp^2 * 2 * s2[p, k]^2 / ν[p, k]
+        for (q, c) in nbrs[p]
+            σ2 = max(var[c, k], 0.0)
+            total += wp * w(i, pairs[q]) * 2 * σ2^2 / sqrt(ν[p, k] * ν[q, k])
         end
-        total += w(i, pairs[p]) * w(i, pairs[q]) * c
     end
     return 2 * v^2 / total
 end
@@ -243,8 +244,9 @@ function _gl_n(pairwise)
 end
 
 # Three clocks from A−B, B−C, C−A; C−A fills pairwise[3, 1].
-function groslambert(x_ab::T, x_bc::T, x_ca::T, args...; kw...) where {T<:AbstractTimingData}
-    pairwise = Matrix{T}(undef, 3, 3)
+function groslambert(x_ab::AbstractTimingData, x_bc::AbstractTimingData,
+                     x_ca::AbstractTimingData, args...; kw...)
+    pairwise = Matrix{AbstractTimingData}(undef, 3, 3)
     pairwise[1, 2] = x_ab
     pairwise[2, 3] = x_bc
     pairwise[3, 1] = x_ca

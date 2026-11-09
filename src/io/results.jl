@@ -12,7 +12,7 @@ function _write_result_table(io::IO, r::StabilityResult)
     println(io, "# calc_ci=", has_ci)
     println(io, "tau\tdev\tnoise_type\tci_lower\tci_upper\tedf\tneff")
     for k in 1:length(r.tau)
-        noise_s = has_ci ? string(r.noise_type[k]) : ""
+        noise_s = has_ci && !isempty(r.noise_type) ? string(r.noise_type[k]) : ""
         ci_lo_s = has_ci ? string(r.ci[k].lo)      : "NaN"
         ci_hi_s = has_ci ? string(r.ci[k].hi)      : "NaN"
         edf_s   = has_ci ? string(r.edf[k])        : "NaN"
@@ -51,7 +51,7 @@ function _parse_result_rows(deviation_type::Symbol, has_ci::Bool,
     has_ci || return StabilityResult(deviation_type, tau, dev,
                                      Symbol[], _CIBound[], Float64[], neff, tau0, n, NaN)
     return StabilityResult(deviation_type, tau, dev,
-                           Symbol.(noise_s), _zip_ci(ci_lo, ci_hi), edf_vec, neff,
+                           all(isempty, noise_s) ? Symbol[] : Symbol.(noise_s), _zip_ci(ci_lo, ci_hi), edf_vec, neff,
                            tau0, n, confidence)
 end
 

@@ -215,7 +215,7 @@ function Base.show(io::IO, ::MIME"text/plain", r::StabilityResult)
         has_ci ?
             [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i]),
              _show4g(r.ci[i].lo), _show4g(r.ci[i].hi), _show4g(r.edf[i]),
-             string(r.noise_type[i])] :
+             isempty(r.noise_type) ? "" : string(r.noise_type[i])] :
             [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i])]
     end
     widths = map(length, header)
