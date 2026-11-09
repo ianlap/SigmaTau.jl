@@ -3,7 +3,6 @@ module SigmaTau
 using DocStringExtensions
 using Statistics
 using Distributions
-using StaticArrays
 using FFTW
 using Dates
 using Printf
@@ -131,6 +130,15 @@ using PrecompileTools: @setup_workload, @compile_workload
         append!(_pc_acc, _pc_x[1:32])
         snapshot(_pc_acc)
         nsamples(_pc_acc)
+        drift_fit(fd)
+        _pc_fit = powerlaw_fit(pd; alphas=[2, 0, -2])
+        powerlaw_sigma(_pc_fit, [1.0, 2.0])
+        cross_adev(pd, pd, ms)
+        cross_psd_y(pd, pd)
+        groslambert(pd, pd, pd, ms)
+        _pc_live = LiveStability([:adev], 1.0, ms)
+        push!(_pc_live, 0.0)
+        snapshot(_pc_live)
     end
 end
 

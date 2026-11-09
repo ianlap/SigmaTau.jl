@@ -23,7 +23,7 @@ const DETRENDS = ["none", "mean", "endpoint", "linear"]
 const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
-const DRIFT_MODELS = ["linear", "quadratic", "log", "diffusion"]
+const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 
 struct Opt
     long::String

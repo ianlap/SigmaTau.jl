@@ -10,16 +10,6 @@ function _nch_pair(pairwise::AbstractMatrix{StabilityResult}, i::Int, j::Int)
     throw(ArgumentError("ncornered_hat: no pairwise result for clocks ($i, $j); fill pairwise[$i, $j] (or its transpose)"))
 end
 
-# χ² limits of a deviation from its equivalent degrees of freedom; NaN where
-# the deviation is not finite or ν < 1.
-function _edf_ci(dev::Vector{Float64}, edf::Vector{Float64}, confidence::Float64)
-    a = (1 - confidence) / 2
-    return [isfinite(d) && ν >= 1 ?
-                (lo=d * sqrt(ν / quantile(Chisq(ν), 1 - a)), hi=d * sqrt(ν / quantile(Chisq(ν), a))) :
-                (lo=NaN, hi=NaN)
-            for (d, ν) in zip(dev, edf)]
-end
-
 """
     ncornered_hat(pairwise::AbstractMatrix{StabilityResult}) → Vector{StabilityResult}
     ncornered_hat(r_ab, r_bc, r_ca) → Vector{StabilityResult}
@@ -124,7 +114,7 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
             edf = [_nch_edf(i, k, pairs, nbrs, s2, ν, var, w) for k in 1:n_tau]
         end
         results[i] = StabilityResult(ref.deviation_type, copy(ref.tau), dev, Symbol[],
-                                     with_ci ? _edf_ci(dev, edf, confidence) : _CIBound[], edf,
+                                     with_ci ? _zip_ci(_edf_ci(dev, edf, confidence)...) : _CIBound[], edf,
                                      copy(neff_min), ref.tau0, ref.n, with_ci ? confidence : NaN)
     end
     return results
@@ -234,7 +224,7 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         edf = [_gl_edf(i, q, couples, covar[q], s2, ν) for q in 1:K]
         dev = [v > 0 ? sqrt(v) : NaN for v in covar]
         results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[],
-                                     _edf_ci(dev, edf, Float64(confidence)), edf,
+                                     _zip_ci(_edf_ci(dev, edf, Float64(confidence))...), edf,
                                      N .- 2 .* m_values, τ₀, N, Float64(confidence))
     end
     return results

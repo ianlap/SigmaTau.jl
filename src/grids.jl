@@ -202,6 +202,14 @@ adev(_phase_to_freq(pd), m_values)` up to the `N → N−1` length change.
 """
 _phase_to_freq(data::PhaseData) = FrequencyData(diff(data.x) ./ data.tau0, data.tau0)
 
+# Either record as the other kind, and its raw samples.
+_as_phase(d::PhaseData) = d
+_as_phase(d::FrequencyData) = _freq_to_phase(d)
+_as_freq(d::FrequencyData) = d
+_as_freq(d::PhaseData) = _phase_to_freq(d)
+_samples(d::PhaseData) = d.x
+_samples(d::FrequencyData) = d.y
+
 """
     _default_m_values(N::Int, kernel::Symbol) → Vector{Int}
 

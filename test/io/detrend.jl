@@ -48,6 +48,23 @@
         @test pd_d.x !== pd.x                     # not aliased
     end
 
+    @testset "gaps stay NaN and do not enter the fit" begin
+        N = 512
+        t = collect(0.0:N-1)
+        x = 1e-9 .* randn(N) .+ 2e-6 .* t .+ 3e-9 .* t .^ 2
+        x[100:140] .= NaN
+        ok = isfinite.(x)
+        for (method, X) in ((:linear, hcat(ones(N), t)), (:quadratic, hcat(ones(N), t, t .^ 2)))
+            d = detrend(PhaseData(x, 1.0); method).x
+            b = (X[ok, :]' * X[ok, :]) \ (X[ok, :]' * x[ok])
+            @test isequal(isnan.(d), .!ok)
+            @test d[ok] ≈ x[ok] .- X[ok, :] * b atol=1e-12
+        end
+        @test sum(filter(isfinite, detrend(PhaseData(x, 1.0); method=:mean).x)) ≈ 0 atol=1e-9
+        e = detrend(PhaseData([NaN; x[2:end]], 1.0); method=:endpoint).x
+        @test isnan(e[1]) && abs(e[2]) < 1e-12 && abs(e[end]) < 1e-12
+    end
+
     @testset "unknown method throws" begin
         pd = PhaseData(randn(32), 1.0)
         @test_throws ArgumentError detrend(pd; method=:cubic)

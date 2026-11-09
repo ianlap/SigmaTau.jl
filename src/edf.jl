@@ -493,43 +493,37 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
     return B
 end
 
-"""
-    confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64) → (Vector{Float64}, Vector{Float64})
+# χ² limits of each deviation from its equivalent degrees of freedom, as
+# (lower, upper); NaN where the deviation is not finite or ν < 1.
+function _edf_ci(devs::Vector{Float64}, edfs::Vector{Float64}, confidence::Float64)
+    a = (1 - confidence) / 2
+    lower = fill(NaN, length(devs))
+    upper = fill(NaN, length(devs))
+    for k in eachindex(devs)
+        d, ν = devs[k], edfs[k]
+        isfinite(d) && isfinite(ν) && ν >= 1 || continue
+        lower[k] = d * sqrt(ν / quantile(Chisq(ν), 1 - a))
+        upper[k] = d * sqrt(ν / quantile(Chisq(ν), a))
+    end
+    return lower, upper
+end
 
-Lower and upper confidence limits for each deviation.
-Uses Distributions.jl for accurate χ² limits.
+"""
+    confidence_intervals(devs, edfs, noises, N, confidence) → (lower, upper)
+
+χ² confidence limits of each deviation from its EDF. Where the EDF is
+missing or below 1, a Gaussian interval on the record length `N` with the
+noise type's Kₙ factor stands in, its lower limit floored at zero.
 """
 function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64)
-    lower = Vector{Float64}(undef, length(devs))
-    upper = Vector{Float64}(undef, length(devs))
-
-    a_half = (1.0 - confidence) / 2.0
-    z = quantile(Normal(), 1.0 - a_half)
-
-    for k in 1:length(devs)
+    lower, upper = _edf_ci(devs, edfs, confidence)
+    z = quantile(Normal(), 1 - (1 - confidence) / 2)
+    for k in eachindex(devs)
         d = devs[k]
-        if isnan(d)
-            lower[k] = NaN
-            upper[k] = NaN
-            continue
-        end
-
-        ef = edfs[k]
-        if isfinite(ef) && ef >= 1.0
-            chi_lo = quantile(Chisq(ef), a_half)
-            chi_hi = quantile(Chisq(ef), 1.0 - a_half)
-            lower[k] = d * sqrt(ef / chi_hi)
-            upper[k] = d * sqrt(ef / chi_lo)
-        else
-            Kn = _kn_from_alpha(_alpha_from_noise(noises[k]))
-            half = Kn * d * z / sqrt(Float64(N))
-            # A deviation is non-negative by construction, so floor the lower
-            # limit at zero; the symmetric Gaussian approximation can otherwise
-            # push it below zero for short records at high confidence.
-            lower[k] = max(d - half, 0.0)
-            upper[k] = d + half
-        end
+        (isnan(d) || !isnan(lower[k])) && continue
+        half = _kn_from_alpha(_alpha_from_noise(noises[k])) * d * z / sqrt(Float64(N))
+        lower[k] = max(d - half, 0.0)
+        upper[k] = d + half
     end
-
     return lower, upper
 end

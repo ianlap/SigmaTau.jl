@@ -1,9 +1,5 @@
-# Power-law noise identification (lag-1 ACF with B1 / R(n) fallback) and
-# calibrated power-law noise synthesis.
-
-# Lag-1 autocorrelation noise identification (with B1 / R(n) fallback).
-using Statistics
-using StaticArrays
+# Power-law noise identification (lag-1 ACF with B1 / R(n) fallback),
+# calibrated power-law noise synthesis and the NNLS variance decomposition.
 
 const NEFF_RELIABLE = 30
 
@@ -141,16 +137,12 @@ function _fill_noise_symbols(alphas::Vector{Int}, ok::AbstractVector{Bool},
 end
 
 function _preprocess(x::Vector{Float64})
-    # 5σ outlier filter only, no polynomial detrending of the full record:
-    # Stable32 and allantools both leave the record untouched and detrend
-    # per m, which `_noise_id_lag1acf` / `_noise_id_b1rn` do (switchable
-    # with the `detrend` keyword of `identify_noise`).
+    # 5σ outlier filter only; Stable32 and allantools detrend per m, as the
+    # identifiers below do.
     x_std = std(x)
     x_std < eps() && return x  # degenerate input; nothing to filter against
     x_mean = mean(x)
     thresh = 5.0 * x_std
-    # Two-pass count-then-fill avoids the N-length boolean mask + temporary
-    # `z` array the broadcast form allocated.
     nkeep = 0
     @inbounds for v in x
         nkeep += (abs(v - x_mean) < thresh) ? 1 : 0
@@ -167,43 +159,9 @@ function _preprocess(x::Vector{Float64})
     return out
 end
 
-function _detrend_quadratic(x::Vector{Float64})
-    N = length(x)
-    N_float = Float64(N)
-
-    # One pass for the three weighted-sum moments. Comprehensions in the
-    # previous form allocated a generator state per `sum(... for i in 1:N)`.
-    X1 = 0.0; X2 = 0.0; X3 = 0.0
-    @inbounds @simd for i in 1:N
-        v = x[i]; fi = Float64(i)
-        X1 += v
-        X2 += fi * v
-        X3 += fi * fi * v
-    end
-
-    S1 = N_float
-    S2 = (N_float * (N_float + 1.0)) / 2.0
-    S3 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0)) / 6.0
-    S4 = (N_float^2 * (N_float + 1.0)^2) / 4.0
-    S5 = (N_float * (N_float + 1.0) * (2.0*N_float + 1.0) * (3.0*N_float^2 + 3.0*N_float - 1.0)) / 30.0
-
-    # 3×3 least-squares solve via StaticArrays, allocation-free.
-    M = @SMatrix [S1 S2 S3; S2 S3 S4; S3 S4 S5]
-    V = @SVector [X1, X2, X3]
-    C = M \ V
-    a, b, c = C[1], C[2], C[3]
-
-    out = Vector{Float64}(undef, N)
-    @inbounds @simd for i in 1:N
-        fi = Float64(i)
-        out[i] = x[i] - (a + b*fi + c*fi*fi)
-    end
-    return out
-end
-
 function _noise_id_lag1acf(x::Vector{Float64}, m::Int, dmin::Int = 0, dmax::Int = 2; detrend::Bool=true)
     x_dec = m > 1 ? x[1:m:end] : x
-    x_det = detrend ? _detrend_quadratic(x_dec) : copy(x_dec)
+    x_det = detrend ? _remove_quadratic(x_dec) : copy(x_dec)
 
     d = 0
     while true
@@ -224,8 +182,6 @@ function _noise_id_lag1acf(x::Vector{Float64}, m::Int, dmin::Int = 0, dmax::Int 
 end
 
 function _lag1_acf(x::Vector{Float64})
-    # Three single-pass loops over `x` rather than allocating a centred
-    # copy and a broadcasted product. Equivalent up to FP reduction order.
     N = length(x)
     N < 2 && return NaN
     s = 0.0
@@ -238,11 +194,8 @@ function _lag1_acf(x::Vector{Float64})
         ssx += d*d
         raw += v*v
     end
-    # Scale-invariant degeneracy guard: bail out only when the centered
-    # signal has no power relative to the raw-magnitude scale. An absolute
-    # threshold would trip on phase records in seconds (1e-9 .. 1e-12)
-    # even though there is ample dynamic range left in the
-    # Float64 representation.
+    # Degenerate record: no power relative to the raw magnitude (phase in
+    # seconds can be 1e-12, so no absolute threshold).
     raw > 0 && ssx <= eps(Float64) * raw && return NaN
     ssx == 0.0 && return NaN
     num = 0.0
@@ -254,21 +207,16 @@ end
 
 function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_length::Symbol=:record)
     x_dec = x[1:m:end]
-    if detrend
-        x_dec = _detrend_quadratic(x_dec)
-    end
+    detrend && (x_dec = _remove_quadratic(x_dec))
 
-    avar_val = _simple_avar(x_dec, 1) / Float64(m)^2
+    avar_val = _adev_core(x_dec, [1], 1.0)[1]^2 / Float64(m)^2
     dx = diff(x)
     Nd = (length(dx) ÷ m) * m
     Nd < m && return (NaN, -2, NaN)
 
     y_blocks = reshape(dx[1:Nd], m, :)
     y_avg = vec(mean(y_blocks, dims=1))
-    # Bessel-corrected (N-1 divisor): Howe/Barnes B1 theory assumes the
-    # unbiased population-variance estimator. The N-divisor variant
-    # systematically understates B1 at small N_eff and pushes long-τ
-    # classifications into the PM region. Matches Stable32 exactly.
+    # Unbiased variance (N − 1), as B1 theory and Stable32 assume.
     var_class = var(y_avg)
 
     # N in B1_theory(N, μ). `:record` uses the full frequency-sample count
@@ -300,7 +248,7 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_lengt
 
     if mu_best == -2
         adev_val = sqrt(avar_val)
-        mdev_val = _simple_mdev(x, m, 1.0)
+        mdev_val = _mdev_core(x, [m], 1.0)[1]
         if !isnan(mdev_val) && adev_val > 0
             Rn_obs = (mdev_val / adev_val)^2
             R_hi = _rn_theory(m, 0)
@@ -334,73 +282,14 @@ function _rn_theory(af::Int, b::Int)
     end
 end
 
-function _simple_avar(x::Vector{Float64}, m::Int)
-    N = length(x)
-    L = N - 2m
-    L <= 0 && return NaN
-    d2 = @view(x[1+2m:N]) .- 2 .* @view(x[1+m:N-m]) .+ @view(x[1:L])
-    return sum(abs2, d2) / (2.0 * Float64(m)^2 * L)
-end
+# ── Power-law noise synthesis ─────────────────────────────────────────────
 
-function _simple_mdev(x::Vector{Float64}, m::Int, tau0::Float64)
-    N  = length(x)
-    Ne = N - 3m + 1
-    Ne <= 0 && return NaN
-    # One length-(N+1) prefix-sum buffer; the three running-sum differences
-    # fold into a single accumulator, so nothing else is allocated per call.
-    cs = Vector{Float64}(undef, N + 1)
-    cs[1] = 0.0
-    acc = 0.0
-    @inbounds for i in 1:N
-        acc += x[i]
-        cs[i+1] = acc
-    end
-    sum_sq = 0.0
-    @inbounds for i in 1:Ne
-        s1 = cs[i+m]  - cs[i]
-        s2 = cs[i+2m] - cs[i+m]
-        s3 = cs[i+3m] - cs[i+2m]
-        d  = (s3 - 2.0*s2 + s1) / m
-        sum_sq += d * d
-    end
-    return sqrt(sum_sq / (2.0 * Float64(m)^2 * tau0^2 * Ne))
-end
-
-
-# Power-law noise synthesizer (internal).
-# Generates synthetic phase data with a chosen fractional-frequency power-law
-# slope α ∈ {-2, -1, 0, 1, 2} by the Kasdin–Walter discrete fractional
-# filter applied to white Gaussian noise, integrated to phase. Used by
-# `noise_gen`, the test suite and the Monte Carlo calibrations.
-#
-# Requires an `AbstractFFTs` backend (e.g. `FFTW`) to be loaded by the caller.
-# `SigmaTau` declares `AbstractFFTs` in its [deps] but no concrete backend;
-# pulling in `using FFTW` at the call site supplies the methods.
-
-using AbstractFFTs
-
-"""
-    _gen_powerlaw_y(alpha, N; rng=nothing) → Vector{Float64}
-
-Internal primitive. Synthesize an N-sample fractional-frequency vector `y`
-with power spectral density ∝ `|2 sin(πf)|^alpha`, the discrete-time form of
-`f^alpha` (Kasdin & Walter 1992). The output is made zero-mean; the absolute
-amplitude is that of the filter on unit-variance white noise. Callers that
-need a calibrated level should rescale (e.g. via [`noise_gen`](@ref)).
-
-Pass an `AbstractRNG` as `rng` to draw from a specific stream (e.g. for a
-Monte Carlo with independent per-realization seeds); the default `nothing`
-draws from the global RNG, so existing seeded callers are unaffected.
-"""
+# Fractional frequency with S_y ∝ |2 sin(πf)|^α, the discrete-time f^α: white
+# Gaussian noise through the Kasdin–Walter filter (1 − z⁻¹)^(α/2), exact at
+# the integer orders (α = 2 is the first difference of white noise, α = 0
+# white, α = −2 a cumulative sum). Zero-mean and uncalibrated; `noise_gen`
+# rescales. `rng = nothing` draws from the global RNG.
 function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
-    # Kasdin–Walter discrete fractional filter (Kasdin & Walter 1992; the
-    # method allantools uses): white Gaussian noise convolved with the impulse
-    # response of (1 - z⁻¹)^(α/2), whose power spectrum is |2 sin(πf)|^α, the
-    # discrete-time counterpart of f^α. It is exact at the integer orders:
-    # α = 2 is the first difference of white noise (so the integrated phase is
-    # white), α = 0 is white, α = -2 is a cumulative sum. Shaping FFT bins by
-    # the continuous f^(α/2) instead leaves the phase spectrum of α = 2 rising
-    # toward Nyquist, which the lag-1 noise identifier reads as α ≈ 3 at m = 1.
     w = rng === nothing ? randn(N) : randn(rng, N)
     h = Vector{Float64}(undef, N)
     h[1] = 1.0
@@ -415,40 +304,13 @@ function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
     return y .- (sum(y) / N)
 end
 
-"""
-    _gen_powerlaw_phase(alpha, N; tau0=1.0) → Vector{Float64}
-
-Synthesize an N-sample phase residual vector whose fractional-frequency
-sequence has power spectral density ∝ `f^alpha`. Mapping:
-
-| α  | Noise type | Phase spectrum |
-|---:|:-----------|:---------------|
-|  2 | WHPM       | flat           |
-|  1 | FLPM       | 1/f            |
-|  0 | WHFM       | 1/f²           |
-| -1 | FLFM       | 1/f³           |
-| -2 | RWFM       | 1/f⁴           |
-
-For deterministic output, seed the global RNG (`Random.seed!`) before calling,
-or pass an `AbstractRNG` as `rng`. The frequency sequence is made zero-mean
-before integration. Calls `AbstractFFTs.fft`/`ifft`, so the caller must have an
-FFT backend loaded (e.g. `using FFTW`).
-"""
+# Phase x = τ₀ · cumsum(y) of a `_gen_powerlaw_y` draw.
 function _gen_powerlaw_phase(alpha::Real, N::Int; tau0::Real = 1.0, rng=nothing)
-    # Phase: x[k] = τ₀ · Σⱼ₌₁ᵏ y[j]
     return cumsum(_gen_powerlaw_y(alpha, N; rng=rng)) .* tau0
 end
 
 
-# Public power-law clock-noise generator.
-# Wraps the internal `_gen_powerlaw_y` Kasdin–Walter filter with a magnitude-aware
-# API. Users specify the noise mixture by α exponent and either a target
-# Allan deviation σ_y(τ=τ₀) per noise type or the corresponding fractional-
-# frequency PSD coefficient h_α. Contributions for different α are drawn
-# independently and summed.
-
-# Empirical σ_y(τ=τ₀) of a fractional-frequency vector via overlapping ADEV
-# at m=1. Used to rescale a raw filter realization to a known level.
+# σ_y(τ₀) of a fractional-frequency vector, to rescale a raw draw to a level.
 function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
     x = cumsum(y) .* tau0
     return _adev_core(x, [1], tau0)[1]
@@ -770,103 +632,43 @@ function _nnls_edf_weights(deviation::Symbol, K::Matrix{Float64}, v::Vector{Floa
 end
 
 """
-    noise_id_nnls(data::PhaseData [, m_values]; deviation=:mhdev, alphas=…, weights=:edf)
-    noise_id_nnls(data::FrequencyData [, m_values]; …)
+    noise_id_nnls(data [, m_values]; deviation=:mhdev, alphas=…, weights=:edf) → NamedTuple
 
 Decompose a record's measured variance profile into nonnegative power-law
-components. One weighted nonnegative least-squares fit over the whole τ range
-returns the amplitude of every α in the basis, plus the dominant noise type at
-each τ.
+components: one weighted nonnegative least-squares fit of
+σ̂²(τ) ≈ Σᵢ aᵢ (τ/τ₀)^μ(αᵢ) over the whole τ range, giving the amplitude of
+every α in the basis and the dominant noise type at each τ. The fit runs on
+the raw deviation (`ci=false`, no bias correction), so it does not lean on
+[`identify_noise`](@ref), which it is meant to replace at run time. `data`
+is a `PhaseData` or `FrequencyData`.
 
-Returns a `NamedTuple`:
+Returns a `NamedTuple` with `deviation`, `tau` (the τ fitted), `var` (σ̂²),
+`fit` (the model at each τ), `alphas`, `noise_types`, `amplitudes` (aᵢ ≥ 0,
+each component's variance at τ = τ₀), `contributions` (a τ × α matrix),
+`dominant` (per τ), `residual` and `weights`.
 
-| field | meaning |
-|:------|:--------|
-| `deviation` | estimator used |
-| `tau` | τ grid actually fitted (s) |
-| `var` | measured σ̂²(τ) |
-| `fit` | fitted Σᵢ aᵢ (τ/τ₀)^μᵢ |
-| `alphas` | basis exponents |
-| `noise_types` | `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`, `:FWFM`, `:RRFM` per α |
-| `amplitudes` | aᵢ ≥ 0 — the α-component's *variance at τ = τ₀* |
-| `contributions` | `length(tau) × length(alphas)` matrix aᵢ (τ/τ₀)^μᵢ |
-| `dominant` | dominant noise type at each τ |
-| `residual` | weighted sum of squared residuals |
-| `weights` | weight vector used |
+`deviation` is `:mdev`, `:hdev`, `:mhdev` (default) or `:mhtotdev`. `alphas`
+defaults to every α the estimator converges for: 2…−2 for `:mdev`, 2…−4 for
+the Hadamard family, which also tolerates drift; `:hdev` cannot tell white
+from flicker PM and takes one of them. The default grid is the estimator's
+octave grid from m = 4, since every estimator is still in transition toward
+its power law at m = 1–2. `weights` is `:edf` (χ² weights νₖ/(2σ̂⁴ₖ), the
+noise type per τ taken from a first `:relative` pass), `:relative` (equal
+fractional weight) or a vector.
 
-!!! warning "Experimental return shape"
-    The set and naming of these fields is experimental and may change in a
-    minor release; `amplitudes`, `alphas` and `dominant` are the stable core.
-
-The fit runs on the **raw** deviation profile: `ci=false` and, for MHTOTDEV,
-`correct_bias=false`. Both the CI machinery and the total-family bias divisor
-are functions of `identify_noise`, so fitting a corrected profile would make
-the decomposition depend on the classification it is computing.
-
-# Basis
-
-The columns are analytic power laws `Kᵢ(τ) = (τ/τ₀)^μ(αᵢ)`, with μ the
-*variance* response exponent — `μ = -α-1` for the modified family
-(MDEV/MHDEV/MHTOTDEV) and, for the unmodified family (HDEV), `μ = -α-1` for
-α ≤ 0 with WPM and FPM both collapsing onto μ = -2. The defaults therefore
-carry α ∈ {2, 1, 0, -1, -2} for `:mdev`, {2, 0, -1, -2, -3, -4} for `:hdev`,
-and {2, 1, 0, -1, -2, -3, -4} for `:mhdev` and `:mhtotdev`. The convergence
-condition per estimator is:
-
-| estimator | converges for | reason |
-|:----------|:--------------|:-------|
-| `:mdev` | α > -3 | second-difference kernel |
-| `:mhdev`, `:hdev`, `:mhtotdev` | α > -5 | third-difference kernel (MHTOTDEV's per-window quadratic detrend matches it, so the boundary extension keeps the range) |
-
-An unmodified basis additionally cannot carry both PM columns — they are the
-same column. Passing a basis that violates either rule is an error.
-
-# Weights
-
-- `:edf` (default) — `wₖ = νₖ / (2 σ̂⁴ₖ)`, the inverse of the χ² sampling
-  variance of a variance estimator with νₖ degrees of freedom. The per-τ noise
-  type that the EDF model needs comes from a first `:relative`-weighted pass of
-  this same fit, not from [`identify_noise`](@ref) — the routine is meant to
-  replace that classifier, so it does not lean on it. Points where the EDF model
-  returns a non-finite or non-positive ν fall back to the `:relative` weight,
-  and α ≤ -3 rows borrow the RWFM EDF (the shipped tables stop at α = -2).
-- `:relative` — `wₖ = 1 / σ̂⁴ₖ`, i.e. equal *fractional* weight per τ.
-- any `AbstractVector` of per-τ weights.
-
-# Caveats
-
-The analytic basis assumes each component is in its asymptotic power-law
-regime over the whole fitted range. Two things break that:
-
-- **Total estimators.** MHTOTDEV's reflected/extended windows bend the response
-  away from τ^μ as τ → T, which distorts the last octaves. An *empirical*
-  basis (ensemble-mean σ̂²(τ) of synthesized unit noises) avoids this; prefer
-  it, or `:mhdev`, when the long-τ octaves matter.
-- **Flicker PM under an unmodified estimator.** The `ln(2π f_h τ)` factor is
-  absorbed into the α=2 column, so an FPM record fitted with `:hdev` reports
-  white PM.
-- **Small τ.** Every estimator is still in transition toward its asymptotic
-  power law at m = 1–2 (the modified family runs 2–3× high there, settling by
-  m ≈ 8), so the default grid starts at m = 4. Fitting the dropped octaves
-  lets a pure WFM record buy off its m = 1 excess with a spurious WPM column.
-
-Amplitudes are variances at τ = τ₀; `sqrt.(result.amplitudes)` is the
-corresponding σ_y(τ₀) per component.
+The basis assumes each component is in its asymptotic regime over the
+fitted range; the total estimators bend away from τ^μ as τ → T, so prefer
+`:mhdev` when the long-τ octaves matter. For calibrated h_α see
+[`powerlaw_fit`](@ref), which fits each component's exact response.
 
 # Examples
 
 ```julia
-using SigmaTau, Random
-Random.seed!(0)
-
 p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14))
 r = noise_id_nnls(p)
 collect(zip(r.noise_types, r.amplitudes))   # amplitude per α
 r.dominant                                  # dominant type per τ
 ```
-
-See also [`identify_noise`](@ref) for the per-τ lag-1 ACF classifier and
-[`noise_gen`](@ref) for the matching synthesizer.
 """
 function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
                        deviation::Symbol = :mhdev,
@@ -874,12 +676,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
                        weights::Union{Symbol, AbstractVector{<:Real}} = :edf)
     x  = _f64(data.x)
     τ₀ = data.tau0
-    # Default grid: the estimator's own octave grid with the first two octaves
-    # dropped. Every estimator's response to a power law is still in transition
-    # at m = 1–2 (the modified family runs 2–3× above its asymptotic τ^μ there,
-    # converging by m ≈ 8), and those are exactly the points the EDF weighting
-    # trusts most — leaving them in lets a pure WFM record buy off its m = 1
-    # excess with a spurious WPM column. Pass `m_values` explicitly to override.
+    # The estimator's octave grid from m = NNLS_M_MIN; see the docstring.
     ms = isempty(m_values) ? filter(>=(NNLS_M_MIN), _default_m_values(length(x), deviation)) :
                              m_values
     isempty(ms) && throw(ArgumentError(
