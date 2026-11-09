@@ -30,6 +30,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Power-law noise model: `powerlaw_fit` fits the h_α of
+  S_y(f) = Σ h_α f^α to a record's σ(τ) (ADEV, MDEV, HDEV or MHDEV, with
+  each component's exact response for a sampled record, from m = 1) or to a
+  spectrum, including a datasheet's ℒ(f) points; `powerlaw_sigma` and
+  `powerlaw_psd` convert a model to σ(τ), S_y(f), S_x(f) or ℒ(f).
 - `noise_id_nnls(data[, m]; deviation=:mhdev, alphas, weights=:edf)`: a
   weighted nonnegative least-squares fit of the measured σ̂²(τ) profile to
   power-law components. One fit over the whole τ range gives the amplitude of
