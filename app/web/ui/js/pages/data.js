@@ -1,7 +1,7 @@
 // Data page: load a file (with the import dialog) or synthesize a record,
 // the record check, and the phase plot with outliers in orange, or the
 // frequency with a fitted drift model.
-import { state, update, activeClock, multi } from "../state.js";
+import { state, update, activeClock, multi, markStale } from "../state.js";
 import { drift as fetchDrift, driftKey } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
 import { thousands, duration, sci, escapeHtml as h } from "../format.js";
@@ -23,7 +23,7 @@ const MODELS = [
   ["diffusion", "Diffusion", "y = a + b·√(t + c)"],
 ];
 
-let root, plotEl, Plotly, ctx;
+let root, plotEl, Plotly, ctx, relayoutBound = false;
 const inflight = new Map();   // clock id → drift key being fitted
 
 export function mount(el, c) {
@@ -40,12 +40,13 @@ export function mount(el, c) {
         <div class="card-row">
           <div class="seg seg-sm" role="group" aria-label="Plot" data-ref="view">
             <button type="button" data-view="phase">Phase</button><button type="button" data-view="drift">Frequency drift</button></div>
-          <h2 data-ref="plot-title">Phase x(t)</h2><span class="muted small" data-ref="plot-hint"></span></div>
+          <h2 data-ref="plot-title">Phase x(t)</h2><span class="muted small" data-ref="plot-hint"></span><span class="range-bar" data-ref="range"></span></div>
         <div class="drift-bar" data-ref="drift-bar" hidden></div>
         <div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div>
       </div>
     </div>`;
   plotEl = root.querySelector("[data-ref=plot]");
+  relayoutBound = false;
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
   // The drift view's toolbar takes height from the plot; follow its size.
@@ -143,7 +144,8 @@ export function refresh() {
   const removed = c?.drift && c.drift !== "none" ? `, ${c.drift} drift removed` : "";
   const title = driftView ? `Frequency y(t)${removed}` : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
   root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
-  root.querySelector("[data-ref=plot-hint]").textContent = driftView ? "Fit in crimson · drag to zoom" : "Outliers marked in orange · drag to zoom";
+  root.querySelector("[data-ref=plot-hint]").textContent = driftView ? "Fit in crimson · drag to zoom" : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
+  root.querySelector("[data-ref=range]").innerHTML = driftView ? "" : rangeBar(c);
   const bar = root.querySelector("[data-ref=drift-bar]");
   bar.hidden = !driftView;
   if (driftView) {
@@ -220,6 +222,20 @@ function drawDrift(c) {
   Plotly.react(plotEl, traces, { ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis("Time t (s)"), yaxis, showlegend: false, uirevision: `${c.id}-drift` }, CONFIG);
 }
 
+// The analysis range: drag across the plot in "Select range" mode. The check
+// above and this plot keep the whole record; the runs use the range.
+function rangeBar(c) {
+  if (!c?.record) return "";
+  const r = c.range;
+  return `${r ? `<span class="small">Analysing <span class="mono">${duration(r[0])} – ${duration(r[1])}</span> · <button class="link-btn" data-act="clear-range">whole record</button></span>` : ""}
+    <span class="seg seg-sm" role="group" aria-label="Drag on the plot to">${[["zoom", "Zoom", "Drag to zoom"], ["range", "Select range", "Drag across the plot to analyse only that part of the record"]].map(([v, l, tip]) =>
+      `<button type="button" data-drag="${v}" class="${state.dataDrag === v ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</span>`;
+}
+
+function setRange(c, r) {
+  update((s) => { c.range = r; c.result = null; c.dynamic = null; markStale(s, "record"); });
+}
+
 function drawRecord(c) {
   const empty = root.querySelector("[data-ref=empty]");
   const s = c?.record?.series;
@@ -247,8 +263,29 @@ function drawRecord(c) {
       hovertemplate: `outlier<br>t = %{x:.6g} s<br>x = %{y:.5g} ${u}<extra></extra>`,
     });
   }
-  const yaxis = { ...linAxis(""), ticksuffix: ` ${u}` };
-  Plotly.react(plotEl, traces, { ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis("Time t (s)"), yaxis, uirevision: c.id }, CONFIG);
+  const picking = state.dataDrag === "range";
+  const yaxis = { ...linAxis(""), ticksuffix: ` ${u}`, fixedrange: picking };
+  const shapes = c.range ? [{ type: "rect", xref: "x", yref: "paper", x0: c.range[0], x1: c.range[1], y0: 0, y1: 1,
+    fillcolor: css("--accent-soft") || "rgba(158,27,50,0.12)", line: { width: 0 }, layer: "below" }] : [];
+  Plotly.react(plotEl, traces, {
+    ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis("Time t (s)"), yaxis, shapes,
+    dragmode: "zoom", uirevision: `${c.id}-${picking}`,
+  }, { ...CONFIG, showTips: false });
+  if (!relayoutBound) {
+    relayoutBound = true;
+    // In "Select range" mode a horizontal drag is a zoom we turn into the range.
+    plotEl.on("plotly_relayout", (ev) => {
+      const k = activeClock();
+      const a = ev["xaxis.range[0]"], b = ev["xaxis.range[1]"];
+      if (state.dataDrag !== "range" || state.dataView === "drift" || !k?.record || a === undefined || b === undefined) return;
+      const end = (k.record.n - 1) * k.record.tau0;
+      const t0 = Math.max(0, Math.min(a, b)), t1 = Math.min(end, Math.max(a, b));
+      const snap = (t) => Math.round(t / k.record.tau0) * k.record.tau0;
+      Plotly.relayout(plotEl, { "xaxis.autorange": true });
+      if (snap(t1) - snap(t0) >= 16 * k.record.tau0) setRange(k, [snap(t0), snap(t1)]);
+      else ctx.status("warn", "The range needs at least 16 samples.");
+    });
+  }
 }
 
 function onClick(e) {
@@ -258,6 +295,8 @@ function onClick(e) {
   if (md) { update((s) => { s.driftModel = md; }); return; }
   const dr = e.target.closest("[data-drift]")?.dataset.drift;
   if (dr) { const c = activeClock(); if (c && c.drift !== dr) ctx.setRecord(c, { drift: dr }); return; }
+  const dg = e.target.closest("[data-drag]")?.dataset.drag;
+  if (dg) { update((s) => { s.dataDrag = dg; }); return; }
   const m = e.target.closest("[data-mode]")?.dataset.mode;
   if (m) { update((s) => { s.dataMode = m; }); return; }
   const act = e.target.closest("[data-act]")?.dataset.act;
@@ -267,6 +306,7 @@ function onClick(e) {
   else if (act === "add-clock") ctx.addClock();
   else if (act === "remove-outliers") ctx.setRecord(c, { remove_outliers: true });
   else if (act === "keep-outliers") ctx.setRecord(c, { remove_outliers: false });
+  else if (act === "clear-range") setRange(c, null);
   else if (act === "synth") {
     const v = (k) => Number(root.querySelector(`[data-synth=${k}]`).value);
     const n = Math.round(v("n")), tau0 = v("tau0"), seed = Math.round(v("seed"));
@@ -286,5 +326,7 @@ function onChange(e) {
 
 export function plotElement() { return plotEl; }
 export function hint() {
-  return "Drop a file anywhere in the window · drag on the plot to zoom · double-click to reset";
+  return state.dataDrag === "range"
+    ? "Drag across the plot to choose the part of the record to analyse"
+    : "Drop a file anywhere in the window · drag on the plot to zoom · double-click to reset";
 }

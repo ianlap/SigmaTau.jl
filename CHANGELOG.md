@@ -13,6 +13,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   `ncornered_hat` now fills `edf` and `ci` when its inputs carry EDF,
   propagating each pair's χ² spread and the covariance of pairs that share
   a clock.
+- Analysis range: `--range A:B` (seconds from the first sample) and
+  `--tau-min` / `--tau-max` in the CLI. In the explorer, **Select range** on
+  the Data page drags out the part of a record to analyse, the options take
+  τ limits, and **Pin run** on the Stability page keeps a run's curves to
+  compare with the next one.
 - Two-channel estimators: `cross_psd_y` / `cross_psd_x` (Welch
   cross-spectrum with the floor `√(S_aa S_bb / nseg)`) and `cross_adev`
   (cross Allan variance with its statistical uncertainty from the record),

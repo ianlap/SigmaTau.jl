@@ -88,7 +88,7 @@ async function importFile(file, clock, prev) {
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo,
-        fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, result: null,
+        fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, range: null, result: null,
       });
       touched.push(c);
     });
@@ -158,7 +158,7 @@ async function useSynth(c, { n, tau0, seed }) {
     if (!c) { c = newClock(); s.clocks.push(c); s.activeClock = c.id; }
     Object.assign(c, {
       source: { type: "synth", n, seed, tau0 }, sourceInfo: "white + random-walk FM", kind: "phase",
-      tau0, hasTimeCol: false, missing: 0, fillgaps: false, remove_outliers: false, drift: "none", result: null,
+      tau0, hasTimeCol: false, missing: 0, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
     });
     if (c.name === "Clock" || !multi()) c.name = "Synthetic record";
   });
