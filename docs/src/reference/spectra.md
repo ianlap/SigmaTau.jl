@@ -32,3 +32,18 @@ PowerLawFit
 powerlaw_sigma
 powerlaw_psd
 ```
+
+## Two channels
+
+[`cross_psd_y`](@ref) and [`cross_psd_x`](@ref) average the cross-spectrum
+of two simultaneous records of one device; [`cross_adev`](@ref) is the
+matching cross Allan variance. [Two-channel measurements](../guide/cross.md)
+shows when and how to use them.
+
+```@docs
+cross_psd_y
+cross_psd_x
+CrossSpectralResult
+cross_adev
+CrossStabilityResult
+```
