@@ -2,14 +2,13 @@ name: Python publish
 
 # Publishes the sigmatau Python package to PyPI when a python-v* tag is pushed
 # (for example python-v0.6.0). The tag must match sigmatau.__version__ and
-# Project.toml's version. Before the build, juliapkg.json is switched from the
-# checkout's dev path to a SigmaTau.jl that juliapkg can fetch: the v<version>
-# git tag by default, or the General registry once the repository variable
-# SIGMATAU_JL_REGISTERED is set to "true".
+# Project.toml's version, and that SigmaTau.jl version must already be in the
+# General registry: the wheel's juliapkg.json pins it there ("=<version>")
+# instead of the checkout's dev path.
 #
-# PyPI side (once): add a trusted publisher for project "sigmatau" with
+# PyPI side (once): add a pending trusted publisher for project "sigmatau" with
 # owner ianlap, repository SigmaTau.jl, workflow PythonPublish.yml and
-# environment pypi.
+# environment pypi. GitHub side (once): create the environment pypi.
 
 on:
   push:
@@ -31,8 +30,8 @@ jobs:
           jl=$(sed -n 's/^version = "\(.*\)"/\1/p' Project.toml)
           echo "tag $tag, python $py, julia $jl"
           [ "$tag" = "$py" ] && [ "$py" = "$jl" ]
-      - name: Pin SigmaTau.jl in juliapkg.json
-        run: python python/tools/pin_juliapkg.py ${{ vars.SIGMATAU_JL_REGISTERED == 'true' && 'registry' || 'git' }}
+      - name: Pin the registered SigmaTau.jl in juliapkg.json
+        run: python python/tools/pin_juliapkg.py
       - name: Build
         run: |
           pip install build
@@ -58,7 +57,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - name: Install the wheel (fetches SigmaTau.jl as pinned)
+      - name: Install the wheel (fetches SigmaTau.jl from the registry)
         timeout-minutes: 25
         run: |
           pip install dist/*.whl pytest

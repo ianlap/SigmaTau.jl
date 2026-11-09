@@ -164,7 +164,7 @@ end
 # given explicitly (as the explorer does after its import dialog).
 function input_format(o::Options)
     o.input_format == "auto" || return Symbol(o.input_format)
-    fmt = detect_format(o.input)
+    fmt = SigmaTau._detect_format(o.input, o.delim)
     fmt === :table && o.columns_set && isempty(o.column) && return :columns
     return fmt
 end
@@ -174,7 +174,7 @@ end
 function read_instrument(o::Options, fmt::Symbol)
     o.reference_col > 0 && throw(usage_error("--reference-col applies to column files only"))
     r = SigmaTau._read_data(o.input, fmt; tau0=o.tau0, column_name=o.column, nominal=o.nominal,
-                            kind=o.freq ? :frequency : :auto, scaling=o.scaling, delim=o.delim,
+                            kind=o.freq ? :frequency : o.phase_given ? :phase : :auto, scaling=o.scaling, delim=o.delim,
                             fillgaps=o.fillgaps)
     o.freq = !r.phase
     # A filled frequency sample leaves the phase sample after it unmeasured.

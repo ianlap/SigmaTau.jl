@@ -68,10 +68,10 @@ function recordArgs(clock) {
   // its layout, which fixes the record type, units and columns.
   if (clock.format) {
     a.push("--input-format", clock.format);
-    // A table is read by column name; its kind is the user's pick.
+    // A table is read by column name, as the record type the user picked.
     if (clock.format === "table") {
       opt("--column", clock.column_name);
-      if (clock.kind === "frequency") a.push("--freq");
+      a.push(clock.kind === "frequency" ? "--freq" : "--phase");
     }
   } else recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
