@@ -37,6 +37,7 @@ each call pays Julia's start-up.
 | `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
+| `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
 | `sigmatau report FILE` | a self-contained HTML report: record, settings, σ(τ) plots, per-τ tables and the command line (prints to PDF) |
 | `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
 | `sigmatau version` | the SigmaTau version |
@@ -170,6 +171,47 @@ numbers are `null`.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 
+## Live measurement
+
+`sigmatau live SOURCE` reads one reading at a time and keeps ADEV, MDEV,
+HDEV and MHDEV up to date with [`LiveStability`](@ref), at constant work per
+reading. `SOURCE` is
+
+- `sim`, a simulated clock (white PM, white FM and random-walk FM) that gives
+  one phase reading per τ₀ (`--fast` runs it flat out);
+- `tcp://HOST:PORT`, an LXI instrument's SCPI socket (usually port 5025),
+  sent `--query` (default `READ?`) before every reading;
+- a path: a serial port set up with `stty` first, or a log file, read to its
+  end. Without `--query` the instrument is expected to stream.
+
+`tcp://` needs macOS or Linux. A reading of `9.91E+37` (SCPI's missed gate)
+stops the run with exit code 2: a running estimate cannot bridge a gap.
+
+The first number on each line is the reading: phase in seconds by default,
+fractional frequency with `--freq`, or a counter frequency in Hz with `--hz`
+(against `--nominal`, by default the first reading to 4 significant
+figures). `--tau0` is the time between readings (default 1 s), `--devs`
+the deviations (default all four) and `--m` or `--grid` the τ values.
+
+```bash
+sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1 --devs adev,mdev
+stty -F /dev/ttyUSB0 9600 raw && sigmatau live /dev/ttyUSB0 --freq --tau0 0.1
+```
+
+Every `--every N` readings (default 1) it writes one JSON object on a line:
+
+```
+{"schema_version": 1, "sigmatau", "command": "live", "source",
+ "quantity": "phase" | "frequency" | "hz", "tau0", "nominal", "n",
+ "readings": [the readings since the last line],
+ "tau": […], "results": [{"deviation": "adev", "dev": […], "neff": […]}, …],
+ "done": false, "elapsed_ms"}
+```
+
+`dev` is `null` at τ values that do not have two terms yet. It stops after
+`--count N` readings or when the source ends, with a last line that has
+`"done": true`; until then it runs until stopped. The values carry no
+confidence intervals: run `analyze` on the saved readings for those.
 ## Report
 
 `sigmatau report` takes the same record and analysis options as `analyze`

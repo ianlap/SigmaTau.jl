@@ -6,17 +6,21 @@
 //   analyze(id, req)    -> the core's JSON (request shape: app/web/README.md)
 //   cancel(id)          -> stop a running analysis
 //   save_file(name, data) -> save dialog, then write the bytes
+//   live_start(args)    -> run `sigmatau live`, returns its id
+//   live_poll(id, since) -> { lines, next, running, error }, its JSON lines from `since`
+//   live_stop()         -> stop the live measurement
 // The compiled sigmatau binary (cli/, a juliac bundle) ships in the app's
 // resources as core/.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::process::Child;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -30,6 +34,26 @@ struct Runs {
 }
 
 static WORK_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// The live measurement, one at a time: its process and the JSON lines it has
+/// written so far, filled by a reader thread.
+struct Live {
+    id: u64,
+    child: Child,
+    lines: Arc<Mutex<Vec<String>>>,
+    stderr: Arc<Mutex<String>>,
+    reader: std::thread::JoinHandle<()>,
+}
+
+#[derive(Default)]
+struct LiveSlot(Mutex<Option<Live>>);
+
+fn stop_live(slot: &LiveSlot) {
+    if let Some(mut live) = slot.0.lock().unwrap().take() {
+        let _ = live.child.kill();
+        let _ = live.child.wait();
+    }
+}
 
 /// The core to run, in order: $SIGMATAU_CLI, the bundled core, then (debug
 /// builds) the juliac bundle in the source tree.
@@ -189,12 +213,69 @@ async fn save_file(app: AppHandle, name: String, data: Vec<u8>) -> Result<bool, 
     Ok(true)
 }
 
+#[tauri::command]
+fn live_start(app: AppHandle, args: Vec<String>, slot: State<'_, LiveSlot>) -> Result<u64, String> {
+    let core = core_path(&app).ok_or("no analysis core: the app bundle is missing core/")?;
+    if args.first().map(String::as_str) != Some("live") {
+        return Err("a live request starts with the live command".into());
+    }
+    if args.iter().any(|a| a == "--out" || a.starts_with("--out=")) {
+        return Err("--out is not allowed here".into());
+    }
+    stop_live(&slot);
+    let mut child = Command::new(core)
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("could not start the analysis core: {e}"))?;
+    let lines = Arc::new(Mutex::new(Vec::new()));
+    let stderr = Arc::new(Mutex::new(String::new()));
+    let (out, mut err) = (child.stdout.take().unwrap(), child.stderr.take().unwrap());
+    let (l, e) = (lines.clone(), stderr.clone());
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(out).lines().map_while(Result::ok) {
+            l.lock().unwrap().push(line);
+        }
+        let _ = err.read_to_string(&mut e.lock().unwrap());
+    });
+    let id = WORK_SEQ.fetch_add(1, Ordering::Relaxed);
+    *slot.0.lock().unwrap() = Some(Live { id, child, lines, stderr, reader });
+    Ok(id)
+}
+
+#[tauri::command]
+fn live_poll(id: u64, since: usize, slot: State<'_, LiveSlot>) -> Result<Value, String> {
+    let mut guard = slot.0.lock().unwrap();
+    let live = guard.as_mut().filter(|l| l.id == id).ok_or("no such live measurement")?;
+    let running = !live.reader.is_finished();
+    let lines: Vec<String> = live.lines.lock().unwrap().get(since..).unwrap_or_default().to_vec();
+    let mut error = Value::Null;
+    if !running {
+        if let Ok(Some(st)) = live.child.try_wait() {
+            if !st.success() {
+                let text = live.stderr.lock().unwrap();
+                error = json!(text.lines().rev().find(|l| !l.trim().is_empty()).map(str::to_owned)
+                    .unwrap_or_else(|| format!("core exited with {st}")));
+            }
+        }
+    }
+    Ok(json!({ "next": since + lines.len(), "lines": lines, "running": running, "error": error }))
+}
+
+#[tauri::command]
+fn live_stop(slot: State<'_, LiveSlot>) {
+    stop_live(&slot);
+}
+
 fn main() {
     let launched = Instant::now();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Runs::default())
-        .invoke_handler(tauri::generate_handler![health, analyze, cancel, save_file])
+        .manage(LiveSlot::default())
+        .invoke_handler(tauri::generate_handler![health, analyze, cancel, save_file, live_start, live_poll, live_stop])
         .on_page_load(move |_, payload| {
             if std::env::var_os("SIGMATAU_DESKTOP_LOG").is_some() {
                 eprintln!("page {:?} at {} ms", payload.event(), launched.elapsed().as_millis());

@@ -8,6 +8,7 @@ import * as stability from "./pages/stability.js";
 import * as data from "./pages/data.js";
 import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
+import * as live from "./pages/live.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
 import { openFile, saveFile, readFile } from "./platform.js";
@@ -16,14 +17,14 @@ import { sessionText, parseSession, applySession, isSession } from "./session.js
 import { loadPlotly } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, stability, spectrum, dynamic: dynamicPage, help };
-const ORDER = ["data", "stability", "spectrum", "dynamic"];
+const PAGES = { data, stability, spectrum, dynamic: dynamicPage, live, help };
+const ORDER = ["data", "stability", "spectrum", "dynamic", "live"];
 const pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
 
 const ctx = {
-  run, addClock, openFile: openInto, reimport, useSynth, setRecord,
+  run, addClock, openFile: openInto, reimport, useSynth, setRecord, addRecord, save: saveFile,
   goData: () => go("data"),
   status: (kind, text) => { transient = { kind, text, until: kind === "error" ? Infinity : Date.now() + 8000 }; renderStatus(); },
 };
@@ -171,6 +172,16 @@ async function setRecord(c, fields) {
   await loadClock(c);
 }
 
+// A record made on another page (the Live page's readings): a new clock,
+// analysed straight away.
+async function addRecord(fields) {
+  let c;
+  update((s) => { c = newClock(fields); s.clocks.push(c); s.activeClock = c.id; s.dataMode = "file"; });
+  go("stability");
+  await loadClock(c);
+  if (c.record) await run();
+}
+
 // Replace everything with a saved session, read its records and rerun.
 async function openSession(file) {
   let doc, clocks;
@@ -268,7 +279,7 @@ function render() {
   document.getElementById("help-btn").classList.toggle("on", state.page === "help");
   // One clock: Spectrum and Dynamic put their settings in the panel. Several
   // clocks: the panel keeps the clocks and the page shows a toolbar.
-  renderPanel(!multi() && page?.controls ? page.controls() : null);
+  renderPanel(page?.controls && (!multi() || page.ownsPanel) ? page.controls() : null);
   renderChip();
   page?.refresh();
   renderStatus();
@@ -337,7 +348,7 @@ document.addEventListener("keydown", (e) => {
   if (document.querySelector("dialog[open]")) return;
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const i = "1234".indexOf(e.key);
+  const i = "12345".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
   if (e.key === "?") go("help");
 });

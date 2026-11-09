@@ -187,3 +187,27 @@ export function dynamic(clock, signal) {
     "--window", Math.max(16, Math.floor(n / state.dyn.frac)),
   ]), signal);
 }
+
+// ── Live measurement ──
+// `sigmatau live` runs until stopped and writes one JSON line per update;
+// the shell keeps the lines and the page polls for the ones it has not seen.
+export async function liveStart(args) {
+  if (tauri) return tauri.invoke("live_start", { args });
+  const r = await fetch("api/live/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ args }) });
+  const out = await r.json();
+  if (!r.ok) throw new Error(out.error || `the server answered ${r.status}`);
+  return out.id;
+}
+
+export async function livePoll(id, since) {
+  const out = tauri ? await tauri.invoke("live_poll", { id, since })
+    : await (await fetch(`api/live/poll?id=${id}&since=${since}`)).json();
+  const lines = (out.lines ?? []).map((l) => JSON.parse(l));
+  const failed = lines.find((l) => l.error);
+  return { lines: lines.filter((l) => !l.error), next: out.next, running: out.running, error: failed?.error ?? out.error ?? null };
+}
+
+export function liveStop() {
+  return tauri ? tauri.invoke("live_stop")
+    : fetch("api/live/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+}

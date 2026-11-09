@@ -1,7 +1,7 @@
 # sigmatau command line
 
 `SigmaTauCLI` is the `sigmatau` program: one binary with the subcommands
-`analyze`, `check`, `spectrum`, `dynamic`, `completion` and `version`. The
+`analyze`, `check`, `spectrum`, `dynamic`, `live`, `completion` and `version`. The
 explorer (`app/web`, `app/desktop`) runs it with `--format json`. Usage, the
 CSV columns, the JSON schema and the exit codes are in
 [docs/src/guide/cli.md](../docs/src/guide/cli.md).
@@ -13,6 +13,7 @@ cli/
   src/options.jl      the option table (parser, help and completions read it)
   src/record.jl       reading or synthesising the record
   src/commands.jl     analyze, check, spectrum, dynamic
+  src/live.jl         live: instrument or simulator readings to running σ(τ)
   src/output.jl       JSON and CSV writers
   src/completion.jl   bash, zsh, fish and PowerShell scripts
   test/runtests.jl    tests (in process, and against a build with SIGMATAU_EXE)

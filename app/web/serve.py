@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Local server for the SigmaTau web explorer (development shell).
 
-Serves app/web/ui/ and answers POST /api/analyze by running the sigmatau binary.
-Standard library only.
+Serves app/web/ui/ and answers POST /api/analyze by running the sigmatau binary,
+and runs `sigmatau live` for the Live page (/api/live/*). Standard library only.
 
     python3 app/web/serve.py               # http://127.0.0.1:9385
     python3 app/web/serve.py --port 8000 --open
@@ -22,9 +22,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 HERE = Path(__file__).resolve().parent
 UI = HERE / "ui"
@@ -70,6 +72,57 @@ def request_to_args(req, workdir):
     return [args[0], str(path), *args[1:]]
 
 
+class Live:
+    """One `sigmatau live` process: its JSON lines are kept as they arrive
+    and handed out by index, so a page can poll for the ones it has not seen."""
+
+    def __init__(self, cmd, args):
+        if not isinstance(args, list) or not args or args[0] != "live":
+            raise ValueError("a live request starts with the live command")
+        if not all(isinstance(a, str) for a in args) or any(a == "--out" or a.startswith("--out=") for a in args):
+            raise ValueError("args must be strings, without --out")
+        self.lines = []
+        self.error = None
+        self.lock = threading.Lock()
+        self.proc = subprocess.Popen(cmd + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
+
+    def _read(self):
+        with self.proc.stdout:
+            for line in self.proc.stdout:
+                with self.lock:
+                    self.lines.append(line.decode(errors="replace").strip())
+        with self.proc.stderr:
+            tail = self.proc.stderr.read().decode(errors="replace").strip().splitlines()
+        if self.proc.wait():
+            self.error = tail[-1] if tail else f"core exited with {self.proc.returncode}"
+
+    def poll(self, since):
+        running = self.reader.is_alive()
+        with self.lock:
+            lines = self.lines[since:]
+        return {"lines": lines, "next": since + len(lines), "running": running, "error": self.error}
+
+    def stop(self):
+        if self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+
+
+LIVE = {}            # id -> Live; one measurement at a time
+LIVE_IDS = iter(range(1, 1 << 62))
+
+
+def stop_live():
+    for live in LIVE.values():
+        live.stop()
+    LIVE.clear()
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(UI), **kw)
@@ -91,13 +144,22 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path == "/api/health":
+        url = urlparse(self.path)
+        if url.path == "/api/health":
             cmd = cli_command()
             return self.send_json(200, {"ok": cmd is not None, "core": cmd[0] if cmd else None})
+        if url.path == "/api/live/poll":
+            q = parse_qs(url.query)
+            try:
+                live = LIVE[int(q["id"][0])]
+                since = int(q.get("since", ["0"])[0])
+            except (KeyError, ValueError):
+                return self.send_json(404, {"error": "no such live measurement"})
+            return self.send_json(200, live.poll(since))
         return super().do_GET()
 
     def do_POST(self):
-        if self.path != "/api/analyze":
+        if self.path not in ("/api/analyze", "/api/live/start", "/api/live/stop"):
             return self.send_json(404, {"error": "unknown endpoint"})
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0 or length > MAX_BODY:
@@ -106,9 +168,26 @@ class Handler(SimpleHTTPRequestHandler):
             req = json.loads(self.rfile.read(length))
         except json.JSONDecodeError as e:
             return self.send_json(400, {"error": f"bad JSON: {e}"})
+        if self.path == "/api/live/stop":
+            stop_live()
+            return self.send_json(200, {"ok": True})
         cmd = cli_command()
         if cmd is None:
             return self.send_json(503, {"error": "no analysis core: build cli/ (see cli/README.md) or put julia on PATH"})
+        if self.path == "/api/live/start":
+            args = req.get("args")
+            # Device and file paths read this machine: only for a page on this machine.
+            local = self.server.server_address[0] in ("127.0.0.1", "::1", "localhost")
+            if not local and isinstance(args, list) and len(args) > 1 and args[1] != "sim" and not str(args[1]).startswith("tcp://"):
+                return self.send_json(403, {"error": "device and file sources are only served on 127.0.0.1"})
+            stop_live()
+            try:
+                live = Live(cmd, args)
+            except (ValueError, TypeError) as e:
+                return self.send_json(400, {"error": str(e)})
+            live_id = next(LIVE_IDS)
+            LIVE[live_id] = live
+            return self.send_json(200, {"id": live_id})
         with tempfile.TemporaryDirectory(prefix="sigmatau-web-") as work:
             try:
                 args = request_to_args(req, work)
@@ -152,6 +231,8 @@ def main():
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        stop_live()
 
 
 if __name__ == "__main__":

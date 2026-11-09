@@ -44,8 +44,9 @@ include("registry.jl")
 include("suite.jl")
 include("ensemble.jl")
 
-# ── Real-time streaming accumulators (Dobrogowski–Kasznia scheme) ───────
+# ── Real-time streaming accumulators and live sources ──────────────────
 include("streaming.jl")
+include("live.jl")
 
 # ── Names replaced in 0.6 (deprecated, exported until 0.7) ──────────────
 include("deprecated.jl")
@@ -82,6 +83,7 @@ export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize
 export StreamingStability, snapshot, nsamples
+export LiveStability, SimulatedSource, InstrumentSource, read_reading
 
 export noise_gen
 export psd_y, psd_x, ssb_phase_noise

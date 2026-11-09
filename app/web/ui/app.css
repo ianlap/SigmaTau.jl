@@ -333,6 +333,23 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .dyn-slice .card-row { display: flex; align-items: center; gap: 12px; }
 .dyn-slice .plot { height: 240px; }
 
+/* Live page */
+.live-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; }
+.live-stats { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: var(--ink-2); }
+.live-stats b { color: var(--ink); font-family: var(--font-mono); font-weight: 500; }
+.live-state { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 600; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.live-dot.on { background: var(--good); animation: live-pulse 1.2s ease-in-out infinite; }
+.live-dot.err { background: var(--error); }
+@keyframes live-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .live-dot.on { animation: none; } }
+.live-error { flex-basis: 100%; color: var(--error); font-size: 12.5px; }
+.live-strip { flex: 0.6; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.live-field span { white-space: nowrap; }
+.live-field input { width: 100%; font-family: var(--font-mono); font-size: 12.5px; }
+.live-devs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.live-go { width: 100%; justify-content: center; }
 .tau-range { display: inline-flex; align-items: center; gap: 4px; }
 .tau-range input { width: 76px; }
 .range-bar { display: flex; margin-left: auto; align-items: center; gap: 8px; }
