@@ -146,6 +146,14 @@ fmt(f) = joinpath(FMT, f)
         @test start_time(c) == DateTime(2022, 3, 8, 22, 59, 57, 120)
         write(tbl, "t,ratio\n" * join(string.(mjd, ",", 1e-15 .* (1:2500)), "\n"))
         @test read_data(tbl) isa FrequencyData && read_data(tbl).tau0 == 1.0
+        # Seconds of day at 10 Hz lie in the MJD range too, and stay seconds.
+        sod = string.(43200 .+ (0:99) ./ 10, " ", 1e-9 .* (1:100))
+        write(dat, join(sod, "\n"))
+        @test read_data(dat).tau0 == 0.1 && start_time(read_data(dat)) === nothing
+        for name in ("time", "t", "UTC")
+            write(tbl, "$name,phase\n" * join(replace.(sod, " " => ","), "\n"))
+            @test read_data(tbl).tau0 == 0.1
+        end
         write(tbl, "t (s),phase\n" * join(string.(50000 .+ (0:9) ./ 2, ",", 1:10), "\n"))
         @test read_data(tbl).tau0 == 0.5
         # A column sampled every third row keeps its own step; a lone column

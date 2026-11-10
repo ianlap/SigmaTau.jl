@@ -190,9 +190,9 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
     (t, v), ncols = _read_cols(path, nskip, nothing, [1, 0])
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
     ncols >= 2 || (t = Float64[])
-    # A Stable32 time tag is an MJD (days).
+    # A Stable32 time tag is an MJD (days); a large value with sub-day steps.
     start = hstart
-    if _is_mjd(t)
+    if length(t) >= 2 && t[1] > 30000 && _median_step(t) < 1
         isnan(start) && (start = _mjd_seconds(t[1]))
         t .*= 86400
     end
@@ -506,8 +506,9 @@ column is phase or frequency by its name.
 - `tau0`: sample interval in seconds; by default from the file header
   (TimeLab `Sample Interval`, Stable32 `Tau:`) or the grid step of the
   time column (seconds, MJD days, or ISO 8601 timestamps). A column named
-  `MJD`, or one whose values lie between MJD 30000 and 90000 with sub-day
-  steps and whose name does not say seconds, is read in days.
+  `MJD` is read in days, and so is one whose values lie between MJD 30000
+  and 90000 with steps under 0.05 d and more than four decimals, unless its
+  name says seconds.
 - `column`: the clock column of a `:table` file, by 1-based index or by
   name. By default the only column besides the time column, else the one
   whose name says phase / time error / PPS, else frequency.

@@ -207,7 +207,10 @@ export function guessRoles(s) {
   if (s.clocks) return { time: 1, value: 2, timeUnit: 86400, scaling: 1 };   // MJD, then the first clock
   if (s.nCols <= 1) return { time: 0, value: 1, timeUnit: 1, scaling: unitOf(s.names[0] ?? "") };
   const inc = (c) => c.length > 1 && c.every((v, i) => i === 0 || v > c[i - 1]);
-  const isMjd = (c, name) => /mjd/i.test(name) || (c[0] > 30000 && c[0] < 90000 && c[1] - c[0] < 1);
+  // MJD by name, or by range: MJD 30000 to 90000, steps under 0.05 d, and digits past the fourth
+  // decimal, which a sub-day MJD needs and seconds of day at 10 Hz (43200.1, …) do not carry.
+  const isMjd = (c, name) => /mjd/i.test(name) || (c[0] > 30000 && c[c.length - 1] < 90000 && c[1] - c[0] < 0.05
+    && c.some((v) => Math.abs(v * 1e4 - Math.round(v * 1e4)) > 1e-2));
   const cand = [];
   for (let c = 0; c < s.nCols; c++) if (inc(s.columns[c])) cand.push(c + 1);
   const nm = (c) => s.names[c - 1] ?? "";
