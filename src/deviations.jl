@@ -722,9 +722,14 @@ Conventions (SP1065 / Stable32):
   N = 65 536. ThêoBR needs `N ≥ 19` samples; shorter records
   yield NaN rows. `:published` is the same ThêoBR. `:stable32` is ThêoBR
   over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`, which is what a Stable32
-  Thêo1 run applies: on Stable32's own `PHASE.DAT` it reproduces that run at
-  every averaging factor to the five digits printed. `correct_bias=false`
-  gives raw Thêo1, a Stable32 run with Alpha set to 0.
+  Thêo1 run with automatic noise identification applies: on Stable32's own
+  `PHASE.DAT` (1001 points) it reproduces that run at every averaging factor
+  to the five digits printed. Longer records are not checked: above 8192
+  points the ladder is sampled as above (within 0.1 %), and Stable32 limits
+  the points it uses for this factor (`MaxTheoBRPts`, 3000 by default in its
+  manual). With a noise type entered by hand Stable32 applies a tabulated
+  bias instead, which no fixture here checks. `correct_bias=false` gives raw
+  Thêo1, a Stable32 run with Alpha set to 0.
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
 formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
