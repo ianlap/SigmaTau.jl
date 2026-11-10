@@ -23,4 +23,5 @@ julia --project=. tools/validation/make_noise_fixtures.jl   # power-law records 
 pip install allantools==2024.6 scipy numpy
 python3 tools/validation/gen_allantools.py                   # allantools / scipy tables (~5 min)
 julia --project=. tools/validation/report.jl                 # REPORT.md: agreement and discrepancies
+julia --project=. tools/validation/tables.jl                 # per-τ tables of the docs Validation page
 ```
