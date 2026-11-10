@@ -1,6 +1,7 @@
 # tools/total_pm_models.jl — exact bias and EDF of TOTDEV and HTOTDEV on white
-# and flicker PM: the source of the PM rows of `_total_bias`, `_totvar_pm_edf`
-# and `_htot_pm_edf` in src/edf.jl. No random numbers.
+# and flicker PM, and the bias of HTOTDEV and MTOTDEV below m = 16: the source
+# of the PM rows of `_total_bias`, of `_totvar_pm_edf` and `_htot_pm_edf`, and
+# of `_MTOT_B_SMALL` in src/edf.jl. No random numbers.
 #
 #   julia -t auto tools/total_pm_models.jl        # under a minute
 #
@@ -66,12 +67,14 @@ function htot_G(F, m)
     return F' * Q * F ./ n
 end
 
-# Expectation of the parent on the same noise: AVAR (d = 2) or HVAR (d = 3).
-function parent(noise, m, d)
+# Expectation of the parent, AVAR (d = 2) or HVAR (d = 3), on the noise with
+# factor Fw over d·m + 1 phase samples.
+function parent(Fw::Matrix, m, d)
     c = d == 2 ? [1.0, -2, 1] : [-1.0, 3, -3, 1]
     v = zeros(d * m + 1); v[1:m:end] .= c
-    return sum(abs2, factor(noise, d * m + 1)' * v) / (sum(abs2, c) / (d == 2 ? 3 : 10 / 3) * m^2)
+    return sum(abs2, Fw' * v) / (sum(abs2, c) / (d == 2 ? 3 : 10 / 3) * m^2)
 end
+parent(noise::Symbol, m, d) = parent(factor(noise, d * m + 1), m, d)
 
 edf(G) = tr(G)^2 / sum(abs2, G)
 lsq(X, y) = (X ./ y) \ ones(length(y))                 # least squares on the relative residual
@@ -116,7 +119,8 @@ ck = hcat(ones(length(ms)), log.(ms)) \ ((ks .+ kd) ./ 2)
 # ── TOTHVAR ───────────────────────────────────────────────────────────────────
 # The bias depends on m alone: one window is enough.
 ms = grid(2, 512)
-hb(noise, m) = (W = htot_window(m); sum(abs2, W * factor(noise, 3m + 1)) / parent(noise, m, 3))
+hb(Fw::Matrix, m) = sum(abs2, htot_window(m) * Fw) / parent(Fw, m, 3)
+hb(noise::Symbol, m) = hb(factor(noise, 3m + 1), m)
 Bw = hb.(:white, ms); Bf = (hb.(:sampled, ms) .+ hb.(:kasdin, ms)) ./ 2
 odd = isodd.(ms)
 cw = lsq(hcat(odd, -odd ./ ms, .!odd, -.!odd ./ ms), Bw)
@@ -142,4 +146,17 @@ for (alpha, noise, gg) in ((2, :white, m -> 2.45), (1, :sampled, g))
     println("  ", rpad(noise == :white ? "white PM" : "flicker PM", 12),
             join((@sprintf("%.3f: %+.0f %%", m / 1023, 100 * res[(1024, m)]) for m in near.((1 / 64, 1 / 16, 1 / 8, 1 / 4, 0.29, 0.31, 0.325, 1 / 3))), "   "),
             @sprintf("   largest %.0f %%", 100 * maximum(abs(v) for ((N, m), v) in res if m >= 16)))
+end
+
+# ── TOTHVAR and MTOT below m = 16 ─────────────────────────────────────────────
+# TOTHVAR on FM noise α is the MTOT computation on α + 2, one integration
+# down, so one table serves both: rows α = 0 … −4 for TOTHVAR, 2 … −2 for
+# MTOT. The phase of FM noise α is white or flicker PM summed (2 − α) ÷ 2
+# times; flicker rows are the mean of the two models.
+sums(Fw, k) = (for _ in 1:k; Fw = cumsum(Fw, dims=1); end; Fw)
+println("\nTOTHVAR bias at m = 2 … 15, α = 0 … −4 (MTOT: α = 2 … −2), and its largest distance from either flicker model")
+for a in 0:-1:-4
+    B = [[hb(sums(factor(noise, 3m + 1), (2 - a) ÷ 2), m) for m in 2:15] for noise in (iseven(a) ? (:white,) : (:sampled, :kasdin))]
+    println("  (", join((@sprintf("%.4f", b) for b in sum(B) ./ length(B)), ", "), "),",
+            iseven(a) ? "" : @sprintf("   ±%.1f %%", 50 * maximum(abs.(B[1] ./ B[2] .- 1))))
 end

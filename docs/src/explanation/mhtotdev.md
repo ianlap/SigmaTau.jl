@@ -51,24 +51,25 @@ the kernel itself and holds the shipped models to its exact moments.
 B = E[MHTOTVAR] / E[MHVAR] depends on the averaging factor m and the noise
 type only, not on the record length or on τ/T.
 
-| Noise | m = 2 | 4 | 8 | 16 | 64 | 256 | shipped |
-|:---|---:|---:|---:|---:|---:|---:|---:|
-| white PM | 0.9000 | 0.9013 | 0.9011 | 0.9007 | 0.9002 | 0.9000 | 0.9000 |
-| flicker PM | 0.8582 | 0.8396 | 0.8291 | 0.8246 | 0.8222 | 0.8218 | 0.8218 |
-| white FM | 0.8281 | 0.8064 | 0.7972 | 0.7938 | 0.7921 | 0.7917 | 0.7917 |
-| flicker FM | 0.8092 | 0.7936 | 0.7871 | 0.7846 | 0.7831 | 0.7828 | 0.7828 |
-| random-walk FM | 0.8009 | 0.7946 | 0.7903 | 0.7883 | 0.7870 | 0.7867 | 0.7867 |
-| flicker-walk FM | 0.8028 | 0.8055 | 0.8027 | 0.8011 | 0.7999 | 0.7996 | 0.7996 |
-| random-run FM | 0.8145 | 0.8243 | 0.8223 | 0.8209 | 0.8199 | 0.8196 | 0.8196 |
+| Noise | m = 2 | 3 | 4 | 8 | 16 | 64 | 256 | from m = 16 |
+|:---|---:|---:|---:|---:|---:|---:|---:|---:|
+| white PM | 0.9000 | 0.8584 | 0.9013 | 0.9011 | 0.9007 | 0.9002 | 0.9000 | 0.9000 |
+| flicker PM | 0.8475 | 0.8233 | 0.8340 | 0.8269 | 0.8239 | 0.8221 | 0.8218 | 0.8218 |
+| white FM | 0.8281 | 0.8059 | 0.8064 | 0.7972 | 0.7938 | 0.7921 | 0.7917 | 0.7917 |
+| flicker FM | 0.8052 | 0.7948 | 0.7927 | 0.7869 | 0.7846 | 0.7831 | 0.7828 | 0.7828 |
+| random-walk FM | 0.8009 | 0.7964 | 0.7946 | 0.7903 | 0.7883 | 0.7870 | 0.7867 | 0.7867 |
+| flicker-walk FM | 0.8025 | 0.8063 | 0.8057 | 0.8028 | 0.8011 | 0.7999 | 0.7996 | 0.7996 |
+| random-run FM | 0.8145 | 0.8239 | 0.8243 | 0.8223 | 0.8209 | 0.8199 | 0.8196 | 0.8196 |
 
 MHTOTDEV reads low on every noise: removing a quadratic from each window
 absorbs part of that window's variance before the reflection.
-[`bias_correction`](@ref) divides by the large-m constant in the last
-column, which is within 0.4 % of the exact value from m = 16. Below that the
-constant is off, in variance, by up to 0.9 % from m = 8, 2.2 % from m = 4,
-and 4.6 % at m = 2 and 3 (white PM dips to 0.858 at m = 3). The flicker rows
-depend on the flicker model below m = 16, by 2.6 % at m = 2. At m = 1 the detrended four-point window leaves a single degree of
-freedom and B = 124/225 on every noise, which [`mhtotdev`](@ref) applies.
+[`bias_correction`](@ref) divides by the exact value at each m from 2 to 15
+and by the large-m constant in the last column from m = 16, where it is
+within 0.4 %. White PM dips at odd m, to 0.858 at m = 3. The flicker rows are
+the mean of the two flicker models of
+[Total estimators on PM noise](total_pm.md), which are within 1.3 % of it at
+m = 2 and 0.5 % from m = 3. At m = 1 the detrended four-point window leaves
+a single degree of freedom and B = 124/225 on every noise.
 
 ## EDF
 
@@ -104,13 +105,15 @@ freedom there; MHTOTVAR has 4.0 on white PM, 2.7 on flicker PM, 2.2 on white
 FM, 1.9 on flicker FM, 1.6 on random-walk FM, 1.4 on flicker-walk FM and 1.2
 on random-run FM.
 
-!!! warning "Below m = 16"
-    The model is fitted from m = 16 and is used down to m = 2. On flicker PM
-    and the FM noises it is within 6 % of the exact EDF from m = 3; at m = 2
-    it reads 5 % high on flicker PM and 5 to 13 % low, the safe side, on the
-    FM noises. On white PM it reads high: by 5 % at m = 8, 15 % at m = 4,
-    35 % at m = 3 and 54 % at m = 2, where the interval is a fifth too
-    narrow.
+!!! note "Below m = 16"
+    The model is fitted from m = 16 and is used down to m = 2. On the FM
+    noises it is within 6 % of the exact EDF from m = 3 and reads 5 to 13 %
+    low, the safe side, at m = 2. On flicker PM it reads 4 to 10 % high at
+    m = 2 and 3, depending on the flicker model, and is within 4 % from
+    m = 4. On white PM it would read high, by 5 % at m = 8, 15 %
+    at m = 4, 35 % at m = 3 and 54 % at m = 2, so there the model is
+    multiplied by the exact ratio at each m from 2 to 15 (0.65 at m = 2,
+    0.75 at m = 3, 0.88 at m = 4, 0.97 at m = 8).
 
 ## Degrees of freedom gained over MHDEV
 

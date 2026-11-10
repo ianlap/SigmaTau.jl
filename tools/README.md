@@ -10,8 +10,9 @@ julia -t auto tools/mhtot_models.jl    # about five minutes
 ```
 
 `total_pm_models.jl` does the same for TOTDEV and HTOTDEV on white and flicker
-PM, where the published tables stop: the source of the PM rows of
-`_total_bias`, `_totvar_pm_edf` and `_htot_pm_edf`, described in
+PM, where the published tables stop, and for the bias of MTOTDEV and HTOTDEV
+below m = 16: the source of the PM rows of `_total_bias`, of `_totvar_pm_edf`
+and `_htot_pm_edf`, and of `_MTOT_B_SMALL`, described in
 `docs/src/explanation/total_pm.md`.
 
 ```bash

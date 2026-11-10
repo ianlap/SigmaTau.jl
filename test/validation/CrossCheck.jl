@@ -135,8 +135,8 @@ end
 # ── allantools EDF / CI / noise ID / spectra / dynamic ─────────────────────
 
 _alpha_sym(a) = a == 2 ? :WHPM : a == 1 ? :FLPM : a == 0 ? :WHFM : a == -1 ? :FLFM : :RWFM
-# Stable32's bias factor for its α: the published FM tables, and none on PM.
-s32_bias(α, var, ms, N) = ifelse.(α .> 0, 1.0, bias_correction(_alpha_sym.(α), var, ms, N))
+# Stable32's bias factor for its α: the published tables alone.
+s32_bias(α, var, ms, N) = bias_correction(_alpha_sym.(α), var, ms, N; published=true)
 
 function allantools_edf_rows()
     rows = Row[]
@@ -274,12 +274,13 @@ function stable32_rows()
         for (k, r) in enumerate(s)
             a_st = SigmaTau._alpha_from_noise(res.noise_type[k])
             same = a_st == r.alpha
-            # TOTDEV's bias follows the noise type, and on PM Stable32 applies
-            # none: the σ row takes Stable32's factor for its α and compares
-            # the estimator.
+            # The bias of TOTDEV and HTOTDEV follows the noise type and m, and
+            # Stable32's differs on PM and below m = 16: the σ row takes
+            # Stable32's factor for its α and compares the estimator.
             σ, σnote = res.dev[k], note
-            if est == "totdev"
-                σ *= sqrt(bias_correction([res.noise_type[k]], :totvar, [r.m], N)[1] / s32_bias([r.alpha], :totvar, [r.m], N)[1])
+            var = est == "totdev" ? :totvar : est == "htotdev" ? :htot : nothing
+            if var !== nothing
+                σ *= sqrt(bias_correction([res.noise_type[k]], var, [r.m], N)[1] / s32_bias([r.alpha], var, [r.m], N)[1])
                 same || (σnote = "bias for Stable32's α (noise ID differs)")
             end
             push!(rows, Row("Stable32 σ", "PHASE.DAT", est, r.m, r.sigma, σ, S32_TOL_SIGMA, σnote))

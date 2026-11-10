@@ -272,6 +272,19 @@ end
 # a DomainError for the whole call.
 _unbias_divisor(B::AbstractVector{<:Real}) = [b > 0 ? sqrt(b) : NaN for b in B]
 
+# What `correct_bias` asks of one estimator: :exact (`true`), :none (`false`),
+# :published, or for `:stable32` whichever of the three Stable32 applies to it.
+function _bias_mode(correct_bias::Union{Bool,Symbol}, stable32::Symbol)
+    correct_bias === true && return :exact
+    correct_bias === false && return :none
+    correct_bias === :published && return :published
+    correct_bias === :stable32 && return stable32
+    throw(ArgumentError("correct_bias must be true, false, :published or :stable32; got :$correct_bias"))
+end
+
+_unbias(raw, mode::Symbol, noises, var_type::Symbol, m_values, N::Int) = mode == :none ? raw :
+    raw ./ _unbias_divisor(bias_correction(noises, var_type, m_values, N; published=mode == :published))
+
 """
     totdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
@@ -282,11 +295,12 @@ the whole-record mean-flip extension.
 correction `σ_unbiased = σ_raw / √B`, where `B = E[TOTVAR]/AVAR` is the
 variance-scale bias factor from [`bias_correction`](@ref). As τ approaches T,
 TOTVAR reads low on FLFM and RWFM (SP1065) and high on white and flicker PM
-(see "Total estimators on PM noise" in the docs). Stable32 applies the FM
-correction and none on PM; `correct_bias=false` returns the raw kernel value,
-which is what allantools reports.
+(see "Total estimators on PM noise" in the docs). `correct_bias=:published`
+or `:stable32` applies the FM correction and none on PM, as SP1065 and
+Stable32 do; `false` returns the raw kernel value, which is what allantools
+reports.
 """
-function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:totdev, data, m_values)
     raw_devs = _totdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -294,10 +308,11 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     neff = _neff_counts(:totdev, length(x), m_values)
 
     # Noise IDs are needed for either path: bias correction and CIs both read α.
-    need_noise = correct_bias || ci
+    mode = _bias_mode(correct_bias, :published)
+    need_noise = mode != :none || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, m_values, length(x))) : raw_devs
+    devs = _unbias(raw_devs, mode, noises, :totvar, m_values, length(x))
 
     if !ci
         return _result(data, confidence, :totdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -319,24 +334,26 @@ per-subsegment detrend and time-reverse extension of Howe and Vernotte.
 correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for α ∈ {2, 1, 0, -1, -2}.
 MTOT is biased low (a < 0), so the correction raises σ, by 0.3 % for white PM
-and 21 % for random-walk FM; the table holds from τ = 16 τ₀ and overcorrects
-by up to 3 % below that. At `m = 1` the estimator is exactly MDEV/√2 for any
-record, and B = 1/2. `correct_bias=false` returns the raw kernel, which is
-what Stable32 and allantools report.
+and 21 % for random-walk FM. The table holds from τ = 16 τ₀; below it the
+exact factor at each `m` is used. At `m = 1` the estimator is exactly MDEV/√2
+for any record, and B = 1/2. `correct_bias=:published` applies the table at
+every `m > 1`; `false` or `:stable32` returns the raw kernel, which is what
+Stable32 and allantools report.
 """
-function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:mtotdev, data, m_values)
     raw_devs = _mtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
     neff = _neff_counts(:mtotdev, length(x), m_values)
 
-    need_noise = correct_bias || ci
+    mode = _bias_mode(correct_bias, :none)
+    need_noise = mode != :none || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
     # At m = 1 the detrended three-point subsequence is (0, z, 0) with z half
     # the second difference, and its reflection averages to half of MVAR.
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, m_values, length(x))) : raw_devs
+    devs = _unbias(raw_devs, mode, noises, :mtot, m_values, length(x))
 
     if !ci
         return _result(data, confidence, :mtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -358,27 +375,31 @@ per-subsegment detrend and time-reverse extension of Howe et al. 2000.
 unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
 α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0) on FM, so the
-correction raises σ, substantially for divergent FM. On white and flicker PM
+correction raises σ, substantially for divergent FM. Those values hold from
+`m = 16`; below it the exact factor at each `m` is used, where Stable32
+keeps the published one. On white and flicker PM
 it reads high, by 25 to 38 % and 4 to 28 % in variance, and the factor is its
 exact expectation (see "Total estimators on PM noise" in the docs). At
-`m = 1` the estimator is plain overlapping HDEV and B = 1. Stable32 applies
-the FM correction and none on PM; `correct_bias=false` returns the raw kernel
-value, which is what allantools reports.
+`m = 1` the estimator is plain overlapping HDEV and B = 1.
+`correct_bias=:published` or `:stable32` applies the published FM factor at
+every `m > 1` and none on PM, as Stable32 does; `false` returns the raw
+kernel value, which is what allantools reports.
 
 `remove_drift` works as in [`hdev`](@ref). Here the noise type also selects
 the bias factor, so the keyword can change σ where the two labels differ.
 """
-function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:htotdev, data, m_values)
     raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
     neff = _neff_counts(:htotdev, length(x), m_values)
 
-    need_noise = correct_bias || ci
+    mode = _bias_mode(correct_bias, :published)
+    need_noise = mode != :none || ci
     noises = need_noise ? _hadamard_noise(x, m_values, remove_drift) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, m_values, length(x))) : raw_devs
+    devs = _unbias(raw_devs, mode, noises, :htot, m_values, length(x))
 
     if !ci
         return _result(data, confidence, :htotdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -398,7 +419,7 @@ Time total deviation (τ/√3) · MTOTDEV, per NIST SP1065 §5.2.13: the σ_x fo
 arguments pass through to `mtotdev`; confidence bounds are scaled by the same
 factor and the EDF is unchanged.
 """
-function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
     res = mtotdev(data, m_values; ci=ci, correct_bias=correct_bias, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 
@@ -428,10 +449,11 @@ on the drift-removed record; the deviation itself does not change. Pass
 `σ_unbiased = σ_raw / √B` with `B` from
 [`bias_correction`](@ref)`(…, :mhtot, …)` (B = 0.78 to 0.90: the per-window
 detrend absorbs part of the variance). Pass `correct_bias=false` for the raw
-kernel value. The EDF model is fitted to the exact EDF of the statistic; see
+kernel value; `:published` and `:stable32` change nothing here, since no
+reference defines the estimator. The EDF model is fitted to the exact EDF of the statistic; see
 the "MHTOTDEV bias and EDF" page for both.
 """
-function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:mhtotdev, data, m_values)
     if remove_drift
         x = _remove_quadratic(x)
@@ -441,12 +463,13 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     T = (length(x) - 1) * data.tau0
     neff = _neff_counts(:mhtotdev, length(x), m_values)
 
-    need_noise = correct_bias || ci
+    mode = _bias_mode(correct_bias, :exact)
+    need_noise = mode != :none || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
 
     # At m = 1 the detrended four-point window is c·(−1, 3, −3, 1), and the
     # nine third differences of its reflection average to 124/225 of MHVAR.
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mhtot, m_values, length(x))) : raw_devs
+    devs = _unbias(raw_devs, mode, noises, :mhtot, m_values, length(x))
 
     if !ci
         return _result(data, confidence, :mhtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -631,15 +654,15 @@ Conventions (SP1065 / Stable32):
   of the factors and interpolates the rest, within 0.5 % of the full
   average (see `_theobr_ratio`); this takes it from O(N³) to about 1 s at
   N = 65 536. ThêoBR needs `N ≥ 19` samples; shorter records
-  yield NaN rows (pass `correct_bias=false` for raw Thêo1, which
-  Stable32 reports as its "Theo1" run).
+  yield NaN rows. `correct_bias=false` or `:stable32` gives raw Thêo1,
+  which Stable32 reports as its "Theo1" run; `:published` is ThêoBR.
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
 formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
 and bias-removed forms. The kernel's double sum is O(N·m) per τ, far
 costlier than the O(N) Allan kernels at large m.
 """
-function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:theo1, data, m_values)
     N = length(x)
     raw_devs = _theo1_core(x, m_values, data.tau0)
@@ -647,7 +670,7 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     T = (N - 1) * data.tau0
     neff = _neff_counts(:theo1, N, m_values)
 
-    devs = correct_bias ? raw_devs .* sqrt(_theobr_ratio(x, data.tau0)) : raw_devs
+    devs = _bias_mode(correct_bias, :none) == :none ? raw_devs : raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
 
     if !ci
         return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)

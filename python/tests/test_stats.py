@@ -49,3 +49,8 @@ def test_calculate_edf_and_ci_reproduce_adev(small_phase):
 def test_bias_correction_unknown_var_type_is_identity():
     b = st.bias_correction(["WHFM"], "unknown", [1], 512)
     assert np.all(b == 1.0)
+
+
+def test_bias_correction_published_leaves_pm_alone():
+    assert st.bias_correction(["WHPM"], "htot", [16], 512)[0] > 1.3
+    assert st.bias_correction(["WHPM"], "htot", [16], 512, published=True)[0] == 1.0

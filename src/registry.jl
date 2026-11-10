@@ -135,7 +135,7 @@ _unknown_error(name::Symbol) = ArgumentError(
 
 function _deviation(name::Symbol, data::AbstractTimingData, ms::Vector{Int};
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
-                    correct_bias::Bool = true, remove_drift::Bool = true)
+                    correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true)
     c = Float64(confidence)
     b = correct_bias
     name === :adev     && return adev(data, ms; ci=ci, confidence=c)

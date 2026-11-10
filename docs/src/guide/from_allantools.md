@@ -69,7 +69,7 @@ SigmaTau also has [`mhdev`](@ref), [`htdev`](@ref), [`mhtotdev`](@ref),
 
 | | allantools | SigmaTau default | To match allantools |
 |---|---|---|---|
-| TOTDEV, MTOTDEV, TTOTDEV, HTOTDEV | raw estimators | divided by the published bias factor of the identified noise type, so unbiased | `correct_bias=False` |
+| TOTDEV, MTOTDEV, TTOTDEV, HTOTDEV | raw estimators | divided by the bias factor of the identified noise type, so unbiased | `correct_bias=False` |
 | Thêo1 | raw Thêo1, reported at τ = m·τ₀ | ThêoBR, reported at τ = 0.75·m·τ₀ (Thêo1's effective τ) | `correct_bias=False`, and compare at 0.75 × allantools' τ |
 | Error bars | dev/√n | χ² intervals that follow the noise type | none; the intervals are wider and asymmetric where the EDF is small |
 
