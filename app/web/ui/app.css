@@ -92,6 +92,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .stroke { flex: none; }
 .row-x, .eye { width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 16px; cursor: pointer; flex: none; }
 .row-x:hover, .eye:hover { background: var(--accent-soft); color: var(--accent); }
+.row-btns { display: flex; align-items: center; flex: none; }
 .clock-row { min-height: 46px; cursor: pointer; text-align: left; font: inherit; color: inherit; width: 100%; }
 .clock-row.active { border-color: var(--line-strong); box-shadow: inset 3px 0 0 var(--accent); }
 .clock-row.hidden-clock .row-main { opacity: 0.45; }
