@@ -85,7 +85,7 @@ using Statistics
         # stays continuous where the rerun corrects it.
         re = timescale(stepped; algorithm=:at2, steps=:real)
         @test re.weights[1:4000, :] == on.weights[1:4000, :] && re.x[1:4000, :] == off.x[1:4000, :]
-        @test all(iszero, re.weights[4004:4020, 2]) && all(isfinite, timescale_phase(re).x)
+        @test all(iszero, re.weights[4010:4020, 2]) && all(isfinite, timescale_phase(re).x)
         @test maximum(abs, diff(timescale_phase(re).x)) < 20 * maximum(abs, diff(timescale_phase(off).x))
         @test adev(timescale_phase(re), [1000]; ci=false).dev[1] < adev(timescale_phase(off), [1000]; ci=false).dev[1]
         @test timescale(stepped; algorithm=:at2, steps=true).x == on.x
@@ -97,6 +97,11 @@ using Statistics
             @test u.weights ≈ on.weights rtol=1e-6
         end
         @test_throws ArgumentError timescale(stepped; steps=true)
+        # At the default 5σ a step-free ensemble triggers nothing (at the paper's
+        # 4σ the noisier clocks do: 53 false steps in 24 such runs).
+        free = timescale(sc; algorithm=:at2)
+        @test timescale(sc; algorithm=:at2, steps=:best).weights == free.weights
+        @test timescale(sc; algorithm=:at2, steps=:real).weights == free.weights
     end
 
     @testset "caps, gaps and outliers" begin

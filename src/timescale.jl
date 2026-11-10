@@ -267,7 +267,7 @@ AT1 keywords:
   intervals (`lmax` defaults to the clock's τ_min in samples, at least 4),
   the clock's mean frequency against the scale over the window is compared
   with its frequency estimate before the window (eqs 19–20). A difference
-  above `step_threshold` (default 4) standard deviations is a step at the
+  above `step_threshold` (default 5) standard deviations is a step at the
   window's start: the scale is rerun from there with that clock's weight
   zero until τ_min later and its frequency variance raised, and it comes back
   with ``ε_i²`` multiplied by `step_inflate` (default 4, σ_α doubled), the
@@ -285,8 +285,13 @@ AT1 keywords:
   flagged). The clock-minus-scale variance is
   less than the sum of the two when the clock is in the scale, so the sum is
   conservative, as in the paper. A clock is
-  not tested over windows that reach into its exclusion. With a 4σ threshold on clean data expect about one false
-  detection per 10⁵ clock-samples, each costing that clock a few τ_min.
+  not tested over windows that reach into its exclusion. The paper's constant is 4, which gives about one false step per
+  3×10⁴ clock-samples on the noisier clocks of a step-free ensemble (53 in 24
+  runs of four clocks and 16384 samples, none at 5 or 6); a false step
+  excludes the clock for its τ_min and raises its ε², which shifts the
+  weights for good. At 5, a frequency step of 5×10⁻¹¹ (several times the
+  white-FM noise per interval) is caught after about 6 samples and 2×10⁻¹¹
+  after about 50; one of 10⁻¹¹ is not. Pass `step_threshold=4` for the paper's value.
 - `wmax` (default 1, no cap): the largest weight any clock may have.
 - `outlier` (default `Inf`, off): a clock whose prediction error passes
   `outlier` ε_i is left out of that sample and of its variance; if that
@@ -303,7 +308,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
                    tau_min::Union{Nothing,Real,AbstractVector{<:Real}}=nothing,
                    memory::Real=20 * 86400.0, bias::Symbol=:paper, wmax::Real=1.0,
                    outlier::Real=Inf, models::Union{Nothing,AbstractVector{ClockModel}}=nothing,
-                   pivot::Integer=1, steps::Union{Bool,Symbol}=false, step_threshold::Real=4.0,
+                   pivot::Integer=1, steps::Union{Bool,Symbol}=false, step_threshold::Real=5.0,
                    lmax::Union{Nothing,Integer}=nothing, step_inflate::Real=4.0)
     algorithm in (:ewfa, :at1, :at2, :greenhall, :jones_tryon) ||
         throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :at2, :greenhall or :jones_tryon, got :$algorithm"))
