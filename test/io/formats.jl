@@ -112,6 +112,19 @@ fmt(f) = joinpath(FMT, f)
         semi = tempname() * ".txt"
         write(semi, "time;phase (ns)\n0;1.0\n1;2.0\n2;4.0\n")
         @test read_data(semi; delim=';').x == [1e-9, 2e-9, 4e-9]      # detected with the delimiter
+        write(semi, "0;1\n1;2\n2;4\n")
+        @test read_data(semi; delim=';').x == [1, 2, 4]               # plain columns keep it too
+        write(semi, "0,1\n1,2\n2,4\n")
+        @test read_data(semi).x == [1, 2, 4]                          # a comma found in a .txt
+        # The unit in a name fixes the record type over its words, and a time
+        # unit scales the time column.
+        units = tempname() * ".csv"
+        write(units, "time (ms),drift ppm,osc (ms),freq (ns/s)\n0,1,1,1\n100,2,2,2\n200,4,4,4\n")
+        d = read_data(units; column="drift ppm")
+        @test d isa FrequencyData && d.y ≈ [1e-6, 2e-6, 4e-6] && d.tau0 == 0.1
+        @test read_data(units; column="osc (ms)") isa PhaseData
+        @test read_data(units; column="freq (ns/s)").y ≈ [1e-9, 2e-9, 4e-9]
+        @test_throws ArgumentError read_data(units; column="drift ppm", kind=:phase)
         # A time column found by its ISO timestamps rather than its name.
         iso = tempname() * ".csv"
         write(iso, "measurement_time,phase (ns)\n2026-11-08T12:00:00Z,1\n2026-11-08T12:00:01Z,2\n2026-11-08T12:00:03Z,4\n")

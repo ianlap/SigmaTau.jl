@@ -1,22 +1,21 @@
 # Readers for phase / frequency data files, with optional scaling, detrending
 # and gap filling, and the time grid that puts timestamped samples in place.
 
-# The delimiter of a file whose first data line is `buf[r]`: `,` for `.csv`
-# and tab for `.tsv` when that line holds one, else runs of blanks, so a
-# blank-separated file named `.csv` still reads.
-function _ext_delim(path::AbstractString, buf::Vector{UInt8}, r::UnitRange{Int})
-    ext = lowercase(splitext(path)[2])
-    d = ext == ".csv" ? UInt8(',') : ext == ".tsv" ? UInt8('\t') : 0x00
-    (d != 0x00 && d in view(buf, r)) || return '\0'
-    return Char(d)
+# The delimiter of a file whose first data line is `buf[r]`: tab for a `.tsv`
+# whose line holds one, else a comma when the line holds one, else runs of
+# blanks (tabs too), so a comma-separated `.txt` and a blank-separated `.csv`
+# both read.
+function _auto_delim(path::AbstractString, buf::Vector{UInt8}, r::UnitRange{Int})
+    lowercase(splitext(path)[2]) == ".tsv" && UInt8('\t') in view(buf, r) && return '\t'
+    return UInt8(',') in view(buf, r) ? ',' : '\0'
 end
 
 # Columns `cols` of a numeric text file (0 is the last column), read line by
 # line so a record of any length costs only those columns. `header` lines are
 # skipped, then blank and `#` lines wherever they appear (Stable32's
 # "# Header End", notes written mid-record); every row must have the same
-# number of fields. The delimiter is `delim`, else the extension's (see
-# `_ext_delim`). Returns the columns and the field count.
+# number of fields. The delimiter is `delim`, else the one picked from the
+# first data line (see `_auto_delim`). Returns the columns and the field count.
 function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing}, cols::Vector{Int})
     isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
     d = delim === nothing ? '\0' : delim
@@ -31,7 +30,7 @@ function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing
             r === nothing && break
             lineno += 1
             (lineno <= header || _blank_or_comment(l.buf, r)) && continue
-            ncols < 0 && delim === nothing && (d = _ext_delim(path, l.buf, r))
+            ncols < 0 && delim === nothing && (d = _auto_delim(path, l.buf, r))
             _fields!(fields, l.buf, r, d)
             if ncols < 0
                 ncols = length(fields)
@@ -68,7 +67,7 @@ function _ncols(path::AbstractString, header::Int, delim::Union{Char,Nothing})
             r === nothing && return 0
             lineno += 1
             (lineno <= header || _blank_or_comment(l.buf, r)) && continue
-            _fields!(fields, l.buf, r, delim === nothing ? _ext_delim(path, l.buf, r) : delim)
+            _fields!(fields, l.buf, r, delim === nothing ? _auto_delim(path, l.buf, r) : delim)
             return length(fields)
         end
     finally
@@ -360,9 +359,9 @@ samples in file order, and a file with one column is read as its values
 - `value_col`: 1-based column index for phase samples.
 - `header`: number of non-comment header lines to skip (counted after any
                leading `#` comment lines).
-- `delim`: field delimiter (`Char`). Auto-detected from extension when
-               `nothing` (`,` for `.csv` and tab for `.tsv` when the first
-               data line holds one, whitespace otherwise).
+- `delim`: field delimiter (`Char`). Auto-detected when `nothing`: a
+               comma when the first data line holds one (tab for a `.tsv`
+               holding one), whitespace otherwise.
 - `scaling`: multiply phase samples by this factor (e.g. `1e-12` for ps→s).
 - `detrend`: one of `:none`, `:mean`, `:endpoint`, `:linear`, `:quadratic`.
                See [`detrend`](@ref).
