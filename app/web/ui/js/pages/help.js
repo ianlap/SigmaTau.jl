@@ -112,10 +112,10 @@ export function mount(root) {
 
       <section id="help-keys"><h2>Keyboard shortcuts</h2>
         <ul class="keys">
-          <li><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run the analysis</li>
+          <li><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run the analysis; while it runs they cancel it</li>
           <li><kbd>1</kbd> Data · <kbd>2</kbd> Stability · <kbd>3</kbd> Spectrum · <kbd>4</kbd> Dynamic · <kbd>5</kbd> Ensemble · <kbd>6</kbd> Live · <kbd>?</kbd> Help</li>
           <li>On a plot: hover for values, drag to zoom, double-click to reset</li>
-          <li><kbd>Esc</kbd> closes a dialog</li>
+          <li><kbd>Esc</kbd> cancels a running analysis or closes a dialog</li>
         </ul>
       </section>
     </article>`;

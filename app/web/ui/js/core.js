@@ -62,6 +62,8 @@ async function post(body, signal) {
 function recordArgs(clock) {
   const synth = clock.source.type === "synth";
   const a = synth ? ["--synth", clock.source.n, "--seed", clock.source.seed] : [];
+  // One clock of a simulated ensemble: the core simulates them all and hands back this one.
+  if (synth && clock.source.clocks > 1) a.push("--clocks", clock.source.clocks, "--clock", clock.source.index);
   const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
   opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
   // An instrument file (TimeLab, Stable32 .phd/.frd, counter log) is read by

@@ -3,7 +3,12 @@
 detrend_symbol(s::String) = Symbol(s)
 
 # White FM + random-walk FM, built without FFTs so it matches earlier releases.
+# With --clocks, clock --clock of the simulated ensemble (the one timescale uses).
 function synth_record(o::Options)
+    if o.clocks >= 2
+        cc = synth_ensemble(o)
+        return PhaseData(cc.x[:, o.clock], cc.tau0; source="synthetic")
+    end
     rng = Random.Xoshiro(o.seed)
     N = o.synth
     tau0 = isnan(o.tau0) ? 1.0 : o.tau0

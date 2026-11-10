@@ -302,6 +302,10 @@ mktempdir() do dir
         @test occursin("\"algorithm\":\"ewfa\"", r.out) && occursin("\"weight\":[0.3333333333333333,", r.out)
         @test occursin("\"adev\":{\"tau\":[1.0,", r.out) && occursin("\"series\":{\"t\":[0.0,", r.out)
         @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
+        # --clocks sets how many clocks are simulated (four by default).
+        r = run_cli("timescale", "--synth", "2048", "--clocks", "6", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"clocks\":[\"clock 1\",\"clock 2\",\"clock 3\",\"clock 4\",\"clock 5\",\"clock 6\"]", r.out)
+        @test length(csv_rows(run_cli("timescale", "--synth", "2048").out)) == 4
         @test run_cli("timescale", tf).code == 1                       # no --value-cols
         @test run_cli("timescale", tf, "--value-cols", "2,2").code == 1
         @test run_cli("timescale", tf, "--value-cols", "2,9").code == 2
@@ -505,6 +509,27 @@ mktempdir() do dir
         @test occursin("\"source\":\"synthetic\"", r.out)
         @test run_cli("analyze", "--synth", "1024", "--seed", "7", "--devs", "adev").out ==
               run_cli("analyze", "--synth", "1024", "--seed", "7", "--devs", "adev").out
+    end
+
+    @testset "simulated clocks" begin
+        # Clock i of --clocks K is column i of the ensemble the timescale uses.
+        cc, _ = simulate_ensemble([ClockModel(; tau0=1.0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:2], 512;
+                                  reference=0, rng=Random.Xoshiro(9))
+        for i in 1:3
+            r = run_cli("check", "--synth", "512", "--clocks", "3", "--clock", string(i), "--seed", "9", "--series", "512", "--format", "json")
+            @test r.code == 0
+            m = match(r"\"series\":\{[^}]*?\"x\":\[([^\]]*)\]", r.out)
+            @test m !== nothing
+            @test parse.(Float64, split(m.captures[1], ','))[end] ≈ cc.x[end, i] rtol=1e-9
+        end
+        a = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "1", "--devs", "adev").out
+        b = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "2", "--devs", "adev").out
+        @test a != b                                        # the clocks differ
+        @test run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "2", "--devs", "adev").out == b
+        @test run_cli("check", "--synth", "64", "--clocks", "3", "--clock", "4").code == 1      # no such clock
+        @test run_cli("check", "--synth", "64", "--clocks", "1").code == 1                      # needs two or more
+        @test run_cli("check", "--synth", "64", "--clock", "2").code == 1                       # needs --clocks
+        @test run_cli("check", pf, "--clocks", "3").code == 1                                   # synthetic only
     end
 
     @testset "usage errors -> exit 1" begin
