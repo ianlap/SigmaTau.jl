@@ -111,6 +111,22 @@ def run_core(argv, env, sock=None, timeout=TIMEOUT_S):
     return proc.returncode, out, err
 
 
+def core_error(stderr, code):
+    """The message of a failed core, from its stderr. A Julia failure to load
+    ends in a trailer ("in expression starting at stdin:5"); the cause is the
+    `ERROR:` line, up to the stack trace. Otherwise the last line."""
+    lines = stderr.decode(errors="replace").strip().splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("ERROR:"):
+            msg = []
+            for l in lines[i:]:
+                if l.startswith("Stacktrace:") or (msg and l.startswith("ERROR:")):
+                    break
+                msg.append(l)
+            return " ".join(msg).strip()[:600]
+    return lines[-1] if lines else f"core exited with {code}"
+
+
 class Live:
     """One `sigmatau live` process: its JSON lines are kept as they arrive
     and handed out by index, so a page can poll for the ones it has not seen."""
@@ -133,9 +149,9 @@ class Live:
                 with self.lock:
                     self.lines.append(line.decode(errors="replace").strip())
         with self.proc.stderr:
-            tail = self.proc.stderr.read().decode(errors="replace").strip().splitlines()
+            stderr = self.proc.stderr.read()
         if self.proc.wait():
-            self.error = tail[-1] if tail else f"core exited with {self.proc.returncode}"
+            self.error = core_error(stderr, self.proc.returncode)
 
     def poll(self, since):
         running = self.reader.is_alive()
@@ -245,8 +261,7 @@ class Handler(SimpleHTTPRequestHandler):
         out = stdout.strip()
         if out.startswith(b"{"):
             return self.send_json(200 if code == 0 else 422, out)
-        err = stderr.decode(errors="replace").strip().splitlines()
-        return self.send_json(500, {"error": err[-1] if err else f"core exited with {code}"})
+        return self.send_json(500, {"error": core_error(stderr, code)})
 
 
 def main():

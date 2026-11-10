@@ -57,6 +57,19 @@ class RequestToArgsTests(unittest.TestCase):
                 serve.Live(["true"], args)
 
 
+class CoreErrorTests(unittest.TestCase):
+    def test_load_failure_shows_the_cause_not_the_trailer(self):
+        err = (b"ERROR: LoadError: UndefVarError: `x` not defined in `SigmaTauCLI`\nSuggestion: check spelling.\n"
+               b"Stacktrace:\n [1] include\nin expression starting at stdin:5\n\n"
+               b"ERROR: The following 1 package failed to precompile:\n")
+        self.assertEqual(serve.core_error(err, 1),
+                         "ERROR: LoadError: UndefVarError: `x` not defined in `SigmaTauCLI` Suggestion: check spelling.")
+
+    def test_plain_message_and_silence(self):
+        self.assertEqual(serve.core_error(b"first\nlast\n", 2), "last")
+        self.assertEqual(serve.core_error(b"", 2), "core exited with 2")
+
+
 SLEEP = [sys.executable, "-c", "import time; time.sleep(60)"]
 
 
