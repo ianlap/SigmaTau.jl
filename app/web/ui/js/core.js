@@ -190,6 +190,13 @@ export function dynamic(clock, signal) {
   ]), signal);
 }
 
+// A timescale from several clocks; the core's JSON as is.
+export async function timescale(body, signal) {
+  const doc = await post(body, signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc;
+}
+
 // ── Live measurement ──
 // `sigmatau live` runs until stopped and writes one JSON line per update;
 // the shell keeps the lines and the page polls for the ones it has not seen.

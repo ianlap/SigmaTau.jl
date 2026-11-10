@@ -44,6 +44,7 @@ makedocs(
             "tutorials/01_drifting_clock_hadamard.md",
             "tutorials/02_reading_your_data.md",
             "tutorials/03_three_cornered_hat.md",
+            "tutorials/04_clock_ensemble.md",
         ],
         "How-to guides" => [
             "Choosing an estimator" => "guide/choosing.md",

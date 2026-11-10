@@ -13,6 +13,7 @@ const SECTIONS = [
   ["range", "Range and pinned runs"],
   ["spectrum", "Spectra"],
   ["dynamic", "Dynamic deviation"],
+  ["ensemble", "Clock ensemble"],
   ["live", "Live measurement"],
   ["files", "Files"],
   ["keys", "Keyboard shortcuts"],
@@ -55,6 +56,7 @@ export function mount(root) {
           <dt>Stability</dt><dd>σ(τ) on log–log axes for σ<sub>y</sub> (frequency) or σ<sub>x</sub> (time) estimators, with confidence intervals as bars or a band (<b>CI band</b>) and the identified noise types along the top (<b>Noise ID</b>). <b>Fit</b> adds the fitted power-law noise model as dotted lines, with its h<sub>α</sub> and its ADEV at round τ under the table; <b>Edit</b> there builds the model by hand, one noise type over a τ span at a time, with the MHDEV it leaves dashed. One clock shows the per-τ table; several clocks show "Compare at τ" with the most stable clock in bold. Click the plot to move τ.</dd>
           <dt>Spectrum</dt><dd>S<sub>y</sub>(f) and either ℒ(f) at a carrier you choose or S<sub>x</sub>(f), on one frequency axis. Settings here apply at once.</dd>
           <dt>Dynamic</dt><dd>σ(t, τ) in sliding windows, to see whether the stability changes over the record. Recomputes when you change the estimator or window.</dd>
+          <dt>Ensemble</dt><dd>A timescale (AT1 or EWFA) from several clocks read against one reference, with each clock's weight and the stability of the scale.</dd>
           <dt>Live</dt><dd>σ(τ) and the frequency of a measurement as it runs, from an instrument or the simulator.</dd>
         </dl>
       </section>
@@ -96,6 +98,9 @@ export function mount(root) {
         <p>DADEV and DHDEV compute ADEV or HDEV inside a window that slides across the record by half its length. Rows are window centre times, columns are τ, and darker means less stable. A stationary clock gives the same colours down every column; a drift, step or disturbed stretch changes them. DHDEV ignores linear drift inside each window. With several clocks, each gets its own map on one shared colour scale, and <b>Compare at τ</b> below them plots every clock's deviation over time at one τ (pick it there or click a map column), with each clock's whole-record value dotted.</p>
       </section>
 
+      <section id="help-ensemble"><h2>Clock ensemble</h2>
+        <p>The Ensemble page forms a timescale from several clocks read against one reference: the value columns of one loaded file, each a clock minus the same reference. With no such file it simulates four clocks. At each sample every clock's phase is predicted from its estimated frequency, and the scale sits where the weighted prediction errors sum to zero. <b>AT1</b> weighs each clock by the inverse of its prediction-error variance, learned as it runs, leaves out a clock whose error passes four times its own σ, and never gives one clock more than the <b>largest weight</b>. <b>EWFA</b> weighs every clock the same. τ<sub>y</sub> is the time over which each clock's frequency is averaged. The solid line is the scale against the reference; the dotted lines are each clock against the scale.</p>
+      </section>
       <section id="help-live"><h2>Live measurement</h2>
         <p>The Live page reads an instrument one reading at a time and updates ADEV, MDEV, HDEV and MHDEV with every reading, in constant work per reading. <b>Network</b> talks to an LXI instrument's SCPI socket (host:port, usually port 5025) and sends the query, READ? by default, before each reading. <b>Serial / file</b> reads a serial port (set its speed first, e.g. <code>stty -F /dev/ttyUSB0 9600 raw</code>, or <code>stty -f</code> on macOS) or a log file, read to its end; leave the query empty for an instrument that streams on its own. The first number on each line is the reading: a counter frequency in Hz (against the nominal, or the first reading), a fractional frequency, or phase in seconds. τ₀ is the time between readings, such as the counter's gate time. <b>Simulator</b> makes up a clock with white PM, white FM and random-walk FM at one reading per τ₀.</p>
         <p>The live curves carry no intervals. Stop the measurement and press <b>Analyse readings</b> to load them as a clock and run the full analysis, or <b>Save readings</b> to keep them as a text file.</p>
@@ -108,7 +113,7 @@ export function mount(root) {
       <section id="help-keys"><h2>Keyboard shortcuts</h2>
         <ul class="keys">
           <li><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run the analysis</li>
-          <li><kbd>1</kbd> Data · <kbd>2</kbd> Stability · <kbd>3</kbd> Spectrum · <kbd>4</kbd> Dynamic · <kbd>5</kbd> Live · <kbd>?</kbd> Help</li>
+          <li><kbd>1</kbd> Data · <kbd>2</kbd> Stability · <kbd>3</kbd> Spectrum · <kbd>4</kbd> Dynamic · <kbd>5</kbd> Ensemble · <kbd>6</kbd> Live · <kbd>?</kbd> Help</li>
           <li>On a plot: hover for values, drag to zoom, double-click to reset</li>
           <li><kbd>Esc</kbd> closes a dialog</li>
         </ul>

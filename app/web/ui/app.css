@@ -363,3 +363,11 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .model-steps li { margin: 2px 0; }
 .model-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .model-add input { width: 70px; font-family: var(--font-mono); font-size: 12px; }
+
+/* ── Ensemble page ── */
+.ens-weights { flex: 0.6; }
+.ens-table { align-self: flex-start; }
+.ens-table .tbl-row { grid-template-columns: minmax(0, 1.4fr) 56px 56px 1fr; }
+.ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
+.ens-table .card-row { padding: 14px 16px 8px; }
+.ens-note { padding: 8px 16px 14px; }

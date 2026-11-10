@@ -9,6 +9,7 @@ import * as data from "./pages/data.js";
 import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
 import * as live from "./pages/live.js";
+import * as ensemble from "./pages/ensemble.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
 import { openFile, saveFile, readFile } from "./platform.js";
@@ -17,8 +18,8 @@ import { sessionText, parseSession, applySession, isSession } from "./session.js
 import { loadPlotly } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, stability, spectrum, dynamic: dynamicPage, live, help };
-const ORDER = ["data", "stability", "spectrum", "dynamic", "live"];
+const PAGES = { data, stability, spectrum, dynamic: dynamicPage, ensemble, live, help };
+const ORDER = ["data", "stability", "spectrum", "dynamic", "ensemble", "live"];
 const pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
@@ -351,7 +352,7 @@ document.addEventListener("keydown", (e) => {
   if (document.querySelector("dialog[open]")) return;
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const i = "12345".indexOf(e.key);
+  const i = "123456".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
   if (e.key === "?") go("help");
 });
