@@ -50,7 +50,7 @@ SigmaTau's are overlapping (IEEE 1139), so the names shift:
 | `totdev`, `mtotdev`, `ttotdev`, `htotdev` | the same names; see the bias note below |
 | `theo1` | [`theo1`](@ref); see the τ note below |
 | `mtie`, `tierms` | [`mtie`](@ref), [`tierms`](@ref) |
-| `mask.py` (ITU-T TDEV/MTIE masks) | [`telecom_mask`](@ref), [`mask_check`](@ref) |
+| `mask.py` (ITU-T TDEV/MTIE masks) | [`telecom_mask`](@ref), [`mask_check`](@ref), in Python too |
 | `gradev` | [`adev`](@ref): `NaN` gaps are skipped, as `gradev` does |
 | `gcodev` | [`groslambert`](@ref), [`cross_adev`](@ref) |
 | `three_cornered_hat_phase` | [`ncornered_hat`](@ref) (any number of clocks ≥ 3) |

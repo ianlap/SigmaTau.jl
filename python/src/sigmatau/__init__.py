@@ -54,7 +54,9 @@ from .io import (
     read_phase,
     remove_outliers,
     save,
+    summarize,
 )
+from .masks import TELECOM_MASKS, MaskCheck, mask_check, telecom_mask
 from .noise import identify_noise, noise_gen
 from .powerlaw import powerlaw_fit, powerlaw_psd, powerlaw_sigma
 from .spectral import psd_x, psd_y, ssb_phase_noise
@@ -113,6 +115,11 @@ __all__ = [
     "theo1",
     "theoh",
     "DEFAULT_CONFIDENCE",
+    # telecom masks
+    "TELECOM_MASKS",
+    "MaskCheck",
+    "telecom_mask",
+    "mask_check",
     # dynamic deviations
     "dadev",
     "dhdev",
@@ -151,6 +158,7 @@ __all__ = [
     "fillgaps",
     "find_outliers",
     "remove_outliers",
+    "summarize",
     "save",
     "load",
     # runtime introspection

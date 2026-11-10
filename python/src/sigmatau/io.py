@@ -170,6 +170,25 @@ def find_outliers(data: PhaseData | FrequencyData, *, n_sigma: float = 5.0) -> n
 
 
 @_map_errors
+def summarize(data: PhaseData | FrequencyData) -> dict:
+    """A quick check of a record before analysis, as the explorer's Data page shows it.
+
+    Keys: ``n`` samples, ``tau0`` and ``span`` in seconds, ``gaps`` (``nan``
+    samples), ``outliers`` (0-based indices at 5σ, as :func:`find_outliers`) and
+    ``drift_per_day`` (least-squares slope of the frequency, per day).
+    """
+    s = jl.summarize(to_jl_data(data))
+    return {
+        "n": int(s.n),
+        "tau0": float(s.tau0),
+        "span": float(s.span),
+        "gaps": int(s.gaps),
+        "outliers": np_int(s.outliers) - 1,
+        "drift_per_day": float(s.drift_per_day),
+    }
+
+
+@_map_errors
 def remove_outliers(
     data: PhaseData | FrequencyData, *, n_sigma: float = 5.0
 ) -> PhaseData | FrequencyData:
@@ -232,6 +251,7 @@ __all__ = [
     "fillgaps",
     "find_outliers",
     "remove_outliers",
+    "summarize",
     "save",
     "load",
 ]

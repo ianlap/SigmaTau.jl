@@ -82,6 +82,14 @@ st.cross_adev(a, b)                            # two channels measuring one devi
 st.groslambert(x_ab, x_bc, x_ca)               # each clock's ADEV with χ² intervals
 ```
 
+Record check and ITU-T wander masks:
+
+```python
+st.summarize(pd)                               # samples, span, gaps, outliers, drift per day
+c = st.mask_check(st.tdev(pd), "G8262_opt1")   # limit per τ, passed, margin
+st.telecom_mask("G811", "mtie", [1.0, 100.0])  # the limit in seconds
+```
+
 Julia only, not wrapped here: live measurement (`LiveStability` and the
 instrument sources, see `sigmatau live`), `noise_id_nnls` and the
 `StreamingStability` accumulator.
