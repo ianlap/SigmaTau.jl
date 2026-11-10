@@ -57,9 +57,7 @@ phase term) from the slow content of each averaging window.
 
 When `false`, the per-m polynomial fit is skipped. This matches
 Stable32's noise-ID convention; use it when you need α values that line
-up with a Stable32-generated reference fixture point-for-point. (Before
-0.6 this keyword was called `detrend`; `detrend=false` still works, with a
-deprecation warning.)
+up with a Stable32-generated reference fixture point-for-point.
 
 ## `b1_length`
 
@@ -88,11 +86,9 @@ error is 5–13 % and random-walk FM keeps its gain. The value 6 comes from
 that simulation, not from the literature.
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
-                        remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:averaged)
+                        remove_drift::Bool=true, b1_length::Symbol=:averaged)
     b1_length in (:record, :averaged) ||
         throw(ArgumentError("b1_length must be :record or :averaged, got :$b1_length"))
-    detrend || Base.depwarn("identify_noise: `detrend` is deprecated, use `remove_drift`", :identify_noise)
-    detrend = remove_drift && detrend
     x_clean = _preprocess(x)
     N = length(x_clean)
     alphas = Vector{Int}(undef, length(m_values))
@@ -111,12 +107,12 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             # Below B1_MIN_POINTS the label is the one at the longest m that has them.
             mr = lag1 || b1_length !== :averaged ? m : clamp(N ÷ B1_MIN_POINTS, 1, m)
             if lag1 && m == 1
-                x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
+                x_rn === nothing && (x_rn = remove_drift ? _remove_quadratic(x_clean) : x_clean)
                 alpha = _noise_id_lag1acf(x_rn, 1, dmin, dmax; detrend=false)[1]
             elseif lag1
-                alpha = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)[1]
+                alpha = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=remove_drift)[1]
             else
-                alpha = _noise_id_b1rn(x_clean, mr; detrend=detrend, b1_length=b1_length)[1]
+                alpha = _noise_id_b1rn(x_clean, mr; detrend=remove_drift, b1_length=b1_length)[1]
             end
             # A PM result is checked with R(n) = MVAR/AVAR (SP1065 §5.5.2, step 5),
             # which uses every sample where the tests above use one in m. From
@@ -124,7 +120,7 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             # FM, or the noise is not PM. And decimation whitens flicker PM, so a
             # white-PM result of the lag-1 test is confirmed with it from m = 4.
             if alpha >= 0.5 && mr >= 4
-                x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
+                x_rn === nothing && (x_rn = remove_drift ? _remove_quadratic(x_clean) : x_clean)
                 if rn_mdev === nothing
                     rn_adev = _adev_core(x_rn, m_values, 1.0)
                     rn_mdev = _mdev_core(x_rn, m_values, 1.0)
