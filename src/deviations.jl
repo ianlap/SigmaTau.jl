@@ -724,11 +724,14 @@ Conventions (SP1065 / Stable32):
   over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`, which is what a Stable32
   Thêo1 run with automatic noise identification applies: on Stable32's own
   `PHASE.DAT` (1001 points) it reproduces that run at every averaging factor
-  to the five digits printed. Longer records are not checked: above 8192
-  points the ladder is sampled as above (within 0.1 %), and Stable32 limits
-  the points it uses for this factor (`MaxTheoBRPts`, 3000 by default in its
-  manual). With a noise type entered by hand Stable32 applies a tabulated
-  bias instead, which no fixture here checks. `correct_bias=false` gives raw
+  to the five digits printed. Stable32 limits the points it uses for this
+  factor (`MaxTheoBRPts`, 3000 by default in its manual); a longer record is
+  taken at every `b`-th phase, `b = ⌈N/3000⌉`, and 0.00055·(b − 1) is added
+  to the factor. That reproduces Stable32's two bias-removed rows on an
+  8192-point record (b = 3) to the five digits printed, where the ladder on
+  the full record reads 1.8 % low; no other `b` is checked. With a noise type
+  entered by hand Stable32 applies a tabulated bias instead, which no fixture
+  here checks. `correct_bias=false` gives raw
   Thêo1, a Stable32 run with Alpha set to 0.
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
@@ -745,9 +748,8 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     neff = _neff_counts(:theo1, N, m_values)
 
     mode = _bias_mode(correct_bias, :stable32)
-    # Stable32's ladder is summed in full while that is quick, so its printed digits are met.
     devs = mode == :none ? raw_devs :
-           mode == :stable32 ? raw_devs .* sqrt(_theobr_ratio(x, data.tau0; sp1065=true, exact=N <= 8192)) :
+           mode == :stable32 ? raw_devs .* sqrt(_stable32_theobr_ratio(x, data.tau0)) :
                                raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
 
     if !ci

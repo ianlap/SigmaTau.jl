@@ -1055,6 +1055,16 @@ function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1
     return cnt == 0 ? NaN : total / cnt
 end
 
+# The ThêoBR factor as Stable32 computes it: SP1065's ladder (eq. 33) on the
+# record, or on every `b`-th phase when it has more than 3000 points
+# (Stable32's `MaxTheoBRPts`), plus 0.00055·(b − 1). The decimation and the
+# added term are inferred from Stable32's output, which they reproduce to its
+# five digits for b = 1 (1001 points) and b = 3 (8192 points).
+function _stable32_theobr_ratio(x::Vector{Float64}, tau0::Float64)
+    b = cld(length(x), 3000)
+    return _theobr_ratio(x[1:b:end], b * tau0; exact=true, sp1065=true) + 0.00055 * (b - 1)
+end
+
 # ThêoH segment rule (SP1065 §5.2.16 eq. 34): requested grid points are
 # τ-grid factors (target τ = m·τ0). Points at or below the crossover
 # k = 20 % of the record span T = (N−1)·τ0 come from overlapping ADEV at
