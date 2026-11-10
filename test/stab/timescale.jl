@@ -38,6 +38,19 @@ using Statistics
         @test abs(timescale_phase(r).x[40000] - timescale_phase(at).x[40000]) < 1e-11
     end
 
+    @testset "offsets, late starters and short records (EWFA)" begin
+        # Frequency offsets of 1 ns/s per clock change nothing, a clock that
+        # starts late joins at its first reading, and a short record runs.
+        off = cc.x .+ (0:size(cc.x, 1)-1) .* [1e-9 -2e-9 3e-9 0.5e-9]
+        @test all(timescale(ClockComparisons(off, 1.0); algorithm=:ewfa).weights[end, :] .≈ 0.25)
+        x = copy(cc.x); x[1:5, 2] .= NaN
+        joined = timescale(ClockComparisons(x, 1.0); algorithm=:ewfa)
+        @test all(isfinite, timescale_phase(joined).x) && all(iszero, joined.weights[1:5, 2])
+        @test joined.weights[end, 2] ≈ 0.25
+        @test abs(adev1(joined) - adev1(ew)) < 0.05 * adev1(ew)
+        @test size(timescale(ClockComparisons(cc.x[1:3, :], 1.0); algorithm=:ewfa).x, 1) == 3
+    end
+
     @testset "reduced Kalman" begin
         rk = timescale(cc; algorithm=:rkt, models=ms)
         @test vec(mean(rk.weights[late, :]; dims=1)) ≈ wopt rtol=0.01   # Greenhall 2003: ∝ 1/q1

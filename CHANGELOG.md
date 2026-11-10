@@ -9,6 +9,9 @@ Clock models, the Kalman filter and timescales.
 
 ### Fixed
 
+- `timescale` no longer turns the whole scale into `NaN` when a clock has no
+  reading at the first sample: a clock joins the scale, at zero weight, at
+  its first reading.
 - `timescale_phase` reads the scale through any clock with a reading at
   each sample, instead of returning `NaN` wherever the first clock has a
   gap.

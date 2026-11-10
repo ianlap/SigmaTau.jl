@@ -149,12 +149,13 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
     any(ok) || throw(ArgumentError("timescale: no clock has a first reading"))
     u = -sum(r[1, ok]) / count(ok)
     X[1, :] = r[1, :] .+ u
+    seen = copy(ok)             # a clock joins the scale at its first reading
     y = zeros(k)
-    W[1, :] = w
+    W[1, :] = w .* ok ./ sum(w[ok])
     for n in 2:N
         algorithm === :at1 && (w = 1 ./ σ²)
         x̂ = X[n-1, :] .+ y .* τ
-        use = isfinite.(r[n, :])
+        use = isfinite.(r[n, :]) .& seen
         if algorithm === :at1 && n > 2
             # A first pass on every reading sets the scale for the outlier test.
             u₀ = sum(w[use] .* (x̂[use] .- r[n, use])) / sum(w[use])   # uncapped is close enough here
@@ -172,7 +173,10 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
         _cap_weights!(wu, max(Float64(wmax), 1 / count(use)))
         u = sum(wu[use] .* (x̂[use] .- r[n, use]))
         for i in 1:k
-            if isfinite(r[n, i])
+            if isfinite(r[n, i]) && !seen[i]
+                X[n, i] = r[n, i] + u
+                seen[i] = true
+            elseif isfinite(r[n, i])
                 X[n, i] = r[n, i] + u
                 E[n, i] = X[n, i] - x̂[i]
                 y[i] = (my * y[i] + (X[n, i] - X[n-1, i]) / τ) / (my + 1)
