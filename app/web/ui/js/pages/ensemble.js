@@ -78,6 +78,7 @@ export function controls() {
     ${E.algorithm === "at2" ? `<label class="opt"><span>Frequency steps</span><select data-ctl="steps">${[["", "Off"], ["best", "Best"], ["real", "Real"]].map(([id, label]) =>
       `<option value="${id}" ${E.steps === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
     <div class="rule"></div>
+    ${KALMAN.has(E.algorithm) && (clocks.length || 4) < 3 ? `<p class="small ens-warn">${ALGS.find(([id]) => id === E.algorithm)[1]} needs three or more clocks.</p>` : ""}
     <p class="muted small">${clocks.length
       ? (clocks[0].source.type === "synth"
         ? `${clocks.length} clocks simulated on the Data page, each against a perfect reference.`
@@ -117,7 +118,7 @@ export function mount(el, c) {
 function ensure() {
   const { body } = request();
   const key = JSON.stringify(body);
-  if (state.ens.result?.key === key || inflight === key || !state.core.ok) return;
+  if (state.ens.result?.key === key || state.ens.error?.key === key || inflight === key || !state.core.ok) return;
   inflightCtl?.abort();
   const ctl = inflightCtl = new AbortController();
   inflight = key;
@@ -129,7 +130,7 @@ function ensure() {
   }).catch((err) => {
     if (err.name === "AbortError" || inflight !== key) return;
     inflight = null;
-    update((s) => { s.ens.error = err.message; s.ens.result = null; });
+    update((s) => { s.ens.error = { key, message: err.message }; s.ens.result = null; });
   });
 }
 
@@ -148,7 +149,7 @@ export function refresh() {
   const { clocks } = request();
   const r = state.ens.result?.ts;
   const table = root.querySelector("[data-ref=table]");
-  if (state.ens.error) { table.innerHTML = ""; return showEmpty(h(state.ens.error)); }
+  if (state.ens.error) { table.innerHTML = ""; return showEmpty(h(state.ens.error.message)); }
   if (!r) { table.innerHTML = ""; return showEmpty(state.core.ok ? "Forming the timescale…" : "No analysis core. Start the explorer with serve.py."); }
   showEmpty("");
   const names = r.clocks.map((n, i) => clocks[i]?.name ?? n);

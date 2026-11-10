@@ -384,6 +384,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
 .ens-table .card-row { padding: 14px 16px 8px; }
 .ens-note { padding: 8px 16px 14px; }
+.ens-warn { color: var(--warn); }
 
 /* Synthesis page */
 .synth-clocks { align-self: flex-start; min-width: 0; overflow: auto; }
