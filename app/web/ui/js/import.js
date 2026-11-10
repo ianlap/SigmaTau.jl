@@ -143,21 +143,48 @@ export function guessRoles(s) {
   return { time, value, timeUnit };
 }
 
-// Median step and gaps of a time column, scanning the whole file.
+// Grid step and gaps of a time column, scanning the whole file: the same
+// step as the reader's _time_grid (the mean of the regular steps, rounded to
+// the shortest value that keeps every timestamp within a quarter step of its
+// slot), so coarse timestamps such as MJD to six decimals give the true τ0.
 export function timeStats(col, unit = 1) {
+  const t = unit === 1 ? col : col.map((x) => x * unit);
   const d = [];
-  for (let i = 1; i < col.length; i++) d.push(col[i] - col[i - 1]);
+  for (let i = 1; i < t.length; i++) d.push(t[i] - t[i - 1]);
   if (!d.length) return null;
-  const sorted = [...d].sort((a, b) => a - b);
-  // Same median as the reader's _median_step: average the middle pair.
-  const m = sorted.length >> 1;
-  const step = sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
+  const step = gridStep(t, d);
   let gaps = 0, missing = 0, uneven = 0;
   for (const x of d) {
     if (x > 1.5 * step) { gaps++; missing += Math.round(x / step) - 1; }
     else if (Math.abs(x - step) > 0.01 * Math.abs(step)) uneven++;
   }
-  return { tau0: step * unit, gaps, missing, even: gaps === 0 && uneven === 0, span: (col[col.length - 1] - col[0]) * unit };
+  return { tau0: step, gaps, missing, even: gaps === 0 && uneven === 0, span: t[t.length - 1] - t[0] };
+}
+
+function gridStep(t, d) {
+  let lo = Infinity;
+  for (const x of d) if (x < lo) lo = x;
+  let sum = 0, n = 0;
+  for (const x of d) if (x < 1.5 * lo) { sum += x; n++; }
+  const est = sum / n;
+  if (!(lo > 0)) return est;
+  const slots = (step) => {
+    const s = [0];
+    for (const x of d) {
+      const k = x / step;
+      if (Math.abs(k - Math.round(k)) > 0.25) return null;
+      s.push(s[s.length - 1] + Math.round(k));
+    }
+    return s;
+  };
+  for (let digits = 1; digits <= 6; digits++) {
+    const step = Number(est.toPrecision(digits));
+    if (Math.abs(step - est) >= 0.01 * est) continue;
+    const s = slots(step);
+    if (s && s.every((k, i) => Math.abs(t[i] - t[0] - k * step) <= 0.25 * step)) return step;
+  }
+  const s = slots(est);
+  return s && s[s.length - 1] > 0 ? (t[t.length - 1] - t[0]) / s[s.length - 1] : est;
 }
 
 // Evenly thinned copy of a column, for the small preview plot.

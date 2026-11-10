@@ -48,11 +48,8 @@ _scpi_nan(v::Float64) = v == 9.91e37 ? NaN : v
 
 const _TIMELAB_FIELD = r"^(STR|DBL|S32|BLN|S64|U32) 0x[0-9A-Fa-f]+ \"([^\"]*)\"\s?(.*)$"
 
-function _delim_for(path::AbstractString, line::AbstractString, delim::Char='\0')
+function _delim_for(line::AbstractString, delim::Char)
     delim == '\0' || return delim
-    ext = lowercase(splitext(path)[2])
-    ext == ".csv" && return ','
-    ext == ".tsv" && return '\t'
     occursin(',', line) && return ','
     occursin('\t', line) && return '\t'
     return nothing
@@ -77,8 +74,8 @@ Name the layout of a data file from its extension and first lines, one of
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
   [`read_frequency`](@ref).
 
-`delim` is the field delimiter, by default comma for `.csv`, tab for
-`.tsv`, else whitespace.
+`delim` is the field delimiter, by default a comma or tab when the first
+data line holds one, else whitespace.
 """
 detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing) =
     _detect_format(path, delim === nothing ? '\0' : Char(delim))
@@ -100,7 +97,7 @@ function _detect_format(path::AbstractString, delim::Char)
         length(data) >= 8 && break
     end
     isempty(data) && return :columns
-    d = _delim_for(path, data[1], delim)
+    d = _delim_for(data[1], delim)
     # Counter readings, after a timestamp or none.
     all(data) do l
         f = _split_fields(l, d)
@@ -221,7 +218,7 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
             r === nothing && break
             _blank_or_comment(l.buf, r) && continue
             if first_line
-                dd = _delim_for(path, _field_string(l.buf, _strip(l.buf, r)), delim)
+                dd = _delim_for(_field_string(l.buf, _strip(l.buf, r)), delim)
                 d = dd === nothing ? '\0' : dd
                 first_line = false
             end
@@ -282,6 +279,7 @@ function _pick_column(names::Vector{String}, column::Int, column_name::String, t
         i === nothing && throw(ArgumentError("read_data: no column named \"" * column_name * "\"; columns: " * join(names, ", ")))
         return i
     end
+    length(names) == 2 && time > 0 && return 3 - time
     for re in (_PHASE_NAMES, _FREQ_NAMES)
         hits = [i for i in eachindex(names) if i != time && occursin(re, names[i])]
         length(hits) == 1 && return hits[1]
@@ -308,7 +306,7 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
             r === nothing && break
             _blank_or_comment(l.buf, r) && continue
             if isempty(names)
-                dd = _delim_for(path, _field_string(l.buf, _strip(l.buf, r)), delim)
+                dd = _delim_for(_field_string(l.buf, _strip(l.buf, r)), delim)
                 d = dd === nothing ? '\0' : dd
                 _fields!(fields, l.buf, r, d)
                 names = String[_field_string(l.buf, f) for f in fields]
@@ -334,6 +332,14 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
     end
     nrow >= 2 || throw(ArgumentError("read_data: fewer than 2 rows under the column names in " * String(path)))
     any(isnan, t) && empty!(t)
+    # On a time axis a row without a reading is a missing reading, which the
+    # grid puts back where it belongs, so a column sampled more sparsely than
+    # the table keeps its own step.
+    if !isempty(t) && any(isnan, v)
+        keep = .!isnan.(v)
+        count(keep) >= 2 || throw(ArgumentError("read_data: fewer than 2 readings in column \"" * names[c] * "\""))
+        t = t[keep]; v = v[keep]
+    end
     start = iso[] && !isempty(t) ? t[1] : NaN
     if !isempty(t) && occursin(r"mjd"i, names[time])
         start = _mjd_seconds(t[1])
@@ -398,11 +404,11 @@ the file: TimeLab logs and counter time-interval readings are phase,
 column is phase or frequency by its name.
 
 - `tau0`: sample interval in seconds; by default from the file header
-  (TimeLab `Sample Interval`, Stable32 `Tau:`) or the median step of the
+  (TimeLab `Sample Interval`, Stable32 `Tau:`) or the grid step of the
   time column (seconds, MJD days, or ISO 8601 timestamps).
 - `column`: the clock column of a `:table` file, by 1-based index or by
-  name. By default the one column whose name says phase / time error /
-  PPS, else frequency.
+  name. By default the only column besides the time column, else the one
+  whose name says phase / time error / PPS, else frequency.
 - `nominal`: nominal frequency in Hz for readings in Hz (counter logs, a
   table column named `… (Hz)`); converted to fractional frequency
   `(f − nominal)/nominal`. By default the mean reading rounded to four
@@ -410,15 +416,17 @@ column is phase or frequency by its name.
 - `kind`: `:phase` or `:frequency` overrides the record type.
 - `scaling`: multiplies the samples after any unit conversion from a
   column name (`(ns)`, `[ps]`, `ppb` …).
-- `delim`: field delimiter of counter and table files; by default comma
-  for `.csv`, tab for `.tsv`, else whitespace.
+- `delim`: field delimiter of counter and table files; by default a comma
+  or tab when the first data line holds one, else whitespace.
 - `fillgaps`: fill the missing samples (and any `NaN` reading) with
   [`fillgaps`](@ref).
 
 A time column (seconds, MJD days or ISO 8601 timestamps) places the samples
 as in [`read_phase`](@ref): a missing reading leaves a `NaN` sample in its
 slot, which the gap-tolerant estimators skip, and a record with none is read
-as written. ISO 8601 and MJD timestamps also set the record's
+as written. A table row with no reading in the clock column is a missing
+reading too, so a column sampled more sparsely than the table keeps its own
+step. ISO 8601 and MJD timestamps also set the record's
 [`start_time`](@ref). Files are read line by line, keeping only the clock
 and time columns.
 

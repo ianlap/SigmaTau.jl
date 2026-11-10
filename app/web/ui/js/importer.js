@@ -137,7 +137,7 @@ export function openImport(file, prev = null) {
         ? `<div class="gap-card"><b>${ts.gaps} gap${ts.gaps > 1 ? "s" : ""} in the time column</b>${thousands(ts.missing)} missing sample${ts.missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to interpolate them.</div>`
         : "";
       const tauLine = ts && ts.tau0 > 0
-        ? `<div class="tau-line"><span class="mono">${num(ts.tau0, 4)} s</span><span class="ok">✓ from the time column${ts.even ? ", evenly spaced" : ", median step"}</span></div>`
+        ? `<div class="tau-line"><span class="mono">${num(ts.tau0, 4)} s</span><span class="ok">✓ from the time column${ts.even ? ", evenly spaced" : ", grid step"}</span></div>`
         : `<div class="tau-line"><input type="number" id="imp-tau0" min="0" step="any" value="${h(st.tau0In)}"> <span class="muted small">s${s.tau0Hint ? " · from the file header" : " · no time column"}</span></div>`;
 
       dlg.innerHTML = `

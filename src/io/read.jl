@@ -1,16 +1,25 @@
 # Readers for phase / frequency data files, with optional scaling, detrending
 # and gap filling, and the time grid that puts timestamped samples in place.
 
+# The delimiter of a file whose first data line is `buf[r]`: `,` for `.csv`
+# and tab for `.tsv` when that line holds one, else runs of blanks, so a
+# blank-separated file named `.csv` still reads.
+function _ext_delim(path::AbstractString, buf::Vector{UInt8}, r::UnitRange{Int})
+    ext = lowercase(splitext(path)[2])
+    d = ext == ".csv" ? UInt8(',') : ext == ".tsv" ? UInt8('\t') : 0x00
+    (d != 0x00 && d in view(buf, r)) || return '\0'
+    return Char(d)
+end
+
 # Columns `cols` of a numeric text file (0 is the last column), read line by
 # line so a record of any length costs only those columns. `header` lines are
 # skipped, then blank and `#` lines wherever they appear (Stable32's
 # "# Header End", notes written mid-record); every row must have the same
-# number of fields. The delimiter is `delim`, else `,` for `.csv`, tab for
-# `.tsv`, else runs of blanks. Returns the columns and the field count.
+# number of fields. The delimiter is `delim`, else the extension's (see
+# `_ext_delim`). Returns the columns and the field count.
 function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing}, cols::Vector{Int})
     isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
-    ext = lowercase(splitext(path)[2])
-    d = delim !== nothing ? delim : ext == ".csv" ? ',' : ext == ".tsv" ? '\t' : '\0'
+    d = delim === nothing ? '\0' : delim
     out = [Float64[] for _ in cols]
     ncols = -1
     lineno = 0
@@ -22,6 +31,7 @@ function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing
             r === nothing && break
             lineno += 1
             (lineno <= header || _blank_or_comment(l.buf, r)) && continue
+            ncols < 0 && delim === nothing && (d = _ext_delim(path, l.buf, r))
             _fields!(fields, l.buf, r, d)
             if ncols < 0
                 ncols = length(fields)
@@ -47,6 +57,25 @@ function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing
     return out, max(ncols, 0)
 end
 
+# The field count of the first data line (0 for no data).
+function _ncols(path::AbstractString, header::Int, delim::Union{Char,Nothing})
+    fields = UnitRange{Int}[]
+    lineno = 0
+    l = _Lines(path)
+    try
+        while true
+            r = _nextline!(l)
+            r === nothing && return 0
+            lineno += 1
+            (lineno <= header || _blank_or_comment(l.buf, r)) && continue
+            _fields!(fields, l.buf, r, delim === nothing ? _ext_delim(path, l.buf, r) : delim)
+            return length(fields)
+        end
+    finally
+        close(l)
+    end
+end
+
 # Median of a NaN-free vector. Hand-rolled instead of `Statistics.median`,
 # whose NaN error path prints the whole vector and so blocks
 # `juliac --trim` builds. Callers must filter or reject NaN first.
@@ -65,11 +94,15 @@ function _median_step(t::AbstractVector{<:Real})
 end
 
 # The even grid of a time column: the slot of each sample and the grid step.
-# The step is the median of the regular steps (under 1.5 times the shortest,
-# so not the gaps), and every step must be within a quarter of a whole number
-# of grid steps, so jittered timestamps keep their order and a missing
-# reading leaves an empty slot. No slots (and a NaN step) when the column is
-# no time axis: not increasing, or steps that fit no grid.
+# The step is first the mean of the regular steps (under 1.5 times the
+# shortest, so not the gaps), whose sum telescopes, so timestamps rounded to
+# a coarse resolution (MJD to 1e-6 day) still average to the true step. The
+# step is then the shortest round value (1 to 6 significant figures) that
+# keeps every timestamp within a quarter step of its slot over the whole
+# record, else the span over the slots. Every step must be within a quarter
+# of a whole number of grid steps, so jittered timestamps keep their order
+# and a missing reading leaves an empty slot. No slots (and a NaN step) when
+# the column is no time axis: not increasing, or steps that fit no grid.
 function _time_grid(t::AbstractVector{<:Real})
     n = length(t)
     none = (Int[], NaN)
@@ -79,16 +112,45 @@ function _time_grid(t::AbstractVector{<:Real})
     end
     dt = diff(t)
     lo = minimum(dt)
-    step = _median_nonan(filter(d -> d < 1.5 * lo, dt))
-    slots = Vector{Int}(undef, n)
-    slots[1] = 1
-    for i in 2:n
-        k = dt[i - 1] / step
-        k < 2.0^31 || throw(ArgumentError("read: a gap of " * string(k) * " samples in the time column"))
-        abs(k - round(k)) <= 0.25 || return none
-        slots[i] = slots[i - 1] + round(Int, k)
+    s = 0.0; m = 0
+    for d in dt
+        d < 1.5 * lo && (s += d; m += 1)
     end
-    return slots, step
+    est = s / m
+    for digits in 1:6
+        step = round(est; sigdigits=digits)
+        abs(step - est) < 0.01 * est || continue
+        slots = _slots(dt, step)
+        isempty(slots) && continue
+        _on_grid(t, slots, step) && return slots, step
+    end
+    slots = _slots(dt, est)
+    isempty(slots) && return none
+    slots[end] > 1 && (est = (t[end] - t[1]) / (slots[end] - 1))
+    slots = _slots(dt, est)
+    return isempty(slots) ? none : (slots, est)
+end
+
+# The slot of each sample on a grid of `step`, each step rounded to a whole
+# number of grid steps; empty when a step is off the grid by over a quarter.
+function _slots(dt::Vector{Float64}, step::Float64)
+    slots = Vector{Int}(undef, length(dt) + 1)
+    slots[1] = 1
+    for i in eachindex(dt)
+        k = dt[i] / step
+        k < 2.0^31 || throw(ArgumentError("read: a gap of " * string(k) * " samples in the time column"))
+        abs(k - round(k)) <= 0.25 || return Int[]
+        slots[i + 1] = slots[i] + round(Int, k)
+    end
+    return slots
+end
+
+# Every timestamp within a quarter step of its slot on the grid from t[1].
+function _on_grid(t::AbstractVector{<:Real}, slots::Vector{Int}, step::Float64)
+    for i in eachindex(slots)
+        abs(t[i] - t[1] - (slots[i] - 1) * step) <= 0.25 * step || return false
+    end
+    return true
 end
 
 # τ₀ from a time column: its grid step, or the median step when it fits no grid.
@@ -146,6 +208,10 @@ function _scan_comment_header(path::AbstractString)
                         start = _iso_seconds(val)
                     end
                 end
+                # A note such as "# data interval 1.0 s" (allantools' sample files).
+                m = match(r"^#\s*(?:data|sample) interval:?\s+(\S+)\s*s\s*$"i, line)
+                m === nothing || isnan(tau0) &&
+                    (tau0 = something(tryparse(Float64, something(m.captures[1], "")), NaN))
                 continue
             end
             leading = false
@@ -176,11 +242,17 @@ function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int,
     # explicit `header` that already covers it is not added on top.
     stable32 = nskip > 0 && !startswith(readline(path), '#')
     value_col >= 1 || throw(ArgumentError("read: value_col must be ≥ 1"))
+    skip = stable32 ? max(header, nskip) : header + nskip
+    # The value column is never its own time axis, and a one-column file read
+    # with the default columns is its values alone.
+    time_col == value_col && (time_col = 0)
+    if time_col == 1 && value_col == 2 && _ncols(path, skip, delim) == 1
+        time_col = 0; value_col = 1
+    end
     have_time = time_col >= 1
     fillgaps && !have_time &&
         throw(ArgumentError("read: fillgaps=true requires a time column (got time_col=0)"))
-    cols, _ = _read_cols(path, stable32 ? max(header, nskip) : header + nskip, delim,
-                         have_time ? [time_col, value_col] : [value_col])
+    cols, _ = _read_cols(path, skip, delim, have_time ? [time_col, value_col] : [value_col])
     v = cols[end]
     t = have_time ? cols[1] : Float64[]
     scaling == 1 || (v .*= scaling)
@@ -211,32 +283,38 @@ Leading `#` comment lines (the header that [`save`](@ref) writes) are skipped
 automatically; a `# tau0: <value>` entry supplies the sample interval when the
 `tau0` keyword is omitted and a `# start: <ISO 8601>` entry the record's
 [`start_time`](@ref), so files written by `save(path, data)` round-trip with
-no keywords at all. Stable32 exports (a text header closed by `# Header End`)
+no keywords at all; a `# data interval 1.0 s` note does the same. Stable32 exports (a text header closed by `# Header End`)
 are read the same way, with `Tau:` supplying the sample interval. `#` lines
 later in the file are skipped too. The file is read line by line, keeping
 only the time and value columns, so multi-day records at high rates load in
 the memory of their samples.
 
-The time column places the samples: each step is rounded to a whole number
-of median steps, so jittered timestamps stay in order and a missing reading
-leaves a `NaN` sample where it belongs, which the gap-tolerant estimators
-skip (see [Timestamps and gaps](@ref)). A record with no missing timestamps is read exactly
-as written. A column that is not a time axis (not increasing) leaves the
-samples in file order.
+The time column places the samples on a grid: its step is the mean of the
+regular steps, rounded to the shortest value that keeps every timestamp
+within a quarter step of its slot, so jittered or coarsely rounded
+timestamps (MJD to six decimals) give the true τ₀. Each step is rounded to
+a whole number of grid steps, so a missing reading leaves a `NaN` sample
+where it belongs, which the gap-tolerant estimators skip (see [Timestamps
+and gaps](@ref)). A record with no missing timestamps is read exactly as
+written. A column that is not a time axis (not increasing) leaves the
+samples in file order, and a file with one column is read as its values
+(`time_col=0`, `value_col=1`).
 
 # Keyword arguments
 
 - `tau0`: sample interval in seconds. When omitted, taken from a
                `# tau0:` comment header if present, else from the time column
-               (its median step); required when `time_col=0` and neither
+               (its grid step); required when `time_col=0` and neither
                fallback applies.
 - `time_col`: 1-based column index for timestamps (`0` = no time column; the
-               samples are then taken in file order).
+               samples are then taken in file order, as they are when
+               `time_col == value_col`).
 - `value_col`: 1-based column index for phase samples.
 - `header`: number of non-comment header lines to skip (counted after any
                leading `#` comment lines).
 - `delim`: field delimiter (`Char`). Auto-detected from extension when
-               `nothing` (`,` for `.csv`, tab for `.tsv`, whitespace otherwise).
+               `nothing` (`,` for `.csv` and tab for `.tsv` when the first
+               data line holds one, whitespace otherwise).
 - `scaling`: multiply phase samples by this factor (e.g. `1e-12` for ps→s).
 - `detrend`: one of `:none`, `:mean`, `:endpoint`, `:linear`, `:quadratic`.
                See [`detrend`](@ref).

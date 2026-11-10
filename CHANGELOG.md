@@ -38,6 +38,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The readers take a one-column file as its values (a `# data interval
+  1.0 s` note gives τ₀), never use the value column as its own time axis,
+  and split a blank-separated `.csv` on blanks.
+- Timestamps rounded to a coarse resolution (MJD to six decimals, 0.0864 s)
+  give the true τ₀ and grid: the step is the mean of the regular steps,
+  rounded to the shortest value every timestamp fits, where the median gave
+  1.0368 s on 1 s data and joined the gaps.
+- A table column logged more sparsely than the table (5 min values in a
+  30 s file) keeps its own step instead of failing to fill; a lone column
+  beside the time column is picked as the clock.
+- `fillgaps` anchors each fill to the filtered samples beside its gap
+  instead of refiltering the whole record per gap: a month of 1 s data with
+  13 500 gaps fills in 5 s instead of over 7 minutes.
 - The Linux AppImage of the explorer could not run its analysis core: the
   AppImage launcher's `LD_LIBRARY_PATH` made the core load the AppImage's
   copy of libjulia, which then looked for `libgcc_s.so.1` beside it. The app
