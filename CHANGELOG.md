@@ -74,6 +74,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   factor. `sigmatau analyze` and `report` take `--noise auto|fit|TYPE` and
   the JSON gains `analysis.noise`; the explorer has a Noise type menu under
   Options; the Python functions take the same `noise` argument.
+- Cross-checked against AllanDeviations.jl 0.3.0 in the Cross-check CI job
+  (every shared estimator within 1.5e-9 relative), and timed beside
+  allantools in the benchmark.
+- Explorer: end-to-end browser smoke test, run in the Web core CI job; no
+  Plotly error when leaving the Data page.
 
 ### Changed
 
