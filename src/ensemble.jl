@@ -170,8 +170,9 @@ end
 Allan deviation of each of ``N ≥ 3`` clocks from the difference records
 between them, by the Groslambert covariance: the cross Allan variance of
 two records that share the clock
-([Vernotte et al. (2016), Eq. (7)](@cite vernotte-2016-gcov), after
-[Groslambert et al. (1981)](@cite groslambert-1981-crosscorrelations)).
+([Vernotte et al. (2016), Eq. (7)](@cite vernotte-2016-gcov), after the
+two-sample cross-variance of
+[Groslambert et al. (1981), Eqs. (12) to (16)](@cite groslambert-1981-crosscorrelations)).
 
 The second differences of ``x_i - x_j`` and ``x_i - x_k`` have only clock
 ``i`` in common, so for independent clocks
@@ -189,7 +190,8 @@ estimate equals that of [`ncornered_hat`](@ref) on the Allan variances of
 the records. The two differ when each record carries noise of its own,
 such as that of the counter that measured it: that noise biases the hat and
 averages out of the covariance
-([Vernotte et al. (2016), Eqs. (13) and (15)](@cite vernotte-2016-gcov)).
+([Groslambert et al. (1981), Eqs. (9) and (17) to (19)](@cite groslambert-1981-crosscorrelations);
+[Vernotte et al. (2016), Eqs. (13) and (15)](@cite vernotte-2016-gcov)).
 Like the hat, the estimate can be negative for a clock much more stable
 than the others; `dev` is `NaN` there.
 

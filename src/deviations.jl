@@ -1120,8 +1120,9 @@ summed over the ``N_w - 2m`` second differences that fit in the window
 [IEEE Std 1139-2022, Eq. (A.40)](@cite ieee1139-2022-definitions)). The map
 shows changes of stability with time, such as a step in noise level or a
 burst, that a single ``σ_y(τ)`` curve averages away.
-[McKelvy et al. (2026)](@cite mckelvy-2026-telemetry-stability) apply it to
-clock telemetry.
+[McKelvy et al. (2026)](@cite mckelvy-2026-telemetry-stability) take it as
+the target of models that estimate the stability of hydrogen masers from
+their telemetry.
 
 # Arguments
 - `data`: a [`PhaseData`](@ref) or [`FrequencyData`](@ref) record without

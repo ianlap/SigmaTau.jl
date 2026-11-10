@@ -23,10 +23,10 @@ struct CrossSpectralResult
     """Rms magnitude of the residual that the noise the channels do not share
     leaves in the average, ``\\sqrt{S_{aa} S_{bb}/K}``. ``K`` is the number of
     segments reduced for the correlation of overlapping ones
-    ([Welch (1967)](@cite welch-1967-psd)), 0.95 of `nseg` with the default
-    half-overlapped Hann taper. Where the channels share nothing, `psd`
-    scatters about zero with a standard deviation of `floor`/√2. A bin where
-    `psd` is not well above the floor is not resolved."""
+    ([Welch (1967), p. 71](@cite welch-1967-psd)), 0.95 of `nseg` with the
+    default half-overlapped Hann taper. Where the channels share nothing,
+    `psd` scatters about zero with a standard deviation of `floor`/√2. A bin
+    where `psd` is not well above the floor is not resolved."""
     floor::Vector{Float64}
     "Spectrum of channel a alone."
     psd_a::Vector{Float64}
@@ -74,9 +74,10 @@ end
 Cross power spectral density of the fractional frequency of two
 simultaneous records of one device, in 1/Hz.
 
-The estimate is Welch's, as in [`psd_y`](@ref), with the product
-``A_k^* B_k`` of the two channels' transforms in place of ``|Y_k|^2``. Its
-real part is reported
+The estimate is Welch's average of cross-periodograms
+([Welch (1967), p. 73](@cite welch-1967-psd)): that of [`psd_y`](@ref) with
+the product ``A_k^* B_k`` of the two channels' transforms in place of
+``|Y_k|^2``. Its real part is reported
 ([Baudiquez et al. (2020)](@cite baudiquez-2020-cross-spectrum-statistics)).
 
 Noise present in both channels survives the average. Noise in only one,
