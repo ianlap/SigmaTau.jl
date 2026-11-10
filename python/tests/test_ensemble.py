@@ -65,6 +65,20 @@ def test_kalman_filter_matches_julia(clock, jl):
     assert t["cost"].shape == (3, 3) and t["model"].R == m.R
 
 
+def test_holdover_matches_julia(clock, jl):
+    _, data, _ = clock
+    h = st.holdover(data, train=200, tau=[10, 100], limit=1e-10)
+    direct = jl.holdover(
+        _convert.to_jl_data(data), train=200, tau=_convert.to_jl_f64([10, 100]), limit=1e-10
+    )
+    np.testing.assert_array_equal(h.rms, np.array(direct.rms))
+    assert h.n.tolist() == [1791, 1701] and h.time_to_limit == float(direct.time_to_limit)
+    assert (h.train, h.anchor, h.drift, h.confidence) == (200.0, True, False, 0.95)
+    assert np.isnan(st.holdover(data).limit)
+    with pytest.raises(ValueError):
+        st.holdover(data, train=0.5)
+
+
 def test_timescale_matches_julia(jl):
     models = [st.ClockModel(1.0, q1=q) for q in (1e-24, 4e-24, 9e-24)]
     cc, truth = st.simulate_ensemble(models, 3000, reference=None, rng=2)
