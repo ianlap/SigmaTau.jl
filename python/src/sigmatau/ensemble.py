@@ -390,7 +390,6 @@ def timescale(
     cc: ClockComparisons,
     *,
     algorithm: str = "at1",
-    tau_y: float | None = None,
     tau_min: float | Sequence[float] | None = None,
     memory: float | None = None,
     bias: str = "paper",
@@ -401,7 +400,7 @@ def timescale(
     steps: bool | str = False,
 ) -> TimescaleResult:
     """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock the
-    same (its frequencies average over ``tau_y`` seconds, default 100 τ₀),
+    same (Kettering 2023, section 3.1),
     ``"at1"`` follows Weiss & Weissert 1991, ``"at2"`` adds their Kalman
     frequency update, and ``"greenhall"`` runs
     Greenhall's Kalman timescale (reduced Kalman at ``R = 0``, IEMx above) on
@@ -427,7 +426,7 @@ def timescale(
             if np.isscalar(tau_min)
             else juliacall.convert(_VecF64, [float(t) for t in tau_min])
         )
-    for name, value in (("tau_y", tau_y), ("memory", memory), ("outlier", outlier)):
+    for name, value in (("memory", memory), ("outlier", outlier)):
         if value is not None:
             kw[name] = float(value)
     if steps:

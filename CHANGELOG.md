@@ -88,10 +88,18 @@ Clock models, the Kalman filter and timescales.
   (Groslambert variances, then a power-law fit), so `:greenhall` and
   `:jones_tryon` need no hand-built `models`. `powerlaw_fit` accepts a
   `StabilityResult`.
+- EWFA follows section 3.1 of Kettering's 2023 thesis: equal weights, and
+  the scale's frequency is the mean of the clocks' frequency steps, so
+  without gaps it is the plain mean of the phases. The `tau_y` option (an
+  exponential average of each clock's frequency, which the thesis does not
+  have) and `--tau-y` are gone; a clock without a reading still keeps its
+  prediction rather than stepping the scale.
+- Explorer: the Ensemble page offers the Greenhall and Jones–Tryon Kalman
+  timescales, with a pivot clock; Jones–Tryon shows no weights (#166).
 - Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
   model by hand, and the JSON `powerlaw` gains `mode`, `components`,
   `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`
-  forms a timescale (`--algorithm`, `--tau-y`, `--wmax`; `--synth N`
+  forms a timescale (`--algorithm`, `--wmax`; `--synth N`
   simulates four clocks).
 - Explorer: **Edit** in the noise model panel builds the model by hand, with
   the MHDEV it leaves drawn dashed, and is saved with the session. The new

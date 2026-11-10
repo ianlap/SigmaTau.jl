@@ -35,6 +35,14 @@ using Statistics
     short, _ = simulate_ensemble(rw, 4096; reference=0, rng=Xoshiro(42))
     @test all(<(0), diff(vec(mean(timescale(short).weights[2048:end, :]; dims=1))))
 
+    @testset "EWFA is the plain mean of the phases" begin
+        # Kettering 2023, section 3.1: the mean of the clocks' frequency steps
+        # steers the scale, which without gaps is the mean of their phases.
+        m = timescale_phase(ew).x
+        @test m .- m[1] ≈ -(vec(sum(cc.x; dims=2)) ./ size(cc.x, 2) .- sum(cc.x[1, :]) / size(cc.x, 2)) atol=1e-15
+        @test_throws MethodError timescale(cc; algorithm=:ewfa, tau_y=10.0)
+    end
+
     @testset "AT2" begin
         # Same weights as AT1 (the time update is AT1's); frequency by the
         # Kalman update, which in steady state is AT1's filter (eq 17).
