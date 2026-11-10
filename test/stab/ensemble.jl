@@ -89,6 +89,14 @@ end
         @test all(isnan(r.dev[1]) for r in ncornered_hat(_nch_mk([NaN]), _nch_mk([1.0]), _nch_mk([1.0])))
     end
 
+    @testset "no χ² interval below 1 EDF" begin
+        # A clock at 5 % of the others' variance: its separated variance has 0.05 EDF.
+        r(v) = StabilityResult(:adev, [1.0], [sqrt(v)], Symbol[], _CIBound[], [10.0], [100], 1.0, 102, 0.95)
+        quiet, loud = ncornered_hat(r(1.0), r(1.9), r(1.0))
+        @test quiet.dev[1]^2 ≈ 0.05 && quiet.edf[1] < 1 && all(isnan, values(quiet.ci[1]))
+        @test loud.edf[1] > 1 && loud.ci[1].lo < loud.dev[1] < loud.ci[1].hi
+    end
+
     @testset "argument validation" begin
         good = _nch_mk([1.0, 2.0])
         @test_throws ArgumentError ncornered_hat(Matrix{StabilityResult}(undef, 3, 4))
@@ -151,7 +159,7 @@ end
     @test_throws ArgumentError groslambert(Q, [1]; interval=:klts)
     @test_throws ArgumentError groslambert(P, [1]; interval=:kltg)
     # The χ² interval is withheld below 1 EDF.
-    @test all(isnan, values(SigmaTau._gl_chi2_ci([1.0], [0.5], 0.95)[1]))
+    @test all(isnan, values(SigmaTau._sep_chi2_ci([1.0], [0.5], 0.95)[1]))
 end
 
 @testset "KLTS against SigmaTheta" begin

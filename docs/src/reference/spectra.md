@@ -36,6 +36,51 @@ powerlaw_sigma
 powerlaw_psd
 ```
 
+## Interactive fit
+
+[`noise_fit`](@ref) builds the model by hand, one noise type at a time:
+pick a type and the τ where it dominates, and its level is fitted there
+with the slope fixed, against what the other components leave. This is the way
+to go when you know which noise sits where, or when [`powerlaw_fit`](@ref)
+spends a component on a bump.
+
+```julia
+f = noise_fit(mhdev(p))
+add_component!(f, :WHPM, 1:2)
+add_component!(f, :WHFM, 6:9)
+noise_residual(f)                  # σ² the model leaves at each τ
+undo!(f)
+```
+
+```@docs
+noise_fit
+NoiseFit
+add_component!
+undo!
+noise_residual
+```
+
+## Clock model
+
+[`clock_model`](@ref) turns a power-law fit into the state-space
+[`ClockModel`](@ref) the Kalman filters run on: white PM becomes the
+measurement noise, white, random-walk and random-run FM drive the phase,
+frequency and drift states. [The clock model](../explanation/clock_model.md)
+derives the mapping and the matrices.
+
+```julia
+m = clock_model(powerlaw_fit(p; alphas=[2, 0, -2]))
+state_transition(m, 1.0), process_noise(m, 1.0)
+powerlaw_sigma(m, [1.0, 100.0])    # σ(τ) the model stands for
+```
+
+```@docs
+ClockModel
+clock_model
+state_transition
+process_noise
+```
+
 ## Two channels
 
 [`cross_psd_y`](@ref) and [`cross_psd_x`](@ref) average the cross-spectrum

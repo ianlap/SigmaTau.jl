@@ -16,6 +16,7 @@ export const state = {
   band: true,              // intervals as a shaded band (else error bars)
   noiseId: true,           // noise-type strip and slope guides on the Stability plot
   fit: true,               // power-law model lines and the noise model table on Stability
+  fitEdit: false,          // the noise model box shows the component editor
   mask: "",                // ITU-T wander mask drawn over MTIE / TDEV on Stability ("" = none)
   bias: "exact",           // bias correction of the totals and Thêo1, one of BIASES
   noise: "auto",           // noise type behind the intervals, one of NOISES
@@ -30,10 +31,17 @@ export const state = {
   // Spectrum page (display settings, applied without a run)
   spec: { carrier: 10e6, carrierText: "10e6", phase: "L", avg: "log", guides: true },
   // Dynamic page: estimator, window = record / frac, map or 3D waterfall
+  // Ensemble page: timescale settings and the last result ({ key, ts })
+  ens: { algorithm: "at1", wmax: 1, pivot: 1, steps: "", result: null, error: null },
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
   // Live page: where the readings come from and what they are
   live: { source: "sim", address: "192.168.1.20:5025", device: "/dev/ttyUSB0", query: "READ?", deviceQuery: "", reading: "hz",
           nominal: "", tau0: 0.1, devs: ["adev", "mdev"] },
+  // Synthesis page: the record and the noise of each clock to be simulated (R, q1, q2, q3 are the
+  // clock-model coefficients), and the predicted stability ({ key, doc }). The two clocks are the ones
+  // the Ensemble page simulates on its own.
+  synth: { n: 16384, tau0: 1, seed: 42, dev: "mdev", preview: null, error: null,
+    clocks: [0, 1].map((j) => ({ name: `Sim ${j + 1}`, R: 0, q1: 1e-24 * 4 ** j, q2: 1e-30 * 4 ** j, q3: 0 })) },
   dataMode: "file",        // "file" | "synth" on the Data page
   dataView: "phase",       // "phase" | "drift": the Data page's plot
   driftModel: "linear",    // frequency drift model fitted on the drift view
@@ -70,6 +78,7 @@ export function newClock(fields = {}) {
     result: null,            // last analysis from the core (with the spectrum)
     dynamic: null,           // last dynamic-deviation map, with its settings key
     driftFit: null,          // last frequency drift fit, with its settings key
+    components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
     error: null,
     ...fields,
   };

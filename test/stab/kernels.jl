@@ -70,6 +70,10 @@ using SigmaTau
         # m too large for N: NaN and neff = 0.
         r_edge = adev(pd, [N ÷ 2 - 1, N ÷ 2]; ci=false)
         @test isnan(r_edge.dev[2]) && r_edge.neff == [2, 0]
+        # totdev: the reflected extension reaches m = N − 1 and no further.
+        r_edge = totdev(pd, [N - 1, N, 2N]; ci=false, correct_bias=false)
+        @test r_edge.dev[1] ≈ sqrt(LK.totdev_var_howe(pd.x, N - 1, pd.tau0)) rtol = 1e-12
+        @test all(isnan, r_edge.dev[2:3]) && r_edge.neff == [N - 2, 0, 0]
     end
 
     @testset "reference-kernel parity" begin
