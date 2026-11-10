@@ -33,11 +33,11 @@ same from a window or a shell.
 
 | Stable32 statistic | SigmaTau |
 |---|---|
-| Normal (non-overlapping) Allan | not provided; the overlapping form has more degrees of freedom |
+| Normal (non-overlapping) Allan | `adev(p; overlapping=false)` |
 | Overlapping Allan | [`adev`](@ref) |
 | Modified Allan | [`mdev`](@ref) |
 | Time | [`tdev`](@ref) |
-| Hadamard (non-overlapping) | not provided |
+| Hadamard (non-overlapping) | `hdev(p; overlapping=false)` |
 | Overlapping Hadamard | [`hdev`](@ref) |
 | Total | [`totdev`](@ref) |
 | Modified Total | `mtotdev(p; correct_bias=false)`; see below |

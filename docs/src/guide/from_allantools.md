@@ -43,7 +43,7 @@ SigmaTau's are overlapping (IEEE 1139), so the names shift:
 
 | allantools | SigmaTau |
 |---|---|
-| `adev`, `hdev` (non-overlapping) | not provided; the overlapping forms have more degrees of freedom |
+| `adev`, `hdev` (non-overlapping) | `adev(p; overlapping=false)`, `hdev(p; overlapping=false)` (`overlapping=False` in Python); the overlapping forms, the default, have more degrees of freedom |
 | `oadev` | [`adev`](@ref) |
 | `mdev`, `tdev` | [`mdev`](@ref), [`tdev`](@ref) |
 | `ohdev` | [`hdev`](@ref) |

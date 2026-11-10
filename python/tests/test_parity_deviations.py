@@ -92,3 +92,10 @@ def test_adev_golden_against_stable32(phase8192, stable32_csv):
 
     expected = np.array([reference[m] for m in ms])
     np.testing.assert_allclose(result.dev, expected, rtol=2e-4)
+
+
+@pytest.mark.parametrize("name", ["adev", "hdev"])
+def test_non_overlapped(small_phase, name):
+    fn, m = getattr(st, name), [1, 4, 16]
+    r, o = fn(small_phase, m, overlapping=False), fn(small_phase, m)
+    assert r.dev[0] == o.dev[0] and (r.neff[1:] < o.neff[1:]).all()

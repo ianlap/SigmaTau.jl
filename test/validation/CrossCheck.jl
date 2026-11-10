@@ -91,9 +91,11 @@ _f(s) = s == "nan" ? NaN : parse(Float64, s)
 # SigmaTau call reproducing each allantools estimator. allantools reports the
 # raw (bias-free) total estimators, so those run with correct_bias=false.
 const AT_MAP = Dict(
+    "adev"    => (p, m) -> adev(p, [m]; ci=false, overlapping=false).dev[1],
     "oadev"   => (p, m) -> adev(p, [m]; ci=false).dev[1],
     "mdev"    => (p, m) -> mdev(p, [m]; ci=false).dev[1],
     "tdev"    => (p, m) -> tdev(p, [m]; ci=false).dev[1],
+    "hdev"    => (p, m) -> hdev(p, [m]; ci=false, overlapping=false).dev[1],
     "ohdev"   => (p, m) -> hdev(p, [m]; ci=false).dev[1],
     "totdev"  => (p, m) -> totdev(p, [m]; ci=false, correct_bias=false).dev[1],
     "mtotdev" => (p, m) -> mtotdev(p, [m]; ci=false, correct_bias=false).dev[1],
@@ -118,7 +120,7 @@ function allantools_dev_rows()
     cache = Dict{String,PhaseData}()
     for r in _csv(joinpath(AT, "devs.csv"))
         est = r["estimator"]
-        haskey(AT_MAP, est) || continue          # adev / hdev: non-overlapped, not in SigmaTau
+        haskey(AT_MAP, est) || continue
         ds = r["dataset"]
         p = get!(() -> dataset(ds), cache, ds)
         m = parse(Int, r["m"])
@@ -229,7 +231,9 @@ const S32_RUNS = [
 
 # σ-only runs over every τ (no CI columns in these files).
 const S32_ALLTAU = [
+    ("phase_dat_adev.txt",   "adev",   (p, m) -> adev(p, m; ci=false, overlapping=false)),
     ("phase_dat_oadev.txt",  "oadev",  (p, m) -> adev(p, m; ci=false)),
+    ("phase_dat_hdev.txt",   "hdev",   (p, m) -> hdev(p, m; ci=false, overlapping=false)),
     ("phase_dat_mdev.txt",   "mdev",   (p, m) -> mdev(p, m; ci=false)),
     ("phase_dat_tdev.txt",   "tdev",   (p, m) -> tdev(p, m; ci=false)),
     ("phase_dat_ohdev.txt",  "ohdev",  (p, m) -> hdev(p, m; ci=false)),

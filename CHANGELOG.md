@@ -18,7 +18,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 - `integrated_jitter`: integrated phase jitter (rms radians and seconds) and
   residual FM (rms hertz) over an offset band, from a `ssb_phase_noise`,
   `psd_x` or `psd_y` result or from spectrum points such as an analyzer's
-  ℒ(f) (NIST SP1065 §5.2.19). Also in Python.
+  ℒ(f) (NIST SP1065 §5.2.19; IEEE Std 1139-1999 eq. A.16). Also in
+  Python.
+- `adev` and `hdev` take `overlapping=false` for the non-overlapped
+  estimators (NIST SP1065 §5.2.2 and §5.2.8; Stable32's Normal Allan and
+  Hadamard, allantools' `adev` and `hdev`), with the Greenhall–Riley EDF
+  for stride τ. Also in Python.
+- Explorer: Espresso dark theme; the header button follows the system
+  setting or picks light or dark, and plots, the heatmap and exports follow
+  the theme.
 - Explorer import dialog: a typed scale factor (a number or an expression such
   as `1/(2*pi*518.295836590863e12)`) for readings that are not in the offered
   units, kept when the dialog is reopened; GNSS clock tables, whitespace
@@ -74,6 +82,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `mhtotdev` at `m = 1` uses the exact bias factor 124/225 and MHDEV's EDF.
+  The fitted bias and EDF models do not hold at τ₀, and the 68.3 % interval
+  never covered the true value there.
+- `totdev` at `m = 1` takes ADEV's EDF for every noise type: at τ₀ TOTVAR is
+  AVAR term for term, and SP1065 Table 7 was applied to the FM noises.
+- `mtotdev` and `ttotdev` take their EDF from Howe and Peppler (2001),
+  Table 2, from τ = 16τ₀, in place of SP1065 Table 8, which runs from 16 %
+  high to 41 % low against simulation; Table 2 stays within 8 % for
+  T/τ ≥ 16.
+- ThêoBR (`theo1` by default, and the Thêo segment of `theoh`) averages its
+  AVAR/Thêo1 ratio over `i = 0…⌊N/30 − 3⌋`, as Howe (2006), McGee and Howe
+  (2007) and Taylor and Howe (2010) define it. SP1065 eq. 33 prints
+  `⌊N/6 − 3⌋`, which runs AVAR out to half the record: the ratio scattered
+  by 25 to 30 % and biased the corrected variance by −9 to +11 %, against
+  8 to 11 % and −5 to +3 % now. Output moves by a few percent. Below
+  N = 90, where the papers' formula has no rung, the first rung is used
+  alone.
 - Flicker PM is identified as flicker PM at long τ. The lag-1 test runs on
   phase decimated by m, which whitens flicker PM, so from m ≈ 16 a pure
   flicker-PM record was labelled white PM (in 64 % of records at m = 16 and
