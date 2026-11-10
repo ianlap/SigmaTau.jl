@@ -22,9 +22,17 @@ function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; ov
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in idx
-            d2 = x[i+2m] - 2x[i+m] + x[i]
-            sum_sq += d2^2
+        # Stride 1 keeps a unit range: Julia ≥ 1.12 does not vectorise @simd over a StepRange.
+        if overlapping || m == 1
+            @inbounds @simd for i in 1:(N - 2m)
+                d2 = x[i+2m] - 2x[i+m] + x[i]
+                sum_sq += d2^2
+            end
+        else
+            @inbounds @simd for i in idx
+                d2 = x[i+2m] - 2x[i+m] + x[i]
+                sum_sq += d2^2
+            end
         end
 
         devs[k] = sqrt(sum_sq / (2.0 * n * Float64(m)^2 * tau0^2))
@@ -126,9 +134,17 @@ function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; ov
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in idx
-            d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
-            sum_sq += d3^2
+        # Stride 1 keeps a unit range: Julia ≥ 1.12 does not vectorise @simd over a StepRange.
+        if overlapping || m == 1
+            @inbounds @simd for i in 1:(N - 3m)
+                d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
+                sum_sq += d3^2
+            end
+        else
+            @inbounds @simd for i in idx
+                d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
+                sum_sq += d3^2
+            end
         end
 
         devs[k] = sqrt(sum_sq / (6.0 * n * Float64(m)^2 * tau0^2))
