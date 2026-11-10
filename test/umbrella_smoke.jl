@@ -25,9 +25,7 @@ using SigmaTau
         :detrend, :fillgaps, :find_outliers, :remove_outliers,
         :drift_fit, :DriftFit,
         :powerlaw_fit, :PowerLawFit, :powerlaw_sigma, :powerlaw_psd])
-    deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
-                      :load_result, :load_suite])
-    @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public ∪ deprecated
+    @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public
     # The kernels stay internal but reachable as SigmaTau._adev_core etc.
     @test isdefined(SigmaTau, :_adev_core)
 end

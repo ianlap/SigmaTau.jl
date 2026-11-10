@@ -9,14 +9,10 @@ in seconds and must be requested explicitly.
 const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 
 function _stability(data, N::Int, kind::Symbol, tau0::Float64;
-                    devs = DEFAULT_DEVIATIONS, m = Octave, taus = nothing,
+                    devs = DEFAULT_DEVIATIONS, m = Octave,
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
                     correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true,
                     noise::_NoiseChoice = :auto)
-    if taus !== nothing
-        Base.depwarn("stability: `taus` is deprecated, use `m`", :stability)
-        m = taus
-    end
     results = StabilityResult[]
     for sym in devs
         name = Symbol(sym)
