@@ -112,6 +112,21 @@ fmt(f) = joinpath(FMT, f)
         semi = tempname() * ".txt"
         write(semi, "time;phase (ns)\n0;1.0\n1;2.0\n2;4.0\n")
         @test read_data(semi; delim=';').x == [1e-9, 2e-9, 4e-9]      # detected with the delimiter
+        write(semi, "0;1\n1;2\n2;4\n")
+        @test read_data(semi; delim=';').x == [1, 2, 4]               # plain columns keep it too
+        write(semi, "0,1\n1,2\n2,4\n")
+        @test read_data(semi).x == [1, 2, 4]                          # a comma found in a .txt
+        # The unit in a name fixes the record type over its words, and a time
+        # unit scales the time column.
+        units = tempname() * ".csv"
+        write(units, "time (ms),drift ppm,osc (ms),freq (ns/s)\n0,1,1,1\n100,2,2,2\n200,4,4,4\n")
+        d = read_data(units; column="drift ppm")
+        @test d isa FrequencyData && d.y ≈ [1e-6, 2e-6, 4e-6] && d.tau0 == 0.1
+        @test read_data(units; column="osc (ms)") isa PhaseData
+        @test read_data(units; column="freq (ns/s)").y ≈ [1e-9, 2e-9, 4e-9]
+        @test_throws ArgumentError read_data(units; column="drift ppm", kind=:phase)
+        write(units, "time (ms),phase (ns)\n2026-11-08T12:00:00Z,1\n2026-11-08T12:00:01Z,2\n2026-11-08T12:00:02Z,4\n")
+        @test read_data(units).tau0 == 1.0                            # not for ISO timestamps
         # A time column found by its ISO timestamps rather than its name.
         iso = tempname() * ".csv"
         write(iso, "measurement_time,phase (ns)\n2026-11-08T12:00:00Z,1\n2026-11-08T12:00:01Z,2\n2026-11-08T12:00:03Z,4\n")
@@ -124,11 +139,17 @@ fmt(f) = joinpath(FMT, f)
         log = tempname() * ".csv"
         write(log, "time,phase (s)\n0.02,1\n0.98,2\n2.01,3\n4.03,5\n4.97,6\n")
         p = read_data(log)
-        @test p.tau0 == 0.98                       # the regular steps, to a round value
+        @test p.tau0 == 1.0                        # the fitted step, to a round value
         @test isequal(p.x, [1, 2, 3, NaN, 5, 6])
         @test start_time(p) === nothing
         @test read_data(log; fillgaps=true).x[[1, 2, 3, 5, 6]] == [1, 2, 3, 5, 6]
         @test SigmaTau._time_grid([0.0, 1.0, 3.1, 4.0]) == ([1, 2, 4, 5], 1.0)
+        # Exact timestamps keep their own step on a short record, not a rounder one.
+        @test SigmaTau._time_grid(86400.0 .* (0:9))[2] == 86400.0     # not 86000
+        @test SigmaTau._time_grid(604800.0 .* (0:99))[2] == 604800.0  # not 605000
+        # MJD-rounded stamps in 30 short runs, then a long gap: the step and every slot.
+        s = [[20j + k for j in 0:29 for k in 0:17]; 55597 .+ (0:99)]
+        @test SigmaTau._time_grid(round.((5.184e9 .+ s) ./ 0.0864) .* 0.0864) == (s .+ 1, 1.0)
         # MJD to six decimals (0.0864 s): 1 s steps read as 0.9504 or 1.0368 s.
         mjd = round.(59646.9583 .+ [0:999; 1500:2999] ./ 86400; digits=6)
         tbl = tempname() * ".csv"

@@ -664,6 +664,11 @@ mktempdir() do dir
         r = run_cli("spectrum", gf)
         @test r.code == 3
         @test occursin("--fillgaps", r.err)
+        # analyze still runs the gap-tolerant estimators and leaves the spectrum out
+        r = run_cli("analyze", gf, "--devs", "adev", "--spectrum", "--format", "json")
+        @test r.code == 0
+        @test occursin("\"spectrum\":{\"error\":\"the spectrum needs a record without gaps\"}", r.out)
+        @test occursin("\"deviation\":\"adev\"", r.out)
         # A one-column frequency file with NaN readings is analyzed once filled.
         yf = joinpath(dir, "y.txt")
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
