@@ -133,12 +133,15 @@ reach, so that convention almost never reports it: in simulation (N = 1024,
 6 to 24 averaged points) random-walk FM is found in 1 to 2 % of records and
 flicker FM in 24 to 48 %, against 60 to 75 % and 34 to 79 % at the number of
 averaged points. White FM is found less often that way, in 33 to 82 % of
-records against 65 to 88 %. Below 6 averaged points the ratio is close to
+records against 65 to 88 %. Below 8 averaged points the ratio is close to
 a coin toss, so SigmaTau reports the label measured at the longest averaging
-factor that still has 6. On the 8192-point validation fixture Stable32
+factor that still has 8. On the 8192-point validation fixture Stable32
 reads white FM at τ = 1024 s and beyond, where ADEV is flat and then rising
-and SigmaTau reads flicker FM and random-walk FM; TOTDEV is then 3.1 %,
-10.9 % and 26.5 % above Stable32's at 1024, 2048 and 4096 s.
+and SigmaTau reads flicker FM; TOTDEV is then 3.1 %,
+6.6 % and 14.7 % above Stable32's at 1024, 2048 and 4096 s. The Hadamard
+family, which removes the drift before it identifies the noise, does not use
+the B1 ratio by default: below 30 averaged points it reports the label of
+the last τ that has 30.
 [Validation](../explanation/validation.md) has the rows.
 
 ## Gaps

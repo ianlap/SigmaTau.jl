@@ -2,7 +2,7 @@
 # calibrated power-law noise synthesis and the NNLS variance decomposition.
 
 const NEFF_RELIABLE = 30
-const B1_MIN_POINTS = 6   # fewest averaged points the averaged-length B1 test is run on
+const B1_MIN_POINTS = 8   # fewest averaged points the averaged-length B1 test is run on
 
 """
     identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true, b1_length::Symbol=:averaged) → Vector{Symbol}
@@ -25,7 +25,11 @@ stands only if R(n) lies nearer its flicker-PM value than 1/2: R(n) is 1/2,
 from every sample where the tests read one in `m`. A PM result that fails is
 reported as white FM. With few averaged points the tests mistake FM for PM
 often enough (white FM in one record in four at 32 points), and a PM label
-there gives an interval several times too narrow. For `m ≥ 2` the limits between white FM,
+there gives an interval several times too narrow. Where the B1 test is used
+R(n) decides the other way too: a result of FM is reported as PM when R(n)
+lies on the PM side. The B1 ratio takes white PM for FM in one record in
+five at 16 averaged points and one in three at 8; R(n) is wrong there in
+fewer than one in ten, either way. For `m ≥ 2` the limits between white FM,
 flicker FM and random-walk FM sit halfway between the values the estimate
 takes on sampled noise (α = 0, −1.446, −2.4), not at the half-integers of
 [riley-2004-lag1-acf](@cite), which split flicker FM almost evenly between
@@ -80,12 +84,17 @@ random-walk FM in 60–75 % of records and flicker FM in 34–79 %, where
 against 65–88 %. With so few points no test separates neighbouring noise
 types better than about two times in three.
 
-Below `B1_MIN_POINTS` = 6 averaged points `:averaged` reports the label
-measured at the longest averaging factor that still has 6, `N ÷ 6`. With 2
+Below `B1_MIN_POINTS` = 8 averaged points `:averaged` reports the label
+measured at the longest averaging factor that still has 8, `N ÷ 8`. With 2
 to 4 points the ratio is close to a coin toss, and on white FM the labels it
-gave over-corrected the total variance by 13–33 %; taken at 6 points the
-error is 5–13 % and random-walk FM keeps its gain. The value 6 comes from
-that simulation, not from the literature.
+gave over-corrected the total variance by 13–33 %; taken at 8 points the
+error is 4–14 % and random-walk FM keeps its gain. At 8 points R(n) still
+tells PM from FM (wrong on white FM in 4–9 % of records, 11–13 % at 6). The
+value 8 comes from simulation, not from the literature.
+
+On a record whose frequency drift has been removed the B1 ratio is about
+half of what its limits assume, and it stops at random-walk FM. The Hadamard
+family therefore does not use it by default (see [`hdev`](@ref)).
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
                         remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:averaged)
@@ -118,12 +127,13 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             else
                 alpha = _noise_id_b1rn(x_clean, mr; detrend=detrend, b1_length=b1_length)[1]
             end
-            # A PM result is checked with R(n) = MVAR/AVAR (SP1065 §5.5.2, step 5),
-            # which uses every sample where the tests above use one in m. From
-            # m = 16 it must lie nearer its flicker-PM value than the 1/2 of white
-            # FM, or the noise is not PM. And decimation whitens flicker PM, so a
-            # white-PM result of the lag-1 test is confirmed with it from m = 4.
-            if alpha >= 0.5 && mr >= 4
+            # R(n) = MVAR/AVAR (SP1065 §5.5.2, step 5) uses every sample where
+            # the tests above use one in m. From m = 16 a PM result must lie
+            # nearer its flicker-PM value than the 1/2 of white FM, or the
+            # noise is not PM; a B1 result of FM that does lie nearer is PM.
+            # And decimation whitens flicker PM, so a white-PM result of the
+            # lag-1 test is confirmed with it from m = 4.
+            if mr >= 4 && (alpha >= 0.5 || (!lag1 && mr >= 16 && N ÷ mr >= B1_MIN_POINTS))
                 x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
                 if rn_mdev === nothing
                     rn_adev = _adev_core(x_rn, m_values, 1.0)
@@ -132,7 +142,9 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
                 md, ad = mr == m ? (rn_mdev[k], rn_adev[k]) :
                                    (_mdev_core(x_rn, [mr], 1.0)[1], _adev_core(x_rn, [mr], 1.0)[1])
                 if mr >= 16 && _rn_fm(md, ad, mr)
-                    alpha = 0.0
+                    alpha >= 0.5 && (alpha = 0.0)
+                elseif alpha < 0.5
+                    isnan(md) || (alpha = _rn_flicker(md, ad, mr) ? 1.0 : 2.0)
                 elseif lag1 && alpha >= 1.5 && _rn_flicker(md, ad, mr)
                     alpha = 1.0
                 end

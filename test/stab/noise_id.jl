@@ -149,8 +149,17 @@ using SigmaTau
         @test identify_noise(PhaseData(x, 1.0), ms; b1_length=:averaged) ==
               identify_noise(x, ms; b1_length=:averaged)
         @test_throws ArgumentError identify_noise(x, ms; b1_length=:bogus)
-        # Below 6 averaged points the label is the one measured at N ÷ 6.
-        @test identify_noise(x, [341, 512]) == identify_noise(x, [170, 170])
+        # Below 8 averaged points the label is the one measured at N ÷ 8.
+        @test identify_noise(x, [170, 341, 512]) == identify_noise(x, [128, 128, 128])
+        # The Hadamard family, drift removed, has no B1 test: the label at N ÷ 30.
+        @test hdev(PhaseData(x, 1.0), [64, 128, 340]).noise_type == fill(hdev(PhaseData(x, 1.0), [34]).noise_type[1], 3)
+    end
+
+    @testset "R(n) tells PM from FM where the B1 test is used" begin
+        # 16 averaged points of white PM whose B1 ratio alone reads white FM.
+        x = noise_gen(PhaseData, 1024, 1.0; h=Dict(2 => 1.0), rng=Xoshiro(23)).x
+        @test SigmaTau._noise_id_b1rn(x, 64)[1] == 0
+        @test identify_noise(x, [64]) == [:WHPM]
     end
 
     @testset "B1(N, μ) closed-form parity vs allantools canonical" begin

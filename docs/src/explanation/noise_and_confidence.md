@@ -76,8 +76,8 @@ points N, the length the ratio is defined for. With 8 to 24 points no test
 separates neighbouring noise types better than about two times in three, so
 labels at the longest τ are weak evidence; `b1_length=:record` gives the
 labels closer to Stable32's, which almost never include random-walk FM
-there. Below 6 averaged points the ratio says almost nothing, and SigmaTau
-reports the label measured at the longest averaging factor that still has 6;
+there. Below 8 averaged points the ratio says almost nothing, and SigmaTau
+reports the label measured at the longest averaging factor that still has 8;
 that value comes from simulation, not from the literature. Decimation whitens flicker PM: its lag-1 correlation fades as m
 grows, and from m ≈ 16 the test reads it as white PM, whose ADEV has several
 times the EDF. A white-PM result is therefore confirmed with R(n), the ratio
@@ -97,6 +97,13 @@ stands only if R(n) lies nearer its flicker-PM value than 1/2; one that fails
 is reported as white FM. On simulated white FM (N = 8192) this raises the
 share of 68.3 % ADEV intervals that hold the true value from 56–64 % to
 70–73 % at 4 to 32 averaged points, and it leaves PM records as they were.
+Where the B1 ratio is used, R(n) decides the other way too: a result of FM
+whose R(n) lies on the PM side is reported as PM. The B1 ratio alone takes
+white PM for FM in one record in five at 16 averaged points and one in three
+at 8, and the FM bias factor then left the default TOTDEV 2 to 33 % and
+MTOTDEV 5 to 12 % high in variance on white PM; with R(n) both are within
+2 %. R(n) is wrong on white FM in 4 to 9 % of records at 8 averaged points
+and 11 to 13 % at 6, which is why the ratio is not run on fewer than 8.
 To set the noise type yourself, see [Stating the noise type](@ref).
 
 The result is always one of the five labels above, or for the
@@ -136,6 +143,18 @@ identification; the deviation itself does not change. The removal also takes
 some of the slowest noise with it, so on a record without drift flicker FM
 near the longest τ is read as white FM more often. `remove_drift=false`
 identifies the noise on the record as given, which is what Stable32 does.
+
+On the drift-removed record these estimators do not use the B1 ratio. Its
+limits are those of a record with the drift left in, where the ratio is
+about twice as large, and it stops at random-walk FM: random-walk FM was
+labelled as such in one record in five at 16 averaged points and in none at
+4, flicker-walk and random-run FM never, and the default HTOTDEV read 7 to
+20 % low in variance on flicker FM and redder. With fewer than 30 averaged
+points they report the label the lag-1 test gives at the longest averaging
+factor that still has 30. On noise of one type that label is right in 54 %
+of records for flicker FM and 68 to 100 % for the others (N = 8192), and the
+default HTOTDEV is within 4 % of HDEV in variance on every type. A change of
+noise type beyond τ = T/30 goes unseen; state it with `noise`.
 
 The third difference of the Hadamard family also converges for flicker-walk
 FM (`:FWFM`, α = −3) and random-run FM (`:RRFM`, α = −4), and these estimators
