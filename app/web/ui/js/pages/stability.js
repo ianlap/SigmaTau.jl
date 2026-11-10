@@ -2,7 +2,7 @@
 // "Compare at τ" (several clocks, overlaid). Mounted once per visit;
 // refresh() redraws from state.
 import { state, update, visibleClocks, multi, markStale } from "../state.js";
-import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope, BIAS_CORRECTED } from "../estimators.js";
+import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope, BIAS_CORRECTED, biasEntry } from "../estimators.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css } from "../plot.js";
 import { sci, num, escapeHtml as h } from "../format.js";
 
@@ -81,7 +81,7 @@ export function refresh() {
   root.querySelectorAll("[data-axis]").forEach((b) => b.classList.toggle("on", b.dataset.axis === state.axis));
   const conf = state.ci ? `${(CONFIDENCES.find(([v]) => v === state.confidence) ?? [0, state.confidence])[1]} confidence · ` : "";
   const biased = state.devs.some((d) => BIAS_CORRECTED.has(d));
-  const bias = biased ? (state.bias ? " · bias-corrected" : " · not bias-corrected") : "";
+  const bias = biased ? ` · ${biasEntry(state.bias)[2]}` : "";
   root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}`;
   const maskSel = root.querySelector("[data-ref=mask]");
   maskSel.value = state.mask;

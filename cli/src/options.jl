@@ -23,6 +23,7 @@ const FORMATS = ["csv", "json"]
 const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "table", "bipm_utc", "rinex_clk"]
 const DETRENDS = ["none", "mean", "endpoint", "linear"]
 const DRIFTS = ["none", "linear", "quadratic"]
+const BIASES = ["exact", "published", "stable32", "none"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
@@ -74,7 +75,8 @@ const OPTS = [
     Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
     Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze", "report"]),
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
-    Opt("--no-bias-correction", "", String[], false, "leave the total estimators and Thêo1 uncorrected", ["analyze", "report"]),
+    Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
+    Opt("--no-bias-correction", "", String[], false, "the same as --bias none", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only)", ["analyze"]),
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
@@ -125,7 +127,7 @@ mutable struct Options
     m::Vector{Int}         # empty = use the grid
     ci::Bool
     confidence::Float64
-    bias::Bool
+    bias::String
     spectrum::Bool
     nperseg::Int           # 0 = library default
     dev::String
@@ -171,12 +173,15 @@ end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
-                    Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
+                    Float64(DEFAULT_CONFIDENCE), "exact", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
+
+# --bias as the library's `correct_bias`.
+correct_bias(o::Options) = o.bias == "exact" ? true : o.bias == "none" ? false : Symbol(o.bias)
 
 function find_opt(name::String)
     for op in OPTS
@@ -309,6 +314,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--scaling";        o.scaling = parse_float(v, name)
     elseif name == "--detrend";        o.detrend = check_choice(v, name, DETRENDS)
     elseif name == "--remove-drift";   o.remove_drift = check_choice(v, name, DRIFTS)
+    elseif name == "--bias";           o.bias = check_choice(v, name, BIASES)
     elseif name == "--devs";           o.devs = parse_devs(v)
     elseif name == "--grid";           tau_mode(v); o.grid = v
     elseif name == "--m";              o.m = parse_m(v)
@@ -346,7 +352,7 @@ function set_flag!(o::Options, name::String)
     elseif name == "--fillgaps";           o.fillgaps = true
     elseif name == "--remove-outliers";    o.remove_outliers = true
     elseif name == "--no-ci";              o.ci = false
-    elseif name == "--no-bias-correction"; o.bias = false
+    elseif name == "--no-bias-correction"; o.bias = "none"
     elseif name == "--spectrum";           o.spectrum = true
     elseif name == "--hz";                 o.hz = true
     elseif name == "--fast";               o.fast = true

@@ -35,6 +35,12 @@ using Statistics
     @test length(fit) == 3 && all(m -> m.tau0 == 1.0, fit)
     @test [m.q1 for m in fit] ≈ [m.q1 for m in ms] rtol=0.3
     @test timescale(cc; algorithm=:greenhall, models=fit) isa TimescaleResult
+    # Flicker PM on a reading is fitted as PM and does not pass for white FM.
+    x = copy(cc.x)
+    x[:, 3] .+= noise_gen(PhaseData, 20000, 1.0; h=Dict(1 => 2e-21), rng=MersenneTwister(8)).x
+    noisy = ClockComparisons(x, 1.0)
+    @test clock_models(noisy)[3].q1 ≈ ms[3].q1 rtol=0.3
+    @test clock_models(noisy; alphas=[2, 0, -2])[3].q1 > 2ms[3].q1
     @test_throws ArgumentError clock_models(ClockComparisons(ones(10, 2), 1.0))
     ideal, _ = simulate_ensemble(ms[[1, 3]], 100; reference=0)
     @test ideal.reference == "ideal reference" && !iszero(ideal.x[:, 1])

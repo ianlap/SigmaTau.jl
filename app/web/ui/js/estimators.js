@@ -58,5 +58,15 @@ export function noiseSlope(dev, noise) {
   return MODIFIED.has(dev) ? -(a + 1) / 2 : -(Math.min(a, 1) + 1) / 2;
 }
 
+// Bias correction of the total estimators and Thêo1 (the command line's
+// --bias): value, menu label, plot caption.
+export const BIASES = [
+  ["exact", "Exact", "bias-corrected"],
+  ["published", "Published tables", "bias as published"],
+  ["stable32", "As Stable32", "bias as Stable32"],
+  ["none", "None", "not bias-corrected"],
+];
+export const biasEntry = (b) => BIASES.find(([v]) => v === b) ?? BIASES[0];
+
 // Estimators the bias-correction option changes.
 export const BIAS_CORRECTED = new Set(["totdev", "mtotdev", "htotdev", "mhtotdev", "ttotdev", "theo1"]);

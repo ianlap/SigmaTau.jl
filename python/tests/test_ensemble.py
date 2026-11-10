@@ -102,3 +102,17 @@ def test_timescale_matches_julia(jl):
     np.testing.assert_allclose(rk.weights[-1], w / w.sum(), rtol=0.02)
     with pytest.raises(ValueError):
         st.timescale(cc, algorithm="at3")
+
+
+def test_clock_models_and_implicit_mean_match_julia(jl):
+    models = [st.ClockModel(1.0, R=1e-22, q1=q) for q in (1e-24, 4e-24, 9e-24)]
+    cc, truth = st.simulate_ensemble(models, 4000, reference=None, rng=5)
+    fitted = st.clock_models(cc)
+    direct = jl.clock_models(cc._jl())
+    assert [m.q1 for m in fitted] == [float(m.q1) for m in direct]
+    r = st.timescale(cc, algorithm="greenhall", models=fitted)
+    jr = jl.seval("(c, ms) -> timescale(c; algorithm=:greenhall, models=ms)")(cc._jl(), direct)
+    iem = st.implicit_mean(r, truth)
+    np.testing.assert_allclose(iem.x, np.array(jl.implicit_mean(jr, truth).x), rtol=1e-12)
+    with pytest.raises(ValueError):
+        st.implicit_mean(st.timescale(cc), truth)
