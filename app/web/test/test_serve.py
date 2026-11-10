@@ -10,6 +10,9 @@ or to `julia --project=cli`.
 import importlib.util
 import json
 import os
+import socket
+import subprocess
+import sys
 import threading
 import time
 import unittest
@@ -52,6 +55,58 @@ class RequestToArgsTests(unittest.TestCase):
         for args in (None, "live", [], ["analyze"], ["live", "sim", "--out", "x"], ["live", 3]):
             with self.assertRaises(ValueError, msg=args):
                 serve.Live(["true"], args)
+
+
+class CoreErrorTests(unittest.TestCase):
+    def test_load_failure_shows_the_cause_not_the_trailer(self):
+        err = (b"ERROR: LoadError: UndefVarError: `x` not defined in `SigmaTauCLI`\nSuggestion: check spelling.\n"
+               b"Stacktrace:\n [1] include\nin expression starting at stdin:5\n\n"
+               b"ERROR: The following 1 package failed to precompile:\n")
+        self.assertEqual(serve.core_error(err, 1),
+                         "ERROR: LoadError: UndefVarError: `x` not defined in `SigmaTauCLI` Suggestion: check spelling.")
+
+    def test_plain_message_and_silence(self):
+        self.assertEqual(serve.core_error(b"first\nlast\n", 2), "last")
+        self.assertEqual(serve.core_error(b"", 2), "core exited with 2")
+
+
+SLEEP = [sys.executable, "-c", "import time; time.sleep(60)"]
+
+
+class RunCoreTests(unittest.TestCase):
+    """The core runs in a process the server can stop: a cancelled run (the
+    page hangs up) must not keep the processor busy."""
+
+    def test_output_and_exit_code(self):
+        code, out, err = serve.run_core([sys.executable, "-c", "print('hi')"], os.environ.copy())
+        self.assertEqual((code, out.strip(), err), (0, b"hi", b""))
+
+    def test_stops_when_the_page_hangs_up(self):
+        server_end, page_end = socket.socketpair()
+        got = {}
+        t = threading.Thread(target=lambda: got.update(r=serve.run_core(SLEEP, os.environ.copy(), server_end)))
+        t0 = time.monotonic()
+        t.start()
+        time.sleep(0.5)
+        self.assertTrue(t.is_alive())          # still running while the page waits
+        page_end.close()                       # the page cancelled
+        t.join(10)
+        self.assertFalse(t.is_alive())
+        self.assertIsNone(got["r"])
+        self.assertLess(time.monotonic() - t0, 10)
+        server_end.close()
+
+    def test_waits_while_the_page_stays(self):
+        server_end, page_end = socket.socketpair()
+        code, out, _ = serve.run_core([sys.executable, "-c", "import time; time.sleep(0.4); print(1)"],
+                                      os.environ.copy(), server_end)
+        self.assertEqual((code, out.strip()), (0, b"1"))
+        server_end.close()
+        page_end.close()
+
+    def test_timeout(self):
+        with self.assertRaises(subprocess.TimeoutExpired):
+            serve.run_core(SLEEP, os.environ.copy(), timeout=0.5)
 
 
 @unittest.skipUnless(serve.cli_command(), "no sigmatau binary and no julia on PATH")

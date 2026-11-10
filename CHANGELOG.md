@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Clock models, the Kalman filter and timescales.
+
 ### Added
 
 - `FrequencyData(p)` and `PhaseData(y)` convert a record to the other kind
@@ -79,6 +81,112 @@ versions follow [Semantic Versioning](https://semver.org/).
   allantools in the benchmark.
 - Explorer: end-to-end browser smoke test, run in the Web core CI job; no
   Plotly error when leaving the Data page.
+
+- Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
+  MDEV, HDEV or MHDEV result (or a total form), `add_component!` fits one
+  noise type's level on a chosen τ range with the slope fixed and the
+  confidence intervals as weights, `undo!` takes the last one back, and
+  `noise_residual` shows what is left. Every change refits all the levels
+  against each other, so the model does not depend on the order the
+  components were added in. The model feeds `powerlaw_sigma`,
+  `powerlaw_psd` and `clock_model`.
+- Single-clock Kalman filter: `kalman_filter` runs a `ClockModel` over a
+  phase record (gaps predicted across, Joseph-form update, least-squares
+  start), `kalman_smooth` is the Rauch–Tung–Striebel smoother,
+  `holdover_error` gives the 1σ time error after free-running for τ, and
+  `innovation_check` tests the normalized innovations for unit variance and
+  whiteness. `tune_q` retunes the white and random-walk FM levels for the
+  smallest phase prediction error at chosen horizons (each level is resolved
+  only to the grid step, a factor of 10^(2·decades/(points−1)), 3.2 by
+  default), `prediction_error`
+  reports that error, and `simulate_clock` draws a record and its true
+  states from a model.
+- Measured holdover test: `holdover(data; train, tau, drift, anchor, limit)`
+  learns the frequency (and drift) from a training stretch, free-runs from
+  the last reading and compares with the record from every start (Delporte et
+  al., PTTI 2000). It gives the RMS, a quantile, the worst case and the mean of
+  the time error at each holdover time, and the time at which the quantile
+  reaches a limit.
+- Clock ensembles: `ClockComparisons` holds several clocks read against one
+  reference (`cc[i]` one clock, `cc[i, j]` a difference), and
+  `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
+  states.
+- Timescales: `timescale(cc; algorithm=:ewfa | :at1)` forms a scale from
+  the clocks' predicted phases, with equal weights (EWFA) or AT1's learned
+  inverse-variance weights; missing readings are skipped and `timescale_phase`
+  gives the scale against the reference. AT1 follows Weiss & Weissert 1991:
+  weights from the prediction-error variance with the bias term `K` (eqs
+  3 to 7), each clock's frequency constant from its own τ_min (eq. 10), the
+  variance memory `N_τ` of 20 days and the starting variance τ²σ_y²(τ). The
+  exact bias correction (`bias=:exact`), a weight cap (`wmax`) and an outlier
+  test (`outlier`) are options.
+- AT2: `timescale(cc; algorithm=:at2)` is AT1 with the paper's Kalman
+  frequency update (eqs 13 to 18), also in the CLI (`--algorithm at2`) and the
+  explorer. `steps=:best` or `:real` (`--steps best|real` in the CLI) adds the
+  paper's frequency-step detection (19 to 22): a clock whose frequency jumps is
+  left out for its τ_min and the scale rerun from the step, with `best`
+  replacing the scale from the step on and `real` keeping the values already
+  issued, as the paper does. The threshold of eq 20 is rewritten as a variance
+  in consistent units (the printed form mixes time and frequency), a
+  documented departure, and it defaults to 5 standard deviations rather than
+  the paper's 4, which fired falsely about once per 3×10⁴ clock-samples on
+  noisy clocks (`step_threshold=4` restores it). Off by default.
+- Greenhall Kalman timescale: `timescale(cc; algorithm=:greenhall, models, pivot)`
+  runs one Kalman filter over every clock with the covariance reduction
+  after each step (the reduced Kalman timescale at `R = 0`, IEMx above), so
+  the scale is quiet at short τ as well as long; without white PM its
+  weights are the optimal 1/q1 ones. The scale is read at clock `pivot`.
+  `algorithm=:jones_tryon` is the same filter without the reduction, the
+  natural Jones–Tryon scale (JT83): a clock's reading less its estimated
+  phase. In
+  simulation `implicit_mean(r, truth)` gives the scale's own phase, the mean
+  of the clocks' true phases, free of the pivot clock's reading noise.
+- Stein's Kalman timescale: `timescale(cc; algorithm=:stein, models, pivot, wmax)`
+  differences every clock against the pivot, runs a Kalman filter on each
+  difference and gets the pivot's own shocks from the constraints that the
+  weighted shocks of all clocks sum to zero, with separate weights for the
+  phase, frequency and aging noise, each inversely proportional to the
+  matching noise variance (Stein 2003; the KAS-2 algorithm, with `wmax` as its
+  weight cap). On white FM clocks it matches `:greenhall` to a few percent.
+  Also in the command line (`--algorithm stein`) and Python.
+- `clock_models(cc)` fits a `ClockModel` per clock from the comparisons alone
+  (Groslambert variances, then a power-law fit with white PM, flicker PM,
+  white FM and random-walk FM, `alphas = [2, 1, 0, -2]`), so `:greenhall` and
+  `:jones_tryon` need no hand-built `models`. `clock_model` folds flicker PM
+  into the reading noise `R` as the PM the filter does not follow (Van
+  Dierendonck, McGraw & Brown 1984); left as white FM, flicker PM inflated
+  `q1`. `powerlaw_fit` accepts a `StabilityResult`.
+- EWFA follows section 3.1 of Kettering's 2023 thesis: equal weights, and
+  the scale's frequency is the mean of the clocks' frequency steps, so
+  without gaps it is the plain mean of the phases. The `tau_y` option (an
+  exponential average of each clock's frequency, which the thesis does not
+  have) and `--tau-y` are gone; a clock without a reading still keeps its
+  prediction rather than stepping the scale.
+- Explorer: the Ensemble page offers the Greenhall and Jones–Tryon Kalman
+  timescales, with a pivot clock; Jones–Tryon shows no weights (#166).
+- Explorer: AT2's frequency-step detection (best or real) on the Ensemble page (#174).
+- Explorer: the Ensemble page offers Stein's Kalman timescale (KAS-2), with the
+  pivot clock and the largest weight (#200).
+- Explorer: a × on each clock in the Clocks list removes it; the Ensemble page
+  forms the scale from the clocks that are left (#182); the Ensemble page
+  shows the core's error instead of waiting forever (#185).
+- Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
+  model by hand, and the JSON `powerlaw` gains `mode`, `components`,
+  `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`
+  forms a timescale (`--algorithm`, `--wmax`; `--synth N`
+  simulates four clocks).
+- Explorer: **Edit** in the noise model panel builds the model by hand, with
+  the MHDEV it leaves drawn dashed, and is saved with the session. The new
+  **Ensemble** page forms a timescale from the clocks of one loaded file, or
+  simulated ones, and plots each clock's weight and the ADEV of the scale
+  and of each clock against it.
+- Python: `ClockModel`, `clock_model`, `noise_fit`, `kalman_filter`,
+  `kalman_smooth`, `holdover_error`, `innovation_check`, `tune_q`,
+  `simulate_clock`, `ClockComparisons`, `simulate_ensemble`, `timescale`,
+  `timescale_phase`, `clock_models`, `implicit_mean`, `holdover` and
+  `HoldoverResult` wrap the Julia calls of the same names.
+- Tutorial "From one clock to an ensemble": noise fit, Kalman filter,
+  holdover and an AT1 timescale on simulated clocks.
 
 ### Changed
 
@@ -162,6 +270,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Explorer: a core that fails to start shows its error message instead of
+  the last line of Julia's output (#179).
 - `mhtotdev` at `m = 1` uses the exact bias factor 124/225 and MHDEV's EDF.
   The fitted bias and EDF models do not hold at τ₀, and the 68.3 % interval
   never covered the true value there.
@@ -195,6 +305,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   EDF there. A white-PM result at m ≥ 4 is now confirmed with the R(n)
   ratio of SP1065 §5.5.2. Labels of the other four noise types, and of
   every shipped Stable32 and allantools fixture, are unchanged.
+- `timescale` no longer turns the whole scale into `NaN` when a clock has no
+  reading at the first sample: a clock joins the scale, at zero weight, at
+  its first reading.
+- `timescale_phase` reads the scale through any clock with a reading at
+  each sample, instead of returning `NaN` wherever the first clock has a
+  gap.
 - The default bias correction of `mtotdev` and `ttotdev` went the wrong way.
   Mod Totvar reads low against MVAR, by 0.5 % for white PM up to 32 % for
   random-walk FM (Howe and Peppler 2001, Table 2; Howe and Vernotte 1999),
@@ -253,6 +369,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   (MJD 30000 to 90000, steps under 0.05 d, more than four decimals), a
   `ratio` column as frequency, and unnamed columns of median size under
   1e-11 as frequency; ROCIT files now read as downloaded.
+
 
 ## [0.6.0] - 2026-11-08
 
