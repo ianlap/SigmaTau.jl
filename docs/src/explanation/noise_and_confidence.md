@@ -309,9 +309,9 @@ Stable32 or allantools, so `correct_bias` also takes the convention of each:
 
 | `correct_bias` | TOTDEV | MTOTDEV, TTOTDEV | HTOTDEV | Thêo1 | Reproduces |
 |:---|:---|:---|:---|:---|:---|
-| `true` (default) | all noises | exact below 16τ₀ | all noises, exact below 16τ₀ | ThêoBR | |
-| `:published` | FM only | published factor at every τ | FM only, published factor at every τ | ThêoBR | SP1065, Howe and Peppler |
-| `:stable32` | FM only | raw | FM only, published factor at every τ | ThêoBR over SP1065's ladder, to N/6 | Stable32 |
+| `true` (default) | all noises | exact below 16τ₀ | all noises, exact below 16τ₀ | ThêoBR, ladder to N/6 (SP1065, IEEE 1139) | |
+| `:published` | FM only | published factor at every τ | FM only, published factor at every τ | ThêoBR, ladder to N/30 (Howe 2006) | SP1065, Howe and Peppler |
+| `:stable32` | FM only | raw | FM only, published factor at every τ | ThêoBR to N/6 on at most 3000 points | Stable32 |
 | `false` | raw | raw | raw | raw | allantools |
 
 MHTOTDEV has no published factor and exists in neither program: it is raw
@@ -323,6 +323,19 @@ and Stable32 read a different noise type at a τ, the FM factor still differs
 against Stable32. The command line names the four values
 `--bias exact|published|stable32|none`, and the explorer offers them under
 Bias correction.
+
+The two ThêoBR ladders fail in different places. ThêoBR scales Thêo1 at
+every τ by one factor, the mean ratio of AVAR to Thêo1 over a ladder of
+matched averaging times. Howe's ladder stops at a tenth of the record, so on
+a record whose noise changes from PM to FM beyond that point the factor is
+the PM one and Thêo1 at long τ reads low: 0.18 to 0.77 of the true variance
+in simulation, and 2.4 times low in deviation on the 8192-point validation
+record. The ladder of SP1065 and IEEE Std 1139 runs to half the record and
+reads 0.56 to 1.12 there, at a price on records of one FM noise: its last
+rungs hold one or two AVAR samples each, the factor scatters 2.5 times more
+and averages 7 to 9 % low, so bias-removed Thêo1 at short τ carries 15 to
+19 % error in σ where ADEV has 4 to 11 %. [`theoh`](@ref) uses ADEV at short
+τ and is little affected.
 
 ## Drift
 

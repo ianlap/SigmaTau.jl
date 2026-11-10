@@ -1004,42 +1004,53 @@ const _THEOBR_DENSE = 16
 const _THEOBR_SAMPLES = 32
 
 """
-    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false, sp1065=false) → Float64
+    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false, howe=false) → Float64
 
-ThêoBR automatic bias-removal factor [howe-2006-theoh](@cite), eq. 6: the
-average over `i = 0…n`, `n = ⌊N/30 − 3⌋`, of the variance ratios
-`AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor ladders sample the same
-effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`), so each term is an AVAR/Theo1
-comparison at matched averaging time, out to a tenth of the record where
-AVAR is still well determined. Multiply a Thêo1 *variance* by this factor (a
-deviation by its square root) to get the bias-removed ThêoBR estimate.
+ThêoBR automatic bias-removal factor: the average over `i = 0…n` of the
+variance ratios `AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor ladders
+sample the same effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`), so each term is
+an AVAR/Theo1 comparison at matched averaging time. Multiply a Thêo1
+*variance* by this factor (a deviation by its square root) to get the
+bias-removed ThêoBR estimate.
 
-[mcgee-2007-theoh](@cite) and [taylor-2010-fast-theobr](@cite) give the same
-`n`. SP1065 §5.2.16 eq. 33 prints `⌊N/6 − 3⌋`, which runs AVAR out to half
-the record, where it has one degree of freedom: on simulated white, flicker
-and random-walk FM that ladder scatters the ratio by 25 to 30 % and biases
-the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to +3 % here
-(N = 1024). `sp1065=true` takes that ladder, which is the one Stable32 runs.
-The paper's formula needs `N ≥ 90` for `n ≥ 0`; shorter records, outside its
-stated range, use the first rung alone.
+`n = ⌊N/6 − 3⌋`, the ladder of SP1065 §5.2.16 eq. 33 and IEEE Std 1139-2022
+eq. A.37, which Stable32 runs: AVAR out to half the record. `howe=true`
+takes `n = ⌊N/30 − 3⌋`, which Howe (2006) eq. 6, McGee and Howe (2007) and
+Taylor and Howe (2010) print: AVAR out to a tenth of the record. The two
+fail in different places, measured in simulation at N = 2048:
+
+- Where PM gives way to FM inside the record the short ladder averages the
+  ratio where PM holds (0.2 to 0.4) and applies it where FM does (1 to
+  2.6): the corrected variance at 0.2 to 0.7 of the span reads 0.18 to 0.77
+  of the true one, against 0.56 to 1.12 with the long ladder.
+- On a record of one FM noise the long ladder's last rungs hold one or two
+  AVAR samples each and count as much as the first: the ratio scatters 2.5
+  times more (white FM, 5 to 95 %: 0.58 to 1.41 against 0.83 to 1.16) and
+  averages 7 to 9 % low, at any N.
+
+The first error is the larger and is silent, so the long ladder is the
+default. The formulas need `N ≥ 18` and `N ≥ 90` for `n ≥ 0`; shorter
+records use the first rung alone.
 
 Unless `exact=true` or the ladder is short, Thêo1 is computed only at the
 first 16 factors and at 32 evenly spaced along the rest, and interpolated
 between them linearly in log m–log σ² (exact for a power law); AVAR is
-computed at every factor. Against the exact ratio on simulated power-law
-noises (α = +2…−2, N = 8192 and 16 384) this stays within 0.5 % (0.25 % on
-the deviation), far inside ThêoBR's own confidence interval. The
-block-averaging form of [taylor-2010-fast-theobr](@cite) was tried and
-rejected here because it moved the ratio by 10–40 % for the PM noises.
+computed at every factor. Against the exact ratio on the five simulated
+power-law noises and on white PM giving way to flicker FM (N = 2048 and
+8192) this stays within 0.7 % (0.35 % on the deviation), far inside
+ThêoBR's own confidence interval. The block-averaging form of Taylor and Howe (2010)
+was tried and rejected here because it moved the ratio by 10–40 % for the PM
+noises.
 
-Ratio terms whose Thêo1 is not finite/positive are skipped and the average
-is taken over the computable terms. Returns NaN when no term is computable
+Ratio terms whose AVAR or Thêo1 is not finite/positive are skipped (the last
+rung when 6 divides N, where AVAR would need m = N/2) and the average is
+taken over the computable terms. Returns NaN when no term is computable
 (`N < 19`).
 """
-function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1065::Bool=false)
+function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, howe::Bool=false)
     N = length(x)
     N < 19 && return NaN
-    n = max(N ÷ (sp1065 ? 6 : 30) - 3, 0)
+    n = max(N ÷ (howe ? 30 : 6) - 3, 0)
 
     # Factors i at which Thêo1 is computed: all of them, or the first 16
     # plus evenly spaced samples (always including the last).
@@ -1092,7 +1103,7 @@ end
 # and b = 3 (8192 points).
 function _stable32_theobr_ratio(x::Vector{Float64}, tau0::Float64)
     b = cld(length(x), 3000)
-    return _theobr_ratio(x[1:b:end], b * tau0; exact=true, sp1065=true) + 0.00055 * (b - 1)
+    return _theobr_ratio(x[1:b:end], b * tau0; exact=true) + 0.00055 * (b - 1)
 end
 
 # ThêoH segment rule (SP1065 §5.2.16 eq. 34): requested grid points are

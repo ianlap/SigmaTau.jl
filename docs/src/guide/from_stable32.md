@@ -94,7 +94,7 @@ and the explorer "As Stable32" under Bias correction.
 | | Stable32 | SigmaTau default | To match Stable32 |
 |---|---|---|---|
 | MTOTDEV | raw estimator, which reads low | raised to MDEV's expected value (Howe and Peppler 2001, Table 2) | `correct_bias=:stable32` |
-| Thêo1 | ThêoBR over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`; raw with Alpha set to 0 | ThêoBR over `i = 0…⌊N/30 − 3⌋` (Howe 2006) | `correct_bias=:stable32`; `correct_bias=false` for the raw run |
+| Thêo1 | ThêoBR over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`, on every `⌈N/3000⌉`-th phase above 3000 points; raw with Alpha set to 0 | ThêoBR over the same ladder on the full record (within 2 % on the 8192-point record, equal up to 3000 points but for a sampled sum) | `correct_bias=:stable32`; `correct_bias=false` for the raw run |
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift, without the B1 ratio: below 30 averaged points an FM type is the one at the longest τ that has 30 | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |

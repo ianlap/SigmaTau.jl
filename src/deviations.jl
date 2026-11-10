@@ -721,30 +721,38 @@ Conventions (SP1065 / Stable32):
   SP1065/Stable32, so `r.dev` matches allantools at the same `m` while
   `r.tau` is allantools' τ scaled by 0.75.
 - `correct_bias=true` (default) applies the ThêoBR automatic bias
-  removal [howe-2006-theoh](@cite): the Thêo1 variance is multiplied by
-  the average of the `AVAR(m=9+3i)/Theo1(m=12+4i)` ratios over
-  `i = 0…⌊N/30 − 3⌋` (matched-τ ladders over the first tenth of the
-  record), removing the noise-dependent Thêo1 bias without explicit
-  noise identification. SP1065 eq. 33 prints `⌊N/6 − 3⌋`, a noisier and
-  biased ladder (see `_theobr_ratio`). On long ladders the ratio computes Thêo1 at 48
-  of the factors and interpolates the rest, within 0.5 % of the full
-  average (see `_theobr_ratio`); this takes it from O(N³) to about 1 s at
-  N = 65 536. ThêoBR needs `N ≥ 19` samples; shorter records
-  yield NaN rows. `:published` is the same ThêoBR. `:stable32` is ThêoBR
-  over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`, which is what a Stable32
-  Thêo1 run with automatic noise identification applies: on Stable32's own
-  `PHASE.DAT` (1001 points) it reproduces that run at every averaging factor
-  to the five digits printed. Stable32 limits the points it uses for this
-  factor (`MaxTheoBRPts`, 3000 by default in its manual); a longer record is
-  taken at every `b`-th phase, `b = ⌈N/3000⌉`, and 0.00055·(b − 1) is added
-  to the factor ([taylor-2010-fast-theobr](@cite), eq. 4, a slope its
-  authors fitted on the FM noises). That reproduces
-  Stable32's two bias-removed rows on an 8192-point record (b = 3) to the
-  five digits printed, where the ladder on the full record reads 1.8 % low;
-  the decimation and `b` are read from that output, and no other `b` is
-  checked. With a noise type entered by hand Stable32 applies a tabulated
-  bias instead, which no fixture here checks. `correct_bias=false` gives raw
-  Thêo1, a Stable32 run with Alpha set to 0.
+  removal: the Thêo1 variance is multiplied by the average of the
+  `AVAR(m=9+3i)/Theo1(m=12+4i)` ratios over `i = 0…⌊N/6 − 3⌋`, the ladder
+  of [riley-2008-sp1065](@cite) eq. 33 and [ieee1139-2022-definitions](@cite)
+  eq. A.37, which removes the noise-dependent Thêo1 bias without explicit
+  noise identification. One factor scales every τ, and its last rungs,
+  near half the record, hold one or two AVAR samples each: on a record of
+  one FM noise it scatters by a quarter of its value and averages 7 to 9 %
+  low in simulation at any length, so bias-removed Thêo1 at short τ is less
+  certain than ADEV there (see `_theobr_ratio`). On long ladders the ratio
+  computes Thêo1 at 48 of the factors and interpolates the rest, within
+  0.7 % of the full average. ThêoBR needs `N ≥ 19` samples; shorter records
+  yield NaN rows.
+- `:published` takes the ladder [howe-2006-theoh](@cite) prints,
+  `i = 0…⌊N/30 − 3⌋`, which stops at a tenth of the record. Its factor
+  scatters less on a record of one noise, and reads low where PM gives way
+  to FM inside the record: by 2.4 in deviation on the 8192-point validation
+  record.
+- `:stable32` is what a Stable32 Thêo1 run with automatic noise
+  identification applies: the default ladder summed in full, which on
+  Stable32's own `PHASE.DAT` (1001 points) reproduces that run at every
+  averaging factor to the five digits printed. Stable32 limits the points
+  it uses for this factor (`MaxTheoBRPts`, 3000 by default in its manual); a
+  longer record is taken at every `b`-th phase, `b = ⌈N/3000⌉`, and
+  0.00055·(b − 1) is added to the factor
+  ([taylor-2010-fast-theobr](@cite), eq. 4, a slope its authors fitted on
+  the FM noises). That reproduces Stable32's two bias-removed rows on an
+  8192-point record (b = 3) to the five digits printed, where the ladder on
+  the full record reads 1.8 % low; the decimation and `b` are read from
+  that output, and no other `b` is checked. With a noise type entered by
+  hand Stable32 applies a tabulated bias instead, which no fixture here
+  checks.
+- `correct_bias=false` gives raw Thêo1, a Stable32 run with Alpha set to 0.
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
 formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
@@ -762,7 +770,7 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     mode = _bias_mode(correct_bias, :stable32)
     devs = mode == :none ? raw_devs :
            mode == :stable32 ? raw_devs .* sqrt(_stable32_theobr_ratio(x, data.tau0)) :
-                               raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
+                               raw_devs .* sqrt(_theobr_ratio(x, data.tau0; howe=mode == :published))
 
     if !ci
         return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)
