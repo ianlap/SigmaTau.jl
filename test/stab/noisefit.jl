@@ -7,6 +7,17 @@ using Random
 
 @testset "interactive noise fit" begin
     h = Dict(2 => 1e-22, 0 => 1e-24, -2 => 1e-30)
+    # On the model's own σ(τ) the levels come back exactly, whatever the order.
+    # Fitted once in sequence, white PM reads 25 % high: white FM adds a
+    # quarter to σ² where it is fitted.
+    τ = 2.0 .^ (0:13)
+    exact = StabilityResult(:mhdev, τ, powerlaw_sigma(h, τ; deviation=:mhdev, tau0=1.0), Symbol[],
+                            SigmaTau._CIBound[], Float64[], zeros(Int, 14), 1.0, 65536, NaN)
+    e = add_component!(add_component!(add_component!(noise_fit(exact), :WHPM, 1:2), 0, 6:9), :RWFM, 12:14)
+    @test [c.h for c in e.components] ≈ [1e-22, 1e-24, 1e-30] rtol=1e-6
+    g = add_component!(add_component!(add_component!(noise_fit(exact), :RWFM, 12:14), 0, 6:9), :WHPM, 1:2)
+    @test [c.h for c in g.components] ≈ [1e-30, 1e-24, 1e-22] rtol=1e-6
+
     p = noise_gen(PhaseData, 65536, 1.0; h=h, rng=MersenneTwister(1))
     r = mhdev(p)                                     # τ = 1, 2, 4, …, 8192 s
     f = noise_fit(r)
@@ -14,13 +25,6 @@ using Random
     add_component!(f, 0, 6:9)
     add_component!(f, :RWFM, 12:14)
     @test [c.alpha for c in f.components] == [2, 0, -2]
-    # White PM is fitted where white FM adds a quarter to σ²: it reads 25 %
-    # high unless it is refitted once white FM is in the model.
-    @test f.components[1].h ≈ 1e-22 rtol=0.03
-    @test f.components[2].h ≈ 1e-24 rtol=0.03
-    @test f.components[3].h ≈ 1e-30 rtol=0.5
-    g = add_component!(add_component!(add_component!(noise_fit(r), :RWFM, 12:14), 0, 6:9), :WHPM, 1:2)
-    @test [c.h for c in g.components] ≈ [c.h for c in reverse(f.components)]
     @test powerlaw_sigma(f, r.tau; deviation=:mhdev) ≈ r.dev rtol=0.1
     @test noise_residual(f) ≈ r.dev .^ 2 .- powerlaw_sigma(f, r.tau; deviation=:mhdev) .^ 2
     @test clock_model(f).q1 == f.components[2].h / 2
