@@ -30,6 +30,16 @@
         @test only(ratio(fillgaps(d; form=:phase), PhaseData(x, 1.0), [1])) > 1.2   # the joins show
     end
 
+    @testset "flicker FM past many short gaps: its deviation does not fall, filled as frequency" begin
+        x = noise_gen(PhaseData, N, 1.0; sigma1=Dict(-1 => 1.0), rng=Xoshiro(1)).x
+        d = PhaseData(copy(x), 1.0)
+        d.x[[k + j for k in 20:40:N-40 for j in 0:11]] .= NaN     # 12 of every 40 lost
+        f = fillgaps(d)
+        @test f.x == fillgaps(d; form=:frequency).x
+        @test 0.95 < only(ratio(f, PhaseData(x, 1.0), [1])) < 1.05
+        @test only(ratio(fillgaps(d; form=:phase), PhaseData(x, 1.0), [1])) > 1.1
+    end
+
     @testset "white PM frequency record: filled as phase, the step across the gap free" begin
         y = diff(randn(Xoshiro(1), N))
         d = FrequencyData(holed(y), 1.0)

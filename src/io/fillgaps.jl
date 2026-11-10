@@ -5,12 +5,19 @@
 # its algorithm (C. Champagne, D. A. Howe and N. Schlossberger, fillgaps.py,
 # doi:10.5281/zenodo.5594587).
 #
-# Their method, kept as it is: a gap of n samples takes the n samples beside
-# it (the run before it, the run after it when that one is too short, half
-# from each when neither is long enough), reflected and inverted, and adds a
-# straight line so that the low-pass-filtered fill meets the filtered data at
-# both ends. Gaps are filled outward from the longest run, so a fill can
-# serve the next gap.
+# Their method: a gap of n samples takes the n samples beside it (the run
+# before it, the run after it when that one is too short, half from each
+# when neither is long enough), reflected and inverted, and adds a straight
+# line so that the low-pass-filtered fill meets the filtered data at both
+# ends. Gaps are filled outward from the longest run, so a fill can serve
+# the next gap.
+#
+# Where this file differs from the script, on purpose: the script's filter
+# gain is one bin off in the mirrored half of the spectrum; its line stops
+# short of the end offset; where half the fill comes from each side it
+# filters the left half twice and adds a middle sample only for gaps of
+# 4j + 1 samples; and it filters whole runs for the levels beside a gap,
+# where a window serves.
 #
 # What the method leaves open is set from the record (see `fillgaps`): which
 # series is filled, phase or frequency, and the span the filter averages
@@ -314,21 +321,26 @@ function _measured_trend(v::Vector{Float64}, degree::Int)
 end
 
 # The span, an octave of samples, to average the level of `v` over when it
-# is carried across a gap. The error of one block mean as a prediction of the
-# next is the series' own two-sample deviation at that block length, so the
-# span is the longest whose deviation is within 10 % of the lowest, among
-# octaves up to a sixteenth of the measured samples. Also returned: whether
-# the deviation has turned up again by the longest span it could be measured
-# at, which white noise never does.
+# is carried across a gap, and whether `v` is redder than white at its
+# shortest spans or beyond them (its running sum is then too smooth to fill;
+# see `fillgaps`). Both are read from the two-sample deviation of `v` at the
+# octaves m that at least 8m terms measure past the gaps. The error of one
+# block mean as a prediction of the next is that deviation at the block
+# length, so the span is the longest octave whose deviation is within 10 % of
+# the lowest. The series is red when the deviation has turned up again by the
+# last octave, or has nowhere fallen to 1/√2 of its first value, the fall of
+# white noise in one octave.
 function _level_span(v::Vector{Float64})
     n = count(isfinite, v)
     n < 4 && return 1, false
-    ms = [2^k for k in 0:max(0, floor(Int, log2(n / 16)))]
-    d = adev(FrequencyData(v, 1.0), ms; ci=false).dev
-    ok = findall(isfinite, d)
+    ms = [2^k for k in 0:max(0, floor(Int, log2(n / 10)))]
+    r = adev(FrequencyData(v, 1.0), ms; ci=false)
+    ok = findall(i -> r.neff[i] >= 8 * ms[i], eachindex(ms))
     isempty(ok) && return 1, false
-    k = findlast(i -> d[i] <= 1.1 * minimum(view(d, ok)), ok)
-    return ms[ok[k]], k < length(ok)
+    d = view(r.dev, ok)
+    lowest = minimum(d)
+    k = findlast(<=(1.1 * lowest), d)
+    return ms[ok[k]], k < length(d) || (length(d) > 1 && lowest > d[1] / sqrt(2))
 end
 
 # The missing phases of `x` from the filled first differences `y`
@@ -369,8 +381,8 @@ function _fillgaps(v::AbstractVector{<:Real}, phase::Bool, form::Symbol)
     y = phase ? diff(out) : out
     line = _measured_trend(y, 1)
     y0 = y .- line
-    span, turns = _level_span(y0)
-    if form === :frequency || (form === :auto && turns)
+    span, red = _level_span(y0)
+    if form === :frequency || (form === :auto && red)
         yf = _howe_fill(y0, span) .+ line
         phase ? _phase_from_steps!(out, yf) : (out[gap] = yf[gap])
     elseif phase
@@ -420,18 +432,20 @@ the joins is integrated across the gap (the frequency of white PM read 12
 times high at 256 τ₀). Two things the paper leaves open are therefore set
 from the record:
 
-- `form`, the series that is filled. `:auto` fills the frequency when the
-  two-sample deviation of the frequency samples, measured past the gaps,
-  turns up again within the spans it can be measured at, as it does for
-  flicker and random-walk FM, and the phase otherwise. `:phase` and
-  `:frequency` force the choice. A phase record filled as frequency has the
-  filled differences corrected to sum to the measured phase change across
-  each gap; a frequency record filled as phase leaves the phase step across
-  each gap free.
+- `form`, the series that is filled. `:auto` reads the two-sample deviation
+  of the frequency samples past the gaps, at the octaves of m samples that
+  at least 8m terms measure. It fills the frequency when that deviation
+  nowhere falls to 1/√2 of its value at τ₀, the fall of white FM in one
+  octave, or turns up again by the last octave: flicker or random-walk FM
+  is then present and the phase too smooth. It fills the phase otherwise.
+  `:phase` and `:frequency` force the choice. A phase record filled as
+  frequency has the filled differences corrected to sum to the measured
+  phase change across each gap; a frequency record filled as phase leaves
+  the phase step across each gap free.
 - The span the filter averages over (16 samples in the script): the longest
-  octave, up to a sixteenth of the measured samples, at which the two-sample
-  deviation of the series being filled is within 10 % of its lowest, so the
-  level beside a gap is averaged for as long as averaging improves it.
+  of those octaves at which the two-sample deviation of the series being
+  filled is within 10 % of its lowest, so the level beside a gap is averaged
+  for as long as averaging improves it.
 
 The trend of the series, a least-squares parabola in phase or line in
 frequency through the measured samples, is set aside while it is filled. The
@@ -441,16 +455,30 @@ filled as scripted read 48 times high at τ₀.
 
 On simulated records of 4096 samples (twelve mixes of the five power-law
 noises, as phase and as frequency records, one to six gaps removing up to
-30 %, at the ends or inside, with and without offset and drift, 100 records
-each) the Allan deviation of the filled record stayed within 5 % of the
-original's from τ₀ to 256 τ₀, and the modified Allan deviation within 4 % to
-16 τ₀. At the longest τ MDEV still reads high where white PM dominates, 1.1 to
-1.3 times and 1.9 for a frequency record with six gaps: averaging m phases
-resolves a level error that ADEV does not see, and the phase step across a gap
-in a frequency record is not measured at all. The estimators that skip gaps
-(`adev`, `mdev`, `hdev`, `mhdev` and their time forms, on the record with its
-`NaN`s) need no fill and have no such error. The choice of form and span is
-this package's, checked by those simulations; the paper prescribes neither.
+30 %, with and without offset and drift, 100 records each) the Allan
+deviation of the filled record stayed within 5 % of the original's from τ₀ to
+256 τ₀, or 11 % at 256 τ₀ for a 30 % gap at the end of the record, which has
+data on one side only; the modified Allan deviation stayed within 4 % to
+16 τ₀. Three things a fill does not recover:
+
+- MDEV at the longest τ where white PM dominates: 1.1 to 1.3 times high, and
+  1.9 for a frequency record with six gaps. Averaging m phases resolves a
+  level error that ADEV does not see.
+- The phase step across a gap in a frequency record, which is not measured,
+  so the errors of many gaps add. With gaps of 1 to 12 samples removing a
+  quarter of a frequency record, white PM read 1.3 and 1.9 times high in ADEV
+  at 64 and 256 τ₀ (4.8 and 19 in MDEV), flicker PM 1.5 at 256 τ₀ and white FM
+  1.06; the same gaps in a phase record stayed within 8 % in ADEV.
+- A periodic term. A sine in the frequency makes the deviation turn up, the
+  frequency is filled, and reflection inverts the sine: with a period of 512
+  samples and an amplitude of 3 σ_y(τ₀) on white PM or white FM, a 30 % gap
+  read 1.15 high in ADEV and 1.40 in MDEV at 256 τ₀, against 1.00 with
+  `form=:phase`.
+
+The estimators that skip gaps (`adev`, `mdev`, `hdev`, `mhdev` and their time
+forms, on the record with its `NaN`s) need no fill and have none of these
+errors. The choice of form and span is this package's, checked by those
+simulations; the paper prescribes neither.
 """
 fillgaps(pd::PhaseData; form::Symbol=:auto) =
     PhaseData(_fillgaps(pd.x, true, form), pd.tau0; source=pd.source, start=pd.start)
