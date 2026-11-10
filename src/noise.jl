@@ -97,7 +97,10 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
     N = length(x_clean)
     alphas = Vector{Int}(undef, length(m_values))
     ok = falses(length(m_values))
-    x_rn = nothing   # drift-removed record for R(n), made on first use
+    # Drift-removed record, shared by m = 1 and R(n), and its ADEV and MDEV at
+    # every m for R(n); each made on first use.
+    x_rn = nothing
+    rn_adev = rn_mdev = nothing
 
     for (k, m) in enumerate(m_values)
         N_eff = N ÷ m
@@ -107,8 +110,14 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             lag1 = N_eff >= NEFF_RELIABLE
             # Below B1_MIN_POINTS the label is the one at the longest m that has them.
             mr = lag1 || b1_length !== :averaged ? m : clamp(N ÷ B1_MIN_POINTS, 1, m)
-            alpha = lag1 ? _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)[1] :
-                           _noise_id_b1rn(x_clean, mr; detrend=detrend, b1_length=b1_length)[1]
+            if lag1 && m == 1
+                x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
+                alpha = _noise_id_lag1acf(x_rn, 1, dmin, dmax; detrend=false)[1]
+            elseif lag1
+                alpha = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)[1]
+            else
+                alpha = _noise_id_b1rn(x_clean, mr; detrend=detrend, b1_length=b1_length)[1]
+            end
             # A PM result is checked with R(n) = MVAR/AVAR (SP1065 §5.5.2, step 5),
             # which uses every sample where the tests above use one in m. From
             # m = 16 it must lie nearer its flicker-PM value than the 1/2 of white
@@ -116,10 +125,15 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             # white-PM result of the lag-1 test is confirmed with it from m = 4.
             if alpha >= 0.5 && mr >= 4
                 x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
-                R = (_mdev_core(x_rn, [mr], 1.0)[1] / _adev_core(x_rn, [mr], 1.0)[1])^2
-                if mr >= 16 && R > sqrt(_rn_theory(mr, -1) / 2)
+                if rn_mdev === nothing
+                    rn_adev = _adev_core(x_rn, m_values, 1.0)
+                    rn_mdev = _mdev_core(x_rn, m_values, 1.0)
+                end
+                md, ad = mr == m ? (rn_mdev[k], rn_adev[k]) :
+                                   (_mdev_core(x_rn, [mr], 1.0)[1], _adev_core(x_rn, [mr], 1.0)[1])
+                if mr >= 16 && _rn_fm(md, ad, mr)
                     alpha = 0.0
-                elseif lag1 && alpha >= 1.5 && R > sqrt(_rn_theory(mr, 0) * _rn_theory(mr, -1))
+                elseif lag1 && alpha >= 1.5 && _rn_flicker(md, ad, mr)
                     alpha = 1.0
                 end
             end
@@ -312,7 +326,7 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_lengt
         end
     end
 
-    mu_best == -2 && (alpha_int = _rn_flicker(x, m, sqrt(avar_val)) ? 1 : 2)
+    mu_best == -2 && (alpha_int = _rn_flicker(_mdev_core(x, [m], 1.0)[1], sqrt(avar_val), m) ? 1 : 2)
 
     return (alpha_int, mu_best, B1_obs)
 end
@@ -320,11 +334,15 @@ end
 # R(n) = MVAR/AVAR at averaging factor m separates the PM noises, which ADEV
 # and the decimated phase cannot: true when it lies nearer its flicker-PM
 # value than 1/m, its white-PM value.
-function _rn_flicker(x::Vector{Float64}, m::Int, adev_val::Float64)
-    mdev_val = _mdev_core(x, [m], 1.0)[1]
+function _rn_flicker(mdev_val::Float64, adev_val::Float64, m::Int)
     (isnan(mdev_val) || !(adev_val > 0)) && return false
     return (mdev_val / adev_val)^2 > sqrt(_rn_theory(m, 0) * _rn_theory(m, -1))
 end
+
+# And PM from FM: true when R(n) lies nearer 1/2, its white-FM value, than its
+# flicker-PM value.
+_rn_fm(mdev_val::Float64, adev_val::Float64, m::Int) =
+    adev_val > 0 && (mdev_val / adev_val)^2 > sqrt(_rn_theory(m, -1) / 2)
 
 function _b1_theory(N::Int, mu::Int)
     if mu == 2;  return N * (N + 1) / 6
