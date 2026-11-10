@@ -1,4 +1,4 @@
-// What the import dialog guesses from a file's top: node --test app/web/test
+// What the import dialog guesses from a file's top: node --test app/web/test/import.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 
