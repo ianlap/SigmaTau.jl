@@ -7,7 +7,7 @@ import { seriesColor, strokeSvg } from "./plot.js";
 import { escapeHtml as h, thousands } from "./format.js";
 import { openPicker } from "./picker.js";
 
-let handlers = { run() {}, cancel() {}, addClock() {}, selectClock() {}, setReference() {} };
+let handlers = { run() {}, cancel() {}, addClock() {}, selectClock() {}, setReference() {}, removeClock() {} };
 export function initPanel(h) {
   handlers = { ...handlers, ...h };
   const side = document.getElementById("side");
@@ -26,7 +26,8 @@ function clockRows() {
     return `<div class="row clock-row ${c.id === state.activeClock ? "active" : ""} ${c.visible ? "" : "hidden-clock"}" data-clock="${c.id}" role="button" tabindex="0">
       <span class="row-main"><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>
         <span class="clock-text"><b>${h(c.name)}</b><span>${h(sub)}</span></span></span>
-      ${ref ? `<span class="ref-tag" title="Reference clock">ref</span>` : `<button class="eye" type="button" data-eye="${c.id}" title="${c.visible ? "Hide" : "Show"} ${h(c.name)} on the plots" aria-pressed="${c.visible}">${c.visible ? "◉" : "○"}</button>`}
+      <span class="row-btns">${ref ? `<span class="ref-tag" title="Reference clock">ref</span>` : `<button class="eye" type="button" data-eye="${c.id}" title="${c.visible ? "Hide" : "Show"} ${h(c.name)} on the plots" aria-pressed="${c.visible}">${c.visible ? "◉" : "○"}</button>`}
+        <button class="row-x" type="button" data-remove-clock="${c.id}" title="Remove ${h(c.name)}${c.source.type === "synth" && c.source.clocks > 1 ? " (the other simulated clocks are simulated again)" : ""}">×</button></span>
     </div>`;
   }).join("");
 }
@@ -121,6 +122,8 @@ function onClick(e) {
     update((s) => { const c = s.clocks.find((k) => k.id === id); c.visible = !c.visible; });
     return;
   }
+  const rc = t.closest("[data-remove-clock]");
+  if (rc) { handlers.removeClock(Number(rc.dataset.removeClock)); return; }
   const rm = t.closest("[data-remove]");
   if (rm) {
     update((s) => { s.devs = s.devs.filter((d) => d !== rm.dataset.remove); markStale(s, "inputs"); });

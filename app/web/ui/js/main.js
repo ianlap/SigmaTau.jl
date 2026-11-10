@@ -231,6 +231,26 @@ async function openSession(file) {
   else ctx.status("good", `Opened the session ${file.name}.`);
 }
 
+// Take a clock out of the explorer. Clocks simulated together share one random
+// stream, so the rest are simulated again without it, each with its own model.
+async function removeClock(id) {
+  const c = state.clocks.find((k) => k.id === id);
+  if (!c) return;
+  const key = ensembleKey(c.source);
+  const sibs = key ? state.clocks.filter((k) => ensembleKey(k.source) === key).sort((a, b) => a.source.index - b.source.index) : [];
+  if (sibs.length > 1) {
+    const { n, tau0, seed } = c.source;
+    const models = c.source.models ?? sibs.map((_, j) => [0, 1e-24 * 4 ** j, 1e-30 * 4 ** j, 0]);   // the core's default clocks
+    const rest = (xs) => xs.filter((_, j) => j !== c.source.index - 1);
+    return useSynth(sibs[0], { n, tau0, seed, clocks: sibs.length - 1, models: rest(models), names: rest(sibs).map((k) => k.name) });
+  }
+  if (state.reference === id) await setReference(null);
+  update((s) => {
+    s.clocks = s.clocks.filter((k) => k.id !== id);
+    if (!s.clocks.some((k) => k.id === s.activeClock)) s.activeClock = s.clocks[0]?.id ?? null;
+  });
+}
+
 function selectClock(id) {
   update((s) => { s.activeClock = id; });
   go("data");
@@ -427,7 +447,7 @@ document.addEventListener("drop", async (e) => {
 });
 
 // ── Start ──
-initPanel({ run, cancel: cancelRun, addClock, selectClock, setReference });
+initPanel({ run, cancel: cancelRun, addClock, selectClock, setReference, removeClock });
 go(location.hash.slice(1) || "stability");
 (async () => {
   const hc = await health();
