@@ -219,6 +219,32 @@ using Statistics
         @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, wmax=0.2)
     end
 
+    @testset "flicker states in the Kalman scales" begin
+        # Flicker FM: the clocks' frequencies follow the truth through the
+        # Markov states, the reduction leaves the unreduced filter's
+        # frequencies as they are, and Stein's three-state clocks refuse.
+        mf = [ClockModel(; tau0=1.0, q1=1e-26, flicker_fm=1e-26, tau_max=1e3),
+              ClockModel(; tau0=1.0, q1=1e-26, flicker_fm=4e-26, tau_max=1e3), ClockModel(; tau0=1.0, q1=1e-24)]
+        cf, tf = simulate_ensemble(mf, 8192; reference=0, rng=MersenneTwister(11))
+        gf = timescale(cf; algorithm=:greenhall, models=mf)
+        rest = 2000:8192
+        @test cor(gf.y[rest, 1] .- gf.y[rest, 2], tf[rest, 2, 1] .- tf[rest, 2, 2]) > 0.8
+        @test maximum(abs, timescale(cf; algorithm=:jones_tryon, models=mf).y .- gf.y) < 1e-6 * std(gf.y[rest, 1])
+        @test_throws ArgumentError timescale(cf; algorithm=:stein, models=mf)
+        # Flicker PM on two of three equal clocks: the weights stay equal,
+        # and past the shortest τ the scale is quieter than with that
+        # flicker folded into R.
+        hp = [0.0, 2.2e-22, 2.2e-21]
+        mp = [ClockModel(; tau0=1.0, q1=1e-24, q2=1e-30, flicker_pm=h) for h in hp]
+        fold = [clock_model(Dict(1 => h, 0 => 2e-24, -2 => 1e-30 / 2π^2); tau0=1.0) for h in hp]
+        cp, _ = simulate_ensemble(mp, 16384; reference=0, rng=MersenneTwister(31))
+        gp = timescale(cp; algorithm=:greenhall, models=mp)
+        scale(r) = adev(timescale_phase(r), [16, 32, 64]; ci=false).dev
+        @test gp.weights[end, :] ≈ fill(1 / 3, 3) rtol=0.01
+        @test all(scale(gp) .< 0.95 .* scale(timescale(cp; algorithm=:greenhall, models=fold)))
+        @test maximum(abs, timescale(cp; algorithm=:jones_tryon, models=mp).y .- gp.y) < 1e-6 * std(gp.y[rest, 1])
+    end
+
     @test_throws ArgumentError timescale(cc; algorithm=:at3)
     @test_throws ArgumentError timescale(cc; wmax=0.2)
 end

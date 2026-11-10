@@ -1,5 +1,5 @@
 # kalman.jl — the single-clock filter and smoother against simulated truth,
-# holdover in closed form, gaps, and the innovation check.
+# holdover in closed form, gaps, the innovation check, and flicker states.
 
 using Test
 using SigmaTau
@@ -58,6 +58,54 @@ using Statistics
         @test (t.model.R, size(t.cost)) == (1e-20, (5, 5))
         @test minimum(t.cost) == t.cost[argmin(t.cost)] <= t.cost[3, 3]
         @test_throws ArgumentError tune_q(p, ClockModel(; tau0=1.0, q1=1e-22))
+    end
+
+    @testset "flicker FM states" begin
+        # A flicker floor of 1.5e-13 between white FM and random-walk FM, from
+        # noise_gen's spectral generator. The model with Markov states
+        # predicts better than the white-only fit and owns up to its error.
+        h = Dict(2 => 8π^2 * 1e-26, 0 => 2e-24, -1 => 1.6e-26, -2 => 1.7e-31)
+        pf = noise_gen(PhaseData, 65536, 1.0; h=h, rng=MersenneTwister(2001))
+        mf = clock_model(h; tau0=1.0, flicker=true)
+        kf = kalman_filter(pf, mf)
+        kw = kalman_filter(pf, clock_model(powerlaw_fit(adev(pf); alphas=[2, 0, -2])))
+        @test size(kf.x, 2) == 7
+        @test innovation_check(kf).nis ≈ 1 rtol=0.03
+        err = prediction_error(kf, pf, [1000, 10000]; burnin=8192)
+        @test all(err .< 0.8 .* prediction_error(kw, pf, [1000, 10000]; burnin=8192))
+        @test holdover_error(kf, [1000.0, 10000.0]) ≈ err rtol=0.3
+        @test tune_q(pf, mf; points=3).model.fm_band == mf.fm_band
+        # A record of the model itself has flicker FM's ADEV, and the filter
+        # follows its frequency, Markov states included.
+        ms = ClockModel(; tau0=1.0, flicker_fm=1e-26)
+        ps, Xs = simulate_clock(ms, 2^17; rng=MersenneTwister(3))
+        @test size(Xs, 2) == 9
+        @test adev(ps, [1, 16, 256]; ci=false).dev ≈ powerlaw_sigma(Dict(-1 => 1e-26), [1.0, 16.0, 256.0]; tau0=1.0) rtol=0.05
+        @test cor(vec(sum(kalman_filter(ps, ms).x[:, 2:9]; dims=2)), vec(sum(Xs[:, 2:9]; dims=2))) > 0.85
+    end
+
+    @testset "flicker PM states" begin
+        # Flicker PM on white FM and random-walk FM. With Markov phase states
+        # the innovations have the claimed variance, where the fold into R
+        # overstates it, and the next reading is predicted better.
+        h = Dict(1 => 2.2e-22, 0 => 2e-24, -2 => 1.7e-31)
+        pp = noise_gen(PhaseData, 65536, 1.0; h=h, rng=MersenneTwister(5))
+        mp = clock_model(h; tau0=1.0, flicker=true)
+        kp, k0 = kalman_filter(pp, mp), kalman_filter(pp, clock_model(h; tau0=1.0))
+        @test (size(kp.x, 2), size(k0.x, 2)) == (6, 2)
+        @test innovation_check(kp).nis ≈ 1 rtol=0.03
+        @test innovation_check(k0).nis < 0.7
+        @test prediction_error(kp, pp, [1]; burnin=4096)[1] < 0.95 * prediction_error(k0, pp, [1]; burnin=4096)[1]
+        # A record of the model itself: flicker PM's ADEV, white innovations,
+        # and a phase estimate as good as it claims, the reading's flicker
+        # kept out of it.
+        ps, Xs = simulate_clock(mp, 2^16; rng=MersenneTwister(5))
+        ks = kalman_filter(ps, mp)
+        @test adev(ps, [1, 8, 64]; ci=false).dev ≈ powerlaw_sigma(h, [1.0, 8.0, 64.0]; tau0=1.0) rtol=0.05
+        @test innovation_check(ks).ok
+        e = rms(ks.x[1000:end, 1] .- Xs[1000:end, 1])
+        @test e ≈ sqrt(mean(ks.P[1, 1, 1000:end])) rtol=0.15
+        @test e < 0.9 * rms(ps.x[1000:end] .- Xs[1000:end, 1])
     end
 
     @test_throws ArgumentError kalman_filter(PhaseData(p.x, 2.0), m)

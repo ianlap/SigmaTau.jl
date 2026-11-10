@@ -17,12 +17,16 @@ ks = kalman_smooth(kf)
 ```
 
 Gaps (`NaN` samples) are predicted across without an update. Flicker noise
-has no state in the model, so on a record dominated by it the innovation
-check fails. [`tune_q`](@ref) then retunes the white and random-walk FM
-levels for the best phase prediction over the horizons you care about,
-starting from the fit.
+has no state in the default model, so on a record dominated by it the
+innovation check fails. Either give the model flicker states, Markov
+processes placed where the flicker matters
+([The clock model](../explanation/clock_model.md)), or let
+[`tune_q`](@ref) retune the white and random-walk FM levels for the best
+phase prediction over the horizons you care about, starting from the fit.
 
 ```julia
+mf = clock_model(powerlaw_fit(p; alphas=[2, 1, 0, -1, -2]); flicker=true)
+kalman_filter(p, mf)                    # flicker FM and PM as states
 t = tune_q(p, m; horizons=[10, 100, 1000])
 kalman_filter(p, t.model)
 ```
