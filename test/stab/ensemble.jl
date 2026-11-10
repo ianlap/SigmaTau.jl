@@ -142,4 +142,33 @@ end
     P2 = Matrix{PhaseData}(undef, 2, 2); P2[1, 2] = d(1, 2)
     @test_throws ArgumentError groslambert(P2, [1])
     @test_throws ArgumentError groslambert(d(1, 2), d(2, 3), PhaseData(x[3][1:100], 1.0), [1])
+    # KLTS: the χ² interval for the dominant clock; a lower bound of 0 for the
+    # quiet clock once it is not resolved (m = 512), where χ² stays above zero.
+    k3 = groslambert(d(1, 2), d(2, 3), d(3, 1), [1, 64, 512]; interval=:klts)
+    c3 = groslambert(d(1, 2), d(2, 3), d(3, 1), [1, 64, 512])
+    @test all(isapprox(collect(k3[2].ci[q]), collect(c3[2].ci[q]); rtol=0.01) for q in 1:3)
+    @test k3[3].ci[3].lo == 0 && c3[3].ci[3].lo > 0 && k3[3].dev == c3[3].dev
+    @test_throws ArgumentError groslambert(Q, [1]; interval=:klts)
+    @test_throws ArgumentError groslambert(P, [1]; interval=:kltg)
+    # The χ² interval is withheld below 1 EDF.
+    @test all(isnan, values(SigmaTau._gl_chi2_ci([1.0], [0.5], 0.95)[1]))
+end
+
+@testset "KLTS against SigmaTheta" begin
+    # SigmaTheta's GCUncert inputs at τ = 100 s and 500 s of a synthetic
+    # three-clock run (Groslambert codeviations in units of 1e-13, a negative
+    # one for a negative covariance; the closure-noise deviation; the EDF) and
+    # its KLTS 97.7 % bounds, with the lower bound of the noisiest clock.
+    function st(g, noise, ν)
+        a, b, c = (sign(v) * v^2 for v in g); vN = noise^2
+        S = [a+b+vN -b -a; -b b+c+vN -c; -a -c c+a+vN]
+        q, zero_lower = SigmaTau._klts(S, vN, ν, (0.023, 0.977))
+        return sqrt.(q), zero_lower
+    end
+    q, z = st((1.7971408, 2.2816487, 7.4142426), 0.230, 44.028683)
+    @test isapprox(q[:, 2], [3.391053, 3.542078, 9.690462]; rtol=0.02)
+    @test isapprox(q[3, 1], 6.234503; rtol=0.02) && z == [true, true, false]
+    q, z = st((2.7856007, -2.2631499, 8.7271228), 0.0993, 8.5863312)
+    @test isapprox(q[:, 2], [2.857472, 2.565684, 16.37095]; rtol=0.02)
+    @test isapprox(q[3, 1], 5.840700; rtol=0.02) && z == [true, true, false]
 end

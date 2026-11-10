@@ -126,6 +126,7 @@ def groslambert(
     *records: PhaseData | FrequencyData | Sequence[Sequence[PhaseData | FrequencyData | None]],
     m: TauMode | Sequence[int] = Octave,
     confidence: float = DEFAULT_CONFIDENCE,
+    interval: str = "chi2",
 ) -> list[StabilityResult]:
     """Groslambert covariance: each clock's Allan deviation from the pairwise records.
 
@@ -137,9 +138,11 @@ def groslambert(
       ``None`` where a pair is missing; the transposed entry, negated, stands in.
 
     Each result is an ``"adev"`` ``StabilityResult`` with χ² intervals at
-    ``confidence`` from the covariance model of Vernotte & Lantz (2019).
+    ``confidence`` from the covariance model of Vernotte & Lantz (2019), or,
+    for three clocks with ``interval="klts"``, the KLTS intervals of Lantz
+    et al. (2019), which hold also for a clock quieter than the others.
     """
-    kwargs = {"confidence": float(confidence)}
+    kwargs = {"confidence": float(confidence), "interval": jl.Symbol(interval)}
     if len(records) == 3:
         separated = jl.groslambert(
             to_jl_data(records[0]),
