@@ -36,6 +36,7 @@ from .edf import bias_correction, calculate_edf, confidence_intervals
 from .ensemble import (
     ClockComparisons,
     ClockModel,
+    HoldoverPrediction,
     HoldoverResult,
     KalmanResult,
     NoiseFit,
@@ -178,6 +179,7 @@ __all__ = [
     "kalman_smooth",
     "holdover_error",
     "HoldoverResult",
+    "HoldoverPrediction",
     "holdover",
     "innovation_check",
     "prediction_error",

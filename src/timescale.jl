@@ -229,7 +229,17 @@ the record, less the mean slope.
   quieter than a weighted readout (three equal clocks: √3 noisier at short
   τ), and pivots differ by that noise; at `R = 0` every pivot gives the same
   scale. While the pivot has no reading the first clock read stands in; a
-  pivot that starts late steps the scale at its first reading.
+  pivot that starts late steps the scale at its first reading. Models with
+  flicker FM states bring them into the filter: at `R = 0` that is the
+  algorithm of [davis-greenhall-stacey-2005-flicker](@cite) (its eqs 3.1–3.6
+  and 4.1), and with `R > 0` the 2006 paper's reduction covers the same
+  state (its §2: states that reach the readings only through the phases).
+  The frequency reported for a clock then includes them. Flicker PM states
+  are measurement noise with memory: they enter the readings, not the phases
+  the scale is formed from, and move the weights little (strong flicker PM
+  on a clock's readings costs it about a tenth of its weight). That is
+  outside the 2006 paper, whose measurement noise is white; the reduction
+  only needs the readings to be differences of clocks, which they still are.
 
 - `:jones_tryon`, the natural Jones–Tryon timescale
   [jones-tryon-1983-estimating-time, greenhall-2003-jones-tryon](@cite): the same
@@ -540,19 +550,22 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
     length(models) == k || throw(ArgumentError("timescale: $(length(models)) models for $k clocks"))
     τ = cc.tau0
     all(m -> m.tau0 ≈ τ, models) || throw(ArgumentError("timescale: the models' tau0 must be the comparisons' τ₀"))
-    ns = any(m -> m.drift, models) ? 3 : 2
-    # State: the k phases, then the k frequencies (then the k drifts).
+    ns = maximum(_nstates, models)
+    # State: the k phases, then the k frequencies, then each clock's further
+    # states (drift, Markov states of the flicker) in its own order.
     idx(i, s) = (s - 1) * k + i
     Φ = Matrix{Float64}(I, ns * k, ns * k)
     Q = zeros(ns * k, ns * k)
     X̂ = zeros(ns * k)
     P = zeros(ns * k, ns * k)
+    G = zeros(k, ns * k)                      # each clock's reading in state terms
     for (i, m) in enumerate(models)
-        φ, q = state_transition(m, τ), process_noise(m, τ)
+        φ, q, g = state_transition(m, τ), process_noise(m, τ), _reading_row(m)
         n = size(φ, 1)
-        x0, P0 = _kalman_start(cc.x[:, i], τ, n)
+        x0, P0 = _model_start(cc.x[:, i], m)
         for a in 1:n
             X̂[idx(i, a)] = x0[a]
+            G[i, idx(i, a)] = g[a]
             for b in 1:n
                 Φ[idx(i, a), idx(i, b)] = φ[a, b]
                 Q[idx(i, a), idx(i, b)] = q[a, b]
@@ -560,7 +573,7 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
             end
         end
     end
-    r = Float64[m.R for m in models]
+    r = Float64[_reading_var(m) for m in models]
     X, Y, W, E = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k)
     S = Matrix{Float64}(I, ns * k, ns * k)
     a = λ = fill(1.0 / k, k)
@@ -569,16 +582,15 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
             X̂ = Φ * X̂
             P = Φ * P * Φ' + Q
         end
-        x̂⁻ = X̂[1:k]
+        x̂⁻ = G * X̂
         use = findall(isfinite, cc.x[n, :])
         if length(use) >= 2
             # Each clock against the first one read: z = xⱼ − xₚ + vⱼ − vₚ.
             p, rest = use[1], use[2:end]
             m = length(rest)
-            H = zeros(m, ns * k)
+            H = G[rest, :] .- G[p:p, :]
             R = fill(r[p], m, m)
             for (row, j) in enumerate(rest)
-                H[row, j], H[row, p] = 1.0, -1.0
                 R[row, row] += r[j]
             end
             z = cc.x[n, rest] .- cc.x[n, p]
@@ -608,7 +620,12 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
             X[n, i] = isfinite(cc.x[n, i]) ? cc.x[n, i] + u : X̂[i]
         end
         n > 1 && (E[n, use] = X[n, use] .- x̂⁻[use])
-        Y[n, :] = X̂[k+1:2k]
+        for (i, m) in enumerate(models)       # frequency: its own state plus the Markov frequency states
+            Y[n, i] = X̂[k+i]
+            for s in _npoly(m) .+ (1:length(_fm_taus(m)))
+                Y[n, i] += X̂[idx(i, s)]
+            end
+        end
         W[n, :] .= algorithm === :jones_tryon ? NaN : a
     end
     return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E)
@@ -648,6 +665,8 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     τ = cc.tau0
     all(m -> m.tau0 ≈ τ, models) || throw(ArgumentError("timescale: the models' tau0 must be the comparisons' τ₀"))
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
+    any(m -> m.flicker_fm > 0 || m.flicker_pm > 0, models) && throw(ArgumentError(
+        "timescale: :stein has no flicker states; pass models without flicker, or use :greenhall or :jones_tryon"))
     ns = any(m -> m.q3 > 0, models) ? 3 : 2
     Φ = zeros(ns, ns)                                 # element-wise: matrix literals are not trim-safe
     for d in 1:ns; Φ[d, d] = 1.0; end
