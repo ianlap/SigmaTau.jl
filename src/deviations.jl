@@ -720,8 +720,11 @@ Conventions (SP1065 / Stable32):
   of the factors and interpolates the rest, within 0.5 % of the full
   average (see `_theobr_ratio`); this takes it from O(N³) to about 1 s at
   N = 65 536. ThêoBR needs `N ≥ 19` samples; shorter records
-  yield NaN rows. `correct_bias=false` or `:stable32` gives raw Thêo1,
-  which Stable32 reports as its "Theo1" run; `:published` is ThêoBR.
+  yield NaN rows. `:published` is the same ThêoBR. `:stable32` is ThêoBR
+  over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`, which is what a Stable32
+  Thêo1 run applies: on Stable32's own `PHASE.DAT` it reproduces that run at
+  every averaging factor to the five digits printed. `correct_bias=false`
+  gives raw Thêo1, a Stable32 run with Alpha set to 0.
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
 formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
@@ -736,7 +739,11 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     T = (N - 1) * data.tau0
     neff = _neff_counts(:theo1, N, m_values)
 
-    devs = _bias_mode(correct_bias, :none) == :none ? raw_devs : raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
+    mode = _bias_mode(correct_bias, :stable32)
+    # Stable32's ladder is summed in full while that is quick, so its printed digits are met.
+    devs = mode == :none ? raw_devs :
+           mode == :stable32 ? raw_devs .* sqrt(_theobr_ratio(x, data.tau0; sp1065=true, exact=N <= 8192)) :
+                               raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
 
     if !ci
         return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)

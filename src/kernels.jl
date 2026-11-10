@@ -977,7 +977,7 @@ const _THEOBR_DENSE = 16
 const _THEOBR_SAMPLES = 32
 
 """
-    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false) → Float64
+    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false, sp1065=false) → Float64
 
 ThêoBR automatic bias-removal factor [howe-2006-theoh](@cite), eq. 6: the
 average over `i = 0…n`, `n = ⌊N/30 − 3⌋`, of the variance ratios
@@ -992,7 +992,7 @@ deviation by its square root) to get the bias-removed ThêoBR estimate.
 the record, where it has one degree of freedom: on simulated white, flicker
 and random-walk FM that ladder scatters the ratio by 25 to 30 % and biases
 the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to +3 % here
-(N = 1024).
+(N = 1024). `sp1065=true` takes that ladder, which is the one Stable32 runs.
 The paper's formula needs `N ≥ 90` for `n ≥ 0`; shorter records, outside its
 stated range, use the first rung alone.
 
@@ -1009,10 +1009,10 @@ Ratio terms whose Thêo1 is not finite/positive are skipped and the average
 is taken over the computable terms. Returns NaN when no term is computable
 (`N < 19`).
 """
-function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false)
+function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1065::Bool=false)
     N = length(x)
     N < 19 && return NaN
-    n = max(N ÷ 30 - 3, 0)
+    n = max(N ÷ (sp1065 ? 6 : 30) - 3, 0)
 
     # Factors i at which Thêo1 is computed: all of them, or the first 16
     # plus evenly spaced samples (always including the last).
