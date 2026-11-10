@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "model", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
@@ -10,6 +10,7 @@ const COMMAND_HELP = [
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
     ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
+    ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "σ(τ) a clock noise model predicts (MDEV and ADEV), no simulation"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
@@ -39,12 +40,13 @@ end
 
 const ALL = filter(!=("live"), COMMANDS)   # the commands that read a FILE
 const ANY = COMMANDS
-const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale"]   # CSV or JSON out (report writes HTML)
+const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "model"]   # CSV or JSON out (report writes HTML; model is always JSON)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
     Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", ANY),
     Opt("--clocks", "K", String[], false, "with --synth: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2; the analysis reads clock --clock, timescale uses all K (default 4)", ALL),
+    Opt("--noise-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", ALL),
     Opt("--clock", "I", String[], false, "with --synth --clocks: the simulated clock to read, 1 to K (default 1)", ALL),
     Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ANY),
     Opt("--freq", "", String[], false, "FILE holds fractional frequency", ANY),
@@ -159,6 +161,7 @@ mutable struct Options
     components::Vector{Tuple{Int,Float64,Float64}}   # --component: α, τ from, τ to (NaN = open)
     clocks::Int               # --clocks: simulated clocks; 0 = not given
     clock::Int                # --clock: which simulated clock to read
+    models::Vector{NTuple{4,Float64}}   # --noise-model: R, q1, q2, q3 per simulated clock
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -166,7 +169,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
-                    Tuple{Int,Float64,Float64}[], 0, 1)
+                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[])
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -187,6 +190,15 @@ function parse_float(s::String, flag::String)
     v = tryparse(Float64, s)
     (v === nothing || !isfinite(v)) && throw(usage_error(flag * " expects a finite number, got \"" * s * "\""))
     return v
+end
+
+# "R:Q1:Q2:Q3", all finite and not negative.
+function parse_noise_model!(o::Options, s::String)
+    parts = split(s, ':')
+    length(parts) == 4 || throw(usage_error("--noise-model expects R:Q1:Q2:Q3, got \"" * s * "\""))
+    v = Float64[parse_float(String(p), "--noise-model") for p in parts]
+    all(>=(0), v) || throw(usage_error("--noise-model levels must not be negative"))
+    push!(o.models, (v[1], v[2], v[3], v[4]))
 end
 
 # "NOISE:A:B", A and B in seconds; an empty side is open.
@@ -279,6 +291,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--seed";           o.seed = parse_int(v, name)
     elseif name == "--clocks";         o.clocks = parse_int(v, name)
     elseif name == "--clock";          o.clock = parse_int(v, name)
+    elseif name == "--noise-model";    parse_noise_model!(o, v)
     elseif name == "--tau0";           o.tau0 = parse_float(v, name)
     elseif name == "--input-format";   o.input_format = check_choice(v, name, INPUT_LAYOUTS)
     elseif name == "--column";         o.column = v
@@ -380,11 +393,14 @@ function parse_args!(o::Options, args::Vector{String})
     end
     !isempty(o.input) && o.synth > 0 && throw(usage_error("give either a FILE or --synth, not both"))
     if o.synth <= 0
-        (o.clocks != 0 || o.clock != 1) && throw(usage_error("--clocks and --clock go with --synth"))
+        (o.clocks != 0 || o.clock != 1 || !isempty(o.models)) && throw(usage_error("--clocks, --clock and --noise-model go with --synth"))
     else
-        o.clocks == 0 || 2 <= o.clocks <= 64 || throw(usage_error("--clocks must be between 2 and 64"))
-        1 <= o.clock <= max(o.clocks, 1) || throw(usage_error("--clock must be between 1 and the number of clocks"))
-        o.clocks == 0 && o.clock != 1 && throw(usage_error("--clock needs --clocks"))
+        nm = length(o.models)
+        nm <= 64 || throw(usage_error("--noise-model: at most 64 clocks"))
+        nm > 0 && o.clocks != 0 && o.clocks != nm && throw(usage_error("--clocks is " * string(o.clocks) * " but " * string(nm) * " --noise-model were given"))
+        nm == 0 && o.clocks != 0 && !(2 <= o.clocks <= 64) && throw(usage_error("--clocks must be between 2 and 64"))
+        1 <= o.clock <= max(o.clocks, nm, 1) || throw(usage_error("--clock must be between 1 and the number of clocks"))
+        o.clocks == 0 && nm == 0 && o.clock != 1 && throw(usage_error("--clock needs --clocks"))
     end
     o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2"))

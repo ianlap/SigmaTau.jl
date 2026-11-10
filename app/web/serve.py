@@ -53,7 +53,7 @@ def cli_command():
     return None
 
 
-COMMANDS = {"check", "analyze", "spectrum", "dynamic", "drift", "timescale"}
+COMMANDS = {"check", "analyze", "spectrum", "dynamic", "drift", "timescale", "model"}
 
 
 def request_to_args(req, workdir):

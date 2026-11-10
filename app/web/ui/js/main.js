@@ -10,6 +10,7 @@ import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
 import * as live from "./pages/live.js";
 import * as ensemble from "./pages/ensemble.js";
+import * as synthesis from "./pages/synthesis.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
 import { openFile, saveFile, readFile } from "./platform.js";
@@ -18,8 +19,8 @@ import { sessionText, parseSession, applySession, isSession } from "./session.js
 import { loadPlotly } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, stability, spectrum, dynamic: dynamicPage, ensemble, live, help };
-const ORDER = ["data", "stability", "spectrum", "dynamic", "ensemble", "live"];
+const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, ensemble, live, help };
+const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "ensemble", "live"];
 const pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
@@ -27,6 +28,7 @@ let transient = null;      // { kind, text } shown in the status bar until the n
 const ctx = {
   run, addClock, openFile: openInto, reimport, useSynth, setRecord, addRecord, save: saveFile,
   goData: () => go("data"),
+  go,
   status: (kind, text) => { transient = { kind, text, until: kind === "error" ? Infinity : Date.now() + 8000 }; renderStatus(); },
 };
 
@@ -161,13 +163,13 @@ async function reimport(c) {
 }
 
 // Simulated clocks that belong together share the numbers they were made from.
-const ensembleKey = (src) => (src.type === "synth" && src.clocks > 1 ? [src.n, src.seed, src.tau0, src.clocks].join("/") : null);
+const ensembleKey = (src) => (src.type === "synth" && src.clocks > 1 ? JSON.stringify([src.n, src.seed, src.tau0, src.clocks, src.models ?? null]) : null);
 const DEFAULT_NAMES = /^(Clock|Synthetic record|Sim \d+)$/;
 
 // Make `clocks` synthetic clocks (one, or an ensemble of simulated clocks
 // against a perfect reference), reusing the clock you are on and the other
 // members of its ensemble.
-async function useSynth(c, { n, tau0, seed, clocks = 1 }) {
+async function useSynth(c, { n, tau0, seed, clocks = 1, models = null, names = null }) {
   const k = Math.max(1, Math.round(clocks));
   const made = [];
   update((s) => {
@@ -180,11 +182,12 @@ async function useSynth(c, { n, tau0, seed, clocks = 1 }) {
       const wasFile = x?.source.type === "file";
       if (!x) { x = newClock(); s.clocks.push(x); }
       Object.assign(x, {
-        source: k > 1 ? { type: "synth", n, seed, tau0, clocks: k, index: i + 1 } : { type: "synth", n, seed, tau0 },
-        sourceInfo: k > 1 ? `simulated clock ${i + 1} of ${k}` : "white + random-walk FM", kind: "phase", group: null,
+        source: { type: "synth", n, seed, tau0, ...(models ? { models } : {}), ...(k > 1 ? { clocks: k, index: i + 1 } : {}) },
+        sourceInfo: k > 1 ? `simulated clock ${i + 1} of ${k}` : models ? "simulated clock" : "white + random-walk FM", kind: "phase", group: null,
         tau0, hasTimeCol: false, missing: 0, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
       });
-      if (wasFile || DEFAULT_NAMES.test(x.name)) x.name = k > 1 ? `Sim ${i + 1}` : "Synthetic record";
+      if (names) x.name = names[i];
+      else if (wasFile || DEFAULT_NAMES.test(x.name)) x.name = k > 1 ? `Sim ${i + 1}` : "Synthetic record";
       if (s.reference === x.id) s.reference = null;
       made.push(x);
     }
@@ -395,7 +398,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
   if (e.key === "Escape" && state.run.state === "running") { e.preventDefault(); cancelRun(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const i = "123456".indexOf(e.key);
+  const i = "1234567".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
   if (e.key === "?") go("help");
 });

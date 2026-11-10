@@ -3,7 +3,7 @@
 // without such a file the core simulates four. The scale is computed when this
 // page needs it and recomputed when the settings or the clocks change.
 import { state, update, isReference } from "../state.js";
-import { timescale } from "../core.js";
+import { timescale, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css } from "../plot.js";
 import { sci, num, escapeHtml as h } from "../format.js";
 
@@ -29,7 +29,7 @@ function fileClocks() {
   for (const c of state.clocks) {
     const src = c.source;
     if (src.type !== "synth" || !(src.clocks > 1) || !c.record) continue;
-    const key = [src.n, src.seed, src.tau0, src.clocks].join("/");
+    const key = JSON.stringify([src.n, src.seed, src.tau0, src.clocks, src.models ?? null]);
     sims.set(key, [...(sims.get(key) ?? []), c]);
   }
   const ens = [...sims.values()].find((g) => g.length === g[0].source.clocks);
@@ -42,7 +42,7 @@ function request() {
   let file = null;
   if (clocks.length && clocks[0].source.type === "synth") {
     const src = clocks[0].source;
-    a.push("--synth", src.n, "--clocks", src.clocks, "--seed", src.seed, "--tau0", src.tau0);
+    a.push(...synthArgs(src), "--tau0", src.tau0);
   } else if (clocks.length) {
     const c = clocks[0];
     file = { name: c.source.name, content: c.source.content };

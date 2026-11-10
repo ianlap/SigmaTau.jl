@@ -295,14 +295,46 @@ function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     return elapsed(io, t_start)
 end
 
+# ── model ─────────────────────────────────────────────────────────────────
+
+# σ(τ) the --noise-model clocks predict (MDEV, ADEV, MHDEV) at the τ of an N = --synth record.
+function run_model(io::IO, o::Options)
+    isempty(o.models) && throw(usage_error("model: give a clock with --noise-model R:Q1:Q2:Q3"))
+    tau0 = isnan(o.tau0) ? 1.0 : o.tau0
+    ms = tau_values(tau_mode(o.grid), o.synth, :mdev)
+    tau = tau0 .* ms
+    json_head(io, o, "model")
+    json_key(io, "model"); print(io, '{')
+    json_key(io, "tau0", true); json_number(io, tau0)
+    json_key(io, "n"); print(io, o.synth)
+    json_key(io, "tau"); json_array(io, tau)
+    json_key(io, "clocks"); print(io, '[')
+    for (i, (R, q1, q2, q3)) in enumerate(o.models)
+        i > 1 && print(io, ',')
+        m = ClockModel(; tau0, R, q1, q2, q3)
+        print(io, '{')
+        # Random-run FM (q3) diverges in ADEV and MDEV; only the Hadamard family converges.
+        for (j, d) in enumerate((:mdev, :adev, :mhdev))
+            json_key(io, String(d), j == 1)
+            q3 > 0 && d !== :mhdev ? print(io, "null") : json_array(io, powerlaw_sigma(m, tau; deviation=d))
+        end
+        print(io, '}')
+    end
+    print(io, "]}}\n")
+    return nothing
+end
+
 # ── timescale ─────────────────────────────────────────────────────────────
 
 # White + random-walk FM clocks (four unless --clocks says otherwise), each a
 # factor of two above the last in level, read against a perfect reference.
 function synth_ensemble(o::Options)
     tau0 = isnan(o.tau0) ? 1.0 : o.tau0
-    k = o.clocks > 0 ? o.clocks : 4
-    ms = [ClockModel(; tau0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:k-1]
+    ms = if isempty(o.models)
+        [ClockModel(; tau0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:(o.clocks > 0 ? o.clocks : 4) - 1]
+    else
+        [ClockModel(; tau0, R, q1, q2, q3) for (R, q1, q2, q3) in o.models]
+    end
     cc, _ = simulate_ensemble(ms, o.synth, reference=0, rng=Random.Xoshiro(o.seed))
     return cc
 end
