@@ -69,9 +69,66 @@ function sizeKind(columns) {
   return readings.length && readings.every((c) => med(c) < 1e-11) ? "frequency" : null;
 }
 
+// A BIPM UTC - UTC(k) file ("MJD  [UTC-UTC(NIST)]/ns  uA/ns …"): an integer MJD and the
+// difference in ns per row, then uncertainty and note columns that vary by row, so the
+// generic column reader cannot take it; the core reads it by its layout (bipm_utc).
+const BIPM_HEAD = /^\s*MJD\s+\[UTC-UTC\((.+?)\s*\)\]\s*\/\s*ns/i;
+function sniffBipm(name, lines, lab) {
+  const rows = [], mjd = [], ns = [];
+  for (const l of lines) {
+    const f = l.trim().split(/\s+/);
+    if (f.length < 2 || !/^\d+$/.test(f[0]) || !Number.isFinite(Number(f[1]))) continue;
+    if (rows.length < PREVIEW_ROWS) rows.push({ ln: lines.indexOf(l) + 1, f: [f[0], f[1]] });
+    mjd.push(Number(f[0])); ns.push(Number(f[1]));
+  }
+  const head = lines.findIndex((l) => BIPM_HEAD.test(l));
+  return {
+    name, lines: lines.length, delimName: "whitespace-separated", comments: 0, header: 0, namesLine: 0,
+    names: ["MJD", `UTC-UTC(${lab}) (ns)`], top: [{ ln: head + 1, text: lines[head].trim() }], rows,
+    nRows: mjd.length, nCols: 2, columns: [mjd, ns], bad: null, tau0Hint: null,
+    format: "bipm_utc", formatLabel: `BIPM UTC − UTC(${lab})`, kindHint: "phase", stable32: false,
+  };
+}
+
+// A RINEX 3 clock file (IGS / CODE clock products): "AS G08 2025 08 17 00 00 00.000000  2  bias  sigma"
+// per satellite (AS) or station (AR) clock and epoch. One column per clock, on the union of the
+// epochs (MJD days, NaN where a clock has no record); the core reads one clock by name (rinex_clk).
+const RINEX_HEAD = /^\s*\d+\.\d+\s+C\b.*RINEX VERSION \/ TYPE/;
+function sniffRinex(name, lines) {
+  const body = lines.findIndex((l) => l.includes("END OF HEADER")) + 1;
+  const epochs = new Map(), mjd = [], series = new Map();
+  for (let j = body; j < lines.length; j++) {
+    const l = lines[j], kind = l.slice(0, 3);
+    if (kind !== "AS " && kind !== "AR ") continue;
+    const f = l.trim().split(/\s+/);
+    if (f.length < 10) continue;
+    const key = f.slice(2, 8).join(" ");
+    let e = epochs.get(key);
+    if (e === undefined) {
+      e = mjd.length; epochs.set(key, e);
+      mjd.push(Date.UTC(+f[2], f[3] - 1, +f[4], +f[5], +f[6]) / 86400000 + 40587 + Number(f[7]) / 86400);
+      for (const c of series.values()) c.col.push(NaN);
+    }
+    let c = series.get(f[1]);
+    if (!c) { c = { col: new Array(mjd.length).fill(NaN), kind: kind === "AS " ? "satellite" : "station", n: 0 }; series.set(f[1], c); }
+    c.col[e] = Number(f[9]); c.n++;
+  }
+  const names = [...series.keys()].sort();
+  return {
+    name, lines: lines.length, delimName: "whitespace-separated", comments: 0, header: body, namesLine: 0,
+    names: ["MJD", ...names], top: [], rows: [], nRows: mjd.length, nCols: names.length + 1,
+    columns: [mjd, ...names.map((n) => series.get(n).col)], bad: null, tau0Hint: null,
+    format: "rinex_clk", formatLabel: "RINEX clock file", kindHint: "phase", stable32: false,
+    clocks: names.map((n) => `${series.get(n).kind} · ${series.get(n).n.toLocaleString("en-US")} epochs`),
+  };
+}
+
 export function sniff(name, text) {
   const lines = text.split(/\r?\n/);
   if (lines.length && lines[lines.length - 1] === "") lines.pop();
+  if (lines.slice(0, 5).some((l) => RINEX_HEAD.test(l))) return sniffRinex(name, lines);
+  const bipm = lines.slice(0, 5).map((l) => BIPM_HEAD.exec(l)).find(Boolean);
+  if (bipm) return sniffBipm(name, lines, bipm[1]);
   const [split, delimName] = splitter(name, lines);
 
   let comments = 0;
@@ -147,6 +204,7 @@ const unitOf = (name) => (NAME_UNITS.find(([re]) => re.test(name)) ?? [null, 1])
 // Guess which columns hold time and value: a strictly increasing first column
 // is time; the value is the next column that is not constant.
 export function guessRoles(s) {
+  if (s.clocks) return { time: 1, value: 2, timeUnit: 86400, scaling: 1 };   // MJD, then the first clock
   if (s.nCols <= 1) return { time: 0, value: 1, timeUnit: 1, scaling: unitOf(s.names[0] ?? "") };
   const inc = (c) => c.length > 1 && c.every((v, i) => i === 0 || v > c[i - 1]);
   const isMjd = (c, name) => /mjd/i.test(name) || (c[0] > 30000 && c[0] < 90000 && c[1] - c[0] < 1);
@@ -225,12 +283,37 @@ export function thin(col, n = 400) {
   return out;
 }
 
-// A typed scale: a number, or a short expression such as 1/(2*pi*518.295836590863e12)
-// (a phase in radians of a carrier). NaN when it is empty or not a positive number.
+// A typed scale: a number or a short expression with pi, + - * / and
+// parentheses, such as 1/(2*pi*518.295836590863e12) (a phase in radians of a
+// carrier). NaN when it is empty, malformed or not a positive number.
 export function parseFactor(text) {
-  const t = text.trim().replace(/\bpi\b/gi, "(" + Math.PI + ")");
-  if (!t || !/^[0-9eE+\-*/().\s]+$/.test(t)) return NaN;
-  try { const v = Function(`"use strict"; return (${t});`)(); return Number.isFinite(v) && v > 0 ? v : NaN; } catch { return NaN; }
+  const tok = text.toLowerCase().match(/\s*(\d+\.?\d*(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?|pi|[-+*/()]|\S)/gy)?.map((t) => t.trim()) ?? [];
+  let i = 0;
+  const expr = () => {
+    let v = term();
+    while (tok[i] === "+" || tok[i] === "-") v = tok[i++] === "+" ? v + term() : v - term();
+    return v;
+  };
+  const term = () => {
+    let v = unary();
+    while (tok[i] === "*" || tok[i] === "/") v = tok[i++] === "*" ? v * unary() : v / unary();
+    return v;
+  };
+  const unary = () => (tok[i] === "-" ? (i++, -unary()) : tok[i] === "+" ? (i++, unary()) : atom());
+  const atom = () => {
+    const t = tok[i++];
+    if (t === "(") { const v = expr(); return tok[i++] === ")" ? v : NaN; }
+    return t === "pi" ? Math.PI : /^[\d.]/.test(t ?? "") ? Number(t) : NaN;
+  };
+  const v = tok.length ? expr() : NaN;
+  return i === tok.length && Number.isFinite(v) && v > 0 ? v : NaN;
+}
+
+// Settings of a loaded clock hold one number for the scale. Back in the dialog
+// it is a menu unit, or else a typed factor and goes in the factor field.
+export function scaleFields(kind, scaling, factor = "") {
+  const menu = kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
+  return menu.some(([f]) => f === scaling) || factor ? { scaling, factor } : { scaling: 1, factor: String(scaling) };
 }
 
 export const PHASE_UNITS = [[1, "seconds"], [1e-3, "milliseconds"], [1e-6, "microseconds"], [1e-9, "nanoseconds"], [1e-12, "picoseconds"]];

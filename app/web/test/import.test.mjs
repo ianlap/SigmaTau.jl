@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.window = {};
-const { sniff, guessRoles, parseFactor } = await import("../ui/js/import.js");
+const { sniff, guessRoles, parseFactor, scaleFields } = await import("../ui/js/import.js");
 
 const seq = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 const read = (name, lines) => { const s = sniff(name, lines.join("\n") + "\n"); return { s, g: guessRoles(s) }; };
@@ -41,6 +41,41 @@ test("readings far below a nanosecond are frequency, and a comment line can name
 
 test("a typed scale is a number or a short expression, nothing else", () => {
   assert.equal(parseFactor("1e-9"), 1e-9);
+  assert.equal(parseFactor(" 2 * (3 + 4) / 7 - .5"), 1.5);
+  assert.equal(parseFactor("500000"), 5e5);
   assert.ok(Math.abs(parseFactor("1/(2*pi*518.295836590863e12)") / 3.0709e-16 - 1) < 1e-4);
-  for (const bad of ["", "-1", "0", "abc", "process.exit()", "1/0", "2**"]) assert.ok(Number.isNaN(parseFactor(bad)), bad);
+  for (const bad of ["", "-1", "0", "abc", "process.exit()", "1/0", "2**", "1/*2*/", "2**3", "(1", "1)", "1 2", "1e"]) assert.ok(Number.isNaN(parseFactor(bad)), bad);
+});
+
+test("reopening a clock with a typed scale keeps it in the factor field", () => {
+  assert.deepEqual(scaleFields("phase", 1e-9), { scaling: 1e-9, factor: "" });
+  assert.deepEqual(scaleFields("phase", 3.07e-16), { scaling: 1, factor: "3.07e-16" });
+  assert.deepEqual(scaleFields("frequency", 1e-9, "5e5"), { scaling: 1e-9, factor: "5e5" });
+  assert.equal(parseFactor(scaleFields("phase", 3.07e-16).factor), 3.07e-16);
+});
+
+test("a BIPM UTC - UTC(k) file is recognised by its header despite the '+/-' columns", () => {
+  const rows = seq(30, (i) => `${50814 + 5 * i}   ${i % 4}.5   +/-   0.2   2.1   2.1   `);
+  const s = sniff("utc-lab", ["  MJD  [UTC-UTC(LAB )]/ns  uA/ns  uB/ns  u/ns  \r", "\r", ...rows, "\x1a"].join("\n"));
+  assert.equal(s.format, "bipm_utc");
+  assert.deepEqual([s.nCols, s.nRows, s.names[1], s.kindHint, s.bad], [2, 30, "UTC-UTC(LAB) (ns)", "phase", null]);
+  assert.deepEqual([guessRoles(s).time, guessRoles(s).value, guessRoles(s).timeUnit, guessRoles(s).scaling], [1, 2, 86400, 1e-9]);
+});
+
+test("a RINEX clock file lists its clocks and takes the clock's own epochs", () => {
+  const rec = (kind, n, min, sec, x) => `${kind} ${n} 2025 08 17 00 ${String(min).padStart(2, "0")} ${String(sec).padStart(2, "0")}.000000  2   ${x}E-07  2.5E-11`;
+  const lines = ["     3.04                 C                    M                   RINEX VERSION / TYPE", "                                                            END OF HEADER"];
+  for (let k = 0; k < 8; k++) {
+    const m = k >> 1, sec = (k & 1) * 30;
+    lines.push(rec("AS", "G08", m, sec, 1 + k));
+    if (!sec && m % 2 === 0) lines.push(rec("AR", "ALGO00CAN", m, 0, 2 + m));
+  }
+  const { s, g } = read("clk.clk", lines);
+  assert.equal(s.format, "rinex_clk");
+  assert.deepEqual(s.names, ["MJD", "ALGO00CAN", "G08"]);
+  assert.equal(s.nRows, 8);
+  assert.deepEqual(s.clocks, ["station · 2 epochs", "satellite · 8 epochs"]);
+  assert.deepEqual([g.time, g.timeUnit], [1, 86400]);
+  assert.equal(s.columns[0][1] - s.columns[0][0] > 0, true);
+  assert.equal(s.columns[2][5], 6e-7);
 });

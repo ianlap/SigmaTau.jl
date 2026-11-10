@@ -74,16 +74,18 @@ function recordArgs(clock) {
   // One clock of a simulated ensemble: the core simulates them all and hands back this one.
   if (synth && clock.source.clocks > 1) a.push("--clock", clock.source.index);
   const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
-  opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
+  // (a RINEX clock file has a grid per clock: the reader takes it from the epochs)
+  if (clock.format !== "rinex_clk") opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
   // An instrument file (TimeLab, Stable32 .phd/.frd, counter log) is read by
   // its layout, which fixes the record type, units and columns.
   if (clock.format) {
     a.push("--input-format", clock.format);
-    // A table is read by column name, as the record type the user picked.
+    // A table is read by column name, as the record type the user picked;
+    // a RINEX clock file by clock name.
     if (clock.format === "table") {
       opt("--column", clock.column_name);
       a.push(clock.kind === "frequency" ? "--freq" : "--phase");
-    }
+    } else if (clock.format === "rinex_clk") opt("--column", clock.column_name);
   } else recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
   if (clock.fillgaps) a.push("--fillgaps");

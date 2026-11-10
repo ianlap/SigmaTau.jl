@@ -248,6 +248,14 @@ mktempdir() do dir
         @test o.code == 0 && occursin("\"quantity\":\"phase\"", o.out)
         @test run_cli("check", fx("gpsdo.csv"), "--column", "OSC offset (ppb)", "--phase").code == 2
         @test run_cli("analyze", tim, "--input-format", "counter", "--tau0", "1").code == 2
+        # A BIPM UTC - UTC(k) file is recognised by its header: phase, five days apart, two rows missing.
+        b = run_cli("check", fx("bipm_utc_lab.txt"), "--format", "json")
+        @test b.code == 0 && occursin("\"quantity\":\"phase\"", b.out) && occursin("\"tau0\":432000.0", b.out)
+        @test occursin("\"gaps\":2", b.out)
+        # A RINEX clock file: the clock named by --column, phase every 30 s.
+        r = run_cli("check", fx("rinex_clk_synth.clk"), "--column", "E02", "--format", "json")
+        @test r.code == 0 && occursin("\"quantity\":\"phase\"", r.out) && occursin("\"tau0\":30.0", r.out)
+        @test run_cli("check", fx("rinex_clk_synth.clk"), "--column", "G99").code == 2
         @test run_cli("analyze", tim, "--reference-col", "2").code == 1
         semi = joinpath(dir, "semi.txt")
         write(semi, "time;phase (ns)\n" * join(string.(0:63, ";", X[1:64] .* 1e9), "\n"))

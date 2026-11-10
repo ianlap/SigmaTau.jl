@@ -9,16 +9,23 @@ const tauri = window.__TAURI__?.core;
 // A picked or dropped file: its text, and the SHA-256 of its bytes for reports
 // (empty where Web Crypto is unavailable).
 export async function readFile(f) {
-  const bytes = await f.arrayBuffer();
+  let bytes = await f.arrayBuffer();
+  let name = f.name;
+  // A gzip file (the IGS clock products are .gz) is unpacked here: the core reads text.
+  if (new Uint8Array(bytes, 0, 2).join() === "31,139") {
+    const ds = new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip")));
+    bytes = await ds.arrayBuffer();
+    name = name.replace(/\.gz$/i, "");
+  }
   let sha256 = "";
   if (crypto?.subtle) {
     const d = await crypto.subtle.digest("SHA-256", bytes);
     sha256 = [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
-  return { name: f.name, text: new TextDecoder().decode(bytes), sha256 };
+  return { name, text: new TextDecoder().decode(bytes), sha256 };
 }
 
-export function openFile(accept = ".txt,.dat,.csv,.tsv,.phd,.frd,.frq,.tim,.log,text/*") {
+export function openFile(accept = ".txt,.dat,.csv,.tsv,.phd,.frd,.frq,.tim,.log,.clk,.gz,text/*") {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
