@@ -107,6 +107,12 @@ Clock models, the Kalman filter and timescales.
   al., PTTI 2000). It gives the RMS, a quantile, the worst case and the mean of
   the time error at each holdover time, and the time at which the quantile
   reaches a limit.
+- Predicted holdover: `holdover(model; train, tau, tau0, …)` predicts the
+  error the measured test finds from a `PowerLawFit`, a `ClockModel` or a
+  `Dict` of h_α, with `budget`, the variance each noise type adds
+  (`HoldoverPrediction`; Python too). Exact for the sampled spectrum,
+  flicker noises included; matches the closed forms of Delporte et al.
+  (PTTI 2000) within 0.4 %.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
