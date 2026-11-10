@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -114,3 +115,18 @@ def test_data_round_trip(tmp_path, small_phase):
 def test_save_rejects_other_types(tmp_path):
     with pytest.raises(TypeError):
         st.save(str(tmp_path / "x.txt"), [1, 2, 3])
+
+
+def test_start_time_from_timestamps(tmp_path):
+    # ISO timestamps set the start, which survives conversion and a save/load.
+    p = tmp_path / "ts.csv"
+    rows = ("2026-11-08T12:00:00Z,0", "2026-11-08T12:00:01Z,1e-9", "2026-11-08T12:00:02Z,3e-9")
+    p.write_text("time,phase\n" + "\n".join(rows) + "\n")
+    rec = st.read_data(str(p))
+    t0 = datetime(2026, 11, 8, 12, tzinfo=UTC)
+    assert st.start_time(rec) == t0
+    assert st.start_time(rec.to_frequency()) == t0
+    q = tmp_path / "rec.txt"
+    st.save(str(q), rec)
+    assert st.start_time(st.load(str(q))) == t0
+    assert st.start_time(PhaseData(np.zeros(4))) is None

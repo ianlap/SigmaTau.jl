@@ -1,10 +1,10 @@
 name: Cross-check
 
-# Regenerates the allantools / scipy reference tables from the committed phase
-# records with a live allantools install, then runs the reference cross-check
-# test group (test/validation/) against those fresh tables. The committed
-# tables in test/fixtures/validation/allantools/ keep the group runnable
-# offline; this job catches drift in either library.
+# Regenerates the allantools / scipy and AllanDeviations.jl reference tables
+# from the committed phase records with live installs, then runs the reference
+# cross-check test group (test/validation/) against those fresh tables. The
+# committed tables in test/fixtures/validation/ keep the group runnable
+# offline; this job catches drift in any of the libraries.
 
 on:
   push:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   crosscheck:
-    name: allantools + Stable32 cross-check
+    name: allantools, AllanDeviations.jl + Stable32 cross-check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -44,14 +44,22 @@ jobs:
           version: '1'
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
+      - name: Regenerate the AllanDeviations.jl table
+        run: |
+          julia --project=tools/validation/allandeviations -e 'using Pkg; Pkg.instantiate()'
+          julia --project=tools/validation/allandeviations tools/validation/gen_allandeviations.jl "$RUNNER_TEMP/allandeviations"
+          cmp -s test/fixtures/validation/allandeviations/devs.csv "$RUNNER_TEMP/allandeviations/devs.csv" \
+            || echo "::notice::allandeviations/devs.csv differs from the committed table"
       - name: Cross-check test group
         env:
           SIGMATAU_ALLANTOOLS_DIR: ${{ runner.temp }}/allantools
+          SIGMATAU_ALLANDEVIATIONS_DIR: ${{ runner.temp }}/allandeviations
         run: julia --project=. -e 'using Test; include("test/validation/runtests.jl")'
       - name: Report
         if: always()
         env:
           SIGMATAU_ALLANTOOLS_DIR: ${{ runner.temp }}/allantools
+          SIGMATAU_ALLANDEVIATIONS_DIR: ${{ runner.temp }}/allandeviations
         run: |
           julia --project=. tools/validation/report.jl "$RUNNER_TEMP/REPORT.md"
           cat "$RUNNER_TEMP/REPORT.md" >> "$GITHUB_STEP_SUMMARY"

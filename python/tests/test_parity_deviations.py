@@ -90,6 +90,25 @@ def test_correct_bias_takes_a_reference_name(phase8192):
     assert st.htotdev(phase8192, [16]).dev[0] < 0.9 * raw
 
 
+def test_noise_states_the_type_behind_the_edf(small_phase):
+    """A stated noise type stands in for the identified one: one name, one per
+    averaging factor, or a fitted model (flicker PM is this record's strongest
+    term at every τ)."""
+    ms = [1, 4, 16]
+    auto = st.adev(small_phase, ms)
+    stated = st.adev(small_phase, ms, noise=list(auto.noise_type))
+    np.testing.assert_array_equal(stated.edf, auto.edf)
+    flfm = st.adev(small_phase, ms, noise="FLFM")
+    assert list(flfm.noise_type) == ["FLFM"] * 3
+    assert flfm.edf[0] != auto.edf[0]
+    suite = st.stability(small_phase, m=ms, noise="FLFM")
+    np.testing.assert_array_equal(suite["adev"].edf, flfm.edf)
+    fitted = st.deviation("hdev", small_phase, ms, noise=st.powerlaw_fit(small_phase))
+    assert list(fitted.noise_type) == ["FLPM"] * 3
+    with pytest.raises(ValueError, match="noise"):
+        st.adev(small_phase, ms, noise="PINK")
+
+
 def test_adev_golden_against_stable32(phase8192, stable32_csv):
     """adev on the 8192-sample record reproduces Stable32's Overlapping Allan sigmas."""
     ms = [1, 2, 4, 8]
