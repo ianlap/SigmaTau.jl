@@ -554,10 +554,11 @@ In a `:table` file the time column is the first whose name is `t`, `time`,
 `timestamp`, `date`, `datetime`, `utc`, `epoch`, `elapsed`, `sec`,
 `seconds` or `mjd`, with or without a unit in brackets after it, else the
 first column that holds ISO 8601 timestamps. Numbers in it are read as
-seconds, or in the unit of time that its name gives, as in `time (ms)`.
-They are read as days when the name contains `mjd`, or when they meet the
-MJD conditions of [`read_phase`](@ref) and the name has neither `sec`,
-`elapsed` nor a unit of time.
+seconds, or in the unit that its name gives when that is one of the units
+of time listed below, as in `time (ms)`: minutes and hours are not among
+them. They are read as days when the name contains `mjd`, or when they meet
+the MJD conditions of [`read_phase`](@ref) and the name has neither `sec`,
+`elapsed` nor one of those units.
 
 The clock column is `column`. By default it is the other column of a file
 with a time column and one more, else the only column whose name holds

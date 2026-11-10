@@ -355,13 +355,14 @@ is read as written.
 
 The grid step starts from the mean of the steps shorter than 1.5 times the
 shortest. It is rounded to the fewest significant figures, at most six, for
-which two conditions hold: the rounded step lies within the uncertainty of
-the least-squares step of the timestamps, which their scatter about that
-fit sets, and every timestamp lies within a quarter step of its place. When
-no rounding passes, the step is the span of the timestamps over the number
-of steps. Timestamps that jitter, or that are rounded to a coarse
-resolution, therefore give a round ``τ_0``, and exact timestamps keep their
-own step whatever the length of the record.
+which two conditions hold: the rounded step differs from the least-squares
+step of the timestamps by no more than the uncertainty of that step, which
+their scatter about the fit sets, nor by more than 1 %, and every timestamp
+lies within a quarter step of its place. When no rounding passes, the step
+is the span of the timestamps over the number of steps. Timestamps that
+jitter, or that are rounded to a coarse resolution, therefore give a round
+``τ_0``, and exact timestamps keep their own step whatever the length of
+the record.
 
 A column that is no time axis leaves the samples in file order: one that
 does not increase from line to line, or whose steps are not whole multiples
