@@ -10,8 +10,8 @@ compares with what the record did next,
 e(\tau) = x(t+\tau) - x(t) - \hat y\,\tau - \tfrac12 \hat D\,\tau^2 ,
 ```
 
-the time interval error x(t + τ) − x(t) of ITU-T G.810 [ITU-G810](@cite)
-less the learned frequency and drift. Every sample the record allows is a
+the time interval error x(t + τ) − x(t) of ITU-T G.810, clause 4.5.14
+[ITU-G810](@cite), less the learned frequency and drift. Every sample the record allows is a
 start, the sliding test of Delporte et al.
 [delporte-2000-extrapolation](@cite), so the statistics at each holdover
 time come from the whole record: the RMS, the quantile at a chosen
@@ -42,9 +42,10 @@ record. A mean error that grows as τ² under a line is drift the line
 cannot follow.
 
 With `anchor = false` the fit's own end value replaces the last reading,
-which is the extrapolated fit Delporte et al. analyse; their closed-form
-variances for white, flicker and random-walk FM are what the tests check
-the function against. [`holdover_error`](@ref) gives the error a
+which is the extrapolated fit Delporte et al. analyze; their closed-form
+variances for white, flicker and random-walk FM (eqs 11 to 13 for a
+parabola, 17 to 19 for a line) are what the tests check the function
+against. [`holdover_error`](@ref) gives the error a
 [`ClockModel`](@ref) predicts from a Kalman filter's last estimate.
 
 ```@docs
