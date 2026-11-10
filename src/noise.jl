@@ -49,7 +49,7 @@ taken; after ``d`` differences, ``α = 2 - 2(δ + d)``
   on flicker FM and 33/40 on random-walk FM). One that fails is reported
   as white FM. ``R(n)`` uses every sample where the tests read one in
   ``m``, and with few decimated points they take FM for PM often: white FM
-  in one record in four at 32 points. A PM label there makes the interval
+  in one record in five at 32 points. A PM label there makes the interval
   several times too narrow.
 
 Samples farther than five standard deviations from the record mean are

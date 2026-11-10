@@ -928,9 +928,16 @@ the factor 0.75, which the white-FM bias of 1 in its Table 2 requires.
   [Howe (2006), Eq. (6)](@cite howe-2006-theoh). The Thêo1 variance is
   multiplied by the mean ratio of the Allan variance at ``m = 9 + 3i`` to
   Thêo1 at ``m = 12 + 4i``, two factors with the same averaging time, over
-  ``i = 0, …, n`` with ``n = \\lfloor N/30 - 3 \\rfloor``. This removes the
-  bias of Thêo1, which depends on the noise type, without identifying the
-  noise. It needs ``N ≥ 19``. `:published` is the same. `false` or
+  ``i = 0, …, n`` with ``n = \\lfloor N/30 - 3 \\rfloor``. The ratio is
+  measured on the record, so no noise type is identified. One ratio removes
+  the bias where it changes little with ``m``, as on FM noise of one type.
+  On white and flicker PM the bias changes with ``m`` throughout
+  ([Howe (2006), Table 3](@cite howe-2006-theoh)), and the corrected
+  variance was 0.64 to 1.6 times the Allan variance in simulation. Where
+  the noise type changes within the record, the ratio is that of the short
+  averaging times at which it is measured, and the corrected variance at
+  long ``τ`` fell to a quarter of the Allan variance in simulation. It
+  needs ``N ≥ 19``. `:published` is the same. `false` or
   `:stable32` returns Thêo1 uncorrected. Stable32 applies to its Thêo1
   results the noise-type bias of SP1065 Table 2, which is 1 for white FM, or
   ThêoBR when the noise type is automatic

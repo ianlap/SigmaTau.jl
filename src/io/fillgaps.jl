@@ -369,9 +369,11 @@ A record without missing samples is returned as a copy.
 
 !!! warning "A filled record is not the record"
     Fill only for a function that needs a complete record, such as the
-    spectra and the cross estimators. The stability estimators leave out
-    the terms a missing sample enters (see [Timestamps and gaps](@ref)),
-    which does not bias them.
+    spectra, the total, Thêo, parabolic and dynamic deviations and the
+    cross estimators. The Allan and Hadamard deviations, their modified
+    and time forms and [`tierms`](@ref) leave out the terms a missing
+    sample enters, which does not bias them, and [`mtie`](@ref) takes the
+    peak-to-peak of the samples measured (see [Timestamps and gaps](@ref)).
 
     This implementation departs from the paper in two steps. The paper
     inserts the reflected samples as they are and filters only to find the
