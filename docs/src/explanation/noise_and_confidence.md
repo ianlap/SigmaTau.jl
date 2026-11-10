@@ -129,8 +129,8 @@ flicker-walk and random-run FM correlate at r₁ = −1/3,
 estimator reads as α = −3.0, −3.93 and −4.57, so for m ≥ 2 the limits sit at
 −3.46 and −4.25. HDEV, MHDEV and HTOTDEV then take their EDF at the identified
 α [greenhall-2003-edf-stability](@cite) and HTOTDEV its bias factor
-[howe-2001-total-estimators](@cite); MHTOTDEV has no model below α = −2 yet
-and uses random-walk FM's. Read as random-walk FM, random-run FM had an HDEV
+[howe-2001-total-estimators](@cite), and MHTOTDEV its own
+[bias and EDF](mhtotdev.md) for each. Read as random-walk FM, random-run FM had an HDEV
 EDF 26 % too high and an HTOTDEV 6 % too low. The price is paid by
 random-walk FM at long τ: its second differences sit at ρ = 0.2, next to the
 0.25 at which the estimator differences again, and in simulation it keeps
@@ -156,8 +156,8 @@ points of a stability plot carry wide intervals. SigmaTau computes it per τ
   [riley-2008-sp1065](@cite) and Howe and Peppler
   [howe-2001-total-estimators](@cite), with the Greenhall–Riley
   value where no coefficients exist (white and flicker PM for TOTDEV and
-  HTOTDEV). For MHTOTDEV, which is new in SigmaTau, the coefficients were
-  measured by Monte Carlo; see [MHTOTDEV bias and EDF](mhtotdev.md).
+  HTOTDEV). For MHTOTDEV, which is new in SigmaTau, the model is fitted
+  to the exact EDF of the statistic; see [MHTOTDEV bias and EDF](mhtotdev.md).
 - **Thêo1 and ThêoH:** the empirical per-noise formulas of SP1065 Table 3.
 - **PDEV:** the PVAR model of Vernotte, Chen and Rubiola.
 - **MTIE and TIE rms** have no χ² model and carry no interval.
@@ -178,8 +178,8 @@ Given the deviation σ̂ and the EDF ν, the interval at confidence level p is
 (`DEFAULT_CONFIDENCE`), the ±1σ convention of Stable32; pass
 `confidence=0.95` for a 95 % interval. The interval is asymmetric about σ̂,
 wider above than below, because the χ² distribution is skewed at small ν.
-The formula holds for any ν > 0, so a point whose EDF falls below 1 (the
-last τ of MHTOTDEV on some records) keeps a χ² interval, a very wide one.
+The formula holds for any ν > 0, so a point whose EDF falls below 1 keeps
+a χ² interval, a very wide one.
 Where an EDF model gives no positive value (SP1065's Thêo1 formula for
 random-walk FM beyond τ ≈ 0.63 T), the point has no interval and its bounds
 are `NaN`.
@@ -197,7 +197,7 @@ SigmaTau divides it out using the identified noise type
 | TOTDEV | Howe and Walter: τ/T-dependent, FLFM and RWFM only |
 | MTOTDEV, TTOTDEV | Howe and Peppler: MTOT reads 0.3 % (white PM) to 18 % (random-walk FM) low |
 | HTOTDEV | Howe and Peppler, FM noises |
-| MHTOTDEV | measured by Monte Carlo, τ/T-dependent |
+| MHTOTDEV | its exact expectation: 10 % (white PM) to 22 % (flicker FM) low in variance |
 | Thêo1 | the ThêoBR ratio to ADEV, which needs no noise ID |
 
 The MTOT factors are Table 2 of Howe and Peppler
