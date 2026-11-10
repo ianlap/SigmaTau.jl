@@ -230,10 +230,6 @@ export function guessRoles(s) {
   return { time, value, timeUnit, scaling: unitOf(nm(value)) };
 }
 
-// Grid step and gaps of a time column, scanning the whole file: the same
-// step as the reader's _time_grid (the mean of the regular steps, rounded to
-// the shortest value that keeps every timestamp within a quarter step of its
-// slot), so coarse timestamps such as MJD to six decimals give the true τ0.
 // Time stats and sample count of each picked clock. The clocks of a RINEX file keep
 // their own grids (30 s satellites, 5 min stations), so each is timed on its own
 // epochs; the columns of any other file share the time column.
@@ -246,6 +242,10 @@ export function clockStats(s, time, values, unit) {
   });
 }
 
+// Grid step and gaps of a time column, scanning the whole file: the same
+// step as the reader's _time_grid (the mean of the regular steps, rounded to
+// the shortest value that keeps every timestamp within a quarter step of its
+// slot), so coarse timestamps such as MJD to six decimals give the true τ0.
 export function timeStats(col, unit = 1) {
   const t = unit === 1 ? col : col.map((x) => x * unit);
   const d = [];
