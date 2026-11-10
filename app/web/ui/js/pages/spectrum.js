@@ -187,7 +187,6 @@ export function refresh() {
   }, CONFIG);
 }
 
-export function plotElement() { return top; }
 export function hint() {
   return multi() ? "Colour = clock · both plots share the frequency axis" : "Both plots share the frequency axis · drag either to zoom both";
 }

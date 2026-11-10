@@ -59,15 +59,14 @@
         end
     end
 
-    @testset "fillgaps kwarg requires a time column" begin
+    @testset "fillgaps without a time column fills the NaN readings" begin
         mktempdir() do dir
-            path = joinpath(dir, "p.txt")
-            open(path, "w") do io
-                for v in 1:32
-                    println(io, Float64(v))
-                end
-            end
-            @test_throws ArgumentError read_phase(path; time_col=0, tau0=1.0, fillgaps=true)
+            path = joinpath(dir, "y.txt")
+            write(path, join([1:4; NaN; 6:16; NaN; 18:32] .* 1e-12, "\n"))
+            fd = read_frequency(path; tau0=1.0, fillgaps=true)
+            @test length(fd) == 32 && all(isfinite, fd.y)
+            @test fd.y[[1:4; 6:16; 18:32]] == [1:4; 6:16; 18:32] .* 1e-12
+            @test count(isnan, read_frequency(path; tau0=1.0).y) == 2
         end
     end
 

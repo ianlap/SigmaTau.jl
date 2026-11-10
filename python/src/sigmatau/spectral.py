@@ -44,7 +44,8 @@ def psd_x(
     noverlap: int | None = None,
     taper: str = "hann",
 ) -> SpectralResult:
-    """One-sided PSD of the phase residual S_x(f) [s²/Hz] (Welch, fs=1/τ₀)."""
+    """One-sided PSD of the phase residual S_x(f) [s²/Hz]: the Welch S_y(f) over the
+    first-difference response 4 sin²(πfτ₀)/τ₀². NaN at f = 0."""
     return spectral_from_jl(jl.psd_x(to_jl_data(data), **_welch_kwargs(nperseg, noverlap, taper)))
 
 

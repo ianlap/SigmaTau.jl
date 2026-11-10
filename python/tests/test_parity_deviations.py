@@ -71,13 +71,17 @@ def test_wrapper_matches_direct_julia(name, fixture, tau_kind, request, jl):
 
 
 def test_htotdev_remove_drift_sets_the_noise_type_and_the_bias(phase8192):
-    """At τ = 1024 s the record as given reads flicker FM; with drift removed
-    first (the default) it reads white FM, as Stable32 does, and the bias
-    factor follows."""
-    as_given = st.htotdev(phase8192, [1024], remove_drift=False)
-    assert as_given.dev[0] == pytest.approx(2.60814e-03, rel=1e-5)
-    assert st.deviation("htotdev", phase8192, [1024], remove_drift=False).dev[0] == as_given.dev[0]
-    assert st.htotdev(phase8192, [1024]).dev[0] == pytest.approx(2.4120e-03, rel=1e-4)
+    """A frequency drift HTOTDEV ignores does not reach its noise type by
+    default; with remove_drift=False the type at τ = 1024 s is the drift's,
+    and the bias factor follows."""
+    drifting = st.PhaseData(phase8192.x + 1e-5 * np.arange(len(phase8192.x)) ** 2, 1.0)
+    default = st.htotdev(drifting, [1024])
+    assert default.noise_type[0] == "FLFM"
+    assert default.dev[0] == pytest.approx(st.htotdev(phase8192, [1024]).dev[0], rel=1e-8)
+    as_given = st.htotdev(drifting, [1024], remove_drift=False)
+    assert as_given.noise_type[0] == "RWFM"
+    assert as_given.dev[0] == pytest.approx(2.74011e-03, rel=1e-5)
+    assert st.deviation("htotdev", drifting, [1024], remove_drift=False).dev[0] == as_given.dev[0]
 
 
 def test_correct_bias_takes_a_reference_name(phase8192):

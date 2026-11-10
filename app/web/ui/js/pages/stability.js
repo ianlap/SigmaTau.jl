@@ -474,7 +474,6 @@ function renderCompare(box, clocks, devs) {
 }
 
 // Plot element and table rows for the export menu.
-export function plotElement() { return plotEl; }
 export function hint() {
   if (multi()) {
     const devs = devsOnAxis();

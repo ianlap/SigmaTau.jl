@@ -93,13 +93,16 @@ end
     cross_psd_x(a, b; nperseg=nothing, noverlap=nothing, taper=:hann) → CrossSpectralResult
 
 Cross power spectral density of the phase of two simultaneous records, in
-s²/Hz. Same method and floor as [`cross_psd_y`](@ref).
+s²/Hz: [`cross_psd_y`](@ref), its floor and the two channels' own spectra,
+each divided by the response of the first difference as in [`psd_x`](@ref).
 """
 function cross_psd_x(a::AbstractTimingData, b::AbstractTimingData;
                      nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
-    _cross_pair(a, b)
-    xa = _f64(_as_phase(a).x); xb = _f64(_as_phase(b).x)
-    return _cross_psd(:Sx, xa, xb, a.tau0, nperseg, noverlap, taper)
+    np, no = _sx_welch_params(a, nperseg, noverlap)
+    c = cross_psd_y(a, b; nperseg=np, noverlap=no, taper=taper)
+    r = _difference_response(c.freq, a.tau0)
+    return CrossSpectralResult(:Sx, c.freq, c.psd ./ r, c.floor ./ r, c.psd_a ./ r, c.psd_b ./ r,
+                               c.nseg, np, no, taper)
 end
 
 # Welch's equivalent number of independent averages of nseg segments of
