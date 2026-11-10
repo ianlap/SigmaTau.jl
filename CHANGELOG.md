@@ -187,6 +187,9 @@ Clock models, the Kalman filter and timescales.
   `HoldoverResult` wrap the Julia calls of the same names.
 - Tutorial "From one clock to an ensemble": noise fit, Kalman filter,
   holdover and an AT1 timescale on simulated clocks.
+- `groslambert(...; interval=:klts)`: KLTS confidence intervals (Lantz et al.
+  2019) for three clocks, valid for a clock quieter than the others; the χ²
+  interval is no longer given below 1 EDF.
 
 ### Changed
 
@@ -260,6 +263,17 @@ Clock models, the Kalman filter and timescales.
   is a menu of the same four; saved sessions still open, as Exact (was on)
   or None (was off).
 - The test suite runs the Aqua.jl package checks.
+- Noise identification: from m = 16 a white or flicker PM label stands only
+  if R(n) = MVAR/AVAR agrees (nearer its flicker-PM value than the 1/2 of
+  white FM); otherwise the noise is reported as white FM. With few averaged
+  points the lag-1 and B1 tests mistook FM for PM, which gave ADEV and HDEV
+  intervals several times too narrow. Labels on the Stable32 cross-check
+  record now agree at every τ.
+- Default calls are faster: the drift fit inside noise identification is a
+  closed-form fit that agrees with the general fit to rounding, no longer
+  goes through filtered generator sums, and is shared between m = 1 and the
+  R(n) check. The fast estimators' default call is about 15× faster than on
+  0.6.0 (about 0.4 ms on 25 000 points).
 
 ### Removed
 
