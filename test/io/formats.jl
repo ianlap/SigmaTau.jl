@@ -71,6 +71,10 @@ fmt(f) = joinpath(FMT, f)
         f = read_data(fmt("stable32.frd"); tau0=10.0)
         @test f isa FrequencyData && f.tau0 == 10.0
         @test_throws ArgumentError read_data(fmt("stable32.frd"))   # no τ₀ anywhere
+        # The older header: bare lines, no "# Header End".
+        old = tempname() * ".frd"
+        write(old, "File: old.frd\nType: Freq\nPoints: 3\nTau: 10\n1e-12\n2e-12\n3e-12\n")
+        @test read_data(old).y == [1e-12, 2e-12, 3e-12] && read_data(old).tau0 == 10.0
     end
 
     @testset "counter logs" begin
