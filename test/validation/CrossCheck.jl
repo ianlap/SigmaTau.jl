@@ -213,13 +213,15 @@ const S32_RUNS = [
     ("phase_dat_oadev_octave.txt",   "oadev",   (p, m) -> adev(p, m),   :adev,    m -> 1.0, ""),
     ("phase_dat_mdev_octave.txt",    "mdev",    (p, m) -> mdev(p, m),   :mdev,    m -> 1.0, ""),
     ("phase_dat_tdev_octave.txt",    "tdev",    (p, m) -> tdev(p, m),   :mdev,    m -> m / sqrt(3), ""),
-    ("phase_dat_ohdev_octave.txt",   "ohdev",   (p, m) -> hdev(p, m),   :hdev,    m -> 1.0, ""),
+    ("phase_dat_ohdev_octave.txt",   "ohdev",   (p, m) -> hdev(p, m; remove_drift=false), :hdev, m -> 1.0,
+        "Stable32 identifies noise on the record as given; remove_drift=false"),
     ("phase_dat_totdev_octave.txt",  "totdev",  (p, m) -> totdev(p, m), :totdev,  m -> 1.0, ""),
     ("phase_dat_mtotdev_octave.txt", "mtotdev", (p, m) -> mtotdev(p, m; correct_bias=false), :mtotdev, m -> 1.0,
         "Stable32 reports MTOT raw; correct_bias=false"),
     ("phase_dat_ttotdev_octave.txt", "ttotdev", (p, m) -> ttotdev(p, m; correct_bias=false), :mtotdev, m -> m / sqrt(3),
         "Stable32 reports TTOT raw; correct_bias=false"),
-    ("phase_dat_htotdev_octave.txt", "htotdev", (p, m) -> htotdev(p, m), :htotdev, m -> 1.0, ""),
+    ("phase_dat_htotdev_octave.txt", "htotdev", (p, m) -> htotdev(p, m; remove_drift=false), :htotdev, m -> 1.0,
+        "Stable32 identifies noise on the record as given; remove_drift=false"),
 ]
 
 # σ-only runs over every τ (no CI columns in these files).

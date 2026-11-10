@@ -77,6 +77,18 @@ Stable32 does not detrend before the lag-1 estimate. The difference only
 matters on records with drift; `identify_noise(...; remove_drift=false)` follows
 Stable32, and [Validation](validation.md) quantifies the effect.
 
+The Hadamard family (`hdev`, `mhdev`, `htdev`, `htotdev`, `mhtotdev`) goes one
+step further, because it is the family used on drifting clocks. A frequency
+drift inflates the B1 ratio, which then reads random-walk FM at long τ
+whatever the noise, and the EDF and the HTOTDEV bias factor follow the wrong
+label. These estimators therefore identify noise on the record less its
+least-squares frequency drift (`remove_drift=true`), as SP1065 §5.5.6
+[riley-2008-sp1065](@cite) has deterministic components removed before noise
+identification; the deviation itself does not change. The removal also takes
+some of the slowest noise with it, so on a record without drift flicker FM
+near the longest τ is read as white FM more often. `remove_drift=false`
+identifies the noise on the record as given, which is what Stable32 does.
+
 ## Equivalent degrees of freedom
 
 An estimated variance from a record with Gaussian noise follows a scaled χ²

@@ -91,12 +91,14 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 | MTOTDEV | raw estimator | divided by √B(α) (SP1065 Table 11), unbiased | `mtotdev(p; correct_bias=false)` |
 | Thêo1 | raw Thêo1 run, ThêoBR a separate run | ThêoBR | `theo1(p; correct_bias=false)` |
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
+| Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | TOTDEV, HTOTDEV | bias-corrected | bias-corrected | the same |
 
-The detrending choice changes the identified noise type only where a
-drift dominates a long τ; when it flips, the EDF and the interval at that τ
-follow it. [Validation](../explanation/validation.md) shows each case
-on the shipped fixture.
+These choices change the identified noise type only at long τ, where few
+averaged samples remain; when it flips, the EDF and the interval at that τ
+follow it, and for HTOTDEV the bias factor too.
+[Validation](../explanation/validation.md) shows each case on the shipped
+fixture.
 
 ## Gaps
 

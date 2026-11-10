@@ -112,6 +112,28 @@ using SigmaTau
         @test raw.dev ≈ base.dev rtol = 1e-8
     end
 
+    @testset "Hadamard noise ID ignores drift" begin
+        # A drift these statistics ignore must not reach the noise type that
+        # sets their EDF and bias factor. White FM with a drift that dominates
+        # ADEV at long τ: by default the result is the driftless record's;
+        # with remove_drift=false the long-τ label is the drift's.
+        Random.seed!(20261110)
+        N, ms = 4096, [64, 256, 1024]
+        x = noise_gen(PhaseData, N, 1.0; h=Dict(0 => 1.0)).x
+        clean, drifting = PhaseData(x, 1.0), PhaseData(x .+ 5e-4 .* (0:N-1) .^ 2, 1.0)
+
+        h, hd = hdev(clean, ms), hdev(drifting, ms)
+        @test hd.noise_type == h.noise_type
+        @test hd.edf ≈ h.edf
+        @test htotdev(drifting, ms).dev ≈ htotdev(clean, ms).dev rtol = 1e-8
+
+        asgiven = hdev(drifting, ms; remove_drift=false)
+        @test asgiven.noise_type == identify_noise(drifting.x, ms; dmin=0, dmax=3)
+        @test asgiven.noise_type[end] === :RWFM !== h.noise_type[end]
+        @test asgiven.dev == hd.dev
+        @test deviation(:hdev, drifting, ms; remove_drift=false).noise_type == asgiven.noise_type
+    end
+
     @testset "ADEV/HDEV across all 5 power-law noise types" begin
         # Kernel accuracy across the full SP1065 α range: each kernel against
         # the same formula evaluated in BigFloat, so the tolerance measures the

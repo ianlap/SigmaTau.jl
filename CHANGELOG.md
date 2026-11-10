@@ -28,6 +28,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `hdev`, `mhdev`, `htdev` and `htotdev` identify the noise type on the
+  record less its least-squares frequency drift, as `mhtotdev` already did,
+  and take `remove_drift` (default `true`); `deviation`, `stability` and
+  the Python wrappers pass it on. A drift used to turn every long-τ label
+  into random-walk FM, which on white FM left `htotdev` 13 to 15 % high and
+  the intervals of all four too wide. The values of `hdev`, `mhdev` and
+  `htdev` do not change; intervals and the `htotdev` bias factor follow the
+  label. Without drift, flicker FM near the longest τ is read as white FM
+  more often. `remove_drift=false` identifies the noise on the record as
+  given, which is Stable32's convention.
 - `confidence_intervals(devs, edfs, confidence)` no longer takes the noise
   types and record length, which only the removed Gaussian stand-in used
   (see Fixed). The five-argument form still works in Julia, with a

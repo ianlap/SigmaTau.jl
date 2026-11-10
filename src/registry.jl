@@ -64,7 +64,7 @@ Run the estimator called `name` (any `name` from [`estimators`](@ref)) on a
 `PhaseData` or `FrequencyData` record. `m` is a [`TauMode`](@ref), resolved
 against the estimator's own m-max, or any integer vector of averaging factors.
 `correct_bias` is passed only to the estimators that take it (the total family
-and `theo1`) and `remove_drift` only to `mhtotdev`; `mtie` and `tierms`
+and `theo1`) and `remove_drift` only to the Hadamard family; `mtie` and `tierms`
 accept `ci` and `confidence` but report no intervals.
 
 `deviation(:adev, pd, m)` is `adev(pd, m)`; use it when the estimator is
@@ -107,13 +107,13 @@ function _deviation(name::Symbol, data::AbstractTimingData, ms::Vector{Int};
     name === :adev     && return adev(data, ms; ci=ci, confidence=c)
     name === :mdev     && return mdev(data, ms; ci=ci, confidence=c)
     name === :tdev     && return tdev(data, ms; ci=ci, confidence=c)
-    name === :hdev     && return hdev(data, ms; ci=ci, confidence=c)
-    name === :mhdev    && return mhdev(data, ms; ci=ci, confidence=c)
-    name === :htdev    && return htdev(data, ms; ci=ci, confidence=c)
+    name === :hdev     && return hdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift)
+    name === :mhdev    && return mhdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift)
+    name === :htdev    && return htdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift)
     name === :totdev   && return totdev(data, ms; ci=ci, confidence=c, correct_bias=b)
     name === :mtotdev  && return mtotdev(data, ms; ci=ci, confidence=c, correct_bias=b)
     name === :ttotdev  && return ttotdev(data, ms; ci=ci, confidence=c, correct_bias=b)
-    name === :htotdev  && return htotdev(data, ms; ci=ci, confidence=c, correct_bias=b)
+    name === :htotdev  && return htotdev(data, ms; ci=ci, confidence=c, correct_bias=b, remove_drift=remove_drift)
     name === :mhtotdev && return mhtotdev(data, ms; ci=ci, confidence=c, correct_bias=b, remove_drift=remove_drift)
     name === :theo1    && return theo1(data, ms; ci=ci, confidence=c, correct_bias=b)
     name === :theoh    && return theoh(data, ms; ci=ci, confidence=c)
