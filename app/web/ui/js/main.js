@@ -8,6 +8,7 @@ import * as stability from "./pages/stability.js";
 import * as data from "./pages/data.js";
 import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
+import * as holdover from "./pages/holdover.js";
 import * as live from "./pages/live.js";
 import * as ensemble from "./pages/ensemble.js";
 import * as synthesis from "./pages/synthesis.js";
@@ -19,8 +20,8 @@ import { sessionText, parseSession, applySession, isSession } from "./session.js
 import { loadPlotly, css } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, ensemble, live, help };
-const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "ensemble", "live"];
+const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, ensemble, live, help };
+const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "ensemble", "live"];
 let pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
@@ -351,7 +352,7 @@ function renderStatus() {
 function render() {
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.page === state.page));
   document.getElementById("help-btn").classList.toggle("on", state.page === "help");
-  // One clock: Spectrum and Dynamic put their settings in the panel. Several
+  // One clock: Spectrum, Dynamic and Holdover put their settings in the panel. Several
   // clocks: the panel keeps the clocks and the page shows a toolbar.
   renderPanel(page?.controls && (!multi() || page.ownsPanel) ? page.controls() : null);
   renderChip();
@@ -428,7 +429,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
   if (e.key === "Escape" && state.run.state === "running") { e.preventDefault(); cancelRun(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const i = "1234567".indexOf(e.key);
+  const i = "12345678".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
   if (e.key === "?") go("help");
 });

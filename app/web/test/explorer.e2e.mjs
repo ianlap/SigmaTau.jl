@@ -1,8 +1,8 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
-// Stability plot against the command line's own JSON, then visit Spectrum,
-// Dynamic, Live (simulated source) and Help, come back to Stability, and run
-// a record with gaps, with no page errors.
+// Stability plot and the Holdover curve against the command line's own JSON,
+// then visit Spectrum, Dynamic, Live (simulated source) and Help, come back to
+// Stability, and run a record with gaps, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -70,6 +70,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await plotted("#page .js-plotly-plot");
     await page.click("a[data-page=dynamic]");
     await plotted("#page [data-ref=map]");
+  });
+
+  await t.test("Holdover: the plotted RMS equals the command line's", async () => {
+    await page.click("a[data-page=holdover]");
+    await plotted("#page [data-ref=plot]");
+    const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
+    const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
+    assert.deepEqual(rms, doc.holdover.rms);
   });
 
   await t.test("Live: a simulated source streams and stops", async () => {
