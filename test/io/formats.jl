@@ -77,6 +77,7 @@ fmt(f) = joinpath(FMT, f)
         @test isequal(read_data(z * ".phd"; tau0=1.0).x, [0, 1e-9, NaN, 3e-9, 0])
         write(z * ".frd", "0\n1e-12\n0\n")
         @test isequal(read_data(z * ".frd"; tau0=1.0).y, [NaN, 1e-12, NaN])
+        @test read_data(z * ".frd"; tau0=1.0, keep_zeros=true).y == [0, 1e-12, 0]   # quantized readings
         # The older header: bare lines, no "# Header End".
         old = tempname() * ".frd"
         write(old, "File: old.frd\nType: Freq\nPoints: 3\nTau: 10\n1e-12\n2e-12\n3e-12\n")

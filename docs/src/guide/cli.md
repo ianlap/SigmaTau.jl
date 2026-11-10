@@ -71,6 +71,7 @@ The record (all four analysis commands):
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
 | `--fillgaps` | fill the missing samples from the data beside each gap, reflected ([`fillgaps`](@ref)): `NaN` readings, and readings missing from the time column; without it, they are gaps the gap-tolerant estimators skip (a frequency record with gaps must be filled) |
+| `--keep-zeros` | read the zeros of a Stable32 `.phd`/`.frd` file as readings (a quantized record); by default they are gaps, as in Stable32 |
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |

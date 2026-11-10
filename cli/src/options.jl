@@ -66,6 +66,7 @@ const OPTS = [
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps and NaN readings", ALL),
+    Opt("--keep-zeros", "", String[], false, "read the zeros of a Stable32 .phd/.frd file as readings, not gaps (quantized data)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyse only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
@@ -123,6 +124,7 @@ mutable struct Options
     scaling::Float64
     detrend::String
     fillgaps::Bool
+    keep_zeros::Bool
     remove_outliers::Bool
     devs::Vector{Symbol}
     grid::String
@@ -174,7 +176,7 @@ mutable struct Options
     steps::String             # --steps: at2 frequency-step detection, "" = off
 end
 
-Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
+Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
@@ -354,6 +356,7 @@ function set_flag!(o::Options, name::String)
     if name == "--phase";                  o.freq = false; o.phase_given = true
     elseif name == "--freq";               o.freq = true
     elseif name == "--fillgaps";           o.fillgaps = true
+    elseif name == "--keep-zeros";         o.keep_zeros = true
     elseif name == "--remove-outliers";    o.remove_outliers = true
     elseif name == "--no-ci";              o.ci = false
     elseif name == "--no-bias-correction"; o.bias = "none"

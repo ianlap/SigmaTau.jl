@@ -23,6 +23,7 @@ p = read_phase("export.dat")        # a Stable32 text export
 | Phase or frequency data type | `PhaseData` or `FrequencyData`; every estimator takes either |
 | Tau (sample interval) | `tau0`, from the header or the time column, or `tau0=` |
 | Multiplier | `scaling=` on the readers (`1e-9` for ns) |
+| Header `Multiplier:`, `Addend:`, `Tag Scale:` lines | not applied, as Stable32 applies them only when *Scale Data* is ticked on opening; `scaling=` multiplies the readings |
 | MJD time tags | the time column; `time_col=` picks it, τ₀ follows from it and [`start_time`](@ref) gives the first sample's date |
 | Converting phase ↔ frequency | not needed for the statistics, which take either; `FrequencyData(p)` and `PhaseData(y)` convert a record, `N` frequency samples integrating to `N + 1` phase points as in Stable32 |
 
@@ -147,7 +148,9 @@ and SigmaTau reads flicker FM and random-walk FM; TOTDEV is then 3.1 %,
 
 Stable32 needs gaps filled before most runs. Its files mark a gap with a
 zero (any zero in frequency data, any but the first and last point in phase
-data), and SigmaTau's Stable32 reader reads those zeros as gaps. In SigmaTau
+data), and SigmaTau's Stable32 reader reads those zeros as gaps. A quantized
+record can hold real zero readings, which Stable32 cannot tell from gaps:
+`read_data(path; keep_zeros=true)` (CLI `--keep-zeros`) keeps them. In SigmaTau
 `NaN` marks a missing sample; ADEV, MDEV, HDEV, MHDEV, TDEV, HTDEV, MTIE and TIE rms skip
 the terms that touch it, and [`fillgaps`](@ref) (or `fillgaps=true` on the
 readers) fills the record for the rest ([Choosing an
