@@ -2,9 +2,10 @@
 # calibrated power-law noise synthesis and the NNLS variance decomposition.
 
 const NEFF_RELIABLE = 30
+const B1_MIN_POINTS = 6   # fewest averaged points the averaged-length B1 test is run on
 
 """
-    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true, b1_length::Symbol=:record) → Vector{Symbol}
+    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true, b1_length::Symbol=:averaged) → Vector{Symbol}
     identify_noise(data::PhaseData, m_values; kwargs...) → Vector{Symbol}
     identify_noise(data::FrequencyData, m_values; kwargs...) → Vector{Symbol}
 
@@ -60,17 +61,28 @@ Sets the record length `N` at which the B1 fallback (used when fewer than
 `NEFF_RELIABLE` averaged points remain) evaluates the theoretical
 B1(N, μ) values that separate the noise types.
 
-- `:record` (default): the full record's frequency-sample count, as
-  Stable32 does. α values line up with Stable32 point for point.
-- `:averaged`: the number of m-averaged frequency points the observed B1
-  is computed from. This is the length the B1 theory describes, and it
-  identifies random-walk FM far more reliably at long τ (in Monte Carlo
-  runs with N = 1024 and m = 40–128, 55–75 % correct instead of 1–4 %),
-  at the cost of somewhat weaker white-FM identification and less
-  agreement with Stable32.
+- `:averaged` (default): the number of m-averaged frequency points the
+  observed B1 is computed from, which is the N that B1(N, μ) is defined for
+  (SP1065 §5.7, [riley-2008-sp1065](@cite)).
+- `:record`: the full record's frequency-sample count, which follows
+  Stable32's labels more closely. At that length the limit for random-walk
+  FM sits far above anything a few averaged points can reach.
+
+In simulation (N = 1024, 6 to 24 averaged points) `:averaged` finds
+random-walk FM in 60–75 % of records and flicker FM in 34–79 %, where
+`:record` finds them in 1–2 % and 24–48 %. White FM pays for it, 33–82 %
+against 65–88 %. With so few points no test separates neighbouring noise
+types better than about two times in three.
+
+Below `B1_MIN_POINTS` = 6 averaged points `:averaged` reports the label
+measured at the longest averaging factor that still has 6, `N ÷ 6`. With 2
+to 4 points the ratio is close to a coin toss, and on white FM the labels it
+gave over-corrected the total variance by 13–33 %; taken at 6 points the
+error is 5–13 % and random-walk FM keeps its gain. The value 6 comes from
+that simulation, not from the literature.
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
-                        remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:record)
+                        remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:averaged)
     b1_length in (:record, :averaged) ||
         throw(ArgumentError("b1_length must be :record or :averaged, got :$b1_length"))
     detrend || Base.depwarn("identify_noise: `detrend` is deprecated, use `remove_drift`", :identify_noise)
@@ -95,7 +107,9 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
                     _rn_flicker(x_rn, m, _adev_core(x_rn, [m], 1.0)[1]) && (alpha = 1.0)
                 end
             else
-                alpha, _, _ = _noise_id_b1rn(x_clean, m; detrend=detrend, b1_length=b1_length)
+                # Below B1_MIN_POINTS the label is the one at the longest m that has them.
+                mb = b1_length === :averaged ? clamp(N ÷ B1_MIN_POINTS, 1, m) : m
+                alpha, _, _ = _noise_id_b1rn(x_clean, mb; detrend=detrend, b1_length=b1_length)
             end
         catch
             alpha = NaN
@@ -246,7 +260,7 @@ function _lag1_acf(x::Vector{Float64})
     return num / ssx
 end
 
-function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_length::Symbol=:record)
+function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_length::Symbol=:averaged)
     x_dec = x[1:m:end]
     detrend && (x_dec = _remove_quadratic(x_dec))
 
@@ -260,10 +274,9 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_lengt
     # Unbiased variance (N − 1), as B1 theory and Stable32 assume.
     var_class = var(y_avg)
 
-    # N in B1_theory(N, μ). `:record` uses the full frequency-sample count
-    # `length(x) - 1`, as Stable32 does; `:averaged` uses the number of
-    # averaged points B1_obs is computed from, which is what the theory
-    # describes (see the `b1_length` docs of `identify_noise`).
+    # N in B1_theory(N, μ): the number of averaged points B1_obs is computed
+    # from, which is what the theory describes, or with `:record` the full
+    # frequency-sample count (see the `b1_length` docs of `identify_noise`).
     N_avar = b1_length === :averaged ? length(y_avg) : length(x) - 1
     N_avar < 2 && return (NaN, -2, NaN)
 
