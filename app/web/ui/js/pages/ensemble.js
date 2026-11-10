@@ -35,7 +35,7 @@ function request() {
     if (c.tau0) a.push("--tau0", c.tau0);
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
-  a.push("--algorithm", E.algorithm, "--wmax", E.wmax, ...(E.tauY ? ["--tau-y", E.tauY] : []), "--format", "json", "--series", 2000);
+  a.push("--algorithm", E.algorithm, "--wmax", E.wmax, ...(E.algorithm === "ewfa" && E.tauY ? ["--tau-y", E.tauY] : []), "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
@@ -44,7 +44,7 @@ export function controls() {
   return `<h2>Timescale</h2>
     <div class="ctl-block"><label class="lbl">Algorithm</label><div class="seg" role="group" aria-label="Algorithm">${ALGS.map(([id, label]) =>
       `<button type="button" data-ctl="alg" data-v="${id}" class="${E.algorithm === id ? "on" : ""}">${label}</button>`).join("")}</div></div>
-    <label class="opt"><span>Frequency averaging τ<sub>y</sub> (s)</span><input type="text" data-ctl="tauY" value="${h(E.tauY)}" placeholder="100 τ₀" inputmode="decimal"></label>
+    ${E.algorithm === "ewfa" ? `<label class="opt"><span>Frequency averaging τ<sub>y</sub> (s)</span><input type="text" data-ctl="tauY" value="${h(E.tauY)}" placeholder="100 τ₀" inputmode="decimal"></label>` : ""}
     <label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>
     <div class="rule"></div>
     <p class="muted small">${clocks.length
