@@ -9,6 +9,8 @@ import * as data from "./pages/data.js";
 import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
 import * as live from "./pages/live.js";
+import * as ensemble from "./pages/ensemble.js";
+import * as synthesis from "./pages/synthesis.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
 import { openFile, saveFile, readFile } from "./platform.js";
@@ -17,8 +19,8 @@ import { sessionText, parseSession, applySession, isSession } from "./session.js
 import { loadPlotly, css } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, stability, spectrum, dynamic: dynamicPage, live, help };
-const ORDER = ["data", "stability", "spectrum", "dynamic", "live"];
+const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, ensemble, live, help };
+const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "ensemble", "live"];
 const pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
@@ -26,6 +28,7 @@ let transient = null;      // { kind, text } shown in the status bar until the n
 const ctx = {
   run, addClock, openFile: openInto, reimport, useSynth, setRecord, addRecord, save: saveFile,
   goData: () => go("data"),
+  go,
   status: (kind, text) => { transient = { kind, text, until: kind === "error" ? Infinity : Date.now() + 8000 }; renderStatus(); },
 };
 
@@ -80,10 +83,13 @@ async function importFile(file, clock, prev) {
   update((s) => {
     settings.value_cols.forEach((col, k) => {
       let c = k === 0 ? clock : null;
-      const colName = settings.names[k] ?? (settings.value_cols.length > 1 ? `${baseName(file.name)} col ${col}` : baseName(file.name));
+      const given = settings.labels?.[k] ?? null;     // a name typed in the dialog
+      const colName = given ?? settings.names[k] ?? (settings.value_cols.length > 1 ? `${baseName(file.name)} col ${col}` : baseName(file.name));
       if (!c) {
         c = newClock({ name: colName });
         s.clocks.push(c);
+      } else if (given) {
+        c.name = given;
       } else if (!multi() || c.source.type !== "file" || c.name === baseName(c.source.name ?? "")) {
         c.name = settings.value_cols.length > 1 ? colName : baseName(file.name);
       }
@@ -131,7 +137,7 @@ async function addClock() {
 async function reimport(c) {
   if (c?.source.type !== "file") return;
   const group = state.clocks.filter((k) => k.group === c.group);
-  const prev = { ...c, value_cols: group.map((k) => k.value_col) };
+  const prev = { ...c, value_cols: group.map((k) => k.value_col), clockNames: Object.fromEntries(group.map((k) => [k.value_col, k.name])) };
   const settings = await openImport({ name: c.source.name, text: c.source.content }, prev);
   if (!settings) return;
   const keep = new Map(group.map((k) => [k.value_col, k]));
@@ -143,7 +149,9 @@ async function reimport(c) {
   update((s) => {
     settings.value_cols.forEach((col, i) => {
       let k = keep.get(col);
-      if (!k) { k = newClock({ name: settings.names[i] ?? `${baseName(c.source.name)} col ${col}` }); s.clocks.push(k); }
+      const given = settings.labels?.[i] ?? null;
+      if (!k) { k = newClock({ name: given ?? settings.names[i] ?? `${baseName(c.source.name)} col ${col}` }); s.clocks.push(k); }
+      else if (given) k.name = given;
       Object.assign(k, {
         group: c.group, kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[i] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
@@ -157,16 +165,38 @@ async function reimport(c) {
   await Promise.all(touched.map(loadClock));
 }
 
-async function useSynth(c, { n, tau0, seed }) {
+// Simulated clocks that belong together share the numbers they were made from.
+const ensembleKey = (src) => (src.type === "synth" && src.clocks > 1 ? JSON.stringify([src.n, src.seed, src.tau0, src.clocks, src.models ?? null]) : null);
+const DEFAULT_NAMES = /^(Clock|Synthetic record|Sim \d+)$/;
+
+// Make `clocks` synthetic clocks (one, or an ensemble of simulated clocks
+// against a perfect reference), reusing the clock you are on and the other
+// members of its ensemble.
+async function useSynth(c, { n, tau0, seed, clocks = 1, models = null, names = null }) {
+  const k = Math.max(1, Math.round(clocks));
+  const made = [];
   update((s) => {
-    if (!c) { c = newClock(); s.clocks.push(c); s.activeClock = c.id; }
-    Object.assign(c, {
-      source: { type: "synth", n, seed, tau0 }, sourceInfo: "white + random-walk FM", kind: "phase",
-      tau0, hasTimeCol: false, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
-    });
-    if (c.name === "Clock" || !multi()) c.name = "Synthetic record";
+    const key = c ? ensembleKey(c.source) : null;
+    const sibs = key ? s.clocks.filter((x) => ensembleKey(x.source) === key).sort((a, b) => a.source.index - b.source.index) : [];
+    const pool = sibs.length ? sibs : c ? [c] : [];
+    s.clocks = s.clocks.filter((x) => !pool.slice(k).includes(x));        // fewer clocks than before
+    for (let i = 0; i < k; i++) {
+      let x = pool[i];
+      const wasFile = x?.source.type === "file";
+      if (!x) { x = newClock(); s.clocks.push(x); }
+      Object.assign(x, {
+        source: { type: "synth", n, seed, tau0, ...(models ? { models } : {}), ...(k > 1 ? { clocks: k, index: i + 1 } : {}) },
+        sourceInfo: k > 1 ? `simulated clock ${i + 1} of ${k}` : models ? "simulated clock" : "white + random-walk FM", kind: "phase", group: null,
+        tau0, hasTimeCol: false, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
+      });
+      if (names) x.name = names[i];
+      else if (wasFile || DEFAULT_NAMES.test(x.name)) x.name = k > 1 ? `Sim ${i + 1}` : "Synthetic record";
+      if (s.reference === x.id) s.reference = null;
+      made.push(x);
+    }
+    s.activeClock = made[0].id;
   });
-  await loadClock(c);
+  await Promise.all(made.map(loadClock));
 }
 
 async function setRecord(c, fields) {
@@ -201,6 +231,26 @@ async function openSession(file) {
   else ctx.status("good", `Opened the session ${file.name}.`);
 }
 
+// Take a clock out of the explorer. Clocks simulated together share one random
+// stream, so the rest are simulated again without it, each with its own model.
+async function removeClock(id) {
+  const c = state.clocks.find((k) => k.id === id);
+  if (!c) return;
+  const key = ensembleKey(c.source);
+  const sibs = key ? state.clocks.filter((k) => ensembleKey(k.source) === key).sort((a, b) => a.source.index - b.source.index) : [];
+  if (sibs.length > 1) {
+    const { n, tau0, seed } = c.source;
+    const models = c.source.models ?? sibs.map((_, j) => [0, 1e-24 * 4 ** j, 1e-30 * 4 ** j, 0]);   // the core's default clocks
+    const rest = (xs) => xs.filter((_, j) => j !== c.source.index - 1);
+    return useSynth(sibs[0], { n, tau0, seed, clocks: sibs.length - 1, models: rest(models), names: rest(sibs).map((k) => k.name) });
+  }
+  if (state.reference === id) await setReference(null);
+  update((s) => {
+    s.clocks = s.clocks.filter((k) => k.id !== id);
+    if (!s.clocks.some((k) => k.id === s.activeClock)) s.activeClock = s.clocks[0]?.id ?? null;
+  });
+}
+
 function selectClock(id) {
   update((s) => { s.activeClock = id; });
   go("data");
@@ -208,19 +258,35 @@ function selectClock(id) {
 
 // ── Run ──
 let runCtl = null;
+let runGen = 0;      // the input generation the run in flight started from
+
+// Stop the run in flight. Results from before it stay as they were.
+function cancelRun() {
+  if (state.run.state !== "running") return;
+  runCtl?.abort();
+  update((s) => { s.run.state = "idle"; s.run.note = "Run cancelled"; });
+  ctx.status("warn", "Run cancelled. The results are from before it.");
+}
+
+// Run analysis (the button, F5). While a run is going it cancels it, or, when
+// the inputs changed since it started, restarts it on the new ones.
 async function run() {
   const clocks = state.clocks.filter((c) => c.record && !isReference(c));
-  if (!clocks.length || !state.devs.length || state.run.state === "running") return;
-  runCtl?.abort();
-  runCtl = new AbortController();
+  if (state.run.state === "running") {
+    const outdated = (state.run.gen ?? 0) !== runGen;
+    cancelRun();
+    if (!outdated) return;
+  }
+  if (!clocks.length || !state.devs.length) return;
+  const ctl = runCtl = new AbortController();
   transient = null;
   update((s) => { s.run.state = "running"; });
-  const gen = state.run.gen ?? 0;
+  const gen = runGen = state.run.gen ?? 0;
   const t0 = performance.now();
   let failed = 0;
   await Promise.all(clocks.map(async (c) => {
     try {
-      const out = await analyze(c, runCtl.signal);
+      const out = await analyze(c, ctl.signal);
       update(() => { c.result = out; c.error = null; });
     } catch (err) {
       if (err.name === "AbortError") return;
@@ -228,6 +294,7 @@ async function run() {
       update(() => { c.result = null; c.error = err.message; });
     }
   }));
+  if (ctl.signal.aborted) return;       // cancelled or replaced: whoever did that has the state
   const s = (performance.now() - t0) / 1000;
   const nd = state.devs.length;
   const what = clocks.length > 1 ? `${clocks.length} clocks` : `${thousands(clocks[0].record.n)} samples`;
@@ -351,10 +418,13 @@ for (const type of ["click", "change"]) {
   document.addEventListener(type, (e) => { if (e.target.closest?.("[data-ctl]")) page?.onControl?.(e); });
 }
 document.addEventListener("keydown", (e) => {
+  // F5 is Run here, so it never reloads the page and loses the loaded clocks (Ctrl+F5 still does).
+  if (e.key === "F5" && !e.ctrlKey && !e.metaKey && !e.shiftKey) e.preventDefault();
   if (document.querySelector("dialog[open]")) return;
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
+  if (e.key === "Escape" && state.run.state === "running") { e.preventDefault(); cancelRun(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const i = "12345".indexOf(e.key);
+  const i = "1234567".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
   if (e.key === "?") go("help");
 });
@@ -377,7 +447,7 @@ document.addEventListener("drop", async (e) => {
 });
 
 // ── Start ──
-initPanel({ run, addClock, selectClock, setReference });
+initPanel({ run, cancel: cancelRun, addClock, selectClock, setReference, removeClock });
 go(location.hash.slice(1) || "stability");
 (async () => {
   const hc = await health();
