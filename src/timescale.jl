@@ -262,7 +262,8 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
             elseif isfinite(r[n, i])
                 X[n, i] = r[n, i] + u
                 E[n, i] = X[n, i] - x̂[i]
-                y[i] = (mf[i] * y[i] + (X[n, i] - X[n-1, i]) / τ) / (mf[i] + 1)
+                # a clock the outlier test left out keeps its frequency
+                use[i] && (y[i] = (mf[i] * y[i] + (X[n, i] - X[n-1, i]) / τ) / (mf[i] + 1))
                 if at1 && use[i]
                     ε̂² = bias === :paper ? (abs(E[n, i]) + 2εx² / sqrt(2π * ε²[i]))^2 :
                          E[n, i]^2 / (1 - min(wu[i], 0.9))
