@@ -92,9 +92,11 @@ Clock models, the Kalman filter and timescales.
   paper's frequency-step detection (19 to 22): a clock whose frequency jumps is
   left out for its τ_min and the scale rerun from the step, with `best`
   replacing the scale from the step on and `real` keeping the values already
-  issued, as the paper does. The threshold of eq 20 is rewritten as a variance in
-  consistent units (the printed form mixes time and frequency), so it is a
-  documented departure; off by default.
+  issued, as the paper does. The threshold of eq 20 is rewritten as a variance
+  in consistent units (the printed form mixes time and frequency), a
+  documented departure, and it defaults to 5 standard deviations rather than
+  the paper's 4, which fired falsely about once per 3×10⁴ clock-samples on
+  noisy clocks (`step_threshold=4` restores it). Off by default.
 - Greenhall Kalman timescale: `timescale(cc; algorithm=:greenhall, models, pivot)`
   runs one Kalman filter over every clock with the covariance reduction
   after each step (the reduced Kalman timescale at `R = 0`, IEMx above), so
