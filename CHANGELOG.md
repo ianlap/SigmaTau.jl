@@ -96,6 +96,15 @@ versions follow [Semantic Versioning](https://semver.org/).
   measured at 6. The labels, and with them the bias factor of the total
   estimators (TOTDEV among them), change at the longest τ, where this
   departs from Stable32; `b1_length=:record` keeps the old labels.
+- MHTOTDEV bias and EDF models replaced by exact ones. The bias factor is
+  the exact expectation of the statistic, a constant per noise type (0.900,
+  0.822, 0.792, 0.783, 0.787, 0.800, 0.820 for white PM to random-run FM);
+  the τ/T slope is gone. The EDF model is `b·T/τ − c + d·τ/T + e·(τ/T)³`,
+  fitted to the exact EDF through τ = T/4, where the old two-term model
+  gave about half the true value. Flicker-walk and random-run FM have their
+  own rows. Corrected deviations move by at most 0.7 % (2.5 % on random-run
+  FM); intervals in the last octave narrow. `tools/mhtot_models.jl`
+  replaces `tools/mc_mhtotdev.jl`.
 
 ### Fixed
 
