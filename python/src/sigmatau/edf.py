@@ -63,20 +63,21 @@ def confidence_intervals(
 def bias_correction(
     noises: Sequence[str],
     var_type: str,
-    taus: Sequence[float],
-    t: float,
+    m_values: Sequence[int],
+    n: int,
 ) -> np.ndarray:
-    """Variance-scale bias factor B(α) = E[estimator²]/true_variance (apply as σ/√B).
+    """Variance-scale bias factor B = E[total variance]/E[parent variance] (apply as σ/√B).
 
     ``var_type`` is one of ``"totvar"``, ``"mtot"``, ``"htot"``, ``"mhtot"``;
-    anything else returns all ones.
+    anything else returns all ones. ``m_values`` are the averaging factors and
+    ``n`` the number of phase samples.
     """
     return np_f64(
         jl.bias_correction(
             to_jl_syms(noises),
             jl.Symbol(str(var_type)),
-            to_jl_f64(taus),
-            float(t),
+            to_jl_ints(m_values),
+            int(n),
         )
     )
 

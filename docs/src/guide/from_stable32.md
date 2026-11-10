@@ -95,7 +95,8 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
 | Noise type with fewer than 30 averaged points | B1 ratio, labels as with B1(N, μ) at the record length | B1 ratio against B1(N, μ) at the number of averaged points; below 6 points the label measured at 6 | `identify_noise(x, m; b1_length=:record)`; no switch on the estimators |
 | Limits between the FM noises, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
-| TOTDEV, HTOTDEV | bias-corrected | bias-corrected | the same |
+| TOTDEV, HTOTDEV on FM noise | bias-corrected | bias-corrected | the same |
+| TOTDEV, HTOTDEV on white and flicker PM | raw estimator, which reads high | lowered to the expected value of ADEV, HDEV ([derivation](../explanation/total_pm.md)) | `totdev(p; correct_bias=false)`, `htotdev(p; correct_bias=false)` on those rows |
 
 The detrending choices change the identified noise type only at long τ, where
 few averaged samples remain; when it flips, the EDF and the interval at that τ

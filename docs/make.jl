@@ -62,6 +62,7 @@ makedocs(
             "Cross-check report" => "explanation/crosscheck.md",
             "MHTOTDEV bias and EDF" => "explanation/mhtotdev.md",
             "The clock model" => "explanation/clock_model.md",
+            "Total estimators on PM noise" => "explanation/total_pm.md",
         ],
         "Reference" => [
             "Types" => "reference/types.md",
