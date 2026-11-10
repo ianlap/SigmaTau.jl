@@ -141,6 +141,8 @@ Clock models, the Kalman filter and timescales.
 - Explorer: the Ensemble page offers the Greenhall and Jones–Tryon Kalman
   timescales, with a pivot clock; Jones–Tryon shows no weights (#166).
 - Explorer: AT2's frequency-step detection (best or real) on the Ensemble page (#174).
+- Explorer: the Ensemble page offers Stein's Kalman timescale (KAS-2), with the
+  pivot clock and the largest weight (#200).
 - Explorer: a × on each clock in the Clocks list removes it; the Ensemble page
   forms the scale from the clocks that are left (#182); the Ensemble page
   shows the core's error instead of waiting forever (#185).
