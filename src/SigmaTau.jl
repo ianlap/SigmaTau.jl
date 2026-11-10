@@ -43,20 +43,19 @@ include("powerlaw.jl")
 include("clockmodel.jl")
 include("noisefit.jl")
 include("kalman.jl")
+include("holdover.jl")
 include("comparisons.jl")
 include("timescale.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
+include("klts.jl")
 include("ensemble.jl")
 include("masks.jl")
 
 # ── Real-time streaming accumulators and live sources ──────────────────
 include("streaming.jl")
 include("live.jl")
-
-# ── Names replaced in 0.6 (deprecated, exported until 0.7) ──────────────
-include("deprecated.jl")
 
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
@@ -91,6 +90,7 @@ export ClockModel, clock_model, state_transition, process_noise
 export NoiseFit, noise_fit, add_component!, undo!, noise_residual
 export KalmanResult, kalman_filter, kalman_smooth, holdover_error, innovation_check, simulate_clock
 export prediction_error, tune_q
+export holdover, HoldoverResult
 export ClockComparisons, simulate_ensemble, clock_models
 export TimescaleResult, timescale, timescale_phase, implicit_mean
 export theo1, theoh

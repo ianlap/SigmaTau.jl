@@ -9,6 +9,7 @@ because SigmaTau's kernels dispatch on concrete ``Vector`` types (a raw
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import juliacall
@@ -73,6 +74,19 @@ def powerlaw_to_jl(h: PowerLawFit | dict) -> Any:
     return to_jl_dict_int_f64(h)
 
 
+def powerlawfit_to_jl(f: PowerLawFit) -> Any:
+    """A ``PowerLawFit`` as Julia's own type."""
+    return jl.PowerLawFit(
+        to_jl_ints(f.alphas),
+        to_jl_f64(f.h),
+        jl.Symbol(f.source),
+        float(f.tau0),
+        to_jl_f64(f.x),
+        to_jl_f64(f.y),
+        to_jl_f64(f.fit),
+    )
+
+
 def resolve_m(m: TauMode | object) -> Any:
     """The ``m`` argument as Julia sees it: a TauMode enum instance or ``Vector{Int}``.
 
@@ -90,10 +104,11 @@ def resolve_m(m: TauMode | object) -> Any:
 
 def to_jl_data(data: PhaseData | FrequencyData) -> Any:
     """Python data record → Julia ``PhaseData``/``FrequencyData``."""
+    start = float("nan") if data.start is None else float(data.start)
     if isinstance(data, PhaseData):
-        return jl.PhaseData(to_jl_f64(data.x), data.tau0, source=data.source)
+        return jl.PhaseData(to_jl_f64(data.x), data.tau0, source=data.source, start=start)
     if isinstance(data, FrequencyData):
-        return jl.FrequencyData(to_jl_f64(data.y), data.tau0, source=data.source)
+        return jl.FrequencyData(to_jl_f64(data.y), data.tau0, source=data.source, start=start)
     raise TypeError(f"expected PhaseData or FrequencyData, got {type(data).__name__}")
 
 
@@ -149,9 +164,10 @@ def np_syms(v: Any) -> np.ndarray:
 
 def data_from_jl(d: Any) -> PhaseData | FrequencyData:
     """Julia data record → Python (read_phase/detrend/fillgaps round-trips)."""
+    start = None if math.isnan(float(d.start)) else float(d.start)
     if jl.isa(d, jl.PhaseData):
-        return PhaseData(np_f64(d.x), float(d.tau0), source=str(d.source))
-    return FrequencyData(np_f64(d.y), float(d.tau0), source=str(d.source))
+        return PhaseData(np_f64(d.x), float(d.tau0), source=str(d.source), start=start)
+    return FrequencyData(np_f64(d.y), float(d.tau0), source=str(d.source), start=start)
 
 
 def _confidence(c: Any) -> float | None:

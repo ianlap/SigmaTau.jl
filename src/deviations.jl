@@ -20,7 +20,51 @@ _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
 # bias correction should too (SP1065 §5.5.6 removes deterministic components
 # before noise identification).
 _hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
-    identify_noise(remove_drift ? _remove_quadratic(x) : x, m_values, dmin=0, dmax=3)
+    identify_noise(remove_drift ? _noise_detrend(x) : x, m_values, dmin=0, dmax=3)
+
+# What `noise=` takes: `:auto`, one noise type, one per τ, or a fitted model.
+const _NoiseChoice = Union{Symbol,AbstractVector{Symbol},PowerLawFit}
+
+# Reddest α the kernel of an estimator converges for.
+_kernel_amin(kernel::Symbol) = kernel === :adev || kernel === :mdev ? -2 : -4
+
+# A stated noise type in `kernel`; one redder than the kernel covers counts as
+# its reddest, as in identification.
+function _stated_noise(n::Symbol, kernel::Symbol)
+    n in _NOISE_SYMBOLS || throw(ArgumentError(
+        "noise must be :auto, a noise type (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM, :FWFM, :RRFM), " *
+        "a vector of them or a PowerLawFit; got :$n"))
+    return _NOISE_SYMBOLS[max(_NOISE_ALPHA[n], _kernel_amin(kernel)) + 5]
+end
+
+# The noise type at each τ from a `noise` other than `:auto`. `kernel` (:adev,
+# :mdev, :hdev or :mhdev) is the estimator's kind.
+_stated_noises(noise::Symbol, kernel::Symbol, taus, tau0::Float64) =
+    fill(_stated_noise(noise, kernel), length(taus))
+
+function _stated_noises(noise::AbstractVector{Symbol}, kernel::Symbol, taus, tau0::Float64)
+    length(noise) == length(taus) || throw(ArgumentError(
+        "noise has $(length(noise)) entries for $(length(taus)) averaging factors"))
+    return Symbol[_stated_noise(n, kernel) for n in noise]
+end
+
+# The component of a power-law model that gives the most variance at each τ.
+function _stated_noises(fit::PowerLawFit, kernel::Symbol, taus, tau0::Float64)
+    amin = _kernel_amin(kernel)
+    noises = Vector{Symbol}(undef, length(taus))
+    for (i, τ) in enumerate(taus)
+        m = max(1, round(Int, τ / tau0))
+        best, vbest = 0, -Inf
+        for (α, h) in zip(fit.alphas, fit.h)
+            # A term the Allan kernels diverge for is weighed in the Hadamard kernel of the same kind.
+            k = α >= amin ? kernel : kernel === :adev ? :hdev : :mhdev
+            v = h * _powerlaw_var(k, α, m, tau0)
+            v > vbest && ((best, vbest) = (α, v))
+        end
+        noises[i] = _NOISE_SYMBOLS[max(best, amin) + 5]
+    end
+    return noises
+end
 
 # EDF of the non-overlapped ADEV (d = 2) and HDEV (d = 3): the Greenhall–Riley
 # algorithm with stride S = 1 in place of the overlapped S = m (Greenhall &
@@ -41,7 +85,7 @@ function _gapfree(est::Symbol, data::PhaseData, m_values::Vector{Int})
 end
 
 """
-    adev(data, m_values; ci=true, overlapping=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    adev(data, m_values; ci=true, overlapping=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Overlapping Allan deviation σ_y(τ) of a phase record, per IEEE 1139-2022 §C.2.
 The EDF for the χ² confidence interval uses the truncated-sum algorithm of
@@ -56,6 +100,15 @@ with fewer degrees of freedom, and needs a gap-free record.
 `m_values` selects the analysis-interval factors (τ = m·τ₀). When
 `ci=true`, the result populates per-τ noise type, χ²-based confidence
 bounds, and equivalent degrees of freedom.
+
+`noise` states the noise type in place of identifying it from the record
+(`:auto`): one type for every τ (`noise=:WHFM`), a vector with one per
+averaging factor, or a [`PowerLawFit`](@ref), whose strongest component at
+each τ is taken. It sets the EDF and, in the total family, the bias factor,
+and every estimator that reports intervals takes it. State the noise when
+the labels do not fit what is known of the clock: the test reads each τ on
+its own, and on a measured record a slow periodic or wandering term can
+mislead it where few averaged points remain.
 
 # Examples
 
@@ -72,8 +125,8 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, overlapping::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:adev, _gap_record(data), m_values; ci=ci, overlapping=overlapping, confidence=confidence)
+function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, overlapping::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:adev, _gap_record(data), m_values; ci=ci, overlapping=overlapping, noise=noise, confidence=confidence)
     _check_m(:adev, m_values)
     x = _f64(data.x)
     raw_devs = _adev_core(x, m_values, data.tau0; overlapping=overlapping)
@@ -84,7 +137,8 @@ function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, overlapping
         return _result(data, confidence, :adev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=2)
+    noises = noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=2) :
+                               _stated_noises(noise, :adev, taus, data.tau0)
     edfs = overlapping ? calculate_edf(:adev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0) :
                          _nonoverlapped_edf(2, noises, m_values, length(x))
     lower, upper = confidence_intervals(raw_devs, edfs, confidence)
@@ -93,7 +147,7 @@ function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, overlapping
 end
 
 """
-    mdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    mdev(data, m_values; ci=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Modified Allan deviation Mod σ_y(τ) of a phase record, per IEEE 1139-2022 §C.3.
 The phase-averaged second difference separates white PM from flicker PM, which
@@ -114,8 +168,8 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:mdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:mdev, _gap_record(data), m_values; ci=ci, noise=noise, confidence=confidence)
     _check_m(:mdev, m_values)
     x = _f64(data.x)
     raw_devs = _mdev_core(x, m_values, data.tau0)
@@ -126,7 +180,8 @@ function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
         return _result(data, confidence, :mdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=2)
+    noises = noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=2) :
+                               _stated_noises(noise, :mdev, taus, data.tau0)
     edfs = calculate_edf(:mdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
@@ -134,7 +189,7 @@ function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 end
 
 """
-    tdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    tdev(data, m_values; ci=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Time deviation σ_x(τ) = (τ/√3) · Mod σ_y(τ), per IEEE 1139-2022 §C.4. A σ_x
 quantity in seconds. Confidence bounds are MDEV's scaled by the same factor.
@@ -146,8 +201,8 @@ place of `m_values` (`tdev(data, Decade)`), or no grid at all (`tdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mdev(data, m_values; ci=ci, confidence=confidence)
+function tdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mdev(data, m_values; ci=ci, noise=noise, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 
     if !ci
@@ -163,7 +218,7 @@ end
 
 
 """
-    hdev(data, m_values; ci=true, remove_drift=true, overlapping=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    hdev(data, m_values; ci=true, remove_drift=true, overlapping=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Overlapping Hadamard deviation of a phase record, per NIST SP1065 §5.2.9. The
 third difference removes linear frequency drift, so `hdev` is the estimator to
@@ -185,8 +240,8 @@ place of `m_values` (`hdev(data, Decade)`), or no grid at all (`hdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, overlapping::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, overlapping=overlapping, confidence=confidence)
+function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, overlapping::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, overlapping=overlapping, noise=noise, confidence=confidence)
     _check_m(:hdev, m_values)
     x = _f64(data.x)
     raw_devs = _hdev_core(x, m_values, data.tau0; overlapping=overlapping)
@@ -198,7 +253,8 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drif
         return _result(data, confidence, :hdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = _hadamard_noise(x, m_values, remove_drift)
+    noises = noise === :auto ? _hadamard_noise(x, m_values, remove_drift) :
+                               _stated_noises(noise, :hdev, taus, data.tau0)
     edfs = overlapping ? calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(x), T) :
                          _nonoverlapped_edf(3, noises, m_values, length(x))
     lower, upper = confidence_intervals(raw_devs, edfs, confidence)
@@ -207,7 +263,7 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drif
 end
 
 """
-    mhdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    mhdev(data, m_values; ci=true, remove_drift=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Modified Hadamard deviation of a phase record: the phase-averaged third
 difference, drift-immune like `hdev` and able to separate white PM from
@@ -220,8 +276,8 @@ place of `m_values` (`mhdev(data, Decade)`), or no grid at all (`mhdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
+function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, noise=noise, confidence=confidence)
     _check_m(:mhdev, m_values)
     x = _f64(data.x)
     raw_devs = _mhdev_core(x, m_values, data.tau0)
@@ -233,7 +289,8 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_dri
         return _result(data, confidence, :mhdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = _hadamard_noise(x, m_values, remove_drift)
+    noises = noise === :auto ? _hadamard_noise(x, m_values, remove_drift) :
+                               _stated_noises(noise, :mhdev, taus, data.tau0)
     edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
@@ -241,7 +298,7 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_dri
 end
 
 """
-    htdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    htdev(data, m_values; ci=true, remove_drift=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Hadamard time deviation σ_x,HT(τ) = τ/√(10/3) · σ_y,MH(τ), the σ_x form of
 `mhdev` in seconds, as TDEV is of MDEV. The construction is original to this
@@ -254,8 +311,8 @@ place of `m_values` (`htdev(data, Decade)`), or no grid at all (`htdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mhdev(data, m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
+function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mhdev(data, m_values; ci=ci, remove_drift=remove_drift, noise=noise, confidence=confidence)
     factor = res.tau ./ sqrt(10.0 / 3.0)
 
     if !ci
@@ -286,7 +343,7 @@ _unbias(raw, mode::Symbol, noises, var_type::Symbol, m_values, N::Int) = mode ==
     raw ./ _unbias_divisor(bias_correction(noises, var_type, m_values, N; published=mode == :published))
 
 """
-    totdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    totdev(data, m_values; ci=true, correct_bias=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Total deviation of a phase record, per NIST SP1065 eq. 25 (Howe 1995), with
 the whole-record mean-flip extension.
@@ -300,7 +357,7 @@ or `:stable32` applies the FM correction and none on PM, as SP1065 and
 Stable32 do; `false` returns the raw kernel value, which is what allantools
 reports.
 """
-function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:totdev, data, m_values)
     raw_devs = _totdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -310,7 +367,9 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     # Noise IDs are needed for either path: bias correction and CIs both read α.
     mode = _bias_mode(correct_bias, :published)
     need_noise = mode != :none || ci
-    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
+    noises = !need_noise     ? Symbol[] :
+             noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=2) :
+                               _stated_noises(noise, :adev, taus, data.tau0)
 
     devs = _unbias(raw_devs, mode, noises, :totvar, m_values, length(x))
 
@@ -325,7 +384,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
 end
 
 """
-    mtotdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    mtotdev(data, m_values; ci=true, correct_bias=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Modified total deviation of a phase record, per NIST SP1065 §5.2.12, with the
 per-subsegment detrend and time-reverse extension of Howe and Vernotte.
@@ -340,7 +399,7 @@ for any record, and B = 1/2. `correct_bias=:published` applies the table at
 every `m > 1`; `false` or `:stable32` returns the raw kernel, which is what
 Stable32 and allantools report.
 """
-function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:mtotdev, data, m_values)
     raw_devs = _mtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -349,7 +408,9 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 
     mode = _bias_mode(correct_bias, :none)
     need_noise = mode != :none || ci
-    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
+    noises = !need_noise     ? Symbol[] :
+             noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=2) :
+                               _stated_noises(noise, :mdev, taus, data.tau0)
 
     # At m = 1 the detrended three-point subsequence is (0, z, 0) with z half
     # the second difference, and its reflection averages to half of MVAR.
@@ -366,7 +427,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 end
 
 """
-    htotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    htotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Hadamard total deviation of a phase record, per NIST SP1065 §5.2.14, with the
 per-subsegment detrend and time-reverse extension of Howe et al. 2000.
@@ -388,7 +449,7 @@ kernel value, which is what allantools reports.
 `remove_drift` works as in [`hdev`](@ref). Here the noise type also selects
 the bias factor, so the keyword can change σ where the two labels differ.
 """
-function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, remove_drift::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:htotdev, data, m_values)
     raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -397,7 +458,9 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 
     mode = _bias_mode(correct_bias, :published)
     need_noise = mode != :none || ci
-    noises = need_noise ? _hadamard_noise(x, m_values, remove_drift) : Symbol[]
+    noises = !need_noise     ? Symbol[] :
+             noise === :auto ? _hadamard_noise(x, m_values, remove_drift) :
+                               _stated_noises(noise, :hdev, taus, data.tau0)
 
     devs = _unbias(raw_devs, mode, noises, :htot, m_values, length(x))
 
@@ -412,15 +475,15 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 end
 
 """
-    ttotdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    ttotdev(data, m_values; ci=true, correct_bias=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Time total deviation (τ/√3) · MTOTDEV, per NIST SP1065 §5.2.13: the σ_x form of
 [`mtotdev`](@ref) in seconds, as [`tdev`](@ref) is of [`mdev`](@ref). Keyword
 arguments pass through to `mtotdev`; confidence bounds are scaled by the same
 factor and the EDF is unchanged.
 """
-function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mtotdev(data, m_values; ci=ci, correct_bias=correct_bias, confidence=confidence)
+function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mtotdev(data, m_values; ci=ci, correct_bias=correct_bias, noise=noise, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 
     if !ci
@@ -432,7 +495,7 @@ function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 end
 
 """
-    mhtotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    mhtotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Modified Hadamard total deviation of a phase record: the total (boundary-
 extended) form of [`mhdev`](@ref). Each window of 4m samples has its own
@@ -453,7 +516,7 @@ kernel value; `:published` and `:stable32` change nothing here, since no
 reference defines the estimator. The EDF model is fitted to the exact EDF of the statistic; see
 the "MHTOTDEV bias and EDF" page for both.
 """
-function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, remove_drift::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:mhtotdev, data, m_values)
     if remove_drift
         x = _remove_quadratic(x)
@@ -465,7 +528,9 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
 
     mode = _bias_mode(correct_bias, :exact)
     need_noise = mode != :none || ci
-    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
+    noises = !need_noise     ? Symbol[] :
+             noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=3) :
+                               _stated_noises(noise, :mhdev, taus, data.tau0)
 
     # At m = 1 the detrended four-point window is c·(−1, 3, −3, 1), and the
     # nine third differences of its reflection average to 124/225 of MHVAR.
@@ -573,7 +638,7 @@ end
 
 
 """
-    pdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    pdev(data, m_values; ci=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Parabolic deviation σ_PDEV(τ) of a phase record, per Vernotte–Lenczner–
 Bourgeois–Rubiola (IEEE T-UFFC 63(4), 2016) and Vernotte–Chen–Rubiola 2020. PDEV
@@ -604,7 +669,7 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:pdev, data, m_values)
     raw_devs = _pdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -614,7 +679,8 @@ function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
         return _result(data, confidence, :pdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=2)
+    noises = noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=2) :
+                               _stated_noises(noise, :mdev, taus, data.tau0)
     edfs = calculate_edf(:pdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
     lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
@@ -623,7 +689,7 @@ end
 
 
 """
-    theo1(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    theo1(data, m_values; ci=true, correct_bias=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15 eq. 30, a
 two-sample variance that mimics the Allan variance while extending the
@@ -662,7 +728,7 @@ formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
 and bias-removed forms. The kernel's double sum is O(N·m) per τ, far
 costlier than the O(N) Allan kernels at large m.
 """
-function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:theo1, data, m_values)
     N = length(x)
     raw_devs = _theo1_core(x, m_values, data.tau0)
@@ -676,7 +742,8 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
         return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=2)
+    noises = noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=2) :
+                               _stated_noises(noise, :adev, taus, data.tau0)
     edfs = calculate_edf(:theo1, devs, noises, m_values, taus, N, T)
     lower, upper = confidence_intervals(devs, edfs, confidence)
 
@@ -684,7 +751,7 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
 end
 
 """
-    theoh(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    theoh(data, m_values; ci=true, noise=:auto, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 ThêoH ("hybrid-ThêoBR") per NIST SP1065 (Riley 2008) §5.2.16 eq. 34: a
 composite σ_y(τ) curve that is overlapping ADEV at short averaging
@@ -711,7 +778,7 @@ EDF on the Thêo1 segment. ThêoBR/ThêoH always carry the bias
 removal; there is no `correct_bias` switch (raw Thêo1 is available via
 `theo1(...; correct_bias=false)`).
 """
-function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:theoh, data, m_values)
     N = length(x)
     tau0 = data.tau0
@@ -748,18 +815,16 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
 
     # Per-segment noise ID and EDF: ADEV EDF below the crossover, Thêo1
     # EDF above, merged back into request order.
-    noises = fill(:WHFM, n_pts)
+    noises = noise === :auto ? fill(:WHFM, n_pts) : _stated_noises(noise, :adev, taus, tau0)
     edfs = fill(NaN, n_pts)
     if !isempty(adev_idx)
-        noises_a = identify_noise(x, adev_ms, dmin=0, dmax=2)
-        noises[adev_idx] = noises_a
-        edfs[adev_idx] = calculate_edf(:adev, adev_devs, noises_a, adev_ms,
+        noise === :auto && (noises[adev_idx] = identify_noise(x, adev_ms, dmin=0, dmax=2))
+        edfs[adev_idx] = calculate_edf(:adev, adev_devs, noises[adev_idx], adev_ms,
                                        taus[adev_idx], N, T)
     end
     if !isempty(theo_idx)
-        noises_t = identify_noise(x, theo_ms, dmin=0, dmax=2)
-        noises[theo_idx] = noises_t
-        edfs[theo_idx] = calculate_edf(:theo1, theo_devs, noises_t, theo_ms,
+        noise === :auto && (noises[theo_idx] = identify_noise(x, theo_ms, dmin=0, dmax=2))
+        edfs[theo_idx] = calculate_edf(:theo1, theo_devs, noises[theo_idx], theo_ms,
                                        taus[theo_idx], N, T)
     end
     lower, upper = confidence_intervals(devs, edfs, confidence)

@@ -83,6 +83,7 @@ st.groslambert(x_ab, x_bc, x_ca)  # each clock's ADEV with χ² intervals
 m = st.clock_model(f, tau0=1.0)  # Kalman model from the h_α fit
 kf = st.kalman_smooth(st.kalman_filter(pd, m))  # phase, frequency (, drift) estimates
 st.holdover_error(kf, [3600.0, 86400.0])  # 1σ time error after free-running
+st.holdover(pd, train=86400, limit=1e-6).time_to_limit  # measured: seconds within 1 µs
 cc, _ = st.simulate_ensemble([m, m, m], 10000)  # three clocks against one reference
 st.timescale(cc, algorithm="at1").weights  # AT1 weights over time
 ```
@@ -156,7 +157,9 @@ settings.
    `ncornered_hat`, `groslambert`, `drift_fit`, `powerlaw_fit` / `powerlaw_sigma` /
    `powerlaw_psd`, `cross_adev` / `cross_psd_y` / `cross_psd_x`, `read_data`,
    `deviation(name, ...)` and `estimators()`, `find_outliers` (returns 0-based
-   indices), `remove_outliers`, plus `tau_values` grids for the new kernels.
+   indices), `remove_outliers`, `noise_id_nnls` (returns a dict), `StreamingStability`
+   (`push` / `extend` / `snapshot`), `start_time` (a UTC `datetime`; records carry
+   `start` in seconds since 2000-01-01), plus `tau_values` grids for the new kernels.
 6. `theo1` reports τ = 0.75·m·τ₀ (the Julia/SP1065 convention), not τ = m·τ₀.
 7. Names follow SigmaTau.jl 0.6: `psd_y` / `psd_x` / `ssb_phase_noise` (with
    `taper=`) for the port's `Sy` / `Sx` / `L` (`window=`); `ncornered_hat` for

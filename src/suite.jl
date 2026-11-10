@@ -9,18 +9,15 @@ in seconds and must be requested explicitly.
 const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 
 function _stability(data, N::Int, kind::Symbol, tau0::Float64;
-                    devs = DEFAULT_DEVIATIONS, m = Octave, taus = nothing,
+                    devs = DEFAULT_DEVIATIONS, m = Octave,
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
-                    correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true)
-    if taus !== nothing
-        Base.depwarn("stability: `taus` is deprecated, use `m`", :stability)
-        m = taus
-    end
+                    correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true,
+                    noise::_NoiseChoice = :auto)
     results = StabilityResult[]
     for sym in devs
         name = Symbol(sym)
         ms = m isa TauMode ? _resolve_m(name, m, N) : collect(Int, m)
-        push!(results, deviation(name, data, ms; ci, confidence, correct_bias, remove_drift))
+        push!(results, deviation(name, data, ms; ci, confidence, correct_bias, remove_drift, noise))
     end
     tau_mode = m isa TauMode ? Symbol(string(m)) : :explicit
     return StabilitySuite(results, kind, tau0, N, ci ? Float64(confidence) : NaN, tau_mode)
@@ -29,7 +26,7 @@ end
 """
     stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, m=Octave,
               ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true,
-              remove_drift=true) → StabilitySuite
+              remove_drift=true, noise=:auto) → StabilitySuite
 
 Compute a suite of stability deviations from one record in a single call, the
 batch analog of `adev`, `mdev`, …. Each symbol in `devs` is run through
@@ -42,7 +39,9 @@ Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 or an integer vector of averaging factors applied to every deviation, as in
 the estimator functions.
 `correct_bias` reaches only the estimators that take it (the total family and
-`theo1`), and `remove_drift` only the Hadamard family. Note that an explicit `m`
+`theo1`), and `remove_drift` only the Hadamard family. `noise` states the noise
+type for every estimator (`:auto`, one type, or a `PowerLawFit`; see
+[`adev`](@ref)). Note that an explicit `m`
 vector is passed to every deviation verbatim: `:theo1` interprets it as even
 Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
 prefer a `TauMode` when mixing the Theo family with others.

@@ -3,8 +3,9 @@
 [`kalman_filter`](@ref) tracks one clock's phase, frequency and, with a
 drift state, drift through a phase record, on a [`ClockModel`](@ref)
 from [`clock_model`](@ref). [`kalman_smooth`](@ref) refines every estimate
-with the samples after it, [`holdover_error`](@ref) says how far the clock
-can wander once the reference is gone, and [`innovation_check`](@ref) says
+with the samples after it, [`holdover_error`](@ref) says how far the model
+lets the clock wander once the reference is gone ([`holdover`](@ref)
+measures it on the record), and [`innovation_check`](@ref) says
 whether the model fits the record at all. [`simulate_clock`](@ref) makes a
 record with a known truth to try all of this on.
 

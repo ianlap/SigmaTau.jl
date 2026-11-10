@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
@@ -25,11 +26,15 @@ def _as_samples(v: object, name: str) -> np.ndarray:
 
 @dataclass(frozen=True)
 class PhaseData:
-    """Phase residuals ``x(t)`` sampled at uniform interval ``tau0`` (default 1.0 s)."""
+    """Phase residuals ``x(t)`` sampled at uniform interval ``tau0`` (default 1.0 s).
+
+    ``start`` is the time of the first sample in seconds since 2000-01-01T00:00Z,
+    or ``None``; read it as a ``datetime`` with :func:`start_time`."""
 
     x: np.ndarray
     tau0: float = 1.0
     source: str = "user"
+    start: float | None = None
 
     def __post_init__(self) -> None:
         x = _as_samples(self.x, "PhaseData")
@@ -47,16 +52,19 @@ class PhaseData:
     def to_frequency(self) -> FrequencyData:
         """Fractional frequency ``y[k] = (x[k+1] - x[k]) / tau0``: N - 1 samples, and
         a missing (NaN) phase sample makes the two beside it missing."""
-        return FrequencyData(np.diff(self.x) / self.tau0, self.tau0, self.source)
+        return FrequencyData(np.diff(self.x) / self.tau0, self.tau0, self.source, self.start)
 
 
 @dataclass(frozen=True)
 class FrequencyData:
-    """Fractional-frequency samples ``y(t)`` at uniform interval ``tau0`` (default 1.0 s)."""
+    """Fractional-frequency samples ``y(t)`` at uniform interval ``tau0`` (default 1.0 s).
+
+    ``start`` is as for :class:`PhaseData`."""
 
     y: np.ndarray
     tau0: float = 1.0
     source: str = "user"
+    start: float | None = None
 
     def __post_init__(self) -> None:
         y = _as_samples(self.y, "FrequencyData")
@@ -79,7 +87,21 @@ class FrequencyData:
                 "to_phase: a missing frequency sample leaves the phase after it unknown; "
                 "fill the gaps first (fillgaps)"
             )
-        return PhaseData(np.concatenate(([0.0], np.cumsum(self.y))) * self.tau0, self.tau0, self.source)
+        x = np.concatenate(([0.0], np.cumsum(self.y))) * self.tau0
+        return PhaseData(x, self.tau0, self.source, self.start)
+
+
+_EPOCH = datetime(2000, 1, 1, tzinfo=UTC)
+
+
+def start_time(data: PhaseData | FrequencyData) -> datetime | None:
+    """UTC time of the record's first sample (to the millisecond), or ``None``
+    when the record does not know it. The readers take it from ISO 8601 or MJD
+    timestamps and from the ``# start:`` line ``save`` writes; sample ``i``
+    (0-based) is at ``start_time(data) + i * tau0``."""
+    if data.start is None:
+        return None
+    return _EPOCH + timedelta(milliseconds=round(data.start * 1000))
 
 
 @dataclass(frozen=True)

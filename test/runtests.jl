@@ -8,4 +8,5 @@ using Test
     @testset "recipes"  begin include("recipes.jl")        end
     @testset "tables"   begin include("tables.jl")         end
     @testset "validation" begin include("validation/runtests.jl") end
+    @testset "aqua"     begin include("aqua.jl")           end
 end

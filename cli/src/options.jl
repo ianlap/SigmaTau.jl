@@ -24,6 +24,7 @@ const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "tab
 const DETRENDS = ["none", "mean", "endpoint", "linear"]
 const DRIFTS = ["none", "linear", "quadratic"]
 const BIASES = ["exact", "published", "stable32", "none"]
+const NOISES = ["auto", "fit", "WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
@@ -77,6 +78,7 @@ const OPTS = [
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
     Opt("--no-bias-correction", "", String[], false, "the same as --bias none", ["analyze", "report"]),
+    Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only)", ["analyze"]),
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
@@ -128,6 +130,7 @@ mutable struct Options
     ci::Bool
     confidence::Float64
     bias::String
+    noise::String
     spectrum::Bool
     nperseg::Int           # 0 = library default
     dev::String
@@ -173,7 +176,7 @@ end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
-                    Float64(DEFAULT_CONFIDENCE), "exact", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
+                    Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "")
@@ -315,6 +318,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--detrend";        o.detrend = check_choice(v, name, DETRENDS)
     elseif name == "--remove-drift";   o.remove_drift = check_choice(v, name, DRIFTS)
     elseif name == "--bias";           o.bias = check_choice(v, name, BIASES)
+    elseif name == "--noise";          o.noise = check_choice(v, name, NOISES)
     elseif name == "--devs";           o.devs = parse_devs(v)
     elseif name == "--grid";           tau_mode(v); o.grid = v
     elseif name == "--m";              o.m = parse_m(v)
