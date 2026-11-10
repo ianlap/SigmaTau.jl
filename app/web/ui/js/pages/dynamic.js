@@ -370,9 +370,6 @@ function renderCell(box, c, d) {
     </div>`;
 }
 
-export function plotElement() {
-  return root?.querySelector(".dyn-single [data-ref=map]") ?? root?.querySelector(".dyn-card .plot") ?? null;
-}
 export function hint() {
   if (multi()) return "Rows = window centre time (s) · columns = τ · darker = less stable";
   return state.dyn.view === "map" ? "Click a cell to pin it · switch to 3D waterfall to compare curve shapes" : "Drag to turn · scroll to zoom";

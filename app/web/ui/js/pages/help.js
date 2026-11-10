@@ -131,5 +131,4 @@ export function mount(root) {
 }
 
 export function refresh() {}
-export function plotElement() { return null; }
 export function hint() { return "Methods, glossary and shortcuts"; }

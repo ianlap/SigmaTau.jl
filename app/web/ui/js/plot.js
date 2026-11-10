@@ -65,7 +65,7 @@ export function baseLayout() {
     plot_bgcolor: css("--bg-card"),
     margin: { l: 62, r: 14, t: 26, b: 48 },
     hovermode: "closest",
-    hoverlabel: { font: { family: css("--font-mono"), size: 11.5 }, bgcolor: css("--bg-popover"), bordercolor: css("--line-strong") },
+    hoverlabel: { font: { family: css("--font-mono"), size: 11.5, color: css("--ink") }, bgcolor: css("--bg-popover"), bordercolor: css("--line-strong") },
     legend: {
       bgcolor: css("--bg-card"), bordercolor: css("--line"), borderwidth: 1,
       x: 0.98, xanchor: "right", y: 0.98, yanchor: "top", font: { size: 11.5 },

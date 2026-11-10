@@ -47,7 +47,9 @@ class RequestToArgsTests(unittest.TestCase):
     def test_rejects(self):
         for req in ({"args": []}, {"args": "analyze"}, {"args": ["rm"]},
                     {"args": ["analyze", "--out", "/tmp/x"]}, {"args": ["analyze", "--out=/tmp/x"]},
-                    {"args": ["analyze", 3]}):
+                    {"args": ["analyze", 3]}, {"args": ["check", "/etc/hostname"], "file": None},
+                    {"args": ["check", "/etc/hostname", "--column", "--synth"]}, {"args": ["check", "/etc/hostname", "--synth=0"]},
+                    {"args": ["check", "--synth", "64", "--synth=0", "/etc/hostname"]}):
             with self.assertRaises(ValueError, msg=req):
                 serve.request_to_args(req, "/nonexistent")
 
@@ -236,6 +238,14 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(status, 400)
         status, doc = self.post({"args": ["analyze"]}, path="/api/nothing")
         self.assertEqual(status, 404)
+
+    def test_foreign_requests(self):
+        body = json.dumps({"args": ["check", "--synth", "64", "--format", "json"]}).encode()
+        for headers in ({"Content-Type": "application/json", "Host": "attacker.example:80"}, {"Content-Type": "text/plain"}):
+            req = urllib.request.Request(self.base + "/api/analyze", data=body, headers=headers)
+            with self.assertRaises(urllib.error.HTTPError, msg=headers) as e:
+                urllib.request.urlopen(req, timeout=60)
+            self.assertEqual(e.exception.code, 403)
 
 
 if __name__ == "__main__":
