@@ -48,21 +48,14 @@ def calculate_edf(
 def confidence_intervals(
     devs: Sequence[float],
     edfs: Sequence[float],
-    noises: Sequence[str],
-    n: int,
     confidence: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Lower/upper confidence limits — χ² when edf ≥ 1, Gaussian fallback otherwise.
+    """Lower/upper χ² confidence limits of each deviation from its EDF.
 
-    Returns a ``(lower, upper)`` tuple of NumPy arrays.
+    Returns a ``(lower, upper)`` tuple of NumPy arrays, ``nan`` where the
+    deviation is not finite or the EDF is not positive.
     """
-    result = jl.confidence_intervals(
-        to_jl_f64(devs),
-        to_jl_f64(edfs),
-        to_jl_syms(noises),
-        int(n),
-        float(confidence),
-    )
+    result = jl.confidence_intervals(to_jl_f64(devs), to_jl_f64(edfs), float(confidence))
     return np_f64(jl.getindex(result, 1)), np_f64(jl.getindex(result, 2))
 
 

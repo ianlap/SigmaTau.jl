@@ -641,10 +641,7 @@ end
 end
 
 
-# ──────────────────────────────────────────────────────────────────────
-# ── stab/core/mtie.jl ───────────────────────────────────────────────────
-
-# core/mtie.jl — Maximum Time Interval Error kernel
+# ── Maximum time interval error ──────────────────────────────────────────
 
 """
     _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}

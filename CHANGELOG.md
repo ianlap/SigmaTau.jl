@@ -28,6 +28,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `confidence_intervals(devs, edfs, confidence)` no longer takes the noise
+  types and record length, which only the removed Gaussian stand-in used
+  (see Fixed). The five-argument form still works in Julia, with a
+  deprecation warning; the Python wrapper takes the three arguments.
 - The readers stream files line by line and keep only the columns they
   return: a 2-million-line two-column file reads in a third of the time and
   a quarter of the memory, a named-column table in a quarter of the time
@@ -38,6 +42,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Confidence intervals where the EDF is below 1 are χ² intervals like every
+  other, and so the widest on the plot. They used to be replaced by a
+  Gaussian interval on the whole record length, which gave the least
+  certain point the tightest bounds: ±2.4 % at the last τ of `mhtotdev` on a
+  1024-sample record, where its neighbour had −29 % / +290 %. The same
+  applied to `theo1` and `theoh` at τ beyond about 0.6 of the record. A
+  point whose EDF model gives no positive value now has `NaN` bounds.
+- An averaging factor below 1 is an `ArgumentError` in every estimator. A
+  negative one used to return numbers read from outside the record, and 0
+  gave `Inf`, `NaN` or a `DivideError`.
+- `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev`, `pdev`, `theo1`,
+  `theoh`, `dadev` and `dhdev` on a record with `NaN` gaps throw an
+  `ArgumentError` that points to `fillgaps`, instead of returning `NaN` at
+  every τ with noise labels attached.
+- `find_outliers` flags nothing when the MAD is zero, as on a coarsely
+  quantized record where more than half the steps are equal. It used to
+  flag every sample off the median, and `remove_outliers`, `summarize` and
+  `sigmatau check` followed.
+- `deviation(name, data)` on a `FrequencyData` record uses the same τ grid
+  as `adev(data)` and `stability(data)`; it stopped one step short.
 - The readers take a one-column file as its values (a `# data interval
   1.0 s` note gives τ₀), never use the value column as its own time axis,
   and split a blank-separated `.csv` on blanks.

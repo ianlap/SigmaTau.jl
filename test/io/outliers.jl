@@ -117,6 +117,12 @@
         @test via_phase.tau0 == tau0
     end
 
+    @testset "a quantized record has no scale to test against" begin
+        steps = repeat([0.0, 0.0, 0.0, 1e-9, -1e-9], 40)      # MAD of the steps is 0
+        @test isempty(find_outliers(FrequencyData(steps, 1.0)))
+        @test isempty(find_outliers(PhaseData(cumsum(steps), 1.0)))
+    end
+
     @testset "remove_outliers: phase record with gaps and a step" begin
         xs = copy(x_base)
         xs[90:end] .+= 5e-9

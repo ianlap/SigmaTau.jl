@@ -2,7 +2,7 @@
 
 The public surface mirrors the retired pure-Python port one-to-one (plus the
 estimators it never had); all computation runs in an embedded Julia runtime
-via juliacall, so results are bit-identical to the Julia oracle.
+via juliacall, so results are bit-identical to the Julia package.
 """
 
 __version__ = "0.6.0"

@@ -198,7 +198,7 @@ phase ↔ frequency map is bijective only up to a constant: round-trip
 
 Deviation estimators are shift-invariant (their second/third differences
 annihilate the offset), so e.g. `adev(pd, m_values) ≈
-adev(_phase_to_freq(pd), m_values)` up to the `N → N−1` length change.
+adev(_phase_to_freq(pd), m_values)`.
 """
 _phase_to_freq(data::PhaseData) = FrequencyData(diff(data.x) ./ data.tau0, data.tau0)
 

@@ -9,7 +9,7 @@ Greenhall–Riley spectral integrals for ADEV / MDEV / HDEV / MHDEV (via
 total-family estimators, and the SP1065 Table 3 empirical formulas for
 `:theo1` (via `_theo1_edf`).
 
-WHPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 9 and
+WHPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 7 and
 FCS 2001 publish coefficients for α ∈ {0, -1, -2} only. For α ∈ {1, 2}
 this routine falls back to the ADEV-style (`d=2`, `F=m`, `S=m`) or
 HDEV-style (`d=3`, `F=m`, `S=m`) Greenhall–Riley formula so every
@@ -40,7 +40,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mhdev
             edfs[k] = _calc_edf_core(alpha, 3, m, 1, m, N)
         elseif method == :totdev
-            # SP1065 Table 9 covers α ∈ {0,-1,-2}. For WHPM/FLPM (α=2,1) TOTDEV
+            # SP1065 Table 7 covers α ∈ {0,-1,-2}. For WHPM/FLPM (α=2,1) TOTDEV
             # is dominated by the same noise-shape contribution as ADEV, so the
             # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m, the overlapped
             # convention) is the accepted pragmatic substitute when no
@@ -313,7 +313,7 @@ end
 Equivalent degrees of freedom of PVAR (parabolic variance) for a record of `N`
 phase samples at averaging factor `m`, per Vernotte–Chen–Rubiola 2020
 (arXiv:2005.13631). The EDF feeds the χ² confidence interval the same way as the
-overlapped families (`ν = 2·E[σ²]²/V[σ²]`, their Eq. 19 ≡ the Wave-4 estimator).
+overlapped families (`ν = 2·E[σ²]²/V[σ²]`, their Eq. 19).
 
 Three regimes:
 
@@ -411,15 +411,6 @@ function _coeff_htot(alpha::Int)
     return (NaN, NaN)
 end
 
-function _kn_from_alpha(alpha::Int)
-    alpha == -2 && return 0.75
-    alpha == -1 && return 0.77
-    alpha == 0  && return 0.87
-    alpha == 1  && return 0.99
-    alpha == 2  && return 0.99
-    return 1.10
-end
-
 """
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
 
@@ -493,37 +484,23 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
     return B
 end
 
-# χ² limits of each deviation from its equivalent degrees of freedom, as
-# (lower, upper); NaN where the deviation is not finite or ν < 1.
-function _edf_ci(devs::Vector{Float64}, edfs::Vector{Float64}, confidence::Float64)
+"""
+    confidence_intervals(devs, edfs, confidence) → (lower, upper)
+
+χ² confidence limits of each deviation from its equivalent degrees of
+freedom ν: `σ √(ν/χ²_{(1+p)/2}(ν))` and `σ √(ν/χ²_{(1−p)/2}(ν))` at level
+`p = confidence` (SP1065 §5.3.2). Any ν > 0 has an interval, however wide;
+a limit is `NaN` where the deviation is not finite or ν is not positive.
+"""
+function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, confidence::Float64)
     a = (1 - confidence) / 2
     lower = fill(NaN, length(devs))
     upper = fill(NaN, length(devs))
     for k in eachindex(devs)
         d, ν = devs[k], edfs[k]
-        isfinite(d) && isfinite(ν) && ν >= 1 || continue
+        isfinite(d) && isfinite(ν) && ν > 0 || continue
         lower[k] = d * sqrt(ν / quantile(Chisq(ν), 1 - a))
         upper[k] = d * sqrt(ν / quantile(Chisq(ν), a))
-    end
-    return lower, upper
-end
-
-"""
-    confidence_intervals(devs, edfs, noises, N, confidence) → (lower, upper)
-
-χ² confidence limits of each deviation from its EDF. Where the EDF is
-missing or below 1, a Gaussian interval on the record length `N` with the
-noise type's Kₙ factor stands in, its lower limit floored at zero.
-"""
-function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64)
-    lower, upper = _edf_ci(devs, edfs, confidence)
-    z = quantile(Normal(), 1 - (1 - confidence) / 2)
-    for k in eachindex(devs)
-        d = devs[k]
-        (isnan(d) || !isnan(lower[k])) && continue
-        half = _kn_from_alpha(_alpha_from_noise(noises[k])) * d * z / sqrt(Float64(N))
-        lower[k] = max(d - half, 0.0)
-        upper[k] = d + half
     end
     return lower, upper
 end
