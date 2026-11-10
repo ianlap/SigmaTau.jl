@@ -42,6 +42,7 @@ include("powerlaw.jl")
 include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
+include("klts.jl")
 include("ensemble.jl")
 include("masks.jl")
 
