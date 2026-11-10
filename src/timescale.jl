@@ -196,7 +196,12 @@ the record, less the mean slope.
   clock's reading less its estimated phase (JT83 §4, after eq. 4.17;
   Greenhall 2003 eq. 10); with noiseless readings it is the same at every
   clock. The frequency estimates are the same as `:greenhall`'s; the scale is
-  noisier at short τ (the reduction is what minimizes its steps). JT83's error
+  slightly noisier at short τ (the reduction is what minimizes its steps:
+  about 4% at τ = 1 on four white-FM clocks, ten seeds, with single records
+  up to 40% higher). Its weights are `NaN`: no weighted mean defines it. `R`
+  is the white PM of a clock's reading against the reference, so every
+  difference carries the reference's noise (correlated), where JT83 takes
+  independent errors in each difference. JT83's error
   detection, step corrections and drift state are not part of it.
 
 AT1 keywords:
@@ -384,7 +389,7 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         end
         n > 1 && (E[n, use] = X[n, use] .- x̂⁻[use])
         Y[n, :] = X̂[k+1:2k]
-        W[n, :] = a
+        W[n, :] .= algorithm === :jones_tryon ? NaN : a
     end
     return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E)
 end

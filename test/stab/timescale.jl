@@ -100,7 +100,7 @@ using Statistics
         # Jones–Tryon: the same filter unreduced; the scale is a clock's reading
         # less its phase estimate, equal at every clock for noiseless readings.
         jt = timescale(cc; algorithm=:jones_tryon, models=ms)
-        @test jt.algorithm === :jones_tryon
+        @test jt.algorithm === :jones_tryon && all(isnan, jt.weights)
         @test maximum(abs, jt.y .- rk.y) < 1e-3 * std(rk.y[late, 1])   # frequency estimates agree (Theorem 1)
         @test timescale_phase(timescale(cc; algorithm=:jones_tryon, models=ms, pivot=3)).x ≈ timescale_phase(jt).x atol=1e-12
         @test adev1(rk) < adev1(jt) < 1.6 * adev1(rk)             # the reduction quiets the scale at short τ
