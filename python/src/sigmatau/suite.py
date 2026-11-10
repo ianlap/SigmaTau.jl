@@ -21,7 +21,7 @@ from ._convert import (
     to_jl_syms,
 )
 from ._julia import _map_errors, jl
-from .deviations import DEFAULT_CONFIDENCE
+from .deviations import DEFAULT_CONFIDENCE, _bias
 from .grids import Octave, TauMode
 from .types import FrequencyData, PhaseData, StabilityResult, StabilitySuite
 
@@ -59,7 +59,7 @@ def stability(
     m: TauMode | Sequence[int] = Octave,
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     remove_drift: bool = True,
 ) -> StabilitySuite:
     """Compute several deviations on one record and collect them into a suite.
@@ -77,7 +77,7 @@ def stability(
             m=resolve_m(m),
             ci=bool(ci),
             confidence=float(confidence),
-            correct_bias=bool(correct_bias),
+            correct_bias=_bias(correct_bias),
             remove_drift=bool(remove_drift),
         )
     )

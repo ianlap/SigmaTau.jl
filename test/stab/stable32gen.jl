@@ -54,12 +54,23 @@ using SigmaTau
     # rises and SigmaTau reads flicker FM and random-walk FM.
     tot = filter(r -> r[1] == "Total", csv)
     ms = [parse(Int, r[2]) for r in tot]
-    α = [parse(Int, r[5]) for r in tot]      # Stable32 applies no factor on PM
-    B = ifelse.(α .> 0, 1.0, bias_correction(getindex.(Ref(αsym), α), :totvar, ms, length(x)))
+    B = bias_correction([αsym[parse(Int, r[5])] for r in tot], :totvar, ms, length(x); published=true)
     @test length(tot) >= 10
     @test all(isapprox.(totdev(pd, ms; ci=false, correct_bias=false).dev ./ sqrt.(B),
                         parse.(Float64, getindex.(tot, 7)); rtol=1e-4))
     @test totdev(pd, [1024, 2048, 4096]).noise_type == [:FLFM, :RWFM, :RWFM]
+
+    # correct_bias=:stable32 is Stable32's bias convention for each estimator:
+    # its σ on the nine rows where the two programs read the same noise type.
+    for (k, est) in (("Total", totdev), ("Modified Total", mtotdev), ("Time Total", ttotdev),
+                     ("Hadamard Total", (p, m; kw...) -> htotdev(p, m; remove_drift=false, kw...)))
+        s32 = filter(r -> r[1] == k, csv)
+        r = est(pd, [parse(Int, r[2]) for r in s32]; correct_bias=:stable32)
+        same = [αsym[parse(Int, r[5])] for r in s32] .== r.noise_type
+        @test count(same) == 9
+        @test r.dev[same] ≈ parse.(Float64, getindex.(s32, 7))[same] rtol = 1e-4
+    end
+    @test_throws ArgumentError totdev(pd, [4]; correct_bias=:sp1065)
 
     # allantools CSV columns: Type, AF, Tau, N, Sigma (raw totdev is _totdev_core)
     raw["Total"] = (m -> SigmaTau._totdev_core(x, [m], 1.0)[1], 0.0)

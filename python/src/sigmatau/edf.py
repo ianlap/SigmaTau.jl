@@ -65,12 +65,15 @@ def bias_correction(
     var_type: str,
     m_values: Sequence[int],
     n: int,
+    *,
+    published: bool = False,
 ) -> np.ndarray:
     """Variance-scale bias factor B = E[total variance]/E[parent variance] (apply as σ/√B).
 
     ``var_type`` is one of ``"totvar"``, ``"mtot"``, ``"htot"``, ``"mhtot"``;
     anything else returns all ones. ``m_values`` are the averaging factors and
-    ``n`` the number of phase samples.
+    ``n`` the number of phase samples. ``published=True`` keeps to the
+    published tables (none on PM, their τ ≥ 16τ₀ value at every m > 1).
     """
     return np_f64(
         jl.bias_correction(
@@ -78,6 +81,7 @@ def bias_correction(
             jl.Symbol(str(var_type)),
             to_jl_ints(m_values),
             int(n),
+            published=bool(published),
         )
     )
 

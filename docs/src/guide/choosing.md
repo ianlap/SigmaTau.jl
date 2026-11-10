@@ -84,8 +84,8 @@ linear drift does not appear in them at all.
   or remove the drift first with [`detrend`](@ref)`(p; method=:quadratic)`
   (on phase, the quadratic term is the frequency drift).
 - **Bias correction.** The total estimators and Thêo1 are bias-corrected by
-  default. Pass `correct_bias=false` for the raw statistic, which is what
-  Stable32 reports for MTOT and Thêo1.
+  default. `correct_bias=false` gives the raw statistic, as allantools
+  does, and `correct_bias=:stable32` what Stable32 reports for each.
 - **Speed.** The Allan and Hadamard estimators are O(N) per τ. The total
   family is heavier but multithreaded (start Julia with `--threads=auto`).
   Thêo1 and ThêoH are O(N²) overall, so they are off by default in the

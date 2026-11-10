@@ -231,10 +231,25 @@ has its own table on [its page](mhtotdev.md).
 The PM rows of TOTDEV and HTOTDEV have no published source and are derived
 in [Total estimators on PM noise](total_pm.md).
 
-`correct_bias=false` returns the raw statistic. Stable32 corrects TOTDEV and
-HTOTDEV the same way on the FM noises, applies no factor on PM, and reports
-MTOT and Thêo1 raw; the [validation page](validation.md) shows both against
-Stable32.
+### Matching a reference
+
+The factors SigmaTau derives itself (PM, m < 16, MHTOTDEV) are not in SP1065,
+Stable32 or allantools, so `correct_bias` also takes the convention of each:
+
+| `correct_bias` | TOTDEV | MTOTDEV, TTOTDEV | HTOTDEV | Thêo1 | Reproduces |
+|:---|:---|:---|:---|:---|:---|
+| `true` (default) | all noises | exact below 16τ₀ | all noises, exact below 16τ₀ | ThêoBR | |
+| `:published` | FM only | published factor at every τ | FM only, published factor at every τ | ThêoBR | SP1065, Howe and Peppler |
+| `:stable32` | FM only | raw | FM only, published factor at every τ | raw | Stable32 |
+| `false` | raw | raw | raw | raw | allantools |
+
+MHTOTDEV has no published factor and exists in neither program: it is raw
+with `false` and corrected otherwise. The setting changes σ and the interval
+that scales with it, not the noise identification or the EDF; where SigmaTau
+and Stable32 read a different noise type at a τ, the FM factor still differs
+([Coming from Stable32](../guide/from_stable32.md)). The
+[validation page](validation.md) shows the default and the raw statistic
+against Stable32.
 
 ## Drift
 
