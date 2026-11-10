@@ -135,10 +135,8 @@ end
 # ── allantools EDF / CI / noise ID / spectra / dynamic ─────────────────────
 
 _alpha_sym(a) = a == 2 ? :WHPM : a == 1 ? :FLPM : a == 0 ? :WHFM : a == -1 ? :FLFM : :RWFM
-# Stable32's bias factor for its α: the published FM tables, for HTOTDEV at
-# their τ ≥ 16τ0 value from m = 2, and none on PM.
-s32_bias(α, var, ms, N) = ifelse.(α .> 0, 1.0,
-    bias_correction(_alpha_sym.(α), var, var == :htot ? ifelse.(ms .> 1, max.(ms, 16), 1) : ms, N))
+# Stable32's bias factor for its α: the published tables alone.
+s32_bias(α, var, ms, N) = bias_correction(_alpha_sym.(α), var, ms, N; published=true)
 
 function allantools_edf_rows()
     rows = Row[]

@@ -39,11 +39,11 @@ same from a window or a shell.
 | Time | [`tdev`](@ref) |
 | Hadamard (non-overlapping) | `hdev(p; overlapping=false)` |
 | Overlapping Hadamard | [`hdev`](@ref) |
-| Total | [`totdev`](@ref) |
-| Modified Total | `mtotdev(p; correct_bias=false)`; see below |
-| Time Total | [`ttotdev`](@ref) |
-| Hadamard Total | [`htotdev`](@ref) |
-| Thêo1 | `theo1(p; correct_bias=false)` |
+| Total | `totdev(p; correct_bias=:stable32)` |
+| Modified Total | `mtotdev(p; correct_bias=:stable32)` |
+| Time Total | `ttotdev(p; correct_bias=:stable32)` |
+| Hadamard Total | `htotdev(p; correct_bias=:stable32, remove_drift=false)` |
+| Thêo1 | `theo1(p; correct_bias=:stable32)` |
 | ThêoBR | [`theo1`](@ref) (the default) |
 | ThêoH | [`theoh`](@ref) |
 | MTIE, TIE rms | [`mtie`](@ref), [`tierms`](@ref) |
@@ -86,18 +86,22 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 
 ## Defaults that differ
 
+`correct_bias=:stable32` on any estimator, on [`deviation`](@ref) or on
+[`stability`](@ref) applies Stable32's bias convention: the first two rows
+and the last three of this table.
+
 | | Stable32 | SigmaTau default | To match Stable32 |
 |---|---|---|---|
-| MTOTDEV | raw estimator, which reads low | raised to MDEV's expected value (Howe and Peppler 2001, Table 2) | `mtotdev(p; correct_bias=false)` |
-| Thêo1 | raw Thêo1 run, ThêoBR a separate run | ThêoBR | `theo1(p; correct_bias=false)` |
+| MTOTDEV | raw estimator, which reads low | raised to MDEV's expected value (Howe and Peppler 2001, Table 2) | `correct_bias=:stable32` |
+| Thêo1 | raw Thêo1 run, ThêoBR a separate run | ThêoBR | `correct_bias=:stable32` |
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
 | Noise type with fewer than 30 averaged points | B1 ratio, labels as with B1(N, μ) at the record length | B1 ratio against B1(N, μ) at the number of averaged points; below 6 points the label measured at 6 | `identify_noise(x, m; b1_length=:record)`; no switch on the estimators |
 | Limits between the FM noises, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
 | TOTDEV, HTOTDEV on FM noise | bias-corrected | bias-corrected | the same from τ = 16τ₀ |
-| HTOTDEV on FM noise, τ = 2τ₀ to 15τ₀ | the factor published for τ ≥ 16τ₀ | the exact factor at that averaging factor, up to 3 % away in σ (white FM at 3τ₀) | no switch |
-| TOTDEV, HTOTDEV on white and flicker PM | raw estimator, which reads high | lowered to the expected value of ADEV, HDEV ([derivation](../explanation/total_pm.md)) | `totdev(p; correct_bias=false)`, `htotdev(p; correct_bias=false)` on those rows |
+| HTOTDEV on FM noise, τ = 2τ₀ to 15τ₀ | the factor published for τ ≥ 16τ₀ | the exact factor at that averaging factor, up to 3 % away in σ (white FM at 3τ₀) | `correct_bias=:stable32` |
+| TOTDEV, HTOTDEV on white and flicker PM | raw estimator, which reads high | lowered to the expected value of ADEV, HDEV ([derivation](../explanation/total_pm.md)) | `correct_bias=:stable32` |
 
 The detrending choices change the identified noise type only at long τ, where
 few averaged samples remain; when it flips, the EDF and the interval at that τ

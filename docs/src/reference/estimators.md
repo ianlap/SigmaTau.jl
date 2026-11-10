@@ -17,7 +17,10 @@ They return a [`StabilityResult`](@ref). The common keywords are
   the noise for the bias correction).
 - `confidence=DEFAULT_CONFIDENCE` (0.683): the interval's confidence level.
 - `correct_bias=true` (total family and `theo1` only): divide out the
-  estimator's known bias; see [Noise, EDF and confidence](../explanation/noise_and_confidence.md#Bias-correction).
+  estimator's known bias. `:published` keeps to the published tables,
+  `:stable32` does what Stable32 does for that estimator, and `false`
+  returns the raw statistic, as allantools does; see
+  [Noise, EDF and confidence](../explanation/noise_and_confidence.md#Matching-a-reference).
 
 [Choosing an estimator](../guide/choosing.md) compares them.
 

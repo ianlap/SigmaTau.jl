@@ -80,6 +80,16 @@ def test_htotdev_remove_drift_sets_the_noise_type_and_the_bias(phase8192):
     assert st.htotdev(phase8192, [1024]).dev[0] == pytest.approx(2.4120e-03, rel=1e-4)
 
 
+def test_correct_bias_takes_a_reference_name(phase8192):
+    """At τ = 16 s the record reads white PM, where Stable32 and the published
+    tables apply no factor to HTOTDEV and the default lowers it."""
+    raw = st.htotdev(phase8192, [16], correct_bias=False).dev[0]
+    assert raw == pytest.approx(7.7624e-02, rel=1e-4)
+    assert st.htotdev(phase8192, [16], correct_bias="stable32").dev[0] == raw
+    assert st.deviation("htotdev", phase8192, [16], correct_bias="published").dev[0] == raw
+    assert st.htotdev(phase8192, [16]).dev[0] < 0.9 * raw
+
+
 def test_adev_golden_against_stable32(phase8192, stable32_csv):
     """adev on the 8192-sample record reproduces Stable32's Overlapping Allan sigmas."""
     ms = [1, 2, 4, 8]

@@ -11,7 +11,7 @@ const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 function _stability(data, N::Int, kind::Symbol, tau0::Float64;
                     devs = DEFAULT_DEVIATIONS, m = Octave, taus = nothing,
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
-                    correct_bias::Bool = true, remove_drift::Bool = true)
+                    correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true)
     if taus !== nothing
         Base.depwarn("stability: `taus` is deprecated, use `m`", :stability)
         m = taus

@@ -459,8 +459,14 @@ function _htot_pm_edf(alpha::Int, m::Int, N::Int)
 end
 
 # Variance-scale bias factor E[total] / E[parent] at averaging factor m on N
-# phase samples.
-function _total_bias(var_type::Symbol, alpha::Int, m::Int, N::Int)
+# phase samples. `published` keeps to the published tables: nothing on PM
+# for TOTVAR and TOTHVAR, and the τ ≥ 16τ0 value of MTOT and TOTHVAR at
+# every m > 1.
+function _total_bias(var_type::Symbol, alpha::Int, m::Int, N::Int, published::Bool=false)
+    if published
+        var_type in (:totvar, :htot) && alpha >= 1 && return 1.0
+        var_type in (:mtot, :htot) && m > 1 && (m = max(m, 16))
+    end
     s = m / (N - 1)
     if var_type == :totvar
         alpha == 2  && return 1 + (8 / 3) * (m ÷ 2) / (N - 2)
@@ -482,7 +488,7 @@ function _total_bias(var_type::Symbol, alpha::Int, m::Int, N::Int)
 end
 
 """
-    bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int) → Vector{Float64}
+    bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int; published=false) → Vector{Float64}
 
 Variance-scale bias factor `B = E[total variance] / E[parent variance]` of a
 total estimator at each averaging factor, for a record of `N` phase samples.
@@ -510,11 +516,14 @@ Apply as `σ_unbiased = σ_raw / √B`: `B < 1` means the raw σ reads low. With
 
 The PM rows of `:totvar` and `:htot`, the `m < 16` values and all of `:mhtot`
 have no published source: they are the exact expectation of each statistic
-(`tools/total_pm_models.jl`, `tools/mhtot_models.jl`). Stable32 applies no
-factor on PM. Anything unrecognised gives `B = 1`.
+(`tools/total_pm_models.jl`, `tools/mhtot_models.jl`). `published=true`
+leaves them out: `B = 1` on PM for `:totvar` and `:htot`, and the published
+value of `:mtot` and `:htot` at every `m > 1`, which is what SP1065 gives and
+what Stable32 applies to TOTDEV and HTOTDEV. `:mhtot`, which has no published
+factor, is unchanged. Anything unrecognised gives `B = 1`.
 """
-bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int) =
-    [_total_bias(var_type, _alpha_from_noise(noises[k]), m_values[k], N) for k in eachindex(noises)]
+bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int; published::Bool=false) =
+    [_total_bias(var_type, _alpha_from_noise(noises[k]), m_values[k], N, published) for k in eachindex(noises)]
 
 """
     confidence_intervals(devs, edfs, confidence) → (lower, upper)
