@@ -297,7 +297,8 @@ async function run() {
   if (ctl.signal.aborted) return;       // cancelled or replaced: whoever did that has the state
   const s = (performance.now() - t0) / 1000;
   const nd = state.devs.length;
-  const what = clocks.length > 1 ? `${clocks.length} clocks` : `${thousands(clocks[0].record.n)} samples`;
+  const r = clocks[0].range, n = r ? Math.floor((r[1] - r[0]) / clocks[0].record.tau0) + 1 : clocks[0].record.n;
+  const what = clocks.length > 1 ? `${clocks.length} clocks` : `${thousands(n)} samples`;
   update((st) => {
     st.run.state = failed ? "error" : "idle";
     // Inputs changed while this ran: the results are already out of date.
@@ -389,13 +390,9 @@ exportMenu.addEventListener("click", async (e) => {
     }
   }
   if (kind === "png" || kind === "svg") {
-    const el = page?.plotElement();
-    if (!el?.data) return ctx.status("warn", "Nothing to export on this page yet.");
-    const P = await loadPlotly();
-    // A dark plot keeps its card behind it; light plots export on clear paper.
-    const fig = document.documentElement.dataset.theme === "dark" ? { data: el.data, layout: { ...el.layout, paper_bgcolor: css("--bg-card") } } : el;
-    const url = await P.toImage(fig, { format: kind, scale: kind === "png" ? 2 : 1, width: el.clientWidth, height: el.clientHeight });
-    saveFile(`sigmatau-${state.page}.${kind}`, await (await fetch(url)).blob());
+    const blob = await plotImage(kind);
+    if (!blob) return ctx.status("warn", "Nothing to export on this page yet.");
+    saveFile(`sigmatau-${state.page}.${kind}`, blob);
   } else if (!analysed.length) {
     ctx.status("warn", "Run the analysis first; there are no results to export.");
   } else if (kind === "json") {
@@ -409,6 +406,41 @@ exportMenu.addEventListener("click", async (e) => {
     saveFile("sigmatau-results.tsv", new Blob([lines.join("\n") + "\n"], { type: "text/tab-separated-values" }));
   }
 });
+
+// Every plot shown on the page (both spectra, each clock's map), placed as on
+// screen, in one PNG (at twice the size) or SVG.
+async function plotImage(kind) {
+  const els = [...pageEl.querySelectorAll(".js-plotly-plot")]
+    .filter((el) => el.data?.length && el.offsetParent && getComputedStyle(el).visibility !== "hidden");
+  if (!els.length) return null;
+  const P = await loadPlotly();
+  // A dark plot keeps its card behind it; light plots export on clear paper.
+  const paper = document.documentElement.dataset.theme === "dark" ? css("--bg-card") : null;
+  const boxes = els.map((el) => el.getBoundingClientRect());
+  const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top));
+  const W = Math.round(Math.max(...boxes.map((b) => b.right)) - x0), H = Math.round(Math.max(...boxes.map((b) => b.bottom)) - y0);
+  const k = kind === "png" ? 2 : 1;
+  const parts = await Promise.all(els.map(async (el, i) => {
+    const b = boxes[i], fig = paper ? { data: el.data, layout: { ...el.layout, paper_bgcolor: paper } } : el;
+    const url = await P.toImage(fig, { format: kind, scale: k, width: Math.round(b.width), height: Math.round(b.height) });
+    return { x: Math.round(b.left - x0), y: Math.round(b.top - y0), w: Math.round(b.width), h: Math.round(b.height), url };
+  }));
+  if (kind === "svg") {
+    const inner = parts.map((p) => decodeURIComponent(p.url.slice(p.url.indexOf(",") + 1)).replace("<svg ", `<svg x="${p.x}" y="${p.y}" `));
+    const bg = paper ? `<rect width="100%" height="100%" fill="${paper}"/>` : "";
+    return new Blob([`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}">${bg}${inner.join("")}</svg>`], { type: "image/svg+xml" });
+  }
+  const canvas = Object.assign(document.createElement("canvas"), { width: W * k, height: H * k });
+  const g = canvas.getContext("2d");
+  if (paper) { g.fillStyle = paper; g.fillRect(0, 0, canvas.width, canvas.height); }
+  for (const p of parts) {
+    const img = new Image();
+    img.src = p.url;
+    await img.decode();
+    g.drawImage(img, p.x * k, p.y * k, p.w * k, p.h * k);
+  }
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
 
 // ── Header buttons and keys ──
 document.getElementById("record-chip").addEventListener("click", () => go("data"));

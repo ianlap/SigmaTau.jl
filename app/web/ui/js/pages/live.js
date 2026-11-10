@@ -242,9 +242,6 @@ function save() {
   ctx.save(`live-${stamp()}.txt`, new Blob([`# ${phase ? "phase (s)" : "fractional frequency"}, tau0 = ${run.tau0} s, source ${run.last?.source ?? ""}\n${text}`], { type: "text/plain" }));
 }
 
-export function plotElement() {
-  return root?.querySelector("[data-ref=sigma]") ?? null;
-}
 export function hint() {
   return run.running ? "Stop the measurement to analyse the readings" : "Start reads from the source in the panel";
 }

@@ -68,6 +68,9 @@ def request_to_args(req, workdir):
         raise ValueError("--out is not allowed here")
     f = req.get("file")
     if f is None:
+        # The record is the uploaded file or a synthetic one, never a path on this machine.
+        if not any(a == "--synth" or a.startswith("--synth=") for a in args):
+            raise ValueError("a request without a file must use --synth")
         return list(args)
     name = Path(str(f.get("name") or "record.txt")).name or "record.txt"
     path = Path(workdir) / name
@@ -168,6 +171,7 @@ class Live:
                 self.proc.kill()
 
 
+LOOPBACK = ("127.0.0.1", "::1", "localhost")
 LIVE = {}            # id -> Live; one measurement at a time
 LIVE_IDS = iter(range(1, 1 << 62))
 
@@ -190,6 +194,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
+    def foreign(self):
+        """A request the page on this machine did not send: on loopback, one
+        addressed to another host name (DNS rebinding); a POST that is not
+        JSON (a cross-site form, which skips the browser's preflight)."""
+        host = urlparse("//" + (self.headers.get("Host") or "")).hostname
+        if self.server.server_address[0] in LOOPBACK and host not in LOOPBACK:
+            return True
+        return self.command == "POST" and self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json"
+
     def send_json(self, status, payload):
         body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
         self.send_response(status)
@@ -200,6 +213,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
+        if url.path.startswith("/api/") and self.foreign():
+            return self.send_json(403, {"error": "only the explorer page on this computer may call the API"})
         if url.path == "/api/health":
             cmd = cli_command()
             return self.send_json(200, {"ok": cmd is not None, "core": cmd[0] if cmd else None})
@@ -216,6 +231,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path not in ("/api/analyze", "/api/live/start", "/api/live/stop"):
             return self.send_json(404, {"error": "unknown endpoint"})
+        if self.foreign():
+            return self.send_json(403, {"error": "only the explorer page on this computer may call the API"})
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0 or length > MAX_BODY:
             return self.send_json(413, {"error": "request body missing or too large"})
@@ -232,7 +249,7 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/live/start":
             args = req.get("args")
             # Device and file paths read this machine: only for a page on this machine.
-            local = self.server.server_address[0] in ("127.0.0.1", "::1", "localhost")
+            local = self.server.server_address[0] in LOOPBACK
             if not local and isinstance(args, list) and len(args) > 1 and args[1] != "sim" and not str(args[1]).startswith("tcp://"):
                 return self.send_json(403, {"error": "device and file sources are only served on 127.0.0.1"})
             stop_live()

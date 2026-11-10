@@ -258,7 +258,7 @@ function drawRecord(c) {
   const maxAbs = Math.max(...finite.map(Math.abs), ...(k?.outlier_x ?? []).map(Math.abs));
   const [f, u] = timeUnit(maxAbs || 1);
   const traces = [{
-    x: s.t, y: s.x.map((v) => v / f), mode: "lines", line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.4 },
+    x: s.t, y: s.x.map((v) => (Number.isFinite(v) ? v / f : null)), mode: "lines", line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.4 },
     hovertemplate: `t = %{x:.6g} s<br>x = %{y:.5g} ${u}<extra></extra>`, name: "phase",
   }];
   if (k?.outlier_t?.length && !c.remove_outliers) {
@@ -330,7 +330,6 @@ function onChange(e) {
   else if (f === "fillgaps") ctx.setRecord(c, { fillgaps: e.target.checked });
 }
 
-export function plotElement() { return plotEl; }
 export function hint() {
   return state.dataDrag === "range"
     ? "Drag across the plot to choose the part of the record to analyse"

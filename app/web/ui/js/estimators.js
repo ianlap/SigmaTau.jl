@@ -49,9 +49,9 @@ const alphaText = (a) => (a > 0 ? `+${a}` : a < 0 ? `−${-a}` : "0");
 export const noiseTitle = (s) => (s in NOISE_ALPHA ? `${NOISE_LONG[s]} noise, α = ${alphaText(NOISE_ALPHA[s])}` : String(s));
 
 // Slope of log σ against log τ for a power-law noise. The modified estimators
-// (MDEV, MHDEV, MTOTDEV, MHTOTDEV) separate white from flicker phase noise;
-// the others give τ^−1 for both.
-const MODIFIED = new Set(["mdev", "mhdev", "mtotdev", "mhtotdev"]);
+// (MDEV, MHDEV, MTOTDEV, MHTOTDEV) and PDEV separate white from flicker phase
+// noise; the others give τ^−1 for both.
+const MODIFIED = new Set(["mdev", "mhdev", "mtotdev", "mhtotdev", "pdev"]);
 export function noiseSlope(dev, noise) {
   const a = NOISE_ALPHA[String(noise)];
   if (a === undefined) return null;
