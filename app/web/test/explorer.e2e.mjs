@@ -86,10 +86,13 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok((await page.locator("#page").innerText()).length > 200);
   });
 
-  await t.test("Stability, revisited: one click pins one run", async () => {
+  await t.test("Stability, revisited: one click pins one run and opens the model editor", async () => {
     await page.click("a[data-page=stability]");
     await page.click("[data-act=pin]");
     assert.equal(await page.locator("#page [data-unpin]").count(), 1);
+    await page.click("#page [data-fit=toggle]");
+    assert.equal(await page.locator("#page .model-edit").count(), 1);
+    await page.click("#page [data-fit=toggle]");
   });
 
   await t.test("A record with gaps runs without its spectrum", async () => {
