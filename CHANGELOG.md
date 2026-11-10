@@ -78,6 +78,10 @@ Clock models, the Kalman filter and timescales.
   phase. In
   simulation `implicit_mean(r, truth)` gives the scale's own phase, the mean
   of the clocks' true phases, free of the pivot clock's reading noise.
+- `clock_models(cc)` fits a `ClockModel` per clock from the comparisons alone
+  (Groslambert variances, then a power-law fit), so `:greenhall` and
+  `:jones_tryon` need no hand-built `models`. `powerlaw_fit` accepts a
+  `StabilityResult`.
 - Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
   model by hand, and the JSON `powerlaw` gains `mode`, `components`,
   `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`

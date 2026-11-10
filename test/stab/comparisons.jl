@@ -28,6 +28,14 @@ using Statistics
     for (i, j) in ((2, 1), (3, 1))
         @test adev(cc[i, j], [100]; ci=false).dev[1]^2 ≈ (ms[i].q1 + ms[j].q1) / 100 + 3ms[i].R / 100^2 rtol=0.2
     end
+    # Models fitted from the comparisons alone: the white FM level comes back
+    # (R and the random walk are only weakly set by one record), and the
+    # Kalman timescale runs on them.
+    fit = clock_models(cc)
+    @test length(fit) == 3 && all(m -> m.tau0 == 1.0, fit)
+    @test [m.q1 for m in fit] ≈ [m.q1 for m in ms] rtol=0.3
+    @test timescale(cc; algorithm=:greenhall, models=fit) isa TimescaleResult
+    @test_throws ArgumentError clock_models(ClockComparisons(ones(10, 2), 1.0))
     ideal, _ = simulate_ensemble(ms[[1, 3]], 100; reference=0)
     @test ideal.reference == "ideal reference" && !iszero(ideal.x[:, 1])
     @test_throws ArgumentError simulate_ensemble(ms[1:1], 10)

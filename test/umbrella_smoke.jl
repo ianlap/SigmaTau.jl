@@ -29,7 +29,7 @@ using SigmaTau
         :NoiseFit, :noise_fit, :add_component!, :undo!, :noise_residual,
         :KalmanResult, :kalman_filter, :kalman_smooth, :holdover_error, :innovation_check, :simulate_clock,
         :prediction_error, :tune_q,
-        :ClockComparisons, :simulate_ensemble, :TimescaleResult, :timescale, :timescale_phase])
+        :ClockComparisons, :simulate_ensemble, :clock_models, :TimescaleResult, :timescale, :timescale_phase, :implicit_mean])
     deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
                       :load_result, :load_suite])
     @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public ∪ deprecated

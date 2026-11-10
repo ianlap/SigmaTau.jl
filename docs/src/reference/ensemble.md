@@ -15,6 +15,7 @@ adev(cc[2, 1])       # clock 2 − clock 1, free of the reference
 ```@docs
 ClockComparisons
 simulate_ensemble
+clock_models
 ```
 
 ## Timescales

@@ -89,3 +89,26 @@ function simulate_ensemble(models::AbstractVector{ClockModel}, N::Int; reference
     names = ["clock $i" for i in 1:k]
     return ClockComparisons(x, τ₀; names, reference=reference == 0 ? "ideal reference" : names[reference]), truth
 end
+
+"""
+    clock_models(cc::ClockComparisons; alphas=[2, 0, -2]) → Vector{ClockModel}
+
+One [`ClockModel`](@ref) per clock, fitted from the comparisons alone, for the
+Kalman timescales (`:greenhall`, `:jones_tryon`), which need one. Needs three
+or more clocks: each clock's Allan deviation comes from the Groslambert
+covariance of the clock differences ([`groslambert`](@ref)), so the reference
+and the other clocks' noise drop out, and the power-law fit of
+[`powerlaw_fit`](@ref) on that curve, with the components `alphas` (white PM,
+white FM and random-walk FM by default; the Allan deviation cannot tell flicker
+PM from white PM), gives the model. A clock whose curve the fit cannot use
+(too few positive points) throws.
+"""
+function clock_models(cc::ClockComparisons; alphas=[2, 0, -2])
+    k = size(cc.x, 2)
+    k >= 3 || throw(ArgumentError("clock_models: needs three or more clocks, got $k"))
+    pair = Matrix{PhaseData{Float64}}(undef, k, k)
+    for i in 1:k, j in (i + 1):k
+        pair[i, j] = cc[i, j]
+    end
+    return ClockModel[clock_model(powerlaw_fit(r; alphas)) for r in groslambert(pair)]
+end
