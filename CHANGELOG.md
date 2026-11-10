@@ -101,6 +101,12 @@ Clock models, the Kalman filter and timescales.
   default), `prediction_error`
   reports that error, and `simulate_clock` draws a record and its true
   states from a model.
+- Measured holdover test: `holdover(data; train, tau, drift, anchor, limit)`
+  learns the frequency (and drift) from a training stretch, free-runs from
+  the last reading and compares with the record from every start (Delporte et
+  al., PTTI 2000). It gives the RMS, a quantile, the worst case and the mean of
+  the time error at each holdover time, and the time at which the quantile
+  reaches a limit.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -144,9 +150,12 @@ Clock models, the Kalman filter and timescales.
   weight cap). On white FM clocks it matches `:greenhall` to a few percent.
   Also in the command line (`--algorithm stein`) and Python.
 - `clock_models(cc)` fits a `ClockModel` per clock from the comparisons alone
-  (Groslambert variances, then a power-law fit), so `:greenhall` and
-  `:jones_tryon` need no hand-built `models`. `powerlaw_fit` accepts a
-  `StabilityResult`.
+  (Groslambert variances, then a power-law fit with white PM, flicker PM,
+  white FM and random-walk FM, `alphas = [2, 1, 0, -2]`), so `:greenhall` and
+  `:jones_tryon` need no hand-built `models`. `clock_model` folds flicker PM
+  into the reading noise `R` as the PM the filter does not follow (Van
+  Dierendonck, McGraw & Brown 1984); left as white FM, flicker PM inflated
+  `q1`. `powerlaw_fit` accepts a `StabilityResult`.
 - EWFA follows section 3.1 of Kettering's 2023 thesis: equal weights, and
   the scale's frequency is the mean of the clocks' frequency steps, so
   without gaps it is the plain mean of the phases. The `tau_y` option (an
@@ -173,8 +182,9 @@ Clock models, the Kalman filter and timescales.
   and of each clock against it.
 - Python: `ClockModel`, `clock_model`, `noise_fit`, `kalman_filter`,
   `kalman_smooth`, `holdover_error`, `innovation_check`, `tune_q`,
-  `simulate_clock`, `ClockComparisons`, `simulate_ensemble`, `timescale` and
-  `timescale_phase` wrap the Julia calls of the same names.
+  `simulate_clock`, `ClockComparisons`, `simulate_ensemble`, `timescale`,
+  `timescale_phase`, `clock_models`, `implicit_mean`, `holdover` and
+  `HoldoverResult` wrap the Julia calls of the same names.
 - Tutorial "From one clock to an ensemble": noise fit, Kalman filter,
   holdover and an AT1 timescale on simulated clocks.
 
