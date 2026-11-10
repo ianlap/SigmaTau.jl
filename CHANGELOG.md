@@ -113,6 +113,11 @@ Clock models, the Kalman filter and timescales.
   (`HoldoverPrediction`; Python too). Exact for the sampled spectrum,
   flicker noises included; matches the closed forms of Delporte et al.
   (PTTI 2000) within 0.4 %.
+- `sigmatau holdover FILE` runs the holdover test from the command line:
+  `--train`, `--tau`, `--fit-drift`, `--no-anchor`, `--limit`,
+  `--confidence`; CSV with one row per holdover time, or JSON, where `--fit`
+  adds the error predicted from the power-law fit with its budget by noise
+  type.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
