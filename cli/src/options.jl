@@ -26,7 +26,7 @@ const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
-const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon"]
+const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 
@@ -85,8 +85,8 @@ const OPTS = [
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
     Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
-    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
-    Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall or jones_tryon scale, 1 to the number of clocks (default 1)", ["timescale"]),
+    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
+    Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),

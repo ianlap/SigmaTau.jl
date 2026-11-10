@@ -372,14 +372,14 @@ function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     k = size(cc.x, 2)
     k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
     1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
-    return timescale(cc; algorithm=alg, models=clock_models(cc), pivot=o.pivot)
+    return timescale(cc; algorithm=alg, models=clock_models(cc), pivot=o.pivot, wmax=o.wmax)
 end
 
 function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     cc = o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
     N, k = size(cc.x)
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
-    kalman = o.algorithm == "greenhall" || o.algorithm == "jones_tryon"
+    kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
     r = run_timescale(cc, o, kalman)
     late = max(1, N ÷ 2):N
     wmean = [sum(r.weights[late, i]) / length(late) for i in 1:k]

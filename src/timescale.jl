@@ -10,7 +10,7 @@ Output of [`timescale`](@ref).
 $(TYPEDFIELDS)
 """
 struct TimescaleResult
-    "Algorithm that formed the scale (`:ewfa`, `:at1`, `:at2`, `:greenhall`, `:jones_tryon`)."
+    "Algorithm that formed the scale (`:ewfa`, `:at1`, `:at2`, `:greenhall`, `:jones_tryon`, `:stein`)."
     algorithm::Symbol
     "The clocks the scale was formed from."
     comparisons::ClockComparisons
@@ -244,6 +244,26 @@ the record, less the mean slope.
   difference carries the reference's noise (correlated), where JT83 takes
   independent errors in each difference. JT83's error
   detection, step corrections and drift state are not part of it.
+- `:stein`, Stein's Kalman timescale [stein-2003-demystified](@cite), the
+  KAS-2 algorithm [levine-2012-statistical-modeling, erickson-2011-symmetricom-time-scale](@cite),
+  with one [`ClockModel`](@ref) per clock in `models`. Each clock has phase,
+  frequency and aging states (no aging when no model has `q3 > 0`) driven by
+  independent shocks of variance `q1 τ`, `q2 τ` and `q3 τ`; `R` is the clock's
+  reading noise. The clocks are differenced against clock `pivot` and each
+  difference gets its own Kalman filter (Stein 2003 eq. 5.8). The pivot's own
+  shocks against the ensemble follow from the constraints that the weighted shocks
+  of all the clocks sum to zero (4.1, 7.1), one set of weights for each state, and
+  the other clocks are the pivot plus their difference estimates (6.3, 7.3). The
+  weights are inversely proportional to the variance of the matching noise
+  (Levine §XVI; a clock with no such noise takes all of it); `wmax` caps them as
+  in KAS-2. The weights returned are the phase weights. The scale is realized at
+  the pivot as for `:greenhall`. Departures from the paper: the shock variances
+  are `qτ` (no cross terms between the states, as in the paper's shock model,
+  where `:greenhall` integrates them), a clock without a reading in a step is
+  predicted from its difference state and the weights run over the clocks read,
+  and the paper's independent difference filters ignore the correlation of
+  their innovations through the pivot, so the scale differs a little with the
+  pivot. With white FM clocks it matches `:greenhall` to a few percent at every τ.
 
 AT1 keywords:
 
@@ -310,11 +330,16 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
                    outlier::Real=Inf, models::Union{Nothing,AbstractVector{ClockModel}}=nothing,
                    pivot::Integer=1, steps::Union{Bool,Symbol}=false, step_threshold::Real=5.0,
                    lmax::Union{Nothing,Integer}=nothing, step_inflate::Real=4.0)
-    algorithm in (:ewfa, :at1, :at2, :greenhall, :jones_tryon) ||
-        throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :at2, :greenhall or :jones_tryon, got :$algorithm"))
+    algorithm in (:ewfa, :at1, :at2, :greenhall, :jones_tryon, :stein) ||
+        throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :at2, :greenhall, :jones_tryon or :stein, got :$algorithm"))
     bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
     N, k = size(cc.x)
     N >= 3 || throw(ArgumentError("timescale: needs three or more samples"))
+    if algorithm === :stein
+        models === nothing && throw(ArgumentError("timescale: :stein needs models, one ClockModel per clock"))
+        1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
+        return _stein(cc, models, Int(pivot), Float64(wmax))
+    end
     if algorithm === :greenhall || algorithm === :jones_tryon
         models === nothing && throw(ArgumentError("timescale: :$algorithm needs models, one ClockModel per clock"))
         1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
@@ -573,4 +598,108 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         W[n, :] .= algorithm === :jones_tryon ? NaN : a
     end
     return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E)
+end
+
+# Inverse-variance weights summing to 1 over the clocks `use`: weight ∝ 1/v;
+# a clock with zero variance takes all of the weight (equally among such
+# clocks), and without any variance the weights are equal.
+function _inverse_weights(v::Vector{Float64}, use::Vector{Int}, wmax::Float64)
+    w = zeros(length(v))
+    zero = [i for i in use if v[i] <= 0]
+    if !isempty(zero)
+        w[zero] .= 1.0
+    elseif all(i -> isfinite(v[i]), use)
+        w[use] .= 1.0 ./ v[use]
+    else
+        w[use] .= 1.0
+    end
+    w ./= sum(w)
+    return wmax < 1 ? _cap_weights!(w, wmax) : w
+end
+
+# Stein's Kalman timescale (Stein 2003, eqs 4.1–7.3; Levine 2012 §XVI, KAS-2).
+# Each clock is a three-state model (phase, frequency, aging; two states when no
+# model has aging noise) driven by independent shocks of variance ε² = q1τ,
+# η² = q2τ, α² = q3τ. Every clock i is differenced against the pivot p and the
+# difference states are estimated by their own Kalman filter (5.8). The shocks
+# of the pivot against the ensemble then follow from the constraint that the
+# weighted shocks of the clocks sum to zero (4.1, 7.1): for each state
+# ε̂ₚ = −Σᵢ aᵢ Kᵢ νᵢ with the weights a, b, c of phase, frequency and aging
+# (6.2, 7.2); the other clocks are the pivot plus their differences. The weights
+# are proportional to the inverse of the matching noise variance, cut at
+# `wmax` as in KAS-2.
+function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot::Int, wmax::Float64)
+    N, k = size(cc.x)
+    length(models) == k || throw(ArgumentError("timescale: $(length(models)) models for $k clocks"))
+    τ = cc.tau0
+    all(m -> m.tau0 ≈ τ, models) || throw(ArgumentError("timescale: the models' tau0 must be the comparisons' τ₀"))
+    k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
+    ns = any(m -> m.q3 > 0, models) ? 3 : 2
+    Φ = zeros(ns, ns)                                 # element-wise: matrix literals are not trim-safe
+    for d in 1:ns; Φ[d, d] = 1.0; end
+    Φ[1, 2] = τ
+    ns == 3 && (Φ[2, 3] = τ; Φ[1, 3] = τ^2 / 2)
+    V = zeros(ns, k)                                  # shock variances per state and clock
+    for (i, m) in enumerate(models)
+        V[1, i], V[2, i] = m.q1 * τ, m.q2 * τ
+        ns == 3 && (V[3, i] = m.q3 * τ)
+    end
+    r = Float64[m.R for m in models]
+    p = pivot
+    isfinite(cc.x[1, p]) || throw(ArgumentError("timescale: the pivot clock $p has no first reading"))
+    X, Y, W, E = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k)
+    # Pivot against the scale: the start scale is the plain mean of the first readings.
+    ok = isfinite.(cc.x[1, :])
+    xs = zeros(ns)
+    xs[1], xs[2] = cc.x[1, p] - sum(cc.x[1, ok]) / count(ok), _initial_frequency(cc)[p]
+    S = zeros(ns, k)                                  # difference states, clock i − pivot
+    P = [zeros(ns, ns) for _ in 1:k]
+    for i in 1:k
+        i == p && continue
+        d = cc.x[:, i] .- cc.x[:, p]
+        count(isfinite, d) > ns || continue
+        S[:, i], P[i] = _kalman_start(d, τ, ns)
+    end
+    W .= 1.0 / k
+    for n in 1:N
+        use = [i for i in 1:k if isfinite(cc.x[n, i])]
+        xs⁻ = Φ * xs
+        pred = Float64[xs⁻[1] + (i == p ? 0.0 : (Φ * S[:, i])[1]) for i in 1:k]
+        if n > 1
+            ν, K = zeros(k), zeros(ns, k)
+            live = p in use
+            for i in 1:k
+                i == p && continue
+                Pm = Φ * P[i] * Φ' + Diagonal(V[:, i] .+ V[:, p])
+                if live && i in use
+                    ν[i] = cc.x[n, i] - cc.x[n, p] - (Φ * S[:, i])[1]
+                    K[:, i] = Pm[:, 1] ./ (Pm[1, 1] + r[i] + r[p])
+                    S[:, i] = Φ * S[:, i] + K[:, i] .* ν[i]
+                    P[i] = Pm - K[:, i] * Pm[1:1, :]
+                    P[i] = (P[i] + P[i]') ./ 2
+                else
+                    S[:, i] = Φ * S[:, i]
+                    P[i] = Pm
+                end
+            end
+            xs = xs⁻
+            if live && length(use) >= 2
+                for m in 1:ns
+                    w = _inverse_weights(V[m, :], use, wmax)
+                    xs[m] -= sum(w[i] * K[m, i] * ν[i] for i in use)
+                    m == 1 && (W[n, :] .= w)
+                end
+            elseif n > 1
+                W[n, :] .= W[n-1, :]
+            end
+        end
+        u = isfinite(cc.x[n, p]) ? xs[1] - cc.x[n, p] : 0.0
+        for i in 1:k
+            xi = xs[1] + (i == p ? 0.0 : S[1, i])
+            X[n, i] = isfinite(cc.x[n, i]) && isfinite(cc.x[n, p]) ? cc.x[n, i] + u : xi
+            Y[n, i] = xs[2] + (i == p ? 0.0 : S[2, i])
+        end
+        n > 1 && (E[n, use] = X[n, use] .- pred[use])
+    end
+    return TimescaleResult(:stein, cc, collect((0:N-1) .* τ), X, Y, W, E)
 end
