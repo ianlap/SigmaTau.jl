@@ -1,7 +1,8 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
 // Stability plot against the command line's own JSON, then visit Spectrum,
-// Dynamic, Live (simulated source) and Help with no page errors.
+// Dynamic, Live (simulated source) and Help, come back to Stability, and run
+// a record with gaps, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -9,6 +10,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -77,10 +80,48 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /Stopped/.test(document.querySelector("#page .live-state")?.textContent ?? ""), null, SLOW);
   });
 
+  await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "NaN" : String(1e-12 * Math.sin(i / 3))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "y.txt", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
+  });
+
   await t.test("Help opens", async () => {
     await page.click("#help-btn");
     await page.waitForFunction(() => document.querySelector("#page")?.className.includes("page-help"));
     assert.ok((await page.locator("#page").innerText()).length > 200);
+  });
+
+  await t.test("Stability, revisited: one click pins one run and opens the model editor", async () => {
+    await page.click("a[data-page=stability]");
+    await page.click("[data-act=pin]");
+    assert.equal(await page.locator("#page [data-unpin]").count(), 1);
+    await page.click("#page [data-fit=toggle]");
+    assert.equal(await page.locator("#page .model-edit").count(), 1);
+    await page.click("#page [data-fit=toggle]");
+  });
+
+  await t.test("A record with gaps runs without its spectrum", async () => {
+    const gapped = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "gapped.csv");
+    const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
+    writeFileSync(gapped, rows.map((i) => `${i},${(1e-9 * Math.sin(i * 0.7) + 1e-12 * i * i).toExponential(6)}`).join("\n") + "\n");
+    await page.click("a[data-page=data]");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles(gapped);
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.click("a[data-page=stability]");
+    await page.click(".run-btn");
+    await settled();
+    assert.match(await page.locator("#status-text").innerText(), /Up to date/);
+    await page.click("a[data-page=spectrum]");
+    await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
   });
 
   assert.deepEqual(errors, []);

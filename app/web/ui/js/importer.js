@@ -73,8 +73,9 @@ export function openImport(file, prev = null) {
       header: s.header,
       scaling: parseFactor(st.factor) || st.scaling,
       tau0,
-      hasTimeCol: st.time > 0 || !!s.format,  // instrument readers can fill gaps without one
       gaps,
+      // NaN (and SCPI 9.91E+37) readings, which a frequency record must have filled
+      blanks: st.values.reduce((a, c) => a + (s.columns[c - 1] ?? []).filter((x) => !Number.isFinite(x) || x === 9.91e37).length, 0),
       // (the clocks of a RINEX file differ in τ₀: the Data page gives each its own)
       sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind}${s.clocks ? "" : ` · τ₀ ${num(tau0, 4)} s`}` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
@@ -147,7 +148,7 @@ export function openImport(file, prev = null) {
       const spark = lines ? `<svg viewBox="0 0 330 92" preserveAspectRatio="none" width="100%" height="100%">${lines}</svg>` : "";
 
       const gap = gaps
-        ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to interpolate them.</div>`
+        ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to fill them.</div>`
         : "";
       const tauLine = ts && ts.tau0 > 0
         ? `<div class="tau-line"><span class="mono">${taus.join(" and ")} s</span><span class="ok">✓ ${taus.length > 1 ? "each clock from its own epochs" : `from the time column${per.every((p) => p.ts?.even) ? ", evenly spaced" : ", grid step"}`}</span></div>`

@@ -183,5 +183,4 @@ export function refresh() {
   { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis(`${label}, σ<sub>y</sub>(τ)`), showlegend: true, uirevision: "synth" }, CONFIG);
 }
 
-export function plotElement() { return root?.querySelector("[data-ref=plot]") ?? null; }
 export function hint() { return "Type a noise as the model coefficient or as h_α, and the other follows"; }

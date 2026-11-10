@@ -120,12 +120,14 @@ with Stable32's α at all 13 τ.
 
 The Hadamard estimators differ in one more way. By default they identify the
 noise on the record less its least-squares frequency drift
-(`remove_drift=true`), which Stable32 does not do, and on this record that
-leaves white FM at τ = 1024 s and 2048 s, as in Stable32, where the record
-as given reads flicker FM and random-walk FM. HDEV itself is unchanged; its
-default interval at 2048 s is [2.1326e-03, 5.4895e-03]. HTOTDEV follows the
-bias factor of the label, so its default values there are Stable32's,
-2.4120e-03 and 2.9382e-03. The two Hadamard tables below pass
+(`remove_drift=true`), which Stable32 does not do. The B1 ratio is not used
+on that record, so with fewer than 30 averaged points an FM type is the one
+found at the longest τ that has 30: flicker FM, from 273 s, at τ = 1024 s
+and 2048 s, where Stable32 reads white FM and the record as given flicker FM
+and random-walk FM. HDEV itself is unchanged; its default interval at 2048 s
+is [2.0803e-03, 6.6351e-03]. HTOTDEV follows the bias factor of the label,
+so its default values there are 2.6081e-03 and 3.1771e-03 where Stable32,
+on white FM, has 2.4120e-03 and 2.9382e-03. The two Hadamard tables below pass
 `remove_drift=false`, which identifies the noise on the record as given,
 like the other tables.
 

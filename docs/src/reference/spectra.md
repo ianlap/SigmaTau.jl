@@ -1,8 +1,10 @@
 # Spectra
 
-One-sided Welch estimates of the frequency and phase spectra and the
-single-sideband phase noise, returned as a [`SpectralResult`](@ref).
-`S_x(f) = S_y(f) / (2πf)²` and `ℒ(f) = ½ (2π f_carrier)² S_x(f)`.
+The one-sided Welch estimate of the frequency spectrum, and the phase
+spectrum and single-sideband phase noise derived from it, returned as a
+[`SpectralResult`](@ref). `S_x(f) = S_y(f) / (2πf)²`, taken on sampled data
+through the response of the first difference, and
+`ℒ(f) = ½ (2π f_carrier)² S_x(f)`.
 [Plotting](../guide/plotting.md#Spectral-densities) shows them with
 power-law slope guides.
 
@@ -63,7 +65,8 @@ noise_residual
 [`clock_model`](@ref) turns a power-law fit into the state-space
 [`ClockModel`](@ref) the Kalman filters run on: white PM becomes the
 measurement noise, white, random-walk and random-run FM drive the phase,
-frequency and drift states. [The clock model](../explanation/clock_model.md)
+frequency and drift states, and with `flicker = true` flicker FM and
+flicker PM become Markov states. [The clock model](../explanation/clock_model.md)
 derives the mapping and the matrices.
 
 ```julia

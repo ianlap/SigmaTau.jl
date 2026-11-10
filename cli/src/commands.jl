@@ -118,8 +118,13 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     print(io, ']')
     if o.spectrum
         json_key(io, "spectrum")
-        sy, sx = spectra(o, data)
-        json_spectrum(io, sy, sx)
+        if any(isnan, data.x)
+            # The estimators skip gaps; the spectrum cannot, so it is left out.
+            print(io, '{'); json_key(io, "error", true); json_string(io, "the spectrum needs a record without gaps"); print(io, '}')
+        else
+            sy, sx = spectra(o, data)
+            json_spectrum(io, sy, sx)
+        end
     end
     o.fit && (json_key(io, "powerlaw"); json_powerlaw(io, o, data, results))
     isempty(o.mask) || (json_key(io, "masks"); json_masks(io, o.mask, results))
