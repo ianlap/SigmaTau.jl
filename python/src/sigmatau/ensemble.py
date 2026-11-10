@@ -343,7 +343,7 @@ def holdover(
             np_f64(r.mean),
             np.array(r.n, dtype=np.int64),
             float(r.train),
-        int(r.grow),
+            int(r.grow),
             bool(r.drift),
             bool(r.anchor),
             float(r.confidence),
@@ -351,7 +351,7 @@ def holdover(
             float(r.time_to_limit),
         )
     if train is None and grow is None:
-        raise ValueError("holdover: a noise model needs `train`, the training stretch in seconds, or `grow`")
+        raise ValueError("holdover: a noise model needs `train`, the stretch in seconds, or `grow`")
     if tau0 is None:
         tau0 = getattr(data, "tau0", None)
     if tau0 is not None:
