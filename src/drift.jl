@@ -152,8 +152,9 @@ end
 # (JᵀJ)⁻¹ over the measured rows, for the parameter covariance; the fit
 # itself is `_lsq` (src/io/detrend.jl).
 function _inv_normal(J::Matrix{Float64}, ok::BitVector)
-    sc = _col_scale(J, ok)
-    Ainv = _normal_inv(J, ok, sc)
+    G = _gram(J, ok)
+    sc = _col_scale(G)
+    Ainv = _normal_inv(G, sc)
     return [Ainv[j, k] / (sc[j] * sc[k]) for j in axes(Ainv, 1), k in axes(Ainv, 2)]
 end
 
