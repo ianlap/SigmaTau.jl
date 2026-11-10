@@ -1,173 +1,131 @@
 # MHTOTDEV bias and EDF
 
-MHTOTDEV (modified Hadamard total deviation) is original to SigmaTau: no other
-library computes it, and no published reference gives its bias factor or its
-equivalent degrees of freedom (EDF). Every other total-family estimator inherits
-a published coefficient table (TOTVAR from SP1065 Table 7; MTOT and HTOT from
-the FCS 2001 paper). MHTOTDEV has none, so SigmaTau
-**measures** both by Monte Carlo against synthesized known-noise.
+MHTOTDEV (modified Hadamard total deviation) is original to SigmaTau, and no
+published reference gives its bias factor or its equivalent degrees of
+freedom (EDF). Every other total estimator takes a published table: TOTDEV
+from SP1065 [riley-2008-sp1065](@cite), MTOTDEV and HTOTDEV from Howe and
+Peppler [howe-2001-total-estimators](@cite). For MHTOTDEV both are computed
+here, exactly, from the definition of the statistic. The computation is
+[`tools/mhtot_models.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/mhtot_models.jl);
+it uses no random numbers and runs in about five minutes.
 
-This page documents the methodology; it is the reproducible basis for the
-shipped `_coeff_mhtot` EDF coefficients and the `bias_correction(:mhtot, …)`
-table. The harness is [`tools/mc_mhtotdev.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/mc_mhtotdev.jl).
-The estimator under test is the shipped `mhtotdev` kernel, which removes each
-window's least-squares quadratic before the reflection, so the coefficients
-calibrate exactly the statistic users compute. That per-window detrend makes
-MHTOTDEV immune to linear frequency drift on its own and lets it converge for
-power laws down to α = −4, like HDEV and MHDEV.
+## The statistic
 
-The procedure follows the NIST total-variance literature: Howe, Beard,
-Greenhall, Vernotte & Riley, *A Total Estimator of the Hadamard Function Used
-for GPS Operations* (32nd PTTI, 2000), for the bias and EDF definitions and the
-`τ/τ0 ≥ 16` validity window, and Vernotte & Howe, *Generalization of the Total
-Variance Approach to the Different Classes of Structure Functions*, for the
-Monte Carlo EDF estimator and the extension methodology.
+For each window of 4m phase samples, MHTOTVAR removes the window's
+least-squares quadratic, extends it by mirror reflection at both ends to 12m
+samples, and averages the squared m-averaged third difference over the
+8m + 1 positions of the extension. The record's value is the mean over all
+N − 4m + 1 windows.
 
-## The reference: MHDEV
+The quadratic removal matches the third difference, which annihilates phase
+polynomials up to degree 2. It makes the statistic immune to a linear
+frequency drift on its own and lets it converge down to random-run FM
+(α = −4), like HDEV and MHDEV. The reference it is compared with is MHVAR,
+the square of [`mhdev`](@ref), at the same averaging factor.
 
-MHTOTDEV is the *total* (boundary-extended) form of the modified-Hadamard
-variance MHVAR. The natural unbiased reference is therefore MHDEV (= `mhdev`),
-whose EDF SigmaTau already computes from first principles via the
-Greenhall–Riley spectral sum (`_calc_edf_core` with difference order `d = 3`,
-inner-average `F = 1`). Writing the per-τ variance estimates as
+## Method
+
+Every step above is linear in the phase, so a window's statistic is a
+quadratic form w′Qw, and the record's is x′Q̄x with Q̄ the mean of the
+window forms. For Gaussian noise with phase covariance Σ,
 
 ```math
-\hat V = \mathrm{MHTOTVAR}(\tau) = \mathtt{mhtotdev}^2, \qquad
-\hat W = \mathrm{MHVAR}(\tau)    = \mathtt{mhdev}^2 ,
+E[\mathrm{MHTOTVAR}] = \operatorname{tr}(\bar Q\,\Sigma), \qquad
+\mathrm{edf} = \frac{2\,E^2}{\mathrm{Var}}
+             = \frac{\operatorname{tr}(\bar Q\,\Sigma)^2}{\operatorname{tr}\big((\bar Q\,\Sigma)^2\big)} ,
 ```
 
-both are computed on the *same* realization at matched averaging factor `m`, so
-finite-sample fluctuations are correlated and partly cancel in their ratio.
+the same definition of the EDF as Greenhall and Riley use for the unextended
+estimators [greenhall-2003-edf-stability](@cite). Q annihilates quadratics,
+so any valid covariance of the samples gives the same value for every noise
+down to α = −4. The tool builds Σ = FF′ with F the response to white noise:
+the identity for white PM, Kasdin's half-order filter for flicker PM, and
+one cumulative sum for each step of 2 down in α.
 
-## Estimators
+The tool builds its matrices from the definition and never calls the package
+kernel. The test suite closes the loop the other way: it extracts F′Q̄F from
+the kernel itself and holds the shipped models to its exact moments.
 
-**EDF.** A variance estimator that is χ²-distributed with `ν` degrees of freedom
-satisfies `Var[\hat V] = 2\,E[\hat V]^2/ν`, so from `R` realizations
+## Bias
+
+B = E[MHTOTVAR] / E[MHVAR] depends on the averaging factor m and the noise
+type only, not on the record length or on τ/T.
+
+| Noise | m = 2 | 4 | 8 | 16 | 64 | 256 | shipped |
+|:---|---:|---:|---:|---:|---:|---:|---:|
+| white PM | 0.9000 | 0.9013 | 0.9011 | 0.9007 | 0.9002 | 0.9000 | 0.9000 |
+| flicker PM | 0.8582 | 0.8396 | 0.8291 | 0.8246 | 0.8222 | 0.8218 | 0.8218 |
+| white FM | 0.8281 | 0.8064 | 0.7972 | 0.7938 | 0.7921 | 0.7917 | 0.7917 |
+| flicker FM | 0.8092 | 0.7936 | 0.7871 | 0.7846 | 0.7831 | 0.7828 | 0.7828 |
+| random-walk FM | 0.8009 | 0.7946 | 0.7903 | 0.7883 | 0.7870 | 0.7867 | 0.7867 |
+| flicker-walk FM | 0.8028 | 0.8055 | 0.8027 | 0.8011 | 0.7999 | 0.7996 | 0.7996 |
+| random-run FM | 0.8145 | 0.8243 | 0.8223 | 0.8209 | 0.8199 | 0.8196 | 0.8196 |
+
+MHTOTDEV reads low on every noise: removing a quadratic from each window
+absorbs part of that window's variance before the reflection.
+[`bias_correction`](@ref) divides by the large-m constant in the last
+column, which is within 0.4 % of the exact value from m = 16. Below that the
+constant is off, in variance, by up to 0.9 % from m = 8, 2.2 % from m = 4,
+and 4.6 % at m = 2 and 3 (white PM dips to 0.858 at m = 3). The flicker rows
+depend on the flicker model below m = 16, by 2.6 % at m = 2. At m = 1 the detrended four-point window leaves a single degree of
+freedom and B = 124/225 on every noise, which [`mhtotdev`](@ref) applies.
+
+## EDF
+
+The exact EDF, computed for records of 512, 1024 and 2048 points, is a
+function of s = τ/T to two digits. The model is
 
 ```math
-\widehat{\mathrm{edf}} \;=\; \frac{2\,\bar V^2}{s_V^2},
+\mathrm{edf} = \frac{b}{s} - c + d\,s + e\,s^3, \qquad s = \tau/T,\quad T = (N-1)\,\tau_0 ,
 ```
 
-with `\bar V` the sample mean and `s_V^2` the Bessel-corrected sample variance.
-A nonparametric bootstrap over the `R` realizations gives the standard error.
-The relative precision scales as `SE/edf ≈ √(2/R)`; the full sweep uses
-`R = 3000` per cell, giving ≈2.6 %.
+fitted by least squares on the relative residual over 16 ≤ m ≤ N/4, the
+three record lengths together:
 
-**Bias.** Following the normalized-bias definition of Howe et al. 2000 (eqn 6),
-`nbias = E[\hat V]/E[\hat W] - 1`, the variance-scale bias factor is the ratio
-of means
+| Noise | b | c | d | e | largest residual |
+|:---|---:|---:|---:|---:|---:|
+| white PM | 1.5949 | 6.535 | 20.18 | −52.1 | 4.5 % |
+| flicker PM | 1.0656 | 4.223 | 10.19 | 7.8 | 2.6 % |
+| white FM | 0.9420 | 3.506 | 6.50 | 23.3 | 2.0 % |
+| flicker FM | 0.8938 | 3.124 | 3.94 | 31.2 | 2.5 % |
+| random-walk FM | 0.8596 | 2.676 | 0.43 | 48.8 | 2.8 % |
+| flicker-walk FM | 0.8129 | 2.115 | −4.27 | 83.8 | 2.9 % |
+| random-run FM | 0.6508 | 1.991 | −2.63 | 78.3 | 1.0 % |
 
-```math
-B(\alpha) \;=\; \frac{E[\hat V]}{E[\hat W]} \;=\; 1 + \mathrm{nbias} \;\approx\; \frac{\bar V}{\bar W},
-```
+The first two terms are the form Howe and Peppler use for the modified total
+variance [howe-2001-total-estimators](@cite). They are not enough here: the
+exact EDF turns upward in the last octave, where the reflection of the few
+remaining windows does the most work, and two terms that fit the range below
+T/16 give about half the exact EDF at τ = T/4. The terms in s and s³ carry
+that rise.
 
-matching the `bias_correction` convention `σ_unbiased = σ_raw / √B` used across
-the total family. `B > 1` means MHTOTDEV reads high (correction lowers σ),
-`B < 1` means it reads low.
+At the reach limit τ = T/4 a single window is left. MHVAR has one degree of
+freedom there; MHTOTVAR has 4.0 on white PM, 2.7 on flicker PM, 2.2 on white
+FM, 1.9 on flicker FM, 1.6 on random-walk FM, 1.4 on flicker-walk FM and 1.2
+on random-run FM.
 
-**EDF model.** The total-variance literature offers two empirical EDF forms:
-the Mod-Totvar form (Vernotte & Howe, eqn 2) and the TotHvar form
-(Howe et al. 2000, eqn 7),
+!!! warning "Below m = 16"
+    The model is fitted from m = 16 and is used down to m = 2. On flicker PM
+    and the FM noises it is within 6 % of the exact EDF from m = 3; at m = 2
+    it reads 5 % high on flicker PM and 5 to 13 % low, the safe side, on the
+    FM noises. On white PM it reads high: by 5 % at m = 8, 15 % at m = 4,
+    35 % at m = 3 and 54 % at m = 2, where the interval is a fifth too
+    narrow.
 
-```math
-\mathrm{edf}(\tau) = b\,\frac{T}{\tau} - c
-\qquad\text{vs.}\qquad
-\mathrm{edf}(\tau) = \frac{T/\tau}{b_0 + b_1\,\tau/T},
-```
+## Degrees of freedom gained over MHDEV
 
-with `T = (N-1)\,τ_0`. MHTOTDEV is the modified-*Hadamard* total, a hybrid of
-the two, so the harness fits **both** by weighted least squares
-(weights `1/\mathrm{SE}^2`) and selects the higher-R² form per α. Critically,
-the fit is restricted to the validity window `τ/τ_0 ≥ 16`: Howe et al. 2000
-note their EDF model "should be used only if … `τ/τ_0 ≥ 16`," below which the
-data-extension confers no advantage over the plain estimator and the fit
-degrades. Coefficients, standard errors, and `R²` are reported per α for both
-forms.
+The exact EDF of MHTOTVAR over that of MHVAR at the same τ:
 
-## Analytic cross-check
+| Noise | m = 16 | T/16 | T/8 | T/4 |
+|:---|---:|---:|---:|---:|
+| white PM | 1.38 | 1.41 | 1.50 | 4.0 |
+| flicker PM | 1.19 | 1.21 | 1.27 | 2.7 |
+| white FM | 1.10 | 1.12 | 1.17 | 2.2 |
+| flicker FM | 1.05 | 1.06 | 1.10 | 1.9 |
+| random-walk FM | 1.01 | 1.02 | 1.06 | 1.6 |
+| flicker-walk FM | 0.99 | 1.00 | 1.03 | 1.4 |
+| random-run FM | 0.98 | 0.98 | 1.00 | 1.2 |
 
-Before any ratio is trusted, the harness verifies that the synthesized noise
-reproduces the analytic MHVAR power law `σ²_MH(τ) ∝ τ^{μ(α)}`:
-
-| α  | Noise | μ(α) (variance slope) |
-|---:|:------|:----------------------|
-|  2 | WHPM  | −3 |
-|  1 | FLPM  | −2 |
-|  0 | WHFM  | −1 |
-| −1 | FLFM  |  0 |
-| −2 | RWFM  | +1 |
-
-(`μ(α) = −α − 1` for α ≤ 0; the *modified* estimator rolls WHPM/FLPM off as
-`τ^{−3}`/`τ^{−2}` in variance, which is what lets it disambiguate the two PM
-noises.) The measured `log MHVAR` vs `log τ` slope must match μ(α) to within a
-small tolerance, validating both the `noise_gen` calibration and the MHDEV
-reference.
-
-## Monte Carlo design
-
-- **α** ∈ {2, 1, 0, −1, −2}, using the *known* injected α (never `identify_noise`,
-  to avoid noise-ID misclassification contaminating the per-α bins).
-- **N** (record length, frequency samples) ∈ {1024, 2048, 4096, 8192, 16384,
-  32768}; octave `m`-grid `1 … N÷4`, dropping cells with `nsubs = N − 4m + 1 < 16`.
-  Pooling across N gives ≥30 `(T/τ, edf)` points per α for the fit.
-- **Both the bias and the EDF use the `τ/τ_0 ≥ 16` window.** The small-`m` cells
-  (especially `m = 1`, which is near-degenerate yet carries the tightest standard
-  error, hence the largest weight) otherwise skew the bias ratio away from its
-  physical value.
-- **Reproducibility.** Each realization draws from an independent stream
-  `Xoshiro(hash((seed, α, N, r)))`, so results are identical regardless of
-  thread count. Synthesis takes an `rng` keyword for exactly this purpose.
-- **Scale invariance.** `B` and EDF are ratios of like-dimensioned quantities,
-  so the arbitrary amplitude of the uncalibrated `_gen_powerlaw_y` draw cancels.
-
-The harness emits a per-cell CSV and a JSON summary of metadata plus fitted
-coefficients (git SHA, seed, thread count, N grid, R, and the μ(α) check
-result). The authoritative full-sweep JSON is tracked at
-`tools/artifacts/mhtotdev_mc_full.json`; ad-hoc quick-run outputs stay local.
-
-## Result
-
-Full sweep (N = 1024 … 32768, R = 3000, both bias and EDF over `τ/τ_0 ≥ 16`,
-per-window quadratic detrend, Kasdin–Walter synthesis, git `9d7a408`). All
-EDF fits have R² ≥ 0.9988:
-
-| α  | Noise | EDF `b`, `c` | bias `b0` | `b1` |
-|---:|:------|:-------------|:----------|:-----|
-|  2 | WHPM  | 1.5429, 3.8504 | 0.9005 | −0.0083 |
-|  1 | FLPM  | 1.0409, 2.9661 | 0.8238 | −0.0541 |
-|  0 | WHFM  | 0.9355, 2.8108 | 0.7933 | −0.0422 |
-| −1 | FLFM  | 0.8780, 2.5258 | 0.7841 | −0.0357 |
-| −2 | RWFM  | 0.8580, 2.5361 | 0.7879 | −0.0325 |
-
-MHTOTDEV **reads low** for every noise type: `B ≈ 0.90` for white PM and
-`B ≈ 0.79` for the FM noises. Removing a quadratic from each `4m`-sample
-window absorbs part of that window's variance before the reflection, and the
-loss is nearly the same for every FM noise, so the correction is close to a
-constant factor. The bias is modeled τ/T-linearly, `B = b0 + b1·(τ/T)`; the
-`b1` term is small and cuts the bias-fit residual by 4 % (WHPM) to 17 %
-(FLPM).
-
-Two methodology points matter for reproducing the table: (1) restricting the
-bias to the same
-`τ/τ_0 ≥ 16` window as the EDF, since the near-degenerate `m = 1` cell otherwise
-dominates the weighted ratio and pulls the apparent bias spuriously low; and
-(2) the `τ/τ_0 ≥ 16` floor on the EDF fit itself, which holds R² ≥ 0.9988 across
-all noise types. The tracked full-sweep artifact records the git SHA, seed,
-grid, and per-α fits.
-
-!!! warning "Edge zone at the reach limit"
-    The kernel needs `N − 4m + 1 ≥ 1`, so MHTOTDEV's reach limit is `τ = T/4`
-    (`T/τ ≥ 4`). The fitted linear form crosses `ν = 1` near
-    `T/τ ≈ 3.1–4.1` depending on α (lowest at α = +2, highest at α = −2).
-    The χ² interval is still defined below `ν = 1` and is very wide there
-    (0.71 σ to 5.9 σ at ν = 0.9 and 68.3 %), as one effective average
-    warrants. Treat confidence intervals as valid for `T/τ ≳ 5–6` and
-    indicative only in the final octave before the reach limit; the σ values
-    themselves are valid all the way to `τ = T/4`.
-
-!!! note "Degrees-of-freedom gain over MHDEV"
-    The extension buys the most degrees of freedom for the phase noises. At
-    the same τ (N ≥ 4096, 16 ≤ m ≤ N/32) the measured MHTOTDEV EDF is about
-    1.36× the Greenhall–Riley MHDEV EDF for WHPM, 1.18× for FLPM, 1.11× for
-    WHFM, 1.04× for FLFM and 1.0× for RWFM. For the red FM noises MHTOTDEV's
-    advantage is reach (`τ = T/4`) and drift immunity, not precision.
+The extension buys the most on the phase noises and in the last octave. On
+the red FM noises below T/8, MHTOTDEV's advantage over MHDEV is drift
+immunity inside each window and reach, not precision.

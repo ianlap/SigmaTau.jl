@@ -427,12 +427,12 @@ frequency drift before the analysis, so the per-τ noise identification runs
 on the drift-removed record; the deviation itself does not change. Pass
 `remove_drift=false` to identify noise on the record as given.
 
-`correct_bias=true` (default) applies the Monte-Carlo-measured unbias
-correction `σ_unbiased = σ_raw / √B`, where `B = b0 + b1·(τ/T)` is the
-τ/T-linear bias from [`bias_correction`](@ref)`(…, :mhtot, …)` (B ≈ 0.79–0.90:
-the per-window detrend absorbs part of the variance). Pass
-`correct_bias=false` for the raw kernel value. The EDF uses the same Monte
-Carlo fit; see the "MHTOTDEV bias and EDF" page for the method.
+`correct_bias=true` (default) divides out the statistic's exact bias,
+`σ_unbiased = σ_raw / √B` with `B` from
+[`bias_correction`](@ref)`(…, :mhtot, …)` (B = 0.78 to 0.90: the per-window
+detrend absorbs part of the variance). Pass `correct_bias=false` for the raw
+kernel value. The EDF model is fitted to the exact EDF of the statistic; see
+the "MHTOTDEV bias and EDF" page for both.
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:mhtotdev, data, m_values)
