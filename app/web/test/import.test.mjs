@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.window = {};
-const { sniff, guessRoles } = await import("../ui/js/import.js");
+const { sniff, guessRoles, parseFactor } = await import("../ui/js/import.js");
 
 const seq = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 const read = (name, lines) => { const s = sniff(name, lines.join("\n") + "\n"); return { s, g: guessRoles(s) }; };
@@ -37,4 +37,10 @@ test("readings far below a nanosecond are frequency, and a comment line can name
   assert.deepEqual(s.names, ["t", "ratio", "flag"]);
   assert.equal(s.kindHint, "frequency");
   assert.deepEqual([g.time, g.value], [1, 2]);
+});
+
+test("a typed scale is a number or a short expression, nothing else", () => {
+  assert.equal(parseFactor("1e-9"), 1e-9);
+  assert.ok(Math.abs(parseFactor("1/(2*pi*518.295836590863e12)") / 3.0709e-16 - 1) < 1e-4);
+  for (const bad of ["", "-1", "0", "abc", "process.exit()", "1/0", "2**"]) assert.ok(Number.isNaN(parseFactor(bad)), bad);
 });

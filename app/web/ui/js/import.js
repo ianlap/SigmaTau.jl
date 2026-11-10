@@ -225,6 +225,14 @@ export function thin(col, n = 400) {
   return out;
 }
 
+// A typed scale: a number, or a short expression such as 1/(2*pi*518.295836590863e12)
+// (a phase in radians of a carrier). NaN when it is empty or not a positive number.
+export function parseFactor(text) {
+  const t = text.trim().replace(/\bpi\b/gi, "(" + Math.PI + ")");
+  if (!t || !/^[0-9eE+\-*/().\s]+$/.test(t)) return NaN;
+  try { const v = Function(`"use strict"; return (${t});`)(); return Number.isFinite(v) && v > 0 ? v : NaN; } catch { return NaN; }
+}
+
 export const PHASE_UNITS = [[1, "seconds"], [1e-3, "milliseconds"], [1e-6, "microseconds"], [1e-9, "nanoseconds"], [1e-12, "picoseconds"]];
 export const FREQ_UNITS = [[1, "fractional (Δf/f)"], [1e-6, "parts per million"], [1e-9, "parts per billion"], [1e-12, "parts per trillion"]];
 export const TIME_UNITS = [[1, "Time (s)"], [86400, "Time (days, MJD)"], [3600, "Time (h)"], [60, "Time (min)"]];
