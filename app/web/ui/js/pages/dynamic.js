@@ -217,7 +217,7 @@ export function refresh() {
     area.querySelectorAll(".dyn-card .plot").forEach(bindSliceClick);
     // Plotly only follows window resizes; follow the row too.
     const row = area.querySelector(".dyn-row");
-    new ResizeObserver(() => row.querySelectorAll(".plot").forEach((p) => { if (p.layout) Plotly.Plots.resize(p); })).observe(row);
+    new ResizeObserver(() => row.querySelectorAll(".plot").forEach((p) => { if (p.layout && p.offsetParent) Plotly.Plots.resize(p); })).observe(row);
   }
   for (const c of clocks) {
     const box = area.querySelector(`.dyn-card[data-clock="${c.id}"]`);
