@@ -93,7 +93,7 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
-| Flicker FM and random-walk FM, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
+| Limits between the FM noises, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
 | TOTDEV, HTOTDEV | bias-corrected | bias-corrected | the same |
 
 The detrending choices change the identified noise type only at long τ, where
@@ -110,7 +110,7 @@ to 2e-5 at every τ and the intervals to 3e-4 wherever the labels do. Where
 they do not, Stable32's interval is ±0.34 % against a simulated scatter of
 ±0.5 % (m = 16) to ±1.8 % (m = 512), and SigmaTau's is ±0.55 % to ±1.7 %.
 
-The flicker-FM row shows from medium τ. On decimated phase the lag-1 estimate
+The FM-limits row shows from medium τ. On decimated phase the lag-1 estimate
 of flicker FM settles at α = −1.45, next to the −1.5 at which rounding turns it
 into random-walk FM: in simulation (N = 4096) pure flicker FM keeps its label in
 72 % of records at m = 8 and 48 % at m = 64 with rounding, and in 100 % and

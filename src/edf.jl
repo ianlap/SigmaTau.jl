@@ -81,7 +81,9 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             if m == 1
                 edfs[k] = _calc_edf_core(alpha, 3, 1, 1, 1, N)
             else
-                b, c = _coeff_mhtot(alpha)
+                # No model below α = −2 yet: flicker-walk and random-run FM
+                # take random-walk FM's, here and in `bias_correction`.
+                b, c = _coeff_mhtot(max(alpha, -2))
                 edfs[k] = b * (T / tau) - c
             end
         elseif method == :theo1
@@ -102,6 +104,8 @@ function _alpha_from_noise(noise::Symbol)
     if noise == :WHFM return 0 end
     if noise == :FLFM return -1 end
     if noise == :RWFM return -2 end
+    if noise == :FWFM return -3 end
+    if noise == :RRFM return -4 end
     return 0
 end
 
@@ -463,12 +467,13 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
             B[k] = 1 - a * (tau / T)
         elseif var_type == :mtot
-            B[k] = 1 + _MTOT_NBIAS[3 - alpha]
+            alpha >= -2 && (B[k] = 1 + _MTOT_NBIAS[3 - alpha])
         elseif var_type == :htot
             # Defined for α ∈ {0, …, −4}; for the PM noises Stable32 leaves B = 1.
             B[k] = -4 <= alpha <= 0 ? 1 + _MTOT_NBIAS[1 - alpha] : 1.0
         elseif var_type == :mhtot
-            B[k] = _MHTOT_B0[3 - alpha] + _MHTOT_B1[3 - alpha] * (tau / T)
+            i = 3 - max(alpha, -2)
+            B[k] = _MHTOT_B0[i] + _MHTOT_B1[i] * (tau / T)
         end
     end
 

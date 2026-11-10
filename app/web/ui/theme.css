@@ -48,12 +48,14 @@
   --on-series: #fff;         /* text on a series-coloured fill */
   --ci-alpha: 0.14;          /* CI band = series colour at this opacity */
 
-  /* Noise-type strip on the Stability plot, ordered by α (white PM … RW FM) */
+  /* Noise-type strip on the Stability plot, ordered by α (white PM … random-run FM) */
   --noise-wpm:  #dde4ee;
   --noise-fpm:  #dfe8dc;
   --noise-wfm:  #ece3c9;
   --noise-ffm:  #efd9c5;
   --noise-rwfm: #ead0cf;
+  --noise-fwfm: #e6cfe0;
+  --noise-rrfm: #d9d1e8;
 
   /* Heatmap ramp, one scale shared across clocks */
   --heat-lo:  #eef1f8;
@@ -129,6 +131,8 @@
   --noise-wfm:  #433c27;
   --noise-ffm:  #473323;
   --noise-rwfm: #472a2d;
+  --noise-fwfm: #442a41;
+  --noise-rrfm: #362d4b;
 
   /* Low values recede into the card, high values glow. */
   --heat-lo:  #1f2638;
