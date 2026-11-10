@@ -8,8 +8,8 @@
 Allan deviation at each averaging factor `m`: overlapping (SP1065 §5.2.4,
 Eq. (11)) or, with `overlapping=false`, the non-overlapped estimator, whose
 second differences start every `m` samples (SP1065 §5.2.2, Eq. (7)). `NaN`
-where fewer than two terms fit. The inner loop is SIMD and does not
-allocate.
+where fewer than two terms fit. The inner loop does not allocate, and at a
+stride of one sample it runs over a unit range, which `@simd` vectorizes.
 """
 function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
@@ -24,9 +24,18 @@ function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; ov
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in idx
-            d2 = x[i+2m] - 2x[i+m] + x[i]
-            sum_sq += d2^2
+        # Stride 1 keeps a unit range: Julia ≥ 1.12 does not vectorize @simd
+        # over a StepRange.
+        if overlapping || m == 1
+            @inbounds @simd for i in 1:(N - 2m)
+                d2 = x[i+2m] - 2x[i+m] + x[i]
+                sum_sq += d2^2
+            end
+        else
+            @inbounds @simd for i in idx
+                d2 = x[i+2m] - 2x[i+m] + x[i]
+                sum_sq += d2^2
+            end
         end
 
         devs[k] = sqrt(sum_sq / (2.0 * n * Float64(m)^2 * tau0^2))
@@ -115,7 +124,7 @@ end
 Hadamard deviation at each averaging factor `m`: overlapping (SP1065 §5.2.9,
 Eq. (20)) or, with `overlapping=false`, non-overlapped, with third
 differences every `m` samples (SP1065 §5.2.8, Eq. (18)). `NaN` where fewer
-than two terms fit. The inner loop is SIMD and does not allocate.
+than two terms fit. The inner loop is arranged as in `_adev_core`.
 """
 function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
@@ -130,9 +139,18 @@ function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; ov
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in idx
-            d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
-            sum_sq += d3^2
+        # Stride 1 keeps a unit range: Julia ≥ 1.12 does not vectorize @simd
+        # over a StepRange.
+        if overlapping || m == 1
+            @inbounds @simd for i in 1:(N - 3m)
+                d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
+                sum_sq += d3^2
+            end
+        else
+            @inbounds @simd for i in idx
+                d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
+                sum_sq += d3^2
+            end
         end
 
         devs[k] = sqrt(sum_sq / (6.0 * n * Float64(m)^2 * tau0^2))

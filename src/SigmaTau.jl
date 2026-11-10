@@ -4,7 +4,7 @@ using DocStringExtensions
 using Statistics
 using Distributions
 using FFTW
-using LinearAlgebra: I, Diagonal, Symmetric, cholesky, diag, eigen, issuccess
+using LinearAlgebra: I, Diagonal, Symmetric, cholesky, diag, dot, eigen, issuccess
 using Dates
 using Printf
 
