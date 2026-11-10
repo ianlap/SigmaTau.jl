@@ -80,18 +80,6 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /Stopped/.test(document.querySelector("#page .live-state")?.textContent ?? ""), null, SLOW);
   });
 
-  await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
-    await page.goto(base + "#data");
-    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "NaN" : String(1e-12 * Math.sin(i / 3))));
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
-    await chooser.setFiles({ name: "y.txt", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
-    await page.fill("#imp-tau0", "1");
-    await page.getByRole("button", { name: "Load record" }).click();
-    await settled();
-    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
-    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
-  });
-
   await t.test("Help opens", async () => {
     await page.click("#help-btn");
     await page.waitForFunction(() => document.querySelector("#page")?.className.includes("page-help"));
@@ -122,6 +110,18 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator("#status-text").innerText(), /Up to date/);
     await page.click("a[data-page=spectrum]");
     await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
+  });
+
+  await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "NaN" : String(1e-12 * Math.sin(i / 3))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "y.txt", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
   });
 
   assert.deepEqual(errors, []);
