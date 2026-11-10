@@ -21,6 +21,35 @@ const _ESTIMATORS = (
     (name=:tierms,   label="TIE rms",  family=:time,  axis=:sigma_x, correct_bias=false, description="RMS time interval error"),
 )
 
+# ── Call forms every estimator shares ────────────────────────────────────
+# deviations.jl defines each estimator on phase data and a `Vector{Int}` of
+# averaging factors.
+const _ESTIMATOR_NAMES = map(e -> e.name, _ESTIMATORS)
+
+for f in (_ESTIMATOR_NAMES..., :dadev, :dhdev)
+    # Frequency data is integrated to phase. The estimators that skip gaps
+    # take a gapped frequency record as it is, because a missing frequency
+    # sample loses the phase step across it (gaps.jl).
+    if f in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev, :mtie, :tierms)
+        @eval $f(data::FrequencyData, m_values::Vector{Int}; kwargs...) = _has_gaps(data) ?
+            _gap_result($(QuoteNode(f)), _gap_record(data), m_values; kwargs...) :
+            $f(_freq_to_phase(data), m_values; kwargs...)
+    else
+        @eval $f(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
+            $f(_freq_to_phase(data), m_values; kwargs...)
+    end
+    # Any integer vector (`adev(pd, 1:10)`), forwarded as a `Vector{Int}` copy.
+    @eval $f(data::AbstractTimingData, m_values::AbstractVector{<:Integer}; kwargs...) =
+        $f(data, collect(Int, m_values); kwargs...)
+end
+
+# A `TauMode` grid, or none for octaves up to the estimator's largest m (the
+# :theo1 grid is rounded to even averaging factors in `tau_values`).
+for f in _ESTIMATOR_NAMES
+    @eval $f(data::AbstractTimingData, taus::TauMode=Octave; kwargs...) =
+        $f(data, tau_values(taus, _nphase(data), $(QuoteNode(f))); kwargs...)
+end
+
 """
     estimators() → Vector{NamedTuple}
 
@@ -90,7 +119,7 @@ deviation(name::Symbol, data::AbstractTimingData, m::AbstractVector{<:Integer}; 
 
 function _resolve_m(name::Symbol, m::TauMode, N::Int)
     name in (:dadev, :dhdev) && throw(_dynamic_error(name))
-    any(e -> e.name === name, _ESTIMATORS) || throw(_unknown_error(name))
+    name in _ESTIMATOR_NAMES || throw(_unknown_error(name))
     return tau_values(m, N, name)
 end
 
