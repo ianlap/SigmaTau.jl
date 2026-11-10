@@ -43,9 +43,9 @@ cannot follow.
 
 With `anchor = false` the fit's own end value replaces the last reading,
 which is the extrapolated fit Delporte et al. analyze; their closed-form
-variances for white, flicker and random-walk FM (eqs 11 to 13 for a
-parabola, 17 to 19 for a line) are what the tests check the function
-against. [`holdover_error`](@ref) gives the error a
+variances (eqs 11 and 13 for a parabola on white and random-walk FM, 17
+to 19 for a line on white, flicker and random-walk FM) are what the tests
+check the function against. [`holdover_error`](@ref) gives the error a
 [`ClockModel`](@ref) predicts from a Kalman filter's last estimate.
 
 ```@docs
