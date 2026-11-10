@@ -138,6 +138,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   is now that word instead of `true`/`false`. The explorer's bias checkbox
   is a menu of the same four; saved sessions still open, as Exact (was on)
   or None (was off).
+- The test suite runs the Aqua.jl package checks.
 
 ### Removed
 
