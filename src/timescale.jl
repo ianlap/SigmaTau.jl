@@ -635,7 +635,10 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     all(m -> m.tau0 ≈ τ, models) || throw(ArgumentError("timescale: the models' tau0 must be the comparisons' τ₀"))
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
     ns = any(m -> m.q3 > 0, models) ? 3 : 2
-    Φ = ns == 3 ? [1.0 τ τ^2/2; 0.0 1.0 τ; 0.0 0.0 1.0] : [1.0 τ; 0.0 1.0]
+    Φ = zeros(ns, ns)                                 # element-wise: matrix literals are not trim-safe
+    for d in 1:ns; Φ[d, d] = 1.0; end
+    Φ[1, 2] = τ
+    ns == 3 && (Φ[2, 3] = τ; Φ[1, 3] = τ^2 / 2)
     V = zeros(ns, k)                                  # shock variances per state and clock
     for (i, m) in enumerate(models)
         V[1, i], V[2, i] = m.q1 * τ, m.q2 * τ
