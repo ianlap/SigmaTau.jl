@@ -253,7 +253,9 @@ class HoldoverResult:
     """Return type of ``holdover``: the statistics of the time error at each
     holdover time ``tau`` (s), over every start the record allows. ``quantile``
     is the |error| that ``confidence`` of the trials stay within; ``limit`` and
-    ``time_to_limit`` are ``nan`` when no limit was asked for."""
+    ``time_to_limit`` are ``nan`` when no limit was asked for. With a stretch
+    that grows with ``tau``, ``grow`` is its multiple and ``train`` is ``nan``;
+    otherwise ``grow`` is 0."""
 
     tau: np.ndarray
     rms: np.ndarray
@@ -262,6 +264,7 @@ class HoldoverResult:
     mean: np.ndarray
     n: np.ndarray
     train: float
+    grow: int
     drift: bool
     anchor: bool
     confidence: float
@@ -282,6 +285,7 @@ class HoldoverPrediction:
     alphas: np.ndarray
     budget: np.ndarray
     train: float
+    grow: int
     drift: bool
     anchor: bool
     confidence: float
@@ -294,6 +298,7 @@ def holdover(
     data: PhaseData | PowerLawFit | ClockModel | Mapping[int | str, float],
     *,
     train: float | None = None,
+    grow: int | None = None,
     tau: Sequence[float] | None = None,
     tau0: float | None = None,
     drift: bool = False,
@@ -308,7 +313,13 @@ def holdover(
     On a ``PhaseData`` record the error is measured from every start the record
     allows. On a noise model (a ``PowerLawFit``, a ``ClockModel`` or an
     ``{α: h_α}`` mapping, which needs ``tau0``) it is predicted, with each noise
-    type's share in ``budget``; ``train`` is then required."""
+    type's share in ``budget``; ``train`` is then required.
+
+    ``grow=k`` in place of ``train`` makes the stretch k times each holdover
+    time. At 2 (3 with ``drift``) the test is the sibling of ``tdev``
+    (``htdev``): √6 TDEV (√20 HTDEV) is the error of the same extrapolation
+    made from τ-averages of the phase, which this test equals at τ₀ and
+    exceeds by a constant 1.26 to 1.42 on FM noise."""
     kw: dict[str, Any] = {
         "drift": bool(drift),
         "anchor": bool(anchor),
@@ -316,6 +327,8 @@ def holdover(
     }
     if train is not None:
         kw["train"] = float(train)
+    if grow is not None:
+        kw["grow"] = int(grow)
     if tau is not None:
         kw["tau"] = to_jl_f64(tau)
     if limit is not None:
@@ -330,14 +343,15 @@ def holdover(
             np_f64(r.mean),
             np.array(r.n, dtype=np.int64),
             float(r.train),
+            int(r.grow),
             bool(r.drift),
             bool(r.anchor),
             float(r.confidence),
             float(r.limit),
             float(r.time_to_limit),
         )
-    if train is None:
-        raise ValueError("holdover: a noise model needs `train`, the training stretch in seconds")
+    if train is None and grow is None:
+        raise ValueError("holdover: a noise model needs `train`, the stretch in seconds, or `grow`")
     if tau0 is None:
         tau0 = getattr(data, "tau0", None)
     if tau0 is not None:
@@ -350,6 +364,7 @@ def holdover(
         np.array(r.alphas, dtype=np.int64),
         _mat(r.budget),
         float(r.train),
+        int(r.grow),
         bool(r.drift),
         bool(r.anchor),
         float(r.confidence),

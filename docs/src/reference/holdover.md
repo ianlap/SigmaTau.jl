@@ -82,6 +82,54 @@ adds the mean ½ D τ (τ + T). [`holdover_error`](@ref) gives the error a
 [`ClockModel`](@ref) predicts from a Kalman filter's last estimate
 instead of a fitted line.
 
+## Holdover and the time deviation
+
+The time variance is the mean square of an error of the same kind. With x̄
+the phase averaged over τ, the definitions of Mod σ_y(τ) and σ_x(τ)
+[ieee1139-1999-definitions](@cite) (eqs A.22 and A.23) give
+
+```math
+\sigma_x^2(\tau) = \tfrac16 \left\langle \left( \bar x(t+2\tau) - 2\,\bar x(t+\tau) + \bar x(t) \right)^2 \right\rangle ,
+```
+
+and the bracket is the next τ-average less the line through the two before
+it. So √6 [`tdev`](@ref) is the RMS error of a holdover test that learns
+the frequency from two τ-averages and predicts the third. The third
+difference does the same with three averages and a parabola, drift
+learned: its mean square is 6τ² Mod σ²_H(τ), which makes that error
+√20 [`htdev`](@ref).
+
+`grow = k` in place of `train` gives the measured test the matching
+stretch, k times each holdover time, so that a longer holdover is learned
+over a longer stretch:
+
+```julia
+g = holdover(p; grow=2)                         # a line over 2τ, then τ ahead
+g.rms ./ (sqrt(6) .* tdev(p, Int.(g.tau ./ p.tau0); ci=false).dev)
+```
+
+The two differ in the readings: TDEV averages them over τ, the test
+compares one reading with a least-squares line. At τ = τ₀ an average is a
+reading and the two are equal. Above it the ratio depends on the noise
+type alone, from the exact variance of the last section:
+
+| Noise | line over 2τ, over √6 TDEV | parabola over 3τ, over √20 HTDEV |
+|:---|:---|:---|
+| white FM | √(8/5) = 1.26 | 1.22 |
+| flicker FM | 1.31 | 1.31 |
+| random-walk FM | √(452/231) = 1.40 | 1.42 |
+| flicker PM | 1.3 to 1.8, rising with τ | 1.1 to 1.4 |
+| white PM | rising as √τ | rising as √τ |
+
+On FM noise the test therefore runs parallel to the scaled time deviation,
+a quarter to two fifths above it, and √6 TDEV read as a holdover error
+understates it by that factor. On white PM the averages smooth what a
+single reading does not, and the two part. The ratios are this package's
+calculation; the tests hold the two white FM and random-walk FM values to
+their closed forms and the equality at τ₀ to rounding. With a fixed
+`train` there is no such relation, because the stretch no longer scales
+with τ.
+
 ```@docs
 holdover
 HoldoverResult
