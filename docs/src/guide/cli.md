@@ -71,7 +71,7 @@ The record (all four analysis commands):
 | `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
-| `--fillgaps` | fill the missing samples by interpolation (needs a time column; without it, a reading missing from the time column is a gap the gap-tolerant estimators skip) |
+| `--fillgaps` | fill the missing samples from the data beside each gap, reflected ([`fillgaps`](@ref)): `NaN` readings, and readings missing from the time column; without it, they are gaps the gap-tolerant estimators skip (a frequency record with gaps must be filled) |
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
@@ -181,8 +181,10 @@ numbers are `null`.
 }
 ```
 
-- `record` is in every answer; `series` only with `--series N`, as an evenly
-  strided subset of the phase. At most 500 outliers are listed in
+- `record` is in every answer; `series` only with `--series N`: the phase
+  itself when it has at most N samples, otherwise, in each of N ÷ 3 equal
+  stretches, its lowest and highest sample and its first gap (`null`), so
+  that a plot keeps every outlier and gap. At most 500 outliers are listed in
   `outlier_t`/`outlier_x`; `outliers` is the full count. `start` is the
   UTC time of the first sample from ISO 8601 or MJD timestamps, `""` when
   the file has none; `gaps` counts the missing samples.

@@ -183,5 +183,4 @@ export function refresh() {
   { ...baseLayout(), margin: { l: 62, r: 14, t: 8, b: 44 }, xaxis: linAxis("Time (s)"), yaxis: { ...linAxis("Weight"), range: [0, 1] }, showlegend: false, uirevision: "ens-w" }, CONFIG);
 }
 
-export function plotElement() { return root?.querySelector("[data-ref=adev]") ?? null; }
 export function hint() { return "Solid = the scale against the reference · dotted = each clock against the scale"; }
