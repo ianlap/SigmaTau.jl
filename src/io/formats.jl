@@ -68,7 +68,9 @@ Name the layout of a data file from its extension and first lines, one of
   53100A, 5120A/5125A and TimePod write through TimeLab): typed header
   fields such as `DBL 0x… "Sample Interval" 0.1`, then a `TIC n` block of
   phase samples in seconds.
-- `:stable32`: a Stable32 `.phd` (phase) or `.frd` (frequency) file.
+- `:stable32`: a Stable32 `.phd` (phase) or `.frd` (frequency) file. As
+  in Stable32, a value of zero is a gap (`NaN`), except the first and last
+  point of phase data.
 - `:counter`: frequency-counter readings in SCPI real format
   (`+1.00000000012345E+07`, as the Keysight 53230A and 53220A log them),
   one per line, optionally after a timestamp (seconds or ISO 8601).
@@ -190,6 +192,10 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
     (t, v), ncols = _read_cols(path, nskip, nothing, [1, 0])
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
     ncols >= 2 || (t = Float64[])
+    # Stable32 writes a gap as a zero; only the end points of phase data may be zero.
+    for i in eachindex(v)
+        v[i] == 0 && !(phase && (i == 1 || i == length(v))) && (v[i] = NaN)
+    end
     # A Stable32 time tag is an MJD (days); a large value with sub-day steps.
     start = hstart
     if length(t) >= 2 && t[1] > 30000 && _median_step(t) < 1
