@@ -366,6 +366,14 @@ def simulate_ensemble(
     return _comparisons_from_jl(cc), _mat(truth)
 
 
+@_map_errors
+def clock_models(cc: ClockComparisons, *, alphas: Sequence[int] = (2, 0, -2)) -> list[ClockModel]:
+    """One ``ClockModel`` per clock, fitted from the comparisons alone (three or
+    more clocks): each clock's Allan deviation from the Groslambert covariance,
+    then a power-law fit with the components ``alphas``."""
+    return [_model_from_jl(m) for m in jl.clock_models(cc._jl(), alphas=to_jl_ints(alphas))]
+
+
 @dataclass(frozen=True)
 class TimescaleResult:
     """Return type of ``timescale``: each clock minus the scale (``x``), its
@@ -450,6 +458,22 @@ def timescale_phase(r: TimescaleResult) -> PhaseData:
     return PhaseData(u, r.comparisons.tau0, source=r.algorithm.upper())
 
 
+def implicit_mean(r: TimescaleResult, truth: np.ndarray) -> PhaseData:
+    """The implicit ensemble mean of a ``"greenhall"`` scale, in simulation: the
+    weighted mean ``Σ aᵢ xᵢ`` of the clocks' true phases, ``truth`` as from
+    ``simulate_ensemble``. Its stability is the scale's own, free of any clock's
+    reading noise."""
+    if r.algorithm != "greenhall":
+        raise ValueError(f"implicit_mean: the implicit mean belongs to greenhall, not {r.algorithm}")
+    truth = np.asarray(truth, dtype=np.float64)
+    if truth.ndim != 3 or (truth.shape[0], truth.shape[2]) != r.weights.shape:
+        raise ValueError(
+            f"implicit_mean: truth is {truth.shape}, the scale has {r.weights.shape[0]} samples "
+            f"and {r.weights.shape[1]} clocks"
+        )
+    return PhaseData((r.weights * truth[:, 0, :]).sum(axis=1), r.comparisons.tau0, source="IEM")
+
+
 __all__ = [
     "ClockModel",
     "clock_model",
@@ -467,7 +491,9 @@ __all__ = [
     "simulate_clock",
     "ClockComparisons",
     "simulate_ensemble",
+    "clock_models",
     "TimescaleResult",
     "timescale",
     "timescale_phase",
+    "implicit_mean",
 ]
