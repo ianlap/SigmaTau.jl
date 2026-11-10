@@ -1056,10 +1056,13 @@ function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1
 end
 
 # The ThêoBR factor as Stable32 computes it: SP1065's ladder (eq. 33) on the
-# record, or on every `b`-th phase when it has more than 3000 points
-# (Stable32's `MaxTheoBRPts`), plus 0.00055·(b − 1). The decimation and the
-# added term are inferred from Stable32's output, which they reproduce to its
-# five digits for b = 1 (1001 points) and b = 3 (8192 points).
+# record, or on every `b`-th phase when it has more than 3000 points, plus
+# 0.00055·(b − 1). The limit (`MaxTheoBRPts`) and the ladder are in Stable32's
+# manual, and the added term is eq. 4 of Taylor and Howe (2010), Fast ThêoBR,
+# which the manual names as its method. That the phase is decimated (a block
+# mean does not fit) and that b = ⌈N/3000⌉ are inferred from Stable32's
+# output, which this reproduces to its five digits for b = 1 (1001 points)
+# and b = 3 (8192 points).
 function _stable32_theobr_ratio(x::Vector{Float64}, tau0::Float64)
     b = cld(length(x), 3000)
     return _theobr_ratio(x[1:b:end], b * tau0; exact=true, sp1065=true) + 0.00055 * (b - 1)

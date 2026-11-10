@@ -727,11 +727,12 @@ Conventions (SP1065 / Stable32):
   to the five digits printed. Stable32 limits the points it uses for this
   factor (`MaxTheoBRPts`, 3000 by default in its manual); a longer record is
   taken at every `b`-th phase, `b = ⌈N/3000⌉`, and 0.00055·(b − 1) is added
-  to the factor. That reproduces Stable32's two bias-removed rows on an
-  8192-point record (b = 3) to the five digits printed, where the ladder on
-  the full record reads 1.8 % low; no other `b` is checked. With a noise type
-  entered by hand Stable32 applies a tabulated bias instead, which no fixture
-  here checks. `correct_bias=false` gives raw
+  to the factor ([taylor-2010-fast-theobr](@cite), eq. 4). That reproduces
+  Stable32's two bias-removed rows on an 8192-point record (b = 3) to the
+  five digits printed, where the ladder on the full record reads 1.8 % low;
+  the decimation and `b` are read from that output, and no other `b` is
+  checked. With a noise type entered by hand Stable32 applies a tabulated
+  bias instead, which no fixture here checks. `correct_bias=false` gives raw
   Thêo1, a Stable32 run with Alpha set to 0.
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
