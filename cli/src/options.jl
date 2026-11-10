@@ -26,7 +26,7 @@ const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
-const TIMESCALES = ["at1", "at2", "ewfa"]
+const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 
@@ -85,8 +85,9 @@ const OPTS = [
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
     Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
-    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update) or ewfa (equal weights)", ["timescale"]),
+    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--tau-y", "SECONDS", String[], false, "frequency averaging time of each clock (default 100 τ₀)", ["timescale"]),
+    Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall or jones_tryon scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
@@ -165,6 +166,7 @@ mutable struct Options
     clock::Int                # --clock: which simulated clock to read
     models::Vector{NTuple{4,Float64}}   # --noise-model: R, q1, q2, q3 per simulated clock
     mask::String              # --mask: ITU-T mask checked in the JSON; "" = none
+    pivot::Int                # --pivot: clock the Kalman timescales read at (1-based)
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -172,7 +174,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
-                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "")
+                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -324,6 +326,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
     elseif name == "--tau-y";          o.tau_y = parse_float(v, name)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
+    elseif name == "--pivot";          o.pivot = parse_int(v, name)
     elseif name == "--series";         o.series = parse_int(v, name)
     elseif name == "--query";          o.query = v
     elseif name == "--every";          o.every = parse_int(v, name)

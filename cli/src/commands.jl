@@ -361,12 +361,23 @@ function read_ensemble(o::Options)
     return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
 end
 
+# The Kalman scales fit a model per clock and read the scale at --pivot.
+function run_timescale(cc::ClockComparisons, o::Options, tau_y::Float64, kalman::Bool)
+    alg = Symbol(o.algorithm)
+    kalman || return timescale(cc; algorithm=alg, tau_y, wmax=o.wmax)
+    k = size(cc.x, 2)
+    k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
+    1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
+    return timescale(cc; algorithm=alg, models=clock_models(cc), pivot=o.pivot)
+end
+
 function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     cc = o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
     N, k = size(cc.x)
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
     tau_y = isnan(o.tau_y) ? 100cc.tau0 : o.tau_y
-    r = timescale(cc; algorithm=Symbol(o.algorithm), tau_y, wmax=o.wmax)
+    kalman = o.algorithm == "greenhall" || o.algorithm == "jones_tryon"
+    r = run_timescale(cc, o, tau_y, kalman)
     late = max(1, N ÷ 2):N
     wmean = [sum(r.weights[late, i]) / length(late) for i in 1:k]
     rms = Float64[]
@@ -393,6 +404,7 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     json_key(io, "reference"); json_string(io, cc.reference)
     json_key(io, "tau_y"); json_number(io, tau_y)
     json_key(io, "wmax"); json_number(io, o.wmax)
+    kalman && (json_key(io, "pivot"); json_number(io, o.pivot))
     json_key(io, "clocks"); json_array(io, cc.names)
     json_key(io, "weight"); json_array(io, r.weights[end, :])
     json_key(io, "weight_mean"); json_array(io, wmean)
