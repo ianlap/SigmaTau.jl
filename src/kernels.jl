@@ -999,9 +999,11 @@ noise (α = 2 … −2, N = 8192 and 16 384) the result stays within 0.5 %
 (2010) was tried and not adopted, because it moved the ratio by 10 to 40 %
 on PM noise.
 
-Terms whose Thêo1 is not finite and positive are skipped, and the mean is
-taken over the terms that remain. Returns `NaN` when there is none
-(`N < 19`).
+A term is skipped when its AVAR is not finite or its Thêo1 is not finite and
+positive, and the mean is taken over the terms that remain. With
+`sp1065=true` the last term of a record whose length is a multiple of 6 is
+one of those: its AVAR factor is `N/2`, which leaves no term. Returns `NaN`
+for `N < 19` and when no term remains.
 """
 function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1065::Bool=false)
     N = length(x)
