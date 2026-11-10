@@ -176,6 +176,13 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(status, 200, doc)
         self.assertIn("dynamic", doc)
 
+    def test_holdover(self):
+        status, doc = self.post({"args": ["holdover", "--synth", "4096", "--train", "512", "--limit", "1e-9",
+                                          "--fit", "--format", "json"]})
+        self.assertEqual(status, 200, doc)
+        self.assertEqual(len(doc["holdover"]["rms"]), len(doc["holdover"]["tau"]))
+        self.assertIn("sigma", doc["holdover"]["predicted"])
+
     def test_live(self):
         status, doc = self.post({"args": ["live", "sim", "--fast", "--count", "20", "--every", "10", "--m", "1"]},
                                 path="/api/live/start")

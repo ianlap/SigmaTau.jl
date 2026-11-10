@@ -1,0 +1,195 @@
+// Holdover page: how far each clock wanders once its reference is gone. The
+// core learns the frequency on a training stretch, lets the clock run and
+// compares with the record, from every start the record allows. One clock:
+// RMS, quantile and worst case against holdover time, the curve its noise
+// model predicts, and the time to a limit. Several clocks: one colour per
+// clock. Computed when this page needs it; no Run is needed.
+import { state, update, visibleClocks, multi } from "../state.js";
+import { holdover as fetchHoldover, holdoverKey } from "../core.js";
+import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, css } from "../plot.js";
+import { sci, num, thousands, duration, escapeHtml as h } from "../format.js";
+
+let root, ctx, Plotly;
+const inflight = new Map();     // clock id → key being fetched
+const FRACS = [8, 4, 2];
+const LEVELS = [[0.683, "68.3 %"], [0.9, "90 %"], [0.95, "95 %"], [0.99, "99 %"]];
+const NOISE = { WHPM: "white PM", FLPM: "flicker PM", WHFM: "white FM", FLFM: "flicker FM", RWFM: "random-walk FM" };
+const pct = (p) => `${num(100 * p, 3)} %`;
+
+export function controls(inline = false) {
+  const o = state.hold;
+  const train = inline
+    ? `<select data-ctl="frac" aria-label="Training stretch">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""}>1/${f} of record</option>`).join("")}</select>`
+    : `<div class="pills">${FRACS.map((f) => `<button type="button" class="pill ${f === o.frac ? "on" : ""}" data-ctl="frac" data-v="${f}">1/${f}</button>`).join("")}</div>`;
+  const fit = `<div class="seg" role="group" aria-label="Learned from the stretch">
+      <button type="button" data-ctl="drift" data-v="0" class="${o.drift ? "" : "on"}">Frequency</button>
+      <button type="button" data-ctl="drift" data-v="1" class="${o.drift ? "on" : ""}">${inline ? "+ drift" : "Frequency and drift"}</button></div>`;
+  const limit = `<input type="text" data-ctl="limit" value="${h(o.limitText)}" placeholder="none" inputmode="decimal" aria-label="Time error limit in seconds" class="carrier">`;
+  const level = `<select data-ctl="confidence" aria-label="Share of trials">${LEVELS.map(([v, l]) => `<option value="${v}" ${v === o.confidence ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+  if (inline) {
+    return `<label class="tool-field">Train&nbsp;on ${train}</label>${fit}<label class="tool-field">Limit ${limit} s</label><label class="tool-field">Trials ${level}</label>`;
+  }
+  const c = visibleClocks()[0];
+  const n = c?.record?.n ?? 0;
+  return `<h2>Holdover</h2>
+    <div class="ctl-block"><label class="lbl">Training stretch</label>${train}
+      ${n ? `<div class="muted small">${duration(Math.floor(n / o.frac) * c.record.tau0)} of the record, moved along it one sample at a time</div>` : ""}</div>
+    <div class="ctl-block"><label class="lbl">Learned from the stretch</label>${fit}</div>
+    <div class="ctl-block"><label class="lbl">Time error limit</label><div class="tau-line">${limit}<span class="muted">s</span></div></div>
+    <label class="opt"><span>Share of trials</span>${level}</label>
+    <label class="check"><input type="checkbox" data-ctl="anchor" ${o.anchor ? "checked" : ""}>Start from the last reading</label>
+    <div class="rule"></div>
+    <p class="muted small">Changes here recompute this page right away. The dashed curve is the error that this share of the trials stayed within; the limit is reached where it crosses.</p>`;
+}
+
+export function onControl(e) {
+  const t = e.target.closest("[data-ctl]");
+  if (!t) return;
+  const k = t.dataset.ctl;
+  if (k === "frac" && (e.type === "click" && t.dataset.v || e.type === "change" && t.tagName === "SELECT")) update((s) => { s.hold.frac = Number(t.dataset.v ?? t.value); });
+  if (k === "drift" && e.type === "click") update((s) => { s.hold.drift = t.dataset.v === "1"; });
+  if (k === "anchor" && e.type === "change") update((s) => { s.hold.anchor = t.checked; });
+  if (k === "confidence" && e.type === "change") update((s) => { s.hold.confidence = Number(t.value); });
+  if (k === "limit" && e.type === "change") {
+    const text = t.value.trim(), v = Number(text);
+    if (!text) update((s) => { s.hold.limit = null; s.hold.limitText = ""; });
+    else if (v > 0) update((s) => { s.hold.limit = v; s.hold.limitText = text; });
+    else { t.value = state.hold.limitText; ctx.status("error", "The limit is a time error in seconds above 0, e.g. 1e-6 for a microsecond."); }
+  }
+}
+
+export function mount(el, c) {
+  root = el; ctx = c;
+  root.innerHTML = `
+    <div class="col">
+      <div class="toolbar" data-ref="toolbar"></div>
+      <div class="card plot-card"><div class="card-row"><h2>Time error in holdover</h2><span class="muted small" data-ref="sub"></span></div>
+        <div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
+    </div>
+    <div class="card side-card hold-card" data-ref="side" hidden></div>`;
+  root.addEventListener("click", (e) => { if (e.target.closest("[data-act=load]")) ctx.goData(); });
+  // Plotly only follows window resizes; follow the card too (the side card comes and goes).
+  const plot = root.querySelector("[data-ref=plot]");
+  new ResizeObserver(() => { if (Plotly && plot.layout && plot.clientWidth) Plotly.Plots.resize(plot); }).observe(plot);
+  loadPlotly().then((P) => { Plotly = P; refresh(); }).catch(() => {});
+}
+
+// Ask the core for any test that is missing or out of date.
+function ensure(clocks) {
+  for (const c of clocks) {
+    const key = holdoverKey(c);
+    if (c.holdover?.key === key || inflight.get(c.id) === key) continue;
+    inflight.set(c.id, key);
+    const done = (fields) => {
+      if (inflight.get(c.id) !== key) return;
+      inflight.delete(c.id);
+      update(() => { c.holdover = { key, ...fields }; });
+    };
+    fetchHoldover(c).then((doc) => done(doc.holdover), (err) => done({ error: err.message }));
+  }
+}
+
+// "within 1e-06 s for 2.3 h", or why there is no such time.
+function limitText(hd) {
+  if (hd.limit === null) return "–";
+  if (hd.time_to_limit === null) return `longer than ${duration(hd.tau[hd.tau.length - 1])}`;
+  return hd.time_to_limit === 0 ? `under ${duration(hd.tau[0])}` : duration(hd.time_to_limit);
+}
+
+function showEmpty(html) {
+  const e = root.querySelector("[data-ref=empty]");
+  e.innerHTML = html;
+  e.hidden = !html;
+  root.querySelector("[data-ref=plot]").style.visibility = html ? "hidden" : "visible";
+}
+
+function renderSide(box, clocks) {
+  box.hidden = !clocks.length;
+  if (!clocks.length) return;
+  if (clocks.length > 1) {
+    box.className = "card side-card hold-card hold-cmp";
+    box.innerHTML = `<div class="card-head"><h2>Time within the limit</h2></div>
+      <div class="tbl"><div class="tbl-row tbl-head"><span>Clock</span><span>${pct(state.hold.confidence)} of trials</span><span>RMS at longest τ</span></div>
+      ${clocks.map((c) => `<div class="tbl-row tbl-body"><span class="name"><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>${h(c.name)}</span>
+        <span>${limitText(c.holdover)}</span><span>${sci(c.holdover.rms[c.holdover.rms.length - 1], 3)} s</span></div>`).join("")}</div>
+      ${state.hold.limit ? "" : `<p class="muted small hold-note">Set a time error limit to compare how long each clock stays within it.</p>`}`;
+    return;
+  }
+  const hd = clocks[0].holdover, p = hd.predicted, last = hd.tau.length - 1;
+  const model = p && !p.error;
+  const shares = model ? p.alphas.map((_, j) => [p.noise_types[j], p.budget[j][last] / (p.sigma[last] ** 2)]).filter(([, s]) => s >= 0.005) : [];
+  box.className = "card side-card hold-card";
+  box.innerHTML = `<div class="card-head"><h2>Holdover</h2></div>
+    <div class="cell-kv">
+      <div class="kv"><span>Training stretch</span><span class="mono">${duration(hd.train)}</span></div>
+      <div class="kv" title="Holdover time at which the error that ${pct(hd.confidence)} of the trials stayed within reaches the limit"><span>Within ${hd.limit === null ? "the limit" : `${sci(hd.limit, 3)} s`} for</span><span class="mono">${limitText(hd)}</span></div>
+      ${model && hd.limit !== null ? `<div class="kv" title="The same time from the power-law noise model fitted to the record"><span>Predicted from the noise model</span><span class="mono">${limitText({ ...hd, time_to_limit: p.time_to_limit })}</span></div>` : ""}
+    </div>
+    ${shares.length ? `<p class="muted small hold-note" title="Share of the predicted error variance at the longest holdover time">Predicted error at ${duration(hd.tau[last])}: ${shares.map(([n, s]) => `${NOISE[n] ?? n} ${Math.round(100 * s)} %`).join(", ")}.</p>` : ""}
+    <div class="tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>RMS (s)</span><span>${pct(hd.confidence)}</span><span>worst</span><span>trials</span></div>
+    ${hd.tau.map((t, i) => `<div class="tbl-row tbl-body"><span>${num(t, 5)}</span><span>${sci(hd.rms[i], 3)}</span><span>${sci(hd.quantile[i], 3)}</span><span>${sci(hd.worst[i], 3)}</span><span>${thousands(hd.n[i])}</span></div>`).join("")}</div>
+    ${p?.error ? `<p class="muted small hold-note">No predicted curve: ${h(p.error)}</p>` : ""}`;
+}
+
+export function refresh() {
+  if (!root) return;
+  const several = multi();
+  const tb = root.querySelector("[data-ref=toolbar]");
+  tb.hidden = !several;
+  if (several && !tb.contains(document.activeElement)) tb.innerHTML = controls(true);
+  const side = root.querySelector("[data-ref=side]");
+  const clocks = visibleClocks().filter((c) => c.record);
+  if (!clocks.length) {
+    side.hidden = true;
+    return showEmpty(`<h2>No record yet</h2><p>Load or synthesize a record on the Data page.</p><button class="btn" data-act="load">Go to Data</button>`);
+  }
+  ensure(clocks);
+  const current = clocks.filter((c) => c.holdover?.key === holdoverKey(c));
+  const ready = current.filter((c) => !c.holdover.error);
+  const failed = current.filter((c) => c.holdover.error);
+  renderSide(side, ready);
+  if (!ready.length) return showEmpty(`<p>${failed.length ? h(failed.map((c) => `${several ? `${c.name}: ` : ""}${c.holdover.error}`).join(" · ")) : "Running the holdover test…"}</p>`);
+  showEmpty("");
+  if (!Plotly) return;
+
+  const level = pct(state.hold.confidence);
+  const traces = [];
+  for (const c of ready) {
+    const hd = c.holdover, who = several ? `<b>${h(c.name)}</b><br>` : "";
+    const line = (name, y, color, dash, width = 2) => traces.push({
+      x: hd.tau, y, name: several ? `${c.name}, ${name}` : name, mode: "lines+markers", line: { color, dash, width }, marker: { color, size: 5 },
+      hovertemplate: `${who}${name}<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>`,
+    });
+    const col = (k) => (several ? seriesColor(c.slot) : css(`--s${k}`));
+    line("RMS", hd.rms, col(1), "solid");
+    line(`${level} of trials`, hd.quantile, col(2), "dash");
+    if (!several) {
+      line("Worst trial", hd.worst, col(3), "dot");
+      const p = hd.predicted;
+      if (p && !p.error) traces.push({
+        x: hd.tau, y: p.sigma, name: "Predicted RMS (noise model)", mode: "lines", line: { color: css("--muted"), width: 1.5, dash: "dashdot" },
+        hovertemplate: "Predicted from the noise model<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>",
+      });
+    }
+  }
+  const limit = state.hold.limit;
+  const accent = css("--accent");
+  const shapes = limit ? [{ type: "line", xref: "paper", yref: "y", x0: 0, x1: 1, y0: limit, y1: limit, line: { color: accent, width: 1.5 } }] : [];
+  if (limit) for (const c of ready) {
+    const t = c.holdover.time_to_limit;
+    if (t > 0) shapes.push({ type: "line", xref: "x", yref: "paper", x0: t, x1: t, y0: 0, y1: 1, line: { color: several ? seriesColor(c.slot) : accent, width: 1, dash: "dot" } });
+  }
+  root.querySelector("[data-ref=sub]").textContent = several ? `solid = RMS · dashed = ${level} of trials` : `from the last ${state.hold.anchor ? "reading" : "value of the fit"} of each training stretch`;
+  Plotly.react(root.querySelector("[data-ref=plot]"), traces, {
+    ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 48 },
+    xaxis: logAxis("Holdover time τ (s)"), yaxis: logAxis("Time error (s)"),
+    showlegend: !several, legend: { ...baseLayout().legend, x: 0.98, xanchor: "right", y: 0.02, yanchor: "bottom" },
+    shapes, annotations: limit ? [{ xref: "paper", x: 0.01, xanchor: "left", yref: "y", y: Math.log10(limit), yanchor: "bottom", showarrow: false, text: `limit ${sci(limit, 3)} s`, font: { color: accent, size: 11.5 } }] : [],
+    uirevision: "hold",
+  }, CONFIG);
+}
+
+export function plotElement() { return root?.querySelector("[data-ref=plot]") ?? null; }
+export function hint() {
+  return multi() ? "Colour = clock · solid = RMS · dashed = the chosen share of trials" : "Solid = RMS · dashed = the chosen share of trials · dotted = worst trial · grey = predicted from the noise model";
+}
