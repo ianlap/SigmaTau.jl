@@ -93,6 +93,7 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
+| Noise type with fewer than 30 averaged points | B1 ratio, labels as with B1(N, μ) at the record length | B1 ratio against B1(N, μ) at the number of averaged points | `identify_noise(x, m; b1_length=:record)`; no switch on the estimators |
 | Limits between the FM noises, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
 | TOTDEV, HTOTDEV | bias-corrected | bias-corrected | the same |
 
@@ -116,6 +117,19 @@ into random-walk FM: in simulation (N = 4096) pure flicker FM keeps its label in
 72 % of records at m = 8 and 48 % at m = 64 with rounding, and in 100 % and
 87 % with SigmaTau's limits. Random-walk FM keeps its label in 98 % or more
 of records at those m either way.
+
+The B1 row shows at the longest τ, and there it moves σ as well as the
+interval for the bias-corrected total estimators. At the record length the
+B1 limit for random-walk FM sits far above what a few averaged points can
+reach, so that convention almost never reports it: in simulation (N = 1024,
+6 to 24 averaged points) random-walk FM is found in 1 to 2 % of records and
+flicker FM in 24 to 48 %, against 60 to 75 % and 34 to 79 % at the number of
+averaged points. White FM is found less often that way, in 33 to 82 % of
+records against 65 to 88 %. On the 8192-point validation fixture Stable32
+reads white FM at τ = 1024 s and beyond, where ADEV is flat and then rising
+and SigmaTau reads flicker FM and random-walk FM; TOTDEV is then 3.1 %,
+10.9 % and 26.5 % above Stable32's at 1024, 2048 and 4096 s.
+[Validation](../explanation/validation.md) has the rows.
 
 ## Gaps
 

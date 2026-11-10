@@ -69,7 +69,14 @@ type at each τ ([`identify_noise`](@ref)), because the interval depends on it.
 SigmaTau uses the lag-1 autocorrelation of the phase decimated by m, after a
 quadratic detrend of each decimated series, which is reliable while at least
 30 averaged samples remain. Beyond that it falls back to the B1 and R(n)
-ratios. Decimation whitens flicker PM: its lag-1 correlation fades as m
+ratios (SP1065 §5.5.2 [riley-2008-sp1065](@cite)). B1 is the ratio of the
+standard variance of the averaged frequency to its Allan variance, and it is
+compared with the B1(N, μ) of each noise type at the number of averaged
+points N, the length the ratio is defined for. With 8 to 24 points no test
+separates neighbouring noise types better than about two times in three, so
+labels at the longest τ are weak evidence; `b1_length=:record` gives the
+labels closer to Stable32's, which almost never include random-walk FM
+there. Decimation whitens flicker PM: its lag-1 correlation fades as m
 grows, and from m ≈ 16 the test reads it as white PM, whose ADEV has several
 times the EDF. A white-PM result is therefore confirmed with R(n), the ratio
 of MVAR to AVAR that SP1065 §5.5.2 uses to separate the two PM noises, and
@@ -91,7 +98,9 @@ reach those values by m ≈ 8. Rounding at −1.5 therefore splits flicker FM
 almost evenly between its own label and random-walk FM. For m ≥ 2 SigmaTau
 places the limits halfway between the readings 0, −1.446 and −2.4, at −0.72
 and −1.92; at m = 1 the record is not decimated and the published rounding
-stands.
+stands. A measured record is itself a sampled process, so flicker FM that
+dominates at τ₀ can read near −1.45 there too, close to the rounding limit,
+where simulated discrete noise reads −1.
 
 Stable32 does not detrend before the lag-1 estimate. The difference only
 matters on records with drift; `identify_noise(...; remove_drift=false)` follows
