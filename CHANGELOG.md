@@ -99,6 +99,15 @@ versions follow [Semantic Versioning](https://semver.org/).
   8 to 11 % and −5 to +3 % now. Output moves by a few percent. Below
   N = 90, where the papers' formula has no rung, the first rung is used
   alone.
+- Flicker FM keeps its label at medium and long τ. On phase decimated by m
+  the lag-1 estimate of flicker FM settles at α = −1.45 and of random-walk
+  FM at −2.4, so rounding to the nearest integer sent pure flicker FM to
+  random-walk FM in a large share of records: it kept its own label in
+  only 48 to 72 % for m = 8 to 64 (N = 4096). For m ≥ 2 the limits between
+  white FM, flicker FM and random-walk FM now sit halfway between those
+  readings, at −0.72 and −1.92; flicker FM then keeps its label in 87 to
+  100 % of those records and random-walk FM in 98 % or more. Stable32
+  rounds, so its labels differ there.
 - Flicker PM is identified as flicker PM at long τ. The lag-1 test runs on
   phase decimated by m, which whitens flicker PM, so from m ≈ 16 a pure
   flicker-PM record was labelled white PM (in 64 % of records at m = 16 and
