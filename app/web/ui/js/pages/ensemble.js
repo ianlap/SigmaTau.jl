@@ -15,7 +15,7 @@ const ALGS = [["at1", "AT1"], ["at2", "AT2"], ["ewfa", "EWFA"], ["greenhall", "G
 const KALMAN = new Set(["greenhall", "jones_tryon"]);
 const ABOUT = {
   at1: "AT1 weighs each clock by the inverse of its prediction-error variance, learned as it runs.",
-  at2: "AT2 keeps AT1's weights and follows each clock's frequency with a Kalman update.",
+  at2: "AT2 keeps AT1's weights and follows each clock's frequency with a Kalman update. Frequency steps: best reruns the scale from a detected step; real keeps the values already issued and corrects from the step on.",
   ewfa: "EWFA weighs every clock the same.",
   greenhall: "Greenhall's Kalman scale fits a model to each clock and reads the scale at the pivot clock. It needs three or more clocks.",
   jones_tryon: "The Jones–Tryon Kalman scale: Greenhall's filter without the covariance reduction, so it has no per-clock weights. It needs three or more clocks.",
@@ -62,7 +62,7 @@ function request() {
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
   a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : ["--wmax", E.wmax]),
-    "--format", "json", "--series", 2000);
+    ...(E.algorithm === "at2" && E.steps ? ["--steps", E.steps] : []), "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
@@ -75,6 +75,8 @@ export function controls() {
       ? `<label class="opt"><span>Pivot clock</span><select data-ctl="pivot">${(clocks.length ? clocks.map((c) => c.name) : [1, 2, 3, 4].map((k) => `clock ${k}`)).map((n, i) =>
         `<option value="${i + 1}" ${pivotOf(clocks.length || 4) === i + 1 ? "selected" : ""}>${h(n)}</option>`).join("")}</select></label>`
       : `<label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>`}
+    ${E.algorithm === "at2" ? `<label class="opt"><span>Frequency steps</span><select data-ctl="steps">${[["", "Off"], ["best", "Best"], ["real", "Real"]].map(([id, label]) =>
+      `<option value="${id}" ${E.steps === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
     <div class="rule"></div>
     <p class="muted small">${clocks.length
       ? (clocks[0].source.type === "synth"
@@ -91,6 +93,7 @@ export function onControl(e) {
   if (e.type !== "change") return;
   const v = t.value.trim();
   if (k === "alg") update((s) => { s.ens.algorithm = v; });
+  if (k === "steps") update((s) => { s.ens.steps = v; });
   if (k === "pivot") update((s) => { s.ens.pivot = Number(v); });
   if (k === "wmax") {
     if (Number(v) > 0 && Number(v) <= 1) update((s) => { s.ens.wmax = Number(v); });
@@ -155,7 +158,7 @@ export function refresh() {
   const wcard = root.querySelector(".ens-weights"), relaid = wcard.hidden === weighted;
   wcard.hidden = !weighted;
   const alg = ALGS.find(([id]) => id === r.algorithm)?.[1] ?? r.algorithm;
-  root.querySelector("[data-ref=sub]").textContent = `${alg}${r.pivot ? ` at ${names[r.pivot - 1]}` : ""} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || "the file's reference"}`;
+  root.querySelector("[data-ref=sub]").textContent = `${alg}${r.pivot ? ` at ${names[r.pivot - 1]}` : ""}${r.steps ? `, ${r.steps} steps` : ""} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || "the file's reference"}`;
   table.innerHTML = `<div class="card-row"><h2>Clocks</h2></div>
     <div class="tbl"><div class="tbl-row tbl-head"><span>Clock</span><span>Weight</span><span>Mean</span><span>RMS error</span></div>
     ${names.map((n, i) => `<div class="tbl-row tbl-body"><span class="ens-name"><span class="clock-dot" style="background:${color(i)}"></span>${h(n)}</span>
