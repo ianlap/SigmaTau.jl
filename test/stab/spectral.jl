@@ -58,16 +58,19 @@ end
         end
     end
 
-    @testset "S_x ↔ S_y identity at low frequency" begin
-        Random.seed!(11)
-        p  = noise_gen(PhaseData, 16384, 1.0; sigma1 = Dict(0 => 1e-12))
+    @testset "S_x is S_y over the first-difference response" begin
+        p  = noise_gen(PhaseData, 16384, 1.0; h = Dict(-2 => 1.0), rng = Xoshiro(11))
         ry = psd_y(p; nperseg=2048)
         rx = psd_x(p; nperseg=2048)
-        @test rx.units === :s2_per_Hz
-        @test ry.freq == rx.freq
-        lo   = 2:50
-        pred = ry.psd[lo] ./ (2π .* ry.freq[lo]) .^ 2     # S_y/(2πf)²
-        @test isapprox(median(rx.psd[lo] ./ pred), 1.0; rtol=0.05)
+        @test rx.units === :s2_per_Hz && ry.freq == rx.freq && isnan(rx.psd[1])
+        @test rx.psd[2:end] ≈ ry.psd[2:end] ./ (4 .* sinpi.(ry.freq[2:end]) .^ 2)
+        # Random-walk FM, S_x = f⁻⁴/(2π)²: the low bins read true (a Welch
+        # estimate on the phase itself is 15 to 100 times high at bins 2 to 4).
+        lo = 3:10
+        @test isapprox(median(rx.psd[lo] .* (2π) .^ 2 .* rx.freq[lo] .^ 4), 1.0; rtol=0.25)
+        # A frequency offset is the mean of y and leaves the spectrum alone.
+        off = PhaseData(p.x .+ 50.0 .* (0:16383), 1.0)
+        @test psd_x(off; nperseg=2048).psd[2:end] ≈ rx.psd[2:end] rtol=1e-6
     end
 
     @testset "ℒ(f) carrier scaling" begin
@@ -109,7 +112,8 @@ end
         @test r.nperseg == 512                  # largest 2^k ≤ N ÷ 4
         @test r.noverlap == 256                 # 50 % overlap
         @test r.taper === :hann
-        @test psd_x(p).nperseg == 1024
+        @test psd_x(p).nperseg == 1024          # from the 4096 phase samples
+        @test psd_x(PhaseData(p.x[1:10], 1.0)).nperseg == 9
         @test SigmaTau._default_nperseg(4095) == 512
         @test SigmaTau._default_nperseg(40) == 16
         @test SigmaTau._default_nperseg(10) == 10

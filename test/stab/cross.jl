@@ -24,7 +24,10 @@
         @test k9.nseg > 8k0.nseg
         @test SigmaTau._independent_averages(:hann, 256, 26, k9.nseg) < 2.5k0.nseg
         @test SigmaTau._independent_averages(:hann, 256, 256, 16) == 16
-        @test cross_psd_x(a, a).psd ≈ psd_x(a).psd rtol=1e-12
+        cx = cross_psd_x(a, a)
+        @test cx.psd[2:end] ≈ psd_x(a).psd[2:end] rtol=1e-12
+        cy = cross_psd_y(a, a; nperseg=cx.nperseg)
+        @test cx.nperseg == 1024 && cx.floor[2:end] ./ cx.psd[2:end] ≈ cy.floor[2:end] ./ cy.psd[2:end]
     end
 
     @testset "device recovered below two references" begin

@@ -426,9 +426,8 @@ function welch_rows()
     end
     for ((ds, kind, nps), ref) in sort(collect(byk); by=first)
         p = get!(() -> dataset(ds), cache, ds)
-        res = kind == "Sy" ? psd_y(p; nperseg=nps) : psd_x(p; nperseg=nps)
-        # Error relative to the spectral peak: FFT round-off scales with the
-        # total power, and a random-run phase record spans ~20 decades of S_x.
+        res = psd_y(p; nperseg=nps)          # psd_x is this over the first-difference response
+        # Error relative to the spectral peak: FFT round-off scales with the total power.
         pk = maximum(ref)
         for (k, (a, b)) in enumerate(zip(ref, res.psd))
             push!(rows, Row("scipy Welch", ds, kind, k - 1, a, b, 1e-9, "error relative to the peak", pk))

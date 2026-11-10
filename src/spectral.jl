@@ -184,27 +184,47 @@ end
 
 psd_y(data::PhaseData; kwargs...) = psd_y(FrequencyData(data); kwargs...)
 
+# Response of the first difference y[k] = (x[k+1] − x[k])/τ₀ at each frequency,
+# |1 − e^{−2πifτ₀}|²/τ₀² = 4 sin²(πfτ₀)/τ₀², which is (2πf)² at low f. S_x is
+# S_y over it, and has no value at f = 0.
+_difference_response(freq::Vector{Float64}, tau0::Float64) =
+    [f > 0 ? 4 * sinpi(f * tau0)^2 / tau0^2 : NaN for f in freq]
+
+# Welch parameters of a phase spectrum: the default segment length comes from
+# the number of phase samples, and fits the one-fewer frequency samples.
+function _sx_welch_params(data::AbstractTimingData, nperseg, noverlap)
+    n = length(data) + (data isa FrequencyData)
+    np = nperseg === nothing ? min(_default_nperseg(n), n - 1) : Int(nperseg)
+    return np, noverlap === nothing ? np ÷ 2 : Int(noverlap)
+end
+
 """
     psd_x(data::PhaseData;     nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
     psd_x(data::FrequencyData; nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
 
 One-sided power spectral density of the phase (time) residual `x(t)`,
-`S_x(f)` in units of `s²/Hz` (IEEE Std 1139-2022 §3.3), estimated by Welch's
-method at sample rate `fs = 1/τ₀`.
+`S_x(f)` in units of `s²/Hz` (IEEE Std 1139-2022 §3.3), at sample rate
+`fs = 1/τ₀`.
 
-`FrequencyData` input is integrated to phase (`x[k] = τ₀·Σⱼ y[j]`) first. The
-estimators are related by `S_x(f) = S_y(f) / (2πf)²`; the two agree under that
-identity at low frequency, where the discrete integrator matches the continuous
-one. Keyword arguments match [`psd_y`](@ref).
+It is the Welch estimate of `S_y(f)` (see [`psd_y`](@ref), same keyword
+arguments) divided by the response of the first difference that takes phase to
+frequency, `4 sin²(πfτ₀)/τ₀²`, the sampled form of `S_x(f) = S_y(f)/(2πf)²`.
+The phase of FM noise has a spectrum as steep as f⁻² to f⁻⁴, which leaks
+through any taper into the lowest bins (a Welch estimate on the phase itself
+reads 3 times high at the second bin on flicker FM and about 100 times on
+random-walk FM, and is swamped at every low bin by a frequency offset); its
+first difference is two powers of f flatter and a frequency offset is only its
+mean. The value at `f = 0` is `NaN`, and the first bin above it, which shares
+the taper's main lobe with the removed mean, is the least reliable: on white
+PM it reads about 10 times high. A segment holds `nperseg` frequency samples;
+the default is the largest power of two up to a quarter of the phase samples.
 """
-function psd_x(data::PhaseData; nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
-    x  = _f64(data.x)
-    np, no = _welch_params(length(x), nperseg, noverlap)
-    freq, psd = _welch_psd(x, 1 / data.tau0; nperseg=np, noverlap=no, window=taper)
-    return SpectralResult(:Sx, freq, psd, :s2_per_Hz, np, no, taper)
+function psd_x(data::AbstractTimingData; nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
+    np, no = _sx_welch_params(data, nperseg, noverlap)
+    sy = psd_y(data; nperseg=np, noverlap=no, taper=taper)
+    return SpectralResult(:Sx, sy.freq, sy.psd ./ _difference_response(sy.freq, data.tau0),
+                          :s2_per_Hz, np, no, taper)
 end
-
-psd_x(data::FrequencyData; kwargs...) = psd_x(_freq_to_phase(data); kwargs...)
 
 """
     ssb_phase_noise(data::PhaseData;     f_carrier, nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
@@ -220,7 +240,7 @@ direct comparison against oscillator-vendor phase-noise plots.
 The DC bin (`f = 0`) is dropped, since `ℒ(0)` is not meaningful and the dB
 conversion would be `-Inf`. Keyword arguments otherwise match [`psd_y`](@ref).
 """
-function ssb_phase_noise(data::PhaseData; f_carrier::Real, nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
+function ssb_phase_noise(data::AbstractTimingData; f_carrier::Real, nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
     f_carrier > 0 ||
         throw(ArgumentError("ssb_phase_noise: f_carrier must be > 0 Hz (got $f_carrier)"))
     sx = psd_x(data; nperseg=nperseg, noverlap=noverlap, taper=taper)
@@ -230,8 +250,6 @@ function ssb_phase_noise(data::PhaseData; f_carrier::Real, nperseg=nothing, nove
     script_l = 10 .* log10.(0.5 .* sphi)
     return SpectralResult(:L, freq, script_l, :dBc_per_Hz, sx.nperseg, sx.noverlap, taper)
 end
-
-ssb_phase_noise(data::FrequencyData; kwargs...) = ssb_phase_noise(_freq_to_phase(data); kwargs...)
 
 """
     integrated_jitter(s::SpectralResult; f_carrier, band=nothing) → (; phase, time, residual_fm)

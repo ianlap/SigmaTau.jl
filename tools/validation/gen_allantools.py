@@ -206,10 +206,6 @@ def gen_welch(w):
                                       detrend="constant", scaling="density", return_onesided=True)
             for fi, pi in zip(f, p):
                 w.writerow([name, "Sy", nps, fmt(float(fi)), fmt(float(pi))])
-            f, p = scipy.signal.welch(x, fs=1.0, window="hann", nperseg=nps, noverlap=nps // 2,
-                                      detrend="constant", scaling="density", return_onesided=True)
-            for fi, pi in zip(f, p):
-                w.writerow([name, "Sx", nps, fmt(float(fi)), fmt(float(pi))])
 
 
 def gen_dynamic(w):
