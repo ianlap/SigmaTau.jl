@@ -291,6 +291,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 
 /* ── Spectrum ── */
 .spec-card { padding-top: 14px; }
+.spec-note { margin: 0; }
+.spec-note:empty { display: none; }
 .plot-card .card-row { display: flex; justify-content: space-between; align-items: baseline; }
 
 /* ── Dynamic ── */

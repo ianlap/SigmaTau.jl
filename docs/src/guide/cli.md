@@ -173,7 +173,9 @@ numbers are `null`.
   and `sigma_y` for the rest. With `--m`, `tau_mode` is `"m"` and `m` lists
   the factors.
 - `spectrum` comes from `sigmatau spectrum`, or `analyze --spectrum`. Its
-  arrays leave out the DC bin.
+  arrays leave out the DC bin. Under `analyze`, a record with gaps gives
+  `{"error": "…"}` there and the estimators still run; `sigmatau spectrum`
+  stops on it with exit code 3.
 - `powerlaw` comes from `analyze --fit`: the fitted model
   (`deviation`, `alphas`, `h`, `noise_types`; see [`powerlaw_fit`](@ref)),
   its σ(τ) for each ADEV, MDEV, TDEV, HDEV and MHDEV result in `curves`, and
