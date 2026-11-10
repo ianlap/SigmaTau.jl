@@ -20,12 +20,10 @@ _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
 # bias correction should too (SP1065 §5.5.6 removes deterministic components
 # before noise identification). The B1 test is not used on that record: its
 # limits are for a record with the drift left in, where the ratio is about
-# twice as large, and it stops at random-walk FM. Below NEFF_RELIABLE averaged
-# points the type is the one of the longest averaging factor that has them.
-function _hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool)
-    remove_drift || return identify_noise(x, m_values, dmin=0, dmax=3)
-    return identify_noise(_remove_quadratic(x), min.(m_values, max(length(x) ÷ NEFF_RELIABLE, 1)), dmin=0, dmax=3)
-end
+# twice as large, and it stops at random-walk FM.
+_hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
+    remove_drift ? identify_noise(_remove_quadratic(x), m_values, dmin=0, dmax=3, b1=false) :
+                   identify_noise(x, m_values, dmin=0, dmax=3)
 
 # What `noise=` takes: `:auto`, one noise type, one per τ, or a fitted model.
 const _NoiseChoice = Union{Symbol,AbstractVector{Symbol},PowerLawFit}
@@ -235,8 +233,8 @@ ADEV into a τ¹ ramp. It cannot separate white from flicker PM; use
 record less its least-squares frequency drift, so a drift the statistic
 ignores cannot bias the EDF; the deviation itself does not change. On that
 record the B1 ratio of [`identify_noise`](@ref) is not used: with fewer than
-30 averaged points the type is the one identified at the longest τ that has
-30, so a change of noise type beyond it needs `noise`.
+30 averaged points an FM type is the one identified at the longest τ that
+has 30, so a change from one FM type to another beyond it needs `noise`.
 `remove_drift=false` identifies it on the record as given, as Stable32 does.
 
 `overlapping=false` gives the non-overlapped Hadamard deviation (SP1065

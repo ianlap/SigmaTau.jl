@@ -51,14 +51,14 @@ using SigmaTau
         @test all(isapprox.(l, lo; rtol=1e-3)) && all(isapprox.(h, hi; rtol=1e-3))
     end
     # From τ = 1024 Stable32 reads white FM, where σ(τ) runs flat and then
-    # rises and SigmaTau reads flicker FM.
+    # rises and SigmaTau reads flicker FM and random-walk FM.
     tot = filter(r -> r[1] == "Total", csv)
     ms = [parse(Int, r[2]) for r in tot]
     B = bias_correction([αsym[parse(Int, r[5])] for r in tot], :totvar, ms, length(x); published=true)
     @test length(tot) >= 10
     @test all(isapprox.(totdev(pd, ms; ci=false, correct_bias=false).dev ./ sqrt.(B),
                         parse.(Float64, getindex.(tot, 7)); rtol=1e-4))
-    @test totdev(pd, [1024, 2048, 4096]).noise_type == [:FLFM, :FLFM, :FLFM]
+    @test totdev(pd, [1024, 2048, 4096]).noise_type == [:FLFM, :RWFM, :RWFM]
 
     # correct_bias=:stable32 is Stable32's bias convention for each estimator:
     # its σ on the nine rows where the two programs read the same noise type.

@@ -96,8 +96,9 @@ and the explorer "As Stable32" under Bias correction.
 | MTOTDEV | raw estimator, which reads low | raised to MDEV's expected value (Howe and Peppler 2001, Table 2) | `correct_bias=:stable32` |
 | Thêo1 | raw Thêo1 run, ThêoBR a separate run | ThêoBR | `correct_bias=:stable32` |
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
-| Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
+| Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift, without the B1 ratio: below 30 averaged points an FM type is the one at the longest τ that has 30 | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
+| PM below 30 averaged points | the B1 ratio and R(n) | PM only if it is PM at the longest τ with 30 points and R(n) at the τ itself agrees | `identify_noise(x, m; b1_length=:record)` |
 | White or flicker PM, τ ≥ 16τ₀ | the result of the lag-1 or B1 test as it comes | stands only if R(n) agrees; otherwise white FM | no switch |
 | Noise type with fewer than 30 averaged points | B1 ratio, labels as with B1(N, μ) at the record length | B1 ratio against B1(N, μ) at the number of averaged points; below 6 points the label measured at 6 | `identify_noise(x, m; b1_length=:record)`; no switch on the estimators |
 | Limits between the FM noises, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
@@ -133,15 +134,12 @@ reach, so that convention almost never reports it: in simulation (N = 1024,
 6 to 24 averaged points) random-walk FM is found in 1 to 2 % of records and
 flicker FM in 24 to 48 %, against 60 to 75 % and 34 to 79 % at the number of
 averaged points. White FM is found less often that way, in 33 to 82 % of
-records against 65 to 88 %. Below 8 averaged points the ratio is close to
+records against 65 to 88 %. Below 6 averaged points the ratio is close to
 a coin toss, so SigmaTau reports the label measured at the longest averaging
-factor that still has 8. On the 8192-point validation fixture Stable32
+factor that still has 6. On the 8192-point validation fixture Stable32
 reads white FM at τ = 1024 s and beyond, where ADEV is flat and then rising
-and SigmaTau reads flicker FM; TOTDEV is then 3.1 %,
-6.6 % and 14.7 % above Stable32's at 1024, 2048 and 4096 s. The Hadamard
-family, which removes the drift before it identifies the noise, does not use
-the B1 ratio by default: below 30 averaged points it reports the label of
-the last τ that has 30.
+and SigmaTau reads flicker FM and random-walk FM; TOTDEV is then 3.1 %,
+10.9 % and 26.5 % above Stable32's at 1024, 2048 and 4096 s.
 [Validation](../explanation/validation.md) has the rows.
 
 ## Gaps
