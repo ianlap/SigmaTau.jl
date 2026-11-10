@@ -21,9 +21,9 @@ from ._convert import (
     to_jl_syms,
 )
 from ._julia import _map_errors, jl
-from .deviations import DEFAULT_CONFIDENCE, _bias
+from .deviations import DEFAULT_CONFIDENCE, _bias, _noise
 from .grids import Octave, TauMode
-from .types import FrequencyData, PhaseData, StabilityResult, StabilitySuite
+from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult, StabilitySuite
 
 DEFAULT_DEVIATIONS = tuple(str(s) for s in jl.DEFAULT_DEVIATIONS)
 
@@ -61,14 +61,15 @@ def stability(
     confidence: float = DEFAULT_CONFIDENCE,
     correct_bias: bool | str = True,
     remove_drift: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
 ) -> StabilitySuite:
     """Compute several deviations on one record and collect them into a suite.
 
     ``devs`` is a sequence of deviation names (default ``DEFAULT_DEVIATIONS``,
     the four σ_y quantities ``("adev", "mdev", "hdev", "mhdev")``). ``m`` is a
     ``TauMode`` grid selector or an explicit sequence of averaging factors;
-    ``ci``/``confidence``, ``correct_bias`` (total family) and ``remove_drift``
-    (Hadamard family) flow through to each deviation.
+    ``ci``/``confidence``, ``correct_bias`` (total family), ``remove_drift``
+    (Hadamard family) and ``noise`` flow through to each deviation.
     """
     return suite_from_jl(
         jl.stability(
@@ -79,6 +80,7 @@ def stability(
             confidence=float(confidence),
             correct_bias=_bias(correct_bias),
             remove_drift=bool(remove_drift),
+            noise=_noise(noise),
         )
     )
 
@@ -124,6 +126,7 @@ def groslambert(
     *records: PhaseData | FrequencyData | Sequence[Sequence[PhaseData | FrequencyData | None]],
     m: TauMode | Sequence[int] = Octave,
     confidence: float = DEFAULT_CONFIDENCE,
+    interval: str = "chi2",
 ) -> list[StabilityResult]:
     """Groslambert covariance: each clock's Allan deviation from the pairwise records.
 
@@ -135,9 +138,11 @@ def groslambert(
       ``None`` where a pair is missing; the transposed entry, negated, stands in.
 
     Each result is an ``"adev"`` ``StabilityResult`` with χ² intervals at
-    ``confidence`` from the covariance model of Vernotte & Lantz (2019).
+    ``confidence`` from the covariance model of Vernotte & Lantz (2019), or,
+    for three clocks with ``interval="klts"``, the KLTS intervals of Lantz
+    et al. (2019), which hold also for a clock quieter than the others.
     """
-    kwargs = {"confidence": float(confidence)}
+    kwargs = {"confidence": float(confidence), "interval": jl.Symbol(interval)}
     if len(records) == 3:
         separated = jl.groslambert(
             to_jl_data(records[0]),

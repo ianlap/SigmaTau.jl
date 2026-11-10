@@ -17,6 +17,7 @@ export Row, FIX, ALPHAS, noise_record, phasedat, stable32gen, nbs14_frequency,
 
 const FIX = normpath(joinpath(@__DIR__, "..", "fixtures", "validation"))
 const AT  = get(ENV, "SIGMATAU_ALLANTOOLS_DIR", joinpath(FIX, "allantools"))
+const AD  = get(ENV, "SIGMATAU_ALLANDEVIATIONS_DIR", joinpath(FIX, "allandeviations"))
 const S32 = joinpath(FIX, "stable32_phasedat")
 const ALPHAS = (2, 1, 0, -1, -2, -3, -4)
 
@@ -115,10 +116,11 @@ function at_tol(est, ds, m)
     return (1e-9, "")
 end
 
-function allantools_dev_rows()
+# One row per σ in a reference table laid out as allantools' devs.csv.
+function _dev_rows(dir, group)
     rows = Row[]
     cache = Dict{String,PhaseData}()
-    for r in _csv(joinpath(AT, "devs.csv"))
+    for r in _csv(joinpath(dir, "devs.csv"))
         est = r["estimator"]
         haskey(AT_MAP, est) || continue
         ds = r["dataset"]
@@ -127,10 +129,15 @@ function allantools_dev_rows()
         ref = _f(r["dev"])
         got = try AT_MAP[est](p, m) catch; NaN end
         tol, note = at_tol(est, ds, m)
-        push!(rows, Row("allantools σ", ds, est, m, ref, got, tol, note))
+        push!(rows, Row(group, ds, est, m, ref, got, tol, note))
     end
     return rows
 end
+
+allantools_dev_rows() = _dev_rows(AT, "allantools σ")
+# AllanDeviations.jl (tools/validation/gen_allandeviations.jl) under
+# allantools' estimator names, so the same calls and tolerances hold.
+allandeviations_dev_rows() = _dev_rows(AD, "AllanDeviations.jl σ")
 
 # ── allantools EDF / CI / noise ID / spectra / dynamic ─────────────────────
 
@@ -249,8 +256,6 @@ const S32_ALLTAU = [
 const S32_TOL_SIGMA = 1e-4   # Stable32 prints 5 significant figures
 const S32_TOL_CI    = 1e-3
 
-const NOISE_ID_NOTE = "noise ID differs: N/m < 30 is the B1/R(n) fallback, which reads 7 averaged samples here"
-
 # CI rows outside the published EDF models: reported, not asserted.
 function s32_ci_tol(est, m)
     if est in ("mtotdev", "ttotdev") && m >= 16
@@ -273,7 +278,6 @@ function stable32_rows()
         res = f(p, ms)
         for (k, r) in enumerate(s)
             a_st = SigmaTau._alpha_from_noise(res.noise_type[k])
-            same = a_st == r.alpha
             # The bias of TOTDEV and HTOTDEV follows the noise type and m, and
             # Stable32's differs on PM and below m = 16: the σ row takes
             # Stable32's factor for its α and compares the estimator.
@@ -281,14 +285,11 @@ function stable32_rows()
             var = est == "totdev" ? :totvar : est == "htotdev" ? :htot : nothing
             if var !== nothing
                 σ *= sqrt(bias_correction([res.noise_type[k]], var, [r.m], N)[1] / s32_bias([r.alpha], var, [r.m], N)[1])
-                same || (σnote = "bias for Stable32's α (noise ID differs)")
             end
             push!(rows, Row("Stable32 σ", "PHASE.DAT", est, r.m, r.sigma, σ, S32_TOL_SIGMA, σnote))
-            idnote = same ? "" : NOISE_ID_NOTE
-            push!(rows, Row("Stable32 α", "PHASE.DAT", est, r.m, r.alpha, a_st, same ? 0.0 : Inf, idnote))
+            push!(rows, Row("Stable32 α", "PHASE.DAT", est, r.m, r.alpha, a_st, 0.0, ""))
             # CI with SigmaTau's own noise ID (the default API output)
             tol, cinote = s32_ci_tol(est, r.m)
-            same || ((tol, cinote) = (Inf, idnote))
             push!(rows, Row("Stable32 CI", "PHASE.DAT", est * " lo", r.m, r.lo, res.ci[k].lo, tol, cinote))
             push!(rows, Row("Stable32 CI", "PHASE.DAT", est * " hi", r.m, r.hi, res.ci[k].hi, tol, cinote))
         end
@@ -509,7 +510,7 @@ function drift_rows()
 end
 
 "Every comparison row, in report order."
-all_rows() = vcat(allantools_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
+all_rows() = vcat(allantools_dev_rows(), allandeviations_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
                   stable32_flickerpm_rows(),
                   allantools_edf_rows(), allantools_ci_rows(), allantools_noiseid_rows(),
                   welch_rows(), dynamic_rows(), gap_rows(), drift_rows())

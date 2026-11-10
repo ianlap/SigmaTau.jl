@@ -2,6 +2,7 @@
 
 ``identify_noise`` classifies the dominant power-law noise type per averaging
 factor (the lag-1 ACF / B1-ratio classifier the EDF/CI machinery consumes);
+``noise_id_nnls`` decomposes the variance profile into power-law components;
 ``noise_gen`` synthesizes a record with a chosen power-law frequency spectrum,
 drawing from Julia's RNG so a seeded draw matches Julia bit-for-bit.
 """
@@ -12,7 +13,15 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from ._convert import data_from_jl, np_syms, to_jl_data, to_jl_dict_int_f64, to_jl_f64, to_jl_ints
+from ._convert import (
+    data_from_jl,
+    np_f64,
+    np_syms,
+    to_jl_data,
+    to_jl_dict_int_f64,
+    to_jl_f64,
+    to_jl_ints,
+)
 from ._julia import _map_errors, jl
 from .types import FrequencyData, PhaseData
 
@@ -45,6 +54,48 @@ def identify_noise(
             remove_drift=bool(remove_drift),
         )
     )
+
+
+@_map_errors
+def noise_id_nnls(
+    data: PhaseData | FrequencyData,
+    m_values: Sequence[int] | None = None,
+    *,
+    deviation: str = "mhdev",
+    alphas: Sequence[int] | None = None,
+    weights: str | Sequence[float] = "edf",
+) -> dict:
+    """Decompose a record's variance profile into nonnegative power-law components.
+
+    One weighted nonnegative least-squares fit of σ̂²(τ) ≈ Σᵢ aᵢ (τ/τ₀)^μ(αᵢ)
+    over the whole τ range. ``deviation`` is ``"mdev"``, ``"hdev"``, ``"mhdev"``
+    (default) or ``"mhtotdev"``; ``alphas`` defaults to every α the estimator
+    converges for; ``weights`` is ``"edf"``, ``"relative"`` or a vector. Returns a
+    dict with ``deviation``, ``tau``, ``var``, ``fit``, ``alphas``, ``noise_types``,
+    ``amplitudes`` (each component's variance at τ₀), ``contributions`` (τ × α),
+    ``dominant`` (per τ), ``residual`` and ``weights``.
+    """
+    kwargs = {
+        "deviation": jl.Symbol(str(deviation)),
+        "weights": jl.Symbol(weights) if isinstance(weights, str) else to_jl_f64(weights),
+    }
+    if alphas is not None:
+        kwargs["alphas"] = to_jl_ints(alphas)
+    args = (to_jl_data(data),) if m_values is None else (to_jl_data(data), to_jl_ints(m_values))
+    r = jl.noise_id_nnls(*args, **kwargs)
+    return {
+        "deviation": str(r.deviation),
+        "tau": np_f64(r.tau),
+        "var": np_f64(r.var),
+        "fit": np_f64(r.fit),
+        "alphas": np.array(r.alphas, dtype=np.int64),
+        "noise_types": np_syms(r.noise_types),
+        "amplitudes": np_f64(r.amplitudes),
+        "contributions": np.array(r.contributions, dtype=np.float64),
+        "dominant": np_syms(r.dominant),
+        "residual": float(r.residual),
+        "weights": np_f64(r.weights),
+    }
 
 
 @_map_errors
@@ -89,4 +140,4 @@ def noise_gen(
     return data_from_jl(jl.noise_gen(jl_kind, int(n), float(tau0), **kwargs))
 
 
-__all__ = ["identify_noise", "noise_gen"]
+__all__ = ["identify_noise", "noise_id_nnls", "noise_gen"]

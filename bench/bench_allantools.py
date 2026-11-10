@@ -15,7 +15,8 @@ times each kernel with a single call. <tag> defaults to "measured", matching
 bench_sigmatau.jl.
 
 Writes bench/results/allantools_<key>.json and prints a Markdown table (and the
-end-to-end default-call table when the SigmaTau JSON carries one). With
+end-to-end default-call table when the SigmaTau JSON carries one), with an
+AllanDeviations.jl column when bench/results/allandeviations_<key>.json exists. With
 --report-only it skips the timing and prints the tables from the saved JSON.
 
 Times are printed to three significant figures and each speed-up is the ratio
@@ -124,12 +125,28 @@ else:
          "python": platform.python_version(), "N": len(x), "tau0": opt.tau0,
          "m_values": sig["m_values"], "reps": reps_used, "seconds": res}, indent=2) + "\n")
 
+# AllanDeviations.jl, when bench_allandeviations.jl has timed the same record.
+ad_path = OUT / f"allandeviations_{key}.json"
+ad = json.loads(ad_path.read_text())["seconds"] if ad_path.exists() else None
+
 print()
-print(f"| Kernel | SigmaTau ({sig['threads']} threads) | allantools | Speed-up |")
-print("|---|---:|---:|---:|")
+if ad is None:
+    print(f"| Kernel | SigmaTau ({sig['threads']} threads) | allantools | Speed-up |")
+    print("|---|---:|---:|---:|")
+else:
+    print(f"| Kernel | SigmaTau ({sig['threads']} threads) | allantools | Speed-up | "
+          f"AllanDeviations.jl | Speed-up |")
+    print("|---|---:|---:|---:|---:|---:|")
 for name in KERNELS:
     (s_txt, s), (a_txt, a) = fmt(sig["seconds"][name]), fmt(res[name])
-    print(f"| {name} | {s_txt} | {a_txt} | {speedup(a, s)} |")
+    row = f"| {name} | {s_txt} | {a_txt} | {speedup(a, s)} |"
+    if ad is not None:
+        if name in ad:
+            j_txt, j = fmt(ad[name])
+            row += f" {j_txt} | {speedup(j, s)} |"
+        else:
+            row += " — | — |"
+    print(row)
 
 if "seconds_default_call" in sig:
     print()

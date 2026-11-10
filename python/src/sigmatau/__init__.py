@@ -82,9 +82,10 @@ from .io import (
     summarize,
 )
 from .masks import TELECOM_MASKS, MaskCheck, mask_check, telecom_mask
-from .noise import identify_noise, noise_gen
+from .noise import identify_noise, noise_gen, noise_id_nnls
 from .powerlaw import powerlaw_fit, powerlaw_psd, powerlaw_sigma
 from .spectral import integrated_jitter, psd_x, psd_y, ssb_phase_noise
+from .streaming import StreamingStability
 from .suite import DEFAULT_DEVIATIONS, groslambert, ncornered_hat, stability
 from .types import (
     CrossSpectralResult,
@@ -97,6 +98,7 @@ from .types import (
     SpectralResult,
     StabilityResult,
     StabilitySuite,
+    start_time,
 )
 
 __all__ = [
@@ -150,6 +152,7 @@ __all__ = [
     "dhdev",
     # compute-all suite + clock ensembles
     "stability",
+    "StreamingStability",
     "DEFAULT_DEVIATIONS",
     "ncornered_hat",
     "groslambert",
@@ -193,6 +196,7 @@ __all__ = [
     "bias_correction",
     # noise identification + generation
     "identify_noise",
+    "noise_id_nnls",
     "noise_gen",
     # spectral estimators
     "psd_y",
@@ -201,6 +205,7 @@ __all__ = [
     "integrated_jitter",
     # file IO
     "read_data",
+    "start_time",
     "detect_format",
     "read_phase",
     "read_frequency",

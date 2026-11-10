@@ -14,6 +14,13 @@ test("a clock column that only drifts upward is not the time column", () => {
   assert.deepEqual([g.time, g.value, g.timeUnit], [1, 2, 86400]);
 });
 
+test("MJD in a column headed t is days; seconds of day at 10 Hz stay seconds", () => {
+  const mjd = read("r.dat", ["# t  ratio  flag", ...seq(30, (i) => `${(59638.801389 + i / 86400).toFixed(6)} ${-7e-15 + i * 1e-17} 1`)]);
+  assert.deepEqual([mjd.g.time, mjd.g.timeUnit], [1, 86400]);
+  const sod = read("s.csv", ["t,phase", ...seq(30, (i) => `${(43200 + i / 10).toFixed(1)},${1e-9 * i}`)]);
+  assert.deepEqual([sod.g.time, sod.g.timeUnit], [1, 1]);
+});
+
 test("a blank-separated file named .csv is split on blanks", () => {
   const { s, g } = read("phase.csv", seq(20, (i) => `${i} ${35 + i / 10}`));
   assert.equal(s.nCols, 2);
