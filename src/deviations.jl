@@ -356,6 +356,10 @@ TOTVAR reads low on FLFM and RWFM (SP1065) and high on white and flicker PM
 or `:stable32` applies the FM correction and none on PM, as SP1065 and
 Stable32 do; `false` returns the raw kernel value, which is what allantools
 reports.
+
+The extension reflects the record about each end, `N − 2` samples either way,
+so the statistic exists for `m ≤ N − 1`; a larger averaging factor gives a
+`NaN` row with `neff` 0. The default grids stop at `(N − 1) ÷ 2`.
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:totdev, data, m_values)
