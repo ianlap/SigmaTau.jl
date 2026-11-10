@@ -69,7 +69,11 @@ type at each τ ([`identify_noise`](@ref)), because the interval depends on it.
 SigmaTau uses the lag-1 autocorrelation of the phase decimated by m, after a
 quadratic detrend of each decimated series, which is reliable while at least
 30 averaged samples remain. Beyond that it falls back to the B1 and R(n)
-ratios. The result is always one of the five labels above: estimates outside
+ratios. Decimation whitens flicker PM: its lag-1 correlation fades as m
+grows, and from m ≈ 16 the test reads it as white PM, whose ADEV has several
+times the EDF. A white-PM result is therefore confirmed with R(n), the ratio
+of MVAR to AVAR that SP1065 §5.5.2 uses to separate the two PM noises, and
+becomes flicker PM when R(n) says so. The result is always one of the five labels above: estimates outside
 the range are clamped to WHPM or RWFM, and a τ where the estimate fails takes
 the type of its nearest neighbour.
 
