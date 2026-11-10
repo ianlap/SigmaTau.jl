@@ -115,8 +115,8 @@ function checkCard(c) {
     <div class="kv" title="Least-squares linear frequency drift of the record as analysed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
     <div class="rule"></div>
     ${driftBlock(c, k)}
-    <label class="check" title="${c.hasTimeCol ? "Fill the missing samples by interpolation (Howe's method)" : "Needs a time column in the file"}">
-      <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""} ${c.hasTimeCol ? "" : "disabled"}>Fill gaps by interpolation</label>
+    <label class="check" title="Fill the missing samples and NaN readings by interpolation (Howe's method)">
+      <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""}>Fill gaps by interpolation</label>
   </div>`;
 }
 

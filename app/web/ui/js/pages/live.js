@@ -233,7 +233,7 @@ async function analyse() {
     name: `Live ${new Date(run.started).toLocaleTimeString()}`,
     source: { type: "file", name: `live-${stamp()}.txt`, content: text },
     sourceInfo: `live: ${run.last?.source ?? ""}`,
-    kind: phase ? "phase" : "frequency", tau0: run.tau0, time_col: 0, value_col: 1, hasTimeCol: false, missing: 0,
+    kind: phase ? "phase" : "frequency", tau0: run.tau0, time_col: 0, value_col: 1, missing: 0,
   });
 }
 

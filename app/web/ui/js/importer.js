@@ -73,8 +73,9 @@ export function openImport(file, prev = null) {
       header: s.header,
       scaling: parseFactor(st.factor) || st.scaling,
       tau0,
-      hasTimeCol: st.time > 0 || !!s.format,  // instrument readers can fill gaps without one
       gaps,
+      // NaN (and SCPI 9.91E+37) readings, which a frequency record must have filled
+      blanks: st.values.reduce((a, c) => a + (s.columns[c - 1] ?? []).filter((x) => !Number.isFinite(x) || x === 9.91e37).length, 0),
       // (the clocks of a RINEX file differ in τ₀: the Data page gives each its own)
       sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind}${s.clocks ? "" : ` · τ₀ ${num(tau0, 4)} s`}` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
