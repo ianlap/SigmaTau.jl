@@ -73,6 +73,12 @@ In simulation the scale's own stability is that of the implicit mean `Σ aᵢ x�
 
 `:jones_tryon` is the same filter without the covariance reduction, the natural Jones–Tryon scale [jones-tryon-1983-estimating-time](@cite): a clock's reading less its estimated phase. It has the same frequency estimates and, with noiseless readings, the same scale at every clock, but it is slightly noisier at short τ (about 4% at τ = 1 on four white-FM clocks over ten seeds; single records up to 40% higher), which the reduction removes. Its reported weights are `NaN`. `R` is each clock's reading noise against the reference, so differences share the reference's noise; JT83 takes independent errors in each difference. JT83's error detection, step corrections and drift state are not included.
 
+`:stein` is Stein's Kalman timescale [stein-2003-demystified](@cite), the KAS-2 algorithm [levine-2012-statistical-modeling, erickson-2011-symmetricom-time-scale](@cite). Every clock is differenced against the pivot and each difference has a Kalman filter; the pivot's own shocks follow from the constraint that the weighted shocks of all clocks sum to zero, with separate weights for the phase, frequency and aging, inversely proportional to the variance of the matching noise. `wmax` caps the weights as in KAS-2.
+
+```julia
+timescale(cc; algorithm=:stein, models=ms, wmax=0.5)
+```
+
 ```@docs
 timescale
 TimescaleResult

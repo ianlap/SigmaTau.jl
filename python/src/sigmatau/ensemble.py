@@ -405,7 +405,9 @@ def timescale(
     frequency update, and ``"greenhall"`` runs
     Greenhall's Kalman timescale (reduced Kalman at ``R = 0``, IEMx above) on
     one ``ClockModel`` per clock in ``models``, read at clock ``pivot``
-    (0-based, default 0).
+    (0-based, default 0); ``"jones_tryon"`` is the same filter without the
+    covariance reduction, and ``"stein"`` is Stein's Kalman timescale (Stein 2003;
+    KAS-2 with ``wmax``) on the same models.
 
     AT1 and AT2 options: ``tau_min`` (each clock's τ_min in seconds, a number or one per
     clock; default estimated from the record), ``memory`` (the variance time

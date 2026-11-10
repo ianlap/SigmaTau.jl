@@ -328,6 +328,8 @@ mktempdir() do dir
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"greenhall\"", r.out) && occursin("\"pivot\":2", r.out)
         @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "jones_tryon", "--format=json", "--series", "0").code == 0
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"algorithm\":\"stein\"", r.out)
         @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
         @test run_cli("timescale", tf, "--value-cols", "2,3", "--algorithm", "greenhall").code != 0
         @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0

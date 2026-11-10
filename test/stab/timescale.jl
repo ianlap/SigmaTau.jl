@@ -187,6 +187,38 @@ using Statistics
         @test 1e-13 < std(a1 .- a2) < 3e-12                    # about the readings' noise, √R = 1e-12 s
     end
 
+    @testset "Stein Kalman (KAS-2)" begin
+        # Stein 2003 eqs 4.1–7.3: weights ∝ 1/variance of the matching noise (Levine 2012 §XVI).
+        st = timescale(cc; algorithm=:stein, models=ms)
+        @test st.algorithm === :stein
+        @test vec(mean(st.weights[late, :]; dims=1)) ≈ wopt rtol=1e-12
+        @test adev1(st) ≈ sqrt(sum(wopt .^ 2 .* q)) rtol=0.05
+        # The same optimum as Greenhall's reduced Kalman scale, to a few percent at every τ.
+        τs = [1, 10, 100]
+        gr = timescale(cc; algorithm=:greenhall, models=ms)
+        @test adev(timescale_phase(st), τs; ci=false).dev ≈ adev(timescale_phase(gr), τs; ci=false).dev rtol=0.05
+        # Clocks differing in white FM and random-walk FM: quieter than each clock, as in the paper's figs 2–4.
+        mix = [ClockModel(; tau0=1.0, q1=isodd(i) ? 1e-22 : 1e-24, q2=isodd(i) ? 1e-32 : 1e-28) for i in 1:4]
+        cm, _ = simulate_ensemble(mix, 20000; reference=0, rng=Xoshiro(3))
+        best = minimum(reduce(hcat, (adev(cm[i], τs; ci=false).dev for i in 1:4)); dims=2)
+        sm = timescale(cm; algorithm=:stein, models=mix)
+        @test all(adev(timescale_phase(sm), τs; ci=false).dev .< vec(best))
+        @test vec(sm.weights[end, :]) ≈ [1, 100, 1, 100] ./ 202 rtol=1e-12
+        # The pivot is a choice of reference: another pivot gives the same weights and a scale as stable.
+        s3 = timescale(cc; algorithm=:stein, models=ms, pivot=3)
+        @test s3.weights[late, :] ≈ st.weights[late, :]
+        @test adev(timescale_phase(s3), τs; ci=false).dev ≈ adev(timescale_phase(st), τs; ci=false).dev rtol=0.02
+        # wmax cuts the weights as in KAS-2; a gap in one clock is carried through.
+        sc = timescale(cc; algorithm=:stein, models=ms, wmax=0.3)
+        @test maximum(sc.weights[late, :]) ≈ 0.3 && all(sum(sc.weights; dims=2) .≈ 1)
+        xg = copy(cc.x); xg[30000:30100, 2] .= NaN
+        sg = timescale_phase(timescale(ClockComparisons(xg, 1.0); algorithm=:stein, models=ms))
+        @test maximum(abs, sg.x[29000:31000] .- timescale_phase(st).x[29000:31000]) < 5e-11
+        @test_throws ArgumentError timescale(cc; algorithm=:stein)
+        @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, pivot=9)
+        @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, wmax=0.2)
+    end
+
     @test_throws ArgumentError timescale(cc; algorithm=:at3)
     @test_throws ArgumentError timescale(cc; wmax=0.2)
 end
