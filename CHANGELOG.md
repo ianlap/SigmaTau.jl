@@ -306,6 +306,15 @@ Clock models, the Kalman filter and timescales.
   `"spectrum": {"error": …}` instead of stopping; `sigmatau spectrum` still
   stops. The explorer analyses such a record and its Spectrum page says why
   it has no spectrum.
+- `:greenhall` with some noiseless-reading clocks and some with reading
+  noise: the noiseless clocks are treated as one in the implicit-mean
+  weights, so the reported weights follow clock stability (before, the clock
+  with reading noise was pulled toward 1/k) and the scale changes slightly
+  with them (up to about 15 % in ADEV at short τ in the mixed case).
+  Frequencies are unchanged.
+- `theo1` and `theoh` sum Thêo1 in cache-sized blocks across all threads; a
+  default `theo1` call on 557 000 points takes 19 s instead of 2 minutes on
+  4 threads. Values move by rounding only.
 
 ### Removed
 
