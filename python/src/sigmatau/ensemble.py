@@ -31,6 +31,7 @@ from .types import PhaseData, PowerLawFit, StabilityResult
 
 _MatF64 = jl.seval("Matrix{Float64}")
 _VecModel = jl.seval("Vector{ClockModel}")
+_VecF64 = jl.seval("Vector{Float64}")
 _add = jl.seval(
     "(f, noise, a, b) -> SigmaTau.add_component!(f, noise, a:b)"
 )  # a range would come back as a Python range
@@ -390,22 +391,36 @@ def timescale(
     *,
     algorithm: str = "at1",
     tau_y: float | None = None,
-    tau_w: float | None = None,
+    tau_min: float | Sequence[float] | None = None,
+    memory: float | None = None,
+    bias: str = "paper",
     wmax: float = 1.0,
-    outlier: float = 4.0,
+    outlier: float | None = None,
     models: Sequence[ClockModel] | None = None,
 ) -> TimescaleResult:
-    """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock
-    the same, ``"at1"`` by inverse prediction-error variance learned as it runs,
-    ``"rkt"`` runs the reduced Kalman timescale on one ``ClockModel`` per clock
-    in ``models``. ``tau_y`` defaults to 100 τ₀ and ``tau_w`` to 10 ``tau_y``."""
-    kw = {"algorithm": jl.Symbol(str(algorithm)), "wmax": float(wmax), "outlier": float(outlier)}
+    """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock the
+    same (its frequencies average over ``tau_y`` seconds, default 100 τ₀),
+    ``"at1"`` follows Weiss & Weissert 1991, and ``"rkt"`` runs the reduced
+    Kalman timescale on one ``ClockModel`` per clock in ``models``.
+
+    AT1 options: ``tau_min`` (each clock's τ_min in seconds, a number or one per
+    clock; default estimated from the record), ``memory`` (the variance time
+    constant in seconds, default 20 days, at most a quarter of the record),
+    ``bias`` (``"paper"`` or ``"exact"``), ``wmax`` (largest weight) and
+    ``outlier`` (reject a clock whose error passes that many ε; default off).
+    """
+    kw = {"algorithm": jl.Symbol(str(algorithm)), "bias": jl.Symbol(str(bias)), "wmax": float(wmax)}
     if models is not None:
         kw["models"] = juliacall.convert(_VecModel, [m._jl() for m in models])
-    if tau_y is not None:
-        kw["tau_y"] = float(tau_y)
-    if tau_w is not None:
-        kw["tau_w"] = float(tau_w)
+    if tau_min is not None:
+        kw["tau_min"] = (
+            float(tau_min)
+            if np.isscalar(tau_min)
+            else juliacall.convert(_VecF64, [float(t) for t in tau_min])
+        )
+    for name, value in (("tau_y", tau_y), ("memory", memory), ("outlier", outlier)):
+        if value is not None:
+            kw[name] = float(value)
     r = jl.timescale(cc._jl(), **kw)
     return TimescaleResult(
         str(r.algorithm), cc, np_f64(r.t), _mat(r.x), _mat(r.y), _mat(r.weights), _mat(r.error)

@@ -39,10 +39,13 @@ Clock models, the Kalman filter and timescales.
   states.
 - Timescales: `timescale(cc; algorithm=:ewfa | :at1)` forms a scale from
   the clocks' predicted phases, with equal weights (EWFA) or AT1's learned
-  inverse-variance weights, capped by `wmax`, outliers and missing readings
-  left out; `timescale_phase` gives the scale against the reference. AT1
-  starts each clock from its Groslambert ADEV, or from its ADEV against the
-  reference where that estimate fails.
+  inverse-variance weights; missing readings are skipped and `timescale_phase`
+  gives the scale against the reference. AT1 follows Weiss & Weissert 1991:
+  weights from the prediction-error variance with the bias term `K` (eqs
+  3 to 7), each clock's frequency constant from its own τ_min (eq. 10), the
+  variance memory `N_τ` of 20 days and the starting variance τ²σ_y²(τ). The
+  exact bias correction (`bias=:exact`), a weight cap (`wmax`) and an outlier
+  test (`outlier`) are options.
 - Reduced Kalman timescale: `timescale(cc; algorithm=:rkt, models)` runs
   one Kalman filter over every clock, with Greenhall's IEMx covariance
   reduction after each step, so the scale is quiet at short τ as well as

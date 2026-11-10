@@ -64,54 +64,102 @@ function _cap_weights!(w::Vector{Float64}, wmax::Float64)
     end
 end
 
-# A clock's starting prediction-error variance from its ADEV at τ₀ over the
-# first samples: the Groslambert estimate with three or more clocks, else (or
-# where that comes out negative) its ADEV against the reference, which has the
-# right scale but includes the reference's noise.
-function _initial_variance(cc::ClockComparisons, n::Int)
-    k = size(cc.x, 2)
-    head = ClockComparisons(cc.x[1:n, :], cc.tau0; names=cc.names)
-    σ = Float64[adev(head[i], [1]; ci=false).dev[1] for i in 1:k]
-    if k >= 3
-        pairs = Matrix{PhaseData{Float64}}(undef, k, k)
-        for i in 1:k, j in i+1:k
-            pairs[i, j] = head[i, j]
-        end
-        g = Float64[r.dev[1] for r in groslambert(pairs, [1])]
-        σ = Float64[isfinite(g[i]) && g[i] > 0 ? g[i] : σ[i] for i in 1:k]
+# Time variance ½E[(x₍ₙ₊₂ₘ₎ − 2x₍ₙ₊ₘ₎ + xₙ)²] = (mτ₀ σ_y(mτ₀))² of each clock (s²),
+# from the second differences of its readings against the reference over the
+# triples that are all read. The reference's own share, the mean cross product
+# of two clocks' differences, is taken out; where that would leave nothing,
+# the raw value stands. NaN where a clock has fewer than 8 triples.
+function _time_variances(r::AbstractMatrix{Float64}, m::Int)
+    N, k = size(r)
+    N > 2m || return fill(NaN, k)
+    D = r[1+2m:N, :] .- 2 .* r[1+m:N-m, :] .+ r[1:N-2m, :]
+    raw = Float64[]
+    for i in 1:k
+        d = filter(isfinite, view(D, :, i))
+        push!(raw, length(d) < 8 ? NaN : sum(abs2, d) / (2 * length(d)))
     end
-    ok = filter(s -> isfinite(s) && s > 0, σ)
+    cross = Float64[]
+    for i in 1:k, j in i+1:k
+        ok = isfinite.(D[:, i]) .& isfinite.(D[:, j])
+        count(ok) >= 8 && push!(cross, sum(D[ok, i] .* D[ok, j]) / (2 * count(ok)))
+    end
+    ref = isempty(cross) ? 0.0 : sum(cross) / length(cross)
+    return Float64[v - ref > 0 ? v - ref : v for v in raw]
+end
+
+# Weiss & Weissert 1991 eq. 10: the exponential constant that best predicts a
+# clock with white FM and random-walk FM whose ADEV has its minimum at τ_min.
+_filter_constant(τmin::Real, τ₀::Real) = (-1 + sqrt(1 / 3 + 4 * (τmin / τ₀)^2 / 3)) / 2
+
+# Each clock's own τ_min: the lag where its individual ADEV is smallest over
+# the octaves the record supports.
+function _estimate_tau_min(cc::ClockComparisons)
+    N, k = size(cc.x)
+    best, tmin = fill(Inf, k), fill(cc.tau0, k)
+    m = 1
+    while N - 2m >= 16
+        v = _time_variances(cc.x, m)
+        for i in 1:k
+            s = sqrt(v[i]) / m
+            isfinite(s) && s < best[i] && (best[i] = s; tmin[i] = m * cc.tau0)
+        end
+        m *= 2
+    end
+    return tmin
+end
+
+# Starting prediction-error variances ε_i²(τ₀) = τ₀² σ_y,i²(τ₀) (eq. 7), from
+# the first max(16, N/10) readings; a clock with no usable estimate takes
+# the largest of the others.
+function _initial_variance(cc::ClockComparisons)
+    N, k = size(cc.x)
+    v = _time_variances(view(cc.x, 1:min(N, max(16, N ÷ 10)), :), 1)
+    ok = filter(s -> isfinite(s) && s > 0, v)
     isempty(ok) && return ones(k)
-    σ = Float64[isfinite(s) && s > 0 ? s : maximum(ok) for s in σ]    # the reference itself reads zero
-    return (σ .* cc.tau0) .^ 2
+    return Float64[isfinite(s) && s > 0 ? s : maximum(ok) for s in v]
+end
+
+# Starting frequencies against the scale: each clock's least-squares slope
+# over the first max(16, N/10) readings less the mean slope, so clocks with
+# frequency offsets start tracking them (the mean of the offsets is the
+# scale's own).
+function _initial_frequency(cc::ClockComparisons)
+    N, k = size(cc.x)
+    rows = 1:min(N, max(16, N ÷ 10))
+    slope = zeros(k)
+    for i in 1:k
+        ok = isfinite.(cc.x[rows, i])
+        count(ok) >= 2 || continue
+        t = (rows[ok] .- 1) .* cc.tau0
+        slope[i] = sum((t .- sum(t) / length(t)) .* cc.x[rows[ok], i]) / sum(abs2, t .- sum(t) / length(t))
+    end
+    seen = isfinite.(cc.x[1, :])
+    return seen .* (slope .- sum(slope[seen]) / max(1, count(seen)))
 end
 
 """
-    timescale(cc::ClockComparisons; algorithm=:at1, tau_y, tau_w, wmax=1, outlier=4) → TimescaleResult
+    timescale(cc::ClockComparisons; algorithm=:at1, …) → TimescaleResult
 
 Form a timescale from the clocks in `cc`. At each sample every clock's
 phase against the scale is predicted from the last one and its estimated
 frequency, and the scale is placed so that the weighted prediction errors
 sum to zero. A clock without a reading keeps its prediction and drops out
-of the average for that sample.
+of the average for that sample; a clock joins at its first reading. Each
+clock's frequency starts at its least-squares slope over the first 10 % of
+the record, less the mean slope.
 
 - `:ewfa`, equal-weight frequency averaging: every clock weighs the same.
-- `:at1`, the NIST real-time scale (Allan, Gray & Machlan 1974; Weiss,
-  Allan & Peppler 1989): weights ∝ 1/σᵢ², with σᵢ² an exponential average
-  of the clock's squared prediction error over `tau_w` seconds, corrected
-  by 1/(1 − wᵢ) for the clock's own pull on the scale. Weights are capped
-  at `wmax`, and a clock whose error passes `outlier` σᵢ is left out of
-  that sample and of its variance.
-
-With two clocks the comparisons alone cannot tell which clock is the better
-one, and AT1's weights wander toward either; cap them with `wmax` or use
-EWFA.
-
-Each clock's frequency is an exponential average of its phase steps over
-`tau_y` seconds (default 100 τ₀); `tau_w` defaults to 10 `tau_y`. With
-three or more clocks, AT1 starts from each clock's Groslambert ADEV over
-the first 10 % of the record.
-
+  Each clock's frequency is an exponential average of its phase steps
+  over `tau_y` seconds (default 100 τ₀). With every clock read at every
+  sample the scale is the plain mean of the clocks' phases.
+- `:at1`, the NIST scale as Weiss & Weissert describe it
+  [weiss-weissert-1991-at2](@cite) (equation numbers are the paper's):
+  weights ``w_i = ε_x²/ε_i²`` (3), with ``ε_x² = (Σ 1/ε_i²)⁻¹`` (4), where
+  ``ε_i²`` is an exponential average (7) of the squared prediction error
+  estimate ``ε̂_i = |x̂_i − x_i| + K_i`` (5), the bias
+  ``K_i = 2ε_x²/√(2πε_i²)`` (6) making up for each clock being part of the
+  scale. Each clock's frequency is filtered (9) with its own constant from
+  its τ_min (10).
 - `:rkt`, the reduced Kalman timescale in Greenhall's IEMx form
   [greenhall-2003-jones-tryon, greenhall-2006-measurement-noise](@cite):
   one Kalman filter over every clock's phase and frequency (and drift),
@@ -120,17 +168,42 @@ the first 10 % of the record.
   part of the covariance is reduced about the implicit ensemble mean, a
   weighted mean of the corrected clocks; this keeps the frequency
   estimates and minimizes each step of the scale, so the scale is quiet at
-  short τ as well as long. The weights are those of that mean; `tau_y`,
-  `tau_w`, `wmax` and `outlier` do not apply. The scale's frequency against
-  the reference settles at a constant set by the start, which comes from a
-  line through each clock's first samples
+  short τ as well as long. The weights are those of that mean. The scale's
+  frequency against the reference settles at a constant set by the start,
+  which comes from a line through each clock's first samples
   [greenhall-2007-measurement-noise-corrections](@cite).
+
+AT1 keywords:
+
+- `tau_min`: each clock's τ_min in seconds, a number or one per clock; the
+  paper takes it from the clock's characterization. Default: the lag of the
+  smallest ADEV of each clock, estimated from the record (the reference's
+  share taken out).
+- `memory`: the time constant of the variance average in seconds, the
+  paper's ``N_τ`` (20 days for cesium clocks, and the default; at most a
+  quarter of the record).
+- `bias`: `:paper` (default) for ``K_i`` above, or `:exact` for the squared
+  error divided by ``1 − w_i``, which is exact when the clocks' own errors
+  are independent and the weights optimal.
+- `wmax` (default 1, no cap): the largest weight any clock may have.
+- `outlier` (default `Inf`, off): a clock whose prediction error passes
+  `outlier` ε_i is left out of that sample and of its variance; if that
+  would leave none, all stay.
+
+The weights are optimal for the interval of the readings: ε_i² is the
+clock's prediction error over one interval, so for τ well beyond it, and
+with clocks of different long-term behaviour, the scale can be worse than
+the best clock. With two clocks the comparisons alone cannot tell which is
+better, and the weights wander toward either; cap them with `wmax` or use
+EWFA. The frequency drift term of the paper's prediction (1) is not used.
 """
 function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100cc.tau0,
-                   tau_w::Real=10tau_y, wmax::Real=1.0, outlier::Real=4.0,
-                   models::Union{Nothing,AbstractVector{ClockModel}}=nothing)
+                   tau_min::Union{Nothing,Real,AbstractVector{<:Real}}=nothing,
+                   memory::Real=20 * 86400.0, bias::Symbol=:paper, wmax::Real=1.0,
+                   outlier::Real=Inf, models::Union{Nothing,AbstractVector{ClockModel}}=nothing)
     algorithm in (:ewfa, :at1, :rkt) ||
         throw(ArgumentError("timescale: algorithm must be :ewfa, :at1 or :rkt, got :$algorithm"))
+    bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
     N, k = size(cc.x)
     N >= 3 || throw(ArgumentError("timescale: needs three or more samples"))
     if algorithm === :rkt
@@ -138,38 +211,41 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
         return _reduced_kalman(cc, models)
     end
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
+    at1 = algorithm === :at1
     τ = cc.tau0
-    my, mw = tau_y / τ, tau_w / τ
+    τmin = tau_min === nothing ? (at1 ? _estimate_tau_min(cc) : fill(τ, k)) :
+           tau_min isa Real ? fill(Float64(tau_min), k) : Float64.(tau_min)
+    length(τmin) == k || throw(ArgumentError("timescale: $(length(τmin)) tau_min values for $k clocks"))
+    mf = at1 ? Float64[_filter_constant(t, τ) for t in τmin] : fill(tau_y / τ, k)
+    Nτ = max(1.0, min(memory, N * τ / 4) / τ)
     r = cc.x
     X, Y, W, E = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k)
-    σ² = algorithm === :at1 ? _initial_variance(cc, max(16, N ÷ 10)) : ones(k)
-    w = fill(1.0 / k, k)
+    ε² = at1 ? _initial_variance(cc) : ones(k)
     # Start: the scale is the plain mean of the first readings.
     ok = isfinite.(r[1, :])
     any(ok) || throw(ArgumentError("timescale: no clock has a first reading"))
     u = -sum(r[1, ok]) / count(ok)
     X[1, :] = r[1, :] .+ u
     seen = copy(ok)             # a clock joins the scale at its first reading
-    y = zeros(k)
-    W[1, :] = w .* ok ./ sum(w[ok])
+    y = _initial_frequency(cc)
+    W[1, :] = ok ./ count(ok)
     for n in 2:N
-        algorithm === :at1 && (w = 1 ./ σ²)
         x̂ = X[n-1, :] .+ y .* τ
         use = isfinite.(r[n, :]) .& seen
-        if algorithm === :at1 && n > 2
-            # A first pass on every reading sets the scale for the outlier test.
-            u₀ = sum(w[use] .* (x̂[use] .- r[n, use])) / sum(w[use])   # uncapped is close enough here
-            for i in findall(use)
-                abs(r[n, i] + u₀ - x̂[i]) > outlier * sqrt(σ²[i]) && (use[i] = false)
-            end
+        if at1 && isfinite(outlier) && n > 2 && any(use)
+            # The median prediction error places the scale for the test, so
+            # that one clock's jump cannot carry it.
+            d = x̂ .- r[n, :]
+            keep = use .& (abs.(d .- median(d[use])) .<= outlier .* sqrt.(ε²))
+            any(keep) && (use = keep)
         end
         if !any(use)
             X[n, :] = x̂
-            W[n, :] .= 0
             continue
         end
-        wu = w .* use
+        wu = at1 ? use ./ ε² : Float64.(use)
         wu ./= sum(wu)
+        εx² = at1 ? 1 / sum(1 ./ ε²[use]) : 0.0
         _cap_weights!(wu, max(Float64(wmax), 1 / count(use)))
         u = sum(wu[use] .* (x̂[use] .- r[n, use]))
         for i in 1:k
@@ -179,9 +255,11 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
             elseif isfinite(r[n, i])
                 X[n, i] = r[n, i] + u
                 E[n, i] = X[n, i] - x̂[i]
-                y[i] = (my * y[i] + (X[n, i] - X[n-1, i]) / τ) / (my + 1)
-                if algorithm === :at1 && use[i]
-                    σ²[i] = (mw * σ²[i] + E[n, i]^2 / (1 - min(wu[i], 0.9))) / (mw + 1)
+                y[i] = (mf[i] * y[i] + (X[n, i] - X[n-1, i]) / τ) / (mf[i] + 1)
+                if at1 && use[i]
+                    ε̂² = bias === :paper ? (abs(E[n, i]) + 2εx² / sqrt(2π * ε²[i]))^2 :
+                         E[n, i]^2 / (1 - min(wu[i], 0.9))
+                    ε²[i] = (ε̂² + Nτ * ε²[i]) / (1 + Nτ)
                 end
             else
                 X[n, i] = x̂[i]

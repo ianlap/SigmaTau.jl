@@ -1,4 +1,4 @@
-# timescale.jl — EWFA and AT1 on simulated ensembles with a known truth.
+# timescale.jl — EWFA, AT1 and the reduced Kalman timescale on simulated ensembles with a known truth.
 
 using Test
 using SigmaTau
@@ -16,14 +16,21 @@ using Statistics
     @test all(ew.weights .≈ 0.25)
     @test adev1(ew) ≈ sqrt(sum(q)) / 4 rtol=0.05            # σ² of an equal mean
 
-    at = timescale(cc)
     wopt = (1 ./ q) ./ sum(1 ./ q)
-    @test vec(mean(at.weights[late, :]; dims=1)) ≈ wopt rtol=0.05
+    wlate(r) = vec(mean(r.weights[late, :]; dims=1))
+    at = timescale(cc)                                      # the paper's bias term K (eqs 5-6)
+    @test wlate(at) ≈ wopt rtol=0.1
     @test adev1(at) ≈ sqrt(sum(wopt .^ 2 .* q)) rtol=0.05   # the inverse-variance optimum
     @test adev1(at) < sqrt(q[1])                            # better than the best clock
     @test all(sum(at.weights; dims=2) .≈ 1)
     @test timescale_phase(at).x ≈ at.x[:, 3] .- cc.x[:, 3]   # the same through any clock
-    # A short record where the Groslambert start fails for the best clock.
+    ex = timescale(cc; bias=:exact)                         # exact for independent errors
+    @test wlate(ex) ≈ wopt rtol=0.02
+    # The paper's constants: m from τ_min (eq. 10), per clock.
+    @test SigmaTau._filter_constant(1.0, 1.0) ≈ (sqrt(5 / 3) - 1) / 2
+    @test SigmaTau._filter_constant(100.0, 1.0) > SigmaTau._filter_constant(10.0, 1.0)
+    @test adev1(timescale(cc; tau_min=[50, 200, 200, 200])) ≈ adev1(at) rtol=0.05
+    # A short record where the Groslambert-style start is poor for the best clock.
     rw = [ClockModel(; tau0=1.0, q1=1e-24 * 4.0^k, q2=1e-30 * 4.0^k) for k in 0:3]
     short, _ = simulate_ensemble(rw, 4096; reference=0, rng=Xoshiro(42))
     @test all(<(0), diff(vec(mean(timescale(short).weights[2048:end, :]; dims=1))))
@@ -31,11 +38,32 @@ using Statistics
     @testset "caps, gaps and outliers" begin
         capped = timescale(cc; wmax=0.4)
         @test maximum(capped.weights[late, :]) <= 0.4 + 1e-12
-        x = copy(cc.x); x[30000:30100, 1] .= NaN; x[40000, 2] += 1e-9
-        r = timescale(ClockComparisons(x, 1.0))
-        @test all(iszero, r.weights[30000:30100, 1]) && all(isnan, r.error[30000:30100, 1])
+        x = copy(cc.x); x[30000:30100, 1] .= NaN
+        gap = timescale(ClockComparisons(x, 1.0))
+        @test all(iszero, gap.weights[30000:30100, 1]) && all(isnan, gap.error[30000:30100, 1])
+        clean = timescale(ClockComparisons(x, 1.0); outlier=4)
+        x[40000, 2] += 1e-9
+        r = timescale(ClockComparisons(x, 1.0); outlier=4)
         @test r.weights[40000, 2] == 0                      # a 1 ns jump is left out
-        @test abs(timescale_phase(r).x[40000] - timescale_phase(at).x[40000]) < 1e-11
+        @test abs(timescale_phase(r).x[40000] - timescale_phase(clean).x[40000]) < 1e-11
+        @test timescale(ClockComparisons(x, 1.0)).weights[40000, 2] > 0   # not by default
+    end
+
+    @testset "offsets, gaps near the start and short records (AT1)" begin
+        # Frequency offsets 1000 times the clocks' noise: weights unchanged,
+        # also with the outlier test on, which never rejects every clock.
+        off = ClockComparisons(cc.x .+ (0:size(cc.x, 1)-1) .* [1e-9 -2e-9 3e-9 0.5e-9], 1.0)
+        @test wlate(timescale(off)) ≈ wlate(at) rtol=0.1
+        @test wlate(timescale(off; outlier=4)) ≈ wlate(at) rtol=0.1
+        # τ₀ = 1000 s keeps its weights.
+        slow = timescale(ClockComparisons(cc.x[1:5000, :], 1000.0))
+        @test vec(mean(slow.weights[2500:end, :]; dims=1)) ≈ wopt rtol=0.15
+        x = copy(cc.x); x[1:5, 2] .= NaN; x[7, 3] = NaN
+        @test wlate(timescale(ClockComparisons(x, 1.0))) ≈ wlate(at) rtol=0.1
+        for n in (3, 10, 15)
+            r = timescale(ClockComparisons(cc.x[1:n, :], 1.0))
+            @test all(isfinite, r.x) && all(sum(r.weights; dims=2) .≈ 1)
+        end
     end
 
     @testset "offsets, late starters and short records (EWFA)" begin
