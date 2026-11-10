@@ -76,9 +76,8 @@ phase from the first sample. A phase jump is one outlying frequency sample,
 so this takes the jump out, where replacing the phase sample it lands on
 would leave it in.
 
-Missing samples are filled with the outliers, so a record that has
-outliers comes back without gaps. One that has none comes back as it is,
-with its gaps.
+Samples that were missing stay missing. Only the outliers are replaced,
+and [`fillgaps`](@ref) fills the gaps when that is wanted.
 
 [SP1065 §10.11](@cite riley-2008-sp1065) and
 [Stable32](@cite hamilton-2008-stable32-manual) replace an outlier by a gap,
@@ -98,7 +97,9 @@ function remove_outliers(data::PhaseData; nsigma::Real=5)
     isempty(idx) && return data
     # Work in frequency space: a phase step is one outlying frequency sample,
     # so fix it there and integrate back, anchored at the first phase sample.
-    pd = any(isnan, data.x) ? fillgaps(data) : data
+    # The sum needs every sample, so the gaps are filled for it and put back.
+    gaps = isnan.(data.x)
+    pd = any(gaps) ? fillgaps(data) : data
     x  = pd.x
     T  = eltype(x)
     t0 = pd.tau0
@@ -109,6 +110,7 @@ function remove_outliers(data::PhaseData; nsigma::Real=5)
     @inbounds for i in 1:length(x) - 1
         out[i + 1] = out[i] + fd.y[i] * t0
     end
+    out[gaps] .= NaN
     return PhaseData(out, t0; source=pd.source, start=pd.start)
 end
 
@@ -117,5 +119,7 @@ function remove_outliers(data::FrequencyData; nsigma::Real=5)
     isempty(idx) && return data
     y = Vector{Float64}(data.y)
     y[idx] .= NaN
-    return fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
+    out = fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
+    out.y[isnan.(data.y)] .= NaN
+    return out
 end
