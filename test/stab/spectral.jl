@@ -114,4 +114,25 @@ end
         @test SigmaTau._default_nperseg(40) == 16
         @test SigmaTau._default_nperseg(10) == 10
     end
+
+    @testset "integrated_jitter (SP1065 §5.2.19)" begin
+        # ℒ falling 10 dB a decade: S_φ = 2e-10·(f/1e3)^-1, so Δφ² = 2e-7·ln 100
+        # and Δf² = 2e-7·(1e5² − 1e3²)/2, both exact on straight-line segments.
+        f = [1e3, 1e4, 1e5]
+        j = integrated_jitter(f, [-100.0, -110.0, -120.0]; f_carrier=10e6)
+        @test j.phase ≈ √(2e-7 * log(100))
+        @test j.time ≈ j.phase / (2π * 10e6)
+        @test j.residual_fm ≈ √(2e-7 * (1e10 - 1e6) / 2)
+        @test integrated_jitter(f, [-100.0, -110.0, -120.0]; f_carrier=10e6, band=(1e3, 1e4)).phase ≈ √(2e-7 * log(10))
+        # White PM: the jitter over the whole band is the phase rms (Parseval),
+        # and over a tenth of it √(1/10) of that, from any of the three spectra.
+        Random.seed!(23)
+        p = PhaseData(1e-9 .* randn(2^16), 1e-3)
+        for s in (psd_x(p), psd_y(p), ssb_phase_noise(p; f_carrier=1e6))
+            @test isapprox(integrated_jitter(s; f_carrier=1e6).time, 1e-9; rtol=0.02)
+        end
+        @test isapprox(integrated_jitter(psd_x(p); f_carrier=1e6, band=(400.0, 450.0)).time, √0.1 * 1e-9; rtol=0.05)
+        @test_throws ArgumentError integrated_jitter(f, [-100.0, -110.0, -120.0]; f_carrier=10e6, band=(10.0, 1e4))
+        @test_throws ArgumentError integrated_jitter(reverse(f), [-100.0, -110.0, -120.0]; f_carrier=10e6)
+    end
 end
