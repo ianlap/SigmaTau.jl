@@ -974,35 +974,39 @@ const _THEOBR_SAMPLES = 32
 """
     _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false) → Float64
 
-ThêoBR automatic bias-removal factor per NIST SP1065 (Riley 2008)
-§5.2.16 eq. 33: the average over `i = 0…n`, `n = ⌊N/6 − 3⌋`, of the
-variance ratios `AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor
-ladders sample the same effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`),
-so each term is an AVAR/Theo1 comparison at matched averaging time.
-Multiply a Thêo1 *variance* by this factor (a deviation by its square
-root) to get the bias-removed ThêoBR estimate.
+ThêoBR automatic bias-removal factor [howe-2006-theoh](@cite), eq. 6: the
+average over `i = 0…n`, `n = ⌊N/30 − 3⌋`, of the variance ratios
+`AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor ladders sample the same
+effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`), so each term is an AVAR/Theo1
+comparison at matched averaging time, out to a tenth of the record where
+AVAR is still well determined. Multiply a Thêo1 *variance* by this factor (a
+deviation by its square root) to get the bias-removed ThêoBR estimate.
 
-The exact average needs Thêo1 at every one of the ~N/6 factors, which is
-O(N³) work (minutes at N = 65 536). Unless `exact=true` or the ladder is
-short, this computes AVAR at every factor but Thêo1 only at the first 16
-and at 32 evenly spaced along the rest, interpolating the
-Thêo1 variance between them linearly in log m–log σ² (exact for a power
-law). Against the exact ratio on simulated power-law noises (α = +2…−2,
-N = 8192 and 16 384) this stays within 0.5 % (0.25 % on the deviation),
-far inside ThêoBR's own confidence interval, at about 1 s for N = 65 536
-on four threads. This is a fast ThêoBR in the spirit of Taylor & Howe
-(2010); their block-averaging form was tried and rejected here because it
-moved the ratio by 10–40 % for the PM noises.
+[mcgee-2007-theoh](@cite) and [taylor-2010-fast-theobr](@cite) give the same
+`n`. SP1065 §5.2.16 eq. 33 prints `⌊N/6 − 3⌋`, which runs AVAR out to half
+the record, where it has one degree of freedom: on simulated white, flicker
+and random-walk FM that ladder scatters the ratio by 25 to 30 % and biases
+the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to +3 % here
+(N = 1024).
+Below `N = 120`, where `n` would be negative, the first rung is used alone.
 
-Ratio terms whose AVAR has no analysis window (eq. 33's ladder reaches
-m ≈ N/2, where `N − 2m < 1` for some record lengths) or whose Thêo1 is
-not finite/positive are skipped and the average is taken over the
-computable terms. Returns NaN when no term is computable (`N < 19`).
+Unless `exact=true` or the ladder is short, Thêo1 is computed only at the
+first 16 factors and at 32 evenly spaced along the rest, and interpolated
+between them linearly in log m–log σ² (exact for a power law); AVAR is
+computed at every factor. Against the exact ratio on simulated power-law
+noises (α = +2…−2, N = 8192 and 16 384) this stays within 0.5 % (0.25 % on
+the deviation), far inside ThêoBR's own confidence interval. The
+block-averaging form of [taylor-2010-fast-theobr](@cite) was tried and
+rejected here because it moved the ratio by 10–40 % for the PM noises.
+
+Ratio terms whose Thêo1 is not finite/positive are skipped and the average
+is taken over the computable terms. Returns NaN when no term is computable
+(`N < 19`).
 """
 function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false)
     N = length(x)
-    n = N ÷ 6 - 3
-    n < 0 && return NaN
+    N < 19 && return NaN
+    n = max(N ÷ 30 - 3, 0)
 
     # Factors i at which Thêo1 is computed: all of them, or the first 16
     # plus evenly spaced samples (always including the last).

@@ -605,11 +605,12 @@ Conventions (SP1065 / Stable32):
   SP1065/Stable32, so `r.dev` matches allantools at the same `m` while
   `r.tau` is allantools' τ scaled by 0.75.
 - `correct_bias=true` (default) applies the ThêoBR automatic bias
-  removal of SP1065 §5.2.16 eq. 33: the Thêo1 variance is multiplied by
+  removal [howe-2006-theoh](@cite): the Thêo1 variance is multiplied by
   the average of the `AVAR(m=9+3i)/Theo1(m=12+4i)` ratios over
-  `i = 0…⌊N/6 − 3⌋` (matched-τ ladders spanning the long-τ ADEV overlap
-  region), removing the noise-dependent Thêo1 bias without explicit
-  noise identification. On long ladders the ratio computes Thêo1 at 48
+  `i = 0…⌊N/30 − 3⌋` (matched-τ ladders over the first tenth of the
+  record), removing the noise-dependent Thêo1 bias without explicit
+  noise identification. SP1065 eq. 33 prints `⌊N/6 − 3⌋`, a noisier and
+  biased ladder (see `_theobr_ratio`). On long ladders the ratio computes Thêo1 at 48
   of the factors and interpolates the rest, within 0.5 % of the full
   average (see `_theobr_ratio`); this takes it from O(N³) to about 1 s at
   N = 65 536. ThêoBR needs `N ≥ 19` samples; shorter records
@@ -647,7 +648,7 @@ end
 
 ThêoH ("hybrid-ThêoBR") per NIST SP1065 (Riley 2008) §5.2.16 eq. 34: a
 composite σ_y(τ) curve that is overlapping ADEV at short averaging
-times and the bias-removed Thêo1 (ThêoBR, eq. 33) beyond, extending a
+times and the bias-removed Thêo1 (ThêoBR, see [`theo1`](@ref)) beyond, extending a
 single continuous stability plot from `τ0` out to 75 % of the record
 span.
 
@@ -666,7 +667,7 @@ the Thêo1 segment can differ from the requested `m·τ0` by up to one
 even-factor rounding step. The ThêoBR scaling needs `N ≥ 19`; shorter
 records yield NaN on the Thêo1 segment. CIs use the ADEV
 (Greenhall–Riley) EDF on the ADEV segment and the SP1065 Table 3 Thêo1
-EDF on the Thêo1 segment. ThêoBR/ThêoH always carry the eq. 33 bias
+EDF on the Thêo1 segment. ThêoBR/ThêoH always carry the bias
 removal; there is no `correct_bias` switch (raw Thêo1 is available via
 `theo1(...; correct_bias=false)`).
 """
