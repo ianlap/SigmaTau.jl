@@ -469,11 +469,14 @@ data on one side only; the modified Allan deviation stayed within 4 % to
   quarter of a frequency record, white PM read 1.3 and 1.9 times high in ADEV
   at 64 and 256 τ₀ (4.8 and 19 in MDEV), flicker PM 1.5 at 256 τ₀ and white FM
   1.06; the same gaps in a phase record stayed within 8 % in ADEV.
-- A periodic term. A sine in the frequency makes the deviation turn up, the
-  frequency is filled, and reflection inverts the sine: with a period of 512
-  samples and an amplitude of 3 σ_y(τ₀) on white PM or white FM, a 30 % gap
-  read 1.15 high in ADEV and 1.40 in MDEV at 256 τ₀, against 1.00 with
-  `form=:phase`.
+- A periodic term that stands out of the noise, which neither form carries in
+  every layout. A sine in the frequency (period 512 samples, amplitude
+  3 σ_y(τ₀)) on white FM read 1.15 high in ADEV and 1.40 in MDEV at 256 τ₀
+  across one 30 % gap, where the frequency is filled and reflection inverts
+  the sine (1.00 with `form=:phase`), and 1.42 at τ₀ past gaps of 1 to 12
+  samples, where the phase is filled (1.00 with `form=:frequency`; 1.05 at a
+  third of the amplitude). Remove such a term before filling and put it back
+  after.
 
 The estimators that skip gaps (`adev`, `mdev`, `hdev`, `mhdev` and their time
 forms, on the record with its `NaN`s) need no fill and have none of these
