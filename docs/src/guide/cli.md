@@ -205,7 +205,10 @@ numbers are `null`.
   `weight` is the last sample's, while `weight_mean` and `error_rms` cover the
   second half of the record. `adev.scale` is the scale against the reference.
   `--series N` adds `"series": {"t", "scale", "weights"}`. The CSV form has
-  one row per clock: `clock,weight,weight_mean,error_rms`.
+  one row per clock: `clock,weight,weight_mean,error_rms`. With `--algorithm
+  greenhall` or `jones_tryon`, `--flicker` fits each clock with
+  [flicker states](@ref "Flicker states") and adds `"flicker": {"fm",
+  "pm"}`, the number of Markov states each clock's model carries.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 

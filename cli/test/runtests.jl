@@ -345,6 +345,10 @@ mktempdir() do dir
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"stein\"", r.out)
         @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
+        # --flicker fits flicker states per clock; these clocks have no flicker, so none.
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--flicker", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"flicker\":{\"fm\":[0,0,0],\"pm\":[0,0,0]}", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--flicker").code != 0
         @test run_cli("timescale", tf, "--value-cols", "2,3", "--algorithm", "greenhall").code != 0
         @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
         # --clocks sets how many clocks are simulated (four by default).

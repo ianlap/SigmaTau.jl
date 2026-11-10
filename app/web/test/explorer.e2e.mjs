@@ -1,8 +1,9 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
 // Stability plot against the command line's own JSON, then visit Spectrum,
-// Dynamic, Live (simulated source) and Help, come back to Stability, and run
-// a record with gaps, with no page errors.
+// Dynamic, Ensemble (a Kalman scale with flicker states), Live (simulated
+// source) and Help, come back to Stability, and run a record with gaps, with
+// no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -70,6 +71,15 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await plotted("#page .js-plotly-plot");
     await page.click("a[data-page=dynamic]");
     await plotted("#page [data-ref=map]");
+  });
+
+  await t.test("Ensemble: a Kalman scale with flicker states", async () => {
+    await page.click("a[data-page=ensemble]");
+    await page.selectOption("#side [data-ctl=alg]", "greenhall");
+    await page.selectOption("#side [data-ctl=flicker]", "on");
+    await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
+    assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
+    await plotted("#page [data-ref=adev]");
   });
 
   await t.test("Live: a simulated source streams and stops", async () => {

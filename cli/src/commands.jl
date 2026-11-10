@@ -374,18 +374,21 @@ function read_ensemble(o::Options)
     return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
 end
 
-# The Kalman scales fit a model per clock and read the scale at --pivot.
+# The Kalman scales fit a model per clock (with --flicker, flicker states
+# included) and read the scale at --pivot. Returns the scale and the models.
 function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     alg = Symbol(o.algorithm)
+    o.flicker && !(alg === :greenhall || alg === :jones_tryon) && throw(usage_error("--flicker needs --algorithm greenhall or jones_tryon"))
     if !kalman
         isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
-        isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax)
-        return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps))
+        isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax), ClockModel[]
+        return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps)), ClockModel[]
     end
     k = size(cc.x, 2)
     k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
     1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
-    return timescale(cc; algorithm=alg, models=clock_models(cc), pivot=o.pivot, wmax=o.wmax)
+    models = clock_models(cc; flicker=o.flicker)
+    return timescale(cc; algorithm=alg, models, pivot=o.pivot, wmax=o.wmax), models
 end
 
 function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
@@ -393,7 +396,7 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     N, k = size(cc.x)
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
     kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
-    r = run_timescale(cc, o, kalman)
+    r, models = run_timescale(cc, o, kalman)
     late = max(1, N ÷ 2):N
     wmean = [sum(r.weights[late, i]) / length(late) for i in 1:k]
     rms = Float64[]
@@ -421,6 +424,12 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     json_key(io, "wmax"); json_number(io, o.wmax)
     kalman && (json_key(io, "pivot"); json_number(io, o.pivot))
     isempty(o.steps) || (json_key(io, "steps"); json_string(io, o.steps))
+    if o.flicker   # Markov states each clock's model carries
+        json_key(io, "flicker"); print(io, '{')
+        json_key(io, "fm", true); json_array(io, Int[length(SigmaTau._fm_taus(m)) for m in models])
+        json_key(io, "pm"); json_array(io, Int[length(SigmaTau._pm_taus(m)) for m in models])
+        print(io, '}')
+    end
     json_key(io, "clocks"); json_array(io, cc.names)
     json_key(io, "weight"); json_array(io, r.weights[end, :])
     json_key(io, "weight_mean"); json_array(io, wmean)

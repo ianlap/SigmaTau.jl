@@ -14,6 +14,8 @@ let inflightCtl = null;        // stops it (the core process too) when the setti
 const ALGS = [["at1", "AT1"], ["at2", "AT2"], ["ewfa", "EWFA"], ["greenhall", "Greenhall"], ["jones_tryon", "Jones–Tryon"], ["stein", "Stein"]];
 const KALMAN = new Set(["greenhall", "jones_tryon", "stein"]);
 const capped = (alg) => !KALMAN.has(alg) || alg === "stein";   // takes --wmax
+const FLICKER = new Set(["greenhall", "jones_tryon"]);          // take --flicker
+const ABOUT_FLICKER = " Flicker states: on keeps each clock's flicker FM and flicker PM in its model as Markov states, across the τ where its fit finds them; off folds flicker PM into the reading noise and leaves flicker FM out.";
 const ABOUT = {
   at1: "AT1 weighs each clock by the inverse of its prediction-error variance, learned as it runs.",
   at2: "AT2 keeps AT1's weights and follows each clock's frequency with a Kalman update. Frequency steps: best reruns the scale from a detected step; real keeps the values already issued and corrects from the step on.",
@@ -64,7 +66,7 @@ function request() {
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
   a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : []), ...(capped(E.algorithm) ? ["--wmax", E.wmax] : []),
-    ...(E.algorithm === "at2" && E.steps ? ["--steps", E.steps] : []), "--format", "json", "--series", 2000);
+    ...(E.algorithm === "at2" && E.steps ? ["--steps", E.steps] : []), ...(FLICKER.has(E.algorithm) && E.flicker ? ["--flicker"] : []), "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
@@ -79,6 +81,8 @@ export function controls() {
     ${capped(E.algorithm) ? `<label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>` : ""}
     ${E.algorithm === "at2" ? `<label class="opt"><span>Frequency steps</span><select data-ctl="steps">${[["", "Off"], ["best", "Best"], ["real", "Real"]].map(([id, label]) =>
       `<option value="${id}" ${E.steps === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
+    ${FLICKER.has(E.algorithm) ? `<label class="opt"><span>Flicker states</span><select data-ctl="flicker">${[["", "Off"], ["on", "On"]].map(([id, label]) =>
+      `<option value="${id}" ${E.flicker === (id === "on") ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
     <div class="rule"></div>
     ${KALMAN.has(E.algorithm) && (clocks.length || 4) < 3 ? `<p class="small ens-warn">${ALGS.find(([id]) => id === E.algorithm)[1]} needs three or more clocks.</p>` : ""}
     <p class="muted small">${clocks.length
@@ -86,7 +90,7 @@ export function controls() {
         ? `${clocks.length} clocks simulated on the Data page, each against a perfect reference.`
         : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference.`)
       : "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."}</p>
-    <p class="muted small">${ABOUT[E.algorithm]}</p>`;
+    <p class="muted small">${ABOUT[E.algorithm]}${FLICKER.has(E.algorithm) ? ABOUT_FLICKER : ""}</p>`;
 }
 
 export function onControl(e) {
@@ -97,6 +101,7 @@ export function onControl(e) {
   const v = t.value.trim();
   if (k === "alg") update((s) => { s.ens.algorithm = v; });
   if (k === "steps") update((s) => { s.ens.steps = v; });
+  if (k === "flicker") update((s) => { s.ens.flicker = v === "on"; });
   if (k === "pivot") update((s) => { s.ens.pivot = Number(v); });
   if (k === "wmax") {
     if (Number(v) > 0 && Number(v) <= 1) update((s) => { s.ens.wmax = Number(v); });
@@ -161,12 +166,16 @@ export function refresh() {
   const wcard = root.querySelector(".ens-weights"), relaid = wcard.hidden === weighted;
   wcard.hidden = !weighted;
   const alg = ALGS.find(([id]) => id === r.algorithm)?.[1] ?? r.algorithm;
-  root.querySelector("[data-ref=sub]").textContent = `${alg}${r.pivot ? ` at ${names[r.pivot - 1]}` : ""}${r.steps ? `, ${r.steps} steps` : ""} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || "the file's reference"}`;
+  root.querySelector("[data-ref=sub]").textContent = `${alg}${r.pivot ? ` at ${names[r.pivot - 1]}` : ""}${r.steps ? `, ${r.steps} steps` : ""}${r.flicker ? ", flicker states" : ""} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || "the file's reference"}`;
+  // With flicker states on: the Markov states each clock's fitted model carries.
+  const states = (i) => [[r.flicker.fm[i], "FM"], [r.flicker.pm[i], "PM"]].filter(([k]) => k).map(([k, kind]) => `${k} ${kind}`).join(" + ");
+  const carried = r.flicker ? names.map((n, i) => [n, states(i)]).filter(([, s]) => s) : [];
+  const flicker = !r.flicker ? "" : carried.length ? `Flicker states: ${carried.map(([n, s]) => `${h(n)} (${s})`).join(", ")}. ` : "No clock's fit has flicker that needs states. ";
   table.innerHTML = `<div class="card-row"><h2>Clocks</h2></div>
     <div class="tbl"><div class="tbl-row tbl-head"><span>Clock</span><span>Weight</span><span>Mean</span><span>RMS error</span></div>
     ${names.map((n, i) => `<div class="tbl-row tbl-body"><span class="ens-name"><span class="clock-dot" style="background:${color(i)}"></span>${h(n)}</span>
       <span>${weight(r.weight[i])}</span><span>${weight(r.weight_mean[i])}</span><span>${sci(r.error_rms[i], 2)} s</span></div>`).join("")}</div>
-    <p class="muted small ens-note">${weighted ? "" : "The Jones–Tryon scale has no per-clock weights. "}Mean weight and RMS prediction error cover the second half of the record.</p>`;
+    <p class="muted small ens-note">${flicker}${weighted ? "" : "The Jones–Tryon scale has no per-clock weights. "}Mean weight and RMS prediction error cover the second half of the record.</p>`;
   if (!Plotly) return;
   const scale = css("--accent");
   Plotly.react(root.querySelector("[data-ref=adev]"), [
