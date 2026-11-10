@@ -312,7 +312,7 @@ end
 # points takes that general fit.
 function _noise_detrend(x::Vector{Float64})
     N = length(x)
-    (N < 3 || !all(isfinite, x)) && return _remove_quadratic(x)
+    (N < 3 || !_allfinite(x)) && return _remove_quadratic(x)
     mu = (N - 1) / 2
     S2 = S4 = 0.0
     @inbounds @simd for i in 1:N
