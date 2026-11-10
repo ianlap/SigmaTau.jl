@@ -319,9 +319,9 @@ per-subsegment detrend and time-reverse extension of Howe and Vernotte.
 correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for α ∈ {2, 1, 0, -1, -2}.
 MTOT is biased low (a < 0), so the correction raises σ, by 0.3 % for white PM
-and 21 % for random-walk FM; the table holds from τ = 16 τ₀ and overcorrects
-by up to 3 % below that. At `m = 1` the estimator is exactly MDEV/√2 for any
-record, and B = 1/2. `correct_bias=false` returns the raw kernel, which is
+and 21 % for random-walk FM. The table holds from τ = 16 τ₀; below it the
+exact factor at each `m` is used. At `m = 1` the estimator is exactly MDEV/√2
+for any record, and B = 1/2. `correct_bias=false` returns the raw kernel, which is
 what Stable32 and allantools report.
 """
 function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
@@ -358,7 +358,9 @@ per-subsegment detrend and time-reverse extension of Howe et al. 2000.
 unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
 α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0) on FM, so the
-correction raises σ, substantially for divergent FM. On white and flicker PM
+correction raises σ, substantially for divergent FM. Those values hold from
+`m = 16`; below it the exact factor at each `m` is used, where Stable32
+keeps the published one. On white and flicker PM
 it reads high, by 25 to 38 % and 4 to 28 % in variance, and the factor is its
 exact expectation (see "Total estimators on PM noise" in the docs). At
 `m = 1` the estimator is plain overlapping HDEV and B = 1. Stable32 applies
