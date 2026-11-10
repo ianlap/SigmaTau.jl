@@ -50,7 +50,8 @@ export function mount(el, c) {
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
   // The drift view's toolbar takes height from the plot; follow its size.
-  new ResizeObserver(() => { if (Plotly && plotEl.data) Plotly.Plots.resize(plotEl); }).observe(plotEl);
+  // offsetParent is null once the page has moved on (Plotly rejects a hidden plot).
+  new ResizeObserver(() => { if (Plotly && plotEl.data && plotEl.offsetParent) Plotly.Plots.resize(plotEl); }).observe(plotEl);
   loadPlotly().then((P) => { Plotly = P; refresh(); }).catch(() => {});
 }
 

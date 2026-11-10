@@ -153,6 +153,7 @@ const analyzeRequest = (clock) => request(clock, "analyze", [
   "--grid", state.grid,
   ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
   "--bias", state.bias,
+  "--noise", state.noise,
   "--spectrum", "--fit", "--mask", "all",
 ]);
 

@@ -85,6 +85,7 @@ The record (all four analysis commands):
 | `--confidence P` | interval level (default 0.683, one sigma) |
 | `--no-ci` | skip intervals, EDF and noise identification |
 | `--bias MODE` | bias correction of the total estimators and Thêo1: `exact` (default), `published`, `stable32` or `none`, the library's [`correct_bias`](../explanation/noise_and_confidence.md#Matching-a-reference); `--no-bias-correction` is `--bias none` |
+| `--noise TYPE` | noise type behind the intervals and bias factors: `auto` (default, identified at each τ), `fit` (the strongest term of the power-law model fitted to MHDEV) or one of `WHPM FLPM WHFM FLFM RWFM FWFM RRFM` for every τ, the library's [`noise`](../explanation/noise_and_confidence.md#Stating-the-noise-type) |
 | `--spectrum` | add the spectrum to the JSON output |
 | `--nperseg N` | Welch segment length for `--spectrum` |
 | `--fit` | add the power-law noise model fitted to MHDEV to the JSON output |
@@ -145,7 +146,7 @@ numbers are `null`.
   },
   "analysis": {
     "quantity": "phase", "tau0": 1.0, "n": 16384, "tau_mode": "octave",
-    "ci": true, "confidence": 0.683, "bias_correction": "exact",
+    "ci": true, "confidence": 0.683, "bias_correction": "exact", "noise": "auto",
     "deviations": ["adev", "tdev"],
     "detrend": "none", "remove_drift": "none", "fillgaps": false, "remove_outliers": false, "reference_col": 0
   },

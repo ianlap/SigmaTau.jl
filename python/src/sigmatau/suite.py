@@ -21,9 +21,9 @@ from ._convert import (
     to_jl_syms,
 )
 from ._julia import _map_errors, jl
-from .deviations import DEFAULT_CONFIDENCE, _bias
+from .deviations import DEFAULT_CONFIDENCE, _bias, _noise
 from .grids import Octave, TauMode
-from .types import FrequencyData, PhaseData, StabilityResult, StabilitySuite
+from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult, StabilitySuite
 
 DEFAULT_DEVIATIONS = tuple(str(s) for s in jl.DEFAULT_DEVIATIONS)
 
@@ -61,14 +61,15 @@ def stability(
     confidence: float = DEFAULT_CONFIDENCE,
     correct_bias: bool | str = True,
     remove_drift: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
 ) -> StabilitySuite:
     """Compute several deviations on one record and collect them into a suite.
 
     ``devs`` is a sequence of deviation names (default ``DEFAULT_DEVIATIONS``,
     the four σ_y quantities ``("adev", "mdev", "hdev", "mhdev")``). ``m`` is a
     ``TauMode`` grid selector or an explicit sequence of averaging factors;
-    ``ci``/``confidence``, ``correct_bias`` (total family) and ``remove_drift``
-    (Hadamard family) flow through to each deviation.
+    ``ci``/``confidence``, ``correct_bias`` (total family), ``remove_drift``
+    (Hadamard family) and ``noise`` flow through to each deviation.
     """
     return suite_from_jl(
         jl.stability(
@@ -79,6 +80,7 @@ def stability(
             confidence=float(confidence),
             correct_bias=_bias(correct_bias),
             remove_drift=bool(remove_drift),
+            noise=_noise(noise),
         )
     )
 
