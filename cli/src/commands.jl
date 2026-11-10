@@ -56,10 +56,10 @@ end
 
 # ── analyze ───────────────────────────────────────────────────────────────
 
-# One method instance per type of `bias`: under --trim=safe the keyword call
-# needs a concrete one.
-run_deviation(d::Symbol, data, ms::Vector{Int}, o::Options, bias::Union{Bool,Symbol}) =
-    deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=bias)
+# One method instance per type of `bias` and `noise`: under --trim=safe the
+# keyword call needs concrete ones.
+run_deviation(d::Symbol, data, ms::Vector{Int}, o::Options, bias::Union{Bool,Symbol}, noise) =
+    deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=bias, noise=noise)
 
 function analysis_results(o::Options, data::PhaseData)
     need_samples(data, 8, "the analysis")
@@ -67,11 +67,13 @@ function analysis_results(o::Options, data::PhaseData)
     N = length(data.x)
     mode = tau_mode(o.grid)
     results = StabilityResult[]
+    fit = o.noise == "fit" ? powerlaw_fit(data) : nothing
     for d in o.devs
         ms = isempty(o.m) ? tau_values(mode, N, d) : o.m
         ms = Int[m for m in ms if !(m * data.tau0 < o.tau_min * (1 - 1e-9)) && !(m * data.tau0 > o.tau_max * (1 + 1e-9))]
         isempty(ms) && continue
-        push!(results, run_deviation(d, data, ms, o, correct_bias(o)))
+        push!(results, fit === nothing ? run_deviation(d, data, ms, o, correct_bias(o), Symbol(o.noise)) :
+                                         run_deviation(d, data, ms, o, correct_bias(o), fit))
     end
     isempty(results) && !(isnan(o.tau_min) && isnan(o.tau_max)) &&
         throw(CLIError(EXIT_ANALYSIS, "no averaging time of the grid lies within --tau-min and --tau-max"))
@@ -102,6 +104,7 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "ci"); json_bool(io, o.ci)
     json_key(io, "confidence"); o.ci ? json_number(io, o.confidence) : print(io, "null")
     json_key(io, "bias_correction"); json_string(io, o.bias)
+    json_key(io, "noise"); json_string(io, o.noise)
     json_key(io, "deviations"); json_array(io, String[String(d) for d in o.devs])
     json_preprocessing(io, o)
     print(io, '}')

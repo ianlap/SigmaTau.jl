@@ -131,6 +131,13 @@ mktempdir() do dir
             @test parse.(Float64, getindex.(rows, 5)) == ref.dev
         end
         @test run_cli("analyze", pf, "--bias", "sp1065").code == 1
+        for (word, noise) in (("FLFM", :FLFM), ("fit", powerlaw_fit(pd)))
+            ref = mtotdev(pd, [3, 9]; noise=noise)
+            rows = csv_rows(run_cli("analyze", pf, "--devs", "mtotdev", "--m", "3,9", "--noise", word).out)
+            @test parse.(Float64, getindex.(rows, 5)) == ref.dev
+            @test parse.(Float64, getindex.(rows, 8)) == ref.edf
+        end
+        @test run_cli("analyze", pf, "--noise", "pink").code == 1
     end
 
     @testset "frequency input" begin
@@ -149,7 +156,8 @@ mktempdir() do dir
         @test r.code == 0
         for k in ("\"schema_version\":1", "\"command\":\"analyze\"", "\"analysis\"", "\"results\"",
                   "\"points\"", "\"deviations\"", "\"noise_type\"", "\"tau_mode\":\"octave\"",
-                  "\"axis\":\"sigma_x\"", "\"label\":\"TDEV\"", "\"record\"", "\"elapsed_ms\"")
+                  "\"axis\":\"sigma_x\"", "\"label\":\"TDEV\"", "\"record\"", "\"elapsed_ms\"",
+                  "\"bias_correction\":\"exact\"", "\"noise\":\"auto\"")
             @test occursin(k, r.out)
         end
         @test !occursin("\"spectrum\"", r.out)
@@ -597,6 +605,8 @@ mktempdir() do dir
             end
             for args in (["analyze", pf, "--devs", "adev,mdev,tdev,totdev,theo1"],
                          ["analyze", pf, "--devs", "totdev,mtotdev,theo1", "--bias", "stable32"],
+                         ["analyze", pf, "--devs", "adev,htotdev,theoh", "--noise", "FLFM"],
+                         ["analyze", pf, "--devs", "mdev,mhtotdev", "--noise", "fit"],
                          ["analyze", pf, "--format", "json", "--spectrum", "--series", "100"],
                          ["check", pf, "--format", "json"],
                          ["spectrum", pf],

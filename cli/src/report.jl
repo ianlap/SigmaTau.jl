@@ -191,7 +191,7 @@ function cmd_report(io::IO, o::Options, data::PhaseData, args::Vector{String})
     print(io, "</dd>")
     print(io, "<dt>Confidence</dt><dd>")
     o.ci ? (plain(io, 100 * o.confidence, 3); print(io, " % (Greenhall EDF, χ² intervals)")) : print(io, "off")
-    print(io, "</dd><dt>Bias correction</dt><dd>", o.bias, "</dd></dl>\n<h2>Stability</h2>\n")
+    print(io, "</dd><dt>Bias correction</dt><dd>", o.bias, "</dd><dt>Noise type</dt><dd>", o.noise, "</dd></dl>\n<h2>Stability</h2>\n")
     for (axis, ylabel) in ((:sigma_y, "σy(τ)"), (:sigma_x, "σx(τ) (s)"))
         sel = StabilityResult[r for r in results if registry_entry(r.deviation_type).axis === axis]
         isempty(sel) && continue

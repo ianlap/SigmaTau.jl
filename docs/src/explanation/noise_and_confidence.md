@@ -139,6 +139,32 @@ where two differences alone keep 98 % and 93 %. A random-walk FM record
 labelled flicker-walk FM has an HDEV EDF 2 % lower and an HTOTDEV 3.7 %
 higher.
 
+### Stating the noise type
+
+The tests above read each τ on its own, and they assume power-law noise. On a
+measured record a slow periodic term, a step or a stretch of wander can
+mislead them where few averaged points remain, and the labels may then run
+against the order a sum of power laws allows (whiter noise at a longer τ
+than a redder one). Since the label sets the EDF and the bias factor, every
+estimator that reports intervals takes `noise` to state it instead (Stable32
+lets the user set the noise type too, and allantools' EDF functions take the
+exponent α):
+
+```julia
+adev(p; noise = :WHFM)                         # one type at every τ
+adev(p, [1, 16, 256]; noise = [:WHPM, :WHFM, :WHFM])
+hdev(p; noise = powerlaw_fit(p))               # strongest term of a model at each τ
+stability(p; noise = :WHFM)
+```
+
+A [`PowerLawFit`](@ref) gives, at each τ, the component with the most
+variance in the estimator's own kernel, so its labels can only redden as τ
+grows. It is as good as the fit: a short record may not resolve the reddest
+term. A type redder than an estimator covers counts as its reddest, as in
+identification (random-walk FM for the Allan family). The command line has
+`--noise auto|fit|TYPE`, the explorer a Noise type menu under Options, and
+the Python functions the same `noise` argument with the names as strings.
+
 ## Equivalent degrees of freedom
 
 An estimated variance from a record with Gaussian noise follows a scaled χ²
