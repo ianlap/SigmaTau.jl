@@ -28,7 +28,7 @@ using SigmaTau
         :ClockModel, :clock_model, :state_transition, :process_noise,
         :NoiseFit, :noise_fit, :add_component!, :undo!, :noise_residual,
         :KalmanResult, :kalman_filter, :kalman_smooth, :holdover_error, :innovation_check, :simulate_clock,
-        :prediction_error, :tune_q, :holdover, :HoldoverResult,
+        :prediction_error, :tune_q, :holdover, :HoldoverResult, :HoldoverPrediction,
         :ClockComparisons, :simulate_ensemble, :clock_models, :TimescaleResult, :timescale, :timescale_phase, :implicit_mean])
     @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public
     # The kernels stay internal but reachable as SigmaTau._adev_core etc.

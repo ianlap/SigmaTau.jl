@@ -264,11 +264,13 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
     return _Record(_gridded(t, v, fillgaps, phase), t0, phase, start)
 end
 
-# Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "Hz"): the
-# scale to SI, NaN for absolute Hz, and whether they are time units (phase,
-# +1) or frequency units (-1).
+# Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "ns/s", "Hz"):
+# the scale to SI, NaN for absolute Hz, and whether they are time units
+# (phase, +1) or frequency units (-1). Ratios of times come first.
 const _UNITS = [(Regex("(^|[\\s(\\[_/-])" * u * "([\\s)\\]]|\$)"), f, k)
-                for (u, f, k) in (("ps", 1e-12, 1), ("ns", 1e-9, 1), ("us", 1e-6, 1), ("µs", 1e-6, 1),
+                for (u, f, k) in (("ps/s", 1e-12, -1), ("ns/s", 1e-9, -1), ("us/s", 1e-6, -1),
+                                  ("µs/s", 1e-6, -1), ("μs/s", 1e-6, -1), ("ms/s", 1e-3, -1),
+                                  ("s/s", 1.0, -1), ("ps", 1e-12, 1), ("ns", 1e-9, 1), ("us", 1e-6, 1), ("µs", 1e-6, 1),
                                   ("μs", 1e-6, 1), ("ms", 1e-3, 1), ("ppt", 1e-12, -1), ("ppb", 1e-9, -1),
                                   ("ppm", 1e-6, -1), ("hz", NaN, -1), ("s", 1.0, 1))]
 
@@ -357,16 +359,22 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         t = t[keep]; v = v[keep]
     end
     start = iso[] && !isempty(t) ? t[1] : NaN
-    # MJD by name, or by its range unless the name says seconds.
+    # MJD by name, or by its range unless the name says seconds; else in the
+    # time unit the name gives ("time (ms)"), seconds without one or for
+    # ISO 8601 timestamps.
+    tscale, tkind = isempty(t) ? (1.0, 0) : _unit(names[time])
     if !isempty(t) && (occursin(r"mjd"i, names[time]) ||
-                       (_unit(names[time])[2] <= 0 && !occursin(r"sec|elapsed"i, names[time]) && _is_mjd(t)))
+                       (tkind <= 0 && !occursin(r"sec|elapsed"i, names[time]) && _is_mjd(t)))
         start = _mjd_seconds(t[1])
         t .*= 86400
+    elseif tkind > 0 && tscale != 1 && !iso[]
+        t .*= tscale
     end
-    phase = phase_hint == 0 ? !occursin(_FREQ_NAMES, names[c]) || occursin(_PHASE_NAMES, names[c]) :
-            phase_hint > 0
     scale, unit_kind = _unit(names[c])
-    # A unit in the name fixes the record type; an override must agree.
+    # A unit in the name fixes the record type, else the name's words do; an
+    # override must agree with the unit.
+    phase = phase_hint != 0 ? phase_hint > 0 : unit_kind != 0 ? unit_kind > 0 :
+            !occursin(_FREQ_NAMES, names[c]) || occursin(_PHASE_NAMES, names[c])
     (phase_hint != 0 && unit_kind != 0 && phase_hint != unit_kind) && throw(ArgumentError(
         "read_data: column \"" * names[c] * "\" is in " * (unit_kind > 0 ? "time" : "frequency") *
         " units and cannot be read as " * (phase_hint > 0 ? "phase" : "frequency")))
@@ -479,8 +487,8 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
         _read_rinex_clk(path, tau0, column, column_name, fillgaps)
     elseif fmt === :columns
         v, t0, start, phase = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
-                                      header=0, delim=nothing, scaling=1.0, detrend=:none,
-                                      fillgaps=fillgaps, hint=hint)
+                                      header=0, delim=delim == '\0' ? nothing : delim, scaling=1.0,
+                                      detrend=:none, fillgaps=fillgaps, hint=hint)
         _Record(v, t0, phase, falses(0), start)
     else
         throw(ArgumentError("read_data: unknown format :" * String(fmt) * "; use one of " * join(map(String, INPUT_FORMATS), ", ")))
@@ -498,12 +506,15 @@ Read a measurement file in any of the [`INPUT_FORMATS`](@ref), detected with
 [`detect_format`](@ref) unless `format` names one. The record type follows
 the file: TimeLab logs and counter time-interval readings are phase,
 `.frd` files and counter frequency readings are frequency, and a named
-column is phase or frequency by its name.
+column is phase or frequency by the unit in its name (`(ns)`, `[ps]` are
+phase; `ppb`, `ns/s`, `Hz` frequency), else by its words (phase, time error,
+PPS; freq, osc, fractional, ratio).
 
 - `tau0`: sample interval in seconds; by default from the file header
   (TimeLab `Sample Interval`, Stable32 `Tau:`) or the grid step of the
-  time column (seconds, MJD days, or ISO 8601 timestamps). A column named
-  `MJD` is read in days, and so is one whose values lie between MJD 30000
+  time column (seconds, MJD days, or ISO 8601 timestamps). A time column
+  whose name gives a time unit (`time (ms)`) is read in that unit, else in
+  seconds. A column named `MJD` is read in days, and so is one whose values lie between MJD 30000
   and 90000 with steps under 0.05 d and more than four decimals, unless its
   name says seconds.
 - `column`: the clock column of a `:table` file, by 1-based index or by
@@ -516,8 +527,8 @@ column is phase or frequency by its name.
 - `kind`: `:phase` or `:frequency` overrides the record type.
 - `scaling`: multiplies the samples after any unit conversion from a
   column name (`(ns)`, `[ps]`, `ppb` …).
-- `delim`: field delimiter of counter and table files; by default a comma
-  or tab when the first data line holds one, else whitespace.
+- `delim`: field delimiter; by default a comma or tab when the first data
+  line holds one, else whitespace.
 - `fillgaps`: fill the missing samples (and any `NaN` reading) with
   [`fillgaps`](@ref).
 

@@ -66,7 +66,7 @@ The record (all four analysis commands):
 | `--time-col N`, `--value-col N` | 1-based columns; `--time-col 0` means no time column |
 | `--reference-col N` | subtract this column from the value column (several clocks against one reference) |
 | `--header N` | extra header lines to skip |
-| `--delim CHAR` | field delimiter; default from the extension, `'\t'` for a tab |
+| `--delim CHAR` | field delimiter; default a comma when the first data line holds one, else whitespace; `'\t'` for a tab |
 | `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
