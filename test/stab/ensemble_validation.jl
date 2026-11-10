@@ -31,10 +31,10 @@ using LinearAlgebra
         @test maximum(abs.(ks.x .- xb) ./ sqrt.(diag(inv(Symmetric(Λ)))[1:2:end] .* sc[1]^2)) < 1e-6
     end
 
-    @testset "timescale :rkt = Greenhall's optimal weights" begin
+    @testset "timescale :greenhall (R = 0) = Greenhall's optimal weights" begin
         ms = [ClockModel(; tau0=1.0, q1=q1, q2=q2) for (q1, q2) in ((1e-24, 1e-31), (4e-24, 1e-30), (1e-23, 1e-29))]
         cc, _ = simulate_ensemble(ms, 2000; reference=0, rng=MersenneTwister(2))
-        rk = timescale(cc; algorithm=:rkt, models=ms)
+        rk = timescale(cc; algorithm=:greenhall, models=ms)
         # Unreduced Jones-Tryon filter on the differences to clock 1 (Greenhall 2003, Thm 1 and 2).
         k = 3; Φ = Matrix{Float64}(I, 2k, 2k); Q = zeros(2k, 2k); X = zeros(2k); P = zeros(2k, 2k)
         for (i, m) in enumerate(ms)
@@ -72,9 +72,9 @@ using LinearAlgebra
         ms = [ClockModel(; tau0=1.0, q1=1e-24) for _ in 1:4]
         cc, _ = simulate_ensemble(ms, 4000; reference=0, rng=MersenneTwister(2))
         x = copy(cc.x); x[:, 2] .+= 1e-10 .* (0:3999)             # 100× the one-second noise
-        @test_broken all(timescale(ClockComparisons(x, 1.0)).weights[end, :] .> 0)   # all clocks rejected at sample 2
-        @test_broken timescale(ClockComparisons(cc.x[1:12, :], 1.0)) isa Any          # BoundsError under 16 samples
+        @test all(timescale(ClockComparisons(x, 1.0)).weights[end, :] .> 0)  
+        @test timescale(ClockComparisons(cc.x[1:12, :], 1.0)) isa Any         
         xn = copy(cc.x); xn[3, 2] = NaN
-        @test_broken timescale(ClockComparisons(xn, 1.0)) isa Any                     # NaN in the first 10 %
+        @test timescale(ClockComparisons(xn, 1.0)) isa Any                    
     end
 end
