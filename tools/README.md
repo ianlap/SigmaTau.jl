@@ -9,6 +9,15 @@ is described in `docs/src/explanation/mhtotdev.md`.
 julia -t auto tools/mhtot_models.jl    # about five minutes
 ```
 
+`total_pm_models.jl` does the same for TOTDEV and HTOTDEV on white and flicker
+PM, where the published tables stop: the source of the PM rows of
+`_total_bias`, `_totvar_pm_edf` and `_htot_pm_edf`, described in
+`docs/src/explanation/total_pm.md`.
+
+```bash
+julia -t auto tools/total_pm_models.jl    # under a minute
+```
+
 ## validation/
 
 The reference cross-check suite behind `test/validation/`:

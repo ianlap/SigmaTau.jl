@@ -9,18 +9,9 @@ Greenhall–Riley spectral integrals for ADEV / MDEV / HDEV / MHDEV (via
 total-family estimators, and the SP1065 Table 3 empirical formulas for
 `:theo1` (via `_theo1_edf`).
 
-WHPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 7 and
-FCS 2001 publish coefficients for α ∈ {0, -1, -2} only. For α ∈ {1, 2}
-this routine falls back to the ADEV-style (`d=2`, `F=m`, `S=m`) or
-HDEV-style (`d=3`, `F=m`, `S=m`) Greenhall–Riley formula so every
-noise type yields a finite EDF instead of NaN. `S=m` matches the
-overlapped convention applied to the four overlapped variants
-(ADEV/MDEV/HDEV/MHDEV); both TOTDEV and HTOTDEV operate on a stride-1
-phase record (Howe's reflected-boundary extension preserves overlap),
-so the overlapped EDF is the consistent choice. The substitute is
-pragmatic, not canonical: it is dominated by the same noise-shape
-contribution as ADEV/HDEV at WHPM/FLPM, but is documented as a policy
-choice rather than a derivation.
+On white and flicker PM, where no table is published, TOTDEV and HTOTDEV
+take the models of `tools/total_pm_models.jl`, fitted to the exact EDF of
+each statistic; see the "Total estimators on PM noise" docs page.
 """
 function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64)
     edfs = Vector{Float64}(undef, length(devs))
@@ -40,14 +31,12 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mhdev
             edfs[k] = _calc_edf_core(alpha, 3, m, 1, m, N)
         elseif method == :totdev
-            # SP1065 Table 7 covers α ∈ {0,-1,-2}. For WHPM/FLPM (α=2,1) TOTDEV
-            # is dominated by the same noise-shape contribution as ADEV, so the
-            # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m, the overlapped
-            # convention) is the accepted pragmatic substitute when no
-            # totvar-specific table value is published. At m = 1 no difference
+            # SP1065 Table 7 covers α ∈ {0,-1,-2}. At m = 1 no difference
             # reaches the extension, so TOTVAR is AVAR term for term.
-            if alpha == 2 || alpha == 1 || m == 1
+            if m == 1
                 edfs[k] = _calc_edf_core(alpha, 2, m, m, m, N)
+            elseif alpha >= 1
+                edfs[k] = _totvar_pm_edf(alpha, m, N)
             else
                 b, c = _coeff_totvar(alpha)
                 edfs[k] = b * (T / tau) - c
@@ -64,14 +53,13 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
             end
         elseif method == :htotdev
-            # Same logic as :totdev: for WHPM/FLPM, fall back to HDEV-style EDF
-            # (third-difference, F=m, S=m, the overlapped convention) since the
-            # FCS 2001 table only gives coefficients for α ∈ {0,-1,-2}. At m = 1
-            # the HTOTDEV kernel *is* overlapping HDEV (SP1065, Stable32 and
-            # allantools all report HDEV there), so it takes HDEV's EDF too; the
-            # table formula would give an EDF above N.
-            if alpha == 2 || alpha == 1 || m == 1
+            # At m = 1 the HTOTDEV kernel *is* overlapping HDEV (SP1065,
+            # Stable32 and allantools all report HDEV there), so it takes
+            # HDEV's EDF too; the table formula would give an EDF above N.
+            if m == 1
                 edfs[k] = _calc_edf_core(alpha, 3, m, m, m, N)
+            elseif alpha >= 1
+                edfs[k] = _htot_pm_edf(alpha, m, N)
             else
                 b0, b1 = _coeff_htot(alpha)
                 edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
@@ -416,64 +404,87 @@ const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
 # of these values from τ/τ0 = 16.
 const _MHTOT_B = (0.9000, 0.8218, 0.7917, 0.7828, 0.7867, 0.7996, 0.8196)
 
-"""
-    bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
+# The total estimators on white and flicker PM, where nothing is published:
+# bias and EDF from the exact moments of each statistic
+# (tools/total_pm_models.jl; docs total_pm.md).
 
-Variance-scale bias factor `B(α) = E[estimator²] / true_variance` in the
-SP1065 / FCS 2001 convention. Apply as `σ_unbiased = σ_raw / √B`, i.e.,
-the caller takes the square root before dividing the deviation.
+# N / EDF of the overlapping Allan variance on flicker PM for N ≫ m, in the
+# sampled-process model of Greenhall & Riley: a fit to their algorithm.
+_flpm_avar_g(m::Int) = (L = log(m); m / (0.789 + 0.276L + 0.204L^2))
 
-- `B < 1` → estimator biased low (raw σ understates the truth).
-- `B > 1` → estimator biased high (raw σ overstates the truth).
-
-Recognised `var_type` values: `:totvar`, `:mtot`, `:htot`, `:mhtot`.
-
-Conventions per variance type:
-- `:totvar`: Howe/Walter (1994). `B = 1 − a·τ/T` with `a = 1/(3·ln 2)`
-  for FLFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
-  divergent FM noises only.
-- `:mtot`: Howe & Peppler 2001, Table 2. `B = 1 + a` with the normalized
-  bias `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}` for
-  α ∈ {2, 1, 0, -1, -2}, independent of τ for τ ≥ 16 τ₀. Biased low (B < 1),
-  as in the simulations of Howe & Vernotte 1999 (Table 1). SP1065 Table 11
-  lists reciprocals (1.06 to 1.31) under a caption that reads the other
-  way; dividing by them lowers a statistic that already reads low. Stable32
-  reports MTOT raw, so `correct_bias=false` on `mtotdev` matches it.
-- `:htot`: Howe & Peppler 2001, Table 3: the same `a` column two steps down
-  in α, for α ∈ {0, -1, -2, -3, -4}, because HTOT is the MTOT computation
-  on frequency data. Biased low (B < 1). B = 1 for α > 0 (no published
-  model; matches Stable32).
-- `:mhtot`: the exact expectation of the statistic over that of MHVAR
-  (`tools/mhtot_models.jl`), since MHTOTDEV is original to SigmaTau and has
-  no published table: `B ∈ {0.900, 0.822, 0.792, 0.783, 0.787, 0.800, 0.820}`
-  for α ∈ {2, 1, 0, -1, -2, -3, -4}, independent of τ/T and within 0.4 % of
-  these from τ = 16 τ₀. MHTOTDEV reads low because each window's quadratic
-  detrend absorbs part of its variance. See docs `mhtotdev.md`.
-
-Anything unrecognised falls through to B = 1.
-"""
-function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64)
-    B = ones(Float64, length(noises))
-
-    for k in 1:length(noises)
-        alpha = _alpha_from_noise(noises[k])
-        tau = taus[k]
-
-        if var_type == :totvar
-            a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
-            B[k] = 1 - a * (tau / T)
-        elseif var_type == :mtot
-            alpha >= -2 && (B[k] = 1 + _MTOT_NBIAS[3 - alpha])
-        elseif var_type == :htot
-            # Defined for α ∈ {0, …, −4}; for the PM noises Stable32 leaves B = 1.
-            B[k] = -4 <= alpha <= 0 ? 1 + _MTOT_NBIAS[1 - alpha] : 1.0
-        elseif var_type == :mhtot
-            B[k] = _MHTOT_B[3 - alpha]
-        end
-    end
-
-    return B
+# TOTVAR is AVAR plus the terms that reach the reflection. Each of those
+# carries an end sample at weight 2, so the two end samples add a variance
+# that grows as m². White PM in closed form: interior covariances 6, −4, 1
+# give 140N, the shared end samples 64m², the remaining edge terms 225m.
+function _totvar_pm_edf(alpha::Int, m::Int, N::Int)
+    B2 = _total_bias(:totvar, alpha, m, N)^2
+    alpha == 2 && return 72.0 * N^2 * B2 / (140N + 225m + 64.0 * m^2)
+    return B2 / (_flpm_avar_g(m) / N + 0.93 * (m / N)^2)
 end
+
+# TOTHVAR on PM: N/g interior terms, thinned as the 3m-sample windows come to
+# overlap (levelling at s = τ/T = s0) and again as the last windows run out.
+function _htot_pm_edf(alpha::Int, m::Int, N::Int)
+    g, c, s0, a, b = alpha == 2 ? (2.45, 2.0, 0.125, 1.0, 0.03) : (_flpm_avar_g(m), 2.5, 0.16, 0.6, 0.04)
+    s = m / (N - 1)
+    return _total_bias(:htot, alpha, m, N)^2 * (N / g) * (1 - a * exp(-(N - 3m) / (b * N))) / (1 + c * min(s, s0))
+end
+
+# Variance-scale bias factor E[total] / E[parent] at averaging factor m on N
+# phase samples.
+function _total_bias(var_type::Symbol, alpha::Int, m::Int, N::Int)
+    s = m / (N - 1)
+    if var_type == :totvar
+        alpha == 2  && return 1 + (8 / 3) * (m ÷ 2) / (N - 2)
+        alpha == 1  && return 1 + (0.593 + 0.068 * log(m)) * s
+        alpha == -1 && return 1 - s / (3 * log(2))
+        alpha == -2 && return 1 - 0.75 * s
+    elseif var_type == :mtot
+        m == 1 && return 0.5
+        alpha >= -2 && return 1 + _MTOT_NBIAS[3 - alpha]
+    elseif var_type == :htot
+        m == 1 && return 1.0
+        alpha == 2 && return isodd(m) ? 1.3697 - 0.8198 / m : 1.3838 - 0.2759 / m
+        alpha == 1 && return (5.148 + 1.440 * log(m)) / (4.75 + log(m)) - (isodd(m) ? 0.396 : 0.114) / m
+        return 1 + _MTOT_NBIAS[1 - alpha]
+    elseif var_type == :mhtot
+        return m == 1 ? 124 / 225 : _MHTOT_B[3 - alpha]
+    end
+    return 1.0
+end
+
+"""
+    bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int) → Vector{Float64}
+
+Variance-scale bias factor `B = E[total variance] / E[parent variance]` of a
+total estimator at each averaging factor, for a record of `N` phase samples.
+Apply as `σ_unbiased = σ_raw / √B`: `B < 1` means the raw σ reads low. With
+`s = τ/T = m/(N − 1)`:
+
+- `:totvar`: `B = 1 − a·s` with `a = 1/(3 ln 2)` for flicker FM and 0.75 for
+  random-walk FM [greenhall-1999-totvar](@cite). On PM the reflected terms
+  read high: `B = 1 + (8/3)·⌊m/2⌋/(N − 2)` for white PM, exactly, and
+  `B = 1 + (0.593 + 0.068 ln m)·s` for flicker PM.
+- `:mtot`: `B = 1 + a`, `a ∈ {−0.005, −0.149, −0.229, −0.283, −0.321}` for
+  α ∈ {2, 1, 0, −1, −2} (Howe & Peppler 2001, Table 2), independent of τ
+  from τ = 16 τ₀. SP1065 Table 11 lists reciprocals (1.06 to 1.31) under a
+  caption that reads the other way; dividing by them lowers a statistic
+  that already reads low. `B = 1/2` at `m = 1`, exactly.
+- `:htot`: the same `a` two steps down in α, for α ∈ {0, …, −4} (their
+  Table 3), because HTOT is the MTOT computation on frequency data. On PM it
+  reads high: `B = 1.384 − 0.28/m` (even m) and `1.370 − 0.82/m` (odd m) for
+  white PM, `(5.15 + 1.44 ln m)/(4.75 + ln m)` less `0.11/m` (even) or
+  `0.40/m` (odd) for flicker PM. `B = 1` at `m = 1`, where the kernel is HDEV.
+- `:mhtot`: `B ∈ {0.900, 0.822, 0.792, 0.783, 0.787, 0.800, 0.820}` for
+  α ∈ {2, …, −4}, independent of τ/T, and 124/225 at `m = 1`.
+
+The PM rows of `:totvar` and `:htot` and all of `:mhtot` have no published
+source: they are the exact expectation of each statistic
+(`tools/total_pm_models.jl`, `tools/mhtot_models.jl`). Stable32 applies no
+factor on PM. Anything unrecognised gives `B = 1`.
+"""
+bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int) =
+    [_total_bias(var_type, _alpha_from_noise(noises[k]), m_values[k], N) for k in eachindex(noises)]
 
 """
     confidence_intervals(devs, edfs, confidence) → (lower, upper)

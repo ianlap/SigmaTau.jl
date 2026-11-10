@@ -16,7 +16,7 @@ using SigmaTau: _mhtotdev_core, _mhdev_core, bias_correction, calculate_edf
         G = [(sq(_mhtotdev_core, F[i] + F[j], m) - s[i] - s[j]) / 2 for i in 1:N, j in 1:N]
 
         B = sum(s) / sum(sq.(_mhdev_core, F, m))
-        @test B ≈ bias_correction([noise], :mhtot, [Float64(m)], N - 1.0)[1] rtol = 0.004
+        @test B ≈ bias_correction([noise], :mhtot, [m], N)[1] rtol = 0.004
         edf = calculate_edf(:mhtotdev, [1.0], [noise], [m], [Float64(m)], N, N - 1.0)[1]
         @test edf ≈ sum(s)^2 / sum(abs2, G) rtol = 0.03
     end

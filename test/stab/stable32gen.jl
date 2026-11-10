@@ -54,7 +54,8 @@ using SigmaTau
     # rises and SigmaTau reads flicker FM and random-walk FM.
     tot = filter(r -> r[1] == "Total", csv)
     ms = [parse(Int, r[2]) for r in tot]
-    B = bias_correction([αsym[parse(Int, r[5])] for r in tot], :totvar, Float64.(ms), length(x) - 1.0)
+    α = [parse(Int, r[5]) for r in tot]      # Stable32 applies no factor on PM
+    B = ifelse.(α .> 0, 1.0, bias_correction(getindex.(Ref(αsym), α), :totvar, ms, length(x)))
     @test length(tot) >= 10
     @test all(isapprox.(totdev(pd, ms; ci=false, correct_bias=false).dev ./ sqrt.(B),
                         parse.(Float64, getindex.(tot, 7)); rtol=1e-4))
