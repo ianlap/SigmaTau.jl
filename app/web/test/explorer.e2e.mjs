@@ -121,8 +121,8 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
+    await page.locator("#record-chip-text", { hasText: /z\.frd.*51[23] samples/ }).waitFor();   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
-    assert.match(await page.locator("#record-chip-text").innerText(), /z\.frd.*51[23] samples/);
   });
 
   await t.test("Data: remembered .frd settings still show a file's zeros", async () => {
@@ -132,6 +132,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.locator("#import-dialog .gap-card", { hasText: "3 zero readings" }).waitFor();
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
+    await page.locator("#record-chip-text", { hasText: /z2\.frd.*25[67] samples/ }).waitFor();
   });
 
   await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
@@ -142,8 +143,8 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor();   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
-    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
   });
 
   assert.deepEqual(errors, []);
