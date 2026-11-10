@@ -49,9 +49,6 @@ include("masks.jl")
 include("streaming.jl")
 include("live.jl")
 
-# ── Names replaced in 0.6 (deprecated, exported until 0.7) ──────────────
-include("deprecated.jl")
-
 # ── Flat exports ────────────────────────────────────────────────────────
 export AbstractTimingData, PhaseData, FrequencyData, StabilityResult, StabilitySuite
 export SpectralResult, DynamicStabilityResult
