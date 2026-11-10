@@ -26,9 +26,12 @@ kbd { font-size: 11px; font-weight: 500; opacity: 0.75; }
   background: var(--bg-card); font: inherit; color: var(--ink); cursor: pointer; white-space: nowrap;
 }
 .btn:hover { border-color: var(--line-strong); background: var(--bg-popover); }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
+.btn-primary:hover { background: var(--accent-fill-hover); border-color: var(--accent-fill-hover); }
 .btn-round { width: 32px; padding: 0; border-radius: 16px; font-weight: 600; }
+.theme-btn { display: inline-flex; align-items: center; justify-content: center; }
+.theme-btn svg { width: 15px; height: 15px; display: none; }
+.theme-btn[data-choice="system"] .i-system, .theme-btn[data-choice="light"] .i-light, .theme-btn[data-choice="dark"] .i-dark { display: block; }
 .btn-dashed {
   height: 38px; width: 100%; border: 1px dashed var(--line-strong); border-radius: 8px; background: transparent;
   color: var(--accent); font: inherit; font-weight: 600; cursor: pointer;
@@ -106,8 +109,8 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .opts-toggle { display: flex; justify-content: space-between; align-items: baseline; width: 100%; border: 0; background: none; font: inherit; color: inherit; padding: 0; cursor: pointer; }
 .opts-toggle .note { font-size: 11px; color: var(--muted); }
 .side-foot { padding: 16px 20px 18px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 8px; }
-.run-btn { height: 44px; border: 0; border-radius: 7px; background: var(--accent); color: #fff; font: inherit; font-size: 14.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
-.run-btn:hover { background: var(--accent-hover); }
+.run-btn { height: 44px; border: 0; border-radius: 7px; background: var(--accent-fill); color: #fff; font: inherit; font-size: 14.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
+.run-btn:hover { background: var(--accent-fill-hover); }
 .run-btn:disabled { opacity: 0.5; cursor: default; }
 .run-btn .stale-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--warn-dot); }
 .run-note { font-size: 11.5px; color: var(--muted); min-height: 1.3em; }
@@ -172,7 +175,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 
 /* ── Dialogs ── */
 .dialog { border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 0; background: var(--bg-popover); color: var(--ink); }
-.dialog::backdrop { background: rgba(60, 45, 20, 0.28); }
+.dialog::backdrop { background: var(--backdrop); }
 .help-dialog form { padding: 22px 24px; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
 .keys { padding-left: 18px; margin: 0; }
 .keys li { margin: 4px 0; }
@@ -217,7 +220,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .preview tr.comment td { background: var(--table-head); color: var(--muted); opacity: 0.85; }
 .preview tr.names td { background: var(--table-head); font-family: var(--font-sans); font-weight: 600; border-bottom: 1px solid var(--line); cursor: pointer; }
 .preview td.value { background: var(--accent-soft); }
-.preview td.time { background: rgba(43, 36, 24, 0.07); }
+.preview td.time { background: var(--tint); }
 .preview tr.names td.value { color: var(--accent); }
 .preview td.ignore { color: var(--muted); }
 .preview td.more { text-align: center; color: var(--muted); font-family: var(--font-sans); padding: 18px; }
@@ -226,8 +229,8 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
   height: 30px; border-radius: 15px; text-align: center; text-align-last: center; font-size: 12px; cursor: pointer;
   appearance: none; -webkit-appearance: none; background: var(--bg-popover); border: 1px solid var(--line-strong);
 }
-.roles select.time { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
-.roles select.value { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.roles select.time { background: var(--ink); color: var(--bg-card); border-color: var(--ink); font-weight: 600; }
+.roles select.value { background: var(--accent-fill); color: var(--on-series); border-color: var(--accent-fill); font-weight: 600; }
 .imp-notes { display: flex; gap: 18px; font-size: 12px; color: var(--muted); }
 .imp-notes span::before { content: ""; display: inline-block; width: 11px; height: 11px; border: 1px solid var(--line-strong); background: var(--table-head); border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .imp-foot { display: flex; align-items: center; gap: 12px; padding: 14px 26px; border-top: 1px solid var(--line-soft); }
@@ -272,7 +275,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .toolbar[hidden] { display: none; }
 .pills { display: flex; gap: 8px; }
 .pill { height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--bg-card); font: inherit; font-size: 12px; cursor: pointer; color: var(--ink); }
-.pill.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.pill.on { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
 .btn-round.on { border-color: var(--accent); color: var(--accent); }
 a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
 

@@ -92,6 +92,8 @@ every change to `src/`, `cli/` or `app/web/`.
 - With one clock the panel holds the current page's settings; with several
   it keeps the clock list and the page settings move to a toolbar (Live
   keeps its settings in the panel).
+- The round button left of Help picks the theme: the system's, light, or
+  dark (Espresso); the choice is remembered.
 - Analysis runs only on Run analysis (F5); changed inputs mark the results
   out of date in the panel and the status bar.
 - Several clocks can be loaded, with no limit. With more than one, colour
