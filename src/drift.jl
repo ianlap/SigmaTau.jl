@@ -92,7 +92,7 @@ function drift_fit(data::FrequencyData; model::Symbol=:linear)
                     t, y, fit, sqrt(rss / nok))
 end
 
-drift_fit(data::PhaseData; kwargs...) = drift_fit(_phase_to_freq(data); kwargs...)
+drift_fit(data::PhaseData; kwargs...) = drift_fit(FrequencyData(data); kwargs...)
 
 function _drift_eval(model::Symbol, c::Vector{Float64}, t::Vector{Float64})
     model === :linear    && return c[1] .+ c[2] .* t

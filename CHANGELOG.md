@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `FrequencyData(p)` and `PhaseData(y)` convert a record to the other kind
+  (first difference, or running sum from 0), keeping τ₀, `source` and
+  `start`; `PhaseData` refuses a frequency record with gaps. In Python,
+  `PhaseData.to_frequency()` and `FrequencyData.to_phase()`.
+- `noise_id_nnls` and `powerlaw_fit` take the averaging factors as any
+  integer vector, a range such as `1:64` included.
 - Explorer import dialog: a typed scale factor (a number or an expression such
   as `1/(2*pi*518.295836590863e12)`) for readings that are not in the offered
   units, kept when the dialog is reopened; GNSS clock tables, whitespace

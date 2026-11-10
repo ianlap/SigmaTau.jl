@@ -182,7 +182,7 @@ function psd_y(data::FrequencyData; nperseg=nothing, noverlap=nothing, taper::Sy
     return SpectralResult(:Sy, freq, psd, :per_Hz, np, no, taper)
 end
 
-psd_y(data::PhaseData; kwargs...) = psd_y(_phase_to_freq(data); kwargs...)
+psd_y(data::PhaseData; kwargs...) = psd_y(FrequencyData(data); kwargs...)
 
 """
     psd_x(data::PhaseData;     nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
