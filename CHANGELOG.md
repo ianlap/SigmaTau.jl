@@ -433,6 +433,10 @@ Clock models, the Kalman filter and timescales.
 - Explorer: page buttons act once per click again. After a page was
   revisited, "Pin run" pinned twice and the noise model's Edit could not be
   opened.
+- `remove_outliers` replaces only the outliers: samples already missing stay
+  missing, where they were filled whenever the record held an outlier and
+  left when it held none. Fill them with `fillgaps` (`--fillgaps`) when that
+  is wanted.
 
 ## [0.6.0] - 2026-11-08
 
