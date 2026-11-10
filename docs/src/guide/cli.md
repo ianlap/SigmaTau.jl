@@ -85,7 +85,7 @@ The record (all four analysis commands):
 | `--spectrum` | add the spectrum to the JSON output |
 | `--nperseg N` | Welch segment length for `--spectrum` |
 | `--fit` | add the power-law noise model fitted to MHDEV to the JSON output |
-| `--component NOISE:A:B` | build that model by hand instead: fit NOISE (`WHFM`, `RWFM`, … or an α) on MHDEV between A and B seconds after the components before it; repeat, in order (see [`noise_fit`](@ref)) |
+| `--component NOISE:A:B` | build that model by hand instead: fit NOISE (`WHFM`, `RWFM`, … or an α) on MHDEV between A and B seconds, against what the other components leave; repeat for each one (see [`noise_fit`](@ref)) |
 
 `spectrum`: `--nperseg N` (default: the largest power of two ≤ N/4, at least 16).
 

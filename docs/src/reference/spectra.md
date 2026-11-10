@@ -36,8 +36,8 @@ powerlaw_psd
 ## Interactive fit
 
 [`noise_fit`](@ref) builds the model by hand, one noise type at a time:
-pick a type and the τ where it dominates, fit its level with the slope
-fixed, and the next component is fitted to what is left. This is the way
+pick a type and the τ where it dominates, and its level is fitted there
+with the slope fixed, against what the other components leave. This is the way
 to go when you know which noise sits where, or when [`powerlaw_fit`](@ref)
 spends a component on a bump.
 
