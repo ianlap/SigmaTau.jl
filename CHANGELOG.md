@@ -64,6 +64,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   statistic that allantools reports. `bias_correction` takes
   `published=true` for the same factors; the Python wrappers take
   `"published"` and `"stable32"`. MHTOTDEV has no published factor.
+- Python: `noise_id_nnls`, `StreamingStability`, `start_time`, and a `start`
+  field on `PhaseData` / `FrequencyData`.
 
 ### Changed
 
@@ -136,6 +138,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   is now that word instead of `true`/`false`. The explorer's bias checkbox
   is a menu of the same four; saved sessions still open, as Exact (was on)
   or None (was off).
+
+### Removed
+
+- **Breaking:** the names deprecated in 0.6: `Sy`, `Sx`, `L`, `nch`,
+  `save_result`, `save_suite`, `load_result`, `load_suite`, the five-argument
+  `confidence_intervals`, `SpectralResult.window` and `stability(; taus=)`;
+  their replacements are listed under 0.6.0, Deprecated.
 
 ### Fixed
 
