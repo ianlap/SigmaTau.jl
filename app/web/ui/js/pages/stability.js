@@ -179,7 +179,7 @@ function traces(clocks, devs) {
       const name = several ? `${c.name} · ${label(d)}` : label(d);
       if (ci && state.band) {
         out.push({ x: r.tau, y: r.ci_hi, mode: "lines", line: { width: 0 }, hoverinfo: "skip", showlegend: false });
-        out.push({ x: r.tau, y: r.ci_lo, mode: "lines", line: { width: 0 }, fill: "tonexty", fillcolor: hexAlpha(color, 0.14), hoverinfo: "skip", showlegend: false });
+        out.push({ x: r.tau, y: r.ci_lo, mode: "lines", line: { width: 0 }, fill: "tonexty", fillcolor: hexAlpha(color, css("--ci-alpha")), hoverinfo: "skip", showlegend: false });
       }
       out.push({
         x: r.tau, y: r.sigma, name, mode: several ? "lines" : "lines+markers",
@@ -282,7 +282,7 @@ function draw(clocks, devs) {
 // τ, as runs of equal type. With one clock, dashed guides show the slope each
 // run implies for the estimator the strip comes from.
 
-const NOISE_VAR = { WHPM: "--noise-wpm", FLPM: "--noise-fpm", WHFM: "--noise-wfm", FLFM: "--noise-ffm", RWFM: "--noise-rwfm" };
+const NOISE_VAR = { WHPM: "--noise-wpm", FLPM: "--noise-fpm", WHFM: "--noise-wfm", FLFM: "--noise-ffm", RWFM: "--noise-rwfm", FWFM: "--noise-fwfm", RRFM: "--noise-rrfm" };
 const STRIP_PX = 18, STRIP_GAP = 3;
 
 // The first selected σ_y estimator with noise types: the strip's source.

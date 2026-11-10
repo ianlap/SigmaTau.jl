@@ -164,14 +164,14 @@ f = powerlaw_fit(p)                 # from MHDEV
 powerlaw_sigma(f, [1.0, 100.0])     # ADEV the model predicts at 1 s and 100 s
 ```
 """
-function powerlaw_fit(data::AbstractTimingData, m_values::Vector{Int}=Int[];
+function powerlaw_fit(data::AbstractTimingData, m_values::AbstractVector{<:Integer}=Int[];
                       deviation::Symbol=:mhdev, alphas=2:-1:-2)
     deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
         "powerlaw_fit: deviation must be one of $(join(POWERLAW_DEVIATIONS, ", ")), got :$deviation"))
     αs = _powerlaw_alphas(alphas, deviation)
     τ₀ = data.tau0
     N  = _nphase(data)
-    ms = isempty(m_values) ? _default_m_values(N, deviation) : m_values
+    ms = isempty(m_values) ? _default_m_values(N, deviation) : collect(Int, m_values)
     # The estimators skip gaps, phase or frequency alike.
     res = deviation === :adev ? adev(data, ms; ci=false) :
           deviation === :mdev ? mdev(data, ms; ci=false) :

@@ -5,15 +5,13 @@
 // estimator, window or record changes; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
-import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css } from "../plot.js";
+import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale } from "../plot.js";
 import { sci, num, thousands, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
 const FRACS = [4, 8, 16, 32];
 const NAME = { dadev: "DADEV", dhdev: "DHDEV" };
-// Light = stable, dark = less stable (higher σ).
-const SCALE = [[0, "#eef1f8"], [0.25, "#a9bbe0"], [0.55, "#5576b6"], [0.8, "#2a4688"], [1, "#13213f"]];
 
 export function controls(inline = false) {
   const d = state.dyn;
@@ -98,7 +96,7 @@ function heat(c, d, zmin, zmax, showscale, compact) {
     x: d.tau.map((_, j) => j),
     y: d.t,
     zmin, zmax,
-    colorscale: SCALE,
+    colorscale: heatScale(),
     xgap: 1, ygap: 1,
     showscale,
     colorbar: showscale ? {
@@ -111,6 +109,8 @@ function heat(c, d, zmin, zmax, showscale, compact) {
     hovertemplate: `${compact ? `<b>${h(c.name)}</b><br>` : ""}t = %{customdata[2]:.6g} s<br>τ = %{customdata[0]:.4g} s<br>${NAME[d.dev]} = %{customdata[1]}<extra></extra>`,
   };
 }
+
+const sceneAxis = (text) => ({ title: { text }, color: css("--ink-2"), gridcolor: css("--grid"), zerolinecolor: css("--line-strong"), linecolor: css("--line-strong") });
 
 function range(a, b) { const out = []; for (let k = a; k <= b; k++) out.push(k); return out; }
 
@@ -179,12 +179,12 @@ export function refresh() {
     if (state.dyn.view === "3d") {
       Plotly.react(plot, [{
         type: "surface", x: d.tau.map(Math.log10), y: d.t, z: d.map.map((r) => r.map(log10)),
-        colorscale: SCALE, cmin: zmin, cmax: zmax, showscale: false,
+        colorscale: heatScale(), cmin: zmin, cmax: zmax, showscale: false,
         hovertemplate: "τ = 10^%{x:.2f} s<br>t = %{y:.6g} s<br>log₁₀σ = %{z:.2f}<extra></extra>",
       }], {
         ...baseLayout(), margin: { l: 0, r: 0, t: 0, b: 0 },
         scene: {
-          xaxis: { title: { text: "log₁₀ τ (s)" } }, yaxis: { title: { text: "t (s)" } }, zaxis: { title: { text: "log₁₀ σ" } },
+          xaxis: sceneAxis("log₁₀ τ (s)"), yaxis: sceneAxis("t (s)"), zaxis: sceneAxis("log₁₀ σ"),
           camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } },
         },
         uirevision: "3d",
@@ -231,7 +231,7 @@ export function refresh() {
   // A colour bar on its own, shared by every map.
   if (ready.length) {
     Plotly.react(area.querySelector("[data-ref=scale]"), [{
-      type: "heatmap", z: [[zmin, zmax]], zmin, zmax, colorscale: SCALE, showscale: true, hoverinfo: "skip", opacity: 0,
+      type: "heatmap", z: [[zmin, zmax]], zmin, zmax, colorscale: heatScale(), showscale: true, hoverinfo: "skip", opacity: 0,
       colorbar: {
         thickness: 14, outlinewidth: 0, len: 1, x: 0, xanchor: "left",
         tickvals: range(Math.ceil(zmin), Math.floor(zmax)),

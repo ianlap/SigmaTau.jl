@@ -219,8 +219,11 @@ Gap-tolerant result for `est` (adev, mdev, tdev, hdev, mhdev, htdev, tierms
 or mtie); see the note at the top of this file.
 """
 function _gap_result(est::Symbol, g::_GapRecord, m_values::Vector{Int};
-                     ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+                     ci::Bool=true, remove_drift::Bool=true, overlapping::Bool=true,
+                     confidence::Float64=DEFAULT_CONFIDENCE)
     _check_m(est, m_values)
+    overlapping || throw(ArgumentError(
+        "$est: overlapping=false needs a gap-free record; fill the gaps first (fillgaps)"))
     pd = PhaseData(g.x, g.tau0)
     taus = m_values .* g.tau0
     if est === :tdev || est === :htdev

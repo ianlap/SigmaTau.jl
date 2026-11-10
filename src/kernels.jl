@@ -2,29 +2,32 @@
 # deviations.jl wraps these.
 
 """
-    _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping=true) → Vector{Float64}
 
-Overlapping Allan deviation at each averaging factor `m`. Allocation-free
-SIMD inner loop.
+Allan deviation at each averaging factor `m`: overlapping, or with
+`overlapping=false` the original non-overlapped estimator, whose second
+differences start every `m` samples (SP1065 §5.2.2). Allocation-free SIMD
+inner loop.
 """
-function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
     for (k, m) in enumerate(m_values)
-        L = N - 2m
-        if L < 2          # need ≥2 analysis windows; one window is a single difference
+        idx = 1:(overlapping ? 1 : m):(N - 2m)
+        n = length(idx)
+        if n < 2          # need ≥2 analysis windows; one window is a single difference
             devs[k] = NaN
             continue
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in 1:L
+        @inbounds @simd for i in idx
             d2 = x[i+2m] - 2x[i+m] + x[i]
             sum_sq += d2^2
         end
 
-        devs[k] = sqrt(sum_sq / (2.0 * L * Float64(m)^2 * tau0^2))
+        devs[k] = sqrt(sum_sq / (2.0 * n * Float64(m)^2 * tau0^2))
     end
 
     return devs
@@ -104,29 +107,31 @@ end
 
 
 """
-    _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping=true) → Vector{Float64}
 
-Overlapping Hadamard deviation at each averaging factor `m`. Allocation-free
-SIMD inner loop.
+Hadamard deviation at each averaging factor `m`: overlapping, or with
+`overlapping=false` non-overlapped, third differences every `m` samples
+(SP1065 §5.2.8). Allocation-free SIMD inner loop.
 """
-function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
     for (k, m) in enumerate(m_values)
-        L = N - 3m
-        if L < 2          # need ≥2 analysis windows
+        idx = 1:(overlapping ? 1 : m):(N - 3m)
+        n = length(idx)
+        if n < 2          # need ≥2 analysis windows
             devs[k] = NaN
             continue
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in 1:L
+        @inbounds @simd for i in idx
             d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
             sum_sq += d3^2
         end
 
-        devs[k] = sqrt(sum_sq / (6.0 * L * Float64(m)^2 * tau0^2))
+        devs[k] = sqrt(sum_sq / (6.0 * n * Float64(m)^2 * tau0^2))
     end
 
     return devs
@@ -974,35 +979,40 @@ const _THEOBR_SAMPLES = 32
 """
     _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false) → Float64
 
-ThêoBR automatic bias-removal factor per NIST SP1065 (Riley 2008)
-§5.2.16 eq. 33: the average over `i = 0…n`, `n = ⌊N/6 − 3⌋`, of the
-variance ratios `AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor
-ladders sample the same effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`),
-so each term is an AVAR/Theo1 comparison at matched averaging time.
-Multiply a Thêo1 *variance* by this factor (a deviation by its square
-root) to get the bias-removed ThêoBR estimate.
+ThêoBR automatic bias-removal factor [howe-2006-theoh](@cite), eq. 6: the
+average over `i = 0…n`, `n = ⌊N/30 − 3⌋`, of the variance ratios
+`AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor ladders sample the same
+effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`), so each term is an AVAR/Theo1
+comparison at matched averaging time, out to a tenth of the record where
+AVAR is still well determined. Multiply a Thêo1 *variance* by this factor (a
+deviation by its square root) to get the bias-removed ThêoBR estimate.
 
-The exact average needs Thêo1 at every one of the ~N/6 factors, which is
-O(N³) work (minutes at N = 65 536). Unless `exact=true` or the ladder is
-short, this computes AVAR at every factor but Thêo1 only at the first 16
-and at 32 evenly spaced along the rest, interpolating the
-Thêo1 variance between them linearly in log m–log σ² (exact for a power
-law). Against the exact ratio on simulated power-law noises (α = +2…−2,
-N = 8192 and 16 384) this stays within 0.5 % (0.25 % on the deviation),
-far inside ThêoBR's own confidence interval, at about 1 s for N = 65 536
-on four threads. This is a fast ThêoBR in the spirit of Taylor & Howe
-(2010); their block-averaging form was tried and rejected here because it
-moved the ratio by 10–40 % for the PM noises.
+[mcgee-2007-theoh](@cite) and [taylor-2010-fast-theobr](@cite) give the same
+`n`. SP1065 §5.2.16 eq. 33 prints `⌊N/6 − 3⌋`, which runs AVAR out to half
+the record, where it has one degree of freedom: on simulated white, flicker
+and random-walk FM that ladder scatters the ratio by 25 to 30 % and biases
+the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to +3 % here
+(N = 1024).
+The paper's formula needs `N ≥ 90` for `n ≥ 0`; shorter records, outside its
+stated range, use the first rung alone.
 
-Ratio terms whose AVAR has no analysis window (eq. 33's ladder reaches
-m ≈ N/2, where `N − 2m < 1` for some record lengths) or whose Thêo1 is
-not finite/positive are skipped and the average is taken over the
-computable terms. Returns NaN when no term is computable (`N < 19`).
+Unless `exact=true` or the ladder is short, Thêo1 is computed only at the
+first 16 factors and at 32 evenly spaced along the rest, and interpolated
+between them linearly in log m–log σ² (exact for a power law); AVAR is
+computed at every factor. Against the exact ratio on simulated power-law
+noises (α = +2…−2, N = 8192 and 16 384) this stays within 0.5 % (0.25 % on
+the deviation), far inside ThêoBR's own confidence interval. The
+block-averaging form of [taylor-2010-fast-theobr](@cite) was tried and
+rejected here because it moved the ratio by 10–40 % for the PM noises.
+
+Ratio terms whose Thêo1 is not finite/positive are skipped and the average
+is taken over the computable terms. Returns NaN when no term is computable
+(`N < 19`).
 """
 function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false)
     N = length(x)
-    n = N ÷ 6 - 3
-    n < 0 && return NaN
+    N < 19 && return NaN
+    n = max(N ÷ 30 - 3, 0)
 
     # Factors i at which Thêo1 is computed: all of them, or the first 16
     # plus evenly spaced samples (always including the last).

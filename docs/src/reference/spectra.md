@@ -10,6 +10,7 @@ power-law slope guides.
 psd_y
 psd_x
 ssb_phase_noise
+integrated_jitter
 ```
 
 ## Power-law model

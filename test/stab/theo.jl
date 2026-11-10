@@ -82,7 +82,7 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
     end
 
     @testset "ThêoBR bias-correction behavior" begin
-        # The eq. 33 correction is a single scalar variance ratio: the
+        # The correction is a single scalar variance ratio: the
         # corrected deviations are exactly raw·√ratio at every τ.
         Random.seed!(7)
         p = noise_gen(PhaseData, 2048, 1.0; sigma1 = Dict(0 => 1e-12))
@@ -92,9 +92,14 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         ratio = _theobr_ratio(_f64(p.x), 1.0)
         @test cor.dev ≈ raw.dev .* sqrt(ratio)
         @test cor.tau == raw.tau
-        # Thêo1 is unbiased for white FM, so the ratio sits near 1
-        # (eq. 33's long-τ terms make it noisy; bounds are deliberately loose).
-        @test 0.4 < ratio < 1.8
+        # Thêo1 is unbiased for white FM, so the ratio sits near 1.
+        @test 0.7 < ratio < 1.3
+
+        # Howe 2006 eq. 6: the mean of AVAR(9+3i)/Theo1(12+4i) over i = 0…⌊N/30 − 3⌋.
+        x = _f64(p.x)
+        i = 0:(2048 ÷ 30 - 3)
+        @test _theobr_ratio(x, 1.0; exact=true) ≈
+              mean(adev(p, collect(9 .+ 3i); ci=false).dev .^ 2 ./ _theo1_core(x, collect(12 .+ 4i), 1.0) .^ 2)
 
         # White PM: Table 2 bias a + b/m^c ≈ 0.09 + 0.74/m^0.4 — the ratio
         # average lands well below 1.
@@ -102,15 +107,20 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         ppm = noise_gen(PhaseData, 2048, 1.0; sigma1 = Dict(2 => 1e-12))
         @test 0.05 < _theobr_ratio(_f64(ppm.x), 1.0) < 0.45
 
-        # Records too short for the eq. 33 ladder (N < 19): NaN, and the
-        # corrected wrapper propagates it.
+        # Below N = 90, where the formula gives n < 0, the first rung stands alone.
+        x60 = _f64(p.x[1:60])
+        @test _theobr_ratio(x60, 1.0) ≈
+              adev(PhaseData(x60, 1.0), [9]; ci=false).dev[1]^2 / _theo1_core(x60, [12], 1.0)[1]^2
+
+        # Records too short for one rung (N < 19): NaN, and the corrected
+        # wrapper propagates it.
         @test isnan(_theobr_ratio(randn(16), 1.0))
         rshort = theo1(PhaseData(randn(16), 1.0), [4]; ci=false)
         @test isnan(rshort.dev[1])
     end
 
     @testset "fast ThêoBR ratio against the exact ladder" begin
-        # The ratio computes Thêo1 at a sample of the eq. 33 ladder and
+        # The ratio computes Thêo1 at a sample of the ladder and
         # interpolates the rest; it stays within 0.5 % of the full average.
         for alpha in (2, 1, 0, -1, -2)
             p = noise_gen(PhaseData, 3000, 1.0; sigma1 = Dict(alpha => 1e-12),

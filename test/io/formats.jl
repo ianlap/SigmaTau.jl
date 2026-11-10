@@ -38,7 +38,20 @@ fmt(f) = joinpath(FMT, f)
         @test e.tau0 == 30 && !any(isnan, e.x) && e.x[1] == 8.0e-5
         @test read_data(fmt("rinex_clk_synth.clk"); column=2).x[1] == -3.2e-7   # by position: the station
         @test !any(isnan, read_data(fmt("rinex_clk_synth.clk"); fillgaps=true).x)
-        @test_throws ArgumentError read_data(fmt("rinex_clk_synth.clk"); column="G99")
+        @test_throws "among the 3 clocks" read_data(fmt("rinex_clk_synth.clk"); column="G99")
+        @test_throws "exceeds the 3 clocks" read_data(fmt("rinex_clk_synth.clk"); column=9999)
+        # Old IGS files write the exponent with D; the record runs on past midnight.
+        old = tempname() * ".clk"
+        write(old, """
+                 2.00           C                   G                   RINEX VERSION / TYPE
+                                                                        END OF HEADER
+            AS G01  2025 08 17 23 59 30.000000  2   -.123000000000D-03  .250000000000D-10
+            AS G01  2025 08 18 00 00  0.000000  2   -.123100000000D-03  .250000000000D-10
+            AS G01  2025 08 18 00 00 30.000000  2   -.123200000000D-03  .250000000000D-10
+            """)
+        o = read_data(old)
+        @test o.tau0 == 30 && o.x == [-1.230e-4, -1.231e-4, -1.232e-4]
+        @test start_time(o) == DateTime(2025, 8, 17, 23, 59, 30)
     end
 
     @testset "TimeLab .tim" begin

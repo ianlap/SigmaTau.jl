@@ -29,3 +29,11 @@ def test_ssb_phase_noise_units(small_phase):
 def test_ssb_phase_noise_requires_carrier(small_phase):
     with pytest.raises(TypeError):
         st.ssb_phase_noise(small_phase)
+
+
+def test_integrated_jitter_matches_julia(small_phase):
+    s = st.ssb_phase_noise(small_phase, f_carrier=1e7)
+    j = st.integrated_jitter(s, f_carrier=1e7, band=(0.01, 0.2))
+    pts = st.integrated_jitter([1e3, 1e4, 1e5], [-100.0, -110.0, -120.0], f_carrier=10e6)
+    assert pts["phase"] == pytest.approx(np.sqrt(2e-7 * np.log(100)))
+    assert j["time"] == pytest.approx(j["phase"] / (2 * np.pi * 1e7))

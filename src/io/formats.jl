@@ -80,8 +80,8 @@ Name the layout of a data file from its extension and first lines, one of
 - `:rinex_clk`: a RINEX 3 clock file (`.clk`, IGS and CODE clock products):
   `AS` satellite and `AR` station clock biases in seconds, many clocks on one
   epoch grid. `column` (1-based, in order of first appearance) or `column_name`
-  (`G08`, `ALGO00CAN`) picks the clock, by default the first. Unzip `.gz`
-  files first.
+  (`G08`, `ALGO00CAN`) picks the clock, by default the first. Old files'
+  `D` exponents (`-.123D-03`) are read too. Unzip `.gz` files first.
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
   [`read_frequency`](@ref).
 
@@ -406,10 +406,10 @@ end
 
 # A RINEX 3 clock file: "AS G08 2025 08 17 00 00 00.000000  2  bias  sigma"
 # records after the header, a satellite (AS) or station (AR) clock bias in
-# seconds per line. The chosen clock's biases are the phase record, on the MJD
-# axis; an epoch it is missing from is a gap.
+# seconds per line (old IGS files write the exponent with D). The chosen clock's
+# biases are the phase record, on the MJD axis; an epoch it is missing from is a gap.
 function _read_rinex_clk(path::AbstractString, tau0::Float64, column::Int, column_name::String, fillgaps::Bool)
-    names = String[]
+    seen = Set{String}()
     t = Float64[]; v = Float64[]
     target = column_name
     io = open(path, "r")
@@ -423,15 +423,15 @@ function _read_rinex_clk(path::AbstractString, tau0::Float64, column::Int, colum
             startswith(line, "AS ") || startswith(line, "AR ") || continue
             f = split(line; keepempty=false)
             length(f) >= 10 || continue
-            if isempty(target)
-                name = String(f[2])
-                name in names || push!(names, name)
-                length(names) >= max(column, 1) && (target = names[max(column, 1)])
+            name = String(f[2])
+            if !(name in seen)
+                push!(seen, name)
+                isempty(target) && length(seen) == max(column, 1) && (target = name)
             end
-            (isempty(target) ? false : lowercase(f[2]) == lowercase(target)) || continue
+            (isempty(target) ? false : lowercase(name) == lowercase(target)) || continue
             y = tryparse(Int, f[3]); mo = tryparse(Int, f[4]); d = tryparse(Int, f[5])
             h = tryparse(Int, f[6]); mi = tryparse(Int, f[7])
-            sec = tryparse(Float64, f[8]); x = tryparse(Float64, f[10])
+            sec = tryparse(Float64, f[8]); x = tryparse(Float64, replace(f[10], 'D' => 'E', 'd' => 'e'))
             (y === nothing || mo === nothing || d === nothing || h === nothing || mi === nothing ||
              sec === nothing || x === nothing) && continue
             days = Dates.value(Date(y, mo, d) - Date(1858, 11, 17))
@@ -440,8 +440,12 @@ function _read_rinex_clk(path::AbstractString, tau0::Float64, column::Int, colum
     finally
         close(io)
     end
-    length(t) >= 2 || throw(ArgumentError("read_data: " * (isempty(target) ? "no clock records" : "no records for clock \"" * target * "\"") *
-                                          " in " * String(path)))
+    if length(t) < 2
+        n = string(length(seen))
+        throw(ArgumentError("read_data: " * (isempty(seen) ? "no clock records" :
+            isempty(target) ? "column=" * string(column) * " exceeds the " * n * " clocks" :
+            "no records for clock \"" * target * "\" among the " * n * " clocks") * " in " * String(path)))
+    end
     start = _mjd_seconds(t[1])
     t .*= 86400
     t0 = _resolve_tau0(tau0, NaN, t, "this RINEX clock file")

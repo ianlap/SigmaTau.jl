@@ -109,4 +109,17 @@ using Test, Random, SigmaTau
         @test Symbol.(strip.(split(devs, ','), Ref([' ', '"']))) == collect(DEFAULT_DEVIATIONS)
         @test match(r"confidence: ([0-9.]+)", st).captures[1] == string(DEFAULT_CONFIDENCE)
     end
+
+    @testset "non-overlapped ADEV / HDEV" begin
+        pd = PhaseData(cumsum(sin.(1:1000)), 1.0)
+        # One difference every m samples; the default grid stops where two remain.
+        @test adev(pd, [1]; overlapping=false).dev == adev(pd, [1]).dev
+        @test adev(pd, [10]; ci=false, overlapping=false).dev ≈ adev(PhaseData(pd.x[1:10:end], 10.0), [1]; ci=false).dev
+        @test hdev(pd, [10]; ci=false, overlapping=false).dev ≈ hdev(PhaseData(pd.x[1:10:end], 10.0), [1]; ci=false).dev
+        r = adev(pd; overlapping=false)
+        @test r.tau[end] == 256 && all(isfinite, r.dev) && all(>=(2), r.neff)
+        @test hdev(FrequencyData(diff(pd.x)); overlapping=false).tau[end] == 128
+        pd.x[500] = NaN
+        @test_throws ArgumentError adev(pd; overlapping=false)
+    end
 end
