@@ -91,6 +91,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   Table 2, from τ = 16τ₀, in place of SP1065 Table 8, which runs from 16 %
   high to 41 % low against simulation; Table 2 stays within 8 % for
   T/τ ≥ 16.
+- ThêoBR (`theo1` by default, and the Thêo segment of `theoh`) averages its
+  AVAR/Thêo1 ratio over `i = 0…⌊N/30 − 3⌋`, as Howe (2006), McGee and Howe
+  (2007) and Taylor and Howe (2010) define it. SP1065 eq. 33 prints
+  `⌊N/6 − 3⌋`, which runs AVAR out to half the record: the ratio scattered
+  by 25 to 30 % and biased the corrected variance by −9 to +11 %, against
+  8 to 11 % and −5 to +3 % now. Output moves by a few percent. Below
+  N = 90, where the papers' formula has no rung, the first rung is used
+  alone.
 - Flicker PM is identified as flicker PM at long τ. The lag-1 test runs on
   phase decimated by m, which whitens flicker PM, so from m ≈ 16 a pure
   flicker-PM record was labelled white PM (in 64 % of records at m = 16 and
