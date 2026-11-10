@@ -124,11 +124,14 @@ fmt(f) = joinpath(FMT, f)
         log = tempname() * ".csv"
         write(log, "time,phase (s)\n0.02,1\n0.98,2\n2.01,3\n4.03,5\n4.97,6\n")
         p = read_data(log)
-        @test p.tau0 == 0.98                       # the regular steps, to a round value
+        @test p.tau0 == 1.0                        # the fitted step, to a round value
         @test isequal(p.x, [1, 2, 3, NaN, 5, 6])
         @test start_time(p) === nothing
         @test read_data(log; fillgaps=true).x[[1, 2, 3, 5, 6]] == [1, 2, 3, 5, 6]
         @test SigmaTau._time_grid([0.0, 1.0, 3.1, 4.0]) == ([1, 2, 4, 5], 1.0)
+        # Exact timestamps keep their own step on a short record, not a rounder one.
+        @test SigmaTau._time_grid(86400.0 .* (0:9))[2] == 86400.0     # not 86000
+        @test SigmaTau._time_grid(604800.0 .* (0:99))[2] == 604800.0  # not 605000
         # MJD to six decimals (0.0864 s): 1 s steps read as 0.9504 or 1.0368 s.
         mjd = round.(59646.9583 .+ [0:999; 1500:2999] ./ 86400; digits=6)
         tbl = tempname() * ".csv"
