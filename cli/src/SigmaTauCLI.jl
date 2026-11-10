@@ -100,6 +100,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     o = Options()
     o.command = cmd
     cmd == "live" && (o.format = "json")    # live writes JSON lines only
+    cmd == "holdover" && (o.confidence = 0.95)
     for a in args
         a == "--format=json" && (o.format = "json")   # so a usage error can still answer in JSON
     end

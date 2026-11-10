@@ -41,6 +41,7 @@ each call pays Julia's start-up.
 | `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
+| `sigmatau holdover FILE` | holdover test: the time error after a training stretch against holdover time, and the time to reach a limit ([holdover](../reference/holdover.md)) |
 | `sigmatau cross FILE --with FILE2` | two channels measuring one device: cross Allan deviation and cross-spectrum ([two-channel measurements](cross.md)) |
 | `sigmatau timescale FILE --value-cols LIST` | a timescale (AT1 or EWFA) from several clocks read against one reference: each clock's weight and prediction error, and with JSON the ADEV of the scale and of each clock against it |
 | `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
@@ -103,6 +104,16 @@ The record (all four analysis commands):
 `drift`: `--model linear|quadratic|log|diffusion` (default `linear`); see
 [`drift_fit`](@ref).
 
+`holdover`: `--train SECONDS` (default: a quarter of the record),
+`--tau LIST` for the holdover times in seconds (default: the octave
+multiples of τ₀ up to the training stretch), `--fit-drift` to fit a parabola
+to the stretch in place of a line, `--no-anchor` to start from the fit's
+value in place of the last reading, `--limit SECONDS` for the holdover time
+at which the error reaches it, and `--confidence P` (default 0.95 here) for
+the share of trials the quantile covers; see [`holdover`](@ref). With JSON,
+`--fit` adds the error that the power-law model fitted to the record
+predicts for the same test.
+
 `cross`: `--with FILE2`, the second channel, read with the same options as
 `FILE`; `--grid` or `--m` for the τ values and `--nperseg N` for the
 cross-spectrum. Both records must have the same length and τ₀ and no gaps.
@@ -126,7 +137,10 @@ is never written as `NaN`. `check` writes
 writes `f,sy,sx` (without the DC bin), and `dynamic` writes `t,tau,dev`, one
 row per window and τ, with `t` the window centre in seconds. `drift` writes
 one row, `source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n`,
-with `c` blank for the linear model. `cross` writes
+with `c` blank for the linear model. `holdover` writes
+`source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit`, one row
+per holdover time; `limit` is blank without `--limit`, and `time_to_limit`
+is blank when the limit is not reached within the holdover times. `cross` writes
 `tau,covar,dev,uncertainty,dev_a,dev_b,neff`, one row per τ (see
 [`cross_adev`](@ref)).
 
@@ -197,6 +211,13 @@ numbers are `null`.
 - `sigmatau drift` adds `"drift": {"model", "coef", "stderr",
   "drift_per_day", "drift_per_day_err", "rms", "n"}`, and with `--series N`
   a `series` of `t`, `y` and `fit`.
+- `sigmatau holdover` adds `"holdover": {"train", "drift", "anchor",
+  "confidence", "tau", "rms", "quantile", "worst", "mean", "n", "limit",
+  "time_to_limit"}`, the fields of [`HoldoverResult`](@ref); `time_to_limit`
+  is `null` when the limit is not reached. With `--fit`, `predicted` holds
+  `{"alphas", "noise_types", "sigma", "quantile", "budget",
+  "time_to_limit"}` from [`HoldoverPrediction`](@ref), with one `budget`
+  array (variance in s², over `tau`) per noise type.
 - `sigmatau cross` adds `"with"` (the second file), `"cross_adev": {"tau",
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`

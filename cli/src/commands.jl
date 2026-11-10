@@ -29,6 +29,7 @@ function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args:
     c == "dynamic"  && return cmd_dynamic(io, o, data, t_start)
     c == "cross"    && return cmd_cross(io, o, data, t_start)
     c == "drift"    && return cmd_drift(io, o, data, t_start)
+    c == "holdover" && return cmd_holdover(io, o, data, t_start)
     c == "timescale" && return cmd_timescale(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
@@ -305,6 +306,80 @@ function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         json_key(io, "fit"); json_array(io, f.fit[idx])
         print(io, '}')
     end
+    print(io, '}')
+    return elapsed(io, t_start)
+end
+
+# ── holdover ──────────────────────────────────────────────────────────────
+
+const CSV_HOLDOVER = "source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit"
+
+# The error the power-law model fitted to the record predicts for the same
+# test, and each noise type's share of its variance.
+function json_holdover_fit(io::IO, data::PhaseData, h::HoldoverResult)
+    p = try
+        pf = powerlaw_fit(data)
+        holdover(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=Float64(data.tau0), train=h.train, tau=h.tau,
+                 drift=h.drift, anchor=h.anchor, limit=isnan(h.limit) ? nothing : h.limit, confidence=h.confidence)
+    catch err
+        err isa ArgumentError || rethrow()
+        print(io, '{'); json_key(io, "error", true); json_string(io, error_message(err)); print(io, '}')
+        return nothing
+    end
+    print(io, '{')
+    json_key(io, "alphas", true); json_array(io, p.alphas)
+    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._nnls_symbol(a)) for a in p.alphas])
+    json_key(io, "sigma"); json_array(io, p.sigma)
+    json_key(io, "quantile"); json_array(io, p.quantile)
+    json_key(io, "budget"); print(io, '[')
+    for j in eachindex(p.alphas)
+        j > 1 && print(io, ',')
+        json_array(io, p.budget[:, j])
+    end
+    print(io, ']')
+    json_key(io, "time_to_limit"); json_number(io, p.time_to_limit)
+    print(io, '}')
+    return nothing
+end
+
+function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+    need_samples(data, 16, "a holdover test")
+    τ₀ = Float64(data.tau0)
+    train = isnan(o.train) ? (length(data.x) ÷ 4) * τ₀ : o.train
+    limit = isnan(o.limit) ? nothing : o.limit
+    h = holdover(data; train, tau=isempty(o.taus) ? nothing : o.taus, drift=o.fit_drift, anchor=o.anchor,
+                 limit, confidence=o.confidence)
+    src = source_name(o, data)
+    if o.format != "json"
+        print(io, CSV_HOLDOVER); print(io, '\n')
+        for i in eachindex(h.tau)
+            csv_field(io, src); print(io, ','); csv_number(io, h.train); print(io, ',')
+            csv_number(io, h.tau[i]); print(io, ','); csv_number(io, h.rms[i]); print(io, ',')
+            csv_number(io, h.quantile[i]); print(io, ','); csv_number(io, h.worst[i]); print(io, ',')
+            csv_number(io, h.mean[i]); print(io, ','); print(io, h.n[i]); print(io, ',')
+            csv_number(io, h.limit); print(io, ','); csv_number(io, h.time_to_limit); print(io, '\n')
+        end
+        return nothing
+    end
+    json_head(io, o, src)
+    json_key(io, "record"); json_record(io, o, data)
+    json_key(io, "analysis"); print(io, '{')
+    json_key(io, "quantity", true); json_string(io, quantity(o))
+    json_preprocessing(io, o); print(io, '}')
+    json_key(io, "holdover"); print(io, '{')
+    json_key(io, "train", true); json_number(io, h.train)
+    json_key(io, "drift"); json_bool(io, h.drift)
+    json_key(io, "anchor"); json_bool(io, h.anchor)
+    json_key(io, "confidence"); json_number(io, h.confidence)
+    json_key(io, "tau"); json_array(io, h.tau)
+    json_key(io, "rms"); json_array(io, h.rms)
+    json_key(io, "quantile"); json_array(io, h.quantile)
+    json_key(io, "worst"); json_array(io, h.worst)
+    json_key(io, "mean"); json_array(io, h.mean)
+    json_key(io, "n"); json_array(io, h.n)
+    json_key(io, "limit"); json_number(io, h.limit)
+    json_key(io, "time_to_limit"); json_number(io, h.time_to_limit)
+    o.fit && (json_key(io, "predicted"); json_holdover_fit(io, data, h))
     print(io, '}')
     return elapsed(io, t_start)
 end

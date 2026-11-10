@@ -373,6 +373,23 @@ mktempdir() do dir
         @test run_cli("drift", sf, "--model", "log").code == 3
     end
 
+    @testset "holdover" begin
+        p, _ = simulate_clock(ClockModel(; tau0=1.0, q1=1e-22, q2=1e-27), 4096; rng=Random.Xoshiro(5))
+        hf = write_table(joinpath(dir, "free.csv"), p.x)
+        q = holdover(p; train=512, tau=[16, 64, 256]).quantile
+        ref = holdover(p; train=512, tau=[16, 64, 256], limit=sqrt(q[2] * q[3]))
+        rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--tau", "256,16,64", "--limit", string(ref.limit)).out)
+        @test parse.(Float64, getindex.(rows, 3)) == ref.tau && parse.(Float64, getindex.(rows, 4)) ≈ ref.rms
+        @test parse(Float64, rows[1][10]) ≈ ref.time_to_limit
+        @test isempty(csv_rows(run_cli("holdover", hf).out)[1][9])                 # no limit: blank
+        r = run_cli("holdover", hf, "--train", "512", "--fit-drift", "--no-anchor", "--limit", "1", "--fit", "--format", "json")
+        @test r.code == 0 && occursin("\"drift\":true,\"anchor\":false,\"confidence\":0.95", r.out)
+        @test occursin("\"limit\":1.0,\"time_to_limit\":null,\"predicted\":{\"alphas\":[2,1,0,-1,-2]", r.out)
+        @test run_cli("holdover", hf, "--train", "0.5").code == 3
+        @test run_cli("holdover", hf, "--limit", "-1").code == 1
+        @test run_cli("holdover", hf, "--fit").code == 1                           # CSV has no room for it
+    end
+
     @testset "--remove-drift" begin
         # A known offset and drift on top of X: linear removes the offset,
         # quadratic both, and what was removed is reported.
@@ -710,6 +727,7 @@ mktempdir() do dir
                          ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],
+                         ["holdover", pf, "--train", "64", "--limit", "1e-9", "--fit", "--format", "json"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],
