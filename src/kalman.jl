@@ -14,7 +14,7 @@ struct KalmanResult
     model::ClockModel
     "Sample times in seconds from the first sample."
     t::Vector{Float64}
-    "State estimates, one row per sample: phase (s), frequency, and drift (1/s) with a drift state."
+    "State estimates, one row per sample: phase (s), frequency, drift (1/s) with a drift state, then the Markov states of the flicker FM, which add to the frequency, and of the flicker PM, which add to the readings."
     x::Matrix{Float64}
     "State covariances, `P[:, :, k]` at sample k."
     P::Array{Float64,3}
@@ -61,16 +61,40 @@ function _kalman_start(z::Vector{Float64}, τ₀::Float64, n::Int)
     return Φ * c, 10 .* (Φ * C * Φ')
 end
 
+# Stationary variance of each Markov state, frequency states first.
+_markov_vars(m::ClockModel) = vcat(fill(_fm_var(m), length(_fm_taus(m))), fill(_pm_var(m), length(_pm_taus(m))))
+
+# The start for model `m`: the polynomial start for phase, frequency and
+# drift; the Markov states at zero with their stationary variance. The
+# readings the phase starts from carry the Markov phase states.
+function _model_start(z::Vector{Float64}, m::ClockModel)
+    np, n = _npoly(m), _nstates(m)
+    xp, Pp = _kalman_start(z, m.tau0, np)
+    x, P = zeros(n), zeros(n, n)
+    x[1:np] = xp
+    P[1:np, 1:np] = Pp
+    for (j, v) in enumerate(_markov_vars(m))
+        P[np+j, np+j] = v
+    end
+    for j in n-length(_pm_taus(m))+1:n
+        P[1, 1] += P[j, j]
+        P[1, j] = P[j, 1] = -P[j, j]
+    end
+    return x, P
+end
+
 """
     kalman_filter(data::PhaseData, m::ClockModel; x0, P0) → KalmanResult
 
 Run the Kalman filter for clock model `m` over a phase record. The state is
-phase and frequency, plus drift when `m.drift`; each sample is a phase
-reading with white PM variance `m.R`. `NaN` samples are gaps: the filter
+phase and frequency, plus drift when `m.drift` and the Markov states of a
+model with flicker; each sample is a reading of the phase with white PM of
+variance `m.R` and, for a model with flicker PM, its Markov phase states. `NaN` samples are gaps: the filter
 predicts across them without an update.
 
 The start `x0`, `P0` defaults to a least-squares polynomial through the
-first samples, with its covariance inflated tenfold. The covariance update
+first samples, with its covariance inflated tenfold, and the Markov states
+at zero with their stationary variance. The covariance update
 uses the Joseph form, which keeps P symmetric and positive under round-off.
 
 Pass the result to [`kalman_smooth`](@ref), [`holdover_error`](@ref) or
@@ -93,12 +117,13 @@ function kalman_filter(data::PhaseData, m::ClockModel;
     isapprox(data.tau0, m.tau0; rtol=1e-9) || throw(ArgumentError(
         "kalman_filter: record τ₀ = $(data.tau0) s but the model's is $(m.tau0) s"))
     z = Float64.(data.x)
-    N, n = length(z), m.drift ? 3 : 2
-    xs, Ps0 = x0 === nothing || P0 === nothing ? _kalman_start(z, m.tau0, n) : (x0, P0)
+    N, n = length(z), _nstates(m)
+    xs, Ps0 = x0 === nothing || P0 === nothing ? _model_start(z, m) : (x0, P0)
     x̂ = Float64.(x0 === nothing ? xs : x0)
     P = Float64.(P0 === nothing ? Ps0 : P0)
     size(P) == (n, n) && length(x̂) == n || throw(ArgumentError("kalman_filter: x0 and P0 must have $n states"))
     Φ, Q = state_transition(m, m.tau0), process_noise(m, m.tau0)
+    h, R = _reading_row(m), _reading_var(m)
     X, Xp = zeros(N, n), zeros(N, n)
     Ps, Pps = zeros(n, n, N), zeros(n, n, N)
     ν, S = fill(NaN, N), fill(NaN, N)
@@ -109,12 +134,13 @@ function kalman_filter(data::PhaseData, m::ClockModel;
         end
         Xp[k, :] = x̂; Pps[:, :, k] = P
         if isfinite(z[k])
-            S[k] = P[1, 1] + m.R
-            ν[k] = z[k] - x̂[1]
-            K = P[:, 1] ./ S[k]
+            Ph = P * h
+            S[k] = h' * Ph + R
+            ν[k] = z[k] - h' * x̂
+            K = Ph ./ S[k]
             x̂ = x̂ .+ K .* ν[k]
-            IKH = Matrix{Float64}(I, n, n); IKH[:, 1] .-= K
-            P = IKH * P * IKH' .+ m.R .* (K * K')
+            IKH = Matrix{Float64}(I, n, n) .- K * h'
+            P = IKH * P * IKH' .+ R .* (K * K')
             P = (P + P') ./ 2
         end
         X[k, :] = x̂; Ps[:, :, k] = P
@@ -148,7 +174,8 @@ end
 
 Standard deviation (s) of the time error after free-running for each τ in
 `tau` (seconds) from the last sample, with the filter's last estimate as the
-starting point: `√[Φ(τ) P Φ(τ)ᵀ + Q(τ)]₁₁`.
+starting point: `√[Φ(τ) P Φ(τ)ᵀ + Q(τ)]₁₁`. It is the clock's error; the
+noise of a reading, white or flicker PM, is not in it.
 """
 function holdover_error(kf::KalmanResult, tau::AbstractVector{<:Real})
     P = kf.P[:, :, end]
@@ -193,18 +220,20 @@ end
 
 A phase record of `N` samples from clock model `m`, and its true states
 (one row per sample), for checking filters against a known truth. The
-clock starts at zero phase, frequency and drift.
+clock starts at zero phase, frequency and drift, and its Markov states from
+their stationary distribution.
 """
 function simulate_clock(m::ClockModel, N::Int; rng=nothing)
-    n = m.drift ? 3 : 2
+    np, n = _npoly(m), _nstates(m)
     Φ, Q = state_transition(m, m.tau0), process_noise(m, m.tau0)
     L = _psd_sqrt(Q)
     draw(k) = rng === nothing ? randn(k) : randn(rng, k)
     X = zeros(N, n)
+    n > np && (X[1, np+1:n] = sqrt.(_markov_vars(m)) .* draw(n - np))
     for k in 2:N
         X[k, :] = Φ * X[k-1, :] .+ L * draw(n)
     end
-    z = X[:, 1] .+ sqrt(m.R) .* draw(N)
+    z = X * _reading_row(m) .+ sqrt(_reading_var(m)) .* draw(N)
     return PhaseData(z, m.tau0), X
 end
 
@@ -217,15 +246,14 @@ end
 """
     prediction_error(kf::KalmanResult, data::PhaseData, horizons; burnin=0) → Vector{Float64}
 
-RMS error (s) of the filter's phase predictions `horizons` samples ahead:
-from the estimate at each sample k past `burnin`, extrapolate the phase to
-k + h and compare it with the reading there. Gaps are skipped.
+RMS error (s) of the filter's predictions `horizons` samples ahead: from
+the estimate at each sample k past `burnin`, carry the state to k + h and
+compare the reading it predicts with the reading there. Gaps are skipped.
 """
 function prediction_error(kf::KalmanResult, data::PhaseData, horizons::AbstractVector{<:Integer}; burnin::Integer=0)
     z, X, n = data.x, kf.x, size(kf.x, 2)
     return map(horizons) do h
-        δ = h * kf.model.tau0
-        w = [δ^(j - 1) / factorial(j - 1) for j in 1:n]
+        w = state_transition(kf.model, h * kf.model.tau0)' * _reading_row(kf.model)
         s, c = 0.0, 0
         for k in burnin+1:length(z)-h
             isfinite(z[k+h]) && isfinite(z[k]) || continue
@@ -244,13 +272,13 @@ Retune the white FM and random-walk FM levels of `m` for prediction: run
 the filter over a log grid of `points` values spanning ± `decades` around
 `m.q1` and `m.q2`, and keep the pair whose phase predictions
 `horizons` samples ahead have the smallest summed log RMS error (see
-[`prediction_error`](@ref)). `R` and `q3` stay as they are. The burn-in
+[`prediction_error`](@ref)). `R`, `q3` and the flicker levels stay as they are. The burn-in
 defaults to a tenth of the record. Returns the tuned model, the grid axes
 and the cost on the grid (rows q1, columns q2).
 
 A noise fit gives levels that match σ(τ); tuning gives the ones that
 predict best, which differ when the record has noise the model lacks, such
-as flicker FM.
+as flicker FM; a model with flicker states carries it instead.
 """
 function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integer}=[10, 100, 1000],
                 decades::Real=2, points::Integer=9, burnin::Integer=length(data.x) ÷ 10)
@@ -260,9 +288,9 @@ function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integ
     grid(q) = q .* exp10.(range(-decades, decades; length=points))
     q1s, q2s = grid(m.q1), grid(m.q2)
     cost = [begin
-                mi = ClockModel(m.tau0, m.R, a, b, m.q3, m.drift)
+                mi = _with(m; q1=a, q2=b)
                 sum(log, prediction_error(kalman_filter(data, mi), data, hs; burnin))
             end for a in q1s, b in q2s]
     i = argmin(cost)
-    return (model=ClockModel(m.tau0, m.R, q1s[i[1]], q2s[i[2]], m.q3, m.drift), q1=q1s, q2=q2s, cost=cost)
+    return (model=_with(m; q1=q1s[i[1]], q2=q2s[i[2]]), q1=q1s, q2=q2s, cost=cost)
 end
