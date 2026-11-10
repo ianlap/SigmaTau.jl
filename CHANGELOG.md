@@ -52,6 +52,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Flicker PM is identified as flicker PM at long τ. The lag-1 test runs on
+  phase decimated by m, which whitens flicker PM, so from m ≈ 16 a pure
+  flicker-PM record was labelled white PM (in 64 % of records at m = 16 and
+  93 % at m = 64, N = 4096) and `adev` reported about six times the true
+  EDF there. A white-PM result at m ≥ 4 is now confirmed with the R(n)
+  ratio of SP1065 §5.5.2. Labels of the other four noise types, and of
+  every shipped Stable32 and allantools fixture, are unchanged.
 - The default bias correction of `mtotdev` and `ttotdev` went the wrong way.
   Mod Totvar reads low against MVAR, by 0.5 % for white PM up to 32 % for
   random-walk FM (Howe and Peppler 2001, Table 2; Howe and Vernotte 1999),
