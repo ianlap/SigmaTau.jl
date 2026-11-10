@@ -72,12 +72,13 @@ Three per-estimator facts behind those rows:
   kernel to ≤ 4.4e-15.
 - **MTOTDEV**: here the two programs deliberately report different
   statistics. Stable32 reports the raw estimator; SigmaTau's raw kernel
-  matches it to ≤ 0.004 % (and allantools to ≤ 1.1e-15). SigmaTau's
-  default divides by `√B(α)` (SP1065 Table 11) to unbias toward the
-  parent modified-Allan statistic, which places the default output
-  2.9 % (WHPM) to 12.3 % (FLFM) below Stable32 on this fixture, and up to
-  ≈ 14.5 % at RWFM per the table. Pass `correct_bias=false` to reproduce
-  Stable32 and allantools.
+  matches it to ≤ 0.004 % (and allantools to ≤ 1.1e-15). The raw
+  estimator reads low against MDEV, and SigmaTau's default divides by
+  `√B(α)` (Howe and Peppler 2001, Table 2, `B < 1`) to unbias it, which
+  places the default output 0.25 % (WHPM) to 18 % (FLFM) above Stable32
+  on this fixture, 21 % at RWFM per the table, and 41 % at τ = τ₀, where
+  the raw estimator is exactly MDEV/√2. Pass `correct_bias=false` to
+  reproduce Stable32 and allantools.
 
 ### The noise-identification residual
 
@@ -221,25 +222,28 @@ the same correction. The SigmaTau CI column belongs to the default
 
 Stable32 and allantools both report the raw estimator here; the SigmaTau
 raw column matches both (≤ 0.004 % / ≤ 1.1e-15). The corrected column is
-SigmaTau's default, the raw value divided by `√B(α)` from SP1065
-Table 11, which on this fixture is 2.9 % (WHPM), 7.5 % (FLPM), 11.3 %
-(WHFM), or 12.3 % (FLFM) below Stable32. The SigmaTau CI column belongs
-to the raw output for like-for-like comparison with Stable32's bounds.
+SigmaTau's default, the raw value divided by `√B(α)` from Howe and Peppler
+2001, Table 2, which on this fixture is 0.25 % (WHPM), 8.4 % (FLPM), 13.9 %
+(WHFM), or 18.1 % (FLFM) above Stable32, and √2 above it at τ = 1 s. It is
+the column to compare with the Modified Allan table above: from 128 s to
+512 s, where the raw value is 13 to 17 % below MDEV, the corrected one is
+within 5 %. The SigmaTau CI column belongs to the raw output for
+like-for-like comparison with Stable32's bounds.
 
 | τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI (raw) |
 |---:|:---|:---|:---|:---|:---|:---|
-| 1 | 7.1400e-01 | 7.13999e-01 | 7.13999e-01 | 6.93497e-01 | [7.0639e-01, 7.2186e-01] | [7.0634e-01, 7.2191e-01] |
-| 2 | 3.5625e-01 | 3.56253e-01 | 3.56253e-01 | 3.46024e-01 | [3.5227e-01, 3.6037e-01] | [3.5225e-01, 3.6040e-01] |
-| 4 | 1.2570e-01 | 1.25704e-01 | 1.25704e-01 | 1.22095e-01 | [1.2394e-01, 1.2755e-01] | [1.2393e-01, 1.2756e-01] |
-| 8 | 4.6303e-02 | 4.63031e-02 | 4.63031e-02 | 4.49735e-02 | [4.5421e-02, 4.7239e-02] | [4.5415e-02, 4.7245e-02] |
-| 16 | 1.5819e-02 | 1.58191e-02 | 1.58191e-02 | 1.53648e-02 | [1.5495e-02, 1.6165e-02] | [1.5472e-02, 1.6191e-02] |
-| 32 | 5.8856e-03 | 5.88559e-03 | 5.88559e-03 | 5.44123e-03 | [5.6979e-03, 6.0933e-03] | [5.6612e-03, 6.1389e-03] |
-| 64 | 2.4483e-03 | 2.44833e-03 | 2.44833e-03 | 2.26348e-03 | [2.3398e-03, 2.5737e-03] | [2.3192e-03, 2.6017e-03] |
-| 128 | 1.5120e-03 | 1.51199e-03 | 1.51199e-03 | 1.34167e-03 | [1.4073e-03, 1.6442e-03] | [1.3982e-03, 1.6589e-03] |
-| 256¹ | 1.5468e-03 | 1.54684e-03 | 1.54684e-03 | 1.37260e-03 | [1.4288e-03, 1.7001e-03] | [1.3889e-03, 1.7747e-03] |
-| 512 | 1.8467e-03 | 1.84668e-03 | 1.84668e-03 | 1.61965e-03 | [1.5780e-03, 2.3251e-03] | [1.5713e-03, 2.3468e-03] |
-| 1024 | 2.2545e-03 | 2.25454e-03 | 2.25454e-03 | 2.00058e-03 | [1.8657e-03, 3.0666e-03] | [1.8461e-03, 3.1572e-03] |
-| 2048 | 4.0510e-03 | 4.05095e-03 | 4.05095e-03 | 3.59464e-03 | [3.1147e-03, 7.2325e-03] | [3.0964e-03, 7.4599e-03] |
+| 1 | 7.1400e-01 | 7.13999e-01 | 7.13999e-01 | 1.00975e+00 | [7.0639e-01, 7.2186e-01] | [7.0634e-01, 7.2191e-01] |
+| 2 | 3.5625e-01 | 3.56253e-01 | 3.56253e-01 | 3.57147e-01 | [3.5227e-01, 3.6037e-01] | [3.5225e-01, 3.6040e-01] |
+| 4 | 1.2570e-01 | 1.25704e-01 | 1.25704e-01 | 1.26020e-01 | [1.2394e-01, 1.2755e-01] | [1.2393e-01, 1.2756e-01] |
+| 8 | 4.6303e-02 | 4.63031e-02 | 4.63031e-02 | 4.64193e-02 | [4.5421e-02, 4.7239e-02] | [4.5415e-02, 4.7245e-02] |
+| 16 | 1.5819e-02 | 1.58191e-02 | 1.58191e-02 | 1.58588e-02 | [1.5495e-02, 1.6165e-02] | [1.5472e-02, 1.6191e-02] |
+| 32 | 5.8856e-03 | 5.88559e-03 | 5.88559e-03 | 6.38007e-03 | [5.6979e-03, 6.0933e-03] | [5.6612e-03, 6.1389e-03] |
+| 64 | 2.4483e-03 | 2.44833e-03 | 2.44833e-03 | 2.65402e-03 | [2.3398e-03, 2.5737e-03] | [2.3192e-03, 2.6017e-03] |
+| 128 | 1.5120e-03 | 1.51199e-03 | 1.51199e-03 | 1.72196e-03 | [1.4073e-03, 1.6442e-03] | [1.3982e-03, 1.6589e-03] |
+| 256¹ | 1.5468e-03 | 1.54684e-03 | 1.54684e-03 | 1.76164e-03 | [1.4288e-03, 1.7001e-03] | [1.3889e-03, 1.7747e-03] |
+| 512 | 1.8467e-03 | 1.84668e-03 | 1.84668e-03 | 2.18088e-03 | [1.5780e-03, 2.3251e-03] | [1.5713e-03, 2.3468e-03] |
+| 1024 | 2.2545e-03 | 2.25454e-03 | 2.25454e-03 | 2.56762e-03 | [1.8657e-03, 3.0666e-03] | [1.8461e-03, 3.1572e-03] |
+| 2048 | 4.0510e-03 | 4.05095e-03 | 4.05095e-03 | 4.61349e-03 | [3.1147e-03, 7.2325e-03] | [3.0964e-03, 7.4599e-03] |
 
 ### Hadamard Total
 

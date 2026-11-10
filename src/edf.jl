@@ -399,7 +399,7 @@ function _theo1_edf(alpha::Int, m::Int, N::Int)
 end
 
 function _coeff_htot(alpha::Int)
-    # FCS 2001 / Howe & Tasset 2005 Table I, columns b₀ and b₁ of
+    # Howe & Peppler 2001 Table 3, columns b₀ and b₁ of
     #   edf(τ) = (T/τ) / (b₀ + b₁·τ/T)
     # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses an
     # undocumented fallback that is not reproduced here.
@@ -410,6 +410,11 @@ function _coeff_htot(alpha::Int)
     alpha == -4 && return (1.276, 3.149)
     return (NaN, NaN)
 end
+
+# Normalized bias a = E[total]/E[parent] − 1 of the modified total variance
+# for α = 2, 1, 0, −1, −2 (Howe & Peppler 2001, Table 2); the Hadamard total
+# variance takes the same column at α = 0 … −4 (their Table 3).
+const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
 
 """
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
@@ -427,15 +432,17 @@ Conventions per variance type:
 - `:totvar`: Howe/Walter (1994). `B = 1 − a·τ/T` with `a = 1/(3·ln 2)`
   for FLFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
   divergent FM noises only.
-- `:mtot`: SP1065 Table 11 / Greenhall 1999. Independent of τ.
-  Biased high (B > 1); MTOT overstates MVAR, consistent with the Monte
-  Carlo of Howe & Vernotte 2003 (Table 1). Stable32 reports MTOT raw, so
-  `correct_bias=false` on `mtotdev` matches Stable32.
-- `:htot`: FCS 2001 (Howe & Tasset) Table I `a` column. `B = 1 + a`
-  with the published `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}`
-  for α ∈ {0, -1, -2, -3, -4}. Biased low (B < 1); HTOT understates
-  the divergent-FM variance. B = 1 for α > 0 (no published model;
-  matches Stable32).
+- `:mtot`: Howe & Peppler 2001, Table 2. `B = 1 + a` with the normalized
+  bias `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}` for
+  α ∈ {2, 1, 0, -1, -2}, independent of τ for τ ≥ 16 τ₀. Biased low (B < 1),
+  as in the simulations of Howe & Vernotte 1999 (Table 1). SP1065 Table 11
+  lists reciprocals (1.06 to 1.31) under a caption that reads the other
+  way; dividing by them lowers a statistic that already reads low. Stable32
+  reports MTOT raw, so `correct_bias=false` on `mtotdev` matches it.
+- `:htot`: Howe & Peppler 2001, Table 3: the same `a` column two steps down
+  in α, for α ∈ {0, -1, -2, -3, -4}, because HTOT is the MTOT computation
+  on frequency data. Biased low (B < 1). B = 1 for α > 0 (no published
+  model; matches Stable32).
 - `:mhtot`: measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
   `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
   external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
@@ -458,16 +465,10 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
             B[k] = 1 - a * (tau / T)
         elseif var_type == :mtot
-            table = Dict(2=>1.06, 1=>1.17, 0=>1.27, -1=>1.30, -2=>1.31)
-            B[k] = get(table, clamp(alpha, -2, 2), 1.0)
+            B[k] = 1 + _MTOT_NBIAS[3 - clamp(alpha, -2, 2)]
         elseif var_type == :htot
-            # FCS 2001 (Howe & Tasset) Table I, column `a`: normalized bias
-            # = E[TotHvar]/E[Hvar] - 1, negative because HTOT is biased low.
-            # B = 1 + a. Defined only for α ∈ {0, -1, -2, -3, -4}; for α > 0
-            # (PM noises) Stable32 leaves B = 1.
-            a_table = Dict(0=>-0.005, -1=>-0.149, -2=>-0.229,
-                           -3=>-0.283, -4=>-0.321)
-            B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
+            # Defined for α ∈ {0, …, −4}; for the PM noises Stable32 leaves B = 1.
+            B[k] = -4 <= alpha <= 0 ? 1 + _MTOT_NBIAS[1 - alpha] : 1.0
         elseif var_type == :mhtot
             # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl
             # at git 9d7a408, the same sweep as _coeff_mhtot) over τ/τ0 ≥ 16,

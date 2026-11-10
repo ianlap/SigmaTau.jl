@@ -334,11 +334,14 @@ end
 Modified total deviation of a phase record, per NIST SP1065 §5.2.11, with the
 per-subsegment detrend and time-reverse extension of Howe and Vernotte.
 
-`correct_bias=true` (default) applies the SP1065 Table 11 correction
-`σ_unbiased = σ_raw / √B`, where `B ∈ {1.06, 1.17, 1.27, 1.30, 1.31}` for
-α ∈ {2, 1, 0, -1, -2}. MTOT is biased high, so the correction lowers σ by 3
-to 13 %. `correct_bias=false` returns the raw kernel, which is what Stable32
-and allantools report.
+`correct_bias=true` (default) applies the Howe and Peppler (2001, Table 2)
+correction `σ_unbiased = σ_raw / √B`, where
+`B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for α ∈ {2, 1, 0, -1, -2}.
+MTOT is biased low (a < 0), so the correction raises σ, by 0.3 % for white PM
+and 21 % for random-walk FM; the table holds from τ = 16 τ₀ and overcorrects
+by up to 3 % below that. At `m = 1` the estimator is exactly MDEV/√2 for any
+record, and B = 1/2. `correct_bias=false` returns the raw kernel, which is
+what Stable32 and allantools report.
 """
 function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:mtotdev, data, m_values)
@@ -350,7 +353,11 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, taus, T)) : raw_devs
+    # At m = 1 the detrended three-point subsequence is (0, z, 0) with z half
+    # the second difference, and its reflection averages to half of MVAR.
+    B = need_noise ? bias_correction(noises, :mtot, taus, T) : Float64[]
+    correct_bias && (B[m_values .== 1] .= 0.5)
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(B) : raw_devs
 
     if !ci
         return _result(data, confidence, :mtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -368,8 +375,8 @@ end
 Hadamard total deviation of a phase record, per NIST SP1065 §5.2.13, with the
 per-subsegment detrend and time-reverse extension of Howe et al. 2000.
 
-`correct_bias=true` (default) applies the FCS 2001 (Howe & Tasset)
-Table I unbias correction `σ_unbiased = σ_raw / √B`, where
+`correct_bias=true` (default) applies the Howe and Peppler (2001, Table 3)
+unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
 α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0), so the
 correction raises σ, substantially for divergent FM. PM noises (α > 0) get
