@@ -81,6 +81,8 @@ fmt(f) = joinpath(FMT, f)
         old = tempname() * ".frd"
         write(old, "File: old.frd\nType: Freq\nPoints: 3\nTau: 10\n1e-12\n2e-12\n3e-12\n")
         @test read_data(old).y == [1e-12, 2e-12, 3e-12] && read_data(old).tau0 == 10.0
+        write(old, "type: freq\ntau: 2\n1e-12\n2e-12\n3e-12\n")
+        @test read_data(old).tau0 == 2.0                              # in any case
     end
 
     @testset "counter logs" begin

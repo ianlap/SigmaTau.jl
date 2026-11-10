@@ -234,7 +234,7 @@ function _scan_comment_header(path::AbstractString)
                 break
             end
             lineno == ncomment + bare + 1 && occursin(r"^(File|Date|Type|Points|Tau):"i, st) && (bare += 1)
-            m = match(r"^Tau:\s*(\S+)", st)
+            m = match(r"^Tau:\s*(\S+)"i, st)
             m === nothing || (s32_tau = something(tryparse(Float64, something(m.captures[1], "")), NaN))
         end
     finally
