@@ -44,3 +44,11 @@ test("a typed scale is a number or a short expression, nothing else", () => {
   assert.ok(Math.abs(parseFactor("1/(2*pi*518.295836590863e12)") / 3.0709e-16 - 1) < 1e-4);
   for (const bad of ["", "-1", "0", "abc", "process.exit()", "1/0", "2**"]) assert.ok(Number.isNaN(parseFactor(bad)), bad);
 });
+
+test("a BIPM UTC - UTC(k) file is recognised by its header despite the '+/-' columns", () => {
+  const rows = seq(30, (i) => `${50814 + 5 * i}   ${i % 4}.5   +/-   0.2   2.1   2.1   `);
+  const s = sniff("utc-lab", ["  MJD  [UTC-UTC(LAB )]/ns  uA/ns  uB/ns  u/ns  \r", "\r", ...rows, "\x1a"].join("\n"));
+  assert.equal(s.format, "bipm_utc");
+  assert.deepEqual([s.nCols, s.nRows, s.names[1], s.kindHint, s.bad], [2, 30, "UTC-UTC(LAB) (ns)", "phase", null]);
+  assert.deepEqual([guessRoles(s).time, guessRoles(s).value, guessRoles(s).timeUnit, guessRoles(s).scaling], [1, 2, 86400, 1e-9]);
+});

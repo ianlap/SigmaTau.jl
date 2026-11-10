@@ -11,7 +11,20 @@ fmt(f) = joinpath(FMT, f)
         @test detect_format(fmt("counter_53230a_freq.csv")) === :counter
         @test detect_format(fmt("counter_53230a_ti.txt")) === :counter
         @test detect_format(fmt("gpsdo.csv")) === :table
+        @test detect_format(fmt("bipm_utc_lab.txt")) === :bipm_utc
         @test detect_format(joinpath(@__DIR__, "..", "fixtures", "validation", "stable32gen.DAT")) === :columns
+    end
+
+    @testset "BIPM UTC - UTC(k)" begin
+        # CRLF, a "+/-" uncertainty column in the later rows, a DOS end mark, two rows missing.
+        p = read_data(fmt("bipm_utc_lab.txt"))
+        @test p isa PhaseData && p.tau0 == 5 * 86400.0
+        @test length(p) == 60 && count(isnan, p.x) == 2          # the two missing rows stay empty slots
+        rows = [split(l) for l in eachline(fmt("bipm_utc_lab.txt")) if occursin(r"^\d", l)]
+        @test p.x[1:3] == [parse(Float64, r[2]) * 1e-9 for r in rows[1:3]]     # ns -> s
+        q = read_data(fmt("bipm_utc_lab.txt"); fillgaps=true)
+        @test !any(isnan, q.x) && length(q) == 60
+        @test start_time(p) == DateTime(1998, 1, 1)               # MJD 50814
     end
 
     @testset "TimeLab .tim" begin

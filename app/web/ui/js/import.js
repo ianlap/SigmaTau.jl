@@ -69,9 +69,32 @@ function sizeKind(columns) {
   return readings.length && readings.every((c) => med(c) < 1e-11) ? "frequency" : null;
 }
 
+// A BIPM UTC - UTC(k) file ("MJD  [UTC-UTC(NIST)]/ns  uA/ns …"): an integer MJD and the
+// difference in ns per row, then uncertainty and note columns that vary by row, so the
+// generic column reader cannot take it; the core reads it by its layout (bipm_utc).
+const BIPM_HEAD = /^\s*MJD\s+\[UTC-UTC\((.+?)\s*\)\]\s*\/\s*ns/i;
+function sniffBipm(name, lines, lab) {
+  const rows = [], mjd = [], ns = [];
+  for (const l of lines) {
+    const f = l.trim().split(/\s+/);
+    if (f.length < 2 || !/^\d+$/.test(f[0]) || !Number.isFinite(Number(f[1]))) continue;
+    if (rows.length < PREVIEW_ROWS) rows.push({ ln: lines.indexOf(l) + 1, f: [f[0], f[1]] });
+    mjd.push(Number(f[0])); ns.push(Number(f[1]));
+  }
+  const head = lines.findIndex((l) => BIPM_HEAD.test(l));
+  return {
+    name, lines: lines.length, delimName: "whitespace-separated", comments: 0, header: 0, namesLine: 0,
+    names: ["MJD", `UTC-UTC(${lab}) (ns)`], top: [{ ln: head + 1, text: lines[head].trim() }], rows,
+    nRows: mjd.length, nCols: 2, columns: [mjd, ns], bad: null, tau0Hint: null,
+    format: "bipm_utc", formatLabel: `BIPM UTC − UTC(${lab})`, kindHint: "phase", stable32: false,
+  };
+}
+
 export function sniff(name, text) {
   const lines = text.split(/\r?\n/);
   if (lines.length && lines[lines.length - 1] === "") lines.pop();
+  const bipm = lines.slice(0, 5).map((l) => BIPM_HEAD.exec(l)).find(Boolean);
+  if (bipm) return sniffBipm(name, lines, bipm[1]);
   const [split, delimName] = splitter(name, lines);
 
   let comments = 0;

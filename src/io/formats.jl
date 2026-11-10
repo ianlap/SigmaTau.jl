@@ -7,7 +7,7 @@
 Input formats [`read_data`](@ref) understands, as [`detect_format`](@ref)
 names them.
 """
-const INPUT_FORMATS = (:columns, :stable32, :timelab, :counter, :table)
+const INPUT_FORMATS = (:columns, :stable32, :timelab, :counter, :table, :bipm_utc)
 
 # What a format reader returns: the samples, τ₀, whether they are phase,
 # which samples fillgaps put back (empty when none were) and the start time
@@ -46,6 +46,9 @@ const _SCPI_REAL = r"^[+-]\d\.\d+E[+-]\d+$"
 # SCPI's "not a number" reading (9.91E+37), written for a missed gate.
 _scpi_nan(v::Float64) = v == 9.91e37 ? NaN : v
 
+# The header of a BIPM UTC - UTC(k) file: "MJD  [UTC-UTC(NIST)]/ns  uA/ns  uB/ns  u/ns".
+const _BIPM_UTC_HEAD = r"^\s*MJD\s+\[UTC-UTC\(.+\)\]\s*/\s*ns"i
+
 const _TIMELAB_FIELD = r"^(STR|DBL|S32|BLN|S64|U32) 0x[0-9A-Fa-f]+ \"([^\"]*)\"\s?(.*)$"
 
 function _delim_for(line::AbstractString, delim::Char)
@@ -71,6 +74,9 @@ Name the layout of a data file from its extension and first lines, one of
   one per line, optionally after a timestamp (seconds or ISO 8601).
 - `:table`: numeric columns under a line of column names (a CSV export,
   most GPSDO and logging-script output).
+- `:bipm_utc`: a BIPM `UTC - UTC(k)` file from the time department's
+  `utclab` directory (`MJD  [UTC-UTC(NIST)]/ns  uA/ns …`): one row every five
+  days with the difference in nanoseconds, read as phase in seconds.
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
   [`read_frequency`](@ref).
 
@@ -86,6 +92,7 @@ function _detect_format(path::AbstractString, delim::Char)
     any(l -> startswith(l, "TIC "), lines) &&
         any(l -> match(_TIMELAB_FIELD, l) !== nothing, lines) && return :timelab
     lowercase(splitext(path)[2]) in (".phd", ".frd") && return :stable32
+    any(l -> occursin(_BIPM_UTC_HEAD, l), first(lines, 5)) && return :bipm_utc
     # Any other Stable32 export (a text header closed by "# Header End") is
     # plain columns to read_phase.
     any(l -> strip(l) == "# Header End", lines) && return :columns
@@ -363,6 +370,32 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
     return _Record(_gridded(t, v, fillgaps), t0, phase, start)
 end
 
+# A BIPM UTC - UTC(k) file: rows of an integer MJD and the difference in ns,
+# then uncertainties and notes that vary from row to row ("+/-", a Circular T
+# tag), so only the first two fields count; the header, blank lines and the
+# DOS end-of-file mark are skipped. The record is phase in seconds on the MJD
+# axis (five days apart), a missing row a gap.
+function _read_bipm_utc(path::AbstractString, tau0::Float64, fillgaps::Bool)
+    t = Float64[]; v = Float64[]
+    io = open(path, "r")
+    try
+        for line in eachline(io)
+            f = split(line; keepempty=false)
+            length(f) >= 2 || continue
+            mjd = tryparse(Int, f[1]); x = tryparse(Float64, f[2])
+            (mjd === nothing || x === nothing) && continue
+            push!(t, Float64(mjd)); push!(v, x * 1e-9)
+        end
+    finally
+        close(io)
+    end
+    length(t) >= 2 || throw(ArgumentError("read_data: no UTC - UTC(k) rows in " * String(path)))
+    start = _mjd_seconds(t[1])
+    t .*= 86400
+    t0 = _resolve_tau0(tau0, NaN, t, "this BIPM file")
+    return _Record(_gridded(t, v, fillgaps), t0, true, start)
+end
+
 # The trim-friendly core of read_data: every argument concrete, NaN / 0 / ""
 # meaning "not given", `kind` one of :auto, :phase, :frequency.
 function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, column::Int=0,
@@ -381,6 +414,8 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
         _read_counter(path, tau0, nominal, hint, delim, fillgaps)
     elseif fmt === :table
         _read_table(path, tau0, column, column_name, nominal, hint, delim, fillgaps)
+    elseif fmt === :bipm_utc
+        _read_bipm_utc(path, tau0, fillgaps)
     elseif fmt === :columns
         v, t0, start = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
                                header=0, delim=nothing, scaling=1.0, detrend=:none, fillgaps=fillgaps)
