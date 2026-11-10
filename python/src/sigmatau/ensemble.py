@@ -269,37 +269,86 @@ class HoldoverResult:
     time_to_limit: float
 
 
+@dataclass(frozen=True)
+class HoldoverPrediction:
+    """Return type of ``holdover`` on a noise model: the standard deviation of
+    the time error at each holdover time ``tau`` (s), its ``quantile`` at
+    ``confidence``, and ``budget``, the variance each noise type in ``alphas``
+    adds (one row per ``tau``, one column per α)."""
+
+    tau: np.ndarray
+    sigma: np.ndarray
+    quantile: np.ndarray
+    alphas: np.ndarray
+    budget: np.ndarray
+    train: float
+    drift: bool
+    anchor: bool
+    confidence: float
+    limit: float
+    time_to_limit: float
+
+
 @_map_errors
 def holdover(
-    data: PhaseData,
+    data: PhaseData | PowerLawFit | ClockModel | Mapping[int | str, float],
     *,
     train: float | None = None,
     tau: Sequence[float] | None = None,
+    tau0: float | None = None,
     drift: bool = False,
     anchor: bool = True,
     limit: float | None = None,
     confidence: float = 0.95,
-) -> HoldoverResult:
-    """Measured holdover: learn the frequency (and drift) on ``train`` seconds,
-    free-run from the last reading for each ``tau``, and compare with the
-    record, from every start it allows (Delporte et al. 2000)."""
-    kw: dict[str, Any] = {}
+) -> HoldoverResult | HoldoverPrediction:
+    """Holdover: learn the frequency (and drift) on ``train`` seconds, free-run
+    from the last reading for each ``tau``, and compare with the clock
+    (Delporte et al. 2000).
+
+    On a ``PhaseData`` record the error is measured from every start the record
+    allows. On a noise model (a ``PowerLawFit``, a ``ClockModel`` or an
+    ``{α: h_α}`` mapping, which needs ``tau0``) it is predicted, with each noise
+    type's share in ``budget``; ``train`` is then required."""
+    kw: dict[str, Any] = {
+        "drift": bool(drift),
+        "anchor": bool(anchor),
+        "confidence": float(confidence),
+    }
     if train is not None:
         kw["train"] = float(train)
     if tau is not None:
         kw["tau"] = to_jl_f64(tau)
     if limit is not None:
         kw["limit"] = float(limit)
-    r = jl.holdover(
-        to_jl_data(data), drift=bool(drift), anchor=bool(anchor), confidence=float(confidence), **kw
-    )
-    return HoldoverResult(
+    if isinstance(data, PhaseData):
+        r = jl.holdover(to_jl_data(data), **kw)
+        return HoldoverResult(
+            np_f64(r.tau),
+            np_f64(r.rms),
+            np_f64(r.quantile),
+            np_f64(r.worst),
+            np_f64(r.mean),
+            np.array(r.n, dtype=np.int64),
+            float(r.train),
+            bool(r.drift),
+            bool(r.anchor),
+            float(r.confidence),
+            float(r.limit),
+            float(r.time_to_limit),
+        )
+    if train is None:
+        raise ValueError("holdover: a noise model needs `train`, the training stretch in seconds")
+    if tau0 is None:
+        tau0 = getattr(data, "tau0", None)
+    if tau0 is not None:
+        kw["tau0"] = float(tau0)
+    r = jl.holdover(data._jl() if isinstance(data, ClockModel) else powerlaw_to_jl(data), **kw)
+    return HoldoverPrediction(
         np_f64(r.tau),
-        np_f64(r.rms),
+        np_f64(r.sigma),
         np_f64(r.quantile),
-        np_f64(r.worst),
-        np_f64(r.mean),
-        np.array(r.n, dtype=np.int64),
+        np.array(r.alphas, dtype=np.int64),
+        _mat(r.budget),
         float(r.train),
         bool(r.drift),
         bool(r.anchor),
@@ -552,6 +601,7 @@ __all__ = [
     "kalman_smooth",
     "holdover_error",
     "HoldoverResult",
+    "HoldoverPrediction",
     "holdover",
     "innovation_check",
     "prediction_error",

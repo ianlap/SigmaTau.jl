@@ -152,8 +152,8 @@ such as caesium, and then holds better than a parabola; with drift, the
 line's mean error grows as τ².
 
 The error includes the white PM of the readings. `NaN` samples are gaps: a
-start is skipped when gaps take more than half its training stretch, its
-last reading or the reading it would be compared with.
+start is skipped when gaps take more than half its training stretch, the
+reading it would be compared with or, when anchored, its last reading.
 
 # Examples
 
@@ -199,4 +199,156 @@ function holdover(data::PhaseData; train::Union{Real,Nothing}=nothing,
     return HoldoverResult(τ, rms, q, worst, μ, cnt, n * τ₀, drift, anchor, Float64(confidence),
                           limit === nothing ? NaN : Float64(limit),
                           limit === nothing ? NaN : _time_to_limit(τ, q, limit))
+end
+
+# Weights on the phase samples 1 … n + h of the error `holdover` measures h
+# samples past a stretch of n: +1 at n + h, less the prediction's.
+function _holdover_weights(n::Int, h::Int, d::Int, anchor::Bool)
+    u = collect(1-n:0) ./ n
+    A = zeros(d + 1, d + 1)
+    for j in 0:d, l in 0:d
+        A[j+1, l+1] = sum(k -> k^(j + l), u)
+    end
+    Ainv, w = _sym_inv(A), zeros(n + h)
+    for j in (anchor ? 1 : 0):d, l in 0:d
+        w[1:n] .-= (h / n)^j * Ainv[j+1, l+1] .* u .^ l
+    end
+    anchor && (w[n] -= 1)
+    w[n+h] += 1
+    return w
+end
+
+# Σⱼₖ aⱼ aₖ / (1 − 4(j − k)²) = ∫₀^{π/2} sin θ |Σ aₖ e^{−2iθk}|² dθ, through the
+# autocorrelation of a.
+function _flicker_form(a::Vector{Float64})
+    L = length(a)
+    F = rfft(vcat(a, zeros(nextpow(2, 2L) - L)))
+    r = irfft(abs2.(F), 2 * (length(F) - 1))
+    return r[1] + 2 * sum(r[m+1] / (1 - 4.0 * m^2) for m in 1:L-1)
+end
+
+# Variance of the error with weights w under the unit component
+# S_y(f) = (sin(πfτ₀)/(πτ₀))^α of a record sampled at τ₀ (as in
+# `_powerlaw_var`). Summing w once gives the weights on the frequency
+# samples, twice those on their steps, and so on; p sums leave the spectrum
+# white (even α) or as sin θ (odd α), both exact in the time domain.
+function _holdover_var(w::Vector{Float64}, α::Int, τ₀::Float64)
+    p = (3 - α) ÷ 2
+    a = w
+    for _ in 1:p
+        a = cumsum(a)
+    end
+    form = iseven(α) ? π / 2 * sum(abs2, a) : _flicker_form(a)
+    return τ₀^2 * 4.0^(p - 1) / (π * τ₀)^(α + 1) * form
+end
+
+"""
+    HoldoverPrediction
+
+Output of [`holdover`](@ref) on a noise model: the time error the model
+predicts at each holdover time, and what each noise type adds to it.
+
+$(TYPEDFIELDS)
+"""
+struct HoldoverPrediction
+    "Holdover times in seconds, from the last training sample."
+    tau::Vector{Float64}
+    "Standard deviation of the time error (s)."
+    sigma::Vector{Float64}
+    "The |error| (s) the clock stays within with probability `confidence`."
+    quantile::Vector{Float64}
+    "Exponents α of the model's noise types, highest first."
+    alphas::Vector{Int}
+    "Variance (s²) each noise type adds: one row per `tau`, one column per α. The rows sum to `sigma.^2`."
+    budget::Matrix{Float64}
+    "Length of the training stretch in seconds."
+    train::Float64
+    "Whether the fit is a parabola (frequency drift) rather than a line."
+    drift::Bool
+    "Whether the clock starts from the last reading rather than the fit's value there."
+    anchor::Bool
+    "Level of `quantile`."
+    confidence::Float64
+    "The limit asked for (s); `NaN` when none."
+    limit::Float64
+    "Holdover time (s) at which `quantile` reaches `limit`; `NaN` when none."
+    time_to_limit::Float64
+end
+
+Base.show(io::IO, h::HoldoverPrediction) =
+    print(io, "HoldoverPrediction(", length(h.tau), " pts, τ∈[", _show4g(h.tau[1]), ", ",
+          _show4g(h.tau[end]), "] s, trained on ", _show4g(h.train), " s)")
+
+function Base.show(io::IO, ::MIME"text/plain", h::HoldoverPrediction)
+    show(io, h)
+    isnan(h.limit) || print(io, "\n  ", _show4g(h.limit), " s reached after ", _show4g(h.time_to_limit), " s")
+    @printf(io, "\n  %10s  %10s  %10s", "tau", "sigma", "p" * _show4g(100h.confidence))
+    for α in h.alphas
+        @printf(io, "  %10s", _nnls_symbol(α))
+    end
+    for i in eachindex(h.tau)
+        @printf(io, "\n  %10.4g  %10.4g  %10.4g", h.tau[i], h.sigma[i], h.quantile[i])
+        for j in eachindex(h.alphas)
+            @printf(io, "  %10.4g", sqrt(h.budget[i, j]))
+        end
+    end
+end
+
+"""
+    holdover(model; train, tau, tau0, drift=false, anchor=true, limit=nothing, confidence=0.95)
+        → HoldoverPrediction
+
+The same test predicted from a noise model: the standard deviation of the
+error [`holdover`](@ref) measures on a record, for a clock with the
+power-law noise of `model`. `model` is a [`PowerLawFit`](@ref) or a
+[`ClockModel`](@ref) (whose `tau0` is the default), or a `Dict` of h_α
+keyed by α or noise type, as in [`powerlaw_sigma`](@ref). `train` has no
+default here.
+
+The error is a weighted sum of phase samples, so its variance follows
+exactly from the spectrum of the sampled record,
+`h_α (sin(πfτ₀)/(πτ₀))^α` up to 1/(2τ₀), flicker noise included; `budget`
+holds each noise type's share. For long stretches it gives the closed
+forms of Delporte et al. (2000). The quantile is the Gaussian one,
+1.96 σ at 95 %. A line takes α from 2 to −2; a parabola (`drift = true`)
+also −3 and −4.
+
+A drift D that the model does not hold adds the mean ½ D τ (τ + T) under a
+line over T seconds, and nothing under a parabola.
+
+# Examples
+
+```julia
+using SigmaTau
+h = holdover(Dict(:WHFM => 2e-22, :FLFM => 1e-27); tau0 = 1.0, train = 3600, limit = 1e-9)
+h.sigma               # at h.tau
+sqrt.(h.budget)       # white FM and flicker FM, side by side
+```
+"""
+function holdover(model; train::Real, tau::Union{AbstractVector{<:Real},Nothing}=nothing,
+                  tau0::Real=_powerlaw_tau0(model), drift::Bool=false, anchor::Bool=true,
+                  limit::Union{Real,Nothing}=nothing, confidence::Real=0.95)
+    0 < confidence < 1 || throw(ArgumentError("holdover: confidence must be between 0 and 1, got $confidence"))
+    τ₀, d = Float64(tau0), drift ? 2 : 1
+    isfinite(τ₀) && τ₀ > 0 || throw(ArgumentError("holdover: pass `tau0`, the sample interval in seconds"))
+    hd = _powerlaw_h(model)
+    αs = reverse!(sort!(collect(keys(hd))))   # sort!(…; rev) is not trim-safe
+    all(α -> -2d <= α <= 2, αs) || throw(ArgumentError(
+        "holdover: α outside $(-2d)…2 has no finite error under a " * (drift ? "parabola" : "line; use drift = true")))
+    n = _whole_samples(train, τ₀, "train")
+    n > d + 1 || throw(ArgumentError("holdover: a training stretch of $n samples cannot hold $(d + 1) terms"))
+    hs = tau === nothing ? _grid(Octave, n) : [_whole_samples(t, τ₀, "tau") for t in tau]
+    !isempty(hs) && issorted(hs) || throw(ArgumentError("holdover: tau must rise"))
+    budget = zeros(length(hs), length(αs))
+    for (i, h) in enumerate(hs)
+        w = _holdover_weights(n, h, d, anchor)
+        for (j, α) in enumerate(αs)
+            budget[i, j] = hd[α] * _holdover_var(w, α, τ₀)
+        end
+    end
+    σ = sqrt.(vec(sum(budget; dims=2)))
+    τ, q = hs .* τ₀, quantile(Normal(), (1 + confidence) / 2) .* σ
+    return HoldoverPrediction(τ, σ, q, αs, budget, n * τ₀, drift, anchor, Float64(confidence),
+                              limit === nothing ? NaN : Float64(limit),
+                              limit === nothing ? NaN : _time_to_limit(τ, q, limit))
 end

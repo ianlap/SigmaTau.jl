@@ -79,6 +79,26 @@ def test_holdover_matches_julia(clock, jl):
         st.holdover(data, train=0.5)
 
 
+def test_holdover_prediction_matches_julia(clock, jl):
+    m, _, _ = clock
+    p = st.holdover(m, train=200, tau=[10, 100])
+    direct = jl.holdover(m._jl(), train=200, tau=_convert.to_jl_f64([10, 100]))
+    np.testing.assert_array_equal(p.sigma, np.array(direct.sigma))
+    assert p.alphas.tolist() == [2, 0, -2] and p.budget.shape == (2, 3)
+    np.testing.assert_allclose(p.budget.sum(axis=1), p.sigma**2)
+    np.testing.assert_allclose(
+        st.holdover(
+            {"WHPM": 8 * np.pi**2 * m.R, 0: 2 * m.q1, -2: m.q2 / (2 * np.pi**2)},
+            tau0=1.0,
+            train=200,
+            tau=[10, 100],
+        ).sigma,
+        p.sigma,
+    )
+    with pytest.raises(ValueError):
+        st.holdover({0: 1e-24}, train=200)  # no tau0
+
+
 def test_timescale_matches_julia(jl):
     models = [st.ClockModel(1.0, q1=q) for q in (1e-24, 4e-24, 9e-24)]
     cc, truth = st.simulate_ensemble(models, 3000, reference=None, rng=2)

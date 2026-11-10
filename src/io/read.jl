@@ -2,22 +2,21 @@
 # optional scaling, detrending and gap filling, and the time grid that puts
 # timestamped samples in place.
 
-# The delimiter of a file whose first data line is `buf[r]`: `,` for `.csv`
-# and tab for `.tsv` when that line holds one, else runs of blanks, so a
-# blank-separated file named `.csv` still reads.
-function _ext_delim(path::AbstractString, buf::Vector{UInt8}, r::UnitRange{Int})
-    ext = lowercase(splitext(path)[2])
-    d = ext == ".csv" ? UInt8(',') : ext == ".tsv" ? UInt8('\t') : 0x00
-    (d != 0x00 && d in view(buf, r)) || return '\0'
-    return Char(d)
+# The delimiter of a file whose first data line is `buf[r]`: tab for a `.tsv`
+# whose line holds one, else a comma when the line holds one, else runs of
+# blanks (tabs too), so a comma-separated `.txt` and a blank-separated `.csv`
+# both read.
+function _auto_delim(path::AbstractString, buf::Vector{UInt8}, r::UnitRange{Int})
+    lowercase(splitext(path)[2]) == ".tsv" && UInt8('\t') in view(buf, r) && return '\t'
+    return UInt8(',') in view(buf, r) ? ',' : '\0'
 end
 
 # Columns `cols` of a numeric text file (0 is the last column), read line by
 # line so a record of any length costs only those columns. `header` lines are
 # skipped, then blank and `#` lines wherever they appear (Stable32's
 # "# Header End", notes written mid-record); every row must have the same
-# number of fields. The delimiter is `delim`, else the extension's (see
-# `_ext_delim`). Returns the columns and the field count.
+# number of fields. The delimiter is `delim`, else the one picked from the
+# first data line (see `_auto_delim`). Returns the columns and the field count.
 function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing}, cols::Vector{Int})
     isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
     d = delim === nothing ? '\0' : delim
@@ -32,7 +31,7 @@ function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing
             r === nothing && break
             lineno += 1
             (lineno <= header || _blank_or_comment(l.buf, r)) && continue
-            ncols < 0 && delim === nothing && (d = _ext_delim(path, l.buf, r))
+            ncols < 0 && delim === nothing && (d = _auto_delim(path, l.buf, r))
             _fields!(fields, l.buf, r, d)
             if ncols < 0
                 ncols = length(fields)
@@ -69,7 +68,7 @@ function _ncols(path::AbstractString, header::Int, delim::Union{Char,Nothing})
             r === nothing && return 0
             lineno += 1
             (lineno <= header || _blank_or_comment(l.buf, r)) && continue
-            _fields!(fields, l.buf, r, delim === nothing ? _ext_delim(path, l.buf, r) : delim)
+            _fields!(fields, l.buf, r, delim === nothing ? _auto_delim(path, l.buf, r) : delim)
             return length(fields)
         end
     finally
@@ -98,10 +97,12 @@ end
 # The step is first the mean of the regular steps (under 1.5 times the
 # shortest, so not the gaps), whose sum telescopes, so timestamps rounded to
 # a coarse resolution (MJD to 1e-6 day) still average to the true step. The
-# step is then the shortest round value (1 to 6 significant figures) that
-# keeps every timestamp within a quarter step of its slot over the whole
-# record, else the span over the slots. Every step must be within a quarter
-# of a whole number of grid steps, so jittered timestamps keep their order
+# step is then the shortest round value of it (1 to 6 significant figures)
+# that the scatter of the timestamps cannot tell from their least-squares
+# step on the slots it gives (see `_step_tolerance`) and that keeps every
+# timestamp within a quarter step of its slot over the whole record, else
+# the span over the slots.
+# Every step must be within a quarter of a whole number of grid steps, so jittered timestamps keep their order
 # and a missing reading leaves an empty slot. No slots (and a NaN step) when
 # the column is no time axis: not increasing, or steps that fit no grid.
 function _time_grid(t::AbstractVector{<:Real})
@@ -120,16 +121,41 @@ function _time_grid(t::AbstractVector{<:Real})
     est = s / m
     for digits in 1:6
         step = round(est; sigdigits=digits)
-        abs(step - est) < 0.01 * est || continue
         slots = _slots(dt, step)
         isempty(slots) && continue
-        _on_grid(t, slots, step) && return slots, step
+        fit, tol = _step_tolerance(t, slots)
+        abs(step - fit) <= min(tol, 0.01 * fit) && _on_grid(t, slots, step) && return slots, step
     end
     slots = _slots(dt, est)
     isempty(slots) && return none
     slots[end] > 1 && (est = (t[end] - t[1]) / (slots[end] - 1))
     slots = _slots(dt, est)
     return isempty(slots) ? none : (slots, est)
+end
+
+# The least-squares step of the timestamps on their slots, and the most a
+# round step may differ from it: the slope error that timestamp errors of
+# twice the largest residual can cause at worst, so coarse timestamps admit
+# a round step and exact ones only the exact step (to 1e-9 of it).
+function _step_tolerance(t::AbstractVector{<:Real}, slots::Vector{Int})
+    n = length(slots)
+    xb = sum(slots) / n; tb = 0.0
+    for i in 1:n
+        tb += t[i] - t[1]
+    end
+    tb /= n
+    sxx = 0.0; sxy = 0.0; sax = 0.0
+    for i in 1:n
+        sxx += (slots[i] - xb)^2
+        sax += abs(slots[i] - xb)
+        sxy += (slots[i] - xb) * (t[i] - t[1] - tb)
+    end
+    b = sxy / sxx
+    r = 0.0
+    for i in 1:n
+        r = max(r, abs(t[i] - t[1] - tb - b * (slots[i] - xb)))
+    end
+    return b, max(2r * sax / sxx, 1e-9 * abs(b))
 end
 
 # The slot of each sample on a grid of `step`, each step rounded to a whole
@@ -327,17 +353,15 @@ grid, and a reading that is missing from the file leaves a `NaN` sample in
 its place (see [Timestamps and gaps](@ref)). A file with no reading missing
 is read as written.
 
-The grid step is the mean of the steps shorter than 1.5 times the shortest,
-rounded to the fewest significant figures, at most six, that leave every
-timestamp within a quarter step of its place, and left unrounded when none
-does. Timestamps that jitter, or that are rounded to a coarse resolution,
-therefore give a round ``τ_0``.
-
-!!! warning "Short records"
-    The rounding can stop at fewer figures than the interval has.
-    Timestamps 86400 s apart give ``τ_0 = 86000`` s in a record of fewer
-    than 55 samples, and timestamps 1.024 s apart give 1.02 s in one of
-    fewer than 65. Pass `tau0` when the interval is known.
+The grid step starts from the mean of the steps shorter than 1.5 times the
+shortest. It is rounded to the fewest significant figures, at most six, for
+which two conditions hold: the rounded step lies within the uncertainty of
+the least-squares step of the timestamps, which their scatter about that
+fit sets, and every timestamp lies within a quarter step of its place. When
+no rounding passes, the step is the span of the timestamps over the number
+of steps. Timestamps that jitter, or that are rounded to a coarse
+resolution, therefore give a round ``τ_0``, and exact timestamps keep their
+own step whatever the length of the record.
 
 A column that is no time axis leaves the samples in file order: one that
 does not increase from line to line, or whose steps are not whole multiples
@@ -359,9 +383,9 @@ taken for MJD: pass `tau0` for them, and disregard the start time.
 - `value_col=2`: column of the samples.
 - `header=0`: number of lines to skip after the leading `#` lines, such as
   a line of column names.
-- `delim`: character that separates the fields. By default a comma in a
-  `.csv` file and a tab in a `.tsv` file, when the first line of data holds
-  one, and runs of blanks otherwise. A field may be enclosed in double
+- `delim`: character that separates the fields. By default a tab in a
+  `.tsv` file whose first line of data holds one, else a comma when that
+  line holds one, else runs of blanks. A field may be enclosed in double
   quotes.
 - `scaling=1.0`: factor applied to the samples, `1e-9` for a file in
   nanoseconds.

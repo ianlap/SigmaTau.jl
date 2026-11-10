@@ -263,11 +263,13 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
     return _Record(_gridded(t, v, fillgaps), t0, phase, start)
 end
 
-# Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "Hz"): the
-# scale to SI, NaN for absolute Hz, and whether they are time units (phase,
-# +1) or frequency units (-1).
+# Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "ns/s", "Hz"):
+# the scale to SI, NaN for absolute Hz, and whether they are time units
+# (phase, +1) or frequency units (-1). Ratios of times come first.
 const _UNITS = [(Regex("(^|[\\s(\\[_/-])" * u * "([\\s)\\]]|\$)"), f, k)
-                for (u, f, k) in (("ps", 1e-12, 1), ("ns", 1e-9, 1), ("us", 1e-6, 1), ("µs", 1e-6, 1),
+                for (u, f, k) in (("ps/s", 1e-12, -1), ("ns/s", 1e-9, -1), ("us/s", 1e-6, -1),
+                                  ("µs/s", 1e-6, -1), ("μs/s", 1e-6, -1), ("ms/s", 1e-3, -1),
+                                  ("s/s", 1.0, -1), ("ps", 1e-12, 1), ("ns", 1e-9, 1), ("us", 1e-6, 1), ("µs", 1e-6, 1),
                                   ("μs", 1e-6, 1), ("ms", 1e-3, 1), ("ppt", 1e-12, -1), ("ppb", 1e-9, -1),
                                   ("ppm", 1e-6, -1), ("hz", NaN, -1), ("s", 1.0, 1))]
 
@@ -356,16 +358,22 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         t = t[keep]; v = v[keep]
     end
     start = iso[] && !isempty(t) ? t[1] : NaN
-    # MJD by name, or by its range unless the name says seconds.
+    # MJD by name, or by its range unless the name says seconds; else in the
+    # time unit the name gives ("time (ms)"), seconds without one or for
+    # ISO 8601 timestamps.
+    tscale, tkind = isempty(t) ? (1.0, 0) : _unit(names[time])
     if !isempty(t) && (occursin(r"mjd"i, names[time]) ||
-                       (_unit(names[time])[2] <= 0 && !occursin(r"sec|elapsed"i, names[time]) && _is_mjd(t)))
+                       (tkind <= 0 && !occursin(r"sec|elapsed"i, names[time]) && _is_mjd(t)))
         start = _mjd_seconds(t[1])
         t .*= 86400
+    elseif tkind > 0 && tscale != 1 && !iso[]
+        t .*= tscale
     end
-    phase = phase_hint == 0 ? !occursin(_FREQ_NAMES, names[c]) || occursin(_PHASE_NAMES, names[c]) :
-            phase_hint > 0
     scale, unit_kind = _unit(names[c])
-    # A unit in the name fixes the record type; an override must agree.
+    # A unit in the name fixes the record type, else the name's words do; an
+    # override must agree with the unit.
+    phase = phase_hint != 0 ? phase_hint > 0 : unit_kind != 0 ? unit_kind > 0 :
+            !occursin(_FREQ_NAMES, names[c]) || occursin(_PHASE_NAMES, names[c])
     (phase_hint != 0 && unit_kind != 0 && phase_hint != unit_kind) && throw(ArgumentError(
         "read_data: column \"" * names[c] * "\" is in " * (unit_kind > 0 ? "time" : "frequency") *
         " units and cannot be read as " * (phase_hint > 0 ? "phase" : "frequency")))
@@ -478,7 +486,8 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
         _read_rinex_clk(path, tau0, column, column_name, fillgaps)
     elseif fmt === :columns
         v, t0, start = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
-                               header=0, delim=nothing, scaling=1.0, detrend=:none, fillgaps=fillgaps)
+                               header=0, delim=delim == '\0' ? nothing : delim, scaling=1.0,
+                               detrend=:none, fillgaps=fillgaps)
         # Unnamed readings of median size under 1e-11 are fractional
         # frequency (or a ratio): a time error that small is not a clock.
         f = filter(isfinite, v)
@@ -503,10 +512,10 @@ its record, phase or frequency as the file has it. The format is found by
 
 # Formats
 
-- `:columns`: numeric columns, read as by [`read_phase`](@ref) with its
-  default keywords. The record is phase, or frequency when the median size
-  of the samples is under ``10^{-11}``. Phase samples can be that small, as
-  the residuals of a low-noise comparison are: pass `kind=:phase` for them.
+- `:columns`: numeric columns, read as [`read_phase`](@ref) reads them by
+  default. The record is phase, or frequency when the median size of the
+  samples is under ``10^{-11}``. Phase samples can be that small, as the
+  residuals of a low-noise comparison are: pass `kind=:phase` for them.
 - `:stable32`: a Stable32 `.phd` (phase) or `.frd` (frequency) file. A
   `Type:` line in its header overrides the extension. ``τ_0`` is that of
   the `Tau:` header line, else the step of the time tags. With two columns
@@ -545,10 +554,10 @@ In a `:table` file the time column is the first whose name is `t`, `time`,
 `timestamp`, `date`, `datetime`, `utc`, `epoch`, `elapsed`, `sec`,
 `seconds` or `mjd`, with or without a unit in brackets after it, else the
 first column that holds ISO 8601 timestamps. Numbers in it are read as
-seconds, and a unit in its name is not applied. They are read as days when
-the name contains `mjd`, or when they meet the MJD conditions of
-[`read_phase`](@ref) and the name has neither `sec`, `elapsed` nor a unit
-of time.
+seconds, or in the unit of time that its name gives, as in `time (ms)`.
+They are read as days when the name contains `mjd`, or when they meet the
+MJD conditions of [`read_phase`](@ref) and the name has neither `sec`,
+`elapsed` nor a unit of time.
 
 The clock column is `column`. By default it is the other column of a file
 with a time column and one more, else the only column whose name holds
@@ -556,16 +565,13 @@ with a time column and one more, else the only column whose name holds
 the only one whose name holds `freq`, `ffe`, `osc`, `fractional`, `ratio`
 or `y`. An error lists the names when none of these decides.
 
-The record is frequency when the name of the clock column holds one of the
-frequency words and none of the phase words, and phase otherwise. A unit in
-the name converts the samples: `ps`, `ns`, `us`, `µs`, `ms` and `s` to
-seconds, `ppt`, `ppb` and `ppm` to fractional frequency, and `Hz` to
-fractional frequency about `nominal`.
-
-!!! warning "Frequency units without a frequency word"
-    A unit of `ppt`, `ppb` or `ppm` converts the samples but does not make
-    the record frequency. A column named `offset (ppb)` is read as phase:
-    pass `kind=:frequency` for it.
+A unit in the name of the clock column sets the type of the record and
+converts the samples. The units of time `ps`, `ns`, `us`, `µs`, `ms` and
+`s` make it phase, in seconds. The units `ppt`, `ppb` and `ppm` and the
+ratios of times from `ps/s` to `s/s` make it fractional frequency, and so
+does `Hz`, about `nominal`. Without a unit the words of the name decide:
+the record is frequency when the name holds one of the frequency words and
+none of the phase words, and phase otherwise.
 
 A row without a number in the clock column is a missing reading. With a
 time column such rows are left out before the grid is fitted, so a column
@@ -575,9 +581,8 @@ logged at a longer interval than the table keeps its own interval.
 
 Where a file has timestamps, they place the samples as in
 [`read_phase`](@ref): they give ``τ_0`` when the keyword and the header do
-not, a reading missing from the file leaves a `NaN` sample, and the warning
-given there for short records applies. ISO 8601 timestamps and MJD values
-give the record its [`start_time`](@ref).
+not, and a reading missing from the file leaves a `NaN` sample. ISO 8601
+timestamps and MJD values give the record its [`start_time`](@ref).
 
 # Keywords
 
@@ -597,10 +602,10 @@ give the record its [`start_time`](@ref).
   unit is of the other kind throws an error.
 - `scaling=1.0`: factor applied to the samples after any conversion of
   units.
-- `delim`: character that separates the fields of a `:counter` or `:table`
-  file. By default a comma, or a tab, when the first line of data holds
-  one, and runs of blanks otherwise. A `:columns` file follows the rule of
-  [`read_phase`](@ref) whatever `delim` is.
+- `delim`: character that separates the fields of a `:columns`, `:counter`
+  or `:table` file. By default a `:columns` file follows the rule of
+  [`read_phase`](@ref). In the other two a comma, else a tab, separates the
+  fields when the first line holds one, and runs of blanks otherwise.
 - `fillgaps=false`: fill the missing samples with [`fillgaps`](@ref), with
   the reservations stated there.
 
