@@ -144,6 +144,11 @@ function _initial_frequency(cc::ClockComparisons)
     return seen .* (slope .- sum(slope[seen]) / max(1, count(seen)))
 end
 
+# Steady-state frequency variance P of the AT2 filter (eq 16 for any τ): with
+# s = σ_β²τ, the fixed point of P̂ = P + s, P = σα² P̂/(σα² + P̂), i.e.
+# P² + sP − σα²s = 0. Units: σα² and s are fractional frequency squared.
+_at2_steady(σα²::Float64, s::Float64) = (-s + sqrt(s^2 + 4 * σα² * s)) / 2
+
 """
     timescale(cc::ClockComparisons; algorithm=:at1, …) → TimescaleResult
 
@@ -239,11 +244,6 @@ the best clock. With two clocks the comparisons alone cannot tell which is
 better, and the weights wander toward either; cap them with `wmax` or use
 EWFA. The frequency drift term of the paper's prediction (1) is not used.
 """
-# Steady-state frequency variance P of the AT2 filter (eq 16 for any τ): with
-# s = σ_β²τ, the fixed point of P̂ = P + s, P = σα² P̂/(σα² + P̂), i.e.
-# P² + sP − σα²s = 0. Units: σα² and s are fractional frequency squared.
-_at2_steady(σα²::Float64, s::Float64) = (-s + sqrt(s^2 + 4 * σα² * s)) / 2
-
 function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100cc.tau0,
                    tau_min::Union{Nothing,Real,AbstractVector{<:Real}}=nothing,
                    memory::Real=20 * 86400.0, bias::Symbol=:paper, wmax::Real=1.0,
