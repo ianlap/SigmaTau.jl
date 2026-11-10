@@ -4,8 +4,9 @@ down-converts the returned ``StabilityResult``.
 ``m`` accepts a ``TauMode`` grid selector (default ``Octave``) or an
 explicit sequence of integer averaging factors; noise ID + χ² confidence
 bounds are computed unless ``ci=False``; the total family applies bias
-correction by default (``correct_bias=True``); ``mhtotdev`` additionally
-removes record-level quadratic drift by default (``remove_drift=True``).
+correction by default (``correct_bias=True``); the Hadamard family identifies
+noise on the record less its frequency drift by default (``remove_drift=True``;
+``False`` uses the record as given, as Stable32 does).
 ``mtie``/``tierms`` have no CI model — their ``ci``/``confidence`` kwargs are
 accepted and ignored, matching the Julia surface.
 """
@@ -66,10 +67,11 @@ def hdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    remove_drift: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Overlapping Hadamard deviation."""
-    return _run(jl.hdev, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.hdev, data, m, ci=ci, remove_drift=remove_drift, confidence=float(confidence))
 
 
 def mhdev(
@@ -77,10 +79,11 @@ def mhdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    remove_drift: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Modified Hadamard deviation."""
-    return _run(jl.mhdev, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.mhdev, data, m, ci=ci, remove_drift=remove_drift, confidence=float(confidence))
 
 
 def htdev(
@@ -88,10 +91,11 @@ def htdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    remove_drift: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Hadamard time deviation σ_x,HT(τ) = (τ/√(10/3))·Mod σ_y,MH(τ). Units of seconds."""
-    return _run(jl.htdev, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.htdev, data, m, ci=ci, remove_drift=remove_drift, confidence=float(confidence))
 
 
 def pdev(
@@ -188,10 +192,19 @@ def htotdev(
     *,
     ci: bool = True,
     correct_bias: bool = True,
+    remove_drift: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Hadamard Total deviation (Greenhall extension on y = diff(x))."""
-    return _run(jl.htotdev, data, m, ci=ci, correct_bias=correct_bias, confidence=float(confidence))
+    return _run(
+        jl.htotdev,
+        data,
+        m,
+        ci=ci,
+        correct_bias=correct_bias,
+        remove_drift=remove_drift,
+        confidence=float(confidence),
+    )
 
 
 def theo1(
@@ -236,11 +249,13 @@ def deviation(
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
     correct_bias: bool = True,
+    remove_drift: bool = True,
 ) -> StabilityResult:
     """Run the estimator called ``name`` (any name from :func:`estimators`).
 
-    ``correct_bias`` applies to the total family and is ignored elsewhere, so
-    one call shape works for every estimator.
+    ``correct_bias`` applies to the total family and ``remove_drift`` to the
+    Hadamard family; each is ignored elsewhere, so one call shape works for
+    every estimator.
     """
     return result_from_jl(
         jl.deviation(
@@ -250,6 +265,7 @@ def deviation(
             ci=bool(ci),
             confidence=float(confidence),
             correct_bias=bool(correct_bias),
+            remove_drift=bool(remove_drift),
         )
     )
 

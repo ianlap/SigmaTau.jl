@@ -12,6 +12,14 @@ _result(data::PhaseData, confidence::Real, dt::Symbol, tau, dev, noise, ci, edf,
 _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
     throw(ArgumentError("$est: averaging factors must be ≥ 1, got $(minimum(m_values))"))
 
+# Noise types for the Hadamard family. With `remove_drift` they are identified
+# on the record less its frequency drift (a least-squares quadratic in phase):
+# these statistics ignore drift, so the noise type that sets their EDF and
+# bias correction should too (SP1065 §5.5.6 removes deterministic components
+# before noise identification).
+_hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
+    identify_noise(remove_drift ? _remove_quadratic(x) : x, m_values, dmin=0, dmax=3)
+
 # The phase samples, for an estimator that cannot skip gaps.
 function _gapfree(est::Symbol, data::PhaseData, m_values::Vector{Int})
     _check_m(est, m_values)
@@ -159,7 +167,7 @@ tdev(data::FrequencyData; kwargs...) = tdev(data, _default_m_values(length(data.
 
 
 """
-    hdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    hdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Overlapping Hadamard deviation of a phase record, per NIST SP1065 §5.2.6. The
 third difference removes linear frequency drift, so `hdev` is the estimator to
@@ -167,13 +175,18 @@ use on rubidium, quartz or any clock with a frequency drift that would turn
 ADEV into a τ¹ ramp. It cannot separate white from flicker PM; use
 [`mhdev`](@ref) for that.
 
+`remove_drift=true` (default) identifies the noise type at each τ on the
+record less its least-squares frequency drift, so a drift the statistic
+ignores cannot bias the EDF; the deviation itself does not change.
+`remove_drift=false` identifies it on the record as given, as Stable32 does.
+
 Like every estimator, `hdev` also takes `FrequencyData`, a `TauMode` grid in
 place of `m_values` (`hdev(data, Decade)`), or no grid at all (`hdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
     _check_m(:hdev, m_values)
     x = _f64(data.x)
     raw_devs = _hdev_core(x, m_values, data.tau0)
@@ -185,7 +198,7 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
         return _result(data, confidence, :hdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=3)
+    noises = _hadamard_noise(x, m_values, remove_drift)
     edfs = calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
@@ -193,20 +206,21 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 end
 
 """
-    mhdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    mhdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Modified Hadamard deviation of a phase record: the phase-averaged third
 difference, drift-immune like `hdev` and able to separate white PM from
 flicker PM like `mdev`. Not defined by SP1065; the EDF uses the
-Greenhall–Riley algorithm with the MHDEV filter.
+Greenhall–Riley algorithm with the MHDEV filter. `remove_drift` works as in
+[`hdev`](@ref).
 
 Like every estimator, `mhdev` also takes `FrequencyData`, a `TauMode` grid in
 place of `m_values` (`mhdev(data, Decade)`), or no grid at all (`mhdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
     _check_m(:mhdev, m_values)
     x = _f64(data.x)
     raw_devs = _mhdev_core(x, m_values, data.tau0)
@@ -218,7 +232,7 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
         return _result(data, confidence, :mhdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=3)
+    noises = _hadamard_noise(x, m_values, remove_drift)
     edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(x), T)
     lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
@@ -226,21 +240,21 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
 end
 
 """
-    htdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    htdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Hadamard time deviation σ_x,HT(τ) = τ/√(10/3) · σ_y,MH(τ), the σ_x form of
 `mhdev` in seconds, as TDEV is of MDEV. The construction is original to this
 package; SP1065, IEEE 1139-2022 and NBS TN-1337 do not define it. Use it in
 place of [`tdev`](@ref) when the clock drifts. Confidence bounds are MHDEV's
-scaled by the same factor.
+scaled by the same factor, and `remove_drift` passes through to it.
 
 Like every estimator, `htdev` also takes `FrequencyData`, a `TauMode` grid in
 place of `m_values` (`htdev(data, Decade)`), or no grid at all (`htdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mhdev(data, m_values; ci=ci, confidence=confidence)
+function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mhdev(data, m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
     factor = res.tau ./ sqrt(10.0 / 3.0)
 
     if !ci
@@ -349,7 +363,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 end
 
 """
-    htotdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    htotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Hadamard total deviation of a phase record, per NIST SP1065 §5.2.13, with the
 per-subsegment detrend and time-reverse extension of Howe et al. 2000.
@@ -362,8 +376,11 @@ correction raises σ, substantially for divergent FM. PM noises (α > 0) get
 B = 1 (no published model), and so does `m = 1`, where the estimator is
 plain overlapping HDEV. Stable32 applies the same correction by default; `correct_bias=false`
 returns the raw kernel value, which is what allantools reports.
+
+`remove_drift` works as in [`hdev`](@ref). Here the noise type also selects
+the bias factor, so the keyword can change σ where the two labels differ.
 """
-function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:htotdev, data, m_values)
     raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -371,7 +388,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     neff = _neff_counts(:htotdev, length(x), m_values)
 
     need_noise = correct_bias || ci
-    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
+    noises = need_noise ? _hadamard_noise(x, m_values, remove_drift) : Symbol[]
 
     # m = 1 is plain overlapping HDEV (see `_htotdev_core`), which is unbiased,
     # so the TotHvar correction applies only from m = 2 on (as in Stable32).

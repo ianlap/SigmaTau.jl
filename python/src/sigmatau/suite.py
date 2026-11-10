@@ -60,14 +60,15 @@ def stability(
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
     correct_bias: bool = True,
+    remove_drift: bool = True,
 ) -> StabilitySuite:
     """Compute several deviations on one record and collect them into a suite.
 
     ``devs`` is a sequence of deviation names (default ``DEFAULT_DEVIATIONS``,
     the four σ_y quantities ``("adev", "mdev", "hdev", "mhdev")``). ``m`` is a
     ``TauMode`` grid selector or an explicit sequence of averaging factors;
-    ``ci``/``confidence`` and (for the total family) ``correct_bias`` flow
-    through to each deviation.
+    ``ci``/``confidence``, ``correct_bias`` (total family) and ``remove_drift``
+    (Hadamard family) flow through to each deviation.
     """
     return suite_from_jl(
         jl.stability(
@@ -77,6 +78,7 @@ def stability(
             ci=bool(ci),
             confidence=float(confidence),
             correct_bias=bool(correct_bias),
+            remove_drift=bool(remove_drift),
         )
     )
 

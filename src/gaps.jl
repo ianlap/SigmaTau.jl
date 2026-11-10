@@ -219,12 +219,12 @@ Gap-tolerant result for `est` (adev, mdev, tdev, hdev, mhdev, htdev, tierms
 or mtie); see the note at the top of this file.
 """
 function _gap_result(est::Symbol, g::_GapRecord, m_values::Vector{Int};
-                     ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+                     ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _check_m(est, m_values)
     pd = PhaseData(g.x, g.tau0)
     taus = m_values .* g.tau0
     if est === :tdev || est === :htdev
-        base = _gap_result(est === :tdev ? :mdev : :mhdev, g, m_values; ci=ci, confidence=confidence)
+        base = _gap_result(est === :tdev ? :mdev : :mhdev, g, m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
         factor = taus ./ sqrt(est === :tdev ? 3.0 : 10.0 / 3.0)
         ci || return _result(pd, confidence, est, taus, base.dev .* factor, Symbol[], _CIBound[], Float64[], base.neff)
         return _result(pd, confidence, est, taus, base.dev .* factor, base.noise_type,
@@ -234,8 +234,8 @@ function _gap_result(est::Symbol, g::_GapRecord, m_values::Vector{Int};
     if !ci || est === :mtie || est === :tierms
         return _result(pd, confidence, est, taus, devs, Symbol[], _CIBound[], Float64[], ns)
     end
-    dmax = est === :adev || est === :mdev ? 2 : 3
-    noises = identify_noise(g.noise_x, m_values, dmin=0, dmax=dmax)
+    noises = est === :adev || est === :mdev ? identify_noise(g.noise_x, m_values, dmin=0, dmax=2) :
+                                              _hadamard_noise(g.noise_x, m_values, remove_drift)
     edfs = Vector{Float64}(undef, length(m_values))
     lower = similar(edfs); upper = similar(edfs)
     for k in eachindex(m_values)

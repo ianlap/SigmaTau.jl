@@ -36,8 +36,9 @@ This page walks through one fixture in detail. The
 regenerated from the validation test group by
 `tools/validation/report.jl`.
 
-Default settings throughout; the total-family tables additionally show
-`correct_bias=false` ("raw") columns.
+Default settings throughout, with two exceptions: the total-family tables
+additionally show `correct_bias=false` ("raw") columns, and the two Hadamard
+tables use `remove_drift=false`, Stable32's convention for the noise type.
 
 ## Summary
 
@@ -89,6 +90,17 @@ all 12 τ on this fixture. Because the EDF (and, for the total family,
 the bias factor) depend on α, the flipped row carries different CI
 bounds (and, for HTOTDEV, a 0.25 % σ difference). The rows are marked ¹
 in the tables below.
+
+The Hadamard estimators differ in one more way. By default they identify the
+noise on the record less its least-squares frequency drift
+(`remove_drift=true`), which Stable32 does not do, and on this record that
+changes two long-τ labels: α = −1 becomes 0 at τ = 512 s, and α = 0 becomes
++1 at τ = 2048 s, where four averaged samples remain. HDEV itself is
+unchanged; its default intervals at those τ are [2.5577e-03, 3.6077e-03] and
+[2.5098e-03, 3.2736e-03]. HTOTDEV follows the bias factor of the label, so
+its default values are 3.10531e-03 (7.5 % below Stable32) and 2.93086e-03
+(0.25 % below). The two Hadamard tables below pass `remove_drift=false`,
+which reproduces Stable32's labels at every τ but 256 s.
 
 ### Confidence intervals
 
@@ -162,6 +174,9 @@ are the τ = 256 s noise-identification flip.
 
 ### Overlapping Hadamard
 
+SigmaTau columns use `remove_drift=false` (see the noise-identification
+residual above).
+
 | τ (s) | Stable32 | allantools | SigmaTau | Stable32 CI | SigmaTau CI |
 |---:|:---|:---|:---|:---|:---|
 | 1 | 1.0646e+00 | 1.06459e+00 | 1.06459e+00 | [1.0522e+00, 1.0774e+00] | [1.0522e+00, 1.0775e+00] |
@@ -169,13 +184,13 @@ are the τ = 256 s noise-identification flip.
 | 4 | 2.6192e-01 | 2.61924e-01 | 2.61924e-01 | [2.5888e-01, 2.6507e-01] | [2.5886e-01, 2.6509e-01] |
 | 8 | 1.3854e-01 | 1.38538e-01 | 1.38538e-01 | [1.3693e-01, 1.4021e-01] | [1.3692e-01, 1.4022e-01] |
 | 16 | 6.6018e-02 | 6.60177e-02 | 6.60177e-02 | [6.5250e-02, 6.6813e-02] | [6.5245e-02, 6.6818e-02] |
-| 32 | 3.3500e-02 | 3.35003e-02 | 3.35003e-02 | [3.2736e-02, 3.4321e-02] | [3.2740e-02, 3.4316e-02] |
-| 64 | 1.6951e-02 | 1.69515e-02 | 1.69515e-02 | [1.6477e-02, 1.7469e-02] | [1.6477e-02, 1.7469e-02] |
+| 32 | 3.3500e-02 | 3.35003e-02 | 3.35003e-02 | [3.2736e-02, 3.4321e-02] | [3.2732e-02, 3.4326e-02] |
+| 64 | 1.6951e-02 | 1.69515e-02 | 1.69515e-02 | [1.6477e-02, 1.7469e-02] | [1.6474e-02, 1.7473e-02] |
 | 128 | 8.4500e-03 | 8.44998e-03 | 8.44998e-03 | [7.8517e-03, 9.2096e-03] | [7.8514e-03, 9.2102e-03] |
 | 256¹ | 4.5672e-03 | 4.56718e-03 | 4.56718e-03 | [4.5122e-03, 4.6242e-03] | [4.1228e-03, 5.1951e-03] |
 | 512 | 2.9510e-03 | 2.95105e-03 | 2.95105e-03 | [2.5185e-03, 3.7257e-03] | [2.5182e-03, 3.7265e-03] |
 | 1024 | 2.4608e-03 | 2.46084e-03 | 2.46084e-03 | [2.0108e-03, 3.4682e-03] | [2.0106e-03, 3.4687e-03] |
-| 2048 | 2.8169e-03 | 2.81691e-03 | 2.81691e-03 | [2.1331e-03, 5.4864e-03] | [2.1326e-03, 5.4890e-03] |
+| 2048 | 2.8169e-03 | 2.81691e-03 | 2.81691e-03 | [2.1331e-03, 5.4864e-03] | [2.1326e-03, 5.4895e-03] |
 
 ### Total
 
@@ -233,8 +248,8 @@ SigmaTau: the corrected (default) column matches Stable32 at every
 matching-α τ; the raw column matches allantools. The two columns differ
 by exactly `√(1+a)` per Howe 2005, for example 0.9975 at WHFM and 0.9225
 at FLFM (τ = 512 s, where Stable32 = 3.3578e-03 matches the corrected
-3.35777e-03, not the raw 3.09753e-03). The SigmaTau CI column belongs to
-the default (corrected) output.
+3.35777e-03, not the raw 3.09753e-03). SigmaTau columns use
+`remove_drift=false`, and the CI column belongs to the bias-corrected output.
 
 | τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI |
 |---:|:---|:---|:---|:---|:---|:---|
@@ -243,8 +258,8 @@ the default (corrected) output.
 | 4 | 3.0296e-01 | 3.02955e-01 | 3.02955e-01 | 3.02955e-01 | [2.9968e-01, 3.0634e-01] | [2.9942e-01, 3.0662e-01] |
 | 8 | 1.5785e-01 | 1.57846e-01 | 1.57846e-01 | 1.57846e-01 | [1.5614e-01, 1.5961e-01] | [1.5600e-01, 1.5976e-01] |
 | 16 | 7.7624e-02 | 7.76241e-02 | 7.76241e-02 | 7.76241e-02 | [7.6785e-02, 7.8492e-02] | [7.6716e-02, 7.8565e-02] |
-| 32 | 3.9227e-02 | 3.92275e-02 | 3.92275e-02 | 3.92275e-02 | [3.8615e-02, 3.9870e-02] | [3.8338e-02, 4.0182e-02] |
-| 64 | 1.9757e-02 | 1.97566e-02 | 1.97566e-02 | 1.97566e-02 | [1.9389e-02, 2.0146e-02] | [1.9204e-02, 2.0360e-02] |
+| 32 | 3.9227e-02 | 3.92275e-02 | 3.92275e-02 | 3.92275e-02 | [3.8615e-02, 3.9870e-02] | [3.8327e-02, 4.0194e-02] |
+| 64 | 1.9757e-02 | 1.97566e-02 | 1.97566e-02 | 1.97566e-02 | [1.9389e-02, 2.0146e-02] | [1.9200e-02, 2.0364e-02] |
 | 128 | 9.9148e-03 | 9.89001e-03 | 9.89001e-03 | 9.91483e-03 | [9.3157e-03, 1.0647e-02] | [9.3118e-03, 1.0652e-02] |
 | 256¹ | 5.1795e-03 | 5.17950e-03 | 5.17950e-03 | 5.19250e-03 | [5.1226e-03, 5.2383e-03] | [4.7578e-03, 5.7731e-03] |
 | 512 | 3.3578e-03 | 3.09753e-03 | 3.09753e-03 | 3.35777e-03 | [2.9050e-03, 4.1199e-03] | [2.9047e-03, 4.1207e-03] |
