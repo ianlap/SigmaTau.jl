@@ -95,6 +95,7 @@ const OPTS = [
     Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record)", ["holdover"]),
+    Opt("--grow", "K", String[], false, "in place of --train: a stretch K times each holdover time (2, or 3 with --fit-drift, is the test behind TDEV and HTDEV)", ["holdover"]),
     Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch)", ["holdover"]),
     Opt("--fit-drift", "", String[], false, "fit a parabola to the stretch, so the frequency drift is learned and carried on (default: a line)", ["holdover"]),
     Opt("--no-anchor", "", String[], false, "start from the fit's value at the end of the stretch, not from the last reading", ["holdover"]),
@@ -183,6 +184,7 @@ mutable struct Options
     fit_drift::Bool           # holdover: parabola instead of a line
     anchor::Bool              # holdover: start from the last reading
     limit::Float64            # holdover: NaN = none
+    grow::Int                 # holdover: the stretch as a multiple of each holdover time; 0 = --train
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -191,7 +193,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
-                    NaN, Float64[], false, true, NaN)
+                    NaN, Float64[], false, true, NaN, 0)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -356,6 +358,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
     elseif name == "--train";          o.train = parse_float(v, name)
+    elseif name == "--grow";           o.grow = parse_int(v, name)
     elseif name == "--tau";            o.taus = parse_taus(v)
     elseif name == "--limit";          o.limit = parse_float(v, name)
     elseif name == "--value-cols";     o.value_cols = parse_cols(v)
@@ -452,6 +455,8 @@ function parse_args!(o::Options, args::Vector{String})
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
     (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
         throw(usage_error("--train and --limit must be positive"))
+    o.grow == 0 || isnan(o.train) && o.grow > 1 + o.fit_drift ||
+        throw(usage_error("--grow goes without --train and is 2 or more, 3 or more with --fit-drift"))
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))

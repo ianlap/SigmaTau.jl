@@ -2,8 +2,9 @@
 // core learns the frequency on a training stretch, lets the clock run and
 // compares with the record, from every start the record allows. One clock:
 // RMS, quantile and worst case against holdover time, the curve its noise
-// model predicts, and the time to a limit. Several clocks: one colour per
-// clock. Computed when this page needs it; no Run is needed.
+// model predicts, √6·TDEV (√20·HTDEV with drift) for reference, and the time
+// to a limit. Several clocks: one colour per clock. Computed when this page
+// needs it; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
 import { holdover as fetchHoldover, holdoverKey } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, css } from "../plot.js";
@@ -11,16 +12,20 @@ import { sci, num, thousands, duration, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
-const FRACS = [8, 4, 2];
+const FRACS = [8, 4, 2, 0];
 const LEVELS = [[0.683, "68.3 %"], [0.9, "90 %"], [0.95, "95 %"], [0.99, "99 %"]];
 const NOISE = { WHPM: "white PM", FLPM: "flicker PM", WHFM: "white FM", FLFM: "flicker FM", RWFM: "random-walk FM" };
 const pct = (p) => `${num(100 * p, 3)} %`;
+// The stretch as the control names it: a share of the record, or (0) as many
+// holdover times as the fit has terms.
+const stretch = (f, drift) => (f ? `1/${f}` : `${drift ? 3 : 2}τ`);
+const reference = (drift) => (drift ? "√20·HTDEV" : "√6·TDEV");
 
 export function controls(inline = false) {
   const o = state.hold;
   const train = inline
-    ? `<select data-ctl="frac" aria-label="Training stretch">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""}>1/${f} of record</option>`).join("")}</select>`
-    : `<div class="pills">${FRACS.map((f) => `<button type="button" class="pill ${f === o.frac ? "on" : ""}" data-ctl="frac" data-v="${f}">1/${f}</button>`).join("")}</div>`;
+    ? `<select data-ctl="frac" aria-label="Training stretch">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""}>${stretch(f, o.drift)}${f ? " of record" : ""}</option>`).join("")}</select>`
+    : `<div class="pills">${FRACS.map((f) => `<button type="button" class="pill ${f === o.frac ? "on" : ""}" data-ctl="frac" data-v="${f}">${stretch(f, o.drift)}</button>`).join("")}</div>`;
   const fit = `<div class="seg" role="group" aria-label="Learned from the stretch">
       <button type="button" data-ctl="drift" data-v="0" class="${o.drift ? "" : "on"}">Frequency</button>
       <button type="button" data-ctl="drift" data-v="1" class="${o.drift ? "on" : ""}">${inline ? "+ drift" : "Frequency and drift"}</button></div>`;
@@ -33,7 +38,7 @@ export function controls(inline = false) {
   const n = c?.record?.n ?? 0;
   return `<h2>Holdover</h2>
     <div class="ctl-block"><label class="lbl">Training stretch</label>${train}
-      ${n ? `<div class="muted small">${duration(Math.floor(n / o.frac) * c.record.tau0)} of the record, moved along it one sample at a time</div>` : ""}</div>
+      ${n ? `<div class="muted small">${o.frac ? `${duration(Math.floor(n / o.frac) * c.record.tau0)} of the record` : `${o.drift ? "three times" : "twice"} each holdover time, the test behind ${o.drift ? "HTDEV" : "TDEV"}`}, moved along the record one sample at a time</div>` : ""}</div>
     <div class="ctl-block"><label class="lbl">Learned from the stretch</label>${fit}</div>
     <div class="ctl-block"><label class="lbl">Time error limit</label><div class="tau-line">${limit}<span class="muted">s</span></div></div>
     <label class="opt"><span>Share of trials</span>${level}</label>
@@ -103,6 +108,15 @@ function showEmpty(html) {
   root.querySelector("[data-ref=plot]").style.visibility = html ? "hidden" : "visible";
 }
 
+// The RMS over the reference at the shortest, a middle and the longest τ that has one.
+function ratios(hd) {
+  const at = hd.tau.map((_, i) => i).filter((i) => hd.reference[i] > 0);
+  if (!at.length) return "";
+  const pick = [...new Set([at[0], at[at.length >> 1], at[at.length - 1]])];
+  const name = reference(hd.drift);
+  return `<p class="muted small hold-note" title="${name} is the RMS error of extrapolating the next τ-average of the phase from the ${hd.drift ? "three" : "two"} before it. With a stretch of ${hd.drift ? 3 : 2}τ the test equals it at τ₀ and stays a constant 1.2 to 1.4 above on FM noise; white PM parts them.">RMS over ${name}: ${pick.map((i) => `${(hd.rms[i] / hd.reference[i]).toFixed(2)} at ${duration(hd.tau[i])}`).join(", ")}.</p>`;
+}
+
 function renderSide(box, clocks) {
   box.hidden = !clocks.length;
   if (!clocks.length) return;
@@ -121,11 +135,12 @@ function renderSide(box, clocks) {
   box.className = "card side-card hold-card";
   box.innerHTML = `<div class="card-head"><h2>Holdover</h2></div>
     <div class="cell-kv">
-      <div class="kv"><span>Training stretch</span><span class="mono">${duration(hd.train)}</span></div>
+      <div class="kv"><span>Training stretch</span><span class="mono">${hd.grow ? `${hd.grow}τ` : duration(hd.train)}</span></div>
       <div class="kv" title="Holdover time at which the error that ${pct(hd.confidence)} of the trials stayed within reaches the limit"><span>Within ${hd.limit === null ? "the limit" : `${sci(hd.limit, 3)} s`} for</span><span class="mono">${limitText(hd)}</span></div>
       ${model && hd.limit !== null ? `<div class="kv" title="The same time from the power-law noise model fitted to the record"><span>Predicted from the noise model</span><span class="mono">${limitText({ ...hd, time_to_limit: p.time_to_limit })}</span></div>` : ""}
     </div>
     ${shares.length ? `<p class="muted small hold-note" title="Share of the predicted error variance at the longest holdover time">Predicted error at ${duration(hd.tau[last])}: ${shares.map(([n, s]) => `${NOISE[n] ?? n} ${Math.round(100 * s)} %`).join(", ")}.</p>` : ""}
+    ${ratios(hd)}
     <div class="tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>RMS (s)</span><span>${pct(hd.confidence)}</span><span>worst</span><span>trials</span></div>
     ${hd.tau.map((t, i) => `<div class="tbl-row tbl-body"><span>${num(t, 5)}</span><span>${sci(hd.rms[i], 3)}</span><span>${sci(hd.quantile[i], 3)}</span><span>${sci(hd.worst[i], 3)}</span><span>${thousands(hd.n[i])}</span></div>`).join("")}</div>
     ${p?.error ? `<p class="muted small hold-note">No predicted curve: ${h(p.error)}</p>` : ""}`;
@@ -170,6 +185,10 @@ export function refresh() {
         x: hd.tau, y: p.sigma, name: "Predicted RMS (noise model)", mode: "lines", line: { color: css("--muted"), width: 1.5, dash: "dashdot" },
         hovertemplate: "Predicted from the noise model<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>",
       });
+      traces.push({
+        x: hd.tau, y: hd.reference, name: reference(hd.drift), mode: "lines", line: { color: css("--s4"), width: 1.5 },
+        hovertemplate: `${reference(hd.drift)}: the same prediction from τ-averages<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>`,
+      });
     }
   }
   const limit = state.hold.limit;
@@ -191,5 +210,5 @@ export function refresh() {
 
 export function plotElement() { return root?.querySelector("[data-ref=plot]") ?? null; }
 export function hint() {
-  return multi() ? "Colour = clock · solid = RMS · dashed = the chosen share of trials" : "Solid = RMS · dashed = the chosen share of trials · dotted = worst trial · grey = predicted from the noise model";
+  return multi() ? "Colour = clock · solid = RMS · dashed = the chosen share of trials" : `Solid = RMS · dashed = the chosen share of trials · dotted = worst trial · grey = predicted from the noise model · thin = ${reference(state.hold.drift)}`;
 }
