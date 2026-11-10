@@ -49,6 +49,7 @@ export function parseSession(text) {
 // reads each clock's record and reruns.
 export function applySession(s, doc) {
   for (const k of SETTINGS) if (k in (doc.settings ?? {})) s[k] = doc.settings[k];
+  if (typeof s.bias === "boolean") s.bias = s.bias ? "exact" : "none";   // sessions saved before the menu
   s.clocks = [];
   s.reference = null;
   s.activeClock = null;

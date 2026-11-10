@@ -2,7 +2,7 @@
 // the Run button. One clock: colour = estimator. Several: colour = clock and
 // line style = estimator.
 import { state, update, markStale, multi, isReference, referenceColFor } from "./state.js";
-import { byId, GRIDS, CONFIDENCES, gridName } from "./estimators.js";
+import { byId, GRIDS, CONFIDENCES, BIASES, gridName } from "./estimators.js";
 import { seriesColor, strokeSvg } from "./plot.js";
 import { escapeHtml as h, thousands } from "./format.js";
 import { openPicker } from "./picker.js";
@@ -66,7 +66,7 @@ function options() {
     <div class="opt" title="Leave out averaging times outside these limits (seconds); empty = no limit"><span>τ range (s)</span>
       <span class="tau-range"><input type="number" min="0" step="any" placeholder="min" data-opt="tauMin" value="${state.tauMin ?? ""}" aria-label="Smallest τ in seconds">
       <span class="muted">–</span><input type="number" min="0" step="any" placeholder="max" data-opt="tauMax" value="${state.tauMax ?? ""}" aria-label="Largest τ in seconds"></span></div>
-    <label class="check" title="Divide out the known bias of TOTDEV, MTOTDEV, HTOTDEV, MHTOTDEV, TTOTDEV and Thêo1 for the identified noise type"><input type="checkbox" data-opt="bias" ${state.bias ? "checked" : ""}>Bias-correct totals and Thêo1</label>
+    <label class="opt" title="Bias correction of TOTDEV, MTOTDEV, HTOTDEV, MHTOTDEV, TTOTDEV and Thêo1 for the identified noise type: exact, the published tables only, what Stable32 applies to each, or none"><span>Bias correction</span><select class="wide" data-opt="bias">${BIASES.map(([v, l]) => `<option value="${v}" ${v === state.bias ? "selected" : ""}>${l}</option>`).join("")}</select></label>
   </div>`;
 }
 
