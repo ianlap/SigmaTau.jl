@@ -75,7 +75,9 @@ Clock models, the Kalman filter and timescales.
   weights are the optimal 1/q1 ones. The scale is read at clock `pivot`.
   `algorithm=:jones_tryon` is the same filter without the reduction, the
   natural Jones–Tryon scale (JT83): a clock's reading less its estimated
-  phase.
+  phase. In
+  simulation `implicit_mean(r, truth)` gives the scale's own phase, the mean
+  of the clocks' true phases, free of the pivot clock's reading noise.
 - Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
   model by hand, and the JSON `powerlaw` gains `mode`, `components`,
   `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`

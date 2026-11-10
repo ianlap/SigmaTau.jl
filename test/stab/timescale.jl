@@ -130,6 +130,15 @@ using Statistics
         @test maximum(abs, jt.y .- rk.y) < 1e-3 * std(rk.y[late, 1])   # frequency estimates agree (Theorem 1)
         @test timescale_phase(timescale(cc; algorithm=:jones_tryon, models=ms, pivot=3)).x ≈ timescale_phase(jt).x atol=1e-12
         @test adev1(rk) < adev1(jt) < 1.6 * adev1(rk)             # the reduction quiets the scale at short τ
+        # The implicit mean of the true phases: the readout at R = 0, quieter than it with white PM.
+        cq, tq = simulate_ensemble(ms, 5000; reference=0, rng=MersenneTwister(9))
+        rq = timescale(cq; algorithm=:greenhall, models=ms)
+        dsum = PhaseData(timescale_phase(rq).x .+ implicit_mean(rq, tq).x, 1.0)    # equal up to sign and a frequency offset
+        @test adev(dsum, [1, 10, 100]; ci=false).dev[1] < 1e-3 * adev(timescale_phase(rq), [1]; ci=false).dev[1]
+        cn, tn = simulate_ensemble(mix, 5000; reference=0, rng=MersenneTwister(9))
+        rn = timescale(cn; algorithm=:greenhall, models=mix)
+        @test adev(implicit_mean(rn, tn), [1]; ci=false).dev[1] < 0.8 * adev(timescale_phase(rn), [1]; ci=false).dev[1]
+        @test_throws ArgumentError implicit_mean(timescale(cc), tq)
         a1 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix)).x
         a2 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix, pivot=2)).x
         @test 1e-13 < std(a1 .- a2) < 3e-12                    # about the readings' noise, √R = 1e-12 s
