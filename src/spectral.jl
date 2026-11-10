@@ -239,18 +239,20 @@ ssb_phase_noise(data::FrequencyData; kwargs...) = ssb_phase_noise(_freq_to_phase
 
 Integrated phase jitter and residual FM over the offset band `band = (f₁, f₂)`
 in Hz (default: the whole spectrum), NIST SP1065 §5.2.19
-[riley-2008-sp1065](@cite). Between neighbouring points the phase spectrum
-`S_φ(f)` is taken as the power law `K·f^x` through them, a straight line on a
+[riley-2008-sp1065](@cite) and IEEE Std 1139-1999 eq. (A.16)
+[ieee1139-1999-definitions](@cite). Between neighbouring points the phase
+spectrum `S_φ(f)` is taken as the power law `K·f^x` through them, a straight line on a
 log-log plot, and integrated exactly:
 
 - `phase`: `Δφ = √∫ S_φ(f) df`, rms radians;
-- `time`: `Δφ / (2π·f_carrier)`, rms seconds [howe-2003-clock-jitter](@cite);
+- `time`: `Δφ / (2π·f_carrier)`, rms seconds (`S_x = S_φ/(2πν₀)²`, IEEE 1139
+  eq. A.14) [howe-2003-clock-jitter](@cite);
 - `residual_fm`: `Δf = √∫ f²·S_φ(f) df`, rms hertz.
 
 `s` is a [`ssb_phase_noise`](@ref), [`psd_x`](@ref) or [`psd_y`](@ref)
 result. The second form takes spectrum points, such as a phase-noise
-analyzer's ℒ(f) in dBc/Hz (`quantity=:L`, `S_φ = 2·ℒ`), or `:Sx` (s²/Hz) or
-`:Sy` (1/Hz); `f` must increase. `f_carrier` is the carrier in Hz.
+analyzer's ℒ(f) in dBc/Hz (`quantity=:L`, `S_φ = 2·ℒ`, IEEE 1139 eq. A.12),
+or `:Sx` (s²/Hz) or `:Sy` (1/Hz); `f` must increase. `f_carrier` is the carrier in Hz.
 
 ```jldoctest
 julia> f = [1e3, 1e4, 1e5];  # ℒ falling 10 dB a decade: x = -1
