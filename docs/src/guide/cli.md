@@ -198,7 +198,7 @@ numbers are `null`.
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`
   without the DC bin.
-- `timescale`: `"timescale": {"algorithm", "tau0", "n", "reference", "tau_y", "wmax", "clocks", "weight", "weight_mean", "error_rms", "adev": {"tau", "scale", "clocks"}}`.
+- `timescale`: `"timescale": {"algorithm", "tau0", "n", "reference", "wmax", "clocks", "weight", "weight_mean", "error_rms", "adev": {"tau", "scale", "clocks"}}`.
   `weight` is the last sample's, while `weight_mean` and `error_rms` cover the
   second half of the record. `adev.scale` is the scale against the reference.
   `--series N` adds `"series": {"t", "scale", "weights"}`. The CSV form has

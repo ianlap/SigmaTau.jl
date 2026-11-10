@@ -181,12 +181,14 @@ of the average for that sample; a clock joins at its first reading. Each
 clock's frequency starts at its least-squares slope over the first 10 % of
 the record, less the mean slope.
 
-- `:ewfa`, equal-weight frequency averaging: every clock weighs the same.
-  Each clock's frequency is an exponential average of its phase steps
-  over `tau_y` seconds (default 100 τ₀). With every clock read at every
-  sample the scale is the plain mean of the clocks' phases. It differs from
-  the plain mean only where readings are missing: the plain mean jumps when a
-  clock drops out, EWFA carries on from its own prediction.
+- `:ewfa`, equal-weights frequency averaging, section 3.1 of
+  [kettering-2023-clock-ensemble](@cite): every clock weighs the same, and the
+  scale's frequency is the mean of the clocks' frequency steps over each
+  interval, so with every clock read at every sample the scale is the plain
+  mean of the clocks' phases. Gaps are not in the thesis: here a clock without
+  a reading keeps its prediction (its last frequency step carried on) and
+  drops out of the average for that sample, so the scale does not jump when a
+  clock drops out, as the plain mean would.
 - `:at1`, the NIST scale as Weiss & Weissert describe it
   [weiss-weissert-1991-at2](@cite) (equation numbers are the paper's):
   weights ``w_i = ε_x²/ε_i²`` (3), with ``ε_x² = (Σ 1/ε_i²)⁻¹`` (4), where
@@ -258,8 +260,8 @@ AT1 keywords:
 - `steps` (`:at2`, default `false`): detect a clock's frequency step and rerun
   the scale without it, in one of two modes. `:best` (`true`) replaces the
   scale from the step on, the best estimate of a recorded history. `:real`
-  keeps every value already issued, as the paper does ("outputs for history are
-  not changed"): the rerun only corrects what follows, continuing from the
+  keeps every value already issued, as the paper does (it cannot change
+  history and steers forward): the rerun only corrects what follows, continuing from the
   last issued phase, so a step costs the samples before it was caught.
   After each sample, for windows of 2 to `lmax − 1`
   intervals (`lmax` defaults to the clock's τ_min in samples, at least 4),
@@ -279,7 +281,8 @@ AT1 keywords:
   ``s`` intervals has variance σ_β²τ (s+1)(2s+1)/(6s), about s/3; scale term
   as eq 22). The paper's ``(P_{-L}+P_{-2})/2`` is ``P_{-L}`` alone here, and
   windows start at two intervals, my reading of its two-back start (one
-  interval would flag a lone phase jump). The clock-minus-scale variance is
+  interval would flag more small phase jumps; a large lone jump is still
+  flagged). The clock-minus-scale variance is
   less than the sum of the two when the clock is in the scale, so the sum is
   conservative, as in the paper. A clock is
   not tested over windows that reach into its exclusion. With a 4σ threshold on clean data expect about one false
@@ -296,7 +299,7 @@ the best clock. With two clocks the comparisons alone cannot tell which is
 better, and the weights wander toward either; cap them with `wmax` or use
 EWFA. The frequency drift term of the paper's prediction (1) is not used.
 """
-function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100cc.tau0,
+function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
                    tau_min::Union{Nothing,Real,AbstractVector{<:Real}}=nothing,
                    memory::Real=20 * 86400.0, bias::Symbol=:paper, wmax::Real=1.0,
                    outlier::Real=Inf, models::Union{Nothing,AbstractVector{ClockModel}}=nothing,
@@ -323,7 +326,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
     τmin = tau_min === nothing ? (at1 ? _estimate_tau_min(cc) : fill(τ, k)) :
            tau_min isa Real ? fill(Float64(tau_min), k) : Float64.(tau_min)
     length(τmin) == k || throw(ArgumentError("timescale: $(length(τmin)) tau_min values for $k clocks"))
-    mf = at1 ? Float64[_filter_constant(t, τ) for t in τmin] : fill(tau_y / τ, k)
+    mf = at1 ? Float64[_filter_constant(t, τ) for t in τmin] : zeros(k)
     Nτ = max(1.0, min(memory, N * τ / 4) / τ)
     r = cc.x
     X, Y, W, E = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k)

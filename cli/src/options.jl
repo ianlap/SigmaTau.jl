@@ -86,7 +86,6 @@ const OPTS = [
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
     Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
-    Opt("--tau-y", "SECONDS", String[], false, "frequency averaging time of each clock (default 100 τ₀)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall or jones_tryon scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
@@ -160,7 +159,6 @@ mutable struct Options
     fit::Bool                 # --fit: power-law model in the JSON
     value_cols::Vector{Int}   # timescale: one value column per clock
     algorithm::String
-    tau_y::Float64            # NaN = 100 τ₀
     wmax::Float64
     components::Vector{Tuple{Int,Float64,Float64}}   # --component: α, τ from, τ to (NaN = open)
     clocks::Int               # --clocks: simulated clocks; 0 = not given
@@ -175,7 +173,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
-                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
+                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
@@ -326,7 +324,6 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
     elseif name == "--value-cols";     o.value_cols = parse_cols(v)
     elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
-    elseif name == "--tau-y";          o.tau_y = parse_float(v, name)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
     elseif name == "--pivot";          o.pivot = parse_int(v, name)
     elseif name == "--steps";          o.steps = check_choice(v, name, ["best", "real"])

@@ -62,7 +62,7 @@ function request() {
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
   a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : ["--wmax", E.wmax]),
-    ...(E.algorithm === "ewfa" && E.tauY ? ["--tau-y", E.tauY] : []), "--format", "json", "--series", 2000);
+    "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
@@ -71,7 +71,6 @@ export function controls() {
   return `<h2>Timescale</h2>
     <label class="opt"><span>Algorithm</span><select data-ctl="alg">${ALGS.map(([id, label]) =>
       `<option value="${id}" ${E.algorithm === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>
-    ${E.algorithm === "ewfa" ? `<label class="opt"><span>Frequency averaging τ<sub>y</sub> (s)</span><input type="text" data-ctl="tauY" value="${h(E.tauY)}" placeholder="100 τ₀" inputmode="decimal"></label>` : ""}
     ${KALMAN.has(E.algorithm)
       ? `<label class="opt"><span>Pivot clock</span><select data-ctl="pivot">${(clocks.length ? clocks.map((c) => c.name) : [1, 2, 3, 4].map((k) => `clock ${k}`)).map((n, i) =>
         `<option value="${i + 1}" ${pivotOf(clocks.length || 4) === i + 1 ? "selected" : ""}>${h(n)}</option>`).join("")}</select></label>`
@@ -91,10 +90,6 @@ export function onControl(e) {
   const k = t.dataset.ctl;
   if (e.type !== "change") return;
   const v = t.value.trim();
-  if (k === "tauY") {
-    if (v === "" || Number(v) > 0) update((s) => { s.ens.tauY = v; });
-    else { t.value = state.ens.tauY; ctx.status("error", "τ_y must be a time above 0 s, or empty for 100 τ₀."); }
-  }
   if (k === "alg") update((s) => { s.ens.algorithm = v; });
   if (k === "pivot") update((s) => { s.ens.pivot = Number(v); });
   if (k === "wmax") {

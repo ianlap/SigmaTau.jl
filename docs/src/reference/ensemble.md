@@ -21,8 +21,9 @@ clock_models
 ## Timescales
 
 [`timescale`](@ref) averages the clocks' predicted phases into one scale.
-`:ewfa` gives every clock the same weight, the baseline any weighting has to
-beat. `:at1` is the NIST algorithm as Weiss & Weissert describe it
+`:ewfa` gives every clock the same weight (Kettering's equal-weights frequency
+averaging [kettering-2023-clock-ensemble](@cite)), the baseline any weighting
+has to beat. `:at1` is the NIST algorithm as Weiss & Weissert describe it
 [weiss-weissert-1991-at2](@cite): it learns each clock's prediction-error
 variance and weights by its inverse, which on clocks of steady noise
 converges to the optimal inverse-variance weights. The equation numbers in

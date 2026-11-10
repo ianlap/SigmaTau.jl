@@ -66,7 +66,7 @@ holdover_error(kf, [60.0, 3600.0, 86400.0])
 ms = [ClockModel(; tau0 = τ₀, q1 = 1e-24 * 4.0^k, q2 = 1e-30 * 4.0^k) for k in 0:3]
 cc, _ = simulate_ensemble(ms, 50_000; reference = 0, rng = Xoshiro(2));
 
-# EWFA averages the clocks' predicted phases with equal weights, so the
+# EWFA averages the clocks' phases with equal weights, so the
 # noisiest clock pulls the scale down. AT1 learns each clock's
 # prediction-error variance and weights it by the inverse.
 
