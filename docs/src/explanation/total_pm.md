@@ -142,5 +142,5 @@ scatter of a single record is 20 to 30 %.
 
 Stable32 applies no bias factor on PM, so on rows labelled white or flicker
 PM the default TOTDEV and HTOTDEV are lower than its values, HTOTDEV by 10
-to 15 %. `correct_bias=false` returns the raw statistic, which matches
-Stable32's on those rows.
+to 15 %. `correct_bias=:stable32` (or `:published`) leaves the PM rows
+uncorrected and matches Stable32's values there.

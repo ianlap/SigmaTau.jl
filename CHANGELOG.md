@@ -57,6 +57,16 @@ Clock models, the Kalman filter and timescales.
   MJD timestamps, kept by `detrend`, `fillgaps`, `remove_outliers` and
   `sigmatau --range`, and written by `save` as a `# start:` line. The CLI's
   record JSON and the explorer's record check show it.
+- `correct_bias` also takes the convention of a reference, on the total
+  estimators, `theo1`, `deviation` and `stability`: `:published` keeps to
+  the published bias tables (no factor on PM for TOTDEV and HTOTDEV, the
+  τ ≥ 16τ₀ factor of MTOTDEV and HTOTDEV at every τ), `:stable32` does what
+  Stable32 does for each estimator (published factors for TOTDEV and
+  HTOTDEV, raw MTOTDEV, TTOTDEV and Thêo1), and `false` remains the raw
+  statistic that allantools reports. `bias_correction` takes
+  `published=true` for the same factors; the Python wrappers take
+  `"published"` and `"stable32"`. MHTOTDEV has no published factor. The
+  CLI and the explorer still switch the correction only on or off.
 
 - Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
   MDEV, HDEV or MHDEV result (or a total form), `add_component!` fits one
@@ -193,6 +203,22 @@ Clock models, the Kalman filter and timescales.
   own rows. Corrected deviations move by at most 0.7 % (2.5 % on random-run
   FM); intervals in the last octave narrow. `tools/mhtot_models.jl`
   replaces `tools/mc_mhtotdev.jl`.
+- TOTDEV and HTOTDEV on white and flicker PM now divide out their bias and
+  take the EDF of the total statistic itself, both from the exact moments of
+  each estimator (`tools/total_pm_models.jl`, docs "Total estimators on PM
+  noise"). HTOTDEV read 25 to 38 % high in variance on white PM and 4 to
+  28 % on flicker PM; TOTDEV reads high in proportion to τ/T (33 % on white
+  PM at τ = T/4). Stable32 applies no factor on PM, so the defaults differ
+  from it on rows labelled PM; `correct_bias=false` matches it.
+  **Breaking:** `bias_correction` now takes `(noises, var_type, m_values, N)`
+  in place of `(noises, var_type, taus, T)`, in Julia and Python.
+- MTOTDEV, TTOTDEV, HTOTDEV and MHTOTDEV divide by the exact bias factor at
+  each averaging factor from 2 to 15, where the published constants (which
+  hold from τ = 16τ₀) were up to 6 % off in variance; the flicker rows are
+  the mean of two flicker models. MHTOTDEV's white PM EDF below m = 16,
+  which the model overstated by up to 54 %, takes the exact ratio. HTOTDEV
+  on FM noise at τ = 2τ₀ to 15τ₀ now differs from Stable32, which keeps the
+  published factor, by up to 3 % in σ.
 
 ### Fixed
 

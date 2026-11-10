@@ -4,7 +4,9 @@ down-converts the returned ``StabilityResult``.
 ``m`` accepts a ``TauMode`` grid selector (default ``Octave``) or an
 explicit sequence of integer averaging factors; noise ID + χ² confidence
 bounds are computed unless ``ci=False``; the total family applies bias
-correction by default (``correct_bias=True``); the Hadamard family identifies
+correction by default (``correct_bias=True``; ``"published"`` keeps to the
+published tables, ``"stable32"`` does what Stable32 does for each estimator,
+``False`` returns the raw statistic, as allantools does); the Hadamard family identifies
 noise on the record less its frequency drift by default (``remove_drift=True``;
 ``False`` uses the record as given, as Stable32 does).
 ``mtie``/``tierms`` have no CI model — their ``ci``/``confidence`` kwargs are
@@ -21,6 +23,11 @@ from .grids import Octave, TauMode
 from .types import FrequencyData, PhaseData, StabilityResult
 
 DEFAULT_CONFIDENCE = float(jl.DEFAULT_CONFIDENCE)
+
+
+def _bias(correct_bias: bool | str):
+    """``correct_bias`` for Julia: a bool, or ``"published"`` / ``"stable32"`` as a Symbol."""
+    return jl.Symbol(correct_bias) if isinstance(correct_bias, str) else bool(correct_bias)
 
 
 @_map_errors
@@ -167,11 +174,11 @@ def totdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Total deviation (Howe / SP1065 mean-flip extension)."""
-    return _run(jl.totdev, data, m, ci=ci, correct_bias=correct_bias, confidence=float(confidence))
+    return _run(jl.totdev, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
 
 
 def mtotdev(
@@ -179,11 +186,11 @@ def mtotdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Modified Total deviation (Greenhall extension)."""
-    return _run(jl.mtotdev, data, m, ci=ci, correct_bias=correct_bias, confidence=float(confidence))
+    return _run(jl.mtotdev, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
 
 
 def ttotdev(
@@ -191,11 +198,11 @@ def ttotdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Time Total deviation σ_x(τ) = (τ/√3)·Mod-Total σ_y(τ). Units of seconds."""
-    return _run(jl.ttotdev, data, m, ci=ci, correct_bias=correct_bias, confidence=float(confidence))
+    return _run(jl.ttotdev, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
 
 
 def htotdev(
@@ -203,7 +210,7 @@ def htotdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     remove_drift: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
@@ -213,7 +220,7 @@ def htotdev(
         data,
         m,
         ci=ci,
-        correct_bias=correct_bias,
+        correct_bias=_bias(correct_bias),
         remove_drift=remove_drift,
         confidence=float(confidence),
     )
@@ -224,11 +231,11 @@ def theo1(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Thêo1 deviation (SP1065 §5.2.15) — extends the usable τ range to 75 % of the record span."""
-    return _run(jl.theo1, data, m, ci=ci, correct_bias=correct_bias, confidence=float(confidence))
+    return _run(jl.theo1, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
 
 
 def mhtotdev(
@@ -236,7 +243,7 @@ def mhtotdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     remove_drift: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
@@ -246,7 +253,7 @@ def mhtotdev(
         data,
         m,
         ci=ci,
-        correct_bias=correct_bias,
+        correct_bias=_bias(correct_bias),
         remove_drift=remove_drift,
         confidence=float(confidence),
     )
@@ -260,7 +267,7 @@ def deviation(
     *,
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
-    correct_bias: bool = True,
+    correct_bias: bool | str = True,
     remove_drift: bool = True,
 ) -> StabilityResult:
     """Run the estimator called ``name`` (any name from :func:`estimators`).
@@ -276,7 +283,7 @@ def deviation(
             resolve_m(m),
             ci=bool(ci),
             confidence=float(confidence),
-            correct_bias=bool(correct_bias),
+            correct_bias=_bias(correct_bias),
             remove_drift=bool(remove_drift),
         )
     )

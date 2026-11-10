@@ -209,13 +209,47 @@ to 1.31 under a caption that reads as the same ratio; applied as printed they
 lower a statistic that already reads low. At τ = τ₀ MTOT is exactly half of
 MVAR for any record, and the correction is that factor of 2.
 
+The published factors hold from τ = 16τ₀. Below it the expectation depends
+on the averaging factor, and SigmaTau divides by its exact value at each m
+from 2 to 15, computed like the PM factors
+([Total estimators on PM noise](total_pm.md)). For MTOT, and for HTOT two
+noise types down (white FM to random-run FM):
+
+| Noise (MTOT) | m = 2 | 3 | 4 | 5 | 8 | from m = 16 |
+|:---|---:|---:|---:|---:|---:|---:|
+| white PM | 0.998 | 0.938 | 0.996 | 0.973 | 0.996 | 0.995 |
+| flicker PM | 0.877 | 0.844 | 0.861 | 0.852 | 0.855 | 0.851 |
+| white FM | 0.814 | 0.781 | 0.784 | 0.777 | 0.774 | 0.771 |
+| flicker FM | 0.735 | 0.722 | 0.722 | 0.719 | 0.718 | 0.717 |
+| random-walk FM | 0.687 | 0.681 | 0.681 | 0.680 | 0.679 | 0.679 |
+
+The white PM row dips at odd m, by 6 % at m = 3, and the white FM row is 5 %
+above its limit at m = 2. The two flicker rows are the mean of two flicker
+models, which are within 2.4 % of it at m = 2 and 1 % from m = 5. MHTOTDEV
+has its own table on [its page](mhtotdev.md).
+
 The PM rows of TOTDEV and HTOTDEV have no published source and are derived
 in [Total estimators on PM noise](total_pm.md).
 
-`correct_bias=false` returns the raw statistic. Stable32 corrects TOTDEV and
-HTOTDEV the same way on the FM noises, applies no factor on PM, and reports
-MTOT and Thêo1 raw; the [validation page](validation.md) shows both against
-Stable32.
+### Matching a reference
+
+The factors SigmaTau derives itself (PM, m < 16, MHTOTDEV) are not in SP1065,
+Stable32 or allantools, so `correct_bias` also takes the convention of each:
+
+| `correct_bias` | TOTDEV | MTOTDEV, TTOTDEV | HTOTDEV | Thêo1 | Reproduces |
+|:---|:---|:---|:---|:---|:---|
+| `true` (default) | all noises | exact below 16τ₀ | all noises, exact below 16τ₀ | ThêoBR | |
+| `:published` | FM only | published factor at every τ | FM only, published factor at every τ | ThêoBR | SP1065, Howe and Peppler |
+| `:stable32` | FM only | raw | FM only, published factor at every τ | raw | Stable32 |
+| `false` | raw | raw | raw | raw | allantools |
+
+MHTOTDEV has no published factor and exists in neither program: it is raw
+with `false` and corrected otherwise. The setting changes σ and the interval
+that scales with it, not the noise identification or the EDF; where SigmaTau
+and Stable32 read a different noise type at a τ, the FM factor still differs
+([Coming from Stable32](../guide/from_stable32.md)). The
+[validation page](validation.md) shows the default and the raw statistic
+against Stable32.
 
 ## Drift
 
