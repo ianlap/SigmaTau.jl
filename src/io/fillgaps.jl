@@ -121,8 +121,8 @@ end
     _choose_initial_gap(gaps) → Int
 
 1-based index into `gaps` of the gap immediately following the largest
-continuous data run between consecutive gaps. Mirrors the MATLAB helper of
-the same name. Returns `1` when there is only one gap.
+continuous data run between consecutive gaps. Returns `1` when there is
+only one gap.
 """
 function _choose_initial_gap(gaps::Vector{Tuple{Int,Int}})
     length(gaps) <= 1 && return 1

@@ -3,7 +3,7 @@
 ``PhaseData``/``FrequencyData`` are the input records; ``StabilityResult``,
 ``StabilitySuite``, ``SpectralResult``, and ``DynamicStabilityResult`` are the
 outputs. All are frozen dataclasses with NumPy array fields, matching the Julia
-oracle's non-parametric ``Vector{Float64}`` design. This module is pure Python
+package's non-parametric ``Vector{Float64}`` design. This module is pure Python
 — importing it does not boot Julia.
 """
 

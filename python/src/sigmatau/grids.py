@@ -1,8 +1,8 @@
-"""Averaging-factor grids — thin delegation to the Julia oracle's ``grids.jl``.
+"""Averaging-factor grids — thin delegation to Julia's ``grids.jl``.
 
 ``TauMode`` selects the averaging-factor spacing; ``tau_values`` resolves it to
 a concrete integer grid bounded by each kernel's algorithmic m-max. Resolution
-happens in Julia, so the grids are guaranteed identical to the oracle's —
+happens in Julia, so the grids are guaranteed identical to Julia's —
 including the theo1 even-rounding and the theoh/tierms m-max rules.
 """
 

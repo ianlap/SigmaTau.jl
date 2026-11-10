@@ -456,7 +456,7 @@ end
 
 # ── NNLS power-law decomposition ────────────────────────────────────────
 
-# noise/nnls.jl — nonnegative least-squares decomposition of a measured
+# Nonnegative least-squares decomposition of a measured
 # variance profile σ̂²(τ) into per-α power-law components.
 #
 # Where `identify_noise` answers "which single α dominates at this τ", this
@@ -634,8 +634,7 @@ components: one weighted nonnegative least-squares fit of
 σ̂²(τ) ≈ Σᵢ aᵢ (τ/τ₀)^μ(αᵢ) over the whole τ range, giving the amplitude of
 every α in the basis and the dominant noise type at each τ. The fit runs on
 the raw deviation (`ci=false`, no bias correction), so it does not lean on
-[`identify_noise`](@ref), which it is meant to replace at run time. `data`
-is a `PhaseData` or `FrequencyData`.
+[`identify_noise`](@ref). `data` is a `PhaseData` or `FrequencyData`.
 
 Returns a `NamedTuple` with `deviation`, `tau` (the τ fitted), `var` (σ̂²),
 `fit` (the model at each τ), `alphas`, `noise_types`, `amplitudes` (aᵢ ≥ 0,

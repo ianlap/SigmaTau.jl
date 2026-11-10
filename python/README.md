@@ -150,6 +150,9 @@ settings.
    `nch`; `save(path, x)` / `load(path)` for `save_result` / `save_suite` /
    `load_result` / `load_suite`; `m=` for `taus=`; and
    `identify_noise(..., remove_drift=)` for `detrend=`.
+8. `confidence_intervals(devs, edfs, confidence)` takes no `noises` or `n`:
+   the interval is χ² for every positive EDF, with no Gaussian stand-in
+   below 1.
 
 ## Testing
 

@@ -168,7 +168,7 @@ function powerlaw_fit(data::AbstractTimingData, m_values::Vector{Int}=Int[];
         "powerlaw_fit: deviation must be one of $(join(POWERLAW_DEVIATIONS, ", ")), got :$deviation"))
     αs = _powerlaw_alphas(alphas, deviation)
     τ₀ = data.tau0
-    N  = data isa PhaseData ? length(data.x) : length(data.y) + 1
+    N  = _nphase(data)
     ms = isempty(m_values) ? _default_m_values(N, deviation) : m_values
     # The estimators skip gaps, phase or frequency alike.
     res = deviation === :adev ? adev(data, ms; ci=false) :

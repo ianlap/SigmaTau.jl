@@ -115,8 +115,11 @@ Given the deviation σ̂ and the EDF ν, the interval at confidence level p is
 (`DEFAULT_CONFIDENCE`), the ±1σ convention of Stable32; pass
 `confidence=0.95` for a 95 % interval. The interval is asymmetric about σ̂,
 wider above than below, because the χ² distribution is skewed at small ν.
-Where the EDF is below 1 (a single average at the longest τ), SigmaTau falls
-back to a symmetric Gaussian interval floored at zero.
+The formula holds for any ν > 0, so a point whose EDF falls below 1 (the
+last τ of MHTOTDEV on some records) keeps a χ² interval, a very wide one.
+Where an EDF model gives no positive value (SP1065's Thêo1 formula for
+random-walk FM beyond τ ≈ 0.63 T), the point has no interval and its bounds
+are `NaN`.
 
 ## Bias correction
 

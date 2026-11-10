@@ -220,6 +220,7 @@ or mtie); see the note at the top of this file.
 """
 function _gap_result(est::Symbol, g::_GapRecord, m_values::Vector{Int};
                      ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _check_m(est, m_values)
     pd = PhaseData(g.x, g.tau0)
     taus = m_values .* g.tau0
     if est === :tdev || est === :htdev
@@ -242,7 +243,7 @@ function _gap_result(est::Symbol, g::_GapRecord, m_values::Vector{Int};
         Neq = _gap_equivalent_n(est, m, ns[k])
         T = (Neq - 1) * g.tau0
         edfs[k] = only(calculate_edf(est, devs[k:k], noises[k:k], [m], taus[k:k], Neq, T))
-        lo, hi = confidence_intervals(devs[k:k], edfs[k:k], noises[k:k], Neq, confidence)
+        lo, hi = confidence_intervals(devs[k:k], edfs[k:k], confidence)
         lower[k] = only(lo); upper[k] = only(hi)
     end
     return _result(pd, confidence, est, taus, devs, noises, _zip_ci(lower, upper), edfs, ns)

@@ -159,9 +159,9 @@ grid, and per-α fits.
     The kernel needs `N − 4m + 1 ≥ 1`, so MHTOTDEV's reach limit is `τ = T/4`
     (`T/τ ≥ 4`). The fitted linear form crosses `ν = 1` near
     `T/τ ≈ 3.1–4.1` depending on α (lowest at α = +2, highest at α = −2).
-    Below `ν = 1` the χ² interval is degenerate, so `confidence_intervals`
-    falls back to the Gaussian `±K_α σ z/√N` approximation there (lower bound
-    floored at zero). Treat confidence intervals as valid for `T/τ ≳ 5–6` and
+    The χ² interval is still defined below `ν = 1` and is very wide there
+    (0.71 σ to 5.9 σ at ν = 0.9 and 68.3 %), as one effective average
+    warrants. Treat confidence intervals as valid for `T/τ ≳ 5–6` and
     indicative only in the final octave before the reach limit; the σ values
     themselves are valid all the way to `τ = T/4`.
 

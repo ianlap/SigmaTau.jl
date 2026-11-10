@@ -1,7 +1,7 @@
 """Noise identification, EDF, confidence intervals, and bias correction.
 
 The EDF/CI helpers must reproduce a full adev(ci=True) result *bitwise* when fed
-the raw pieces — the record duration is (N-1)*tau0, matching the Julia oracle.
+the raw pieces — the record duration is (N-1)*tau0, matching the Julia package.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def test_calculate_edf_and_ci_reproduce_adev(small_phase):
     edf = st.calculate_edf("adev", bare.dev, noises, ms, bare.tau, n, t)
     np.testing.assert_array_equal(edf, full.edf)
 
-    lower, upper = st.confidence_intervals(bare.dev, edf, noises, n, 0.683)
+    lower, upper = st.confidence_intervals(bare.dev, edf, 0.683)
     np.testing.assert_array_equal(lower, full.ci_lower)
     np.testing.assert_array_equal(upper, full.ci_upper)
 

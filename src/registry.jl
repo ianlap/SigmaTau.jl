@@ -83,7 +83,7 @@ true
 ```
 """
 deviation(name::Symbol, data::AbstractTimingData, m::TauMode = Octave; kwargs...) =
-    deviation(name, data, _resolve_m(name, m, length(data)); kwargs...)
+    deviation(name, data, _resolve_m(name, m, _nphase(data)); kwargs...)
 
 deviation(name::Symbol, data::AbstractTimingData, m::AbstractVector{<:Integer}; kwargs...) =
     _deviation(name, data, collect(Int, m); kwargs...)

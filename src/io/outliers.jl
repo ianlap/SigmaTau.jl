@@ -30,7 +30,8 @@ phase glitch at `x[j]` therefore produces two flagged differences (`Δⱼ₋₁`
 
 `NaN` samples (existing gaps) are excluded from the median/MAD estimates and
 are never flagged. Returns an empty vector when nothing exceeds the
-threshold.
+threshold, or when the MAD is zero (more than half the samples equal, as in
+a coarsely quantized record), which leaves no scale to test against.
 
 See also [`remove_outliers`](@ref), [`fillgaps`](@ref).
 """
@@ -55,6 +56,7 @@ function _mad_outliers(v::AbstractVector{<:Real}, nsigma::Real)
     isempty(finite) && return Int[]
     med       = _median_nonan(finite)
     mad       = _median_nonan(abs.(finite .- med))
+    mad > 0 || return Int[]
     threshold = nsigma * mad / 0.6745
     return [i for i in eachindex(v) if abs(v[i] - med) > threshold]
 end

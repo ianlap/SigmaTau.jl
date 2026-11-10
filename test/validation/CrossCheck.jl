@@ -171,7 +171,7 @@ function allantools_ci_rows()
     rows = Row[]
     for r in _csv(joinpath(AT, "ci.csv"))
         e = _f(r["edf"]); c = _f(r["confidence"])
-        lo, hi = confidence_intervals([1.0], [e], [:WHFM], 1000, c)
+        lo, hi = confidence_intervals([1.0], [e], c)
         push!(rows, Row("allantools CI", "edf=$(r["edf"][1:6]) c=$(r["confidence"][1:6])", "lo", 0, _f(r["lo_factor"]), lo[1], 1e-9, ""))
         push!(rows, Row("allantools CI", "edf=$(r["edf"][1:6]) c=$(r["confidence"][1:6])", "hi", 0, _f(r["hi_factor"]), hi[1], 1e-9, ""))
     end
@@ -304,7 +304,7 @@ function stable32_ci_forced_alpha_rows()
             m = r.m
             σ = r.sigma / scale(m)                       # back to the σ_y statistic
             edf = calculate_edf(method, [σ], [_alpha_sym(r.alpha)], [m], [Float64(m)], N, T)[1]
-            lo, hi = confidence_intervals([σ], [edf], [_alpha_sym(r.alpha)], N, 0.683)
+            lo, hi = confidence_intervals([σ], [edf], 0.683)
             tol, cinote = s32_ci_tol(est, m)
             push!(rows, Row("Stable32 CI (S32 α)", "PHASE.DAT", est * " lo", m, r.lo, lo[1] * scale(m), tol, cinote))
             push!(rows, Row("Stable32 CI (S32 α)", "PHASE.DAT", est * " hi", m, r.hi, hi[1] * scale(m), tol, cinote))

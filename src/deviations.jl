@@ -8,6 +8,18 @@ _result(data::PhaseData, confidence::Real, dt::Symbol, tau, dev, noise, ci, edf,
     StabilityResult(dt, tau, dev, noise, ci, edf, neff, data.tau0, length(data.x),
                     isempty(ci) ? NaN : Float64(confidence))
 
+# Averaging factors count from 1; the kernels index with them unchecked.
+_check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
+    throw(ArgumentError("$est: averaging factors must be ≥ 1, got $(minimum(m_values))"))
+
+# The phase samples, for an estimator that cannot skip gaps.
+function _gapfree(est::Symbol, data::PhaseData, m_values::Vector{Int})
+    _check_m(est, m_values)
+    _has_gaps(data) && throw(ArgumentError(
+        "$est: the record has NaN gaps, which this estimator cannot skip; fill them with fillgaps first"))
+    return _f64(data.x)
+end
+
 """
     adev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
@@ -36,6 +48,7 @@ julia> round.(r.dev; sigdigits=4)
 """
 function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:adev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:adev, m_values)
     x = _f64(data.x)
     raw_devs = _adev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -47,7 +60,7 @@ function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:adev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :adev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -76,6 +89,7 @@ julia> round.(r.dev; sigdigits=4)
 """
 function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:mdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:mdev, m_values)
     x = _f64(data.x)
     raw_devs = _mdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -87,7 +101,7 @@ function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:mdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :mdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -160,6 +174,7 @@ octave-spaced up to the estimator's limit). See
 """
 function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:hdev, m_values)
     x = _f64(data.x)
     raw_devs = _hdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -172,7 +187,7 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     noises = identify_noise(x, m_values, dmin=0, dmax=3)
     edfs = calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :hdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -192,6 +207,7 @@ octave-spaced up to the estimator's limit). See
 """
 function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:mhdev, m_values)
     x = _f64(data.x)
     raw_devs = _mhdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -204,7 +220,7 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
 
     noises = identify_noise(x, m_values, dmin=0, dmax=3)
     edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :mhdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -276,7 +292,7 @@ increases σ at long τ. Stable32 applies the same correction by default; `corre
 returns the raw kernel value, which is what allantools reports.
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:totdev, data, m_values)
     raw_devs = _totdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
@@ -293,7 +309,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     end
 
     edfs = calculate_edf(:totdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :totdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -311,7 +327,7 @@ to 13 %. `correct_bias=false` returns the raw kernel, which is what Stable32
 and allantools report.
 """
 function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:mtotdev, data, m_values)
     raw_devs = _mtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
@@ -327,7 +343,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     end
 
     edfs = calculate_edf(:mtotdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :mtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -348,7 +364,7 @@ plain overlapping HDEV. Stable32 applies the same correction by default; `correc
 returns the raw kernel value, which is what allantools reports.
 """
 function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:htotdev, data, m_values)
     raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
@@ -368,7 +384,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     end
 
     edfs = calculate_edf(:htotdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :htotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -415,7 +431,7 @@ the per-window detrend absorbs part of the variance). Pass
 Carlo fit; see the "MHTOTDEV bias and EDF" page for the method.
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:mhtotdev, data, m_values)
     if remove_drift
         x = _remove_quadratic(x)
     end
@@ -434,7 +450,7 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     end
 
     edfs = calculate_edf(:mhtotdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :mhtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -500,6 +516,7 @@ julia> r.dev
 """
 function mtie(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:mtie, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:mtie, m_values)
     raw_devs = _mtie_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:mtie, length(data.x), m_values)
@@ -558,6 +575,7 @@ julia> round.(r.dev; sigdigits=4)
 """
 function tierms(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:tierms, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:tierms, m_values)
     raw_devs = _tierms_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:tierms, length(data.x), m_values)
@@ -609,7 +627,7 @@ julia> round.(r.dev; sigdigits=4)
 ```
 """
 function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:pdev, data, m_values)
     raw_devs = _pdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:pdev, length(x), m_values)
@@ -620,7 +638,7 @@ function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:pdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :pdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -676,7 +694,7 @@ and bias-removed forms. The kernel's double sum is O(N·m) per τ, far
 costlier than the O(N) Allan kernels at large m.
 """
 function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:theo1, data, m_values)
     N = length(x)
     raw_devs = _theo1_core(x, m_values, data.tau0)
     taus = 0.75 .* m_values .* data.tau0
@@ -691,7 +709,7 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:theo1, devs, noises, m_values, taus, N, T)
-    lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :theo1, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -725,7 +743,7 @@ removal; there is no `correct_bias` switch (raw Thêo1 is available via
 `theo1(...; correct_bias=false)`).
 """
 function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:theoh, data, m_values)
     N = length(x)
     tau0 = data.tau0
     T = (N - 1) * tau0
@@ -775,7 +793,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
         edfs[theo_idx] = calculate_edf(:theo1, theo_devs, noises_t, theo_ms,
                                        taus[theo_idx], N, T)
     end
-    lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :theoh, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -811,7 +829,7 @@ theoh(data::FrequencyData; kwargs...) = theoh(data, _default_m_values(length(dat
 function _dynamic_dev(core::F, dev_sym::Symbol, data::PhaseData,
                       m_values::Vector{Int};
                       window::Int, step::Int, min_window::Int) where {F}
-    x = _f64(data.x)
+    x = _gapfree(dev_sym, data, m_values)
     N = length(x)
     window <= N || throw(ArgumentError(
         "$dev_sym: window=$window exceeds the record length N=$N"))

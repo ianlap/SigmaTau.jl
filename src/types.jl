@@ -107,6 +107,10 @@ Number of samples in the record.
 Base.length(p::PhaseData) = length(p.x)
 Base.length(f::FrequencyData) = length(f.y)
 
+# Phase samples a record stands for: N frequency samples integrate to N + 1.
+_nphase(p::PhaseData) = length(p.x)
+_nphase(f::FrequencyData) = length(f.y) + 1
+
 """
     start_time(data::PhaseData) / start_time(data::FrequencyData) → DateTime or nothing
 
