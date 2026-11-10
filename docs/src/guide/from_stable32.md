@@ -98,6 +98,7 @@ and the explorer "As Stable32" under Bias correction.
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
+| White or flicker PM, τ ≥ 16τ₀ | the result of the lag-1 or B1 test as it comes | stands only if R(n) agrees; otherwise white FM | no switch |
 | Noise type with fewer than 30 averaged points | B1 ratio, labels as with B1(N, μ) at the record length | B1 ratio against B1(N, μ) at the number of averaged points; below 6 points the label measured at 6 | `identify_noise(x, m; b1_length=:record)`; no switch on the estimators |
 | Limits between the FM noises, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
 | TOTDEV, HTOTDEV on FM noise | bias-corrected | bias-corrected | the same from τ = 16τ₀ |
