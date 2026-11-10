@@ -63,8 +63,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   HTOTDEV, raw MTOTDEV, TTOTDEV and Thêo1), and `false` remains the raw
   statistic that allantools reports. `bias_correction` takes
   `published=true` for the same factors; the Python wrappers take
-  `"published"` and `"stable32"`. MHTOTDEV has no published factor. The
-  CLI and the explorer still switch the correction only on or off.
+  `"published"` and `"stable32"`. MHTOTDEV has no published factor.
 
 ### Changed
 
@@ -131,6 +130,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   which the model overstated by up to 54 %, takes the exact ratio. HTOTDEV
   on FM noise at τ = 2τ₀ to 15τ₀ now differs from Stable32, which keeps the
   published factor, by up to 3 % in σ.
+- `sigmatau analyze` and `report` take `--bias exact|published|stable32|none`,
+  the library's `correct_bias` conventions; `--no-bias-correction` remains
+  as `--bias none`. **Breaking:** the JSON field `analysis.bias_correction`
+  is now that word instead of `true`/`false`. The explorer's bias checkbox
+  is a menu of the same four; saved sessions still open, as Exact (was on)
+  or None (was off).
 
 ### Fixed
 
