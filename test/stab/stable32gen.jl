@@ -50,6 +50,14 @@ using SigmaTau
         l, h = confidence_intervals(σ, edf, 0.683)
         @test all(isapprox.(l, lo; rtol=1e-3)) && all(isapprox.(h, hi; rtol=1e-3))
     end
+    # Without the per-m drift removal, and with B1 at the record length, the
+    # labels are Stable32's at every τ but 256 s, where R(n) reads its white PM
+    # as flicker PM.
+    oa = filter(r -> r[1] == "Overlapping Allan", csv)
+    ms = [parse(Int, r[2]) for r in oa]
+    ours = identify_noise(x, ms; remove_drift=false, b1_length=:record)
+    @test ms[ours .!= [αsym[parse(Int, r[5])] for r in oa]] == [256]
+    @test ours[ms .== 256] == [:FLPM]
     # From τ = 1024 Stable32 reads white FM, where σ(τ) runs flat and then
     # rises and SigmaTau reads flicker FM and random-walk FM.
     tot = filter(r -> r[1] == "Total", csv)

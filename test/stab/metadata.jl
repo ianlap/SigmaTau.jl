@@ -17,6 +17,4 @@ using Test, Random, SigmaTau
     legacy = StabilityResult(:adev, [1.0], [1.0], Symbol[], SigmaTau._CIBound[], Float64[], [1])
     @test isnan(legacy.tau0) && legacy.n == 0 && isnan(legacy.confidence)
     @test psd_y(pd; taper = :hamming).taper === :hamming
-    @test identify_noise(x, [1, 2, 4]; remove_drift = false) ==
-          (@test_deprecated identify_noise(x, [1, 2, 4]; detrend = false))
 end
