@@ -1,91 +1,107 @@
 # Power-law noise identification (lag-1 ACF with B1 / R(n) fallback),
 # calibrated power-law noise synthesis and the NNLS variance decomposition.
 
+# Fewest decimated points the lag-1 test is run on: Riley and Greenhall
+# (2004) find it reliable from about 30, and Stable32 switches to B1 below.
 const NEFF_RELIABLE = 30
 const B1_MIN_POINTS = 6   # fewest averaged points the averaged-length B1 test is run on
 
 """
-    identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true, b1_length::Symbol=:averaged) → Vector{Symbol}
-    identify_noise(data::PhaseData, m_values; kwargs...) → Vector{Symbol}
-    identify_noise(data::FrequencyData, m_values; kwargs...) → Vector{Symbol}
+    identify_noise(x, m_values; dmin=0, dmax=2, remove_drift=true,
+                   b1_length=:averaged) → Vector{Symbol}
+    identify_noise(data, m_values; kwargs...) → Vector{Symbol}
 
-The record forms take the same keywords and accept any integer vector or
-[`TauMode`](@ref) for `m_values`; a `FrequencyData` record is integrated to
-phase first. Use `dmax=2` for the Allan family and `dmax=3` for the Hadamard
-family, as the deviation functions do.
+Dominant power-law noise type of a record at each averaging factor: `:WHPM`,
+`:FLPM`, `:WHFM`, `:FLFM` or `:RWFM`, and with `dmax=3` also `:FWFM`
+(flicker-walk FM, ``α = -3``) and `:RRFM` (random-run FM, ``α = -4``). The
+estimators use it for the noise type that sets their EDF and bias
+correction.
 
-Identify the dominant power-law noise type at each averaging factor by the
-lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
-fewer than `NEFF_RELIABLE` effective samples remain. Decimating the phase by
-`m` changes what the lag-1 test reads, and two steps allow for it. A white-PM
-result at `m ≥ 4` is confirmed with R(n), the ratio of MVAR to AVAR, because
-decimation whitens flicker PM. From `m = 16` any PM result, of either test,
-stands only if R(n) lies nearer its flicker-PM value than 1/2: R(n) is 1/2,
-27/40 and 33/40 for white, flicker and random-walk FM, and it is computed
-from every sample where the tests read one in `m`. A PM result that fails is
-reported as white FM. With few averaged points the tests mistake FM for PM
-often enough (white FM in one record in four at 32 points), and a PM label
-there gives an interval several times too narrow. For `m ≥ 2` the limits between white FM,
-flicker FM and random-walk FM sit halfway between the values the estimate
-takes on sampled noise (α = 0, −1.446, −2.4), not at the half-integers of
-[riley-2004-lag1-acf](@cite), which split flicker FM almost evenly between
-its own label and random-walk FM.
+# Method
 
-Every entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM` and, with
-`dmax=3`, `:FWFM` (flicker-walk FM, α = −3) and `:RRFM` (random-run FM,
-α = −4), which the third difference of the Hadamard family converges for.
-On sampled noise a third difference reads α = −3.0, −3.93 and −4.57 for
-random-walk, flicker-walk and random-run FM, and for `m ≥ 2` the limits again
-sit halfway. The function never returns `:unknown`: estimates outside the
-labelled range are clamped to the nearest end, an averaging factor whose
-estimate fails takes the type of the successful one nearest to it in log(m),
-and a record with no usable estimate at all (e.g. constant) is reported as
-`:WHFM`. The B1 fallback stops at random-walk FM.
+For each ``m`` the phase is decimated by ``m``, and the lag-1
+autocorrelation ``r_1`` of the result gives ``δ = r_1/(1 + r_1)``. The
+series is differenced until ``δ < 0.25`` or `dmax` differences have been
+taken; after ``d`` differences, ``α = 2 - 2(δ + d)``
+([Riley and Greenhall (2004)](@cite riley-2004-lag1-acf);
+[SP1065 §5.5.6](@cite riley-2008-sp1065)). This package adds four steps:
 
-The full record always passes through a 5σ outlier filter before the
-per-m loop; that step is unconditional and unrelated to the polynomial
-detrend below.
+- For ``m ≥ 2`` the limits between the FM labels are moved. A decimated
+  record is a sampled continuous process, on which the estimate reads
+  ``α = 0``, −1.446 and −2.4 for white, flicker and random-walk FM, and
+  after a third difference −3.0, −3.93 and −4.57 for random-walk,
+  flicker-walk and random-run FM. The limits sit halfway between those
+  readings. Rounding to the nearest integer, as the paper does and as is
+  done here at ``m = 1``, would split flicker FM almost evenly between its
+  own label and random-walk FM.
+- A white-PM result at ``m ≥ 4`` is confirmed with ``R(n)``, the ratio of
+  the modified to the plain Allan variance
+  ([SP1065 §5.5.2](@cite riley-2008-sp1065)), because decimation whitens
+  flicker PM.
+- Where fewer than 30 decimated points remain, the lag-1 test gives way to
+  the ``B_1`` ratio of the standard variance to the Allan variance of the
+  ``m``-averaged frequency, with ``R(n)`` to separate the PM types
+  ([SP1065 §5.5.2](@cite riley-2008-sp1065)), as in
+  [Stable32](@cite hamilton-2008-stable32-manual). That test stops at
+  random-walk FM.
+- From ``m = 16`` a PM result of either test stands only if ``R(n)`` lies
+  nearer its flicker-PM value than 1/2, its value on white FM (it is 27/40
+  on flicker FM and 33/40 on random-walk FM). One that fails is reported
+  as white FM. ``R(n)`` uses every sample where the tests read one in
+  ``m``, and with few decimated points they take FM for PM often: white FM
+  in one record in four at 32 points. A PM label there makes the interval
+  several times too narrow.
 
-## `remove_drift`
+Samples farther than five standard deviations from the record mean are
+dropped before the analysis.
 
-When `true` (default), each decimated-by-m subseries is quadratically
-detrended before the lag-1 ACF / B1 ratio is computed. Allantools'
-`autocorr_noise_id` does the same thing (`detrend(x, deg=2)` in
-[`ci.py`](https://github.com/aewallin/allantools/blob/master/allantools/ci.py))
-to remove a frequency offset (linear phase ramp) and drift (quadratic
-phase term) from the slow content of each averaging window.
+The function always returns a label. An estimate outside the labeled range
+counts as the nearest end of it, an averaging factor whose estimate fails
+takes the label of the nearest one in ``\\log m`` that succeeded, and a
+record with no usable estimate, such as a constant one, is reported as
+`:WHFM`.
 
-When `false`, the per-m polynomial fit is skipped. This matches
-Stable32's noise-ID convention; use it when you need α values that line
-up with a Stable32-generated reference fixture point-for-point. (Before
-0.6 this keyword was called `detrend`; `detrend=false` still works, with a
-deprecation warning.)
+# Arguments
 
-## `b1_length`
+- `x`: phase samples, or `data`, a `PhaseData` or `FrequencyData` record
+  (frequency is integrated to phase).
+- `m_values`: averaging factors. With a record, any integer vector or a
+  [`TauMode`](@ref).
 
-Sets the record length `N` at which the B1 fallback (used when fewer than
-`NEFF_RELIABLE` averaged points remain) evaluates the theoretical
-B1(N, μ) values that separate the noise types.
+# Keywords
 
-- `:averaged` (default): the number of m-averaged frequency points the
-  observed B1 is computed from, which is the N that B1(N, μ) is defined for
-  (SP1065 §5.7, [riley-2008-sp1065](@cite)).
-- `:record`: the full record's frequency-sample count, which follows
-  Stable32's labels more closely. At that length the limit for random-walk
-  FM sits far above anything a few averaged points can reach.
+- `dmin=0`, `dmax=2`: the fewest and the most differences taken. Use
+  `dmax=2` for the Allan family and `dmax=3` for the Hadamard family, as
+  the estimators do.
+- `remove_drift=true`: remove a least-squares quadratic, that is a frequency
+  offset and a linear frequency drift, from each decimated series before
+  the test, as allantools does. `false` skips it.
+- `b1_length=:averaged`: the record length ``N`` at which the expected
+  ``B_1(N, μ)`` of each noise type is evaluated in the test for fewer than
+  30 points. `:averaged` is the number of ``m``-averaged frequency values
+  the ratio is computed from, which is the ``N`` of the definition
+  ([SP1065 §5.7](@cite riley-2008-sp1065)). `:record` is the number of
+  frequency samples in the whole record, which follows Stable32's labels
+  more closely; at that length the limit for random-walk FM lies far above
+  anything a few averaged values can reach.
 
-In simulation (N = 1024, 6 to 24 averaged points) `:averaged` finds
-random-walk FM in 60–75 % of records and flicker FM in 34–79 %, where
-`:record` finds them in 1–2 % and 24–48 %. White FM pays for it, 33–82 %
-against 65–88 %. With so few points no test separates neighbouring noise
-types better than about two times in three.
+!!! note "Labels from fewer than 30 points"
+    In simulation (``N = 1024``, 6 to 24 averaged values) `:averaged` finds
+    random-walk FM in 60 to 75 % of records and flicker FM in 34 to 79 %,
+    where `:record` finds them in 1 to 2 % and 24 to 48 %. White FM pays
+    for it: 33 to 82 % against 65 to 88 %. With so few values no test
+    separates neighboring noise types better than about two times in three.
 
-Below `B1_MIN_POINTS` = 6 averaged points `:averaged` reports the label
-measured at the longest averaging factor that still has 6, `N ÷ 6`. With 2
-to 4 points the ratio is close to a coin toss, and on white FM the labels it
-gave over-corrected the total variance by 13–33 %; taken at 6 points the
-error is 5–13 % and random-walk FM keeps its gain. The value 6 comes from
-that simulation, not from the literature.
+    Below 6 averaged values `:averaged` reports the label found at the
+    longest averaging factor that still has 6. With 2 to 4 values the ratio
+    is close to a coin toss, and on white FM the labels it gave
+    over-corrected the total variance by 13 to 33 %; taken at 6 values the
+    error is 5 to 13 %. The value 6 comes from that simulation, not from
+    the literature.
+
+!!! compat "SigmaTau 0.6"
+    `remove_drift` was called `detrend` before version 0.6. `detrend=false`
+    still works and gives a deprecation warning.
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
                         remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:averaged)
@@ -162,7 +178,7 @@ identify_noise(data::FrequencyData, m_values::AbstractVector{<:Integer}; kwargs.
 # correlate at (9 ln 3 − 16 ln 2)/(8 ln 2) and 1/4. After three, random-walk,
 # flicker-walk and random-run FM read −3.0, −3.927 and −4.565, from
 # −1/3, (128 ln 2 − 81 ln 3)/(27 ln 3 − 32 ln 2) and 13/33. All follow from the
-# generalized autocovariances of Greenhall & Riley (2003).
+# generalized autocovariances of Greenhall and Riley (2003).
 _lag1_reading(r1, d) = 2 - 2 * (d + r1 / (1 + r1))
 const _LAG1_FLFM = _lag1_reading((9log(3) - 16log(2)) / (8log(2)), 2)
 const _LAG1_RWFM = _lag1_reading(1 / 4, 2)
@@ -172,10 +188,10 @@ const _LAG1_RRFM = _lag1_reading(13 / 33, 3)
 
 # Integer α of a lag-1 estimate, no lower than `amin` (−2, or −4 when a third
 # difference is allowed). The estimate is continuous and noisy (white PM can
-# come out at 2.6), so it is clamped to the labelled range. At m = 1 it rounds
-# to the nearest integer (Riley & Greenhall 2004); for m ≥ 2 the limits on the
-# FM side sit halfway between the sampled-process readings above, at −0.72,
-# −1.92, −3.46 and −4.25.
+# come out at 2.6), so it is clamped to the labeled range. At m = 1 it rounds
+# to the nearest integer (Riley and Greenhall (2004)); for m ≥ 2 the limits on
+# the FM side sit halfway between the sampled-process readings above, at
+# −0.72, −1.92, −3.46 and −4.25.
 function _lag1_label(alpha::Real, m::Int, amin::Int)
     m == 1 && return round(Int, clamp(alpha, amin, 2))
     amin <= -4 && alpha < (_LAG1_FWFM + _LAG1_RRFM) / 2 && return -4
@@ -297,7 +313,7 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_lengt
 
     y_blocks = reshape(dx[1:Nd], m, :)
     y_avg = vec(mean(y_blocks, dims=1))
-    # Unbiased variance (N − 1), as B1 theory and Stable32 assume.
+    # Unbiased variance (N − 1), as B1 is defined.
     var_class = var(y_avg)
 
     # N in B1_theory(N, μ): the number of averaged points B1_obs is computed
@@ -344,6 +360,9 @@ end
 _rn_fm(mdev_val::Float64, adev_val::Float64, m::Int) =
     adev_val > 0 && (mdev_val / adev_val)^2 > sqrt(_rn_theory(m, -1) / 2)
 
+# Barnes's B1(N, μ) without dead time: the expected ratio of the N-sample
+# standard variance to the Allan variance when σ_y²(τ) ∝ τ^μ (SP1065 §5.5.2
+# and §5.7, Eq. (48)).
 function _b1_theory(N::Int, mu::Int)
     if mu == 2;  return N * (N + 1) / 6
     elseif mu == 1;  return N / 2
@@ -354,6 +373,9 @@ function _b1_theory(N::Int, mu::Int)
     end
 end
 
+# Expected R(n) = MVAR/AVAR (SP1065 §5.10, Eq. (51)) at averaging factor `af`:
+# 1/af for white PM (b = 0); for flicker PM (b = −1) the ratio of the two
+# conversion formulas with the bandwidth at the Nyquist frequency of τ₀.
 function _rn_theory(af::Int, b::Int)
     if b == 0
         return 1.0 / af
@@ -369,10 +391,11 @@ end
 # ── Power-law noise synthesis ─────────────────────────────────────────────
 
 # Fractional frequency with S_y ∝ |2 sin(πf)|^α, the discrete-time f^α: white
-# Gaussian noise through the Kasdin–Walter filter (1 − z⁻¹)^(α/2), exact at
-# the integer orders (α = 2 is the first difference of white noise, α = 0
-# white, α = −2 a cumulative sum). Zero-mean and uncalibrated; `noise_gen`
-# rescales. `rng = nothing` draws from the global RNG.
+# Gaussian noise through the fractional differencing filter (1 − z⁻¹)^(α/2)
+# of Kasdin and Walter (1992), Eqs. (36) and (42), exact at the integer
+# orders (α = 2 is the first difference of white noise, α = 0 white, α = −2 a
+# cumulative sum). Zero-mean and not yet scaled; `noise_gen` sets the level.
+# `rng = nothing` draws from the global RNG.
 function _gen_powerlaw_y(alpha::Real, N::Int; rng=nothing)
     w = rng === nothing ? randn(N) : randn(rng, N)
     h = Vector{Float64}(undef, N)
@@ -433,9 +456,10 @@ function _noise_gen_y(N::Int, tau0::Float64,
             y_total .+= y_raw .* (Float64(s) / σ_raw)
         end
     else
-        # Analytic calibration of the PSD coefficient: the Kasdin–Walter
-        # filter driven by unit white noise sampled at τ₀ has one-sided PSD
-        # 2τ₀·|2 sin(πfτ₀)|^α = 2τ₀·(2πτ₀f)^α at low frequency, so scaling by
+        # Analytic calibration of the PSD coefficient: the filter driven by
+        # unit white noise sampled at τ₀ has one-sided PSD
+        # 2τ₀·|2 sin(πfτ₀)|^α (Kasdin and Walter (1992), Eq. (37)), which is
+        # 2τ₀·(2πτ₀f)^α at low frequency, so scaling by
         # √(h_α / (2τ₀(2πτ₀)^α)) gives S_y(f) = h_α f^α there.
         for (key, hα) in h
             α = _noise_alpha(key)
@@ -449,75 +473,78 @@ function _noise_gen_y(N::Int, tau0::Float64,
 end
 
 """
-    noise_gen(::Type{PhaseData},     N, tau0; sigma1=Dict(), h=Dict()) → PhaseData
-    noise_gen(::Type{FrequencyData}, N, tau0; sigma1=Dict(), h=Dict()) → FrequencyData
+    noise_gen(PhaseData, N, tau0; sigma1=Dict(), h=Dict(), rng=nothing) → PhaseData
+    noise_gen(FrequencyData, N, tau0; sigma1=Dict(), h=Dict(),
+              rng=nothing) → FrequencyData
 
-Synthesize a length-`N` clock record whose fractional-frequency power spectrum
-is a sum of user-specified power laws `S_y(f) = h_α f^α`. Returns either a
-`PhaseData` (integrated to phase with sample interval `tau0`) or a
-`FrequencyData` (raw `y` sequence) depending on the first argument.
+Simulated clock record of `N` samples at sample interval `tau0` whose
+fractional-frequency spectrum is a sum of power laws,
+``S_y(f) = \\sum_α h_α f^α``. The first argument selects the kind of record
+returned.
 
-# α index
+Each component is white Gaussian noise passed through the fractional
+differencing filter ``(1 - z^{-1})^{α/2}`` of
+[Kasdin and Walter (1992), Eqs. (36) and (42)](@cite kasdin-1992-discrete-simulation),
+which is exact at the integer orders: a first difference for ``α = 2``, a
+running sum for ``α = -2``. The components are independent.
 
-| α  | Noise type                | Phase PSD slope |
-|---:|:--------------------------|:----------------|
-|  2 | WHPM, white phase          | flat            |
-|  1 | FLPM, flicker phase        | 1/f             |
-|  0 | WHFM, white frequency      | 1/f²            |
-| -1 | FLFM, flicker frequency    | 1/f³            |
-| -2 | RWFM, random-walk frequency | 1/f⁴           |
-| -3 | FWFM, flicker-walk frequency | 1/f⁵          |
-| -4 | RRFM, random-run frequency  | 1/f⁶           |
+| ``α`` | Noise type      | Label   | Slope of ``S_x(f)`` |
+|------:|:----------------|:--------|:--------------------|
+|     2 | white PM        | `:WHPM` | flat                |
+|     1 | flicker PM      | `:FLPM` | ``f^{-1}``          |
+|     0 | white FM        | `:WHFM` | ``f^{-2}``          |
+|    −1 | flicker FM      | `:FLFM` | ``f^{-3}``          |
+|    −2 | random-walk FM  | `:RWFM` | ``f^{-4}``          |
+|    −3 | flicker-walk FM | `:FWFM` | ``f^{-5}``          |
+|    −4 | random-run FM   | `:RRFM` | ``f^{-6}``          |
 
-Keys are the integer α or the noise-type name (`Dict(:WHFM => 1e-12)`).
+# Keywords
 
-# Specifying the mixture
+Give `sigma1` or `h`, not both. The keys are the integer ``α`` or the
+label, as in `Dict(:WHFM => 1e-12)`.
 
-Pass *either* `sigma1` *or* `h` (not both):
+- `sigma1`: the Allan deviation ``σ_y(τ_0)`` of each component, for when a
+  specification quotes a deviation at one averaging time. Each component is
+  rescaled so that its overlapping Allan deviation at ``τ_0`` equals the
+  request exactly, in every realization.
+- `h`: the coefficient ``h_α`` of each component. The filter driven by unit
+  white noise has the one-sided spectrum ``2τ_0\\,|2\\sin(πfτ_0)|^α`` (their
+  Eq. (37)), so the component is scaled by
+  ``\\sqrt{h_α/(2τ_0(2πτ_0)^α)}`` and has
+  ``S_y(f) = h_α\\,(\\sin(πfτ_0)/(πτ_0))^α``, which is ``h_α f^α`` well
+  below the Nyquist frequency.
+- `rng`: a random number generator, such as `Xoshiro(1)`, for a
+  reproducible or an independent stream. The global generator is used by
+  default.
 
-- `sigma1[α] = σ`: target Allan deviation σ_y(τ=τ₀) of the α-component.
-  Convenient when working from a clock spec sheet that quotes
-  σ_y(1 s) directly.
-- `h[α] = h_α`: fractional-frequency PSD coefficient in
-  `S_y(f) = h_α f^α`. Unambiguous everywhere.
+For ``α ≤ -1`` the process is not stationary, and the spectrum above is
+that of its differences: the ``d``-th difference of ``y`` has the spectrum
+``(2\\sin(πfτ_0))^{2d} S_y(f)``.
 
-`sigma1` components are rescaled so the empirical σ_y(τ=τ₀) of the drawn
-realization equals the request exactly. `h` components are scaled
-analytically: the Kasdin–Walter filter driven by unit white noise has
-one-sided PSD `2τ₀ |2 sin(πfτ₀)|^α`, which is `2τ₀ (2πτ₀ f)^α` at low
-frequency, so the component is multiplied by `√(h_α / (2τ₀ (2πτ₀)^α))` and
-its spectrum is
-
-    S_y(f) = h_α · (sin(π f τ₀) / (π τ₀))^α,
-
-which is `h_α f^α` up to the sine-versus-linear roll-off near Nyquist. For
-α ≤ −1 the process is not stationary and this is the spectrum of its
-differences: the d-th difference of `y` has spectrum
-`(2 sin(π f τ₀))^(2d) S_y(f)`. The test suite checks the spectrum, through
-differences where needed, for every α from +2 to −4. The empirical σ_y(τ₀) of an `h` component therefore fluctuates
-with the realization (≈ √(2/N) relative), and for the coloured noises it is
-not the continuous-time SP1065 value, because a sampled discrete process is
-not a band-limited continuous one. Components from different α are
-statistically independent.
-
-Seed the global RNG (`Random.seed!`) before calling for reproducible output,
-or pass an `AbstractRNG` as `rng` to draw from a specific stream (e.g. for a
-Monte Carlo with independent per-realization seeds).
+The record is a sampled process, not a band-limited continuous one. The
+Allan variance of an `h` component follows the usual conversion
+([SP1065 §7.1, Eq. (67)](@cite riley-2008-sp1065), with the bandwidth
+``f_h = 1/(2τ_0)``) at every ``τ`` for white PM and white FM, and only at
+long ``τ`` for the other types. [`powerlaw_sigma`](@ref) gives the exact
+deviation of such a record and states the difference.
 
 # Examples
 
+```jldoctest
+julia> using SigmaTau, Random
+
+julia> p = noise_gen(PhaseData, 4096, 1.0; sigma1=Dict(:WHFM => 1e-12),
+                     rng=Xoshiro(1));
+
+julia> adev(p, [1]; ci=false).dev[1] ≈ 1e-12
+true
+```
+
+White FM with random-walk FM, by deviation and by coefficient:
+
 ```julia
-using SigmaTau, Random
-Random.seed!(0)
-
-# Composite: WHFM at σ_y(1 s) = 1e-12 plus RWFM at σ_y(1 s) = 1e-14
-p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14))
-
-# Same record but as fractional-frequency
-y = noise_gen(FrequencyData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14))
-
-# Specify by h_α (here pure WHFM with h_0 = 2e-24 → σ_y(1 s) ≈ 1e-12)
-noise_gen(PhaseData, 8192, 1.0; h = Dict(0 => 2e-24))
+p = noise_gen(PhaseData, 8192, 1.0; sigma1=Dict(0 => 1e-12, -2 => 1e-14))
+y = noise_gen(FrequencyData, 8192, 1.0; h=Dict(0 => 2e-24, -2 => 1e-28))
 ```
 """
 function noise_gen(::Type{PhaseData}, N::Int, tau0::Real;
@@ -540,36 +567,34 @@ end
 
 # ── NNLS power-law decomposition ────────────────────────────────────────
 
-# Nonnegative least-squares decomposition of a measured
-# variance profile σ̂²(τ) into per-α power-law components.
+# Nonnegative least-squares decomposition of a measured variance profile
+# σ̂²(τ) into power-law components.
 #
-# Where `identify_noise` answers "which single α dominates at this τ", this
-# answers "how much of each α is present across the whole τ range" — one fit to
-# the entire profile rather than an independent classification per point. The
-# nonnegativity constraint is what makes it well posed: variance contributions
-# cannot be negative, and without the constraint the near-collinear power-law
+# `identify_noise` finds the one α that dominates at each τ. This fit gives
+# the amount of each α over the whole τ range, from one fit to the entire
+# profile. The constraint makes it well posed: a variance contribution cannot
+# be negative, and without the constraint the nearly collinear power-law
 # columns trade large positive and negative amplitudes.
 #
-# The deviation API this dispatches into lives in deviations.jl, which is
-# included after this file; that is fine, the call is resolved at run time.
+# The estimators this calls are defined in deviations.jl, included after
+# this file; the calls are resolved at run time.
 
 """
     _nnls_exact(A, b) → (a, rss)
 
-Exact nonnegative least squares — minimize ‖Aa − b‖² subject to `a ≥ 0` — by
-exhaustive active-set enumeration. Every one of the `2ⁿ − 1` nonempty supports
-is solved as an unconstrained least-squares problem restricted to that support
-and kept only if the solution is feasible; `a = 0` seeds the search.
+Nonnegative least squares, minimizing ‖Aa − b‖² subject to `a ≥ 0`, by
+enumerating the active sets. Each of the `2ⁿ − 1` nonempty supports is
+solved as an unconstrained least-squares problem on that support and kept
+if its solution is feasible; `a = 0` seeds the search.
 
-This is exact, not heuristic: the optimum restricted to its own support *is*
-the unconstrained minimizer over that subspace, so the optimum appears among
-the candidates, and every candidate is a feasible point of the constrained
-problem. Cost is exponential in the number of columns, which is why the caller
-is capped at 20 — the intended `n` here is 5–7 power laws.
+The result is exact: the constrained optimum is the unconstrained minimizer
+on its own support, so it is among the candidates, and every candidate is
+feasible. The cost is exponential in the number of columns, capped at 20;
+the intended use has five to seven power laws.
 
-The restricted solves go through `\\` (QR) rather than explicit normal
-equations: power-law columns are near-collinear and squaring the condition
-number would lose the smallest amplitudes.
+The restricted problems are solved with `\\` (QR), not the normal
+equations: power-law columns are nearly collinear, and squaring the
+condition number would lose the smallest amplitudes.
 """
 function _nnls_exact(A::AbstractMatrix{<:Real}, b::AbstractVector{<:Real})
     n = size(A, 2)
@@ -580,14 +605,14 @@ function _nnls_exact(A::AbstractMatrix{<:Real}, b::AbstractVector{<:Real})
     Af = Matrix{Float64}(A)
     bf = Vector{Float64}(b)
     best_a = zeros(n)
-    best_r = sum(abs2, bf)             # empty support — always feasible
+    best_r = sum(abs2, bf)             # the empty support is always feasible
     for mask in 1:((1 << n) - 1)
         S = [j for j in 1:n if (mask >> (j - 1)) & 1 == 1]
         AS = Af[:, S]
         aS = try
             AS \ bf
         catch
-            continue                   # rank-deficient support — skip
+            continue                   # rank-deficient support
         end
         (all(isfinite, aS) && all(>=(0.0), aS)) || continue
         r = sum(abs2, AS * aS .- bf)
@@ -600,8 +625,8 @@ function _nnls_exact(A::AbstractMatrix{<:Real}, b::AbstractVector{<:Real})
     return best_a, best_r
 end
 
-# Estimator family: `:modified` for the phase-averaged (modified) kernels,
-# `:unmodified` for the plain second/third-difference kernels.
+# Estimator family: `:modified` for the kernels that average the phase,
+# `:unmodified` for the plain second- and third-difference kernels.
 function _nnls_family(deviation::Symbol)
     (deviation === :mdev || deviation === :mhdev || deviation === :mhtotdev) &&
         return :modified
@@ -618,17 +643,16 @@ _nnls_diff_order(deviation::Symbol) = deviation === :mdev ? 2 : 3
 """
     _nnls_mu(family, alpha) → Float64
 
-Response exponent μ of the *variance*: σ²_D(τ) ∝ τ^μ for a pure α power law.
+Exponent μ of the variance response, σ²(τ) ∝ τ^μ, to the power law `alpha`.
 
-- Modified family (MDEV / MHDEV / MHTOTDEV): the phase pre-average separates
-  the two PM noises, so a single relation covers the whole range,
-  `μ = -α - 1` — α=2 → -3, α=1 → -2, α=0 → -1, α=-1 → 0, α=-2 → 1, α=-3 → 2,
-  α=-4 → 3.
-- Unmodified family (ADEV / HDEV): `μ = -α - 1` for α ≤ 0, but WPM and FPM are
-  *degenerate* at μ = -2. AVAR/HVAR of white PM is exactly τ⁻² (with a
-  bandwidth factor) and of flicker PM is τ⁻² times a slowly varying
-  `ln(2π f_h τ)`, which no power-law column can resolve. A basis for an
-  unmodified estimator therefore carries at most one of α ∈ {1, 2}.
+- Modified family (MDEV, MHDEV, MHTOTDEV): `μ = −α − 1` over the whole
+  range, from −3 for white PM to 3 for random-run FM, because the phase
+  average separates the two PM types.
+- Unmodified family (ADEV, HDEV): `μ = −α − 1` for `α ≤ 0`. White and
+  flicker PM both give μ = −2: the variance of white PM is proportional to
+  τ⁻², and that of flicker PM to τ⁻² times a slowly varying `ln(2π f_h τ)`,
+  which a power-law column cannot resolve. A basis for an unmodified
+  estimator therefore holds at most one of α = 1 and α = 2.
 """
 function _nnls_mu(family::Symbol, alpha::Int)
     family === :modified && return -alpha - 1.0
@@ -648,7 +672,7 @@ function _nnls_default_alphas(deviation::Symbol)
     return family === :modified ? [2, 1, 0, -1, -2, -3, -4] : [2, 0, -1, -2, -3, -4]
 end
 
-# Smallest averaging factor kept by the default grid — see `noise_id_nnls`.
+# Smallest averaging factor of the default grid (see `noise_id_nnls`).
 const NNLS_M_MIN = 4
 
 function _nnls_symbol(alpha::Int)
@@ -675,14 +699,14 @@ function _nnls_deviation(deviation::Symbol, data::PhaseData, m_values::Vector{In
     throw(ArgumentError("noise_id_nnls: unsupported deviation $deviation"))
 end
 
-# The MDEV and MHTOTDEV EDF models stop at α = -2, so the α ≤ -3 rows borrow
-# the RWFM model — the closest available.
-# This only sets the χ² weights; it does not enter the fitted amplitudes.
+# The χ² weights of the α ≤ −3 rows use the random-walk FM EDF, the reddest
+# type MDEV's model covers. This sets the weights only; it does not enter the
+# fitted amplitudes.
 _nnls_edf_symbol(alpha::Int) = alpha <= -3 ? :RWFM : _nnls_symbol(alpha)
 
 # Weighted NNLS of v ≈ K·a. The power-law columns span many orders of
 # magnitude over a wide τ grid; equilibrating them to unit 2-norm keeps the
-# restricted QR solves well scaled, and the amplitudes are unscaled afterwards.
+# restricted QR solves well scaled, and the amplitudes are unscaled afterward.
 function _nnls_weighted(K::Matrix{Float64}, v::Vector{Float64}, w::Vector{Float64})
     sw = sqrt.(w)
     A  = sw .* K
@@ -694,10 +718,11 @@ function _nnls_weighted(K::Matrix{Float64}, v::Vector{Float64}, w::Vector{Float6
 end
 
 # Self-consistent χ² weights wₖ = νₖ/(2 σ̂⁴ₖ): a first pass with equal
-# fractional weight supplies the per-τ noise type, and the EDF model turns
-# that into ν, with `Ns[k]` the record length at the k-th τ. Deriving the types from the fit rather than from
-# `identify_noise` keeps the fit independent of that classifier. Points where
-# the EDF model gives no finite positive ν keep the fractional weight.
+# fractional weight supplies the noise type at each τ, and the EDF model
+# turns that into ν, with `Ns[k]` the record length at the k-th τ. Taking the
+# types from the fit, not from `identify_noise`, keeps the fit independent of
+# that test. A point where the EDF model gives no finite positive ν keeps the
+# fractional weight.
 function _nnls_edf_weights(deviation::Symbol, K::Matrix{Float64}, v::Vector{Float64},
                            αs::Vector{Int}, ms::Vector{Int}, taus::Vector{Float64},
                            Ns::Vector{Int}, τ₀::Float64)
@@ -710,41 +735,57 @@ function _nnls_edf_weights(deviation::Symbol, K::Matrix{Float64}, v::Vector{Floa
 end
 
 """
-    noise_id_nnls(data [, m_values]; deviation=:mhdev, alphas=…, weights=:edf) → NamedTuple
+    noise_id_nnls(data, m_values; deviation=:mhdev, alphas, weights=:edf) → NamedTuple
 
-Decompose a record's measured variance profile into nonnegative power-law
-components: one weighted nonnegative least-squares fit of
-σ̂²(τ) ≈ Σᵢ aᵢ (τ/τ₀)^μ(αᵢ) over the whole τ range, giving the amplitude of
-every α in the basis and the dominant noise type at each τ. The fit runs on
-the raw deviation (`ci=false`, no bias correction), so it does not lean on
-[`identify_noise`](@ref). `data` is a `PhaseData` or `FrequencyData`.
+Amount of each power-law noise type in a record, from one nonnegative
+least-squares fit of the measured variance to
+``σ^2(τ) ≈ \\sum_i a_i\\,(τ/τ_0)^{μ(α_i)}`` over the whole range of ``τ``.
+Where [`identify_noise`](@ref) names the dominant type at each ``τ``, this
+fit gives an amplitude for every type in the basis. It runs on the
+deviation without bias correction or noise identification, so it does not
+depend on that test.
 
-Returns a `NamedTuple` with `deviation`, `tau` (the τ fitted), `var` (σ̂²),
-`fit` (the model at each τ), `alphas`, `noise_types`, `amplitudes` (aᵢ ≥ 0,
-each component's variance at τ = τ₀), `contributions` (a τ × α matrix),
-`dominant` (per τ), `residual` and `weights`.
+For coefficients ``h_α`` use [`powerlaw_fit`](@ref), which fits the exact
+response of each component. The basis here is the asymptotic power law
+``τ^μ`` of each type, and the total estimators bend away from it as ``τ``
+approaches the record length, so prefer `:mhdev` when the longest averaging
+times matter.
 
-`deviation` is `:mdev`, `:hdev`, `:mhdev` (default) or `:mhtotdev`. `alphas`
-defaults to every α the estimator converges for: 2…−2 for `:mdev`, 2…−4 for
-the Hadamard family, which also tolerates drift; `:hdev` cannot tell white
-from flicker PM and takes one of them. The default grid is the estimator's
-octave grid from m = 4, since every estimator is still in transition toward
-its power law at m = 1–2. `weights` is `:edf` (χ² weights νₖ/(2σ̂⁴ₖ), the
-noise type per τ taken from a first `:relative` pass), `:relative` (equal
-fractional weight) or a vector.
+# Arguments
 
-The basis assumes each component is in its asymptotic regime over the
-fitted range; the total estimators bend away from τ^μ as τ → T, so prefer
-`:mhdev` when the long-τ octaves matter. For calibrated h_α see
-[`powerlaw_fit`](@ref), which fits each component's exact response.
+- `data`: a `PhaseData` or `FrequencyData` record.
+- `m_values`: averaging factors. The default is the octave grid of the
+  estimator from ``m = 4``, because at ``m = 1`` and 2 the estimators have
+  not yet reached their power laws.
+
+# Keywords
+
+- `deviation=:mhdev`: the estimator fitted, one of `:mdev`, `:hdev`,
+  `:mhdev` and `:mhtotdev`.
+- `alphas`: the exponents in the basis. The default is every type the
+  estimator converges for: 2 to −2 for `:mdev` and 2 to −4 for the Hadamard
+  family, which is also insensitive to drift. `:hdev` cannot tell white PM
+  from flicker PM and takes one of them, white PM by default.
+- `weights=:edf`: `:edf` weights each point by ``ν/(2σ^4)``, with the EDF
+  ``ν`` for the type that dominates a first fit there; `:relative` gives
+  every point the same fractional weight; a vector gives the weights
+  directly.
+
+# Returns
+
+A named tuple with `deviation`, `tau` (the averaging times fitted), `var`
+(the measured variance), `fit` (the model at each ``τ``), `alphas`,
+`noise_types`, `amplitudes` (``a_i ≥ 0``, the variance of each component at
+``τ_0``), `contributions` (a matrix, ``τ`` by type), `dominant` (the
+largest contribution at each ``τ``), `residual` and `weights`.
 
 # Examples
 
 ```julia
-p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14))
+p = noise_gen(PhaseData, 8192, 1.0; sigma1=Dict(0 => 1e-12, -2 => 1e-14))
 r = noise_id_nnls(p)
-collect(zip(r.noise_types, r.amplitudes))   # amplitude per α
-r.dominant                                  # dominant type per τ
+collect(zip(r.noise_types, r.amplitudes))   # amplitude of each type
+r.dominant                                  # dominant type at each τ
 ```
 """
 function noise_id_nnls(data::PhaseData, m_values::AbstractVector{<:Integer} = Int[];

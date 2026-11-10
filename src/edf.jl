@@ -1,17 +1,54 @@
 # Equivalent degrees of freedom, bias factors and χ² confidence intervals.
 
 """
-    calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64) → Vector{Float64}
+    calculate_edf(method, devs, noises, m_values, taus, N, T) → Vector{Float64}
 
-Equivalent degrees of freedom for the chosen `method`. Uses the
-Greenhall–Riley spectral integrals for ADEV / MDEV / HDEV / MHDEV (via
-`_calc_edf_core`), the published EDF coefficient tables for the
-total-family estimators, and the SP1065 Table 3 empirical formulas for
-`:theo1` (via `_theo1_edf`).
+Equivalent degrees of freedom (EDF) of a variance estimate at each averaging
+factor: the ``ν`` of the χ² distribution behind
+[`confidence_intervals`](@ref). The estimators call it for the interval
+they report.
 
-On white and flicker PM, where no table is published, TOTDEV and HTOTDEV
-take the models of `tools/total_pm_models.jl`, fitted to the exact EDF of
-each statistic; see the "Total estimators on PM noise" docs page.
+# Arguments
+
+- `method`: the estimator, one of the symbols below. Any other gives `NaN`.
+- `devs`: the deviations. Only their number is used.
+- `noises`: the noise type at each point (`:WHPM`, `:FLPM`, `:WHFM`,
+  `:FLFM`, `:RWFM`, `:FWFM` or `:RRFM`). Any other label counts as white FM.
+- `m_values`, `taus`: the averaging factor and averaging time of each point.
+- `N`, `T`: the number of phase samples and the record duration
+  ``(N - 1)τ_0``.
+
+# Models
+
+- `:adev`, `:mdev`, `:hdev`, `:mhdev`: the full version of the algorithm of
+  [Greenhall and Riley (2003), §3.6](@cite greenhall-2003-edf-stability),
+  for the overlapping estimator. The result is `NaN` where the variance
+  does not converge for the noise type (flicker-walk and random-run FM with
+  `:adev` and `:mdev`).
+- `:totdev`: ``b\\,T/τ - c`` on white, flicker and random-walk FM
+  ([Greenhall et al. (1999), Eq. (26)](@cite greenhall-1999-totvar), with
+  the coefficients as rounded in
+  [SP1065 Table 7](@cite riley-2008-sp1065)). On white and flicker PM, the
+  model of [Total estimators on PM noise](@ref). At ``m = 1``, the EDF of
+  `:adev`.
+- `:mtotdev`: ``(T/τ)/(b_0 + b_1τ/T)`` from ``τ = 16τ_0``
+  ([Howe and Peppler (2001), Table 2](@cite howe-2001-total-estimators)),
+  and the EDF of `:mdev` below it. SP1065 Table 8 gives a different
+  approximation, which is not used.
+- `:htotdev`: the same form on white FM to random-run FM, with the
+  coefficients of
+  [Howe et al. (2005), Eq. (7) and Table I](@cite howe-2005-tothvar). The
+  paper states it for ``τ ≥ 16τ_0``; it is applied here from ``m = 2``. On
+  white and flicker PM, the model of [Total estimators on PM noise](@ref).
+  At ``m = 1``, the EDF of `:hdev`.
+- `:mhtotdev`: the model of [MHTOTDEV bias and EDF](@ref), and the EDF of
+  `:mhdev` at ``m = 1``.
+- `:theo1`: the empirical formulas of
+  [SP1065 §5.2.15, Table 3](@cite riley-2008-sp1065), for white PM to
+  random-walk FM.
+- `:pdev`: the approximation of
+  [Vernotte et al. (2021), Eqs. (16), (18) and (22) to (24)](@cite vernotte-2021-pvar-noninteger),
+  for white PM to random-walk FM, and the EDF of `:adev` at ``m = 1``.
 """
 function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64)
     edfs = Vector{Float64}(undef, length(devs))
@@ -42,10 +79,10 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 edfs[k] = b * (T / tau) - c
             end
         elseif method == :mtotdev
-            # Howe & Peppler 2001 Table 2 holds from τ = 16τ0: the Hadamard
-            # total column two steps up in α. Below that MTOT takes MDEV's EDF
-            # (Greenhall–Riley, d=2, F=1), as Stable32 does; it reads 20–50 %
-            # low there, on the wide side.
+            # Howe and Peppler (2001), Table 2, holds from τ = 16τ0: the
+            # Hadamard total column two steps up in α. Below that MTOT takes
+            # MDEV's EDF (Greenhall and Riley, d = 2, F = 1), as Stable32
+            # does; it reads 20 to 50 % low there, on the wide side.
             if m < 16
                 edfs[k] = _calc_edf_core(alpha, 2, m, 1, m, N)
             else
@@ -53,7 +90,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
             end
         elseif method == :htotdev
-            # At m = 1 the HTOTDEV kernel *is* overlapping HDEV (SP1065,
+            # At m = 1 the HTOTDEV kernel is overlapping HDEV (SP1065,
             # Stable32 and allantools all report HDEV there), so it takes
             # HDEV's EDF too; the table formula would give an EDF above N.
             if m == 1
@@ -97,17 +134,19 @@ function _alpha_from_noise(noise::Symbol)
     return 0
 end
 
-# Greenhall & Riley 2003 ("Uncertainty of stability variances based on finite
-# differences", PTTI 2003), the EDF algorithm Stable32 and allantools implement.
-# `F` is the filter factor (1 for the modified variances, m for the unmodified
-# ones) and `S` the stride factor (m for the overlapped estimators). The exact
-# basic sum (their eq. 10) is evaluated whenever its length J is at most
-# J_MAX = 100; beyond that (with r = M/S ≥ d + 1) the paper's Tables 1–3 give the large-J asymptote,
-# and the "m′ = J_MAX/r" substitution covers short records. For unmodified
-# variances with α ≤ 0 the filter factor is taken as ∞ once m(d+1) > J_MAX,
-# as the paper prescribes (case 2.1b). Following every branch reproduces
-# Stable32's χ² bounds; summing the full series instead differs by up to ~3.5 %
-# in EDF wherever J > 100.
+# Greenhall and Riley (2003), "Uncertainty of stability variances based on
+# finite differences", §3: the EDF algorithm that Stable32 and allantools
+# implement. `F` is the filter factor (1 for the modified variances, m for
+# the unmodified ones) and `S` the stride factor (m for the overlapped
+# estimators, 1 for the non-overlapped). This is the full version (§3.6).
+# The basic sum (Eq. (10)) is evaluated whenever its length J is at most
+# J_MAX = 100. Beyond that, with r = M/S ≥ d + 1, Tables 1 to 3 give the
+# large-J asymptote; otherwise the substitution m′ = J_MAX/r shortens the
+# sum. For unmodified variances with α ≤ 0 the filter factor is taken as ∞
+# once m(d + 1) > J_MAX (Case 2). Following every branch reproduces
+# Stable32's χ² bounds. The simplified version (§3.5, Eq. (13)), which sums
+# the whole series, differs by up to about 4 % in EDF where J > 100, on
+# white FM and flicker PM under the unmodified variances.
 const _GR_JMAX = 100
 
 # Table 1 (modified variances, F = 1): (a0, a1) by α = 2 … −4 (rows), d = 1 … 3.
@@ -185,13 +224,13 @@ function _calc_edf_core(alpha::Int, d::Int, m::Int, F::Int, S::Int, N::Int)
     return 1 / _gr_inv_edf(alpha, d, J, M, Float64(S), Float64(m))
 end
 
-# 1/edf = BasicSum(J, M, S, F) / (s_z(0)² · M), Greenhall & Riley eq. (12).
+# 1/edf = BasicSum(J, M, S, F) / (s_z(0)² · M): Greenhall and Riley (2003), Eq. (13).
 function _gr_inv_edf(alpha::Int, d::Int, J::Int, M::Int, S::Float64, F::Float64)
     sz0 = _compute_sz(0.0, F, alpha, d)
     return _gr_basic_sum(alpha, d, J, M, S, F) / (sz0 * sz0 * M)
 end
 
-# Greenhall & Riley eq. (10).
+# BasicSum of Greenhall and Riley (2003), Eq. (10).
 function _gr_basic_sum(alpha::Int, d::Int, J::Int, M::Int, S::Float64, F::Float64)
     sz0 = _compute_sz(0.0, F, alpha, d)
     bsum = sz0 * sz0
@@ -218,7 +257,8 @@ end
     end
 end
 
-# s_x(t) of Greenhall & Riley eq. (8); F = Inf is the F → ∞ limit s_w(t, α+2).
+# s_x(t) of Greenhall and Riley (2003), Eq. (8); F = Inf is the limit
+# F → ∞, s_w(t, α + 2).
 @inline function _compute_sx(t::Float64, F::Float64, alpha::Int)
     isinf(F) && return _compute_sw(t, alpha + 2)
     inv_F = 1.0 / F
@@ -251,6 +291,9 @@ end
     end
 end
 
+# b and c of edf = b·T/τ − c for α = 0, −1, −2: SP1065 Table 7, which rounds
+# Greenhall et al. (1999), Table I (3/2 and 0; 24(ln 2)²/π² and 0.222;
+# 140/151 and 0.358) to two decimals.
 function _coeff_totvar(alpha::Int)
     alpha == 0  && return (1.50, 0.00)
     alpha == -1 && return (1.17, 0.22)
@@ -260,8 +303,8 @@ end
 
 # edf = b/s − c + d·s + e·s³ with s = τ/T, for α = 2 … −4: fitted to the exact
 # EDF of the statistic over 16 ≤ τ/τ0 and τ ≤ T/4 (tools/mhtot_models.jl),
-# largest residual 1 to 4.5 %. MHTOTDEV is original to SigmaTau, so there is
-# no published table; see docs mhtotdev.md.
+# largest residual 1 to 4.5 %. The estimator is defined in this package, so
+# no published table exists; see the "MHTOTDEV bias and EDF" docs page.
 function _coeff_mhtot(alpha::Int)
     alpha == 2  && return (1.5949, 6.535, 20.18, -52.1)
     alpha == 1  && return (1.0656, 4.223, 10.19, 7.8)
@@ -273,15 +316,13 @@ function _coeff_mhtot(alpha::Int)
     return (NaN, NaN, NaN, NaN)
 end
 
-# A(α) coefficient of the PVAR EDF approximation, Vernotte–Chen–Rubiola 2020
-# (arXiv:2005.13631) Eq. (18): the 3rd-order polynomial
-#   A(α) = 27 + (1/4)α + (5/14)α² − (3/4)α³
-# fitted to a large Monte Carlo, with A(+2)=23 fixed by the white-PM closed form of
-# Vernotte et al. 2016 (arXiv:1506.00687) Eq. (24). Stored as the integer-α values
-# the paper reports (the cubic rounded), since noise identification only yields
-# integer α. The companion coefficient B(α) = 12 is constant for all α (Eq. 18).
+# A(α) of the PVAR EDF approximation: Vernotte, Chen and Rubiola (2021),
+# Eq. (18), the cubic A(α) = 27 + α/4 + 5α²/14 − 3α³/4 fitted to Monte Carlo
+# simulation, with A(+2) = 23 from the white-PM closed form of Vernotte et
+# al. (2016), Eq. (24). The integer-α values the paper reports (the cubic,
+# rounded) are stored, since noise identification yields integer α. The
+# companion coefficient B = 12 for every α.
 function _pvar_A(alpha::Int)
-    # Values are the cubic A(α) deliberately rounded to the integers published in Vernotte et al. 2020.
     alpha == 2  && return 23.0   # cubic 22.93; fixed exact by 2016 Eq. (24)
     alpha == 1  && return 27.0   # cubic 26.86
     alpha == 0  && return 27.0
@@ -293,24 +334,20 @@ end
 """
     _pvar_edf(alpha::Int, m::Int, N::Int) → Float64
 
-Equivalent degrees of freedom of PVAR (parabolic variance) for a record of `N`
-phase samples at averaging factor `m`, per Vernotte–Chen–Rubiola 2020
-(arXiv:2005.13631). The EDF feeds the χ² confidence interval the same way as the
-overlapped families (`ν = 2·E[σ²]²/V[σ²]`, their Eq. 19).
+Equivalent degrees of freedom of the parabolic variance on `N` phase samples
+at averaging factor `m`, after Vernotte, Chen and Rubiola (2021):
 
-Three regimes:
+- `m = 1`: the EDF of the overlapping Allan variance, which the statistic
+  equals there. The paper notes that its approximation is poor at m = 1
+  and 2.
+- `1 < m ≤ m₁`: `ν = 35 / (A·m/M − 12·(m/M)²)` with `M = N − 2m` (their
+  Eqs. (16) and (18)), where `m₁ = round(1.11·N/4)`.
+- `m > m₁`: `ν = a·ln m + b`, the line in ln m from the value at `m₁` down
+  to `ν = 1` at `m₂ = round(0.901·N/2)` (their Eqs. (22) to (24)), and 1
+  beyond `m₂`.
 
-- `m = 1`: PVAR(τ₀) ≡ AVAR(τ₀) (`_pdev_core` returns ADEV at m=1), so the EDF is
-  ADEV's Greenhall–Riley value `_calc_edf_core(α, 2, 1, 1, 1, N)`. This also
-  sidesteps the paper's note that the closed-form approximation is poor at m=1,2.
-- `1 < m ≤ m₁`: the Eq. (16)+(18) approximation
-  `ν = 35 / (A(α)·(m/M) − 12·(m/M)²)` with `M = N − 2m`, valid for `m ≲ N/4`.
-- `m₁ < m`: the Eq. (22)–(23) semi-log interpolation `ν = a·ln(m) + b` between
-  `m₁ = round(1.11·N/4)` (anchored at the Eq.-16 value) and `m₂ = round(0.901·N/2)`
-  (anchored at `ν = 1`, the single-estimate limit at `m = N/2`).
-
-`A(α) = 27 + α/4 + 5α²/14 − 3α³/4` (`_pvar_A`); `B = 12`. PVAR is an unbiased
-wavelet variance, so no bias correction is applied.
+`A` is `_pvar_A(alpha)`. Flicker-walk and random-run FM, outside the range
+the paper covers, give `NaN`.
 """
 function _pvar_edf(alpha::Int, m::Int, N::Int)
     m <= 0 && return NaN
@@ -319,7 +356,7 @@ function _pvar_edf(alpha::Int, m::Int, N::Int)
     A = _pvar_A(alpha)
     isnan(A) && return NaN
 
-    # Eq. (16): closed form, valid for m ≲ N/4.
+    # Eq. (16): closed form, for m up to about N/4.
     edf16(mm) = begin
         M = N - 2 * mm
         M < 1 && return NaN
@@ -333,29 +370,26 @@ function _pvar_edf(alpha::Int, m::Int, N::Int)
         return edf16(m)
     end
 
-    # Eqs. (22)–(23): semi-log interpolation across N/4 < m ≤ N/2, with ν=1 at
-    # m₂ ≈ N/2 (one effective estimate). Anchored at the Eq.-16 value at m₁.
+    # Eqs. (22) to (24): interpolation in ln m across N/4 < m ≤ N/2, from the
+    # Eq. (16) value at m₁ down to ν = 1 at m₂ (one effective estimate).
     m2 = round(Int, 0.901 * N / 2)
-    (m1 < 2 || m2 <= m1) && return edf16(m)   # degenerate for tiny N: fall back
+    (m1 < 2 || m2 <= m1) && return edf16(m)   # too few samples for the line
     nu_m1 = edf16(m1)
     isfinite(nu_m1) || return NaN
     a = (nu_m1 - 1.0) / (log(m1) - log(m2))
     b = 1.0 - a * log(m2)
-    # ν falls to 1 at m₂ ≈ N/2 (single estimate) and is held there for any larger
-    # m, rather than extrapolating the line below 1 (Eq. 22–23 / Fig. 2).
+    # ν is held at 1 beyond m₂, not extrapolated below it.
     return max(a * log(m) + b, 1.0)
 end
 
 """
     _theo1_edf(alpha::Int, m::Int, N::Int) → Float64
 
-Equivalent χ² degrees of freedom of the Thêo1 statistic at averaging factor
-`m` (even) on `N` phase samples, per the empirical formulas of NIST SP1065
-(Riley 2008) §5.2.15 Table 3 (Howe & Peppler 2003), with `r = 0.75·m` and the
-stated validity condition `τ0 ≤ T/10`. One closed form per power-law noise
-type; α outside {−2…2} returns NaN. Also used for ThêoBR / the Thêo1 segment
-of ThêoH; the bias-removal ratio is a scalar rescaling, which standard
-practice (Stable32) treats as not changing the degrees of freedom.
+Equivalent degrees of freedom of Thêo1 at the even averaging factor `m` on
+`N` phase samples: the empirical formulas of SP1065 §5.2.15, Table 3, with
+`r = 0.75·m`, stated there for `τ0 ≤ T/10`. One formula per noise type from
+white PM to random-walk FM; any other gives `NaN`. ThêoBR and the Thêo1
+segment of ThêoH take the same EDF, as in SP1065 §5.4.4.
 """
 function _theo1_edf(alpha::Int, m::Int, N::Int)
     m < 2 && return NaN
@@ -382,11 +416,11 @@ function _theo1_edf(alpha::Int, m::Int, N::Int)
 end
 
 function _coeff_htot(alpha::Int)
-    # Howe & Peppler 2001 Table 3, columns b₀ and b₁ of
-    #   edf(τ) = (T/τ) / (b₀ + b₁·τ/T)
-    # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses an
-    # undocumented fallback that is not reproduced here. Their Table 2 gives
-    # the modified total variance the same values at α + 2.
+    # b₀ and b₁ of edf(τ) = (T/τ) / (b₀ + b₁·τ/T): Howe and Peppler (2001),
+    # Table 3, and Howe et al. (2005), Table I, stated for τ ≥ 16τ₀ and
+    # τ ≤ T/3. Stable32 uses a fallback outside that range that its manual
+    # does not describe; it is not reproduced here. Table 2 of Howe and
+    # Peppler gives the modified total variance the same values at α + 2.
     alpha == 0  && return (0.559, 1.004)
     alpha == -1 && return (0.868, 1.140)
     alpha == -2 && return (0.938, 1.696)
@@ -396,8 +430,9 @@ function _coeff_htot(alpha::Int)
 end
 
 # Normalized bias a = E[total]/E[parent] − 1 of the modified total variance
-# for α = 2, 1, 0, −1, −2 (Howe & Peppler 2001, Table 2); the Hadamard total
-# variance takes the same column at α = 0 … −4 (their Table 3).
+# for α = 2, 1, 0, −1, −2 (Howe and Peppler (2001), Table 2); the Hadamard
+# total variance takes the same column at α = 0 … −4 (their Table 3; Howe et
+# al. (2005), Table I).
 const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
 
 # The published values hold from τ/τ0 = 16. Below it, the exact expectation
@@ -488,39 +523,59 @@ function _total_bias(var_type::Symbol, alpha::Int, m::Int, N::Int, published::Bo
 end
 
 """
-    bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int; published=false) → Vector{Float64}
+    bias_correction(noises, var_type, m_values, N; published=false) → Vector{Float64}
 
-Variance-scale bias factor `B = E[total variance] / E[parent variance]` of a
+Bias factor ``B = E[\\text{total variance}]/E[\\text{parent variance}]`` of a
 total estimator at each averaging factor, for a record of `N` phase samples.
-Apply as `σ_unbiased = σ_raw / √B`: `B < 1` means the raw σ reads low. With
-`s = τ/T = m/(N − 1)`:
+The estimators divide a total deviation by ``\\sqrt{B}``, so ``B < 1`` means
+that the uncorrected deviation reads low. `noises` gives the noise type at
+each entry of `m_values`; a label outside the seven power-law names counts
+as white FM. Below, ``s = τ/T = m/(N-1)``.
 
-- `:totvar`: `B = 1 − a·s` with `a = 1/(3 ln 2)` for flicker FM and 0.75 for
-  random-walk FM [greenhall-1999-totvar](@cite). On PM the reflected terms
-  read high: `B = 1 + (8/3)·⌊m/2⌋/(N − 2)` for white PM, exactly, and
-  `B = 1 + (0.593 + 0.068 ln m)·s` for flicker PM.
-- `:mtot`: `B = 1 + a`, `a ∈ {−0.005, −0.149, −0.229, −0.283, −0.321}` for
-  α ∈ {2, 1, 0, −1, −2} (Howe & Peppler 2001, Table 2), independent of τ
-  from τ = 16 τ₀. SP1065 Table 11 lists reciprocals (1.06 to 1.31) under a
-  caption that reads the other way; dividing by them lowers a statistic
-  that already reads low. At `m = 2 … 15` the exact expectation at that m,
-  up to 6 % from the published value; `B = 1/2` at `m = 1`, exactly.
-- `:htot`: the same `a` two steps down in α, for α ∈ {0, …, −4} (their
-  Table 3), because HTOT is the MTOT computation on frequency data. On PM it
-  reads high: `B = 1.384 − 0.28/m` (even m) and `1.370 − 0.82/m` (odd m) for
-  white PM, `(5.15 + 1.44 ln m)/(4.75 + ln m)` less `0.11/m` (even) or
-  `0.40/m` (odd) for flicker PM. `B = 1` at `m = 1`, where the kernel is HDEV.
-- `:mhtot`: `B ∈ {0.900, 0.822, 0.792, 0.783, 0.787, 0.800, 0.820}` for
-  α ∈ {2, …, −4}, independent of τ/T, with the exact value at each
-  `m = 2 … 15` and 124/225 at `m = 1`.
+- `var_type = :totvar` (total variance against Allan variance):
+  ``B = 1 - a\\,s`` with ``a = 1/(3\\ln 2)`` for flicker FM and ``a = 3/4``
+  for random-walk FM
+  ([Greenhall et al. (1999), Eq. (25) and Table I](@cite greenhall-1999-totvar);
+  [SP1065 §5.11, Eq. (52)](@cite riley-2008-sp1065)), and ``B = 1`` for
+  white FM. On PM noise the estimator reads high:
+  ``B = 1 + (8/3)⌊m/2⌋/(N-2)`` for white PM, which is exact, and
+  ``B = 1 + (0.593 + 0.068\\ln m)\\,s`` for flicker PM.
+- `:mtot` (modified total against modified Allan): ``B = 0.995``, 0.851,
+  0.771, 0.717 and 0.679 for white PM, flicker PM, white FM, flicker FM and
+  random-walk FM, independent of ``τ`` from ``τ = 16τ_0``
+  ([Howe and Peppler (2001), Table 2](@cite howe-2001-total-estimators),
+  which lists ``a = B - 1``). At ``m = 2, …, 15`` the exact expectation at
+  that ``m`` is used, up to 6 % from the published value, and ``B = 1/2``
+  at ``m = 1``, exactly.
+- `:htot` (Hadamard total against Hadamard): the same five values for white
+  FM to random-run FM
+  ([Howe et al. (2005), Table I](@cite howe-2005-tothvar)), with the same
+  values below ``m = 16``. On PM noise the estimator reads high:
+  ``B = 1.384 - 0.28/m`` (even ``m``) or ``1.370 - 0.82/m`` (odd ``m``) for
+  white PM, and ``(5.15 + 1.44\\ln m)/(4.75 + \\ln m)`` less ``0.11/m``
+  (even) or ``0.40/m`` (odd) for flicker PM. ``B = 1`` at ``m = 1``, where
+  the estimate is the Hadamard deviation.
+- `:mhtot` (modified Hadamard total against modified Hadamard):
+  ``B = 0.900``, 0.822, 0.792, 0.783, 0.787, 0.800 and 0.820 for white PM
+  to random-run FM from ``m = 16``, the exact value at each
+  ``m = 2, …, 15``, and 124/225 at ``m = 1``.
 
-The PM rows of `:totvar` and `:htot`, the `m < 16` values and all of `:mhtot`
-have no published source: they are the exact expectation of each statistic
-(`tools/total_pm_models.jl`, `tools/mhtot_models.jl`). `published=true`
-leaves them out: `B = 1` on PM for `:totvar` and `:htot`, and the published
-value of `:mtot` and `:htot` at every `m > 1`, which is what SP1065 gives and
-what Stable32 applies to TOTDEV and HTOTDEV. `:mhtot`, which has no published
-factor, is unchanged. Anything unrecognised gives `B = 1`.
+A noise type not listed for a `var_type`, or any other `var_type`, gives
+``B = 1``.
+
+The PM values of `:totvar` and `:htot`, every value below ``m = 16`` and all
+of `:mhtot` have no published source: they are the expectation of each
+statistic, computed in this package (see
+[Total estimators on PM noise](@ref) and [MHTOTDEV bias and EDF](@ref)).
+`published=true` leaves them out. It gives ``B = 1`` on PM for `:totvar` and
+`:htot`, and the published value of `:mtot` and `:htot` at every ``m > 1``.
+`:mhtot` is unchanged.
+
+!!! note "SP1065 Table 11"
+    [SP1065 §5.12](@cite riley-2008-sp1065) lists modified total bias
+    factors of 1.06 to 1.31 and describes them as the ratio of the expected
+    modified total variance to the modified Allan variance. The estimator
+    reads low, so that ratio is below 1, and those values are not used.
 """
 bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int; published::Bool=false) =
     [_total_bias(var_type, _alpha_from_noise(noises[k]), m_values[k], N, published) for k in eachindex(noises)]
@@ -528,10 +583,17 @@ bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int},
 """
     confidence_intervals(devs, edfs, confidence) → (lower, upper)
 
-χ² confidence limits of each deviation from its equivalent degrees of
-freedom ν: `σ √(ν/χ²_{(1+p)/2}(ν))` and `σ √(ν/χ²_{(1−p)/2}(ν))` at level
-`p = confidence` (SP1065 §5.3.2). Any ν > 0 has an interval, however wide;
-a limit is `NaN` where the deviation is not finite or ν is not positive.
+χ² confidence limits of each deviation ``σ`` from its equivalent degrees of
+freedom ``ν`` ([SP1065 §5.3.2](@cite riley-2008-sp1065)):
+
+```math
+σ\\sqrt{\\frac{ν}{χ^2_{(1+p)/2}(ν)}} \\quad\\text{and}\\quad σ\\sqrt{\\frac{ν}{χ^2_{(1-p)/2}(ν)}} ,
+```
+
+where ``p`` is `confidence` and ``χ^2_q(ν)`` is the ``q`` quantile of the χ²
+distribution with ``ν`` degrees of freedom. Every ``ν > 0`` has an
+interval, however wide. A limit is `NaN` where the deviation is not finite
+or ``ν`` is not positive.
 """
 function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, confidence::Float64)
     a = (1 - confidence) / 2

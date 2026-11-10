@@ -1,30 +1,32 @@
 # Power-law noise model S_y(f) = Σ h_α f^α: fit the h_α to a measured σ(τ) or
-# spectrum, and convert a model between σ(τ), S_y(f), S_x(f) and ℒ(f).
+# spectrum, and convert a model to σ(τ), S_y(f), S_x(f) or ℒ(f).
 
 const POWERLAW_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 
 """
     PowerLawFit
 
-Result of [`powerlaw_fit`](@ref): the coefficients of
-`S_y(f) = Σ h_α f^α` (S_y in 1/Hz) and the fit they give. Pass it to
-[`powerlaw_sigma`](@ref) or [`powerlaw_psd`](@ref) to convert it to another
-domain.
+Result of [`powerlaw_fit`](@ref): the coefficients ``h_α`` of the power-law
+model ``S_y(f) = \\sum_α h_α f^α``, with ``S_y`` in 1/Hz, and the fit they
+give. [`powerlaw_sigma`](@ref) and [`powerlaw_psd`](@ref) convert it to a
+deviation or to another spectrum.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct PowerLawFit
-    "Exponents α of the components, highest first."
+    "Exponents ``α`` of the components, highest first."
     alphas::Vector{Int}
-    "Coefficients h_α ≥ 0, one per α."
+    "Coefficients ``h_α ≥ 0``, one per ``α``."
     h::Vector{Float64}
     "What was fitted: a deviation (`:adev`, `:mdev`, `:hdev`, `:mhdev`) or a spectrum (`:Sy`, `:Sx`, `:L`)."
     source::Symbol
-    "Sample interval of the record in seconds; `NaN` for a spectrum given as points."
+    "Sample interval of the record, in seconds; `NaN` for a spectrum given as points."
     tau0::Float64
-    "Abscissa: τ in seconds for a deviation, f in Hz for a spectrum."
+    "Abscissa: ``τ`` in seconds for a deviation, ``f`` in Hz for a spectrum."
     x::Vector{Float64}
-    "Measured values: σ(τ) for a deviation, S_y(f) in 1/Hz for a spectrum."
+    "Measured values: ``σ(τ)`` for a deviation, ``S_y(f)`` in 1/Hz for a spectrum."
     y::Vector{Float64}
     "The model at each `x`, in the units of `y`."
     fit::Vector{Float64}
@@ -121,45 +123,66 @@ _powerlaw_h(h::AbstractDict) = Dict(_noise_alpha(k) => Float64(v) for (k, v) in 
 _powerlaw_h(f::PowerLawFit) = Dict(zip(f.alphas, f.h))
 
 """
-    powerlaw_fit(data [, m_values]; deviation=:mhdev, alphas=2:-1:-2) → PowerLawFit
+    powerlaw_fit(data, m_values=Int[]; deviation=:mhdev, alphas=2:-1:-2) → PowerLawFit
     powerlaw_fit(s::SpectralResult; alphas=2:-1:-2, f_carrier=nothing) → PowerLawFit
     powerlaw_fit(f, S; quantity=:Sy, alphas=2:-1:-2, f_carrier=nothing) → PowerLawFit
 
-Fit the power-law coefficients h_α of `S_y(f) = Σ h_α f^α` by nonnegative
-least squares, either to a record's σ(τ) or to a spectrum.
+Coefficients ``h_α`` of the power-law model ``S_y(f) = \\sum_α h_α f^α``,
+fitted by nonnegative least squares to the deviation of a record or to a
+spectrum.
 
-**From a record** (`PhaseData` or `FrequencyData`, `NaN` gaps allowed): the
-deviation (`:adev`, `:mdev`, `:hdev` or `:mhdev`, without bias correction)
-is computed on the octave grid, or at `m_values`, and each α contributes
-its exact σ²(τ) for a record sampled at τ₀ (see [`powerlaw_sigma`](@ref)).
-The response is exact down to m = 1, so every point is fitted, and white
-and flicker PM stay apart even under ADEV. The weights are the χ² ones,
-νₖ/(2σ⁴ₖ), with σ²ₖ from the model and the EDF from each point's dominant
-component and its term count, so a τ that gaps cost terms counts for less.
-The Allan pair takes α from −2 to 2; the Hadamard pair, which also
-tolerates a linear frequency drift, from −4 to 2.
+# From a record
 
-**From a spectrum:** a [`SpectralResult`](@ref) of [`psd_y`](@ref),
-[`psd_x`](@ref) or [`ssb_phase_noise`](@ref) (which needs `f_carrier`), or
-points `f`, `S` such as a datasheet's phase noise table, where `quantity`
-is `:Sy` (1/Hz), `:Sx` (s²/Hz) or `:L` (dBc/Hz). A Welch estimate is fitted
-with the sampled spectrum `h_α (sin(πfτ₀)/(πτ₀))^α`, points with `h_α f^α`.
-Every point has the same fractional weight. The DC bin is left out.
+The deviation of `data`, a `PhaseData` or `FrequencyData` record that may
+have gaps, is computed without bias correction on the octave grid, or at
+`m_values`. Each component enters with the variance it has in that
+estimator on a record sampled at ``τ_0`` (see [`powerlaw_sigma`](@ref)).
+That response is exact from ``m = 1``, so every point is fitted, and it
+separates white PM from flicker PM even under ADEV, where both fall close
+to ``τ^{-2}``.
 
-The coefficients cannot go negative, so a component the record does not have
-comes out small but positive, at a few percent of its neighbours' expense.
-The long-τ octaves carry few samples: h₋₂ from a σ(τ) fit scatters by
-about 20 % on 65 536 samples. Compare `fit` with `y` before trusting a
-small h_α. [`noise_id_nnls`](@ref) fits pure power laws to name the
-dominant noise type; this fit gives the calibrated h_α.
+A point is weighted by ``ν/(2σ^4)``, the inverse variance of a
+``χ^2``-distributed estimate, with ``σ^2`` from the model and the EDF ``ν``
+from the point's dominant component and its number of terms. An averaging
+time at which gaps cost terms therefore counts for less.
+
+# From a spectrum
+
+The spectrum is a result of [`psd_y`](@ref), [`psd_x`](@ref) or
+[`ssb_phase_noise`](@ref), or points `f`, `S` such as the phase-noise table
+of a data sheet. A Welch estimate is fitted with the spectrum of a sampled
+record, ``h_α (\\sin(πfτ_0)/(πτ_0))^α``, and points with ``h_α f^α``. Every
+point has the same fractional weight, and a point at ``f = 0`` is left out.
+
+# Keywords
+
+- `deviation=:mhdev`: the estimator fitted, `:adev`, `:mdev`, `:hdev` or
+  `:mhdev`.
+- `alphas=2:-1:-2`: the exponents fitted. The Allan pair takes ``α`` from 2
+  to −2. The Hadamard pair takes it to −4 and is insensitive to linear
+  frequency drift.
+- `quantity=:Sy`: what `S` holds: `:Sy` (1/Hz), `:Sx` (s²/Hz) or `:L`
+  (dBc/Hz).
+- `f_carrier`: the carrier frequency in Hz, needed for ``ℒ(f)``.
+
+!!! note "Reading the result"
+    A coefficient cannot be negative, so a component the record does not
+    have comes out small and positive, at the expense of its neighbors. In
+    simulation (white PM, white FM and random-walk FM, 65 536 samples) the
+    components present were recovered about 2 % low with a scatter of 2 to
+    3 %, except ``h_{-2}``, which rests on the few longest averaging times
+    and scattered by 20 %. Compare `fit` with `y` before trusting a small
+    coefficient.
+
+[`noise_id_nnls`](@ref) fits the asymptotic power laws of the variance to
+name the noise types present; this fit gives the calibrated ``h_α``.
 
 # Examples
 
 ```julia
-using SigmaTau
-p = noise_gen(PhaseData, 65536, 1.0; h = Dict(2 => 1e-22, 0 => 1e-24, -2 => 1e-30))
+p = noise_gen(PhaseData, 65536, 1.0; h=Dict(2 => 1e-22, 0 => 1e-24, -2 => 1e-30))
 f = powerlaw_fit(p)                 # from MHDEV
-powerlaw_sigma(f, [1.0, 100.0])     # ADEV the model predicts at 1 s and 100 s
+powerlaw_sigma(f, [1.0, 100.0])     # the ADEV the model gives at 1 s and 100 s
 ```
 """
 function powerlaw_fit(data::AbstractTimingData, m_values::AbstractVector{<:Integer}=Int[];
@@ -184,7 +207,7 @@ function powerlaw_fit(data::AbstractTimingData, m_values::AbstractVector{<:Integ
     # where gaps cost terms.
     Ns = [_gap_equivalent_n(deviation, mk[k], res.neff[keep[k]]) for k in eachindex(keep)]
     # χ² weights νₖ/(2σ²ₖ) taken at the model, not the measured σ̂²ₖ, which
-    # would favour the points that happened to come out low.
+    # would favor the points that happened to come out low.
     halfν = _nnls_edf_weights(deviation, K, v, αs, mk, τ, Ns, τ₀) .* v .^ 2
     h, _ = _nnls_weighted(K, v, halfν ./ v .^ 2)
     for _ in 1:3
@@ -237,24 +260,58 @@ end
 """
     powerlaw_sigma(h, tau; deviation=:adev, tau0) → Vector{Float64}
 
-σ(τ) that the power-law model `h` gives in `deviation` (`:adev`, `:mdev`,
-`:hdev` or `:mhdev`) for a record sampled at `tau0`. `h` is a
-[`PowerLawFit`](@ref) (whose `tau0` is the default) or a `Dict` of h_α keyed
-by α or noise type, as in [`noise_gen`](@ref). Every τ must be a whole
-multiple of `tau0`.
+Deviation ``σ(τ)`` that the power-law model ``S_y(f) = \\sum_α h_α f^α``
+gives in an estimator, for a record sampled at `tau0`.
 
-The model is the spectrum of a sampled record, `h_α (sin(πfτ₀)/(πτ₀))^α` up
-to the Nyquist frequency f_h = 1/(2τ₀), integrated through the estimator's
-transfer function. Well above m = 1 this gives SP1065's closed forms, such
-as `h₀/(2τ)` for white FM in ADEV, `2 ln 2 · h₋₁` for flicker FM and
-`(2π²/3) h₋₂ τ` for random-walk FM. White and flicker PM depend on the
-bandwidth, here f_h; `3 f_h h₂/(4π²τ²)` holds for white PM at every m.
+The model is taken as the spectrum of a sampled record,
+``h_α (\\sin(πfτ_0)/(πτ_0))^α`` up to the Nyquist frequency
+``f_h = 1/(2τ_0)``. That is the spectrum [`noise_gen`](@ref) produces, and
+it is ``h_α f^α`` well below ``f_h``. It is integrated through the transfer
+function of the estimator at ``τ = mτ_0``:
+
+```math
+σ^2(τ) = \\int_0^{f_h} S_y(f)\\,\\lvert H_m(f) \\rvert^2\\,df .
+```
+
+| `deviation` | ``\\lvert H_m(f) \\rvert^2``, with ``θ = πfτ_0`` |
+|:------------|:-------------------------------------------------|
+| `:adev`     | ``2\\sin^4(mθ)/(m^2\\sin^2θ)``                     |
+| `:mdev`     | ``2\\sin^6(mθ)/(m^4\\sin^4θ)``                     |
+| `:hdev`     | ``(8/3)\\sin^6(mθ)/(m^2\\sin^2θ)``                 |
+| `:mhdev`    | ``(8/3)\\sin^8(mθ)/(m^4\\sin^4θ)``                 |
+
+For ADEV at ``m ≫ 1`` this is the usual conversion
+([SP1065 §7.1, Eq. (67)](@cite riley-2008-sp1065);
+[IEEE Std 1139-2022, Eq. (B.4)](@cite ieee1139-2022-definitions)):
+``h_0/(2τ)`` for white FM, ``2\\ln 2\\,h_{-1}`` for flicker FM and
+``(2π^2/3)\\,h_{-2}\\,τ`` for random-walk FM. The white FM term and the
+white PM term, ``3 f_h h_2/(4π^2 τ^2)``, hold at every ``m``. At ``τ_0``
+the sampled record is above the conversion by 44 % in variance on flicker
+FM and 50 % on random-walk FM, and within 1 % from ``16τ_0``. On flicker
+PM it is 19 % above at ``τ_0`` and still 4 % above at ``64τ_0``.
+
+# Arguments
+
+- `h`: a [`PowerLawFit`](@ref), or a `Dict` of ``h_α`` keyed by ``α`` or by
+  noise type, as in [`noise_gen`](@ref).
+- `tau`: averaging times in seconds, each a whole multiple of `tau0`.
+
+# Keywords
+
+- `deviation=:adev`: `:adev`, `:mdev`, `:hdev` or `:mhdev`.
+- `tau0`: the sample interval in seconds. A fit carries its own.
 
 # Examples
 
-```julia
-using SigmaTau
-powerlaw_sigma(Dict(:WHFM => 2e-24), [1.0, 10.0, 100.0]; tau0=1.0)   # ≈ 1e-12 τ^-1/2
+White FM with random-walk FM, at 1 s, 100 s and 10⁴ s:
+
+```jldoctest
+julia> using SigmaTau
+
+julia> h = Dict(:WHFM => 2e-24, :RWFM => 1e-30);
+
+julia> print(round.(powerlaw_sigma(h, [1.0, 100.0, 1e4]; tau0=1.0); sigdigits=4))
+[1.0e-12, 1.032e-13, 2.567e-13]
 ```
 """
 function powerlaw_sigma(h, tau::AbstractVector{<:Real}; deviation::Symbol=:adev,
@@ -276,10 +333,29 @@ end
 """
     powerlaw_psd(h, f; quantity=:Sy, f_carrier=nothing) → Vector{Float64}
 
-The power-law model `h` as a spectrum at the frequencies `f` (Hz):
-`:Sy`, `S_y(f) = Σ h_α f^α` in 1/Hz; `:Sx`, `S_x(f) = S_y(f)/(2πf)²` in
-s²/Hz; or `:L`, `ℒ(f) = ½ (2π f_carrier)² S_x(f)` in dBc/Hz. `h` is a
-[`PowerLawFit`](@ref) or a `Dict` of h_α keyed by α or noise type.
+The power-law model `h` as a spectrum at the Fourier frequencies `f`, in
+Hz. `h` is a [`PowerLawFit`](@ref), or a `Dict` of ``h_α`` keyed by ``α``
+or by noise type. `quantity` selects the spectrum
+([IEEE Std 1139-2022, Eqs. (A.13), (A.15) and (A.16)](@cite ieee1139-2022-definitions)):
+
+- `:Sy`: ``S_y(f) = \\sum_α h_α f^α``, in 1/Hz.
+- `:Sx`: ``S_x(f) = S_y(f)/(2πf)^2``, in s²/Hz.
+- `:L`: ``ℒ(f) = \\tfrac{1}{2}(2πν_0)^2 S_x(f)``, in dBc/Hz, at the carrier
+  frequency ``ν_0`` given as `f_carrier`, in Hz.
+
+# Examples
+
+White FM with ``σ_y = 10^{-12}`` at 1 s, on a 10 MHz carrier:
+
+```jldoctest
+julia> using SigmaTau
+
+julia> L = powerlaw_psd(Dict(:WHFM => 2e-24), [1.0, 10.0, 100.0];
+                        quantity=:L, f_carrier=10e6);
+
+julia> print(round.(L; digits=2))
+[-100.0, -120.0, -140.0]
+```
 """
 function powerlaw_psd(h, f::AbstractVector{<:Real}; quantity::Symbol=:Sy, f_carrier=nothing)
     hd = _powerlaw_h(h)

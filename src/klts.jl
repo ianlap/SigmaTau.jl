@@ -1,18 +1,20 @@
 # KLTS confidence intervals for the Groslambert covariance of three clocks
-# [lantz-2019-klts](@cite): the Bayesian posterior of the three clock variances
+# (Lantz et al. (2019)): the Bayesian posterior of the three clock variances,
 # given the sample covariance of the three difference records.
 
 # Prior range of each clock variance, relative to the smallest and largest
-# |estimate|: log-uniform ("total ignorance") over [1e-5 min, 1e3 max]. The
-# paper takes 1e-5 for the lower limit; the upper one is SigmaTheta's.
+# |estimate|: uniform in the logarithm ("total ignorance") over
+# [1e-5 min, 1e3 max]. The paper takes 1e-5 for the lower limit and gives no
+# upper one; 1e3 is that of the SigmaTheta program.
 const _KLTS_PRIOR = (1e-5, 1e3)
 
 # Log-likelihood of clock variances (a, b, c) for records (ab, bc, ca) with
 # sample covariance S, measurement noise vN per record and ν degrees of
-# freedom: −(ν/2)(log det Σ + tr(Σ⁻¹ S)), the logarithm of eqs (13)–(14).
-# Σ has Var(ab) = a + b + vN, … and Cov(ab, bc) = −b, Cov(bc, ca) = −c,
-# Cov(ab, ca) = −a. Without measurement noise Σ is singular (the records sum
-# to zero) and the first two records carry everything (the paper's 2 × 2 case).
+# freedom: −(ν/2)(log det Σ + tr(Σ⁻¹ S)), the logarithm of Eq. (14) with the
+# sum of Eq. (13). Σ has Var(ab) = a + b + vN, … and Cov(ab, bc) = −b,
+# Cov(bc, ca) = −c, Cov(ab, ca) = −a (Eqs. (4) and (5)). Without measurement
+# noise Σ is singular, because the records sum to zero, and the first two
+# records carry everything: the paper's 2 × 2 case.
 function _klts_loglik(a, b, c, vN, S, ν)
     if size(S, 1) == 2
         s11, s22, s12 = a + b + vN, b + c + vN, -b
@@ -32,17 +34,22 @@ end
 """
     _klts(S, vN, ν, probs) → (q, zero_lower)
 
-Quantiles `probs` of the posterior of clock variances (a, b, c) (rows of the
-3 × length(probs) matrix `q`), and for each clock whether its lower bound is
-to be read as 0. `S` is the 3 × 3 sample covariance of the records ab, bc, ca
-(or the 2 × 2 one of ab, bc when there is no measurement noise).
+Quantiles `probs` of the posterior of the clock variances (a, b, c), as the
+rows of the 3 × length(probs) matrix `q`, and for each clock whether its
+lower bound is to be read as 0. `S` is the 3 × 3 sample covariance of the
+records ab, bc, ca, or the 2 × 2 one of ab, bc when there is no measurement
+noise.
 
-The paper draws 10⁷ random triplets; here the posterior is integrated on a
-log grid instead: a coarse grid over the whole prior box, shrunk onto the
-posterior mass five times, then a fine 128³ grid, with trapezoidal CDFs.
-The lower bound reads 0 when the lowest decade of the prior holds more than
-the 0.135 % (−3σ) tail, because the bound then depends on the prior's lower
-limit: the paper's rule, which replaces such a bound by 0.
+The paper draws 10⁷ random triplets. Here the posterior is integrated on a
+grid in the logarithm of each variance: a coarse grid over the whole prior
+range, shrunk onto the posterior mass five times, then a 128³ grid, with
+trapezoidal CDFs.
+
+The paper replaces a lower bound by 0 when the 0.135 % (−3σ) point falls
+below the lower limit of the prior range, because the bound then depends on
+that limit. On a grid the point cannot pass the limit, so the test here is
+that the lowest decade of the prior holds more than 0.135 % of the
+posterior.
 """
 function _klts(S::AbstractMatrix{Float64}, vN::Float64, ν::Float64, probs)
     est = size(S, 1) == 3 ? abs.((S[1, 3], S[1, 2], S[2, 3])) :

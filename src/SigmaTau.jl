@@ -21,9 +21,13 @@ include("io/save.jl")
 include("io/outliers.jl")
 
 """
-Default confidence level (0.683, one sigma, the Stable32 convention) for
-every deviation with a χ² confidence model. Override per call with
-`confidence=0.95`. `mtie` and `tierms` have no interval model and ignore it.
+    DEFAULT_CONFIDENCE
+
+Default confidence level of the reported intervals, 0.683: the two-sided
+one-sigma level usual on stability plots
+([SP1065 §5.3](@cite riley-2008-sp1065)). Pass `confidence`, for example
+`confidence=0.95`, to an estimator to change it. `mtie` and `tierms` report
+no interval.
 """
 const DEFAULT_CONFIDENCE = 0.683
 

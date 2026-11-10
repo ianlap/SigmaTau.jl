@@ -1,25 +1,27 @@
-# Howe and Schlossberger gap imputation, which preserves the noise character
-# (and AVAR shape) of the surrounding data.
+# Gap filling by reflection, after Howe and Schlossberger (2022): the samples
+# beside a gap are reversed, inverted and placed in the gap, with a line added
+# so that both ends join the record.
 #
-# Reference: D. A. Howe and L. Schlossberger,
-# "Characterizing Frequency Stability Measurements having Multiple Data Gaps",
-# Proc. PTTI 2009.
+# For each gap, as many samples as are missing are taken from the run before
+# it, or after it, or half from each side, according to which is long enough.
+# The reflected and inverted segment is filtered (`_howe_filter`), and the
+# line joins it to the filtered data on both sides. Gaps are filled outward
+# from the longest run of data.
 #
-# Algorithm: for each gap, take a number of samples equal to the gap length
-# from one (or both) side(s), reflect-and-invert them, low-pass filter via FFT
-# with exp(-k/N) shaping, then add a linear ramp matched to the endpoints of
-# the surrounding (filtered) data. Iterates outward from the largest
-# continuous run.
+# Two steps differ from the paper and from the authors' script (Champagne,
+# Howe and Schlossberger (2021)): there the reflected samples are inserted
+# unfiltered, the filter serving only to find the ends the line joins, and
+# the gain of the filter is exp(−16k/L) where this one has exp(−k/L).
 
 """
-    _howe_filter(x::Vector{Float64}) → Vector{Float64}
+    _howe_filter(x) → Vector{Float64}
 
-Howe's symmetric reflect-and-FFT-shape filter. `x` is padded as
-`[reverse(x); x; reverse(x)]`, multiplied in the frequency domain by the
-even-symmetric mask `exp(-|k|/N)`, then the central third is returned.
-Used both for synthesizing fill points and as a smoothing pass on existing
-data so the linear ramp matches a low-passed endpoint instead of a noisy
-single sample.
+Low-pass filter of a segment. `x` is padded with its reflection on both
+sides, `[reverse(x); x; reverse(x)]`, multiplied in the frequency domain by
+the even mask `exp(-|k|/L)`, with `L` the padded length, and the middle
+third is returned. The gain falls to `exp(-1/2)` at the Nyquist frequency.
+Applied to the segment placed in a gap, and to the data beside it, whose
+filtered ends the line joins.
 """
 function _howe_filter(x::AbstractVector{<:Real})
     n  = length(x)
@@ -94,9 +96,9 @@ end
 """
     _fill_singletons!(x::Vector{Float64}, gaps::Vector{Tuple{Int,Int}})
 
-Fill any 1-sample gaps in `x` (mean of the two neighbours, or nearest
-neighbour at the edges) and remove those entries from `gaps`. Returns the
-mutated `gaps` vector.
+Fill the gaps of one sample in `x` with the mean of the two neighbors, or
+with the one neighbor at an end of the record, and remove them from `gaps`.
+Returns `gaps`.
 """
 function _fill_singletons!(x::Vector{Float64}, gaps::Vector{Tuple{Int,Int}})
     keep_mask = trues(length(gaps))
@@ -293,15 +295,15 @@ end
 reverse_view(v) = collect(Iterators.reverse(v))
 
 """
-    _howe_fillgaps_core(x::Vector{Float64}) → (xfilled, filled_mask::BitVector)
+    _howe_fillgaps_core(x) → (xfilled, filled_mask::BitVector)
 
-In-place-equivalent Howe fill. Takes an equispaced phase/frequency vector
-with `NaN` at missing samples; returns a finite vector and a bit-mask
-flagging the indices that were imputed. Returns `(copy(x), falses(...))`
-unchanged if `x` has no `NaN`.
+Fill the `NaN` samples of an equally spaced vector. Returns the filled
+vector and a mask of the samples that were filled; a vector without `NaN`
+comes back as a copy with an empty mask.
 
-Throws `ErrorException` if the gap topology cannot be filled (e.g. NaN
-runs at both record ends with no sufficiently long internal run to mirror).
+Throws an `ErrorException` if the gaps cannot be filled, as when both ends
+of the record are missing and no run between them is long enough to
+reflect.
 """
 function _howe_fillgaps_core(x::AbstractVector{<:Real})
     xv         = Vector{Float64}(x)
@@ -349,22 +351,53 @@ function _howe_fillgaps_core(x::AbstractVector{<:Real})
 end
 
 """
-    fillgaps(pd::PhaseData) → PhaseData
-    fillgaps(fd::FrequencyData) → FrequencyData
+    fillgaps(data) → PhaseData or FrequencyData
 
-Impute `NaN` samples using Howe & Schlossberger's reflect-and-FFT-filter
-algorithm, which preserves the local noise character and the AVAR/MDEV
-curves of the surrounding data. Returns a new `PhaseData` /
-`FrequencyData` with the same `tau0`. The input is treated as already
-equispaced; the readers put timestamped samples on their grid first, so
-`read_phase(path; fillgaps=true)` fills the readings a file is missing.
+Copy of a record with its missing samples (`NaN`) filled, after the
+reflection method of
+[Howe and Schlossberger (2022)](@cite howe-2022-gap-imputation): the
+samples before a gap, as many as are missing, are reversed in time,
+inverted in sign and placed in the gap, with a line added so that both ends
+join the record.
 
-Single-sample gaps are filled with the mean of their neighbours; multi-sample
-gaps are filled by reflecting `sizegap` points from the larger neighbouring
-run (or `sizegap/2` from each side when neither side has enough), inverting,
-low-pass filtering, and adding an endpoint-matched linear ramp.
+Where the run before a gap is too short, the samples after it are used, and
+where both are, half from each side. A gap of one sample takes the mean of
+its neighbors. Filling starts at the gap after the longest run of data and
+proceeds to the right, then to the left, so a fill may rest on an earlier
+one. An error is thrown if the gaps are too long for the data between them.
+A record without missing samples is returned as a copy.
 
-Returns the input unchanged if there are no `NaN` samples.
+!!! warning "A filled record is not the record"
+    Fill only for a function that needs a complete record, such as the
+    spectra and the cross estimators. The stability estimators leave out
+    the terms a missing sample enters (see [Timestamps and gaps](@ref)),
+    which does not bias them.
+
+    This implementation departs from the paper in two steps. The paper
+    inserts the reflected samples as they are and filters only to find the
+    ends that the line joins. Here the inserted samples are themselves
+    low-pass filtered, and the filter is weaker than that of the authors'
+    script ([Champagne et al. (2021)](@cite champagne-2021-gap-filling-script)).
+
+    In simulation (4096 samples with one gap of 30 %), the Allan deviation
+    of a filled phase record was 8 % low at ``τ_0`` and 1 to 5 % low at
+    ``16τ_0`` on white PM to flicker FM, and 25 % high at ``τ_0`` on
+    random-walk FM. That of a filled frequency record was 5 to 7 % low at
+    ``τ_0`` on flicker and random-walk FM, and many times high at long
+    ``τ`` on white PM, flicker PM and white FM: 5 to 50 times at
+    ``256τ_0``. With the gap left in place it was within 1 % at ``τ_0``
+    and within 3 % at ``256τ_0`` on every noise type.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> x = PhaseData([0.0, 1.0, NaN, 3.0, 4.0], 1.0);
+
+julia> print(fillgaps(x).x)
+[0.0, 1.0, 2.0, 3.0, 4.0]
+```
 """
 function fillgaps(pd::PhaseData)
     xfilled, _ = _howe_fillgaps_core(pd.x)

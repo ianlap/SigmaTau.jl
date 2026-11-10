@@ -1,56 +1,66 @@
-# Real-time streaming stability accumulators.
+# Stability estimators updated one sample at a time.
 #
-# Implements the Dobrogowski–Kasznia real-time computation scheme (2007 IEEE
-# Frequency Control Symposium): per averaging factor m, keep a running sum of
-# squared overlapping differences (their eqs. 6–9 for ADEV), and for the
-# modified family the cumulative inner-sum form (their eqs. 10–14 for TDEV),
-# each updated in O(1) work per new sample per m. Generalized here to the
-# third-difference (Hadamard) family: `:hdev` streams squared third
-# differences, and `:mhdev` keeps a per-m sliding inner sum of third
-# differences whose slide update is the binomial *fourth* difference
-# (the third-difference analogue of their eq. 12).
+# Dobrogowski and Kasznia (2007) keep, for each averaging factor, a running
+# sum of squared second differences for ADEV (their Eqs. (6) to (9)) and,
+# for TDEV, an inner sum of m second differences that slides by one sample,
+# with a running sum of its squares (Eqs. (10) to (14)). A new sample costs
+# O(1) per averaging factor. The same scheme is applied here to third
+# differences for HDEV and MHDEV, whose inner sum slides by a fourth
+# difference.
 #
-# Correctness contract: at any sample count, `snapshot(acc).dev` reproduces
-# the batch kernels `_adev_core` / `_mdev_core` / `_hdev_core` /
-# `_mhdev_core` on the samples pushed so far: same windows, same
-# normalization, same NaN guards. The streaming equivalence testset in
-# test/stab/streaming.jl locks this in at rtol 1e-10.
+# After any number of samples, `snapshot(acc).dev` equals `_adev_core`,
+# `_mdev_core`, `_hdev_core` or `_mhdev_core` on the samples so far, with
+# the same terms and normalization (test/stab/streaming.jl).
 
-# Deepest lag (in units of m) each kernel reads back from the newest sample:
-# ADEV second difference reaches x_{t−2m}; MDEV's slide update (eq. 12) and
-# HDEV's third difference reach x_{t−3m}; MHDEV's fourth-difference slide
-# reaches x_{t−4m}.
+# Samples behind the newest that each update reads, in units of m: the
+# second difference of ADEV reaches x[t−2m], the third difference of HDEV
+# and of the MDEV slide x[t−3m], the fourth difference of the MHDEV slide
+# x[t−4m].
 const _STREAMING_LAG = Dict{Symbol,Int}(:adev => 2, :mdev => 3, :hdev => 3, :mhdev => 4)
 
 """
-    StreamingStability(dev::Symbol, tau0, m_values)
+    StreamingStability(dev, tau0, m_values)
 
-Real-time streaming accumulator for the overlapping difference-family
-deviations: feed phase samples one at a time with `push!` (or in chunks
-with `append!`) and read off the running deviation estimate at any moment
-with [`snapshot`](@ref), without storing the record or recomputing
-anything.
+Accumulator that updates ADEV, MDEV, HDEV or MHDEV as phase samples
+arrive, without keeping the record. Feed it with `push!` or `append!` and
+read the estimate at any moment with [`snapshot`](@ref).
 
-`dev` selects the estimator: `:adev`, `:mdev`, `:hdev`, or `:mhdev`. `tau0`
-is the sample interval in seconds and `m_values` the averaging factors
-(τ = m·τ₀), exactly as in the batch API. At every sample count the streamed
-estimate equals the corresponding batch call on the samples seen so far
-(`adev(PhaseData(x[1:k], tau0), m_values; ci=false)`, etc.).
+After any number of samples the deviation equals that of [`adev`](@ref),
+[`mdev`](@ref), [`hdev`](@ref) or [`mhdev`](@ref) on the samples so far.
 
-Implements the running-sum scheme of Dobrogowski & Kasznia
-[dobrogowski-2007-realtime-adev](@cite), generalized to third differences
-for the Hadamard pair. Each sample costs O(`length(m_values)`), and memory
-is a ring buffer of at most `4·maximum(m_values) + 1` samples. The total
-and Thêo families cannot stream: they re-read the whole record.
+The running sums are those of
+[Dobrogowski and Kasznia (2007), Eqs. (6) to (14)](@cite dobrogowski-2007-realtime-adev),
+who give them for ADEV and TDEV. The same scheme is applied here to the
+third differences of HDEV and MHDEV. A sample costs a fixed number of
+operations per averaging factor, and the accumulator holds the last
+``k\\max(m) + 1`` samples, with ``k = 2`` for ADEV, 3 for MDEV and HDEV and
+4 for MHDEV. The total and Thêo estimators read the whole record at every
+averaging time and cannot be accumulated this way.
 
-# Example
+# Arguments
 
-```julia
-acc = StreamingStability(:adev, 1.0, [1, 10, 100])
-for x in phase_source            # samples arrive one at a time
-    push!(acc, x)
-end
-result = snapshot(acc)            # StabilityResult, same dev values as batch
+- `dev`: `:adev`, `:mdev`, `:hdev` or `:mhdev`.
+- `tau0`: sample interval in seconds.
+- `m_values`: averaging factors ``m``, with ``τ = mτ_0``.
+
+!!! warning "Missing samples"
+    Every sample must be a number. The estimators leave out the terms that
+    a missing sample enters; the accumulator cannot, and after a `NaN`
+    every estimate is `NaN`.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> x = [0.0, 1.0, 3.0, 2.0, 5.0, 4.0, 7.0, 9.0];
+
+julia> acc = StreamingStability(:adev, 1.0, [1, 2]);
+
+julia> append!(acc, x);
+
+julia> snapshot(acc).dev ≈ adev(PhaseData(x, 1.0), [1, 2]; ci=false).dev
+true
 ```
 """
 mutable struct StreamingStability
@@ -91,14 +101,13 @@ end
     @inbounds buf[mod1(idx, cap)]
 
 """
-    push!(acc::StreamingStability, x_next::Real) → acc
+    push!(acc::StreamingStability, x) → acc
 
-Feed one new phase sample (seconds) into the accumulator. Updates every
-per-m running sum in O(1) per averaging factor, per the Dobrogowski–Kasznia
-scheme [dobrogowski-2007-realtime-adev](@cite): the squared-difference sum
-update of their eq. 9 for `:adev` (third-difference form for `:hdev`), the
-inner-sum build/slide of their eqs. 12–13 plus the overall-sum update of
-eq. 11 for `:mdev` (third-difference generalization for `:mhdev`).
+Add one phase sample `x`, in seconds, and update the running sum of every
+averaging factor: the sum of squared second differences for `:adev`
+([Dobrogowski and Kasznia (2007), Eq. (9)](@cite dobrogowski-2007-realtime-adev)),
+the inner sum and the sum of its squares for `:mdev` (their Eqs. (11) to
+(14)), and the same with third differences for `:hdev` and `:mhdev`.
 """
 function Base.push!(acc::StreamingStability, x_next::Real)
     t = acc.count + 1
@@ -111,7 +120,7 @@ function Base.push!(acc::StreamingStability, x_next::Real)
     sumsq = acc.sumsq
     dev = acc.dev
     if dev === :adev
-        # Eq. 9: S_t(m) = S_{t−1}(m) + (x_t − 2x_{t−m} + x_{t−2m})².
+        # Eq. (9): S_t(m) = S_{t−1}(m) + (x_t − 2x_{t−m} + x_{t−2m})².
         for (k, m) in enumerate(ms)
             t >= 2m + 1 || continue
             d = _ring_get(buf, cap, t) - 2.0 * _ring_get(buf, cap, t - m) +
@@ -119,7 +128,7 @@ function Base.push!(acc::StreamingStability, x_next::Real)
             @inbounds sumsq[k] += d * d
         end
     elseif dev === :hdev
-        # Eq. 9 generalized to the third difference.
+        # The same with the third difference.
         for (k, m) in enumerate(ms)
             t >= 3m + 1 || continue
             d = _ring_get(buf, cap, t) - 3.0 * _ring_get(buf, cap, t - m) +
@@ -130,21 +139,21 @@ function Base.push!(acc::StreamingStability, x_next::Real)
         inner = acc.inner
         for (k, m) in enumerate(ms)
             if t > 3m
-                # Eq. 12 slide: drop the oldest second difference of the
-                # window, pick up the newest: a single third difference.
+                # Slide the inner sum (Eq. (14)): the oldest second difference
+                # leaves and the newest enters, a single third difference.
                 @inbounds inner[k] += _ring_get(buf, cap, t) -
                     3.0 * _ring_get(buf, cap, t - m) +
                     3.0 * _ring_get(buf, cap, t - 2m) -
                     _ring_get(buf, cap, t - 3m)
-                @inbounds sumsq[k] += inner[k]^2     # eq. 11
+                @inbounds sumsq[k] += inner[k]^2     # Eq. (11)
             elseif t >= 2m + 1
-                # Eq. 13 build phase: accumulate the first window's m second
-                # differences one at a time; the window completes at t = 3m.
+                # Build the first inner sum (Eq. (13)), one second difference
+                # at a time. It is complete at t = 3m.
                 @inbounds inner[k] += _ring_get(buf, cap, t) -
                     2.0 * _ring_get(buf, cap, t - m) +
                     _ring_get(buf, cap, t - 2m)
                 if t == 3m
-                    @inbounds sumsq[k] += inner[k]^2 # eq. 11, first window
+                    @inbounds sumsq[k] += inner[k]^2 # Eq. (11), first term
                 end
             end
         end
@@ -152,9 +161,9 @@ function Base.push!(acc::StreamingStability, x_next::Real)
         inner = acc.inner
         for (k, m) in enumerate(ms)
             if t > 4m
-                # Third-difference generalization of eq. 12: the slide is the
-                # binomial fourth difference x_t − 4x_{t−m} + 6x_{t−2m}
-                # − 4x_{t−3m} + x_{t−4m}.
+                # As for MDEV, with third differences: the inner sum slides by
+                # the fourth difference x_t − 4x_{t−m} + 6x_{t−2m} − 4x_{t−3m}
+                # + x_{t−4m}.
                 @inbounds inner[k] += _ring_get(buf, cap, t) -
                     4.0 * _ring_get(buf, cap, t - m) +
                     6.0 * _ring_get(buf, cap, t - 2m) -
@@ -162,8 +171,8 @@ function Base.push!(acc::StreamingStability, x_next::Real)
                     _ring_get(buf, cap, t - 4m)
                 @inbounds sumsq[k] += inner[k]^2
             elseif t >= 3m + 1
-                # Eq. 13 build phase with third differences; the first window
-                # completes at t = 4m.
+                # The first inner sum, of m third differences, is complete at
+                # t = 4m.
                 @inbounds inner[k] += _ring_get(buf, cap, t) -
                     3.0 * _ring_get(buf, cap, t - m) +
                     3.0 * _ring_get(buf, cap, t - 2m) -
@@ -178,10 +187,10 @@ function Base.push!(acc::StreamingStability, x_next::Real)
 end
 
 """
-    append!(acc::StreamingStability, xs::AbstractVector{<:Real}) → acc
+    append!(acc::StreamingStability, xs) → acc
 
-Feed a chunk of phase samples (seconds), in order; equivalent to
-`push!`-ing them one at a time.
+Add the phase samples `xs`, in seconds and in order. The result is that of
+`push!` on each in turn.
 """
 function Base.append!(acc::StreamingStability, xs::AbstractVector{<:Real})
     for v in xs
@@ -192,14 +201,15 @@ end
 
 """
     snapshot(acc::StreamingStability) → StabilityResult
+    snapshot(live::LiveStability) → Vector{StabilityResult}
 
-The deviation estimate over all samples streamed so far, as a plain
-[`StabilityResult`](@ref). `dev` matches the batch kernel on the same record
-at every m (NaN where the batch kernel has fewer than 2 analysis windows);
-`neff` carries the current window counts (0 at NaN points). The
-`ci`/`edf`/`noise_type` fields are empty (on-demand EDF/CI for streaming
-accumulators is not implemented); for confidence intervals run the batch API
-on the full record.
+Deviation over all the samples received so far, as a
+[`StabilityResult`](@ref); for a [`LiveStability`](@ref), one result per
+deviation.
+
+`dev` is `NaN` at an averaging factor with fewer than two terms, and `neff`
+holds the number of terms. The result carries no noise type, EDF or
+confidence interval: for those, run the estimator on the record.
 """
 function snapshot(acc::StreamingStability)
     ms = acc.m_values
@@ -238,7 +248,7 @@ end
 """
     nsamples(acc::StreamingStability) → Int
 
-Number of phase samples streamed into the accumulator so far.
+Number of phase samples the accumulator has received.
 """
 nsamples(acc::StreamingStability) = acc.count
 

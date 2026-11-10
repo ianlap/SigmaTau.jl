@@ -90,12 +90,17 @@ plot!(p, clock3; label = "clock 3 recovered", ls = :dash)
 #
 # ## The Groslambert covariance
 #
-# When the difference records themselves are at hand, `groslambert` is the
-# alternative that does not subtract variances: it multiplies the second
-# differences of two records that share a clock, so only that clock's noise
-# survives the average. Its estimates scatter about the truth instead of
-# turning negative, and each comes with a χ² interval from the covariance
-# model of Vernotte & Lantz (2019).
+# When the difference records themselves are at hand, `groslambert`
+# multiplies the second differences of two records that share a clock, so
+# only that clock's noise survives the average
+# ([Vernotte et al. (2016)](@cite vernotte-2016-gcov)). On records that
+# close, as these three do, its estimate is the hat's. The two differ when
+# each record carries the noise of its own instrument, which biases the hat
+# and averages out of the covariance. Each estimate comes with a χ² interval
+# from the covariance model of
+# [Vernotte and Lantz (2019)](@cite vernotte-2019-tch-gcov-uncertainty), or
+# with the KLTS interval of [Lantz et al. (2019)](@cite lantz-2019-klts)
+# when `interval=:klts` is passed.
 
 g1, g2, g3 = groslambert(PhaseData(x1 .- x2, τ₀), PhaseData(x2 .- x3, τ₀),
                          PhaseData(x3 .- x1, τ₀), m_values)

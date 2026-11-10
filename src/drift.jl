@@ -1,70 +1,95 @@
-# Frequency drift (aging) fits: Stable32's Drift function. A model is fitted
-# by least squares to the fractional frequency y(t), and the drift rate is
-# its slope at the end of the record.
+# Frequency drift fits: a model is fitted by least squares to the fractional
+# frequency y(t), and the drift rate is its slope at the end of the record
+# (SP1065 §5.22; the Drift function of Stable32).
 
 const DRIFT_MODELS = (:linear, :quadratic, :log, :diffusion)
 
 """
     DriftFit
 
-Result of [`drift_fit`](@ref): a frequency drift model fitted to y(t), with
-standard errors and the drift rate. The residuals are `f.y .- f.fit`.
+Result of [`drift_fit`](@ref): a frequency drift model fitted to ``y(t)``,
+with the standard errors of its parameters and the drift rate at the end
+of the record. The residuals are `f.y .- f.fit`.
 
-`coef` holds the model parameters, with t in seconds from the first sample:
+`coef` holds the parameters of the model, with ``t`` in seconds from the
+first sample:
 
-| model        | y(t)                    | `coef`      |
-|:-------------|:------------------------|:------------|
-| `:linear`    | a + b·t                 | `[a, b]`    |
-| `:quadratic` | a + b·t + c·t²          | `[a, b, c]` |
-| `:log`       | a·ln(1 + b·t) + c       | `[a, b, c]` |
-| `:diffusion` | a + b·√(t + c)          | `[a, b, c]` |
+| `model`      | ``y(t)``               | `coef`      |
+|:-------------|:-----------------------|:------------|
+| `:linear`    | ``a + bt``             | `[a, b]`    |
+| `:quadratic` | ``a + bt + ct^2``      | `[a, b, c]` |
+| `:log`       | ``a\\ln(1 + bt) + c``   | `[a, b, c]` |
+| `:diffusion` | ``a + b\\sqrt{t + c}``  | `[a, b, c]` |
+
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct DriftFit
-    "Model name, one of `:linear`, `:quadratic`, `:log`, `:diffusion`."
+    "Model fitted: `:linear`, `:quadratic`, `:log` or `:diffusion`."
     model::Symbol
-    "Model parameters; see the table above."
+    "Parameters of the model, as in the table above."
     coef::Vector{Float64}
-    "One-σ standard error of each parameter."
+    "Standard error of each parameter."
     stderr::Vector{Float64}
-    "Drift rate dy/dt at the end of the record, per day."
+    "Drift rate ``dy/dt`` at the end of the record, per day."
     rate::Float64
-    "One-σ standard error of `rate`, per day."
+    "Standard error of `rate`, per day."
     rate_stderr::Float64
-    "Sample times in seconds from the first sample."
+    "Sample times, in seconds from the first sample."
     t::Vector{Float64}
-    "Fractional frequency (`NaN` at gaps)."
+    "Fractional frequency; `NaN` at a missing sample."
     y::Vector{Float64}
-    "Fitted model at each `t`."
+    "The model at each `t`."
     fit::Vector{Float64}
-    "RMS of the residuals `y − fit` over the measured samples."
+    "Rms of the residuals `y − fit` over the measured samples."
     rms::Float64
 end
 
 """
     drift_fit(data; model=:linear) → DriftFit
 
-Fit a frequency drift model to a record, as Stable32's Drift function does:
-`:linear` and `:quadratic` polynomials, the MIL-PRF-55310 `:log` aging model
-a·ln(1 + b·t) + c, or the `:diffusion` model a + b·√(t + c). Phase records
-are differenced to frequency first. `NaN` samples are skipped.
+Least-squares fit of a frequency drift model to the fractional frequency
+of a record. The result gives the parameters, their standard errors and
+the drift rate ``dy/dt`` at the end of the record, per day.
 
-The standard errors are the least-squares ones, from the residual scatter.
-They assume white residuals, so they are too small when the record has
-flicker or random-walk FM; compare the residuals' σ(τ) with the clock's to
-judge how far.
+# Models
+
+- `:linear`, ``y(t) = a + bt``: a constant drift ``b``, the optimum fit
+  under white FM noise.
+- `:quadratic`, ``y(t) = a + bt + ct^2``: a drift that changes linearly
+  with time.
+- `:log`, ``y(t) = a\\ln(1 + bt) + c``: the stabilization of an oscillator.
+- `:diffusion`, ``y(t) = a + b\\sqrt{t + c}``.
+
+The linear, log and diffusion models are the frequency drift models of
+[SP1065 §5.22](@cite riley-2008-sp1065) and of the Drift function of
+[Stable32](@cite hamilton-2008-stable32-manual); the constant ``c`` of the
+log model is in the form its test suite reports. ``t`` runs from 0 at the
+first sample, so ``a`` of the linear model is the frequency there.
+Stable32 counts the samples from 1 and reports the intercept one sample
+interval earlier; the slope is the same.
+
+A `PhaseData` record is differenced to frequency first, and missing
+samples are skipped.
+
+The standard errors are those of least squares, from the scatter of the
+residuals. They assume white residuals and are too small where the
+residuals are not white, as on a record with flicker FM or random-walk FM.
+The deviation of the residuals shows whether they are.
 
 # Examples
+
+A drift of 2 × 10⁻¹⁵ per second is 1.728 × 10⁻¹⁰ per day:
 
 ```jldoctest
 julia> using SigmaTau
 
-julia> y = 1e-9 .+ 2e-15 .* (0:999);   # 2e-15 per second
+julia> y = FrequencyData(1e-9 .+ 2e-15 .* (0:999), 1.0);
 
-julia> f = drift_fit(FrequencyData(collect(y), 1.0));
+julia> f = drift_fit(y);
 
-julia> round(f.rate; sigdigits=4)        # per day
+julia> round(f.rate; sigdigits=4)
 1.728e-10
 ```
 """
@@ -169,7 +194,7 @@ function _drift_poly(t, y, ok, p)
 end
 
 # The nonlinear models are linear in two parameters once the third is
-# fixed: minimise the residual over that one (b for :log, c for :diffusion)
+# fixed: minimize the residual over that one (b for :log, c for :diffusion)
 # on a log grid, then refine by golden section.
 function _profile_min(rss::Function, lo::Float64, hi::Float64)
     grid = range(lo, hi; length=81)

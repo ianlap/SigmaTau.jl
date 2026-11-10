@@ -1,10 +1,11 @@
 # `stability`: a suite of deviations in one call.
 """
-Default deviation set computed by [`stability`](@ref) when `devs` is not given:
-overlapping Allan, modified Allan, overlapping Hadamard, and modified Hadamard.
-All four are fractional-frequency (σ_y) quantities, so the default suite
-overlays on one ordinate; time deviations (`tdev`, `htdev`) are σ_x quantities
-in seconds and must be requested explicitly.
+    DEFAULT_DEVIATIONS
+
+The estimators [`stability`](@ref) runs when `devs` is not given: `:adev`,
+`:mdev`, `:hdev` and `:mhdev`. All four are fractional-frequency
+deviations, so the default suite shares one ordinate. The time deviations,
+in seconds, are run on request.
 """
 const DEFAULT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev)
 
@@ -24,27 +25,30 @@ function _stability(data, N::Int, kind::Symbol, tau0::Float64;
 end
 
 """
-    stability(data::PhaseData; devs=DEFAULT_DEVIATIONS, m=Octave,
-              ci=true, confidence=DEFAULT_CONFIDENCE, correct_bias=true,
-              remove_drift=true, noise=:auto) → StabilitySuite
+    stability(data; devs=DEFAULT_DEVIATIONS, m=Octave, ci=true,
+              confidence=DEFAULT_CONFIDENCE, correct_bias=true, remove_drift=true,
+              noise=:auto) → StabilitySuite
 
-Compute a suite of stability deviations from one record in a single call, the
-batch analog of `adev`, `mdev`, …. Each symbol in `devs` is run through
-[`deviation`](@ref) with a per-deviation averaging-factor grid derived from
-`m`, so every deviation gets a grid valid for its own algorithmic m-max.
-Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
+Several deviations of one record in a single call. Each name in `devs` is
+run through [`deviation`](@ref), and the results come back as a
+[`StabilitySuite`](@ref), indexed by name.
 
-`devs` is any iterable of estimator names from [`estimators`](@ref)
-(symbols or strings). `m` is a [`TauMode`](@ref) (e.g. `Octave`, `Decade`)
-or an integer vector of averaging factors applied to every deviation, as in
-the estimator functions.
-`correct_bias` reaches only the estimators that take it (the total family and
-`theo1`), and `remove_drift` only the Hadamard family. `noise` states the noise
-type for every estimator (`:auto`, one type, or a `PowerLawFit`; see
-[`adev`](@ref)). Note that an explicit `m`
-vector is passed to every deviation verbatim: `:theo1` interprets it as even
-Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
-prefer a `TauMode` when mixing the Theo family with others.
+# Arguments
+
+- `data`: a `PhaseData` or `FrequencyData` record.
+
+# Keywords
+
+- `devs`: the estimators to run, as symbols or strings from
+  [`estimators`](@ref).
+- `m`: a [`TauMode`](@ref) grid, cut for each estimator at the largest
+  averaging factor it supports, or an integer vector that every estimator
+  takes as it stands. `theo1` reads such a vector as even Thêo1 factors (an
+  odd entry gives `NaN`) and `theoh` as factors of ``τ = mτ_0``, so prefer a
+  `TauMode` when the suite mixes them with other estimators.
+- `ci`, `confidence`, `noise`: as in [`adev`](@ref), for every estimator.
+- `correct_bias`: reaches the total estimators and `theo1`.
+- `remove_drift`: reaches the Hadamard family.
 
 # Examples
 

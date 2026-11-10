@@ -1,30 +1,51 @@
-# Live measurement: instrument sources that yield one reading at a time, and
-# a set of streaming accumulators that turn readings into running σ(τ).
+# Live measurement: a source gives one reading at a time, and a set of
+# streaming accumulators turns the readings into running deviations.
 #
-# A source is anything with `read_reading(src) → Float64` (NaN once the
-# stream ends). `InstrumentSource` reads text lines from any IO: a serial
-# device opened as a file, a TCP socket to an LXI instrument (SCPI on port
-# 5025), or a pipe. `SimulatedSource` is a noise-only stand-in clock.
+# A source is anything with `read_reading(src) → Float64`, NaN once the
+# stream has ended. `InstrumentSource` reads lines of text from an IO: a
+# serial device opened as a file, a TCP socket to an instrument (SCPI on
+# port 5025) or a pipe. `SimulatedSource` is a noise model in its place.
 
 """
     read_reading(src) → Float64
 
-The next reading from a live source, or `NaN` once the stream has ended.
+Next reading of a live source, or `NaN` once its stream has ended. A source
+is a [`SimulatedSource`](@ref), an [`InstrumentSource`](@ref), or any type
+given a method of this function.
 """
 function read_reading end
 
 """
     SimulatedSource(; white_pm=0, white_fm=1e-12, rw_fm=0, tau0=1.0, rng=nothing)
 
-A simulated clock for trying out a live setup without an instrument. Each
-reading is a phase sample in seconds, built by exact recurrences from
-independent Gaussian draws: white PM adds `white_pm` seconds (standard
-deviation) to each phase sample, white FM is a fractional frequency of
-standard deviation `white_fm` per sample, and random-walk FM steps that
-frequency by `rw_fm` per sample. At τ₀ the expected Allan deviations of
-the three terms are `white_fm`, `√3·white_pm/tau0` and `rw_fm/√2`.
+Simulated clock, for trying a live setup without an instrument. A reading
+is a phase sample in seconds, the sum of three independent Gaussian terms.
 
-Pass an `AbstractRNG` as `rng` for a reproducible stream.
+# Keywords
+
+- `white_pm=0`: standard deviation of the white PM added to each phase
+  sample, in seconds.
+- `white_fm=1e-12`: standard deviation of the white FM, as a fractional
+  frequency per sample.
+- `rw_fm=0`: standard deviation of the step the frequency takes from one
+  sample to the next, which makes random-walk FM.
+- `tau0=1.0`: sample interval in seconds.
+- `rng`: an `AbstractRNG`, for a reproducible stream.
+
+At ``τ_0`` the Allan deviation of the white PM term is
+`√3·white_pm/tau0`, that of the white FM term `white_fm`, and that of the
+random-walk FM term `rw_fm/√2`.
+
+# Examples
+
+```julia
+clock = SimulatedSource(white_fm=1e-12)
+live = LiveStability([:adev], 1.0, [1, 10, 100])
+for _ in 1:10_000
+    push!(live, read_reading(clock))
+end
+snapshot(live)[1]
+```
 """
 mutable struct SimulatedSource{R}
     const white_pm::Float64
@@ -56,24 +77,41 @@ function read_reading(s::SimulatedSource)
 end
 
 """
-    InstrumentSource(io::IO; query="")
+    InstrumentSource(io; query="")
 
-Readings from an instrument that talks in text lines: each reading is the
-first number on a line (SCPI replies such as `+1.000000000012E+07`, or
-comma-separated fields). With a `query` such as `"READ?"`, the query is
-written before every line is read; without one the instrument is expected
-to stream on its own. Blank lines are skipped and the stream ends at EOF.
-SCPI's no-reading value `9.91E+37` (a missed gate) throws: a running
-estimate cannot bridge a gap.
+Readings from an instrument that sends lines of text. A reading is the
+first number on a line, as in a SCPI reply such as `+1.000000000012E+07`
+or in comma-separated fields. Blank lines are skipped, and the stream ends
+with `io`.
+
+With a `query` such as `"READ?"`, the query is written before each line is
+read. Without one the instrument is expected to send readings on its own.
+
+SCPI's not-a-number value, `9.91E+37`, with which a counter reports a gate
+without a measurement, throws an error: the running sums cannot leave a
+sample out.
 
 `io` is any open stream:
 
-- an LXI instrument over the network: `Sockets.connect(host, 5025)` (raw
-  SCPI socket; most counters and VISA "SOCKET" resources use port 5025);
-- a serial port, opened as a file after setting its line speed, e.g.
-  `stty -F /dev/ttyUSB0 9600 raw` (Linux; `stty -f` on macOS) and then
+- an instrument on the network, `Sockets.connect(host, 5025)`: 5025 is the
+  port registered for raw SCPI;
+- a serial port, opened as a file once its line speed is set: on Linux
+  `stty -F /dev/ttyUSB0 9600 raw`, on macOS `stty -f`, then
   `open("/dev/ttyUSB0", "r+")`;
-- a pipe, or a log file, replayed to its end.
+- a pipe, or a file of readings, read to its end.
+
+# Examples
+
+```julia
+using Sockets
+counter = InstrumentSource(Sockets.connect("192.168.1.20", 5025); query="READ?")
+live = LiveStability([:adev, :mdev], 1.0, [1, 2, 4, 8, 16];
+                     quantity=:hz, nominal=10e6)
+for _ in 1:3600
+    push!(live, read_reading(counter))
+end
+snapshot(live)
+```
 """
 struct InstrumentSource{T<:IO}
     io::T
@@ -102,19 +140,29 @@ end
 """
     LiveStability(devs, tau0, m_values; quantity=:phase, nominal=NaN)
 
-Running deviations for a live measurement: one [`StreamingStability`](@ref)
-per name in `devs` (`:adev`, `:mdev`, `:hdev`, `:mhdev`), fed through
-`push!(live, reading)`. `quantity` says what the readings are:
+Running deviations of a live measurement: one [`StreamingStability`](@ref)
+for each name in `devs`, all fed by `push!(live, reading)`.
+[`snapshot`](@ref) returns one [`StabilityResult`](@ref) per deviation,
+equal to the estimator's on the readings so far, and [`nsamples`](@ref) the
+number of readings.
 
-- `:phase`: time error in seconds;
-- `:frequency`: fractional frequency, integrated as `x = [0; cumsum(y)]·τ₀`
-  like [`FrequencyData`](@ref);
-- `:hz`: counter readings in hertz, turned into fractional frequency
-  against `nominal` (by default the first reading to 4 significant
-  figures).
+# Arguments
 
-`snapshot(live)` returns one `StabilityResult` per deviation; at every
-reading count it equals the batch estimators on the readings so far.
+- `devs`: a vector of `:adev`, `:mdev`, `:hdev` and `:mhdev`.
+- `tau0`: interval between readings, in seconds.
+- `m_values`: averaging factors.
+
+# Keywords
+
+- `quantity=:phase`: what a reading is: `:phase`, a time error in seconds;
+  `:frequency`, a fractional frequency, integrated to phase as
+  [`FrequencyData`](@ref) is, so that `n` readings make `n + 1` phase
+  samples; or `:hz`, a frequency in hertz as a counter reads it, converted
+  to fractional frequency against `nominal`.
+- `nominal`: the nominal frequency in hertz for `:hz`. By default it is the
+  first reading rounded to four significant digits.
+
+A reading that is not finite throws an error.
 """
 mutable struct LiveStability
     const accs::Vector{StreamingStability}
@@ -165,6 +213,6 @@ snapshot(live::LiveStability) = StabilityResult[snapshot(acc) for acc in live.ac
 """
     nsamples(live::LiveStability) → Int
 
-Number of readings pushed so far.
+Number of readings received.
 """
 nsamples(live::LiveStability) = live.readings
