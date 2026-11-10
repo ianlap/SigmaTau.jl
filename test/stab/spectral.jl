@@ -7,7 +7,7 @@ using Test
 using Random
 using Statistics
 using SigmaTau
-using SigmaTau: _welch_psd, _window, _phase_to_freq, _freq_to_phase
+using SigmaTau: _welch_psd, _window, _freq_to_phase
 
 # Least-squares slope of log(psd) vs log(freq) over the given bin range.
 function _loglog_slope(freq, psd, idx)

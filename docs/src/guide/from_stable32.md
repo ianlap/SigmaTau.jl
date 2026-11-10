@@ -23,7 +23,7 @@ p = read_phase("export.dat")        # a Stable32 text export
 | Tau (sample interval) | `tau0`, from the header or the time column, or `tau0=` |
 | Multiplier | `scaling=` on the readers (`1e-9` for ns) |
 | MJD time tags | the time column; `time_col=` picks it, τ₀ follows from it and [`start_time`](@ref) gives the first sample's date |
-| Converting phase ↔ frequency | not needed; `FrequencyData` integrates to `N + 1` phase points, as Stable32 does |
+| Converting phase ↔ frequency | not needed for the statistics, which take either; `FrequencyData(p)` and `PhaseData(y)` convert a record, `N` frequency samples integrating to `N + 1` phase points as in Stable32 |
 
 ## Running the statistics
 

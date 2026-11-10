@@ -172,7 +172,7 @@ conversion Stable32 and allantools perform). `N` frequency samples give
 `N + 1` phase samples, so every `y[k]` survives as the phase difference
 `x[k+1] − x[k]` and `adev(FrequencyData(y, τ₀), …)` equals
 `adev(PhaseData([0; cumsum(y)]·τ₀, τ₀), …)`. This is the exact inverse of
-[`_phase_to_freq`](@ref) up to the phase offset `x[1]`.
+the first difference up to the phase offset `x[1]`.
 """
 function _freq_to_phase(data::FrequencyData)
     y = data.y
@@ -187,26 +187,44 @@ function _freq_to_phase(data::FrequencyData)
 end
 
 """
-    _phase_to_freq(data::PhaseData) → FrequencyData
+    FrequencyData(p::PhaseData) → FrequencyData
+    PhaseData(f::FrequencyData) → PhaseData
 
-Convert phase residuals to fractional frequency via the canonical first
-difference `y[k] = (x[k+1] − x[k]) / τ₀`. Length drops from `N` to
-`N − 1`. The inverse direction (`_freq_to_phase`) recovers the
-`N`-length record but not the absolute phase offset, so the
-phase ↔ frequency map is bijective only up to a constant: round-trip
-`_freq_to_phase ∘ _phase_to_freq` returns `x .- x[1]`.
+The record as the other kind, as Stable32's Convert function and allantools'
+`phase2frequency` / `frequency2phase` do [riley-2008-sp1065](@cite). Phase
+becomes frequency by the first difference `y[k] = (x[k+1] − x[k]) / τ₀`, so
+`N` phase samples give `N − 1` frequency samples and a missing phase sample
+makes the two beside it missing. Frequency becomes phase by the running sum
+`x = τ₀ · [0; cumsum(y)]`, `N + 1` samples from 0; a missing frequency sample
+leaves every later phase unknown, so fill it first with [`fillgaps`](@ref).
+`τ₀`, `source` and `start` carry over.
 
-Deviation estimators are shift-invariant (their second/third differences
-annihilate the offset), so e.g. `adev(pd, m_values) ≈
-adev(_phase_to_freq(pd), m_values)`.
+The estimators take either kind and convert internally, so this is for
+plotting, saving or handing the record to another tool. The round trip
+`PhaseData(FrequencyData(p))` returns `p.x .- p.x[1]`.
+
+```jldoctest
+julia> using SigmaTau
+
+julia> FrequencyData(PhaseData([0.0, 1.0, 3.0], 0.5)).y
+2-element Vector{Float64}:
+ 2.0
+ 4.0
+```
 """
-_phase_to_freq(data::PhaseData) = FrequencyData(diff(data.x) ./ data.tau0, data.tau0)
+FrequencyData(p::PhaseData) = FrequencyData(diff(p.x) ./ p.tau0, p.tau0; source=p.source, start=p.start)
+
+function PhaseData(f::FrequencyData)
+    any(isnan, f.y) && throw(ArgumentError(
+        "PhaseData: a missing frequency sample leaves the phase after it unknown; fill the gaps first (fillgaps)"))
+    return PhaseData(_freq_to_phase(f).x, f.tau0; source=f.source, start=f.start)
+end
 
 # Either record as the other kind, and its raw samples.
 _as_phase(d::PhaseData) = d
 _as_phase(d::FrequencyData) = _freq_to_phase(d)
 _as_freq(d::FrequencyData) = d
-_as_freq(d::PhaseData) = _phase_to_freq(d)
+_as_freq(d::PhaseData) = FrequencyData(d)
 _samples(d::PhaseData) = d.x
 _samples(d::FrequencyData) = d.y
 

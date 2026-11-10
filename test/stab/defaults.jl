@@ -82,17 +82,21 @@ using SigmaTau
         end
     end
 
-    @testset "_phase_to_freq / _freq_to_phase helpers" begin
+    @testset "phase ↔ frequency conversion" begin
         # Canonical mapping: y[k] = (x[k+1] − x[k]) / τ₀, length N → N−1.
         @testset "definition and shape" begin
             τ₀ = 0.5
             x  = [0.0, 1.0, 3.0, 7.0, 15.0]
-            pd = PhaseData(x, τ₀)
-            fd = SigmaTau._phase_to_freq(pd)
-            @test fd isa FrequencyData
-            @test fd.tau0 == τ₀
+            pd = PhaseData(x, τ₀; source="clk", start=86400.0)
+            fd = FrequencyData(pd)
             @test fd.y == diff(x) ./ τ₀
-            @test length(fd.y) == length(x) - 1
+            @test (fd.tau0, fd.source, fd.start) == (τ₀, "clk", 86400.0)
+            @test PhaseData(fd).start == 86400.0
+            # A missing phase sample loses the frequency on both sides; a
+            # missing frequency sample leaves the later phase unknown.
+            fg = FrequencyData(PhaseData([0.0, 1.0, NaN, 3.0, 4.0]))
+            @test isequal(fg.y, [1.0, NaN, NaN, 1.0])
+            @test_throws ArgumentError PhaseData(fg)
         end
 
         @testset "round-trip identities (modulo the phase offset)" begin
@@ -102,29 +106,29 @@ using SigmaTau
             # N + 1 phase points starting at 0 (SP1065, Stable32, allantools).
             y  = randn(64)
             fd = FrequencyData(y, τ₀)
-            pd1 = SigmaTau._freq_to_phase(fd)
+            pd1 = PhaseData(fd)
             @test length(pd1.x) == length(y) + 1
             @test pd1.x[1] == 0.0
-            fd2 = SigmaTau._phase_to_freq(pd1)
+            fd2 = FrequencyData(pd1)
             @test fd2.y ≈ y
             # Phase → frequency → phase recovers x − x[1].
             x   = cumsum(randn(64))
             pd  = PhaseData(x, τ₀)
-            pd2 = SigmaTau._freq_to_phase(SigmaTau._phase_to_freq(pd))
+            pd2 = PhaseData(FrequencyData(pd))
             @test length(pd2.x) == length(x)
             @test pd2.x ≈ x .- x[1]
         end
 
         @testset "deviation equivalence: adev/mdev/hdev agree on either domain" begin
             # Build a synthetic WFM phase record, compute ADEV/MDEV/HDEV via
-            # the phase path and via the frequency path (after _phase_to_freq).
+            # the phase path and via the frequency path (after FrequencyData(p)).
             # Second- and third-difference kernels are shift-invariant and the
             # conversion is lossless up to the offset, so both paths agree to
             # rounding.
             Random.seed!(2026)
             τ₀ = 1.0
             p_full = PhaseData(noise_gen(PhaseData, 4096, τ₀; h=Dict(0 => 1.0)).x, τ₀)
-            f_diff = SigmaTau._phase_to_freq(p_full)
+            f_diff = FrequencyData(p_full)
             @test length(f_diff.y) == length(p_full.x) - 1
             ms = [1, 4, 16, 64]
             for fn in (adev, mdev, hdev)

@@ -44,6 +44,11 @@ class PhaseData:
         src = "" if self.source == "user" else f", source={self.source!r}"
         return f"PhaseData(N={self.x.size}, tau0={self.tau0} s{src})"
 
+    def to_frequency(self) -> FrequencyData:
+        """Fractional frequency ``y[k] = (x[k+1] - x[k]) / tau0``: N - 1 samples, and
+        a missing (NaN) phase sample makes the two beside it missing."""
+        return FrequencyData(np.diff(self.x) / self.tau0, self.tau0, self.source)
+
 
 @dataclass(frozen=True)
 class FrequencyData:
@@ -65,6 +70,16 @@ class FrequencyData:
     def __repr__(self) -> str:
         src = "" if self.source == "user" else f", source={self.source!r}"
         return f"FrequencyData(N={self.y.size}, tau0={self.tau0} s{src})"
+
+    def to_phase(self) -> PhaseData:
+        """Phase ``x = tau0 * [0, cumsum(y)]``: N + 1 samples from 0. A missing (NaN)
+        frequency sample leaves the later phase unknown, so fill gaps first."""
+        if np.isnan(self.y).any():
+            raise ValueError(
+                "to_phase: a missing frequency sample leaves the phase after it unknown; "
+                "fill the gaps first (fillgaps)"
+            )
+        return PhaseData(np.concatenate(([0.0], np.cumsum(self.y))) * self.tau0, self.tau0, self.source)
 
 
 @dataclass(frozen=True)

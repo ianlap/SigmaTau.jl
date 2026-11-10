@@ -46,3 +46,14 @@ def test_repr_contains_n_and_tau0(cls):
     r = repr(cls(np.arange(10.0), 2.5))
     assert "N=10" in r
     assert "2.5" in r
+
+
+def test_phase_frequency_conversion():
+    p = PhaseData(np.array([0.0, 1e-9, 3e-9, np.nan, 7e-9]), 0.5, "clk")
+    f = p.to_frequency()
+    np.testing.assert_allclose(f.y[:2], [2e-9, 4e-9])
+    assert np.isnan(f.y[2:]).all() and f.tau0 == 0.5 and f.source == "clk"
+    q = FrequencyData(np.array([1e-9, 2e-9])).to_phase()
+    np.testing.assert_allclose(q.x, [0.0, 1e-9, 3e-9])
+    with pytest.raises(ValueError):
+        f.to_phase()

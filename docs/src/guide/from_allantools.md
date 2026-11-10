@@ -54,6 +54,7 @@ SigmaTau's are overlapping (IEEE 1139), so the names shift:
 | `gradev` | [`adev`](@ref): `NaN` gaps are skipped, as `gradev` does |
 | `gcodev` | [`groslambert`](@ref), [`cross_adev`](@ref) |
 | `three_cornered_hat_phase` | [`ncornered_hat`](@ref) (any number of clocks ≥ 3) |
+| `phase2frequency`, `frequency2phase` | `FrequencyData(p)`, `PhaseData(y)`; `p.to_frequency()`, `y.to_phase()` in Python |
 | `noise.white`, `noise.brown`, `noise_kasdin.Noise` | [`noise_gen`](@ref), any power law and mixture |
 | `autocorr_noise_id` | [`identify_noise`](@ref), run inside every estimator |
 | `edf_greenhall`, `confidence_interval` | automatic with `ci=true`; [`calculate_edf`](@ref) and [`confidence_intervals`](@ref) on their own |
