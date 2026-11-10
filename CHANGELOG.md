@@ -114,6 +114,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   from it on rows labelled PM; `correct_bias=false` matches it.
   **Breaking:** `bias_correction` now takes `(noises, var_type, m_values, N)`
   in place of `(noises, var_type, taus, T)`, in Julia and Python.
+- MTOTDEV, TTOTDEV, HTOTDEV and MHTOTDEV divide by the exact bias factor at
+  each averaging factor from 2 to 15, where the published constants (which
+  hold from τ = 16τ₀) were up to 6 % off in variance; the flicker rows are
+  the mean of two flicker models. MHTOTDEV's white PM EDF below m = 16,
+  which the model overstated by up to 54 %, takes the exact ratio. HTOTDEV
+  on FM noise at τ = 2τ₀ to 15τ₀ now differs from Stable32, which keeps the
+  published factor, by up to 3 % in σ.
 
 ### Fixed
 
