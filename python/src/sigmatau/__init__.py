@@ -59,7 +59,7 @@ from .io import (
 from .masks import TELECOM_MASKS, MaskCheck, mask_check, telecom_mask
 from .noise import identify_noise, noise_gen
 from .powerlaw import powerlaw_fit, powerlaw_psd, powerlaw_sigma
-from .spectral import psd_x, psd_y, ssb_phase_noise
+from .spectral import integrated_jitter, psd_x, psd_y, ssb_phase_noise
 from .suite import DEFAULT_DEVIATIONS, groslambert, ncornered_hat, stability
 from .types import (
     CrossSpectralResult,
@@ -149,6 +149,7 @@ __all__ = [
     "psd_y",
     "psd_x",
     "ssb_phase_noise",
+    "integrated_jitter",
     # file IO
     "read_data",
     "detect_format",

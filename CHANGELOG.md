@@ -15,6 +15,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   integer vector, a range such as `1:64` included.
 - Python: `telecom_mask`, `mask_check` (a `MaskCheck`; Julia's `pass` is
   `passed`), `TELECOM_MASKS` and `summarize`.
+- `integrated_jitter`: integrated phase jitter (rms radians and seconds) and
+  residual FM (rms hertz) over an offset band, from a `ssb_phase_noise`,
+  `psd_x` or `psd_y` result or from spectrum points such as an analyzer's
+  ℒ(f) (NIST SP1065 §5.2.19). Also in Python.
 - Explorer import dialog: a typed scale factor (a number or an expression such
   as `1/(2*pi*518.295836590863e12)`) for readings that are not in the offered
   units, kept when the dialog is reopened; GNSS clock tables, whitespace

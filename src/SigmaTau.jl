@@ -88,7 +88,7 @@ export StreamingStability, snapshot, nsamples
 export LiveStability, SimulatedSource, InstrumentSource, read_reading
 
 export noise_gen
-export psd_y, psd_x, ssb_phase_noise
+export psd_y, psd_x, ssb_phase_noise, integrated_jitter
 export cross_psd_y, cross_psd_x, cross_adev, CrossSpectralResult, CrossStabilityResult
 
 # Plot recipes for `StabilityResult` live in the `SigmaTauRecipesBaseExt`
