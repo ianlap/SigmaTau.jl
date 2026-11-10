@@ -182,7 +182,7 @@ function psd_y(data::FrequencyData; nperseg=nothing, noverlap=nothing, taper::Sy
     return SpectralResult(:Sy, freq, psd, :per_Hz, np, no, taper)
 end
 
-psd_y(data::PhaseData; kwargs...) = psd_y(_phase_to_freq(data); kwargs...)
+psd_y(data::PhaseData; kwargs...) = psd_y(FrequencyData(data); kwargs...)
 
 """
     psd_x(data::PhaseData;     nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
@@ -232,3 +232,74 @@ function ssb_phase_noise(data::PhaseData; f_carrier::Real, nperseg=nothing, nove
 end
 
 ssb_phase_noise(data::FrequencyData; kwargs...) = ssb_phase_noise(_freq_to_phase(data); kwargs...)
+
+"""
+    integrated_jitter(s::SpectralResult; f_carrier, band=nothing) → (; phase, time, residual_fm)
+    integrated_jitter(f, S; quantity=:L, f_carrier, band=nothing) → (; phase, time, residual_fm)
+
+Integrated phase jitter and residual FM over the offset band `band = (f₁, f₂)`
+in Hz (default: the whole spectrum), NIST SP1065 §5.2.19
+[riley-2008-sp1065](@cite) and IEEE Std 1139-1999 eq. (A.16)
+[ieee1139-1999-definitions](@cite). Between neighbouring points the phase
+spectrum `S_φ(f)` is taken as the power law `K·f^x` through them, a straight line on a
+log-log plot, and integrated exactly:
+
+- `phase`: `Δφ = √∫ S_φ(f) df`, rms radians;
+- `time`: `Δφ / (2π·f_carrier)`, rms seconds (`S_x = S_φ/(2πν₀)²`, IEEE 1139
+  eq. A.14) [howe-2003-clock-jitter](@cite);
+- `residual_fm`: `Δf = √∫ f²·S_φ(f) df`, rms hertz.
+
+`s` is a [`ssb_phase_noise`](@ref), [`psd_x`](@ref) or [`psd_y`](@ref)
+result. The second form takes spectrum points, such as a phase-noise
+analyzer's ℒ(f) in dBc/Hz (`quantity=:L`, `S_φ = 2·ℒ`, IEEE 1139 eq. A.12),
+or `:Sx` (s²/Hz) or `:Sy` (1/Hz); `f` must increase. `f_carrier` is the carrier in Hz.
+
+```jldoctest
+julia> f = [1e3, 1e4, 1e5];  # ℒ falling 10 dB a decade: x = -1
+
+julia> j = integrated_jitter(f, [-100.0, -110.0, -120.0]; f_carrier=10e6);
+
+julia> round(j.phase; sigdigits=4), round(j.time * 1e12; sigdigits=4), round(j.residual_fm; sigdigits=4)
+(0.0009597, 15.27, 31.62)
+```
+"""
+function integrated_jitter(s::SpectralResult; f_carrier::Real, band=nothing)
+    τ₀ = 1 / (s.nperseg * (s.freq[2] - s.freq[1]))
+    return _jitter(s.freq, s.psd, s.spectral_type, f_carrier, band, τ₀)
+end
+
+integrated_jitter(f::AbstractVector{<:Real}, S::AbstractVector{<:Real};
+                  quantity::Symbol=:L, f_carrier::Real, band=nothing) =
+    _jitter(Float64.(f), Float64.(S), quantity, f_carrier, band, NaN)
+
+function _jitter(f::Vector{Float64}, S::Vector{Float64}, quantity::Symbol,
+                 f_carrier::Real, band, τ₀::Float64)
+    length(f) == length(S) || throw(DimensionMismatch(
+        "integrated_jitter: $(length(f)) frequencies but $(length(S)) values"))
+    f_carrier > 0 || throw(ArgumentError("integrated_jitter: f_carrier must be > 0 Hz (got $f_carrier)"))
+    ω₀² = (2π * f_carrier)^2
+    Sφ = quantity === :L  ? 2 .* exp10.(S ./ 10) :
+         quantity === :Sx ? ω₀² .* S :
+         quantity === :Sy ? ω₀² .* S ./ _powerlaw_to_sy(:Sx, f, ones(length(f)), nothing, τ₀) :
+         throw(ArgumentError("integrated_jitter: quantity must be :L, :Sx or :Sy, got :$quantity"))
+    keep = findall(k -> f[k] > 0 && isfinite(Sφ[k]) && Sφ[k] > 0, eachindex(f))
+    fk, Sk = f[keep], Sφ[keep]
+    length(fk) >= 2 && issorted(fk; lt=<=) ||
+        throw(ArgumentError("integrated_jitter: need at least 2 increasing frequencies with a positive spectrum"))
+    lo, hi = band === nothing ? (fk[1], fk[end]) : Float64.(band)
+    fk[1] <= lo < hi <= fk[end] || throw(ArgumentError(
+        "integrated_jitter: band ($lo, $hi) Hz must lie inside the spectrum, $(fk[1]) to $(fk[end]) Hz"))
+    φ² = 0.0; ν² = 0.0
+    for k in 1:length(fk)-1
+        a, b = max(fk[k], lo), min(fk[k+1], hi)
+        a < b || continue
+        x = log(Sk[k+1] / Sk[k]) / log(fk[k+1] / fk[k])
+        φ² += _powerlaw_segment(Sk[k] * fk[k], x, a / fk[k], b / fk[k])
+        ν² += _powerlaw_segment(Sk[k] * fk[k]^3, x + 2, a / fk[k], b / fk[k])
+    end
+    return (phase = √φ², time = √φ² / (2π * f_carrier), residual_fm = √ν²)
+end
+
+# ∫ S₁ (f/f₁)^x df from a·f₁ to b·f₁, with c = S₁·f₁ (SP1065 eqs 41 and 43).
+_powerlaw_segment(c::Float64, x::Float64, a::Float64, b::Float64) =
+    abs(x + 1) < 1e-9 ? c * log(b / a) : c * (b^(x + 1) - a^(x + 1)) / (x + 1)

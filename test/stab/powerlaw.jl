@@ -46,6 +46,7 @@ using Random
         end
         f = powerlaw_fit(p)
         @test powerlaw_sigma(f, [1.0, 100.0]) ≈ adev(p, [1, 100]; ci=false).dev rtol=0.02
+        @test powerlaw_fit(p, 4:4:256).h == powerlaw_fit(p, collect(4:4:256)).h
         @test powerlaw_fit(FrequencyData(diff(p.x), 1.0); deviation=:hdev, alphas=0:-1:-4).alphas == [0, -1, -2, -3, -4]
         # Gaps cost terms, not the record: a gap near the start leaves the fit
         # close, for phase and frequency alike.

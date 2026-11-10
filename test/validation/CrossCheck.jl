@@ -91,9 +91,11 @@ _f(s) = s == "nan" ? NaN : parse(Float64, s)
 # SigmaTau call reproducing each allantools estimator. allantools reports the
 # raw (bias-free) total estimators, so those run with correct_bias=false.
 const AT_MAP = Dict(
+    "adev"    => (p, m) -> adev(p, [m]; ci=false, overlapping=false).dev[1],
     "oadev"   => (p, m) -> adev(p, [m]; ci=false).dev[1],
     "mdev"    => (p, m) -> mdev(p, [m]; ci=false).dev[1],
     "tdev"    => (p, m) -> tdev(p, [m]; ci=false).dev[1],
+    "hdev"    => (p, m) -> hdev(p, [m]; ci=false, overlapping=false).dev[1],
     "ohdev"   => (p, m) -> hdev(p, [m]; ci=false).dev[1],
     "totdev"  => (p, m) -> totdev(p, [m]; ci=false, correct_bias=false).dev[1],
     "mtotdev" => (p, m) -> mtotdev(p, [m]; ci=false, correct_bias=false).dev[1],
@@ -118,7 +120,7 @@ function allantools_dev_rows()
     cache = Dict{String,PhaseData}()
     for r in _csv(joinpath(AT, "devs.csv"))
         est = r["estimator"]
-        haskey(AT_MAP, est) || continue          # adev / hdev: non-overlapped, not in SigmaTau
+        haskey(AT_MAP, est) || continue
         ds = r["dataset"]
         p = get!(() -> dataset(ds), cache, ds)
         m = parse(Int, r["m"])
@@ -146,7 +148,7 @@ function allantools_edf_rows()
             got = _calc_edf_core(a, d, m, 1, m, N)
             est = d == 2 ? "mdev" : "mhdev"
         elseif fam in ("totdev", "mtotdev")
-            # SP1065 Tables 7/8: edf = b·T/τ − c. allantools takes T/τ = N/m;
+            # SP1065 Table 7: edf = b·T/τ − c. allantools takes T/τ = N/m;
             # SigmaTau takes the record span T = (N − 1)·τ0 (a 1/N relative
             # difference). Compare the table formula at allantools' T here.
             est = fam
@@ -155,8 +157,11 @@ function allantools_edf_rows()
             continue   # nonoverlapping, simple: no SigmaTau counterpart
         end
         tol, note = 1e-9, ""
-        if est == "mtotdev" && m < 16
-            tol, note = Inf, "SigmaTau uses MDEV's EDF below τ = 16τ0, the edge of SP1065 Table 8"
+        if est == "mtotdev"
+            tol, note = Inf, m < 16 ? "SigmaTau uses MDEV's EDF below τ = 16τ0, where the published tables start" :
+                                      "allantools uses SP1065 Table 8; SigmaTau uses Howe & Peppler 2001 Table 2"
+        elseif est == "totdev" && m == 1
+            tol, note = Inf, "at τ0 TOTVAR is AVAR and SigmaTau takes ADEV's EDF; allantools applies SP1065 Table 7"
         elseif isnan(ref) && est == "ohdev" && a == -4
             tol, note = Inf, "allantools' edf_greenhall cannot reach Table 2's α = −4 row"
         elseif isnan(ref) && est == "oadev" && a == 2
@@ -226,7 +231,9 @@ const S32_RUNS = [
 
 # σ-only runs over every τ (no CI columns in these files).
 const S32_ALLTAU = [
+    ("phase_dat_adev.txt",   "adev",   (p, m) -> adev(p, m; ci=false, overlapping=false)),
     ("phase_dat_oadev.txt",  "oadev",  (p, m) -> adev(p, m; ci=false)),
+    ("phase_dat_hdev.txt",   "hdev",   (p, m) -> hdev(p, m; ci=false, overlapping=false)),
     ("phase_dat_mdev.txt",   "mdev",   (p, m) -> mdev(p, m; ci=false)),
     ("phase_dat_tdev.txt",   "tdev",   (p, m) -> tdev(p, m; ci=false)),
     ("phase_dat_ohdev.txt",  "ohdev",  (p, m) -> hdev(p, m; ci=false)),
@@ -245,7 +252,9 @@ const NOISE_ID_NOTE = "noise ID differs: N/m < 30 is the B1/R(n) fallback, which
 # CI rows outside the published EDF models: reported, not asserted.
 function s32_ci_tol(est, m)
     if est in ("mtotdev", "ttotdev") && m >= 16
-        return (Inf, "Stable32's MTOT EDF at τ = 16τ0 is not SP1065 Table 8 (implied EDF 81 vs 68)")
+        return (Inf, "Stable32's MTOT EDF at τ = 16τ0 follows no published table (implied EDF 81; Howe & Peppler 2001 Table 2 gives 65)")
+    elseif est == "totdev" && m == 1
+        return (Inf, "at τ0 TOTVAR is AVAR and SigmaTau takes ADEV's EDF; Stable32 applies SP1065 Table 7")
     elseif est == "htotdev" && m < 16
         return (Inf, "below τ = 16τ0 the FCS 2001 HTOT EDF table does not apply; Stable32's fallback is undocumented")
     end
@@ -310,6 +319,46 @@ function stable32_ci_forced_alpha_rows()
             tol, cinote = s32_ci_tol(est, m)
             push!(rows, Row("Stable32 CI (S32 α)", "PHASE.DAT", est * " lo", m, r.lo, lo[1] * scale(m), tol, cinote))
             push!(rows, Row("Stable32 CI (S32 α)", "PHASE.DAT", est * " hi", m, r.hi, hi[1] * scale(m), tol, cinote))
+        end
+    end
+    return rows
+end
+
+# ── Stable32 on a flicker PM frequency record (stable32_flickerpm/) ───────
+
+# Stable32 bias-corrects HTOTDEV for the α it identifies. At m = 256 it reads
+# white FM (B = 0.995) where SigmaTau reads flicker PM (B = 1), so the HTOT
+# rows apply the bias for Stable32's α and compare the estimator, not the
+# noise ID. TOTDEV's B is 1 on every row (PM or white FM), so the default
+# call serves; MTOT is printed raw.
+const S32_FPM_RUNS = Dict(
+    "Overlapping Allan"    => ("oadev",   (d, m, α) -> adev(d, m; ci=false).dev),
+    "Modified Allan"       => ("mdev",    (d, m, α) -> mdev(d, m; ci=false).dev),
+    "Overlapping Hadamard" => ("ohdev",   (d, m, α) -> hdev(d, m; ci=false, remove_drift=false).dev),
+    "Total"                => ("totdev",  (d, m, α) -> totdev(d, m; ci=false).dev),
+    "Modified Total"       => ("mtotdev", (d, m, α) -> mtotdev(d, m; ci=false, correct_bias=false).dev),
+    "Hadamard Total"       => ("htotdev", (d, m, α) ->
+        htotdev(d, m; ci=false, remove_drift=false, correct_bias=false).dev ./
+        sqrt.(bias_correction(_alpha_sym.(α), :htot, Float64.(m), length(d.y) * d.tau0))),
+)
+
+function stable32_flickerpm_rows()
+    dir = joinpath(FIX, "stable32_flickerpm")
+    d = read_frequency(joinpath(dir, "flickerpm_8192"); tau0=1.0)
+    tables = Pair{String,Vector{Vector{SubString{String}}}}[]   # Sigma Type => rows, in file order
+    for ln in eachline(joinpath(dir, "flickerpm_8192_tables.txt"))
+        t = match(r"Sigma Type: (.+)", ln)
+        t === nothing || (push!(tables, strip(t[1]) => []); continue)
+        v = split(ln)          # AF, τ, #, α, min, σ, max
+        length(v) == 7 && tryparse(Int, v[1]) !== nothing && push!(last(tables[end]), v)
+    end
+    rows = Row[]
+    for (est, tab) in tables
+        name, f = S32_FPM_RUNS[est]
+        ms = parse.(Int, getindex.(tab, 1))
+        got = f(d, ms, parse.(Int, getindex.(tab, 4)))
+        for (k, v) in enumerate(tab)
+            push!(rows, Row("Stable32 flicker PM σ", "flickerpm_8192", name, ms[k], parse(Float64, v[6]), got[k], S32_TOL_SIGMA, ""))
         end
     end
     return rows
@@ -449,6 +498,7 @@ end
 
 "Every comparison row, in report order."
 all_rows() = vcat(allantools_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
+                  stable32_flickerpm_rows(),
                   allantools_edf_rows(), allantools_ci_rows(), allantools_noiseid_rows(),
                   welch_rows(), dynamic_rows(), gap_rows(), drift_rows())
 

@@ -26,6 +26,14 @@ export async function loadPlotly() {
 
 export const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+// fn's result with the light theme's colours, for figures on white paper.
+// Synchronous, so the page never paints in between.
+export function inLightTheme(fn) {
+  const root = document.documentElement, theme = root.dataset.theme;
+  root.dataset.theme = "light";
+  try { return fn(); } finally { root.dataset.theme = theme; }
+}
+
 export const seriesColor = (i) => css(`--s${(i % 8) + 1}`);
 export const DASHES = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot"];
 const DASH_SVG = ["", "5 3", "1.5 3", "5 3 1.5 3", "9 3", "9 3 1.5 3"];
@@ -62,6 +70,7 @@ export function baseLayout() {
       bgcolor: css("--bg-card"), bordercolor: css("--line"), borderwidth: 1,
       x: 0.98, xanchor: "right", y: 0.98, yanchor: "top", font: { size: 11.5 },
     },
+    modebar: { bgcolor: "rgba(0,0,0,0)", color: css("--muted"), activecolor: css("--accent") },
     showlegend: false,
   };
 }
@@ -84,6 +93,9 @@ export const CONFIG = {
   modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "toggleSpikelines", "zoomIn2d", "zoomOut2d"],
   toImageButtonOptions: { format: "png", scale: 2, filename: "sigmatau" },
 };
+
+// Low to high σ: low values recede into the card, high values stand out.
+export const heatScale = () => [[0, css("--heat-lo")], [0.55, css("--heat-mid")], [1, css("--heat-hi")]];
 
 export function hexAlpha(hex, a) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());

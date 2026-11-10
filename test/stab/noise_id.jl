@@ -20,6 +20,42 @@ using SigmaTau
         @test pm(2) == [:WHPM, :WHPM]
     end
 
+    @testset "flicker FM at long τ" begin
+        # On decimated phase flicker FM reads α ≈ −1.45 and random-walk FM
+        # −2.4, so for m ≥ 2 the limit between them sits at −1.92. This
+        # flicker FM record reads −1.73 at m = 64.
+        fm(alpha) = identify_noise(noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0),
+                                             rng=Xoshiro(11)), [16, 64])
+        @test fm(-1) == [:FLFM, :FLFM]
+        @test fm(-2) == [:RWFM, :RWFM]
+        @test SigmaTau._lag1_label(-1.73, 1, -2) == -2    # not decimated: nearest integer
+        # The readings follow from the generalized autocovariances the EDF uses.
+        r1(alpha) = (s = t -> SigmaTau._compute_sw(Float64(t), alpha + 2);
+                     (s(3) - 4s(2) + 7s(1)) / (2s(2) - 8s(1)))
+        @test SigmaTau._LAG1_FLFM ≈ SigmaTau._lag1_reading(r1(-1), 2)
+        @test SigmaTau._LAG1_RWFM ≈ SigmaTau._lag1_reading(r1(-2), 2) ≈ -2.4
+    end
+
+    @testset "flicker-walk and random-run FM" begin
+        # A third difference (dmax = 3, the Hadamard family) tells the two
+        # from random-walk FM; sampled, the three read α = −3.0, −3.93, −4.57.
+        record(alpha) = noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0), rng=Xoshiro(11))
+        h3(alpha) = identify_noise(record(alpha), [1, 16, 64]; dmax=3)
+        @test h3(-2) == fill(:RWFM, 3)
+        @test h3(-3) == fill(:FWFM, 3)
+        @test h3(-4) == fill(:RRFM, 3)
+        @test hdev(record(-3), [16]).noise_type == [:FWFM]
+        r1(alpha) = (s = t -> SigmaTau._compute_sw(Float64(t), alpha + 2);
+                     (s(4) - 6s(3) + 16s(2) - 26s(1)) / (2s(3) - 12s(2) + 30s(1)))
+        @test SigmaTau._LAG1_RWFM3 ≈ SigmaTau._lag1_reading(r1(-2), 3) ≈ -3
+        @test SigmaTau._LAG1_FWFM ≈ SigmaTau._lag1_reading(r1(-3), 3)
+        @test SigmaTau._LAG1_RRFM ≈ SigmaTau._lag1_reading(r1(-4), 3)
+        # HTOT has published bias factors down to α = −4 (Howe & Peppler 2001,
+        # Table 3); MHTOT borrows random-walk FM's.
+        @test bias_correction([:FWFM, :RRFM], :htot, [16.0, 16.0], 4095.0) ≈ [0.717, 0.679]
+        @test allequal(bias_correction([:RWFM, :FWFM, :RRFM], :mhtot, fill(16.0, 3), 4095.0))
+    end
+
     @testset "noise-ID scale invariance" begin
         # Regression for the eps*N threshold bug in `_lag1_acf` that
         # produced :unknown classifications on any phase record with std
@@ -52,17 +88,15 @@ using SigmaTau
         using Random
         known = (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM)
 
-        # Lag-1 estimates outside α ∈ [-2, 2] clamp to the nearest end.
+        # Lag-1 estimates outside the labelled range clamp to the nearest end.
         # White PM scatters above α = 2.5 on some realizations, and
-        # random-run FM (α = -4) with dmax = 3 (the HDEV family's setting)
-        # lands below -2.5; both used to come back :unknown.
+        # random-run FM (α = -4) lands below the Allan family's floor of -2;
+        # both used to come back :unknown.
         rng = MersenneTwister(7)
         m_grid = [1, 2, 4, 8, 16, 32, 64]
         @test all(all(in(known), identify_noise(randn(rng, 2048), m_grid)) for _ in 1:50)
         rrfm = cumsum(cumsum(cumsum(randn(rng, 4096))))
-        n3 = identify_noise(rrfm, m_grid; dmin=0, dmax=3)
-        @test all(in(known), n3)
-        @test n3[1] == :RWFM
+        @test identify_noise(rrfm, m_grid) == fill(:RWFM, 7)
 
         # Averaging factors whose estimate fails take the successful one
         # nearest in log(m), including leading ones (previously :unknown),

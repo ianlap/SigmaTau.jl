@@ -3,7 +3,7 @@
 MHTOTDEV (modified Hadamard total deviation) is original to SigmaTau: no other
 library computes it, and no published reference gives its bias factor or its
 equivalent degrees of freedom (EDF). Every other total-family estimator inherits
-a published coefficient table (TOTVAR and MTOT from SP1065 Tables 7–8; HTOT from
+a published coefficient table (TOTVAR from SP1065 Table 7; MTOT and HTOT from
 the FCS 2001 paper). MHTOTDEV has none, so SigmaTau
 **measures** both by Monte Carlo against synthesized known-noise.
 

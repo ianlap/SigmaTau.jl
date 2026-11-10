@@ -91,7 +91,7 @@ end
         r = noise_id_nnls(p; deviation = :mhdev)
         @test r.tau == Float64.(filter(>=(4), SigmaTau._default_m_values(N, :mhdev)))
         @test length(r.weights) == length(r.tau) && all(>(0.0), r.weights)
-        @test noise_id_nnls(p, [2, 4, 8, 16, 32, 64, 128]; deviation = :mhdev).tau == [2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+        @test noise_id_nnls(p, 8:8:64; deviation = :mhdev).tau == 8.0:8.0:64.0
         for w in (:relative, fill(1.0, length(r.tau)))
             @test all(>=(0.0), noise_id_nnls(p; deviation = :mhdev, weights = w).amplitudes)
         end

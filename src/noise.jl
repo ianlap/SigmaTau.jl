@@ -15,16 +15,25 @@ family, as the deviation functions do.
 
 Identify the dominant power-law noise type at each averaging factor by the
 lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
-fewer than `NEFF_RELIABLE` effective samples remain. A white-PM result of the
-lag-1 test at `m ≥ 4` is confirmed with R(n), the ratio of MVAR to AVAR,
-because decimating the phase whitens flicker PM.
+fewer than `NEFF_RELIABLE` effective samples remain. Decimating the phase by
+`m` changes what the lag-1 test reads, and two steps allow for it. A white-PM
+result at `m ≥ 4` is confirmed with R(n), the ratio of MVAR to AVAR, because
+decimation whitens flicker PM. For `m ≥ 2` the limits between white FM,
+flicker FM and random-walk FM sit halfway between the values the estimate
+takes on sampled noise (α = 0, −1.446, −2.4), not at the half-integers of
+[riley-2004-lag1-acf](@cite), which split flicker FM almost evenly between
+its own label and random-walk FM.
 
-Every entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`; the
-function never returns `:unknown`. Estimates outside α ∈ [-2, 2] are
-clamped to the nearest end, an averaging factor whose estimate fails
-takes the type of the successful one nearest to it in log(m), and a
-record with no usable estimate at all (e.g. constant) is reported as
-`:WHFM`.
+Every entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM` and, with
+`dmax=3`, `:FWFM` (flicker-walk FM, α = −3) and `:RRFM` (random-run FM,
+α = −4), which the third difference of the Hadamard family converges for.
+On sampled noise a third difference reads α = −3.0, −3.93 and −4.57 for
+random-walk, flicker-walk and random-run FM, and for `m ≥ 2` the limits again
+sit halfway. The function never returns `:unknown`: estimates outside the
+labelled range are clamped to the nearest end, an averaging factor whose
+estimate fails takes the type of the successful one nearest to it in log(m),
+and a record with no usable estimate at all (e.g. constant) is reported as
+`:WHFM`. The B1 fallback stops at random-walk FM.
 
 The full record always passes through a 5σ outlier filter before the
 per-m loop; that step is unconditional and unrelated to the polynomial
@@ -93,13 +102,7 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
         end
 
         isnan(alpha) && continue
-        # The lag-1 estimate is continuous and noisy: a white-PM record can
-        # come out at α ≈ 2.6, and at d = dmax a ρ near its 0.5 ceiling gives
-        # α ≈ -3 (and FWFM/RRFM-dominated data, or an infinite ratio, can go
-        # further). None of those has a symbol here, so clamp to the
-        # supported range and take the nearest power law instead of
-        # reporting :unknown.
-        alphas[k] = round(Int, clamp(alpha, -2.0, 2.0))
+        alphas[k] = _lag1_label(alpha, m, dmax >= 3 ? -4 : -2)
         ok[k] = true
     end
 
@@ -113,7 +116,36 @@ identify_noise(data::PhaseData, m_values::AbstractVector{<:Integer}; kwargs...) 
 identify_noise(data::FrequencyData, m_values::AbstractVector{<:Integer}; kwargs...) =
     identify_noise(_freq_to_phase(data), m_values; kwargs...)
 
-const _NOISE_SYMBOLS = (:RWFM, :FLFM, :WHFM, :FLPM, :WHPM)  # α = -2 … 2
+# Decimating the phase by m leaves a sampled continuous process, on which the
+# lag-1 estimate does not settle on the integers. After two differences flicker
+# FM and random-walk FM read α = −1.446 and −2.4: their second differences
+# correlate at (9 ln 3 − 16 ln 2)/(8 ln 2) and 1/4. After three, random-walk,
+# flicker-walk and random-run FM read −3.0, −3.927 and −4.565, from
+# −1/3, (128 ln 2 − 81 ln 3)/(27 ln 3 − 32 ln 2) and 13/33. All follow from the
+# generalized autocovariances of Greenhall & Riley (2003).
+_lag1_reading(r1, d) = 2 - 2 * (d + r1 / (1 + r1))
+const _LAG1_FLFM = _lag1_reading((9log(3) - 16log(2)) / (8log(2)), 2)
+const _LAG1_RWFM = _lag1_reading(1 / 4, 2)
+const _LAG1_RWFM3 = _lag1_reading(-1 / 3, 3)
+const _LAG1_FWFM = _lag1_reading((128log(2) - 81log(3)) / (27log(3) - 32log(2)), 3)
+const _LAG1_RRFM = _lag1_reading(13 / 33, 3)
+
+# Integer α of a lag-1 estimate, no lower than `amin` (−2, or −4 when a third
+# difference is allowed). The estimate is continuous and noisy (white PM can
+# come out at 2.6), so it is clamped to the labelled range. At m = 1 it rounds
+# to the nearest integer (Riley & Greenhall 2004); for m ≥ 2 the limits on the
+# FM side sit halfway between the sampled-process readings above, at −0.72,
+# −1.92, −3.46 and −4.25.
+function _lag1_label(alpha::Real, m::Int, amin::Int)
+    m == 1 && return round(Int, clamp(alpha, amin, 2))
+    amin <= -4 && alpha < (_LAG1_FWFM + _LAG1_RRFM) / 2 && return -4
+    amin <= -3 && alpha < (_LAG1_RWFM3 + _LAG1_FWFM) / 2 && return -3
+    alpha < (_LAG1_FLFM + _LAG1_RWFM) / 2 && return -2
+    alpha < _LAG1_FLFM / 2 && return -1
+    return round(Int, clamp(alpha, 0.0, 2.0))
+end
+
+const _NOISE_SYMBOLS = (:RRFM, :FWFM, :RWFM, :FLFM, :WHFM, :FLPM, :WHPM)  # α = -4 … 2
 
 # Map integer α to noise symbols. An averaging factor whose estimate failed
 # (too few points after differencing, a degenerate decimated series) takes
@@ -140,7 +172,7 @@ function _fill_noise_symbols(alphas::Vector{Int}, ok::AbstractVector{Bool},
                 end
             end
         end
-        noises[k] = _NOISE_SYMBOLS[alphas[j] + 3]
+        noises[k] = _NOISE_SYMBOLS[alphas[j] + 5]
     end
     return noises
 end
@@ -587,11 +619,10 @@ function _nnls_symbol(alpha::Int)
     return :unknown
 end
 
-# Deviation dispatch: the RAW profile, uniform kwargs. `ci=false` skips the
-# lag-1/B1 classifier and `correct_bias=false` skips MHTOTDEV's bias divisor —
-# both of which are functions of `identify_noise`, i.e. of exactly the
-# classification this routine is meant to replace. Fitting a bias-corrected
-# profile would make the decomposition depend on the answer it is computing.
+# The raw profile: `ci=false` skips the lag-1/B1 classifier and
+# `correct_bias=false` MHTOTDEV's bias divisor. Both depend on
+# `identify_noise`, and fitting a profile that depends on a noise label would
+# make the decomposition depend on the answer it is computing.
 function _nnls_deviation(deviation::Symbol, data::PhaseData, m_values::Vector{Int})
     deviation === :mdev  && return mdev(data, m_values; ci=false)
     deviation === :mhdev && return mhdev(data, m_values; ci=false)
@@ -601,8 +632,8 @@ function _nnls_deviation(deviation::Symbol, data::PhaseData, m_values::Vector{In
     throw(ArgumentError("noise_id_nnls: unsupported deviation $deviation"))
 end
 
-# The shipped EDF tables stop at α = -2 (`_alpha_from_noise` maps anything else
-# to α = 0), so the α ≤ -3 rows borrow the RWFM model — the closest available.
+# The MDEV and MHTOTDEV EDF models stop at α = -2, so the α ≤ -3 rows borrow
+# the RWFM model — the closest available.
 # This only sets the χ² weights; it does not enter the fitted amplitudes.
 _nnls_edf_symbol(alpha::Int) = alpha <= -3 ? :RWFM : _nnls_symbol(alpha)
 
@@ -673,7 +704,7 @@ collect(zip(r.noise_types, r.amplitudes))   # amplitude per α
 r.dominant                                  # dominant type per τ
 ```
 """
-function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
+function noise_id_nnls(data::PhaseData, m_values::AbstractVector{<:Integer} = Int[];
                        deviation::Symbol = :mhdev,
                        alphas::AbstractVector{<:Integer} = _nnls_default_alphas(deviation),
                        weights::Union{Symbol, AbstractVector{<:Real}} = :edf)
@@ -681,7 +712,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
     τ₀ = data.tau0
     # The estimator's octave grid from m = NNLS_M_MIN; see the docstring.
     ms = isempty(m_values) ? filter(>=(NNLS_M_MIN), _default_m_values(length(x), deviation)) :
-                             m_values
+                             collect(Int, m_values)
     isempty(ms) && throw(ArgumentError(
         "noise_id_nnls: record of $(length(x)) samples is too short for the default " *
         "m ≥ $NNLS_M_MIN grid; pass `m_values` explicitly"))
@@ -742,6 +773,6 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
             contributions, dominant, residual = rss, weights = w)
 end
 
-function noise_id_nnls(data::FrequencyData, m_values::Vector{Int} = Int[]; kwargs...)
+function noise_id_nnls(data::FrequencyData, m_values::AbstractVector{<:Integer} = Int[]; kwargs...)
     return noise_id_nnls(_freq_to_phase(data), m_values; kwargs...)
 end

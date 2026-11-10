@@ -1,7 +1,10 @@
 /* SigmaTau explorer theme: the approved design tokens (sand + Alabama
-   crimson, Okabe-Ito series, IBM Plex). Every color and font the UI uses
-   comes from here; app.css and the plots only read these variables. */
+   crimson, Okabe-Ito series, IBM Plex) and their dark counterpart,
+   Espresso. Every color and font the UI uses comes from here; app.css and
+   the plots only read these variables. js/theme.js sets data-theme. */
 :root {
+  color-scheme: light;
+
   /* Surfaces */
   --bg-window:   #e9e0cf;
   --bg-panel:    #f1eadc;
@@ -23,6 +26,8 @@
   --accent:       #9e1b32;
   --accent-hover: #7a1426;
   --accent-soft:  #f2ddd8;
+  --accent-fill:  #9e1b32;   /* filled buttons, under white text */
+  --accent-fill-hover: #7a1426;
   --warn:         #9a5b00;
   --warn-soft:    #f6e7c8;
   --warn-dot:     #e0a33a;
@@ -40,18 +45,22 @@
   --s7: #3d3d3d;
   --s8: #a88f00;
   --outlier: #e69f00;
+  --on-series: #fff;         /* text on a series-coloured fill */
+  --ci-alpha: 0.14;          /* CI band = series colour at this opacity */
 
-  /* Noise-type strip on the Stability plot, ordered by α (white PM … RW FM) */
+  /* Noise-type strip on the Stability plot, ordered by α (white PM … random-run FM) */
   --noise-wpm:  #dde4ee;
   --noise-fpm:  #dfe8dc;
   --noise-wfm:  #ece3c9;
   --noise-ffm:  #efd9c5;
   --noise-rwfm: #ead0cf;
+  --noise-fwfm: #e6cfe0;
+  --noise-rrfm: #d9d1e8;
 
   /* Heatmap ramp, one scale shared across clocks */
-  --heat-lo:  #eef2fa;
-  --heat-mid: #2f4e90;
-  --heat-hi:  #14213f;
+  --heat-lo:  #eef1f8;
+  --heat-mid: #5576b6;
+  --heat-hi:  #13213f;
 
   /* Type */
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -68,7 +77,70 @@
   --radius-pill: 999px;
   --shadow-pop: 0 12px 40px rgba(60, 45, 20, 0.22);
   --focus-ring: 0 0 0 3px rgba(158, 27, 50, 0.3);
+  --backdrop: rgba(60, 45, 20, 0.28);
+  --tint: rgba(43, 36, 24, 0.07);
   --header-h: 56px;
   --status-h: 34px;
   --panel-w: 320px;
+}
+
+/* Espresso: the same warm family, dark. Text passes 4.5:1 and series lines
+   5.5:1 on the card; crimson is lifted for text, kept deep for fills. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-window:   #1c1914;
+  --bg-panel:    #221e18;
+  --bg-card:     #2a251e;
+  --bg-popover:  #332d25;
+  --line:        #3d362b;
+  --line-strong: #4d4436;
+  --line-soft:   #332d25;
+  --grid:        #3a3329;
+  --table-head:  #302a22;
+  --table-zebra: #26221b;
+
+  --ink:   #ece4d4;
+  --ink-2: #c9bfac;
+  --muted: #a39782;
+
+  --accent:       #ea6a7e;
+  --accent-hover: #f08a9a;
+  --accent-soft:  #3f1d24;
+  --accent-fill:  #b8243d;
+  --accent-fill-hover: #9e1b32;
+  --warn:         #e3a64a;
+  --warn-soft:    #3d3020;
+  --warn-dot:     #e3a64a;
+  --good:         #5fb98a;
+  --error:        #f07c72;
+
+  --s1: #56b4e9;
+  --s2: #e69f00;
+  --s3: #2fbf8f;
+  --s4: #d98cb8;
+  --s5: #f0e442;
+  --s6: #ef7d45;
+  --s7: #b9a6f2;
+  --s8: #c9bfac;
+  --on-series: #1c1914;
+  --ci-alpha: 0.22;
+
+  --noise-wpm:  #2b3646;
+  --noise-fpm:  #2c3b2f;
+  --noise-wfm:  #433c27;
+  --noise-ffm:  #473323;
+  --noise-rwfm: #472a2d;
+  --noise-fwfm: #442a41;
+  --noise-rrfm: #362d4b;
+
+  /* Low values recede into the card, high values glow. */
+  --heat-lo:  #1f2638;
+  --heat-mid: #3f6fb5;
+  --heat-hi:  #e8eefc;
+
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --focus-ring: 0 0 0 3px rgba(234, 106, 126, 0.45);
+  --backdrop: rgba(0, 0, 0, 0.5);
+  --tint: rgba(236, 228, 212, 0.05);
 }

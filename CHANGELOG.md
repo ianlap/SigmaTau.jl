@@ -9,15 +9,36 @@ Clock models, the Kalman filter and timescales.
 
 ### Added
 
+- `FrequencyData(p)` and `PhaseData(y)` convert a record to the other kind
+  (first difference, or running sum from 0), keeping τ₀, `source` and
+  `start`; `PhaseData` refuses a frequency record with gaps. In Python,
+  `PhaseData.to_frequency()` and `FrequencyData.to_phase()`.
+- `noise_id_nnls` and `powerlaw_fit` take the averaging factors as any
+  integer vector, a range such as `1:64` included.
+- Python: `telecom_mask`, `mask_check` (a `MaskCheck`; Julia's `pass` is
+  `passed`), `TELECOM_MASKS` and `summarize`.
+- `integrated_jitter`: integrated phase jitter (rms radians and seconds) and
+  residual FM (rms hertz) over an offset band, from a `ssb_phase_noise`,
+  `psd_x` or `psd_y` result or from spectrum points such as an analyzer's
+  ℒ(f) (NIST SP1065 §5.2.19; IEEE Std 1139-1999 eq. A.16). Also in
+  Python.
+- `adev` and `hdev` take `overlapping=false` for the non-overlapped
+  estimators (NIST SP1065 §5.2.2 and §5.2.8; Stable32's Normal Allan and
+  Hadamard, allantools' `adev` and `hdev`), with the Greenhall–Riley EDF
+  for stride τ. Also in Python.
+- Explorer: Espresso dark theme; the header button follows the system
+  setting or picks light or dark, and plots, the heatmap and exports follow
+  the theme.
 - Explorer import dialog: a typed scale factor (a number or an expression such
   as `1/(2*pi*518.295836590863e12)`) for readings that are not in the offered
   units, kept when the dialog is reopened; GNSS clock tables, whitespace
   `.csv` files, one-column files and comment-line names load as downloaded.
 - `read_data` / `--input-format` read BIPM `UTC - UTC(k)` files (`:bipm_utc`)
   and RINEX 3 clock files (`:rinex_clk`, the IGS and CODE clock products: one
-  satellite or station clock per call, picked with `column` / `--column`). The
-  explorer opens both as downloaded, unpacks `.gz` files, and lists a RINEX
-  file's clocks to pick from.
+  satellite or station clock per call, picked with `column` / `--column`; old
+  files with `D` exponents too). The explorer opens both as downloaded, unpacks
+  `.gz` files, and lists a RINEX file's clocks to pick from, each on its own
+  sample interval.
 - Docs: "Coming from Stable32" and "Coming from allantools" guides, mapping
   their statistics, options and defaults onto SigmaTau.
 - ITU-T wander masks for MTIE and TDEV: `TELECOM_MASKS` (G.811 PRC,
@@ -136,9 +157,45 @@ Clock models, the Kalman filter and timescales.
 - `fillgaps=true` places samples on the grid of the regular time steps
   instead of the smallest step, so jittered timestamps no longer scatter
   the record.
+- `identify_noise(...; dmax=3)`, and with it the Hadamard family (`hdev`,
+  `mhdev`, `htdev`, `htotdev`, `mhtotdev`), now labels flicker-walk FM
+  (`:FWFM`, α = −3) and random-run FM (`:RRFM`, α = −4) instead of
+  reporting both as `:RWFM`. HDEV, MHDEV and HTOTDEV take their EDF, and
+  HTOTDEV its bias factor, at the identified α: read as random-walk FM,
+  random-run FM had an HDEV EDF 26 % too high and an HTOTDEV 6 % too low.
+  MHTOTDEV keeps random-walk FM's model for both labels. The explorer, the
+  CLI report and the Python docs name the two labels. At long τ some
+  random-walk FM records are now labelled flicker-walk FM (6 % with 64
+  averaged points left, 11 % with 32).
 
 ### Fixed
 
+- `mhtotdev` at `m = 1` uses the exact bias factor 124/225 and MHDEV's EDF.
+  The fitted bias and EDF models do not hold at τ₀, and the 68.3 % interval
+  never covered the true value there.
+- `totdev` at `m = 1` takes ADEV's EDF for every noise type: at τ₀ TOTVAR is
+  AVAR term for term, and SP1065 Table 7 was applied to the FM noises.
+- `mtotdev` and `ttotdev` take their EDF from Howe and Peppler (2001),
+  Table 2, from τ = 16τ₀, in place of SP1065 Table 8, which runs from 16 %
+  high to 41 % low against simulation; Table 2 stays within 8 % for
+  T/τ ≥ 16.
+- ThêoBR (`theo1` by default, and the Thêo segment of `theoh`) averages its
+  AVAR/Thêo1 ratio over `i = 0…⌊N/30 − 3⌋`, as Howe (2006), McGee and Howe
+  (2007) and Taylor and Howe (2010) define it. SP1065 eq. 33 prints
+  `⌊N/6 − 3⌋`, which runs AVAR out to half the record: the ratio scattered
+  by 25 to 30 % and biased the corrected variance by −9 to +11 %, against
+  8 to 11 % and −5 to +3 % now. Output moves by a few percent. Below
+  N = 90, where the papers' formula has no rung, the first rung is used
+  alone.
+- Flicker FM keeps its label at medium and long τ. On phase decimated by m
+  the lag-1 estimate of flicker FM settles at α = −1.45 and of random-walk
+  FM at −2.4, so rounding to the nearest integer sent pure flicker FM to
+  random-walk FM in a large share of records: it kept its own label in
+  only 48 to 72 % for m = 8 to 64 (N = 4096). For m ≥ 2 the limits between
+  white FM, flicker FM and random-walk FM now sit halfway between those
+  readings, at −0.72 and −1.92; flicker FM then keeps its label in 87 to
+  100 % of those records and random-walk FM in 98 % or more. Stable32
+  rounds, so its labels differ there.
 - Flicker PM is identified as flicker PM at long τ. The lag-1 test runs on
   phase decimated by m, which whitens flicker PM, so from m ≈ 16 a pure
   flicker-PM record was labelled white PM (in 64 % of records at m = 16 and

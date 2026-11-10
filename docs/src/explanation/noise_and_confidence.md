@@ -73,9 +73,25 @@ ratios. Decimation whitens flicker PM: its lag-1 correlation fades as m
 grows, and from m ≈ 16 the test reads it as white PM, whose ADEV has several
 times the EDF. A white-PM result is therefore confirmed with R(n), the ratio
 of MVAR to AVAR that SP1065 §5.5.2 uses to separate the two PM noises, and
-becomes flicker PM when R(n) says so. The result is always one of the five labels above: estimates outside
-the range are clamped to WHPM or RWFM, and a τ where the estimate fails takes
-the type of its nearest neighbour.
+becomes flicker PM when R(n) says so. The result is always one of the five labels above, or for the
+Hadamard family one of seven (see below): estimates outside the range are
+clamped to its ends, and a τ where the estimate fails takes the type of its
+nearest neighbour.
+
+Decimation also moves the FM noises. The estimator of
+[riley-2004-lag1-acf](@cite) turns the lag-1 autocorrelation r₁ of the
+differenced series into α and rounds to the nearest integer, which is exact
+for discrete fractional noise. Phase decimated by m is instead a sampled
+continuous process. The second differences of sampled flicker FM and
+random-walk FM correlate at r₁ = (9 ln 3 − 16 ln 2)/(8 ln 2) = −0.217 and
+r₁ = 1/4, from their generalized autocovariances t² ln|t| and |t|³
+[greenhall-2003-edf-stability](@cite), and the estimator reads those as
+α = −1.446 and −2.4 where discrete noise gives −1 and −2. Simulated records
+reach those values by m ≈ 8. Rounding at −1.5 therefore splits flicker FM
+almost evenly between its own label and random-walk FM. For m ≥ 2 SigmaTau
+places the limits halfway between the readings 0, −1.446 and −2.4, at −0.72
+and −1.92; at m = 1 the record is not decimated and the published rounding
+stands.
 
 Stable32 does not detrend before the lag-1 estimate. The difference only
 matters on records with drift; `identify_noise(...; remove_drift=false)` follows
@@ -92,6 +108,25 @@ identification; the deviation itself does not change. The removal also takes
 some of the slowest noise with it, so on a record without drift flicker FM
 near the longest τ is read as white FM more often. `remove_drift=false`
 identifies the noise on the record as given, which is what Stable32 does.
+
+The third difference of the Hadamard family also converges for flicker-walk
+FM (`:FWFM`, α = −3) and random-run FM (`:RRFM`, α = −4), and these estimators
+identify the two by letting the lag-1 estimator difference a third time
+[riley-2004-lag1-acf](@cite). The third differences of sampled random-walk,
+flicker-walk and random-run FM correlate at r₁ = −1/3,
+(128 ln 2 − 81 ln 3)/(27 ln 3 − 32 ln 2) = −0.035 and 13/33, which the
+estimator reads as α = −3.0, −3.93 and −4.57, so for m ≥ 2 the limits sit at
+−3.46 and −4.25. HDEV, MHDEV and HTOTDEV then take their EDF at the identified
+α [greenhall-2003-edf-stability](@cite) and HTOTDEV its bias factor
+[howe-2001-total-estimators](@cite); MHTOTDEV has no model below α = −2 yet
+and uses random-walk FM's. Read as random-walk FM, random-run FM had an HDEV
+EDF 26 % too high and an HTOTDEV 6 % too low. The price is paid by
+random-walk FM at long τ: its second differences sit at ρ = 0.2, next to the
+0.25 at which the estimator differences again, and in simulation it keeps
+its label in 91 % of records with 64 averaged points left and 81 % with 32,
+where two differences alone keep 98 % and 93 %. A random-walk FM record
+labelled flicker-walk FM has an HDEV EDF 2 % lower and an HTOTDEV 3.7 %
+higher.
 
 ## Equivalent degrees of freedom
 

@@ -43,17 +43,18 @@ SigmaTau's are overlapping (IEEE 1139), so the names shift:
 
 | allantools | SigmaTau |
 |---|---|
-| `adev`, `hdev` (non-overlapping) | not provided; the overlapping forms have more degrees of freedom |
+| `adev`, `hdev` (non-overlapping) | `adev(p; overlapping=false)`, `hdev(p; overlapping=false)` (`overlapping=False` in Python); the overlapping forms, the default, have more degrees of freedom |
 | `oadev` | [`adev`](@ref) |
 | `mdev`, `tdev` | [`mdev`](@ref), [`tdev`](@ref) |
 | `ohdev` | [`hdev`](@ref) |
 | `totdev`, `mtotdev`, `ttotdev`, `htotdev` | the same names; see the bias note below |
 | `theo1` | [`theo1`](@ref); see the τ note below |
 | `mtie`, `tierms` | [`mtie`](@ref), [`tierms`](@ref) |
-| `mask.py` (ITU-T TDEV/MTIE masks) | [`telecom_mask`](@ref), [`mask_check`](@ref) |
+| `mask.py` (ITU-T TDEV/MTIE masks) | [`telecom_mask`](@ref), [`mask_check`](@ref), in Python too |
 | `gradev` | [`adev`](@ref): `NaN` gaps are skipped, as `gradev` does |
 | `gcodev` | [`groslambert`](@ref), [`cross_adev`](@ref) |
 | `three_cornered_hat_phase` | [`ncornered_hat`](@ref) (any number of clocks ≥ 3) |
+| `phase2frequency`, `frequency2phase` | `FrequencyData(p)`, `PhaseData(y)`; `p.to_frequency()`, `y.to_phase()` in Python |
 | `noise.white`, `noise.brown`, `noise_kasdin.Noise` | [`noise_gen`](@ref), any power law and mixture |
 | `autocorr_noise_id` | [`identify_noise`](@ref), run inside every estimator |
 | `edf_greenhall`, `confidence_interval` | automatic with `ci=true`; [`calculate_edf`](@ref) and [`confidence_intervals`](@ref) on their own |

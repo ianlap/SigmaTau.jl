@@ -24,7 +24,9 @@ using SigmaTau
         "Time"                 => (m -> m * sqrt(LK.mdev_var(x, m, 1.0, x_cs)) / sqrt(3.0), 1e-4),
         "Modified Total"       => (m -> sqrt(LK.mtotdev_var(x, m, 1.0)), 5e-4),
         "Total"                => (m -> sqrt(LK.totdev_var_howe(x, m, 1.0)), 0.02),   # B ≤ 1.5 %
-        "Hadamard Total"       => (m -> sqrt(LK.htotdev_var(x, m, 1.0)), 0.10))       # 1/√(1+a) ≤ 8.4 %
+        "Hadamard Total"       => (m -> sqrt(LK.htotdev_var(x, m, 1.0)), 0.10),       # 1/√(1+a) ≤ 8.4 %
+        "Allan"                => (m -> adev(PhaseData(x), [m]; ci=false, overlapping=false).dev[1], 1e-4),
+        "Hadamard"             => (m -> hdev(PhaseData(x), [m]; ci=false, overlapping=false).dev[1], 1e-4))
     # CSV columns: Type, AF, Tau, N, Alpha, MinSigma, Sigma, MaxSigma
     rows = [(r[1], parse(Int, r[2]), parse(Float64, r[7]))
             for r in split.(readlines(joinpath(dir, "stable32out", "stable32_data_full.csv"))[2:end], ',')
@@ -34,6 +36,19 @@ using SigmaTau
                    if !isapprox(raw[k][1](m), ref; rtol=raw[k][2])])
 
     pd = PhaseData(x, 1.0)
+    # Non-overlapped ADEV / HDEV: Stable32's counts, and its intervals from the
+    # stride-1 EDF at Stable32's noise type.
+    csv = split.(readlines(joinpath(dir, "stable32out", "stable32_data_full.csv"))[2:end], ',')
+    αsym = Dict(2 => :WHPM, 1 => :FLPM, 0 => :WHFM, -1 => :FLFM, -2 => :RWFM)
+    for (k, d, est) in (("Allan", 2, adev), ("Hadamard", 3, hdev))
+        s32 = filter(r -> r[1] == k, csv)
+        ms = [parse(Int, r[2]) for r in s32]
+        @test est(pd, ms; ci=false, overlapping=false).neff == [parse(Int, r[4]) for r in s32]
+        edf = SigmaTau._nonoverlapped_edf(d, [αsym[parse(Int, r[5])] for r in s32], ms, length(x))
+        lo, σ, hi = (parse.(Float64, getindex.(s32, c)) for c in 6:8)
+        l, h = confidence_intervals(σ, edf, 0.683)
+        @test all(isapprox.(l, lo; rtol=1e-3)) && all(isapprox.(h, hi; rtol=1e-3))
+    end
     tot = [(m, ref) for (k, m, ref) in rows if k == "Total"]
     @test length(tot) >= 10
     @test all(isapprox.(totdev(pd, first.(tot)).dev, last.(tot); rtol=1e-4))

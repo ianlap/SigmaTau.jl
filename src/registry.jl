@@ -47,8 +47,13 @@ end
 # :theo1 grid is rounded to even averaging factors in `tau_values`).
 for f in _ESTIMATOR_NAMES
     @eval $f(data::AbstractTimingData, taus::TauMode=Octave; kwargs...) =
-        $f(data, tau_values(taus, _nphase(data), $(QuoteNode(f))); kwargs...)
+        $f(data, tau_values(taus, _nphase(data), _grid_kernel($(QuoteNode(f)), kwargs)); kwargs...)
 end
+
+# Two non-overlapped ADEV (HDEV) terms span (d + 1)·m + 1 samples, the reach
+# of MDEV (MHDEV), so the grid stops where theirs does.
+_grid_kernel(f::Symbol, kwargs) =
+    get(kwargs, :overlapping, true) ? f : f === :adev ? :mdev : f === :hdev ? :mhdev : f
 
 """
     estimators() → Vector{NamedTuple}

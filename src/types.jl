@@ -21,7 +21,8 @@ p = PhaseData(x, 1.0)          # x in seconds, τ₀ = 1 s
 adev(p)
 ```
 
-[`read_phase`](@ref) builds one from a file.
+[`read_phase`](@ref) builds one from a file, and `PhaseData(f)` converts a
+[`FrequencyData`](@ref) record to phase.
 
 $(TYPEDFIELDS)
 """
@@ -68,7 +69,8 @@ f = FrequencyData(y, 10.0)     # one reading every 10 s
 mdev(f)
 ```
 
-[`read_frequency`](@ref) builds one from a file.
+[`read_frequency`](@ref) builds one from a file, and `FrequencyData(p)`
+converts a [`PhaseData`](@ref) record to frequency (below).
 
 $(TYPEDFIELDS)
 """

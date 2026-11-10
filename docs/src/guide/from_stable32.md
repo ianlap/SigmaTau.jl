@@ -23,7 +23,7 @@ p = read_phase("export.dat")        # a Stable32 text export
 | Tau (sample interval) | `tau0`, from the header or the time column, or `tau0=` |
 | Multiplier | `scaling=` on the readers (`1e-9` for ns) |
 | MJD time tags | the time column; `time_col=` picks it, τ₀ follows from it and [`start_time`](@ref) gives the first sample's date |
-| Converting phase ↔ frequency | not needed; `FrequencyData` integrates to `N + 1` phase points, as Stable32 does |
+| Converting phase ↔ frequency | not needed for the statistics, which take either; `FrequencyData(p)` and `PhaseData(y)` convert a record, `N` frequency samples integrating to `N + 1` phase points as in Stable32 |
 
 ## Running the statistics
 
@@ -33,11 +33,11 @@ same from a window or a shell.
 
 | Stable32 statistic | SigmaTau |
 |---|---|
-| Normal (non-overlapping) Allan | not provided; the overlapping form has more degrees of freedom |
+| Normal (non-overlapping) Allan | `adev(p; overlapping=false)` |
 | Overlapping Allan | [`adev`](@ref) |
 | Modified Allan | [`mdev`](@ref) |
 | Time | [`tdev`](@ref) |
-| Hadamard (non-overlapping) | not provided |
+| Hadamard (non-overlapping) | `hdev(p; overlapping=false)` |
 | Overlapping Hadamard | [`hdev`](@ref) |
 | Total | [`totdev`](@ref) |
 | Modified Total | `mtotdev(p; correct_bias=false)`; see below |
@@ -93,6 +93,7 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
+| Limits between the FM noises, τ ≥ 2τ₀ | lag-1 estimate rounded to the nearest α | limits halfway between what the estimate reads on decimated phase | no switch |
 | TOTDEV, HTOTDEV | bias-corrected | bias-corrected | the same |
 
 The detrending choices change the identified noise type only at long τ, where
@@ -108,6 +109,13 @@ labels averaging factors 16, 32 and 128 to 512 white PM and the others up to
 to 2e-5 at every τ and the intervals to 3e-4 wherever the labels do. Where
 they do not, Stable32's interval is ±0.34 % against a simulated scatter of
 ±0.5 % (m = 16) to ±1.8 % (m = 512), and SigmaTau's is ±0.55 % to ±1.7 %.
+
+The FM-limits row shows from medium τ. On decimated phase the lag-1 estimate
+of flicker FM settles at α = −1.45, next to the −1.5 at which rounding turns it
+into random-walk FM: in simulation (N = 4096) pure flicker FM keeps its label in
+72 % of records at m = 8 and 48 % at m = 64 with rounding, and in 100 % and
+87 % with SigmaTau's limits. Random-walk FM keeps its label in 98 % or more
+of records at those m either way.
 
 ## Gaps
 

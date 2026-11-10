@@ -44,24 +44,24 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             # is dominated by the same noise-shape contribution as ADEV, so the
             # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m, the overlapped
             # convention) is the accepted pragmatic substitute when no
-            # totvar-specific table value is published.
-            if alpha == 2 || alpha == 1
+            # totvar-specific table value is published. At m = 1 no difference
+            # reaches the extension, so TOTVAR is AVAR term for term.
+            if alpha == 2 || alpha == 1 || m == 1
                 edfs[k] = _calc_edf_core(alpha, 2, m, m, m, N)
             else
                 b, c = _coeff_totvar(alpha)
                 edfs[k] = b * (T / tau) - c
             end
         elseif method == :mtotdev
-            # The SP1065 Table 8 coefficient formula is valid only for
-            # τ ≥ 16τ0. Below that floor MTOT reduces to MDEV, so it inherits
-            # the modified-Allan EDF (Greenhall–Riley, d=2, F=1), verified to
-            # match Stable32's reported Chi Square DF to ~5 sig figs at small m
-            # (and avoids the b·(T/τ) form returning an unphysical EDF > N).
+            # Howe & Peppler 2001 Table 2 holds from τ = 16τ0: the Hadamard
+            # total column two steps up in α. Below that MTOT takes MDEV's EDF
+            # (Greenhall–Riley, d=2, F=1), as Stable32 does; it reads 20–50 %
+            # low there, on the wide side.
             if m < 16
                 edfs[k] = _calc_edf_core(alpha, 2, m, 1, m, N)
             else
-                b, c = _coeff_mtot(alpha)
-                edfs[k] = b * (T / tau) - c
+                b0, b1 = _coeff_htot(alpha - 2)
+                edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
             end
         elseif method == :htotdev
             # Same logic as :totdev: for WHPM/FLPM, fall back to HDEV-style EDF
@@ -77,8 +77,15 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
             end
         elseif method == :mhtotdev
-            b, c = _coeff_mhtot(alpha)
-            edfs[k] = b * (T / tau) - c
+            # At m = 1 MHTOTVAR is 124/225 of MHVAR term for term (see `mhtotdev`).
+            if m == 1
+                edfs[k] = _calc_edf_core(alpha, 3, 1, 1, 1, N)
+            else
+                # No model below α = −2 yet: flicker-walk and random-run FM
+                # take random-walk FM's, here and in `bias_correction`.
+                b, c = _coeff_mhtot(max(alpha, -2))
+                edfs[k] = b * (T / tau) - c
+            end
         elseif method == :theo1
             edfs[k] = _theo1_edf(alpha, m, N)
         elseif method == :pdev
@@ -97,6 +104,8 @@ function _alpha_from_noise(noise::Symbol)
     if noise == :WHFM return 0 end
     if noise == :FLFM return -1 end
     if noise == :RWFM return -2 end
+    if noise == :FWFM return -3 end
+    if noise == :RRFM return -4 end
     return 0
 end
 
@@ -261,20 +270,6 @@ function _coeff_totvar(alpha::Int)
     return (NaN, NaN)
 end
 
-function _coeff_mtot(alpha::Int)
-    # edf = b·(T/τ) − c, coefficients per noise type from NIST SP1065
-    # (Riley 2008) §5.4.3 Table 8, the published standard, traceable to
-    # Greenhall's degrees-of-freedom recipes (Greenhall 1991 / Greenhall &
-    # Riley 2003). Used verbatim for all five noise types, matching how
-    # `_coeff_totvar` follows SP1065 Table 7.
-    alpha == 2  && return (1.90, 2.10)
-    alpha == 1  && return (1.20, 1.40)
-    alpha == 0  && return (1.10, 1.20)
-    alpha == -1 && return (0.85, 0.50)
-    alpha == -2 && return (0.75, 0.31)
-    return (NaN, NaN)
-end
-
 function _coeff_mhtot(alpha::Int)
     # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
     # (tools/mc_mhtotdev.jl at git 9d7a408: per-window quadratic detrend,
@@ -402,7 +397,8 @@ function _coeff_htot(alpha::Int)
     # Howe & Peppler 2001 Table 3, columns b₀ and b₁ of
     #   edf(τ) = (T/τ) / (b₀ + b₁·τ/T)
     # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses an
-    # undocumented fallback that is not reproduced here.
+    # undocumented fallback that is not reproduced here. Their Table 2 gives
+    # the modified total variance the same values at α + 2.
     alpha == 0  && return (0.559, 1.004)
     alpha == -1 && return (0.868, 1.140)
     alpha == -2 && return (0.938, 1.696)
@@ -415,6 +411,12 @@ end
 # for α = 2, 1, 0, −1, −2 (Howe & Peppler 2001, Table 2); the Hadamard total
 # variance takes the same column at α = 0 … −4 (their Table 3).
 const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
+
+# B = b0 + b1·(τ/T) of the modified Hadamard total variance for α = 2 … −2,
+# E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo over τ/τ0 ≥ 16
+# (tools/mc_mhtotdev.jl at git 9d7a408, the same sweep as _coeff_mhtot).
+const _MHTOT_B0 = (0.9005, 0.8238, 0.7933, 0.7841, 0.7879)
+const _MHTOT_B1 = (-0.0083, -0.0541, -0.0422, -0.0357, -0.0325)
 
 """
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
@@ -465,20 +467,13 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
             B[k] = 1 - a * (tau / T)
         elseif var_type == :mtot
-            B[k] = 1 + _MTOT_NBIAS[3 - clamp(alpha, -2, 2)]
+            alpha >= -2 && (B[k] = 1 + _MTOT_NBIAS[3 - alpha])
         elseif var_type == :htot
             # Defined for α ∈ {0, …, −4}; for the PM noises Stable32 leaves B = 1.
             B[k] = -4 <= alpha <= 0 ? 1 + _MTOT_NBIAS[1 - alpha] : 1.0
         elseif var_type == :mhtot
-            # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl
-            # at git 9d7a408, the same sweep as _coeff_mhtot) over τ/τ0 ≥ 16,
-            # modeled as B = b0 + b1·(τ/T) like :totvar. The per-window
-            # quadratic detrend absorbs part of each window's variance, so
-            # MHTOTDEV reads low: B ≈ 0.90 for WHPM, ≈ 0.79 for the FM noises.
-            b0_t = Dict(2=>0.9005, 1=>0.8238, 0=>0.7933, -1=>0.7841, -2=>0.7879)
-            b1_t = Dict(2=>-0.0083, 1=>-0.0541, 0=>-0.0422, -1=>-0.0357, -2=>-0.0325)
-            aa = clamp(alpha, -2, 2)
-            B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
+            i = 3 - max(alpha, -2)
+            B[k] = _MHTOT_B0[i] + _MHTOT_B1[i] * (tau / T)
         end
     end
 
