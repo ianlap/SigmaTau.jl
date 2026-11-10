@@ -425,7 +425,11 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mhtot, taus, T)) : raw_devs
+    # At m = 1 the detrended four-point window is c·(−1, 3, −3, 1), and the
+    # nine third differences of its reflection average to 124/225 of MHVAR.
+    B = need_noise ? bias_correction(noises, :mhtot, taus, T) : Float64[]
+    correct_bias && (B[m_values .== 1] .= 124 / 225)
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(B) : raw_devs
 
     if !ci
         return _result(data, confidence, :mhtotdev, taus, devs, noises, _CIBound[], Float64[], neff)

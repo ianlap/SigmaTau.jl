@@ -44,24 +44,24 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             # is dominated by the same noise-shape contribution as ADEV, so the
             # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m, the overlapped
             # convention) is the accepted pragmatic substitute when no
-            # totvar-specific table value is published.
-            if alpha == 2 || alpha == 1
+            # totvar-specific table value is published. At m = 1 no difference
+            # reaches the extension, so TOTVAR is AVAR term for term.
+            if alpha == 2 || alpha == 1 || m == 1
                 edfs[k] = _calc_edf_core(alpha, 2, m, m, m, N)
             else
                 b, c = _coeff_totvar(alpha)
                 edfs[k] = b * (T / tau) - c
             end
         elseif method == :mtotdev
-            # The SP1065 Table 8 coefficient formula is valid only for
-            # τ ≥ 16τ0. Below that floor MTOT reduces to MDEV, so it inherits
-            # the modified-Allan EDF (Greenhall–Riley, d=2, F=1), verified to
-            # match Stable32's reported Chi Square DF to ~5 sig figs at small m
-            # (and avoids the b·(T/τ) form returning an unphysical EDF > N).
+            # Howe & Peppler 2001 Table 2 holds from τ = 16τ0: the Hadamard
+            # total column two steps up in α. Below that MTOT takes MDEV's EDF
+            # (Greenhall–Riley, d=2, F=1), as Stable32 does; it reads 20–50 %
+            # low there, on the wide side.
             if m < 16
                 edfs[k] = _calc_edf_core(alpha, 2, m, 1, m, N)
             else
-                b, c = _coeff_mtot(alpha)
-                edfs[k] = b * (T / tau) - c
+                b0, b1 = _coeff_htot(alpha - 2)
+                edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
             end
         elseif method == :htotdev
             # Same logic as :totdev: for WHPM/FLPM, fall back to HDEV-style EDF
@@ -77,8 +77,13 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 edfs[k] = (T / tau) / (b0 + b1 * (tau / T))
             end
         elseif method == :mhtotdev
-            b, c = _coeff_mhtot(alpha)
-            edfs[k] = b * (T / tau) - c
+            # At m = 1 MHTOTVAR is 124/225 of MHVAR term for term (see `mhtotdev`).
+            if m == 1
+                edfs[k] = _calc_edf_core(alpha, 3, 1, 1, 1, N)
+            else
+                b, c = _coeff_mhtot(alpha)
+                edfs[k] = b * (T / tau) - c
+            end
         elseif method == :theo1
             edfs[k] = _theo1_edf(alpha, m, N)
         elseif method == :pdev
@@ -261,20 +266,6 @@ function _coeff_totvar(alpha::Int)
     return (NaN, NaN)
 end
 
-function _coeff_mtot(alpha::Int)
-    # edf = b·(T/τ) − c, coefficients per noise type from NIST SP1065
-    # (Riley 2008) §5.4.3 Table 8, the published standard, traceable to
-    # Greenhall's degrees-of-freedom recipes (Greenhall 1991 / Greenhall &
-    # Riley 2003). Used verbatim for all five noise types, matching how
-    # `_coeff_totvar` follows SP1065 Table 7.
-    alpha == 2  && return (1.90, 2.10)
-    alpha == 1  && return (1.20, 1.40)
-    alpha == 0  && return (1.10, 1.20)
-    alpha == -1 && return (0.85, 0.50)
-    alpha == -2 && return (0.75, 0.31)
-    return (NaN, NaN)
-end
-
 function _coeff_mhtot(alpha::Int)
     # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
     # (tools/mc_mhtotdev.jl at git 9d7a408: per-window quadratic detrend,
@@ -402,7 +393,8 @@ function _coeff_htot(alpha::Int)
     # Howe & Peppler 2001 Table 3, columns b₀ and b₁ of
     #   edf(τ) = (T/τ) / (b₀ + b₁·τ/T)
     # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses an
-    # undocumented fallback that is not reproduced here.
+    # undocumented fallback that is not reproduced here. Their Table 2 gives
+    # the modified total variance the same values at α + 2.
     alpha == 0  && return (0.559, 1.004)
     alpha == -1 && return (0.868, 1.140)
     alpha == -2 && return (0.938, 1.696)
