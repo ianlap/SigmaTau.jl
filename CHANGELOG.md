@@ -62,7 +62,9 @@ Clock models, the Kalman filter and timescales.
   MDEV, HDEV or MHDEV result (or a total form), `add_component!` fits one
   noise type's level on a chosen τ range with the slope fixed and the
   confidence intervals as weights, `undo!` takes the last one back, and
-  `noise_residual` shows what is left. The model feeds `powerlaw_sigma`,
+  `noise_residual` shows what is left. Every change refits all the levels
+  against each other, so the model does not depend on the order the
+  components were added in. The model feeds `powerlaw_sigma`,
   `powerlaw_psd` and `clock_model`.
 - Single-clock Kalman filter: `kalman_filter` runs a `ClockModel` over a
   phase record (gaps predicted across, Joseph-form update, least-squares
@@ -70,7 +72,9 @@ Clock models, the Kalman filter and timescales.
   `holdover_error` gives the 1σ time error after free-running for τ, and
   `innovation_check` tests the normalized innovations for unit variance and
   whiteness. `tune_q` retunes the white and random-walk FM levels for the
-  smallest phase prediction error at chosen horizons, `prediction_error`
+  smallest phase prediction error at chosen horizons (each level is resolved
+  only to the grid step, a factor of 10^(2·decades/(points−1)), 3.2 by
+  default), `prediction_error`
   reports that error, and `simulate_clock` draws a record and its true
   states from a model.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
