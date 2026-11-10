@@ -900,9 +900,11 @@ averaging time of a Thêo1 value is `τ = 0.75·m·τ0` (SP1065 §5.2.15).
 
 The double sum is O((N−m)·m/2) per averaging factor, that is O(N·m), unlike
 the O(N) Allan kernels; the largest factors dominate, so a full even-m
-sweep on a long record costs O(N³) overall. The loop is δ-major with a
-SIMD inner i-loop and no allocations; entries of `m_values` are
-processed in parallel across threads.
+sweep on a long record costs O(N³) overall. The sum over i runs in
+cache-sized tiles with the δ loop inside, so the samples a tile needs stay
+in cache across δ; blocks of δ run in parallel, and entries of `m_values`
+too. Each δ adds its tiles in order, so the result does not depend on the
+thread count.
 """
 function _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     devs = Vector{Float64}(undef, length(m_values))
@@ -920,8 +922,13 @@ end
 # Single-m Thêo1 deviation; NaN for odd m or m outside [2, N−1].
 #
 # Each term is (x_i + x_{i+m}) − (x_{c−δ} + x_{c+δ}) with c = i + m/2, so the
-# pair sum A_i = x_i + x_{i+m} is formed once per m, and two δ are taken per
-# pass over i, which reads 2.5 samples per term instead of 4.
+# pair sum A_i = x_i + x_{i+m} is formed once per m. A pass over every i per
+# δ streams the record from memory m/2 times; instead each block of
+# _THEO1_DBLK values of δ walks the record in tiles of _THEO1_TILE samples,
+# which stay in cache across the block, and takes two δ per pass.
+const _THEO1_TILE = 2048
+const _THEO1_DBLK = 128
+
 function _theo1_dev_at(x::Vector{Float64}, m::Int, tau0::Float64)
     N = length(x)
     (m < 2 || isodd(m) || m > N - 1) && return NaN
@@ -932,32 +939,46 @@ function _theo1_dev_at(x::Vector{Float64}, m::Int, tau0::Float64)
     @inbounds @simd for i in 1:L
         A[i] = x[i] + x[i + m]
     end
+    s = zeros(half)                        # s[δ+1] = Σᵢ (A_i − x_{c−δ} − x_{c+δ})²
+    Threads.@threads :dynamic for blk in 1:cld(half, _THEO1_DBLK)
+        _theo1_block!(s, A, x, half, L, (blk - 1) * _THEO1_DBLK, min(blk * _THEO1_DBLK, half) - 1)
+    end
     total = 0.0
-    delta = 0
-    @inbounds while delta + 1 <= half - 1
-        s0 = 0.0
-        s1 = 0.0
-        @simd for i in 1:L
-            c = i + half
-            d0 = A[i] - (x[c - delta] + x[c + delta])
-            d1 = A[i] - (x[c - delta - 1] + x[c + delta + 1])
-            s0 += d0 * d0
-            s1 += d1 * d1
-        end
-        total += s0 / (half - delta) + s1 / (half - delta - 1)
-        delta += 2
+    @inbounds for delta in 0:half-1
+        total += s[delta + 1] / (half - delta)
     end
-    @inbounds if delta <= half - 1
-        s0 = 0.0
-        @simd for i in 1:L
-            c = i + half
-            d0 = A[i] - (x[c - delta] + x[c + delta])
-            s0 += d0 * d0
-        end
-        total += s0 / (half - delta)
-    end
-
     return sqrt(total / (0.75 * L * (m * tau0)^2))
+end
+
+function _theo1_block!(s, A, x, half, L, d_lo, d_hi)
+    @inbounds for t0 in 1:_THEO1_TILE:L
+        t1 = min(t0 + _THEO1_TILE - 1, L)
+        delta = d_lo
+        while delta + 1 <= d_hi
+            s0 = 0.0
+            s1 = 0.0
+            @simd for i in t0:t1
+                c = i + half
+                d0 = A[i] - (x[c - delta] + x[c + delta])
+                d1 = A[i] - (x[c - delta - 1] + x[c + delta + 1])
+                s0 += d0 * d0
+                s1 += d1 * d1
+            end
+            s[delta + 1] += s0
+            s[delta + 2] += s1
+            delta += 2
+        end
+        if delta <= d_hi
+            s0 = 0.0
+            @simd for i in t0:t1
+                c = i + half
+                d0 = A[i] - (x[c - delta] + x[c + delta])
+                s0 += d0 * d0
+            end
+            s[delta + 1] += s0
+        end
+    end
+    return s
 end
 
 # Overlapping Allan *variance* at a single averaging factor, allowing a
