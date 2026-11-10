@@ -359,8 +359,8 @@ function _gl_klts(x, s2, ν, m_values, τ₀, confidence)
             for i in 1:3; ci[i][q] = (lo = NaN, hi = NaN); end
             continue
         end
-        vN <= 1e-9 * sum(S[k, k] for k in 1:3) / 3 && (S = S[1:2, 1:2])
-        qs, zero_lower = _klts(S, vN, n, probs)
+        Sk = vN <= 1e-9 * sum(S[k, k] for k in 1:3) / 3 ? S[1:2, 1:2] : S
+        qs, zero_lower = _klts(Sk, vN, n, probs)
         for i in 1:3
             ci[i][q] = (lo = zero_lower[i] ? 0.0 : sqrt(qs[i, 1]), hi = sqrt(qs[i, 2]))
         end

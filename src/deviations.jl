@@ -20,7 +20,7 @@ _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
 # bias correction should too (SP1065 §5.5.6 removes deterministic components
 # before noise identification).
 _hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
-    identify_noise(remove_drift ? _remove_quadratic(x) : x, m_values, dmin=0, dmax=3)
+    identify_noise(remove_drift ? _noise_detrend(x) : x, m_values, dmin=0, dmax=3)
 
 # What `noise=` takes: `:auto`, one noise type, one per τ, or a fitted model.
 const _NoiseChoice = Union{Symbol,AbstractVector{Symbol},PowerLawFit}

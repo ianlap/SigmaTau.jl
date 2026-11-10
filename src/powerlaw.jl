@@ -121,6 +121,8 @@ end
 
 _powerlaw_h(h::AbstractDict) = Dict(_noise_alpha(k) => Float64(v) for (k, v) in h)
 _powerlaw_h(f::PowerLawFit) = Dict(zip(f.alphas, f.h))
+_powerlaw_tau0(h) = NaN
+_powerlaw_tau0(f::PowerLawFit) = f.tau0
 
 """
     powerlaw_fit(data, m_values=Int[]; deviation=:mhdev, alphas=2:-1:-2) → PowerLawFit
@@ -197,6 +199,26 @@ function powerlaw_fit(data::AbstractTimingData, m_values::AbstractVector{<:Integ
     res = deviation === :adev ? adev(data, ms; ci=false) :
           deviation === :mdev ? mdev(data, ms; ci=false) :
           deviation === :hdev ? hdev(data, ms; ci=false) : mhdev(data, ms; ci=false)
+    return _powerlaw_fit_curve(res, deviation, αs, τ₀, ms)
+end
+
+"""
+    powerlaw_fit(r::StabilityResult; alphas=…) → PowerLawFit
+
+The same fit to an existing ADEV, MDEV, HDEV or MHDEV result `r`, such as one
+clock's Allan deviation from [`groslambert`](@ref).
+"""
+function powerlaw_fit(r::StabilityResult; alphas=2:-1:-2)
+    deviation = r.deviation_type
+    deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
+        "powerlaw_fit: a result of $deviation cannot be fitted; use :adev, :mdev, :hdev or :mhdev"))
+    isfinite(r.tau0) && r.tau0 > 0 || throw(ArgumentError("powerlaw_fit: the result has no sample interval"))
+    αs = _powerlaw_alphas(alphas, deviation)
+    ms = round.(Int, r.tau ./ r.tau0)
+    return _powerlaw_fit_curve(r, deviation, αs, r.tau0, ms)
+end
+
+function _powerlaw_fit_curve(res::StabilityResult, deviation::Symbol, αs::Vector{Int}, τ₀::Real, ms::Vector{Int})
     keep = findall(k -> isfinite(res.dev[k]) && res.dev[k] > 0, eachindex(res.dev))
     length(keep) >= length(αs) || throw(ArgumentError(
         "powerlaw_fit: $(length(keep)) usable τ points for $(length(αs)) components; " *
@@ -292,14 +314,15 @@ PM it is 19 % above at ``τ_0`` and still 4 % above at ``64τ_0``.
 
 # Arguments
 
-- `h`: a [`PowerLawFit`](@ref), or a `Dict` of ``h_α`` keyed by ``α`` or by
-  noise type, as in [`noise_gen`](@ref).
+- `h`: a [`PowerLawFit`](@ref), a [`ClockModel`](@ref), or a `Dict` of
+  ``h_α`` keyed by ``α`` or by noise type, as in [`noise_gen`](@ref).
 - `tau`: averaging times in seconds, each a whole multiple of `tau0`.
 
 # Keywords
 
 - `deviation=:adev`: `:adev`, `:mdev`, `:hdev` or `:mhdev`.
-- `tau0`: the sample interval in seconds. A fit carries its own.
+- `tau0`: the sample interval in seconds. A fit or a clock model carries
+  its own.
 
 # Examples
 
@@ -315,7 +338,7 @@ julia> print(round.(powerlaw_sigma(h, [1.0, 100.0, 1e4]; tau0=1.0); sigdigits=4)
 ```
 """
 function powerlaw_sigma(h, tau::AbstractVector{<:Real}; deviation::Symbol=:adev,
-                        tau0::Real=(h isa PowerLawFit ? h.tau0 : NaN))
+                        tau0::Real=_powerlaw_tau0(h))
     deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
         "powerlaw_sigma: deviation must be one of $(join(POWERLAW_DEVIATIONS, ", ")), got :$deviation"))
     τ₀ = Float64(tau0)
@@ -334,8 +357,8 @@ end
     powerlaw_psd(h, f; quantity=:Sy, f_carrier=nothing) → Vector{Float64}
 
 The power-law model `h` as a spectrum at the Fourier frequencies `f`, in
-Hz. `h` is a [`PowerLawFit`](@ref), or a `Dict` of ``h_α`` keyed by ``α``
-or by noise type. `quantity` selects the spectrum
+Hz. `h` is a [`PowerLawFit`](@ref), a [`ClockModel`](@ref), or a `Dict` of
+``h_α`` keyed by ``α`` or by noise type. `quantity` selects the spectrum
 ([IEEE Std 1139-2022, Eqs. (A.13), (A.15) and (A.16)](@cite ieee1139-2022-definitions)):
 
 - `:Sy`: ``S_y(f) = \\sum_α h_α f^α``, in 1/Hz.

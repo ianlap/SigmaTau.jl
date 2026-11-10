@@ -92,7 +92,7 @@ fn core_command(core: &Path) -> Command {
     cmd
 }
 
-const COMMANDS: [&str; 5] = ["check", "analyze", "spectrum", "dynamic", "drift"];
+const COMMANDS: [&str; 7] = ["check", "analyze", "spectrum", "dynamic", "drift", "timescale", "model"];
 
 /// Check a request `{args: [command, flags...], file: {name, content} | null}`
 /// (the same rules as serve.py) and return the sigmatau arguments, with the
