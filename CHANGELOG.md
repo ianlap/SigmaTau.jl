@@ -184,6 +184,8 @@ Clock models, the Kalman filter and timescales.
 
 ### Fixed
 
+- Explorer: a core that fails to start shows its error message instead of
+  the last line of Julia's output (#179).
 - `mhtotdev` at `m = 1` uses the exact bias factor 124/225 and MHDEV's EDF.
   The fitted bias and EDF models do not hold at τ₀, and the 68.3 % interval
   never covered the true value there.
