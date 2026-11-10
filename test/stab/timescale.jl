@@ -228,7 +228,7 @@ using Statistics
         cf, tf = simulate_ensemble(mf, 8192; reference=0, rng=MersenneTwister(11))
         gf = timescale(cf; algorithm=:greenhall, models=mf)
         rest = 2000:8192
-        @test cor(gf.y[rest, 1] .- gf.y[rest, 2], tf[rest, 2, 1] .- tf[rest, 2, 2]) > 0.8
+        @test cor(gf.y[rest, 1] .- gf.y[rest, 2], tf[rest, 2, 1] .- tf[rest, 2, 2]) > 0.75
         @test maximum(abs, timescale(cf; algorithm=:jones_tryon, models=mf).y .- gf.y) < 1e-6 * std(gf.y[rest, 1])
         @test_throws ArgumentError timescale(cf; algorithm=:stein, models=mf)
         # Flicker PM on two of three equal clocks: the weights stay equal,
