@@ -58,7 +58,7 @@ class ClockModel:
     """Discrete clock model: phase, frequency and (with ``drift``) drift driven by
     white noise (Zucca & Tavella 2005).
 
-    ``R`` is the white PM phase variance per sample (s²), ``q1`` the white FM
+    ``R`` is the variance of a reading's noise, taken as white (s²), ``q1`` the white FM
     (s), ``q2`` the random-walk FM (1/s) and ``q3`` the random-run FM (1/s³)
     diffusion coefficient.
     """
@@ -98,9 +98,11 @@ def clock_model(
     tau0: float | None = None,
     drift: bool | None = None,
 ) -> ClockModel:
-    """The ``ClockModel`` with the white PM, white FM, random-walk FM and random-run
-    FM levels of a power-law model; flicker components have no finite-state form
-    and are left out.
+    """The ``ClockModel`` with the white FM, random-walk FM and random-run FM
+    levels of a power-law model, and its PM as the reading noise ``R``: white PM,
+    with flicker PM folded in as the white PM of the same Allan variance where PM
+    hands over to FM. Flicker FM and flicker walk have no finite-state form and
+    are left out.
 
     ``fit`` is a ``PowerLawFit``, a ``NoiseFit`` or an ``{α: h_α}`` mapping (with
     ``tau0``).
