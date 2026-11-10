@@ -1,6 +1,8 @@
 # Holdover test on a phase record: learn frequency (and drift) on a training
 # stretch, free-run, and compare with what the clock did, at every start the
-# record allows (Delporte et al. 2000).
+# record allows (Delporte et al. 2000). The predictor is a least-squares fit
+# or a Kalman filter; a noise model in place of the record gives the error
+# the fit should show.
 
 """
     HoldoverResult
@@ -23,6 +25,8 @@ struct HoldoverResult
     mean::Vector{Float64}
     "Number of trials."
     n::Vector{Int}
+    "Standard deviation (s) the Kalman filter itself gives the error; empty for a least-squares fit."
+    claimed::Vector{Float64}
     "Length of the training stretch in seconds; `NaN` when it grows with `tau`."
     train::Float64
     "The training stretch as a multiple of each holdover time; `0` when it is fixed."
@@ -48,9 +52,12 @@ _show_train(h) = h.grow > 0 ? "$(h.grow) τ" : _show4g(h.train) * " s"
 function Base.show(io::IO, ::MIME"text/plain", h::HoldoverResult)
     show(io, h)
     isnan(h.limit) || print(io, "\n  ", _show4g(h.limit), " s reached after ", _show4g(h.time_to_limit), " s")
+    kalman = !isempty(h.claimed)
     @printf(io, "\n  %10s  %10s  %10s  %10s  %8s", "tau", "rms", "p" * _show4g(100h.confidence), "worst", "n")
+    kalman && @printf(io, "  %10s", "claimed")
     for i in eachindex(h.tau)
         @printf(io, "\n  %10.4g  %10.4g  %10.4g  %10.4g  %8d", h.tau[i], h.rms[i], h.quantile[i], h.worst[i], h.n[i])
+        kalman && @printf(io, "  %10.4g", h.claimed[i])
     end
 end
 
@@ -126,6 +133,27 @@ end
 _whole_samples(t::Real, τ₀::Float64, what::String) = (k = round(Int, t / τ₀);
     k >= 1 && isapprox(k * τ₀, t; rtol=1e-9) ? k :
     throw(ArgumentError("holdover: $what = $t is not a whole multiple of tau0 = $τ₀")))
+
+# Holdover times in samples: `tau` (s), or the octave grid up to `top`; none
+# past the `room` samples the record has after the training stretch.
+function _holdover_steps(tau, τ₀::Float64, top::Int, room::Int)
+    hs = tau === nothing ? _grid(Octave, top) : [_whole_samples(t, τ₀, "tau") for t in tau]
+    !isempty(hs) && issorted(hs) && hs[end] <= room || throw(ArgumentError(
+        "holdover: tau must rise and stay within the $(room * τ₀) s the record has past the training stretch"))
+    return hs
+end
+
+# RMS, `confidence` quantile of |e|, worst case, mean and number of the
+# trial errors e, which are overwritten.
+function _trial_stats!(e::Vector{Float64}, confidence::Real, τ::Float64)
+    isempty(e) && throw(ArgumentError("holdover: gaps leave no trial at tau = $τ"))
+    μ, rms = sum(e) / length(e), sqrt(sum(abs2, e) / length(e))
+    e .= abs.(e)
+    return rms, quantile(e, confidence), maximum(e), μ, length(e)
+end
+
+# The limit and the time the quantile curve reaches it, both NaN without one.
+_limit(τ, q, limit) = limit === nothing ? (NaN, NaN) : (Float64(limit), _time_to_limit(τ, q, limit))
 
 """
     holdover(data::PhaseData; train, grow, tau, drift=false, anchor=true, limit=nothing, confidence=0.95)
@@ -221,15 +249,69 @@ function holdover(data::PhaseData; train::Union{Real,Nothing}=nothing, grow::Uni
             y = x[s+h] - (anchor ? x[s] - c[1] : 0.0) - evalpoly(float(h), c)
             isfinite(y) && push!(e, y)
         end
-        isempty(e) && throw(ArgumentError("holdover: gaps leave no trial at tau = $(h * τ₀)"))
-        μ[i], rms[i], cnt[i] = sum(e) / length(e), sqrt(sum(abs2, e) / length(e)), length(e)
-        e .= abs.(e)
-        q[i], worst[i] = quantile(e, confidence), maximum(e)
+        rms[i], q[i], worst[i], μ[i], cnt[i] = _trial_stats!(e, confidence, h * τ₀)
     end
     τ = hs .* τ₀
-    return HoldoverResult(τ, rms, q, worst, μ, cnt, k > 0 ? NaN : n * τ₀, k, drift, anchor, Float64(confidence),
-                          limit === nothing ? NaN : Float64(limit),
-                          limit === nothing ? NaN : _time_to_limit(τ, q, limit))
+    return HoldoverResult(τ, rms, q, worst, μ, cnt, Float64[], k > 0 ? NaN : n * τ₀, k, drift, anchor, Float64(confidence),
+                          _limit(τ, q, limit)...)
+end
+
+"""
+    holdover(data::PhaseData, model::ClockModel; train, tau, limit=nothing, confidence=0.95)
+        → HoldoverResult
+
+The same test with a Kalman filter as the predictor. The filter for `model`
+runs once over the record ([`kalman_filter`](@ref)); at every sample past
+the first `train` seconds (a quarter of the record by default) its estimate
+is carried τ ahead with no further readings and compared with the reading
+there.
+
+`claimed` is the standard deviation the filter itself gives that error,
+`√([Φ(τ) P Φ(τ)ᵀ + Q(τ)]₁₁ + R)`, [`holdover_error`](@ref) with the noise of
+the reading it is compared with; a model with flicker PM reads its Markov
+phase states along with the phase. It matches `rms` when the model fits the
+clock; an `rms` above it says the model's noise is too low. With the right
+model the filter is the optimum predictor (Allan 1987), so no training
+stretch makes a least-squares fit hold better, though at its best stretch
+the fit comes within a few percent.
+
+# Examples
+
+```julia
+using SigmaTau
+m = ClockModel(; tau0 = 1.0, q1 = 1e-22, q2 = 1e-26)
+p, _ = simulate_clock(m, 65536)
+h = holdover(p, m; limit = 1e-9)
+h.rms ./ h.claimed    # near 1
+```
+"""
+function holdover(data::PhaseData, m::ClockModel; train::Union{Real,Nothing}=nothing,
+                  tau::Union{AbstractVector{<:Real},Nothing}=nothing,
+                  limit::Union{Real,Nothing}=nothing, confidence::Real=0.95)
+    0 < confidence < 1 || throw(ArgumentError("holdover: confidence must be between 0 and 1, got $confidence"))
+    kf, c = kalman_filter(data, m), _reading_row(m)
+    z, τ₀ = Float64.(data.x), m.tau0
+    N = length(z)
+    b = train === nothing ? N ÷ 4 : _whole_samples(train, τ₀, "train")
+    b < N || throw(ArgumentError("holdover: a training stretch of $b samples does not fit a record of $N"))
+    hs = _holdover_steps(tau, τ₀, (N - b) ÷ 2, N - b)
+    rms, q, worst, μ = zeros(length(hs)), zeros(length(hs)), zeros(length(hs)), zeros(length(hs))
+    cnt, claimed, e = zeros(Int, length(hs)), zeros(length(hs)), Float64[]
+    for (i, h) in enumerate(hs)
+        φ = state_transition(m, h * τ₀)' * c          # the reading h samples on, in today's state
+        empty!(e)
+        v = 0.0
+        for k in b:N-h
+            isfinite(z[k+h]) || continue
+            push!(e, z[k+h] - dot(φ, view(kf.x, k, :)))
+            v += dot(φ, view(kf.P, :, :, k), φ)
+        end
+        rms[i], q[i], worst[i], μ[i], cnt[i] = _trial_stats!(e, confidence, h * τ₀)
+        claimed[i] = sqrt(v / cnt[i] + dot(c, process_noise(m, h * τ₀), c) + _reading_var(m))
+    end
+    τ = hs .* τ₀
+    return HoldoverResult(τ, rms, q, worst, μ, cnt, claimed, b * τ₀, 0, m.drift, false, Float64(confidence),
+                          _limit(τ, q, limit)...)
 end
 
 # Weights on the phase samples 1 … n + h of the error `holdover` measures h
@@ -385,6 +467,5 @@ function holdover(model; train::Union{Real,Nothing}=nothing, grow::Union{Integer
     σ = sqrt.(vec(sum(budget; dims=2)))
     τ, q = hs .* τ₀, quantile(Normal(), (1 + confidence) / 2) .* σ
     return HoldoverPrediction(τ, σ, q, αs, budget, k > 0 ? NaN : n * τ₀, k, drift, anchor, Float64(confidence),
-                              limit === nothing ? NaN : Float64(limit),
-                              limit === nothing ? NaN : _time_to_limit(τ, q, limit))
+                              _limit(τ, q, limit)...)
 end

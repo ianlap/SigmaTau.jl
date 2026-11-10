@@ -78,9 +78,30 @@ predictor on that noise [allan-1987-prediction](@cite): what remains is
 the price of learning the frequency from a finite stretch.
 
 The prediction holds noise only. A drift D that a line does not follow
-adds the mean ½ D τ (τ + T). [`holdover_error`](@ref) gives the error a
-[`ClockModel`](@ref) predicts from a Kalman filter's last estimate
-instead of a fitted line.
+adds the mean ½ D τ (τ + T).
+
+## With a Kalman filter as the predictor
+
+A record and a [`ClockModel`](@ref) together run the test with the filter in
+place of the fit: the filter passes once over the record, and from every
+sample past the first `train` seconds its estimate is carried τ ahead with
+no further readings and compared with the reading there.
+
+```julia
+m = clock_model(powerlaw_fit(p))
+k = holdover(p, m; limit=1e-6)
+k.rms ./ k.claimed     # near 1 when the model fits the clock
+```
+
+`claimed` is the standard deviation the filter itself gives the error,
+[`holdover_error`](@ref) with the noise of the reading it is compared
+with (white PM, and the flicker PM states of a model that has them). The
+two columns side by side test the model where it matters for
+holdover: an `rms` above `claimed` says the model's noise is too low at
+that τ. With the right model the filter is the optimum predictor
+[allan-1987-prediction](@cite); a least-squares line at its best stretch
+comes within a few percent of it on white plus random-walk FM, and falls
+behind as the stretch moves away from that.
 
 ## Holdover and the time deviation
 
