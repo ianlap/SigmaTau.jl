@@ -39,7 +39,7 @@ a variance memory of 20 days (`memory`) capped at a quarter of the record.
 `:at2` keeps AT1's weights and replaces each clock's frequency filter by a
 Kalman update that carries a frequency variance, which adapts as the clock's
 prediction error does; in steady state it is AT1's filter, so the scales are
-close. `steps=true` adds the paper's frequency-step detection (eqs 19–22):
+close. `steps=:best` or `:real` adds the paper's frequency-step detection (eqs 19–22):
 a clock whose frequency jumps is left out for τ_min and the scale rerun from
 the step; the threshold's units are corrected from the printed equation (see
 the docstring), and off by default.

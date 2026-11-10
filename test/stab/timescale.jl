@@ -73,6 +73,15 @@ using Statistics
         @test all(iszero, on.weights[4001:4020, 2]) && off.weights[4005, 2] > 0.1
         @test adev(timescale_phase(on), [1000]; ci=false).dev[1] < 0.6 * adev(timescale_phase(off), [1000]; ci=false).dev[1]
         @test timescale(stepped; algorithm=:at2, steps=false).x == off.x
+        # :real keeps what was issued: identical up to the catch, and the scale
+        # stays continuous where the rerun corrects it.
+        re = timescale(stepped; algorithm=:at2, steps=:real)
+        @test re.weights[1:4000, :] == on.weights[1:4000, :] && re.x[1:4000, :] == off.x[1:4000, :]
+        @test all(iszero, re.weights[4004:4020, 2]) && all(isfinite, timescale_phase(re).x)
+        @test maximum(abs, diff(timescale_phase(re).x)) < 20 * maximum(abs, diff(timescale_phase(off).x))
+        @test adev(timescale_phase(re), [1000]; ci=false).dev[1] < adev(timescale_phase(off), [1000]; ci=false).dev[1]
+        @test timescale(stepped; algorithm=:at2, steps=true).x == on.x
+        @test_throws ArgumentError timescale(stepped; algorithm=:at2, steps=:fast)
         # Eq 20 reads the same however the units are chosen: a scaled phase
         # (all variances ∝ c²) and a scaled τ₀ (frequencies ∝ 1/a) change nothing.
         for (c, a) in ((1e3, 1.0), (1.0, 10.0))

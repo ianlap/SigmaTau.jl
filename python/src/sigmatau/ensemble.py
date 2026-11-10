@@ -398,6 +398,7 @@ def timescale(
     outlier: float | None = None,
     models: Sequence[ClockModel] | None = None,
     pivot: int = 0,
+    steps: bool | str = False,
 ) -> TimescaleResult:
     """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock the
     same (its frequencies average over ``tau_y`` seconds, default 100 τ₀),
@@ -412,6 +413,9 @@ def timescale(
     constant in seconds, default 20 days, at most a quarter of the record),
     ``bias`` (``"paper"`` or ``"exact"``), ``wmax`` (largest weight) and
     ``outlier`` (reject a clock whose error passes that many ε; default off).
+    ``steps`` (AT2 only) detects clock frequency steps: ``"best"`` (or ``True``)
+    recomputes the scale from the step, ``"real"`` keeps the values already
+    issued and corrects forward.
     """
     kw = {"algorithm": jl.Symbol(str(algorithm)), "bias": jl.Symbol(str(bias)), "wmax": float(wmax)}
     if models is not None:
@@ -426,6 +430,8 @@ def timescale(
     for name, value in (("tau_y", tau_y), ("memory", memory), ("outlier", outlier)):
         if value is not None:
             kw[name] = float(value)
+    if steps:
+        kw["steps"] = jl.Symbol("best" if steps is True else str(steps))
     r = jl.timescale(cc._jl(), **kw)
     return TimescaleResult(
         str(r.algorithm), cc, np_f64(r.t), _mat(r.x), _mat(r.y), _mat(r.weights), _mat(r.error)

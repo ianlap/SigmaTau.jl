@@ -88,6 +88,7 @@ const OPTS = [
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--tau-y", "SECONDS", String[], false, "frequency averaging time of each clock (default 100 τ₀)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall or jones_tryon scale, 1 to the number of clocks (default 1)", ["timescale"]),
+    Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
@@ -167,6 +168,7 @@ mutable struct Options
     models::Vector{NTuple{4,Float64}}   # --noise-model: R, q1, q2, q3 per simulated clock
     mask::String              # --mask: ITU-T mask checked in the JSON; "" = none
     pivot::Int                # --pivot: clock the Kalman timescales read at (1-based)
+    steps::String             # --steps: at2 frequency-step detection, "" = off
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -174,7 +176,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
-                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1)
+                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -327,6 +329,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--tau-y";          o.tau_y = parse_float(v, name)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
     elseif name == "--pivot";          o.pivot = parse_int(v, name)
+    elseif name == "--steps";          o.steps = check_choice(v, name, ["best", "real"])
     elseif name == "--series";         o.series = parse_int(v, name)
     elseif name == "--query";          o.query = v
     elseif name == "--every";          o.every = parse_int(v, name)

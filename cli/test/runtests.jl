@@ -321,6 +321,9 @@ mktempdir() do dir
         @test occursin("\"adev\":{\"tau\":[1.0,", r.out) && occursin("\"series\":{\"t\":[0.0,", r.out)
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"at2\"", r.out)
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--steps", "real", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"steps\":\"real\"", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at1", "--steps", "best").code != 0
         # The Kalman scales fit a model per clock; --pivot picks the clock they read at.
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"greenhall\"", r.out) && occursin("\"pivot\":2", r.out)
