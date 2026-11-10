@@ -18,9 +18,12 @@ _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
 # on the record less its frequency drift (a least-squares quadratic in phase):
 # these statistics ignore drift, so the noise type that sets their EDF and
 # bias correction should too (SP1065 §5.5.6 removes deterministic components
-# before noise identification).
+# before noise identification). The B1 test is not used on that record: its
+# limits are for a record with the drift left in, where the ratio is about
+# twice as large, and it stops at random-walk FM.
 _hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
-    identify_noise(remove_drift ? _noise_detrend(x) : x, m_values, dmin=0, dmax=3)
+    remove_drift ? identify_noise(_noise_detrend(x), m_values, dmin=0, dmax=3, b1=false) :
+                   identify_noise(x, m_values, dmin=0, dmax=3)
 
 # What `noise=` takes: `:auto`, one noise type, one per τ, or a fitted model.
 const _NoiseChoice = Union{Symbol,AbstractVector{Symbol},PowerLawFit}
@@ -228,7 +231,10 @@ ADEV into a τ¹ ramp. It cannot separate white from flicker PM; use
 
 `remove_drift=true` (default) identifies the noise type at each τ on the
 record less its least-squares frequency drift, so a drift the statistic
-ignores cannot bias the EDF; the deviation itself does not change.
+ignores cannot bias the EDF; the deviation itself does not change. On that
+record the B1 ratio of [`identify_noise`](@ref) is not used: with fewer than
+30 averaged points an FM type is the one identified at the longest τ that
+has 30, so a change from one FM type to another beyond it needs `noise`.
 `remove_drift=false` identifies it on the record as given, as Stable32 does.
 
 `overlapping=false` gives the non-overlapped Hadamard deviation (SP1065
@@ -533,7 +539,7 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     mode = _bias_mode(correct_bias, :exact)
     need_noise = mode != :none || ci
     noises = !need_noise     ? Symbol[] :
-             noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=3) :
+             noise === :auto ? _hadamard_noise(x, m_values, remove_drift) :
                                _stated_noises(noise, :mhdev, taus, data.tau0)
 
     # At m = 1 the detrended four-point window is c·(−1, 3, −3, 1), and the

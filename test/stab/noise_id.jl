@@ -151,6 +151,18 @@ using SigmaTau
         @test_throws ArgumentError identify_noise(x, ms; b1_length=:bogus)
         # Below 6 averaged points the label is the one measured at N ÷ 6.
         @test identify_noise(x, [341, 512]) == identify_noise(x, [170, 170])
+        # The Hadamard family, drift removed, has no B1 test: an FM type is the one at N ÷ 30.
+        @test hdev(PhaseData(x, 1.0), [64, 128, 340]).noise_type == fill(hdev(PhaseData(x, 1.0), [34]).noise_type[1], 3)
+    end
+
+    @testset "PM below 30 averaged points" begin
+        # It needs PM at N ÷ 30 and R(n) on the PM side at the τ itself.
+        pm = noise_gen(PhaseData, 1024, 1.0; h=Dict(2 => 1.0), rng=Xoshiro(23))
+        @test identify_noise(pm.x, [64, 128, 256]) == hdev(pm, [64, 128, 256]).noise_type == fill(:WHPM, 3)
+        # White PM that random-walk FM overtakes at τ = 60 is not PM beyond it.
+        mixed = noise_gen(PhaseData, 1024, 1.0; h=Dict(2 => 1.0, -2 => 2.7e-8), rng=Xoshiro(23))
+        @test isdisjoint(identify_noise(mixed.x, [128, 256]), (:WHPM, :FLPM))
+        @test isdisjoint(hdev(mixed, [128, 256]).noise_type, (:WHPM, :FLPM))
     end
 
     @testset "B1(N, μ) closed-form parity vs allantools canonical" begin
