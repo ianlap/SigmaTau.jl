@@ -59,9 +59,20 @@ async function post(body, signal) {
 
 // Command-line flags that describe one clock's record. A file travels
 // separately (the shell saves it and passes its path as FILE).
+// The flags that make a simulated record (or ensemble) of `src`: a
+// "--noise-model R:q1:q2:q3" per clock when it was made on the Synthesis page.
+export function synthArgs(src) {
+  const a = ["--synth", src.n, "--seed", src.seed];
+  if (src.models) for (const m of src.models) a.push("--noise-model", m.join(":"));
+  else if (src.clocks > 1) a.push("--clocks", src.clocks);
+  return a;
+}
+
 function recordArgs(clock) {
   const synth = clock.source.type === "synth";
-  const a = synth ? ["--synth", clock.source.n, "--seed", clock.source.seed] : [];
+  const a = synth ? synthArgs(clock.source) : [];
+  // One clock of a simulated ensemble: the core simulates them all and hands back this one.
+  if (synth && clock.source.clocks > 1) a.push("--clock", clock.source.index);
   const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
   // (a RINEX clock file has a grid per clock: the reader takes it from the epochs)
   if (clock.format !== "rinex_clk") opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
@@ -155,6 +166,7 @@ const analyzeRequest = (clock) => request(clock, "analyze", [
   "--bias", state.bias,
   "--noise", state.noise,
   "--spectrum", "--fit", "--mask", "all",
+  ...clock.components.flatMap((k) => ["--component", `${k.noise}:${k.from ?? ""}:${k.to ?? ""}`]),
 ]);
 
 export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
@@ -163,8 +175,8 @@ export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
 // for reports.
 export function analyzeCommand(clock) {
   const { args, file } = analyzeRequest(clock);
-  const extra = new Set(["--spectrum", "--fit", "--mask", "--format"]);
-  const kept = args.filter((a, i) => !extra.has(a) && !["--format", "--mask"].includes(args[i - 1]));
+  const valued = new Set(["--format", "--component", "--mask"]);   // JSON-only options and their values
+  const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--fit" && !valued.has(a) && !valued.has(args[i - 1]));
   const q = (a) => (/^[\w.,:+\/=-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
   return ["sigmatau", kept[0], ...(file ? [file.name] : []), ...kept.slice(1)].map(q).join(" ");
 }
@@ -192,6 +204,13 @@ export function dynamic(clock, signal) {
   ]), signal);
 }
 
+// A timescale from several clocks; the core's JSON as is.
+export async function timescale(body, signal) {
+  const doc = await post(body, signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc;
+}
+
 // ── Live measurement ──
 // `sigmatau live` runs until stopped and writes one JSON line per update;
 // the shell keeps the lines and the page polls for the ones it has not seen.
@@ -214,4 +233,12 @@ export async function livePoll(id, since) {
 export function liveStop() {
   return tauri ? tauri.invoke("live_stop")
     : fetch("api/live/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+}
+
+// The σ(τ) that noise models predict (MDEV and ADEV per model), closed form.
+export async function modelPreview({ n, tau0, models }, signal) {
+  const args = ["model", "--synth", n, "--tau0", tau0, ...models.flatMap((m) => ["--noise-model", m.join(":")]), "--format", "json"];
+  const doc = await post({ args: args.map(String), file: null }, signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc.model;
 }

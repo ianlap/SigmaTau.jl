@@ -9,6 +9,7 @@
 using Test
 using SigmaTau
 using SigmaTauCLI
+using Random
 
 function run_cli(args...)
     o = IOBuffer()
@@ -173,6 +174,13 @@ mktempdir() do dir
         @test occursin("{\"deviation\":\"tdev\"", r.out) && !occursin("{\"deviation\":\"totdev\",\"tau\"", r.out)
         @test occursin("\"sigma_at\":{\"tau\":[1.0,10.0,100.0]", r.out)
         @test run_cli("analyze", pf, "--fit").code != 0
+        r = run_cli("analyze", "--synth", "4096", "--format=json", "--devs", "mhdev", "--component", "WHFM::64", "--component", "-2:256:")
+        @test r.code == 0
+        @test occursin("\"alphas\":[0,-2],\"h\":[", r.out) && occursin("\"mode\":\"components\"", r.out)
+        @test occursin("\"components\":[{\"alpha\":0,", r.out) && occursin("\"residual\":{\"tau\":[", r.out)
+        @test occursin("\"clock_model\":{\"R\":0.0,\"q1\":", r.out) && occursin("\"q2\":", r.out)
+        @test occursin("\"error\":", run_cli("analyze", pf, "--format=json", "--component", "WHFM:1e9:").out)
+        @test run_cli("analyze", pf, "--format=json", "--component", "PINK:1:2").code == 1
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,mtie", "--mask", "G8262_opt1")
         @test r.code == 0 && occursin("\"masks\":[{\"name\":\"G8262_opt1\"", r.out)
         @test occursin("\"checks\":[{\"deviation\":\"tdev\"", r.out) && occursin("{\"deviation\":\"mtie\"", r.out)
@@ -305,6 +313,47 @@ mktempdir() do dir
         @test isapprox(parse.(Float64, getindex.(a, 5)), parse.(Float64, getindex.(b, 5)); rtol=1e-6)
         @test run_cli("analyze", rf, "--reference-col", "9").code == 2
         @test run_cli("analyze", rf, "--reference-col", "2").code == 1
+    end
+
+    @testset "timescale" begin
+        # Three clocks in columns 2–4 against one reference, the third twice as noisy.
+        cc, _ = simulate_ensemble([ClockModel(; tau0=1.0, q1=q) for q in (1e-24, 1e-24, 4e-24)], 4096;
+                                  reference=0, rng=Random.Xoshiro(3))
+        tf = joinpath(dir, "clocks.csv")
+        open(tf, "w") do io
+            for k in 1:4096
+                println(io, k - 1, ",", join(cc.x[k, :], ","))
+            end
+        end
+        rows = csv_rows(run_cli("timescale", tf, "--value-cols", "2,3,4").out)
+        @test getindex.(rows, 1) == ["column 2", "column 3", "column 4"]
+        w = parse.(Float64, getindex.(rows, 3))
+        @test sum(w) ≈ 1 && w[3] < w[1] / 2
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "ewfa", "--format=json", "--series", "8")
+        @test r.code == 0
+        @test occursin("\"algorithm\":\"ewfa\"", r.out) && occursin("\"weight\":[0.3333333333333333,", r.out)
+        @test occursin("\"adev\":{\"tau\":[1.0,", r.out) && occursin("\"series\":{\"t\":[0.0,", r.out)
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"algorithm\":\"at2\"", r.out)
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--steps", "real", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"steps\":\"real\"", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at1", "--steps", "best").code != 0
+        # The Kalman scales fit a model per clock; --pivot picks the clock they read at.
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "2", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"algorithm\":\"greenhall\"", r.out) && occursin("\"pivot\":2", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "jones_tryon", "--format=json", "--series", "0").code == 0
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"algorithm\":\"stein\"", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
+        @test run_cli("timescale", tf, "--value-cols", "2,3", "--algorithm", "greenhall").code != 0
+        @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
+        # --clocks sets how many clocks are simulated (four by default).
+        r = run_cli("timescale", "--synth", "2048", "--clocks", "6", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"clocks\":[\"clock 1\",\"clock 2\",\"clock 3\",\"clock 4\",\"clock 5\",\"clock 6\"]", r.out)
+        @test length(csv_rows(run_cli("timescale", "--synth", "2048").out)) == 4
+        @test run_cli("timescale", tf).code == 1                       # no --value-cols
+        @test run_cli("timescale", tf, "--value-cols", "2,2").code == 1
+        @test run_cli("timescale", tf, "--value-cols", "2,9").code == 2
     end
 
     @testset "drift" begin
@@ -505,6 +554,48 @@ mktempdir() do dir
         @test occursin("\"source\":\"synthetic\"", r.out)
         @test run_cli("analyze", "--synth", "1024", "--seed", "7", "--devs", "adev").out ==
               run_cli("analyze", "--synth", "1024", "--seed", "7", "--devs", "adev").out
+    end
+
+    @testset "simulated clocks" begin
+        # Clock i of --clocks K is column i of the ensemble the timescale uses.
+        cc, _ = simulate_ensemble([ClockModel(; tau0=1.0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:2], 512;
+                                  reference=0, rng=Random.Xoshiro(9))
+        for i in 1:3
+            r = run_cli("check", "--synth", "512", "--clocks", "3", "--clock", string(i), "--seed", "9", "--series", "512", "--format", "json")
+            @test r.code == 0
+            m = match(r"\"series\":\{[^}]*?\"x\":\[([^\]]*)\]", r.out)
+            @test m !== nothing
+            @test parse.(Float64, split(m.captures[1], ','))[end] ≈ cc.x[end, i] rtol=1e-9
+        end
+        a = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "1", "--devs", "adev").out
+        b = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "2", "--devs", "adev").out
+        @test a != b                                        # the clocks differ
+        @test run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "2", "--devs", "adev").out == b
+        @test run_cli("check", "--synth", "64", "--clocks", "3", "--clock", "4").code == 1      # no such clock
+        @test run_cli("check", "--synth", "64", "--clocks", "1").code == 1                      # needs two or more
+        @test run_cli("check", "--synth", "64", "--clock", "2").code == 1                       # needs --clocks
+        @test run_cli("check", pf, "--clocks", "3").code == 1                                   # synthetic only
+    end
+
+    @testset "noise models" begin
+        ms = [ClockModel(; tau0=1.0, R=1e-22, q1=1e-24, q2=1e-30), ClockModel(; tau0=1.0, q1=4e-24)]
+        cc, _ = simulate_ensemble(ms, 512; reference=0, rng=Random.Xoshiro(9))
+        r = run_cli("check", "--synth", "512", "--seed", "9", "--noise-model", "1e-22:1e-24:1e-30:0", "--noise-model", "0:4e-24:0:0",
+                    "--clock", "2", "--series", "512", "--format", "json")
+        @test r.code == 0
+        m = match(r"\"series\":\{[^}]*?\"x\":\[([^\]]*)\]", r.out)
+        @test parse.(Float64, split(m.captures[1], ','))[end] ≈ cc.x[end, 2] rtol=1e-9
+        @test run_cli("check", "--synth", "256", "--noise-model", "1e-22:1e-24:0:0").code == 0       # one clock
+        # model: the closed form of the library
+        r = run_cli("model", "--synth", "4096", "--noise-model", "1e-22:1e-24:1e-30:0", "--noise-model", "0:0:0:1e-40", "--format", "json")
+        @test r.code == 0
+        tau = [1.0, 2.0, 4.0]
+        @test occursin("\"mdev\":[" * join(string.(powerlaw_sigma(ms[1], tau; deviation=:mdev)), ",")[1:12], r.out)
+        @test occursin("\"mdev\":null,\"adev\":null,\"mhdev\":[", r.out)                       # random-run FM: Hadamard only
+        @test run_cli("model", "--synth", "64").code == 1                                         # needs a model
+        @test run_cli("check", "--synth", "64", "--noise-model", "1:2:3").code == 1
+        @test run_cli("check", "--synth", "64", "--noise-model", "-1:0:0:0").code == 1
+        @test run_cli("check", "--synth", "64", "--clocks", "3", "--noise-model", "0:1e-24:0:0").code == 1
     end
 
     @testset "usage errors -> exit 1" begin
