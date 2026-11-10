@@ -79,6 +79,13 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
     const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
     assert.deepEqual(rms, doc.holdover.rms);
+    // A stretch of twice the holdover time: equal to √6·TDEV at τ₀.
+    await page.click("[data-ctl=frac][data-v='0']");
+    await page.waitForFunction(() => document.querySelector("#page .hold-card .cell-kv")?.innerText.includes("2τ"));
+    const at0 = await page.evaluate(() => ["RMS", "√6·TDEV"].map((n) => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === n).y[0]));
+    const grown = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--grow", "2", "--format", "json"])).holdover;
+    assert.deepEqual(at0, [grown.rms[0], grown.reference[0]]);
+    assert.ok(Math.abs(at0[0] / at0[1] - 1) < 1e-9);
   });
 
   await t.test("Ensemble: a Kalman scale with flicker states", async () => {

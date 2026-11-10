@@ -208,11 +208,13 @@ export function dynamic(clock, signal) {
   ]), signal);
 }
 
-// The holdover test of one clock (training stretch = record / frac), with
-// the error its fitted noise model predicts.
+// The holdover test of one clock (training stretch = record / frac, or with
+// frac 0 as many holdover times as the fit has terms: the test behind TDEV
+// and HTDEV), with the error its fitted noise model predicts.
 const holdoverRequest = (clock) => request(clock, "holdover", [
   ...rangeArgs(clock),
-  "--train", Math.max(4, Math.floor(samples(clock) / state.hold.frac)) * clock.record.tau0,
+  ...(state.hold.frac ? ["--train", Math.max(4, Math.floor(samples(clock) / state.hold.frac)) * clock.record.tau0]
+    : ["--grow", state.hold.drift ? 3 : 2]),
   ...(state.hold.drift ? ["--fit-drift"] : []),
   ...(state.hold.anchor ? [] : ["--no-anchor"]),
   ...(state.hold.limit ? ["--limit", state.hold.limit] : []),
