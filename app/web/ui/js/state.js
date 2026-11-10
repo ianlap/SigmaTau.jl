@@ -32,7 +32,7 @@ export const state = {
   spec: { carrier: 10e6, carrierText: "10e6", phase: "L", avg: "log", guides: true },
   // Dynamic page: estimator, window = record / frac, map or 3D waterfall
   // Ensemble page: timescale settings and the last result ({ key, ts })
-  ens: { algorithm: "at1", wmax: 1, pivot: 1, steps: "", result: null, error: null },
+  ens: { algorithm: "at1", wmax: 1, pivot: 1, steps: "", flicker: false, result: null, error: null },
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
   // Live page: where the readings come from and what they are
   live: { source: "sim", address: "192.168.1.20:5025", device: "/dev/ttyUSB0", query: "READ?", deviceQuery: "", reading: "hz",

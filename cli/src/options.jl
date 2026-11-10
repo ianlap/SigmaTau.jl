@@ -93,6 +93,7 @@ const OPTS = [
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
+    Opt("--flicker", "", String[], false, "greenhall and jones_tryon only: keep each clock's flicker FM and flicker PM as Markov states where the fit finds them, instead of folding flicker PM into the reading noise", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record)", ["holdover"]),
     Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch)", ["holdover"]),
@@ -183,6 +184,7 @@ mutable struct Options
     fit_drift::Bool           # holdover: parabola instead of a line
     anchor::Bool              # holdover: start from the last reading
     limit::Float64            # holdover: NaN = none
+    flicker::Bool             # --flicker: flicker states in the Kalman scales' clock models
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -191,7 +193,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
-                    NaN, Float64[], false, true, NaN)
+                    NaN, Float64[], false, true, NaN, false)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -389,6 +391,7 @@ function set_flag!(o::Options, name::String)
     elseif name == "--fit";                o.fit = true
     elseif name == "--fit-drift";          o.fit_drift = true
     elseif name == "--no-anchor";          o.anchor = false
+    elseif name == "--flicker";            o.flicker = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end
