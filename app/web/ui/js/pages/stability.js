@@ -273,7 +273,7 @@ function draw(clocks, devs) {
 // τ, as runs of equal type. With one clock, dashed guides show the slope each
 // run implies for the estimator the strip comes from.
 
-const NOISE_VAR = { WHPM: "--noise-wpm", FLPM: "--noise-fpm", WHFM: "--noise-wfm", FLFM: "--noise-ffm", RWFM: "--noise-rwfm" };
+const NOISE_VAR = { WHPM: "--noise-wpm", FLPM: "--noise-fpm", WHFM: "--noise-wfm", FLFM: "--noise-ffm", RWFM: "--noise-rwfm", FWFM: "--noise-fwfm", RRFM: "--noise-rrfm" };
 const STRIP_PX = 18, STRIP_GAP = 3;
 
 // The first selected σ_y estimator with noise types: the strip's source.

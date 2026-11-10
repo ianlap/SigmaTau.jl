@@ -24,6 +24,8 @@ const NOISE = [
   ["WFM", "White frequency modulation", "α = 0", "μ = −1", "ADEV ∝ τ⁻¹ᐟ². The usual floor of a passive atomic standard."],
   ["FFM", "Flicker frequency modulation", "α = −1", "μ = 0", "ADEV flat: the flicker floor."],
   ["RWFM", "Random-walk frequency modulation", "α = −2", "μ = 1", "ADEV ∝ τ¹ᐟ². Long-term wander, often from the environment."],
+  ["FWFM", "Flicker-walk frequency modulation", "α = −3", "μ = 2", "HDEV ∝ τ. Too steep for ADEV; identified for the Hadamard family only."],
+  ["RRFM", "Random-run frequency modulation", "α = −4", "μ = 3", "HDEV ∝ τ³ᐟ². The steepest noise the Hadamard family converges for."],
 ];
 
 function estimatorTable() {

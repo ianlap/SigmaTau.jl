@@ -40,9 +40,9 @@ export const CONFIDENCES = [[0.683, "68.3 %"], [0.9, "90 %"], [0.95, "95 %"], [0
 
 // SigmaTau's noise symbols shown the usual way, with the power-law exponent α
 // of S_y(f) ∝ f^α.
-const NOISE_NAMES = { WHPM: "WPM", FLPM: "FPM", WHFM: "WFM", FLFM: "FFM", RWFM: "RWFM" };
-export const NOISE_ALPHA = { WHPM: 2, FLPM: 1, WHFM: 0, FLFM: -1, RWFM: -2 };
-export const NOISE_LONG = { WHPM: "white phase", FLPM: "flicker phase", WHFM: "white frequency", FLFM: "flicker frequency", RWFM: "random-walk frequency" };
+const NOISE_NAMES = { WHPM: "WPM", FLPM: "FPM", WHFM: "WFM", FLFM: "FFM", RWFM: "RWFM", FWFM: "FWFM", RRFM: "RRFM" };
+export const NOISE_ALPHA = { WHPM: 2, FLPM: 1, WHFM: 0, FLFM: -1, RWFM: -2, FWFM: -3, RRFM: -4 };
+export const NOISE_LONG = { WHPM: "white phase", FLPM: "flicker phase", WHFM: "white frequency", FLFM: "flicker frequency", RWFM: "random-walk frequency", FWFM: "flicker-walk frequency", RRFM: "random-run frequency" };
 export const noiseLabel = (s) => NOISE_NAMES[String(s)] ?? String(s);
 export const noiseAlpha = (s) => NOISE_ALPHA[String(s)];
 const alphaText = (a) => (a > 0 ? `+${a}` : a < 0 ? `−${-a}` : "0");

@@ -140,7 +140,7 @@ function html_result_table(io::IO, r::StabilityResult, lab::String)
 end
 
 noise_short(s::Symbol) = s === :WHPM ? "WPM" : s === :FLPM ? "FPM" : s === :WHFM ? "WFM" :
-                         s === :FLFM ? "FFM" : s === :RWFM ? "RWFM" : String(s)
+                         s === :FLFM ? "FFM" : String(s)
 
 const REPORT_STYLE = """
 body{font:13px/1.5 system-ui,sans-serif;color:#1d1d1f;background:#fff;margin:32px auto;max-width:900px;padding:0 16px}

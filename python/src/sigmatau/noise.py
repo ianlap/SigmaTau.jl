@@ -32,8 +32,8 @@ def identify_noise(
 
     ``x`` is a ``PhaseData`` or ``FrequencyData`` record (frequency is integrated
     to phase first) or a raw vector of phase samples. Returns an object array of
-    symbol strings (``"WHPM"``/``"FLPM"``/``"WHFM"``/``"FLFM"``/``"RWFM"`` or
-    ``"unknown"``). ``remove_drift`` (default ``True``, matching allantools)
+    symbol strings (``"WHPM"``/``"FLPM"``/``"WHFM"``/``"FLFM"``/``"RWFM"`` and,
+    with ``dmax=3``, ``"FWFM"``/``"RRFM"``). ``remove_drift`` (default ``True``, matching allantools)
     quadratically detrends each decimated subseries before classification.
     """
     return np_syms(
