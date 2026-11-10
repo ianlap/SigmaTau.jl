@@ -55,24 +55,25 @@ verbatim. The JSON files in `results/` are the raw timings behind Tables 1 to 3.
 
 ## Recorded results
 
-Tables 1 to 3 come from a 6-core / 12-thread AMD Ryzen 5 9600X workstation
-(Fedora, Linux 6.19), SigmaTau 0.5.0, Julia 1.12.6 with `-t auto` = 12
-threads, Python 3.14.4, numpy 2.4.4 and allantools 2024.06. The machine
-was otherwise idle. They were timed on `main` at 9c6acb7, which includes PR #57
-(the detrending pass before the MDEV/MHDEV prefix sums).
+Tables 1 and 3 come from a 6-core / 12-thread AMD Ryzen 5 9600X workstation
+(Fedora 44, Linux 6.19.14), SigmaTau 0.6.0, Julia 1.12.6 with `-t auto` = 12
+threads, Python 3.14.4, numpy 2.5.4, allantools 2024.06 and AllanDeviations.jl
+0.3.0. The machine was otherwise idle. They were timed on `main` at 15700eb,
+which includes PR #247 (the overlapping ADEV and HDEV sums vectorise again on
+Julia 1.12 and newer).
 
 **Table 1.** Synthetic record, N = 25 000, one fixed-seed record. Each time is
 the minimum of repeated calls, from the best of three runs (see Method).
 
-| Kernel | SigmaTau (12 threads) | allantools | Speed-up |
-|---|---:|---:|---:|
-| adev | 13.5 µs | 180 µs | 13× |
-| mdev | 34.1 µs | 860 µs | 25× |
-| hdev | 19.0 µs | 233 µs | 12× |
-| tdev | 32.2 µs | 860 µs | 27× |
-| totdev | 7.33 µs | 520 µs | 71× |
-| mtotdev | 26.3 ms | 108 s | 4,106× |
-| htotdev | 27.2 ms | 115 s | 4,228× |
+| Kernel | SigmaTau (12 threads) | allantools | Speed-up | AllanDeviations.jl | Speed-up |
+|---|---:|---:|---:|---:|---:|
+| adev | 17.9 µs | 172 µs | 9.6× | 91.4 µs | 5.1× |
+| mdev | 37.3 µs | 854 µs | 23× | 114 µs | 3.1× |
+| hdev | 23.0 µs | 225 µs | 9.8× | 94.9 µs | 4.1× |
+| tdev | 37.7 µs | 854 µs | 23× | 114 µs | 3.0× |
+| totdev | 15.5 µs | 533 µs | 34× | 115 µs | 7.4× |
+| mtotdev | 15.3 ms | 106 s | 6,928× | — | — |
+| htotdev | 14.1 ms | 113 s | 8,014× | — | — |
 
 **Table 2.** Measured phase record, N = 406 763, one timed call per kernel.
 
@@ -92,22 +93,33 @@ time by the SigmaTau default-call time.
 
 | Kernel | SigmaTau kernel-only | SigmaTau default call | allantools | Speed-up (allantools ÷ default call) |
 |---|---:|---:|---:|---:|
-| adev | 13.5 µs | 66.8 µs | 180 µs | 2.7× |
-| mdev | 34.1 µs | 125 µs | 860 µs | 6.9× |
-| hdev | 19.0 µs | 110 µs | 233 µs | 2.1× |
-| tdev | 32.2 µs | 87.2 µs | 860 µs | 9.9× |
-| totdev | 7.33 µs | 64.5 µs | 520 µs | 8.1× |
-| mtotdev | 26.3 ms | 26.8 ms | 108 s | 4,030× |
-| htotdev | 27.2 ms | 29.3 ms | 115 s | 3,925× |
+| adev | 17.9 µs | 212 µs | 172 µs | 0.8× |
+| mdev | 37.3 µs | 251 µs | 854 µs | 3.4× |
+| hdev | 23.0 µs | 161 µs | 225 µs | 1.4× |
+| tdev | 37.7 µs | 267 µs | 854 µs | 3.2× |
+| totdev | 15.5 µs | 320 µs | 533 µs | 1.7× |
+| mtotdev | 15.3 ms | 15.8 ms | 106 s | 6,709× |
+| htotdev | 14.1 ms | 15.5 ms | 113 s | 7,290× |
 
 The default call adds per-τ noise identification, EDF and χ² intervals (and
-the bias correction for the totals), which the kernel-only ratios in Tables 1
-and 2 leave out. For the five fast kernels that work costs about 50 to 90 µs
-per call at this N. It dominates the default-call time of the five fast kernels and cuts their ratio
-to 2 to 10×. For mtotdev and htotdev the kernel dominates and the
-end-to-end ratio stays in the thousands. allantools returns only a simple
-σ/√n error estimate, with no noise identification or χ² intervals, so Table 3
-compares SigmaTau doing more work against allantools doing less.
+the bias correction for the totals), which the kernel-only ratios in Table 1
+leave out. For the five fast kernels that work costs about 140 to 300 µs
+per call at this N. It dominates their default-call time and cuts their ratio
+to 0.8 to 3.4×; the adev default call takes longer than allantools' adev. For
+mtotdev and htotdev the kernel dominates and the end-to-end ratio stays in the
+thousands. allantools returns only a simple σ/√n error estimate, with no noise
+identification or χ² intervals, so Table 3 compares SigmaTau doing more work
+against allantools doing less.
+
+**Thêo1.** On allantools' public Cs 5071A vs H-maser phase record
+(`tests/Cs5071A/5071A_phase.txt.gz` in the allantools repository, downloaded
+and not stored here), N = 556 990 at τ₀ = 1 s, `theo1` over its octave grid up
+to m = 524 288 takes 1.36 s as a raw kernel (`ci=false, correct_bias=false`)
+and 5.32 s as the default call, each the minimum of three calls on the same
+machine and commit with 12 threads. The default call includes the ThêoBR bias
+ratio, averaged over the ⌊N/30 − 3⌋ ladder of AVAR/Thêo1 terms, with Thêo1
+computed at 48 sampled factors along it and interpolated between them, along
+with noise identification and χ² intervals. allantools is not timed here.
 
 ### Earlier re-run: 4-core cloud container
 
