@@ -9,6 +9,7 @@
 | `stable32_flickerpm/flickerpm_8192` | 8192-point flicker PM frequency record, τ0 = 1 s, as Stable32 wrote it | Stable32 noise generator, flicker PM coefficient 1, 2026-11-09 |
 | `stable32_flickerpm/flickerpm_8192_tables.txt` | Stable32's printed tables on it: overlapping Allan, modified Allan, overlapping Hadamard, total, modified total, Hadamard total (octave AF 1–2048, total to 4096; 0.683 confidence) | Stable32; σ asserted by `test/validation/`, α and bounds not |
 | `allantools/*.csv` | allantools 2024.6 and scipy runs on all of the above | `tools/validation/gen_allantools.py` |
+| `allandeviations/devs.csv` | AllanDeviations.jl 0.3.0 on `noise/alpha_*.txt`, every estimator it has, octave m | `tools/validation/gen_allandeviations.jl` |
 
 The records are committed so both programs read identical numbers. The
 Cross-check workflow regenerates `allantools/` with a live install and runs

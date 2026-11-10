@@ -17,6 +17,7 @@ export Row, FIX, ALPHAS, noise_record, phasedat, stable32gen, nbs14_frequency,
 
 const FIX = normpath(joinpath(@__DIR__, "..", "fixtures", "validation"))
 const AT  = get(ENV, "SIGMATAU_ALLANTOOLS_DIR", joinpath(FIX, "allantools"))
+const AD  = get(ENV, "SIGMATAU_ALLANDEVIATIONS_DIR", joinpath(FIX, "allandeviations"))
 const S32 = joinpath(FIX, "stable32_phasedat")
 const ALPHAS = (2, 1, 0, -1, -2, -3, -4)
 
@@ -115,10 +116,11 @@ function at_tol(est, ds, m)
     return (1e-9, "")
 end
 
-function allantools_dev_rows()
+# One row per σ in a reference table laid out as allantools' devs.csv.
+function _dev_rows(dir, group)
     rows = Row[]
     cache = Dict{String,PhaseData}()
-    for r in _csv(joinpath(AT, "devs.csv"))
+    for r in _csv(joinpath(dir, "devs.csv"))
         est = r["estimator"]
         haskey(AT_MAP, est) || continue
         ds = r["dataset"]
@@ -127,10 +129,15 @@ function allantools_dev_rows()
         ref = _f(r["dev"])
         got = try AT_MAP[est](p, m) catch; NaN end
         tol, note = at_tol(est, ds, m)
-        push!(rows, Row("allantools σ", ds, est, m, ref, got, tol, note))
+        push!(rows, Row(group, ds, est, m, ref, got, tol, note))
     end
     return rows
 end
+
+allantools_dev_rows() = _dev_rows(AT, "allantools σ")
+# AllanDeviations.jl (tools/validation/gen_allandeviations.jl) under
+# allantools' estimator names, so the same calls and tolerances hold.
+allandeviations_dev_rows() = _dev_rows(AD, "AllanDeviations.jl σ")
 
 # ── allantools EDF / CI / noise ID / spectra / dynamic ─────────────────────
 
@@ -503,7 +510,7 @@ function drift_rows()
 end
 
 "Every comparison row, in report order."
-all_rows() = vcat(allantools_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
+all_rows() = vcat(allantools_dev_rows(), allandeviations_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
                   stable32_flickerpm_rows(),
                   allantools_edf_rows(), allantools_ci_rows(), allantools_noiseid_rows(),
                   welch_rows(), dynamic_rows(), gap_rows(), drift_rows())
