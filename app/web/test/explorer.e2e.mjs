@@ -124,5 +124,18 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
   });
 
+  await t.test("Data: a zero in a Stable32 frequency file is a gap, filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "0" : String(1e-12 * (2 + Math.sin(i / 3)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    assert.match(await page.locator("#import-dialog .gap-card").innerText(), /1 zero reading/);
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+    assert.match(await page.locator("#record-chip-text").innerText(), /z\.frd.*51[23] samples/);
+  });
+
   assert.deepEqual(errors, []);
 });

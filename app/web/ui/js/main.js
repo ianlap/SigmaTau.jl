@@ -102,7 +102,7 @@ async function importFile(file, clock, prev) {
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         sourceInfo: settings.sourceInfo,
-        fillgaps: c.fillgaps || fillNeeded(settings), remove_outliers: false, range: null, result: null,
+        keep_zeros: settings.keep_zeros, fillgaps: c.fillgaps || fillNeeded(settings), remove_outliers: false, range: null, result: null,
       });
       touched.push(c);
     });
@@ -160,7 +160,7 @@ async function reimport(c) {
         group: c.group, kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[i] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         sourceInfo: settings.sourceInfo, source: c.source,
-        fillgaps: k.fillgaps || fillNeeded(settings), result: null,
+        keep_zeros: settings.keep_zeros, fillgaps: k.fillgaps || fillNeeded(settings), result: null,
       });
       touched.push(k);
     });
