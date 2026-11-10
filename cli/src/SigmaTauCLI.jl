@@ -126,6 +126,18 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         end
     end
 
+    if cmd == "model"
+        buf = IOBuffer()
+        try
+            o.format = "json"
+            run_model(buf, o)
+        catch e
+            return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
+        end
+        write(out, take!(buf))
+        return EXIT_OK
+    end
+
     t_start = time_ns()
     data = try
         load_record(o)

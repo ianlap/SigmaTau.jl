@@ -56,6 +56,7 @@ export function mount(root) {
           <dt>Stability</dt><dd>σ(τ) on log–log axes for σ<sub>y</sub> (frequency) or σ<sub>x</sub> (time) estimators, with confidence intervals as bars or a band (<b>CI band</b>) and the identified noise types along the top (<b>Noise ID</b>). <b>Fit</b> adds the fitted power-law noise model as dotted lines, with its h<sub>α</sub> and its ADEV at round τ under the table; <b>Edit</b> there builds the model by hand, one noise type over a τ span at a time, with the MHDEV it leaves dashed. One clock shows the per-τ table; several clocks show "Compare at τ" with the most stable clock in bold. Click the plot to move τ.</dd>
           <dt>Spectrum</dt><dd>S<sub>y</sub>(f) and either ℒ(f) at a carrier you choose or S<sub>x</sub>(f), on one frequency axis. Settings here apply at once.</dd>
           <dt>Dynamic</dt><dd>σ(t, τ) in sliding windows, to see whether the stability changes over the record. Recomputes when you change the estimator or window.</dd>
+          <dt>Synthesis</dt><dd>Define the noise of one or more simulated clocks, as the clock-model coefficients or as power-law h<sub>α</sub> (each follows the other), see the stability they predict, and generate them on the Data page. Two or more go on to the Ensemble page.</dd>
           <dt>Ensemble</dt><dd>A timescale (AT1 or EWFA) from several clocks read against one reference, with each clock's weight and the stability of the scale.</dd>
           <dt>Live</dt><dd>σ(τ) and the frequency of a measurement as it runs, from an instrument or the simulator.</dd>
         </dl>
@@ -113,7 +114,7 @@ export function mount(root) {
       <section id="help-keys"><h2>Keyboard shortcuts</h2>
         <ul class="keys">
           <li><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run the analysis; while it runs they cancel it</li>
-          <li><kbd>1</kbd> Data · <kbd>2</kbd> Stability · <kbd>3</kbd> Spectrum · <kbd>4</kbd> Dynamic · <kbd>5</kbd> Ensemble · <kbd>6</kbd> Live · <kbd>?</kbd> Help</li>
+          <li><kbd>1</kbd> Data · <kbd>2</kbd> Synthesis · <kbd>3</kbd> Stability · <kbd>4</kbd> Spectrum · <kbd>5</kbd> Dynamic · <kbd>6</kbd> Ensemble · <kbd>7</kbd> Live · <kbd>?</kbd> Help</li>
           <li>On a plot: hover for values, drag to zoom, double-click to reset</li>
           <li><kbd>Esc</kbd> cancels a running analysis or closes a dialog</li>
         </ul>

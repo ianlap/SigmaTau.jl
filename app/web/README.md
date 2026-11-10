@@ -111,6 +111,8 @@ every change to `src/`, `cli/` or `app/web/`.
 - Every clock can be renamed: in the import dialog (one name per Clock column)
   or in the name field on the Data page. Synthesize can make several clocks
   at once (`--clocks`, up to 8), each noisier than the last by a factor of two,
-  all against one perfect reference; the Ensemble page uses them.
-- Keys: F5 or Ctrl+Enter runs, 1 to 4 switch pages, ? opens Help, a file dropped anywhere opens the
+  all against one perfect reference; the Ensemble page uses them. The Synthesis
+  page sets each clock's noise (clock-model coefficients or h_α, converted both
+  ways) and previews the MDEV it predicts (`sigmatau model`).
+- Keys: F5 or Ctrl+Enter runs, 1 to 7 switch pages, ? opens Help, a file dropped anywhere opens the
   import dialog.

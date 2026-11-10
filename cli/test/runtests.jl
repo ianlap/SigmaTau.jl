@@ -532,6 +532,27 @@ mktempdir() do dir
         @test run_cli("check", pf, "--clocks", "3").code == 1                                   # synthetic only
     end
 
+    @testset "noise models" begin
+        ms = [ClockModel(; tau0=1.0, R=1e-22, q1=1e-24, q2=1e-30), ClockModel(; tau0=1.0, q1=4e-24)]
+        cc, _ = simulate_ensemble(ms, 512; reference=0, rng=Random.Xoshiro(9))
+        r = run_cli("check", "--synth", "512", "--seed", "9", "--noise-model", "1e-22:1e-24:1e-30:0", "--noise-model", "0:4e-24:0:0",
+                    "--clock", "2", "--series", "512", "--format", "json")
+        @test r.code == 0
+        m = match(r"\"series\":\{[^}]*?\"x\":\[([^\]]*)\]", r.out)
+        @test parse.(Float64, split(m.captures[1], ','))[end] ≈ cc.x[end, 2] rtol=1e-9
+        @test run_cli("check", "--synth", "256", "--noise-model", "1e-22:1e-24:0:0").code == 0       # one clock
+        # model: the closed form of the library
+        r = run_cli("model", "--synth", "4096", "--noise-model", "1e-22:1e-24:1e-30:0", "--noise-model", "0:0:0:1e-40", "--format", "json")
+        @test r.code == 0
+        tau = [1.0, 2.0, 4.0]
+        @test occursin("\"mdev\":[" * join(string.(powerlaw_sigma(ms[1], tau; deviation=:mdev)), ",")[1:12], r.out)
+        @test occursin("\"mdev\":null,\"adev\":null,\"mhdev\":[", r.out)                       # random-run FM: Hadamard only
+        @test run_cli("model", "--synth", "64").code == 1                                         # needs a model
+        @test run_cli("check", "--synth", "64", "--noise-model", "1:2:3").code == 1
+        @test run_cli("check", "--synth", "64", "--noise-model", "-1:0:0:0").code == 1
+        @test run_cli("check", "--synth", "64", "--clocks", "3", "--noise-model", "0:1e-24:0:0").code == 1
+    end
+
     @testset "usage errors -> exit 1" begin
         @test run_cli("analyze").code == 1
         r = run_cli("analyze", pf, "--devs", "bogus")

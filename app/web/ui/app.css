@@ -380,3 +380,14 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
 .ens-table .card-row { padding: 14px 16px 8px; }
 .ens-note { padding: 8px 16px 14px; }
+
+/* Synthesis page */
+.synth-clocks { align-self: flex-start; min-width: 0; overflow: auto; }
+.synth-clocks .card-row { padding: 14px 16px 8px; }
+.synth-clock { padding: 10px 16px 14px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 10px; }
+.synth-clock .clock-name { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-popover); color: var(--ink); font: inherit; padding: 0 8px; }
+.noise-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; }
+.noise-grid input { width: 100%; min-width: 0; box-sizing: border-box; height: 28px; padding: 0 8px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-popover); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
+.noise-name { font-size: 12px; color: var(--ink-2); }
+.synth-note { padding: 8px 16px 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

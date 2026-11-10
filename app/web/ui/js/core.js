@@ -59,11 +59,20 @@ async function post(body, signal) {
 
 // Command-line flags that describe one clock's record. A file travels
 // separately (the shell saves it and passes its path as FILE).
+// The flags that make a simulated record (or ensemble) of `src`: a
+// "--noise-model R:q1:q2:q3" per clock when it was made on the Synthesis page.
+export function synthArgs(src) {
+  const a = ["--synth", src.n, "--seed", src.seed];
+  if (src.models) for (const m of src.models) a.push("--noise-model", m.join(":"));
+  else if (src.clocks > 1) a.push("--clocks", src.clocks);
+  return a;
+}
+
 function recordArgs(clock) {
   const synth = clock.source.type === "synth";
-  const a = synth ? ["--synth", clock.source.n, "--seed", clock.source.seed] : [];
+  const a = synth ? synthArgs(clock.source) : [];
   // One clock of a simulated ensemble: the core simulates them all and hands back this one.
-  if (synth && clock.source.clocks > 1) a.push("--clocks", clock.source.clocks, "--clock", clock.source.index);
+  if (synth && clock.source.clocks > 1) a.push("--clock", clock.source.index);
   const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
   opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
   // An instrument file (TimeLab, Stable32 .phd/.frd, counter log) is read by
@@ -221,4 +230,12 @@ export async function livePoll(id, since) {
 export function liveStop() {
   return tauri ? tauri.invoke("live_stop")
     : fetch("api/live/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+}
+
+// The σ(τ) that noise models predict (MDEV and ADEV per model), closed form.
+export async function modelPreview({ n, tau0, models }, signal) {
+  const args = ["model", "--synth", n, "--tau0", tau0, ...models.flatMap((m) => ["--noise-model", m.join(":")]), "--format", "json"];
+  const doc = await post({ args: args.map(String), file: null }, signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc.model;
 }

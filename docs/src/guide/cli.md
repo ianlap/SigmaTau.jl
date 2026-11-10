@@ -70,6 +70,7 @@ The record (all four analysis commands):
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
+| `--noise-model R:Q1:Q2:Q3` | with `--synth`: one simulated clock with these [`ClockModel`](@ref) levels (white PM variance in s², then the white FM, random-walk FM and random-run FM diffusions). Repeat it for each clock, which sets the number of clocks; `--clock I` then picks the one to read. `sigmatau model --synth N --noise-model …` prints the σ(τ) (MDEV, ADEV, MHDEV) the models predict without simulating |
 | `--clocks K`, `--clock I` | with `--synth`: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2, and read clock I of them; `timescale --synth` uses all K (default 4) |
 
 `analyze`:
