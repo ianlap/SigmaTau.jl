@@ -202,6 +202,12 @@ function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 
     Threads.@threads :dynamic for k in eachindex(m_values)
         m = m_values[k]
+        # The extension reaches N − 2 samples past each end, so x* exists for
+        # m ≤ N − 1 only.
+        if m > N - 1
+            devs[k] = NaN
+            continue
+        end
         D = 0.0
 
         # Left tail: lo_k = n − m < 1. hi_k may or may not reflect.
@@ -1113,9 +1119,9 @@ function _neff_count(dev_sym::Symbol, N::Int, m::Int)
         Ne = N - 4m + 1
         return Ne >= 2 ? Ne : 0
     elseif dev_sym === :totdev
-        # _totdev_core: n in 2:N−1 for every m (the reflected extension
-        # supplies the tails); NaN only when N ≤ 2.
-        return N > 2 ? N - 2 : 0
+        # _totdev_core: n in 2:N−1 for every m ≤ N−1 (the reflected
+        # extension supplies the tails); NaN beyond, and when N ≤ 2.
+        return N > 2 && m <= N - 1 ? N - 2 : 0
     elseif dev_sym === :mtotdev
         # _mtotdev_core: nsubs = N−3m+1 subsequences, NaN when < 1.
         nsubs = N - 3m + 1

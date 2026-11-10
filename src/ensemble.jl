@@ -51,7 +51,8 @@ Returned conventions (one `StabilityResult` per clock, in clock order):
   `2σ_c⁴/√(ν₁ν₂)`. Propagating these through the separation gives the
   variance of each `σ̂²ᵢ`, reported as the equivalent `edf = 2σ̂⁴ᵢ / Var(σ̂²ᵢ)`
   (the covariance model of [vernotte-2019-tch-gcov-uncertainty](@cite)).
-  The intervals widen sharply for a clock much quieter than the others.
+  The intervals widen sharply for a clock much quieter than the others, and
+  below 1 EDF, where the χ² model degenerates, none is given (`NaN` bounds).
 - `noise_type` is empty; `neff` is the elementwise minimum over the inputs.
 
 See also [`groslambert`](@ref), which needs the difference records rather
@@ -114,7 +115,7 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
             edf = [_nch_edf(i, k, pairs, nbrs, s2, ν, var, w) for k in 1:n_tau]
         end
         results[i] = StabilityResult(ref.deviation_type, copy(ref.tau), dev, Symbol[],
-                                     with_ci ? _zip_ci(confidence_intervals(dev, edf, confidence)...) : _CIBound[], edf,
+                                     with_ci ? _sep_chi2_ci(dev, edf, confidence) : _CIBound[], edf,
                                      copy(neff_min), ref.tau0, ref.n, with_ci ? confidence : NaN)
     end
     return results
@@ -246,7 +247,7 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         end
         edf = [_gl_edf(i, q, couples, covar[q], s2, ν) for q in 1:K]
         dev = [v > 0 ? sqrt(v) : NaN for v in covar]
-        ci = klts === nothing ? _gl_chi2_ci(dev, edf, c) : klts[i]
+        ci = klts === nothing ? _sep_chi2_ci(dev, edf, c) : klts[i]
         results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[], ci, edf,
                                      N .- 2 .* m_values, τ₀, N, c)
     end
@@ -270,9 +271,10 @@ function _gl_edf(i, q, couples, v, s2, ν)
     return 2 * v^2 * length(couples)^2 / total
 end
 
-# χ² interval on the equivalent EDF. Below 1 EDF the χ² model degenerates (its
-# lower bound can pass the estimate), so no interval is given there.
-function _gl_chi2_ci(dev, edf, confidence)
+# χ² interval of a separated variance on its equivalent EDF. Below 1 EDF the χ²
+# model degenerates (its lower bound can pass the estimate), so no interval is
+# given there.
+function _sep_chi2_ci(dev, edf, confidence)
     lo, hi = confidence_intervals(dev, edf, confidence)
     for q in eachindex(edf)
         edf[q] >= 1 || (lo[q] = hi[q] = NaN)
@@ -299,8 +301,8 @@ function _gl_klts(x, s2, ν, m_values, τ₀, confidence)
             for i in 1:3; ci[i][q] = (lo = NaN, hi = NaN); end
             continue
         end
-        vN <= 1e-9 * sum(S[k, k] for k in 1:3) / 3 && (S = S[1:2, 1:2])
-        qs, zero_lower = _klts(S, vN, n, probs)
+        Sk = vN <= 1e-9 * sum(S[k, k] for k in 1:3) / 3 ? S[1:2, 1:2] : S
+        qs, zero_lower = _klts(Sk, vN, n, probs)
         for i in 1:3
             ci[i][q] = (lo = zero_lower[i] ? 0.0 : sqrt(qs[i, 1]), hi = sqrt(qs[i, 2]))
         end
