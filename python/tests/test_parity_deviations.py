@@ -70,13 +70,14 @@ def test_wrapper_matches_direct_julia(name, fixture, tau_kind, request, jl):
     np.testing.assert_array_equal(wrapped.neff, direct.neff)
 
 
-def test_htotdev_noise_on_the_record_as_given_matches_stable32(phase8192):
-    """At τ = 512 s Stable32 reads flicker FM; with drift removed first (the
-    default) the record reads white FM there, and the bias factor follows."""
-    as_given = st.htotdev(phase8192, [512], remove_drift=False)
-    assert as_given.dev[0] == pytest.approx(3.3578e-03, rel=1e-4)
-    assert st.deviation("htotdev", phase8192, [512], remove_drift=False).dev[0] == as_given.dev[0]
-    assert st.htotdev(phase8192, [512]).dev[0] == pytest.approx(3.10531e-03, rel=1e-5)
+def test_htotdev_remove_drift_sets_the_noise_type_and_the_bias(phase8192):
+    """At τ = 1024 s the record as given reads flicker FM; with drift removed
+    first (the default) it reads white FM, as Stable32 does, and the bias
+    factor follows."""
+    as_given = st.htotdev(phase8192, [1024], remove_drift=False)
+    assert as_given.dev[0] == pytest.approx(2.60814e-03, rel=1e-5)
+    assert st.deviation("htotdev", phase8192, [1024], remove_drift=False).dev[0] == as_given.dev[0]
+    assert st.htotdev(phase8192, [1024]).dev[0] == pytest.approx(2.4120e-03, rel=1e-4)
 
 
 def test_adev_golden_against_stable32(phase8192, stable32_csv):

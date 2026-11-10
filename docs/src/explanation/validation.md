@@ -45,28 +45,32 @@ tables use `remove_drift=false`, Stable32's convention for the noise type.
 
 | Estimator | σ vs Stable32 | σ (raw) vs allantools | CI bounds vs Stable32 |
 |---|---|---|---|
-| OADEV, MDEV, TDEV, OHDEV | ≤ 0.005 % (fixture precision) | ≤ 1e-13 | ≤ 0.06 % at 11 of 12 τ¹ |
-| TOTDEV | ≤ 0.005 % at all 13 τ | ≤ 2.8e-15 | ≤ 0.07 % at 10 of 13 τ¹ ² |
-| MTOTDEV (raw) | ≤ 0.004 % | ≤ 1.1e-15 | within 7.4 % (≤ 0.02 % at τ ≤ 8 s)³ |
-| HTOTDEV | ≤ 0.003 % at 11 of 12 τ¹ | ≤ 4.4e-15 | ≤ 0.1 % at 9 of 12 τ¹ ² |
+| OADEV, MDEV, TDEV, OHDEV | ≤ 0.005 % (fixture precision) | ≤ 1e-13 | ≤ 0.06 % at 9 of 12 τ¹ |
+| TOTDEV | ≤ 0.005 % at 10 of 13 τ¹ | ≤ 2.8e-15 | ≤ 0.07 % at 7 of 13 τ¹ ² |
+| MTOTDEV (raw) | ≤ 0.004 % | ≤ 1.1e-15 | within 1.3 % up to τ = 512 s¹ (≤ 0.02 % at τ ≤ 8 s)³ |
+| HTOTDEV | ≤ 0.003 % at 9 of 12 τ¹ | ≤ 4.4e-15 | ≤ 0.1 % at 7 of 12 τ¹ ² |
 
-¹ The single recurring residual is a noise-identification convention, not
-a numerical disagreement; see below.
+¹ The recurring residuals are two noise-identification conventions, at
+τ = 256 s and at τ ≥ 1024 s, not numerical disagreements; see below.
 ² At the two flicker-PM τ (32 s, 64 s) the bounds differ by up to 0.8 %
 (TOTDEV) / 1.1 % (HTOTDEV): the published TOTVAR/HTOT EDF tables stop at
 α = 0, and the two programs substitute different EDF models above it.
 ³ From τ = 16 s Stable32's MTOT EDF follows no published table and at
 most τ runs 1.2 to 1.5 times the Howe and Peppler (2001, Table 2) value
 SigmaTau uses, so its intervals are usually the narrower ones; the bounds
-agree to ≤ 0.02 % at τ ≤ 8 s and to within 7.4 % at the longest τ.
+agree to ≤ 0.02 % at τ ≤ 8 s and to within 1.3 % wherever the two programs
+agree on the noise type.
 
 Three per-estimator facts behind those rows:
 
 - **TOTDEV**: both programs apply the Howe/Walter `B = 1 − a·τ/T`
   correction for FLFM/RWFM. SigmaTau's default (`correct_bias=true`)
-  matches Stable32's σ to ≤ 0.005 % at every τ including the FLFM row at
-  τ = 512 s; `correct_bias=false` reproduces allantools' raw SP1065
-  eq. 25 kernel to ≤ 2.8e-15.
+  matches Stable32's σ to ≤ 0.005 % wherever the noise types agree,
+  including the FLFM row at τ = 512 s. At τ ≥ 1024 s SigmaTau reads
+  flicker FM and random-walk FM where Stable32 reads white FM, and the
+  correction puts its σ 3.1 %, 10.9 % and 26.5 % higher (¹).
+  `correct_bias=false` reproduces allantools' raw SP1065 eq. 25 kernel to
+  ≤ 2.8e-15.
 - **HTOTDEV**: Stable32 *applies* the Howe 2005 bias correction by
   default (the factors are exactly `1/√(1+a)`), and so does SigmaTau:
   `correct_bias=true` (the default) matches Stable32 to ≤ 0.003 % at
@@ -77,33 +81,46 @@ Three per-estimator facts behind those rows:
   matches it to ≤ 0.004 % (and allantools to ≤ 1.1e-15). The raw
   estimator reads low against MDEV, and SigmaTau's default divides by
   `√B(α)` (Howe and Peppler 2001, Table 2, `B < 1`) to unbias it, which
-  places the default output 0.25 % (WHPM) to 18 % (FLFM) above Stable32
-  on this fixture, 21 % at RWFM per the table, and 41 % at τ = τ₀, where
+  places the default output 0.25 % (WHPM) to 18 % (FLFM) and 21 % (RWFM)
+  above Stable32 on this fixture, and 41 % at τ = τ₀, where
   the raw estimator is exactly MDEV/√2. Pass `correct_bias=false` to
   reproduce Stable32 and allantools.
 
-### The noise-identification residual
+### The noise-identification residuals
+
+Because the EDF (and, for the total family, the bias factor) depend on α, a
+row where the two programs identify different noise types carries different
+CI bounds, and for TOTDEV and HTOTDEV a different σ. Those rows are marked ¹
+in the tables below. Two conventions produce them.
 
 At τ = 256 s (every estimator) Stable32 assigns α = +2 where SigmaTau's
 default identification assigns α = 0. This is a convention difference in
 the lag-1 ACF identifier: SigmaTau quadratically detrends each decimated
-subseries before classifying (`remove_drift=true` default); Stable32 does not.
-`identify_noise(x, m_values; remove_drift=false)` reproduces Stable32's α at
-all 12 τ on this fixture. Because the EDF (and, for the total family,
-the bias factor) depend on α, the flipped row carries different CI
-bounds (and, for HTOTDEV, a 0.25 % σ difference). The rows are marked ¹
-in the tables below.
+subseries before classifying (`remove_drift=true` default); Stable32 does
+not. For HTOTDEV the row carries a 0.25 % σ difference.
+
+From τ = 512 s fewer than 30 averaged points remain and both programs turn
+to the B1 ratio. They agree on flicker FM at 512 s. At τ ≥ 1024 s Stable32
+reads white FM; SigmaTau compares the ratio with B1(N, μ) at the number of
+averaged points, the N that B1 is defined for (SP1065 §5.7), and reads
+flicker FM at 1024 s and random-walk FM beyond, which is what σ(τ) does on
+this record: ADEV is flat from 512 s to 1024 s and rises by a factor 1.47 to
+2048 s. The labels at 2048 s and 4096 s are the one measured with six
+averaged points (m = 1365), the fewest SigmaTau runs the ratio on. With
+eight points or fewer either reading is weak evidence. `identify_noise(x, m_values; remove_drift=false,
+b1_length=:record)` reproduces Stable32's α at every τ but 256 s, where the
+R(n) confirmation of white PM gives +1, and the test suite checks TOTDEV's σ
+with Stable32's α at all 13 τ.
 
 The Hadamard estimators differ in one more way. By default they identify the
 noise on the record less its least-squares frequency drift
 (`remove_drift=true`), which Stable32 does not do, and on this record that
-changes two long-τ labels: α = −1 becomes 0 at τ = 512 s, and α = 0 becomes
-+1 at τ = 2048 s, where four averaged samples remain. HDEV itself is
-unchanged; its default intervals at those τ are [2.5577e-03, 3.6077e-03] and
-[2.5098e-03, 3.2736e-03]. HTOTDEV follows the bias factor of the label, so
-its default values are 3.10531e-03 (7.5 % below Stable32) and 2.93086e-03
-(0.25 % below). The two Hadamard tables below pass `remove_drift=false`,
-which reproduces Stable32's labels at every τ but 256 s.
+leaves white FM at τ = 1024 s, as in Stable32, and α = +1 at τ = 2048 s,
+where four averaged samples remain. HDEV itself is unchanged; its default
+interval at 2048 s is [2.5098e-03, 3.2736e-03]. HTOTDEV follows the bias
+factor of the label, so its default value there is 2.93086e-03 (0.25 % below
+Stable32). The two Hadamard tables below pass `remove_drift=false`, which
+identifies the noise on the record as given, like the other tables.
 
 ### Confidence intervals
 
@@ -122,7 +139,7 @@ averaging interval τ. Stable32 columns carry 5 significant figures (the
 fixture's precision); SigmaTau and allantools columns are truncated to 6.
 CI columns are the 68.3 % `[lower, upper]` bounds, Stable32's
 MinSigma/MaxSigma against SigmaTau's `ci_lower`/`ci_upper`. Rows marked ¹
-are the τ = 256 s noise-identification flip.
+are those where the identified noise type differs from Stable32's.
 
 ### Overlapping Allan
 
@@ -138,8 +155,8 @@ are the τ = 256 s noise-identification flip.
 | 128 | 8.1063e-03 | 8.10630e-03 | 8.10630e-03 | [7.5737e-03, 8.7695e-03] | [7.5735e-03, 8.7699e-03] |
 | 256¹ | 4.5004e-03 | 4.50037e-03 | 4.50037e-03 | [4.4513e-03, 4.5511e-03] | [4.0951e-03, 5.0557e-03] |
 | 512 | 3.1642e-03 | 3.16419e-03 | 3.16419e-03 | [2.7368e-03, 3.8843e-03] | [2.7366e-03, 3.8850e-03] |
-| 1024 | 3.1373e-03 | 3.13732e-03 | 3.13732e-03 | [2.6177e-03, 4.1767e-03] | [2.6175e-03, 4.1769e-03] |
-| 2048 | 4.6131e-03 | 4.61311e-03 | 4.61311e-03 | [3.5914e-03, 7.7529e-03] | [3.5907e-03, 7.7565e-03] |
+| 1024¹ | 3.1373e-03 | 3.13732e-03 | 3.13732e-03 | [2.6177e-03, 4.1767e-03] | [2.5690e-03, 4.3934e-03] |
+| 2048¹ | 4.6131e-03 | 4.61311e-03 | 4.61311e-03 | [3.5914e-03, 7.7529e-03] | [3.4274e-03, 1.0302e-02] |
 
 ### Modified Allan
 
@@ -155,8 +172,8 @@ are the τ = 256 s noise-identification flip.
 | 128 | 1.7347e-03 | 1.73473e-03 | 1.73473e-03 | [1.5955e-03, 1.9182e-03] | [1.5954e-03, 1.9183e-03] |
 | 256¹ | 1.8372e-03 | 1.83717e-03 | 1.83717e-03 | [1.6585e-03, 2.0896e-03] | [1.6358e-03, 2.1374e-03] |
 | 512 | 2.2115e-03 | 2.21151e-03 | 2.21151e-03 | [1.8801e-03, 2.8157e-03] | [1.8799e-03, 2.8163e-03] |
-| 1024 | 2.7671e-03 | 2.76714e-03 | 2.76714e-03 | [2.2099e-03, 4.2001e-03] | [2.2095e-03, 4.2008e-03] |
-| 2048 | 5.2906e-03 | 5.29055e-03 | 5.29055e-03 | [3.8697e-03, 1.3794e-02] | [3.8687e-03, 1.3800e-02] |
+| 1024¹ | 2.7671e-03 | 2.76714e-03 | 2.76714e-03 | [2.2099e-03, 4.2001e-03] | [2.2039e-03, 4.2393e-03] |
+| 2048¹ | 5.2906e-03 | 5.29055e-03 | 5.29055e-03 | [3.8697e-03, 1.3794e-02] | [3.7901e-03, 1.9043e-02] |
 
 ### Time
 
@@ -172,8 +189,8 @@ are the τ = 256 s noise-identification flip.
 | 128 | 1.2820e-01 | 1.28198e-01 | 1.28198e-01 | [1.1791e-01, 1.4175e-01] | [1.1790e-01, 1.4176e-01] |
 | 256¹ | 2.7154e-01 | 2.71537e-01 | 2.71537e-01 | [2.4513e-01, 3.0884e-01] | [2.4178e-01, 3.1591e-01] |
 | 512 | 6.5373e-01 | 6.53730e-01 | 6.53730e-01 | [5.5577e-01, 8.3233e-01] | [5.5572e-01, 8.3250e-01] |
-| 1024 | 1.6359e+00 | 1.63595e+00 | 1.63595e+00 | [1.3065e+00, 2.4831e+00] | [1.3063e+00, 2.4835e+00] |
-| 2048 | 6.2556e+00 | 6.25562e+00 | 6.25562e+00 | [4.5756e+00, 1.6310e+01] | [4.5744e+00, 1.6317e+01] |
+| 1024¹ | 1.6359e+00 | 1.63595e+00 | 1.63595e+00 | [1.3065e+00, 2.4831e+00] | [1.3030e+00, 2.5063e+00] |
+| 2048¹ | 6.2556e+00 | 6.25562e+00 | 6.25562e+00 | [4.5756e+00, 1.6310e+01] | [4.4814e+00, 2.2517e+01] |
 
 ### Overlapping Hadamard
 
@@ -192,17 +209,18 @@ residual above).
 | 128 | 8.4500e-03 | 8.44998e-03 | 8.44998e-03 | [7.8517e-03, 9.2096e-03] | [7.8514e-03, 9.2102e-03] |
 | 256¹ | 4.5672e-03 | 4.56718e-03 | 4.56718e-03 | [4.5122e-03, 4.6242e-03] | [4.1228e-03, 5.1951e-03] |
 | 512 | 2.9510e-03 | 2.95105e-03 | 2.95105e-03 | [2.5185e-03, 3.7257e-03] | [2.5182e-03, 3.7265e-03] |
-| 1024 | 2.4608e-03 | 2.46084e-03 | 2.46084e-03 | [2.0108e-03, 3.4682e-03] | [2.0106e-03, 3.4687e-03] |
-| 2048 | 2.8169e-03 | 2.81691e-03 | 2.81691e-03 | [2.1331e-03, 5.4864e-03] | [2.1326e-03, 5.4895e-03] |
+| 1024¹ | 2.4608e-03 | 2.46084e-03 | 2.46084e-03 | [2.0108e-03, 3.4682e-03] | [1.9715e-03, 3.6922e-03] |
+| 2048¹ | 2.8169e-03 | 2.81691e-03 | 2.81691e-03 | [2.1331e-03, 5.4864e-03] | [2.0598e-03, 7.3497e-03] |
 
 ### Total
 
 `SigmaTau corrected` is the default (`correct_bias=true`); it differs
-from the raw column only at the FLFM row (τ = 512 s), where the
-Howe/Walter `B = 1 − a·τ/T` correction applies, and that is the row
-where Stable32 matches the corrected value, confirming Stable32 applies
-the same correction. The SigmaTau CI column belongs to the default
-(corrected) output.
+from the raw column from τ = 512 s, where SigmaTau reads flicker FM or
+random-walk FM and the Howe/Walter `B = 1 − a·τ/T` correction applies. At
+512 s Stable32 reads flicker FM too and matches the corrected value,
+confirming Stable32 applies the same correction; beyond it Stable32 reads
+white FM and matches the raw one. The SigmaTau CI column belongs to the
+default (corrected) output.
 
 | τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI |
 |---:|:---|:---|:---|:---|:---|:---|
@@ -216,9 +234,9 @@ the same correction. The SigmaTau CI column belongs to the default
 | 128 | 8.1074e-03 | 8.10739e-03 | 8.10739e-03 | 8.10739e-03 | [7.5805e-03, 8.7619e-03] | [7.5801e-03, 8.7624e-03] |
 | 256¹ | 4.4756e-03 | 4.47557e-03 | 4.47557e-03 | 4.47557e-03 | [4.4264e-03, 4.5264e-03] | [4.0807e-03, 5.0127e-03] |
 | 512 | 3.1028e-03 | 3.05583e-03 | 3.05583e-03 | 3.10283e-03 | [2.6974e-03, 3.7709e-03] | [2.6974e-03, 3.7709e-03] |
-| 1024 | 2.8694e-03 | 2.86942e-03 | 2.86942e-03 | 2.86942e-03 | [2.4276e-03, 3.6939e-03] | [2.4273e-03, 3.6948e-03] |
-| 2048 | 3.4123e-03 | 3.41229e-03 | 3.41229e-03 | 3.41229e-03 | [2.7445e-03, 5.0548e-03] | [2.7439e-03, 5.0558e-03] |
-| 4096 | 4.0832e-03 | 4.08324e-03 | 4.08324e-03 | 4.08324e-03 | [3.1056e-03, 7.7435e-03] | [3.1048e-03, 7.7483e-03] |
+| 1024¹ | 2.8694e-03 | 2.86942e-03 | 2.86942e-03 | 2.95976e-03 | [2.4276e-03, 3.6939e-03] | [2.4567e-03, 3.9928e-03] |
+| 2048¹ | 3.4123e-03 | 3.41229e-03 | 3.41229e-03 | 3.78565e-03 | [2.7445e-03, 5.0548e-03] | [2.9051e-03, 6.8227e-03] |
+| 4096¹ | 4.0832e-03 | 4.08324e-03 | 4.08324e-03 | 5.16513e-03 | [3.1056e-03, 7.7435e-03] | [3.7325e-03, 1.5796e-02] |
 
 ### Modified Total
 
@@ -226,7 +244,8 @@ Stable32 and allantools both report the raw estimator here; the SigmaTau
 raw column matches both (≤ 0.004 % / ≤ 1.1e-15). The corrected column is
 SigmaTau's default, the raw value divided by `√B(α)` from Howe and Peppler
 2001, Table 2, which on this fixture is 0.25 % (WHPM), 8.4 % (FLPM), 13.9 %
-(WHFM), or 18.1 % (FLFM) above Stable32, and √2 above it at τ = 1 s. It is
+(WHFM), 18.1 % (FLFM) or 21.4 % (RWFM) above Stable32, and √2 above it at
+τ = 1 s. It is
 the column to compare with the Modified Allan table above: from 128 s to
 512 s, where the raw value is 13 to 17 % below MDEV, the corrected one is
 within 5 %. The SigmaTau CI column belongs to the raw output for
@@ -244,8 +263,8 @@ like-for-like comparison with Stable32's bounds.
 | 128 | 1.5120e-03 | 1.51199e-03 | 1.51199e-03 | 1.72196e-03 | [1.4073e-03, 1.6442e-03] | [1.3961e-03, 1.6625e-03] |
 | 256¹ | 1.5468e-03 | 1.54684e-03 | 1.54684e-03 | 1.76164e-03 | [1.4288e-03, 1.7001e-03] | [1.3855e-03, 1.7819e-03] |
 | 512 | 1.8467e-03 | 1.84668e-03 | 1.84668e-03 | 2.18088e-03 | [1.5780e-03, 2.3251e-03] | [1.5789e-03, 2.3221e-03] |
-| 1024 | 2.2545e-03 | 2.25454e-03 | 2.25454e-03 | 2.56762e-03 | [1.8657e-03, 3.0666e-03] | [1.8338e-03, 3.2207e-03] |
-| 2048 | 4.0510e-03 | 4.05095e-03 | 4.05095e-03 | 4.61349e-03 | [3.1147e-03, 7.2325e-03] | [3.0750e-03, 7.7667e-03] |
+| 1024¹ | 2.2545e-03 | 2.25454e-03 | 2.25454e-03 | 2.66255e-03 | [1.8657e-03, 3.0666e-03] | [1.8173e-03, 3.3142e-03] |
+| 2048¹ | 4.0510e-03 | 4.05095e-03 | 4.05095e-03 | 4.91611e-03 | [3.1147e-03, 7.2325e-03] | [2.9780e-03, 9.9754e-03] |
 
 ### Hadamard Total
 
@@ -269,5 +288,5 @@ at FLFM (τ = 512 s, where Stable32 = 3.3578e-03 matches the corrected
 | 128 | 9.9148e-03 | 9.89001e-03 | 9.89001e-03 | 9.91483e-03 | [9.3157e-03, 1.0647e-02] | [9.3118e-03, 1.0652e-02] |
 | 256¹ | 5.1795e-03 | 5.17950e-03 | 5.17950e-03 | 5.19250e-03 | [5.1226e-03, 5.2383e-03] | [4.7578e-03, 5.7731e-03] |
 | 512 | 3.3578e-03 | 3.09753e-03 | 3.09753e-03 | 3.35777e-03 | [2.9050e-03, 4.1199e-03] | [2.9047e-03, 4.1207e-03] |
-| 1024 | 2.4120e-03 | 2.40600e-03 | 2.40600e-03 | 2.41204e-03 | [2.0370e-03, 3.1179e-03] | [2.0368e-03, 3.1187e-03] |
-| 2048 | 2.9382e-03 | 2.93086e-03 | 2.93086e-03 | 2.93822e-03 | [2.3269e-03, 4.6000e-03] | [2.3265e-03, 4.6009e-03] |
+| 1024¹ | 2.4120e-03 | 2.40600e-03 | 2.40600e-03 | 2.60814e-03 | [2.0370e-03, 3.1179e-03] | [2.1422e-03, 3.6207e-03] |
+| 2048¹ | 2.9382e-03 | 2.93086e-03 | 2.93086e-03 | 3.33786e-03 | [2.3269e-03, 4.6000e-03] | [2.5337e-03, 6.3995e-03] |

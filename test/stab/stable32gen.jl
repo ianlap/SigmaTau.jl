@@ -4,7 +4,8 @@
 # Stable32 prints 4-5 significant figures, so the floor is rtol = 1e-4. It
 # reports MTOTDEV uncorrected but bias-corrects TOTDEV (B = 1 − a·τ/T) and
 # HTOTDEV (1/√(1+a)), so the raw kernels differ from it at the FLFM/RWFM rows
-# by exactly those factors; the corrected `totdev` matches every row at 1e-4.
+# by exactly those factors; `totdev` corrected for Stable32's noise type
+# matches every row at 1e-4.
 # allantools reports every estimator raw and is matched at 1e-11 (the CSV is
 # written at %.17e), TOTDEV at 1e-7.
 
@@ -49,9 +50,15 @@ using SigmaTau
         l, h = confidence_intervals(σ, edf, 0.683)
         @test all(isapprox.(l, lo; rtol=1e-3)) && all(isapprox.(h, hi; rtol=1e-3))
     end
-    tot = [(m, ref) for (k, m, ref) in rows if k == "Total"]
+    # From τ = 1024 Stable32 reads white FM, where σ(τ) runs flat and then
+    # rises and SigmaTau reads flicker FM and random-walk FM.
+    tot = filter(r -> r[1] == "Total", csv)
+    ms = [parse(Int, r[2]) for r in tot]
+    B = bias_correction([αsym[parse(Int, r[5])] for r in tot], :totvar, Float64.(ms), length(x) - 1.0)
     @test length(tot) >= 10
-    @test all(isapprox.(totdev(pd, first.(tot)).dev, last.(tot); rtol=1e-4))
+    @test all(isapprox.(totdev(pd, ms; ci=false, correct_bias=false).dev ./ sqrt.(B),
+                        parse.(Float64, getindex.(tot, 7)); rtol=1e-4))
+    @test totdev(pd, [1024, 2048, 4096]).noise_type == [:FLFM, :RWFM, :RWFM]
 
     # allantools CSV columns: Type, AF, Tau, N, Sigma (raw totdev is _totdev_core)
     raw["Total"] = (m -> SigmaTau._totdev_core(x, [m], 1.0)[1], 0.0)
