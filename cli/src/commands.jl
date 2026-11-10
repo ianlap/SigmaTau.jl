@@ -56,6 +56,11 @@ end
 
 # ── analyze ───────────────────────────────────────────────────────────────
 
+# One method instance per type of `bias`: under --trim=safe the keyword call
+# needs a concrete one.
+run_deviation(d::Symbol, data, ms::Vector{Int}, o::Options, bias::Union{Bool,Symbol}) =
+    deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=bias)
+
 function analysis_results(o::Options, data::PhaseData)
     need_samples(data, 8, "the analysis")
     o.tau_min > o.tau_max && throw(usage_error("--tau-min is above --tau-max"))
@@ -66,7 +71,7 @@ function analysis_results(o::Options, data::PhaseData)
         ms = isempty(o.m) ? tau_values(mode, N, d) : o.m
         ms = Int[m for m in ms if !(m * data.tau0 < o.tau_min * (1 - 1e-9)) && !(m * data.tau0 > o.tau_max * (1 + 1e-9))]
         isempty(ms) && continue
-        push!(results, deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=correct_bias(o)))
+        push!(results, run_deviation(d, data, ms, o, correct_bias(o)))
     end
     isempty(results) && !(isnan(o.tau_min) && isnan(o.tau_max)) &&
         throw(CLIError(EXIT_ANALYSIS, "no averaging time of the grid lies within --tau-min and --tau-max"))
