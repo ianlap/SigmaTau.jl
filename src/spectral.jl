@@ -30,8 +30,15 @@ end
 One-sided Welch PSD estimate of the real signal `z` sampled at `fs` Hz.
 
 Splits `z` into overlapping segments of length `nperseg` stepped by
-`nperseg - noverlap`, removes each segment's mean (constant detrend), applies
-the chosen `window`, periodograms each segment with a real FFT, and averages.
+`nperseg - noverlap`, removes each segment's mean, applies the chosen
+`window`, periodograms each segment with a real FFT, and averages. The mean
+is taken with the window's own weights, `Σ wᵢzᵢ / Σ wᵢ`, which leaves the
+tapered segment with no value at `f = 0`. The plain mean (scipy's
+`detrend="constant"`) differs in the first two values only for a Hann or
+Hamming window, and there it is the worse estimate when the spectrum rises
+with `f`: the plain mean of a differenced record is its end-point difference,
+which leaks through the window's main lobe into the first bin in proportion
+to `nperseg` (white PM read `1 + nperseg/(12π²)` times high).
 The normalization is the "density" convention: each periodogram is scaled by
 `1 / (fs · Σ wᵢ²)` and every bin except DC (and the Nyquist bin when `nperseg`
 is even) is doubled to fold negative-frequency power into the one-sided
@@ -87,12 +94,13 @@ function _welch(a::Vector{Float64}, b::Vector{Float64}, fs::Float64;
     Sab   = zeros(ComplexF64, same ? 0 : nfreq)
     seg   = Vector{Float64}(undef, nperseg)
 
+    wsum = sum(win)
     function taper!(z, off)
         μ = 0.0
         @inbounds for i in 1:nperseg
-            μ += z[off + i]
+            μ += win[i] * z[off + i]
         end
-        μ /= nperseg
+        μ /= wsum
         @inbounds for i in 1:nperseg
             seg[i] = (z[off + i] - μ) * win[i]
         end
@@ -174,6 +182,13 @@ low-frequency resolution, lower it for more averaging. `taper` is `:hann`,
 `:hamming`, or `:rectangular`.
 
 The estimate is variance-preserving: `Σ S_y(f)·Δf ≈ var(y)` over `[0, fs/2]`.
+Each segment's mean is removed with the taper's weights, so a frequency offset
+leaves no trace and the value at `f = 0` is zero. The first bin above it
+shares the taper's main lobe with the removed mean and reads 0.55 (flicker
+FM) to 1.09 (white PM) of the true density under the Hann taper, at any
+segment length; from the second bin the estimate equals scipy's
+`signal.welch`. A frequency drift is not removed; take it out first
+([`detrend`](@ref)).
 """
 function psd_y(data::FrequencyData; nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
     y  = _f64(data.y)
@@ -210,14 +225,19 @@ It is the Welch estimate of `S_y(f)` (see [`psd_y`](@ref), same keyword
 arguments) divided by the response of the first difference that takes phase to
 frequency, `4 sin²(πfτ₀)/τ₀²`, the sampled form of `S_x(f) = S_y(f)/(2πf)²`.
 The phase of FM noise has a spectrum as steep as f⁻² to f⁻⁴, which leaks
-through any taper into the lowest bins (a Welch estimate on the phase itself
+through any taper into the lowest bins: a Welch estimate on the phase itself
 reads 3 times high at the second bin on flicker FM and about 100 times on
-random-walk FM, and is swamped at every low bin by a frequency offset); its
-first difference is two powers of f flatter and a frequency offset is only its
-mean. The value at `f = 0` is `NaN`, and the first bin above it, which shares
-the taper's main lobe with the removed mean, is the least reliable: on white
-PM it reads about 10 times high. A segment holds `nperseg` frequency samples;
-the default is the largest power of two up to a quarter of the phase samples.
+random-walk FM, and is swamped at every low bin by a frequency offset. The
+first difference is two powers of f flatter, and a frequency offset is only
+its mean. Under the Hann taper the estimate is within 16 % of the true density
+from the third bin on every power-law noise (random-walk FM reads 1.5 at the
+second); the first bin is as in [`psd_y`](@ref), and the value at `f = 0` is
+`NaN`. The Hamming and rectangular tapers, whose side lobes fall slowly, let
+the top of a PM spectrum leak down into the low bins of a long segment.
+
+A segment holds `nperseg` frequency samples, one fewer than the phase samples
+it spans; the default is the largest power of two up to a quarter of the
+phase samples.
 """
 function psd_x(data::AbstractTimingData; nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
     np, no = _sx_welch_params(data, nperseg, noverlap)

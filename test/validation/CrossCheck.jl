@@ -428,9 +428,11 @@ function welch_rows()
         p = get!(() -> dataset(ds), cache, ds)
         res = psd_y(p; nperseg=nps)          # psd_x is this over the first-difference response
         # Error relative to the spectral peak: FFT round-off scales with the total power.
+        # From the second bin: below it scipy's plain segment mean and the
+        # taper-weighted mean used here differ.
         pk = maximum(ref)
-        for (k, (a, b)) in enumerate(zip(ref, res.psd))
-            push!(rows, Row("scipy Welch", ds, kind, k - 1, a, b, 1e-9, "error relative to the peak", pk))
+        for k in 3:length(ref)
+            push!(rows, Row("scipy Welch", ds, kind, k - 1, ref[k], res.psd[k], 1e-9, "error relative to the peak", pk))
         end
     end
     return rows

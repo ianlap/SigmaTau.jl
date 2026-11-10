@@ -22,6 +22,10 @@ const NOTES = """
   `correct_bias=false` for the latter.
 - **Thêo1 τ.** allantools reports Thêo1 at τ = m·τ0, SigmaTau and Stable32 at
   the effective τ = 0.75·m·τ0. Rows are matched on m.
+- **Welch spectra.** Compared from the second bin above zero. Below it scipy
+  removes each segment's plain mean and SigmaTau its taper-weighted mean (see
+  `psd_y`); S_x is S_y over the first-difference response and has no rows of
+  its own.
 - **TOTDEV / MTOT EDF record length.** SP1065 Tables 7–8 give
   edf = b·T/τ − c. allantools uses T/τ = N/m, SigmaTau the span
   (N − 1)·τ0/τ, a 1/N relative difference; the EDF rows compare the formula

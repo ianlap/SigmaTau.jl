@@ -71,6 +71,12 @@ end
         # A frequency offset is the mean of y and leaves the spectrum alone.
         off = PhaseData(p.x .+ 50.0 .* (0:16383), 1.0)
         @test psd_x(off; nperseg=2048).psd[2:end] ≈ rx.psd[2:end] rtol=1e-6
+        # White PM, S_x = 2τ₀σ²: the first bin stays true on a long segment
+        # (with the plain segment mean it reads 1 + nperseg/(12π²) = 70 times high).
+        w = PhaseData(randn(Xoshiro(3), 2^17), 1.0)
+        @test 0.5 < psd_x(w; nperseg=8192).psd[2] / 2 < 2
+        sy = psd_y(w; nperseg=8192)
+        @test sy.psd[1] < 1e-20 * sy.psd[2]
     end
 
     @testset "ℒ(f) carrier scaling" begin
