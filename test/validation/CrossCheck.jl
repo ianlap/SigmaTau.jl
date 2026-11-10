@@ -146,7 +146,7 @@ function allantools_edf_rows()
             got = _calc_edf_core(a, d, m, 1, m, N)
             est = d == 2 ? "mdev" : "mhdev"
         elseif fam in ("totdev", "mtotdev")
-            # SP1065 Tables 7/8: edf = b·T/τ − c. allantools takes T/τ = N/m;
+            # SP1065 Table 7: edf = b·T/τ − c. allantools takes T/τ = N/m;
             # SigmaTau takes the record span T = (N − 1)·τ0 (a 1/N relative
             # difference). Compare the table formula at allantools' T here.
             est = fam
@@ -155,8 +155,11 @@ function allantools_edf_rows()
             continue   # nonoverlapping, simple: no SigmaTau counterpart
         end
         tol, note = 1e-9, ""
-        if est == "mtotdev" && m < 16
-            tol, note = Inf, "SigmaTau uses MDEV's EDF below τ = 16τ0, the edge of SP1065 Table 8"
+        if est == "mtotdev"
+            tol, note = Inf, m < 16 ? "SigmaTau uses MDEV's EDF below τ = 16τ0, where the published tables start" :
+                                      "allantools uses SP1065 Table 8; SigmaTau uses Howe & Peppler 2001 Table 2"
+        elseif est == "totdev" && m == 1
+            tol, note = Inf, "at τ0 TOTVAR is AVAR and SigmaTau takes ADEV's EDF; allantools applies SP1065 Table 7"
         elseif isnan(ref) && est == "ohdev" && a == -4
             tol, note = Inf, "allantools' edf_greenhall cannot reach Table 2's α = −4 row"
         elseif isnan(ref) && est == "oadev" && a == 2
@@ -245,7 +248,9 @@ const NOISE_ID_NOTE = "noise ID differs: N/m < 30 is the B1/R(n) fallback, which
 # CI rows outside the published EDF models: reported, not asserted.
 function s32_ci_tol(est, m)
     if est in ("mtotdev", "ttotdev") && m >= 16
-        return (Inf, "Stable32's MTOT EDF at τ = 16τ0 is not SP1065 Table 8 (implied EDF 81 vs 68)")
+        return (Inf, "Stable32's MTOT EDF at τ = 16τ0 follows no published table (implied EDF 81; Howe & Peppler 2001 Table 2 gives 65)")
+    elseif est == "totdev" && m == 1
+        return (Inf, "at τ0 TOTVAR is AVAR and SigmaTau takes ADEV's EDF; Stable32 applies SP1065 Table 7")
     elseif est == "htotdev" && m < 16
         return (Inf, "below τ = 16τ0 the FCS 2001 HTOT EDF table does not apply; Stable32's fallback is undocumented")
     end

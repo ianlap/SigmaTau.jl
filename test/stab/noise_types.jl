@@ -47,6 +47,26 @@ using SigmaTau
         @test ratio(-2) ≈ [0.5, B(:RWFM)] rtol = 0.05
     end
 
+    @testset "Total-family identities at m = 1" begin
+        # No difference reaches the extension at m = 1: TOTVAR is AVAR and
+        # MHTOTVAR is 124/225 of MHVAR for any record, so each takes its
+        # parent's EDF.
+        p = noise_gen(PhaseData, 1024, 1.0; h=Dict(0 => 1.0), rng=Xoshiro(3))
+        t, a = totdev(p, [1]), adev(p, [1])
+        @test t.dev ≈ a.dev && t.edf == a.edf
+        h, g = mhtotdev(p, [1]), mhdev(p, [1])
+        @test h.dev ≈ g.dev rtol = 1e-8
+        @test h.edf == g.edf
+        @test (mhtotdev(p, [1]; ci=false, correct_bias=false).dev ./ g.dev) .^ 2 ≈ [124 / 225]
+    end
+
+    @testset "MTOTDEV EDF (Howe & Peppler 2001, Table 2)" begin
+        edf(est, noise, m) = SigmaTau.calculate_edf(est, [1.0], [noise], [m], [Float64(m)], 4097, 4096.0)[1]
+        @test edf(:mtotdev, :WHPM, 64) ≈ 64 / (0.559 + 1.004 / 64)
+        @test edf(:mtotdev, :RWFM, 1024) ≈ 4 / (1.276 + 3.149 / 4)
+        @test edf(:mtotdev, :WHFM, 8) == edf(:mdev, :WHFM, 8)       # below 16τ0
+    end
+
     @testset "TTOTDEV = MTOTDEV · τ/√3 identity" begin
         # ttotdev wraps mtotdev with a τ/√3 rescaling (analogous to tdev
         # over mdev). Verifies the wrapper produces the documented
