@@ -1,7 +1,8 @@
 # Benchmarks
 
-Two scripts time the same deviation kernels, on the same samples and the same
-τ grid, in SigmaTau and in [allantools](https://github.com/aewallin/allantools).
+Three scripts time the same deviation kernels, on the same samples and the
+same τ grid, in SigmaTau, in [allantools](https://github.com/aewallin/allantools)
+and in [AllanDeviations.jl](https://github.com/JulienKluge/AllanDeviations.jl).
 
 ```bash
 # synthetic record (default)
@@ -12,6 +13,12 @@ python bench/bench_allantools.py 25000                       # writes allantools
 # a phase record from a file (last column = phase, sampled at --tau0 seconds)
 julia --project=. -t auto bench/bench_sigmatau.jl --input path/to/phase.txt --tau0 1 --tag measured
 python bench/bench_allantools.py --input path/to/phase.txt --tau0 1 --tag measured
+
+# AllanDeviations.jl on the record SigmaTau wrote (run before bench_allantools.py,
+# which then adds its column; it has no mtotdev or htotdev)
+julia --project=tools/validation/allandeviations -e 'using Pkg; Pkg.instantiate()'
+julia --project=tools/validation/allandeviations bench/bench_allandeviations.jl 25000
+julia --project=tools/validation/allandeviations bench/bench_allandeviations.jl --tag measured
 
 # reprint the tables from saved JSON without timing
 python bench/bench_allantools.py 25000 --report-only
