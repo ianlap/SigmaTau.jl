@@ -5,9 +5,13 @@
 
 const PREVIEW_ROWS = 9;
 
-function splitter(name) {
+function splitter(name, lines) {
   const ext = name.toLowerCase().split(".").pop();
-  const delim = ext === "csv" ? "," : ext === "tsv" ? "\t" : null;
+  let delim = ext === "csv" ? "," : ext === "tsv" ? "\t" : null;
+  // A blank-separated file named .csv still reads: the extension's delimiter
+  // counts only when the first data line holds it, as in the readers.
+  const first = lines.find((l) => l.trim() && !l.trim().startsWith("#"));
+  if (delim && first !== undefined && !first.includes(delim)) delim = null;
   const fn = (line) => {
     const t = line.trim();
     if (!t) return [];
@@ -40,7 +44,7 @@ function formatOf(name, timelab, header, rows, columns) {
 // picks its default column: phase names first, then frequency.
 const tableKind = (names) =>
   names.some((n) => /phase|time ?err|\btie\b|pps|time ?offset|time ?diff/i.test(n)) ? "phase"
-    : names.some((n) => /freq|\bffe\b|osc|fractional/i.test(n)) ? "frequency" : null;
+    : names.some((n) => /freq|\bffe\b|osc|fractional|ratio/i.test(n)) ? "frequency" : null;
 
 // NaN marks a missing sample; Julia's reader parses it as a Float64.
 const isNum = (x) => x !== "" && (Number.isFinite(Number(x)) || /^[+-]?nan$/i.test(x));
@@ -56,10 +60,19 @@ function fieldValue(x) {
   return Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) / 1000 + Number(m[6]) - off;
 }
 
+// With no names to go by, readings that never exceed 1e-11 in size can only be
+// fractional frequency (or a ratio): a time error that small is not a clock.
+function sizeKind(columns) {
+  const med = (c) => { const v = c.filter(Number.isFinite).map(Math.abs).sort((a, b) => a - b); return v.length ? v[v.length >> 1] : NaN; };
+  const varies = (c) => c.length > 1 && c.some((v) => v !== c[0]);
+  const readings = columns.filter((c) => varies(c) && !c.every((v, i) => i === 0 || v > c[i - 1]));
+  return readings.length && readings.every((c) => med(c) < 1e-11) ? "frequency" : null;
+}
+
 export function sniff(name, text) {
   const lines = text.split(/\r?\n/);
   if (lines.length && lines[lines.length - 1] === "") lines.pop();
-  const [split, delimName] = splitter(name);
+  const [split, delimName] = splitter(name, lines);
 
   let comments = 0;
   while (comments < lines.length && lines[comments].trim().startsWith("#")) comments++;
@@ -93,9 +106,14 @@ export function sniff(name, text) {
     nRows++;
   }
   const nCols = columns.length;
-  // "# tau0: 1" (SigmaTau's save) or "Tau: 1" (Stable32-style headers).
-  const tauComment = lines.slice(0, start).map((c) => /\btau0?\s*[:=]\s*([0-9.eE+-]+)/i.exec(c)).find(Boolean);
-  const names = nameFields.length === nCols && !timelab ? nameFields : [];
+  // "# tau0: 1" (SigmaTau's save), "Tau: 1" (Stable32-style headers) or
+  // "# data interval 1.0 s" (allantools' sample files).
+  const tauComment = lines.slice(0, start).map((c) => /\btau0?\s*[:=]\s*([0-9.eE+-]+)/i.exec(c)
+    ?? /^#\s*(?:data|sample) interval:?\s+([0-9.eE+-]+)\s*s\s*$/i.exec(c)).find(Boolean);
+  // A last comment line of names ("# t  ratio  flag", as the ROCIT files have) names the columns too.
+  const commentNames = comments > 0 && !header ? lines[comments - 1].replace(/^#\s*/, "").trim().split(/\s+/) : [];
+  const names = timelab ? [] : nameFields.length === nCols ? nameFields
+    : commentNames.length === nCols && commentNames.every((x) => !isField(x)) ? commentNames : [];
   const fmt = formatOf(name, timelab, header, rows, columns);
   const interval = timelab && head.map((l) => /"Sample Interval"\s+([0-9.eE+-]+)/.exec(l)).find(Boolean);
 
@@ -105,7 +123,7 @@ export function sniff(name, text) {
     delimName,
     comments,
     header,
-    namesLine: names.length ? start : 0,       // 1-based line number of the column names
+    namesLine: nameFields.length === nCols && !timelab ? start : 0,       // 1-based line number of the column names
     names,
     top: lines.slice(0, start).map((t, i) => ({ ln: i + 1, text: t })).slice(-4),
     rows,
@@ -116,31 +134,42 @@ export function sniff(name, text) {
     tau0Hint: interval ? Number(interval[1]) : tauComment ? Number(tauComment[1]) : null,
     format: fmt?.format ?? null,      // passed to the core as --input-format
     formatLabel: fmt?.label ?? null,
-    kindHint: fmt?.format === "table" ? tableKind(names) : fmt?.kind ?? null,
+    kindHint: fmt?.format ? fmt.format === "table" ? tableKind(names) : fmt.kind ?? null : tableKind(names) ?? sizeKind(columns),
     stable32: /stable32/i.test(lines.slice(0, start).join("\n")) || /\.dat$/i.test(name) && header > 0,
   };
 }
 
+// The scale a column name states: "(ns)", "[ps]" for time, "ppb" for frequency.
+const NAME_UNITS = [[/[(\[]\s*ns\s*[)\]]/i, 1e-9], [/[(\[]\s*(?:us|µs|μs)\s*[)\]]/i, 1e-6], [/[(\[]\s*ms\s*[)\]]/i, 1e-3],
+  [/[(\[]\s*ps\s*[)\]]/i, 1e-12], [/ppb/i, 1e-9], [/ppm/i, 1e-6], [/ppt/i, 1e-12]];
+const unitOf = (name) => (NAME_UNITS.find(([re]) => re.test(name)) ?? [null, 1])[1];
+
 // Guess which columns hold time and value: a strictly increasing first column
 // is time; the value is the next column that is not constant.
 export function guessRoles(s) {
-  if (s.nCols <= 1) return { time: 0, value: 1, timeUnit: 1 };
+  if (s.nCols <= 1) return { time: 0, value: 1, timeUnit: 1, scaling: unitOf(s.names[0] ?? "") };
   const inc = (c) => c.length > 1 && c.every((v, i) => i === 0 || v > c[i - 1]);
   const isMjd = (c, name) => /mjd/i.test(name) || (c[0] > 30000 && c[0] < 90000 && c[1] - c[0] < 1);
   const cand = [];
   for (let c = 0; c < s.nCols; c++) if (inc(s.columns[c])) cand.push(c + 1);
   const nm = (c) => s.names[c - 1] ?? "";
-  // A column named like elapsed seconds wins; then any increasing column
-  // that is not MJD; then MJD, read in days.
-  let time = cand.find((c) => /elapsed|sec|time|^t$|_s$/i.test(nm(c)) && !isMjd(s.columns[c - 1], nm(c)))
-    ?? cand.find((c) => !isMjd(s.columns[c - 1], nm(c))) ?? cand[0] ?? 0;
+  // A clock column that only drifts upward is increasing too, so names count:
+  // a column named for a phase or frequency is never time.
+  const reading = (c) => /phase|freq|ratio|value|offset|clock|^[xy]$/i.test(nm(c));
+  const timeLike = cand.filter((c) => !reading(c));
+  // A column named like elapsed seconds wins; then the first increasing
+  // column that is not MJD; then the first one, read in days when it is MJD.
+  let time = timeLike.find((c) => /elapsed|sec|time|^t$|_s$/i.test(nm(c)) && !isMjd(s.columns[c - 1], nm(c)))
+    ?? timeLike.find((c) => !isMjd(s.columns[c - 1], nm(c))) ?? timeLike[0] ?? 0;
+  // Unnamed columns: the first one is time when it is increasing.
+  if (!time && cand[0] === 1) time = 1;
   const timeUnit = time && isMjd(s.columns[time - 1], nm(time)) ? 86400 : 1;
-  const named = s.names.findIndex((n, i) => i + 1 !== time && !cand.includes(i + 1) && /phase|freq|value|^x$|^y$/i.test(n));
-  if (named >= 0) return { time, value: named + 1, timeUnit };
+  const named = s.names.findIndex((n, i) => i + 1 !== time && !timeLike.includes(i + 1) && /phase|freq|value|^x$|^y$/i.test(n));
+  if (named >= 0) return { time, value: named + 1, timeUnit, scaling: unitOf(nm(named + 1)) };
   let value = 1;
-  while (value <= s.nCols && (value === time || cand.includes(value))) value++;
+  while (value <= s.nCols && (value === time || timeLike.includes(value))) value++;
   if (value > s.nCols) value = time === 1 ? 2 : 1;
-  return { time, value, timeUnit };
+  return { time, value, timeUnit, scaling: unitOf(nm(value)) };
 }
 
 // Grid step and gaps of a time column, scanning the whole file: the same

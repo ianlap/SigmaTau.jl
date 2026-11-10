@@ -34,7 +34,7 @@ export function openImport(file, prev = null) {
     time: p?.time_col ?? guess.time,          // 0 = no time column
     timeUnit: p?.timeUnit ?? guess.timeUnit,
     values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
-    scaling: p?.scaling ?? 1,
+    scaling: p?.scaling ?? guess.scaling ?? 1,
     tau0In: p?.tau0 ?? s.tau0Hint ?? "",     // no guess: without a time column τ0 must be given
     against: p?.against ?? "",
     remember: true,
