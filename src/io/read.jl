@@ -285,8 +285,6 @@ function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int,
         time_col = 0; value_col = 1
     end
     have_time = time_col >= 1
-    fillgaps && !have_time &&
-        throw(ArgumentError("read: fillgaps=true requires a time column (got time_col=0)"))
     cols, _ = _read_cols(path, skip, delim, have_time ? [time_col, value_col] : [value_col])
     v = cols[end]
     t = have_time ? cols[1] : Float64[]
@@ -373,8 +371,8 @@ samples in file order, and a file with one column is read as its values
 - `detrend`: one of `:none`, `:mean`, `:endpoint`, `:linear`, `:quadratic`.
                See [`detrend`](@ref).
 - `fillgaps`: when `true`, fill the missing samples (and any `NaN` reading)
-               with [`fillgaps`](@ref) (Howe's algorithm). Requires a time
-               column.
+               with [`fillgaps`](@ref) (Howe's algorithm). Without a time
+               column only the `NaN` readings are missing.
 
 # Examples
 

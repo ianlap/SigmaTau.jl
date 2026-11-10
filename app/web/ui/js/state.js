@@ -73,7 +73,6 @@ export function newClock(fields = {}) {
     fillgaps: false,
     range: null,             // [start, end] in seconds from the first sample, or null = all
     remove_outliers: false,
-    hasTimeCol: false,
     record: null,            // record + check from the core
     result: null,            // last analysis from the core (with the spectrum)
     dynamic: null,           // last dynamic-deviation map, with its settings key
