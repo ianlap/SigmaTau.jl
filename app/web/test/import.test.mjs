@@ -91,6 +91,7 @@ test("a RINEX clock file lists its clocks and takes the clock's own epochs", () 
 
 test("exact timestamps keep their own step on a short record", () => {
   assert.equal(timeStats(seq(10, (i) => 86400 * i)).tau0, 86400);       // not 86000
+  assert.equal(timeStats([0.89, 4.03, 7.18]).tau0, 3.14);                  // ties as the reader rounds
   assert.equal(timeStats(seq(30, (i) => 1 + i / 86400).map((x) => Math.round(x * 1e6) / 1e6), 86400).tau0, 1);
 });
 

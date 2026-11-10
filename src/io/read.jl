@@ -96,10 +96,11 @@ end
 # The step is first the mean of the regular steps (under 1.5 times the
 # shortest, so not the gaps), whose sum telescopes, so timestamps rounded to
 # a coarse resolution (MJD to 1e-6 day) still average to the true step. The
-# step is then the shortest round value (1 to 6 significant figures) of the
-# least-squares step that the scatter of the timestamps cannot tell from it
-# (see `_step_tolerance`) and that keeps every timestamp within a quarter
-# step of its slot over the whole record, else the span over the slots.
+# step is then the shortest round value of it (1 to 6 significant figures)
+# that the scatter of the timestamps cannot tell from their least-squares
+# step on the slots it gives (see `_step_tolerance`) and that keeps every
+# timestamp within a quarter step of its slot over the whole record, else
+# the span over the slots.
 # Every step must be within a quarter of a whole number of grid steps, so jittered timestamps keep their order
 # and a missing reading leaves an empty slot. No slots (and a NaN step) when
 # the column is no time axis: not increasing, or steps that fit no grid.
@@ -117,13 +118,12 @@ function _time_grid(t::AbstractVector{<:Real})
         d < 1.5 * lo && (s += d; m += 1)
     end
     est = s / m
-    fit, tol = _step_tolerance(t, _slots(dt, est), est)
     for digits in 1:6
-        step = round(fit; sigdigits=digits)
-        abs(step - fit) <= min(tol, 0.01 * fit) || continue
+        step = round(est; sigdigits=digits)
         slots = _slots(dt, step)
         isempty(slots) && continue
-        _on_grid(t, slots, step) && return slots, step
+        fit, tol = _step_tolerance(t, slots)
+        abs(step - fit) <= min(tol, 0.01 * fit) && _on_grid(t, slots, step) && return slots, step
     end
     slots = _slots(dt, est)
     isempty(slots) && return none
@@ -136,10 +136,8 @@ end
 # round step may differ from it: the slope error that timestamp errors of
 # twice the largest residual can cause at worst, so coarse timestamps admit
 # a round step and exact ones only the exact step (to 1e-9 of it).
-# `(est, Inf)` when the slots are unknown.
-function _step_tolerance(t::AbstractVector{<:Real}, slots::Vector{Int}, est::Float64)
+function _step_tolerance(t::AbstractVector{<:Real}, slots::Vector{Int})
     n = length(slots)
-    n == 0 && return est, Inf
     xb = sum(slots) / n; tb = 0.0
     for i in 1:n
         tb += t[i] - t[1]
@@ -335,10 +333,10 @@ A time column of MJD values (from MJD 30000 to 90000, with steps under
 0.05 d and more than four decimals) is read in days and sets the record's
 [`start_time`](@ref); pass `tau0` for seconds timestamps that look like that.
 
-The time column places the samples on a grid: its step is the
-least-squares step of the timestamps, rounded to the shortest value that
-their scatter cannot tell from it and that keeps every timestamp within a
-quarter step of its slot, so jittered or coarsely rounded timestamps (MJD to
+The time column places the samples on a grid: its step is the mean of the
+regular steps, rounded to the shortest value that the scatter of the
+timestamps cannot tell from their least-squares step and that keeps every
+timestamp within a quarter step of its slot, so jittered or coarsely rounded timestamps (MJD to
 six decimals) give the true τ₀ and exact ones their own step at any length. Each step is rounded to
 a whole number of grid steps, so a missing reading leaves a `NaN` sample
 where it belongs, which the gap-tolerant estimators skip (see [Timestamps

@@ -125,6 +125,8 @@ fmt(f) = joinpath(FMT, f)
         @test read_data(units; column="osc (ms)") isa PhaseData
         @test read_data(units; column="freq (ns/s)").y ≈ [1e-9, 2e-9, 4e-9]
         @test_throws ArgumentError read_data(units; column="drift ppm", kind=:phase)
+        write(units, "time (ms),phase (ns)\n2026-11-08T12:00:00Z,1\n2026-11-08T12:00:01Z,2\n2026-11-08T12:00:02Z,4\n")
+        @test read_data(units).tau0 == 1.0                            # not for ISO timestamps
         # A time column found by its ISO timestamps rather than its name.
         iso = tempname() * ".csv"
         write(iso, "measurement_time,phase (ns)\n2026-11-08T12:00:00Z,1\n2026-11-08T12:00:01Z,2\n2026-11-08T12:00:03Z,4\n")
@@ -145,6 +147,9 @@ fmt(f) = joinpath(FMT, f)
         # Exact timestamps keep their own step on a short record, not a rounder one.
         @test SigmaTau._time_grid(86400.0 .* (0:9))[2] == 86400.0     # not 86000
         @test SigmaTau._time_grid(604800.0 .* (0:99))[2] == 604800.0  # not 605000
+        # MJD-rounded stamps in 30 short runs, then a long gap: the step and every slot.
+        s = [[20j + k for j in 0:29 for k in 0:17]; 55597 .+ (0:99)]
+        @test SigmaTau._time_grid(round.((5.184e9 .+ s) ./ 0.0864) .* 0.0864) == (s .+ 1, 1.0)
         # MJD to six decimals (0.0864 s): 1 s steps read as 0.9504 or 1.0368 s.
         mjd = round.(59646.9583 .+ [0:999; 1500:2999] ./ 86400; digits=6)
         tbl = tempname() * ".csv"

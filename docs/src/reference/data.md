@@ -16,10 +16,10 @@ read_frequency
 
 ## Timestamps and gaps
 
-A time column places the samples. The grid step is the least-squares step
-of the timestamps, rounded to the shortest value that their scatter cannot
-tell from it and that keeps every timestamp within a quarter step of its
-slot, so timestamps rounded to a coarse resolution (MJD to six decimals is
+A time column places the samples. The grid step is the mean of the
+regular steps, rounded to the shortest value that the scatter of the
+timestamps cannot tell from their least-squares step and that keeps every
+timestamp within a quarter step of its slot, so timestamps rounded to a coarse resolution (MJD to six decimals is
 0.0864 s) still give the true τ₀, and exact timestamps give their own step
 however short the record (86400 s, not 86000 s). Each
 step between timestamps is rounded to a whole number of grid steps, so

@@ -360,13 +360,14 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
     end
     start = iso[] && !isempty(t) ? t[1] : NaN
     # MJD by name, or by its range unless the name says seconds; else in the
-    # time unit the name gives ("time (ms)"), seconds without one.
+    # time unit the name gives ("time (ms)"), seconds without one or for
+    # ISO 8601 timestamps.
     tscale, tkind = isempty(t) ? (1.0, 0) : _unit(names[time])
     if !isempty(t) && (occursin(r"mjd"i, names[time]) ||
                        (tkind <= 0 && !occursin(r"sec|elapsed"i, names[time]) && _is_mjd(t)))
         start = _mjd_seconds(t[1])
         t .*= 86400
-    elseif tkind > 0 && tscale != 1
+    elseif tkind > 0 && tscale != 1 && !iso[]
         t .*= tscale
     end
     scale, unit_kind = _unit(names[c])
