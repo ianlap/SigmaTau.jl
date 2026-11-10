@@ -397,11 +397,14 @@ def timescale(
     wmax: float = 1.0,
     outlier: float | None = None,
     models: Sequence[ClockModel] | None = None,
+    pivot: int = 0,
 ) -> TimescaleResult:
     """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock the
     same (its frequencies average over ``tau_y`` seconds, default 100 τ₀),
-    ``"at1"`` follows Weiss & Weissert 1991, and ``"rkt"`` runs the reduced
-    Kalman timescale on one ``ClockModel`` per clock in ``models``.
+    ``"at1"`` follows Weiss & Weissert 1991, and ``"greenhall"`` runs
+    Greenhall's Kalman timescale (reduced Kalman at ``R = 0``, IEMx above) on
+    one ``ClockModel`` per clock in ``models``, read at clock ``pivot``
+    (0-based, default 0).
 
     AT1 options: ``tau_min`` (each clock's τ_min in seconds, a number or one per
     clock; default estimated from the record), ``memory`` (the variance time
@@ -411,6 +414,7 @@ def timescale(
     """
     kw = {"algorithm": jl.Symbol(str(algorithm)), "bias": jl.Symbol(str(bias)), "wmax": float(wmax)}
     if models is not None:
+        kw["pivot"] = int(pivot) + 1
         kw["models"] = juliacall.convert(_VecModel, [m._jl() for m in models])
     if tau_min is not None:
         kw["tau_min"] = (

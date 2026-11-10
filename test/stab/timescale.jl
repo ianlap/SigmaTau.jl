@@ -79,8 +79,8 @@ using Statistics
         @test size(timescale(ClockComparisons(cc.x[1:3, :], 1.0); algorithm=:ewfa).x, 1) == 3
     end
 
-    @testset "reduced Kalman" begin
-        rk = timescale(cc; algorithm=:rkt, models=ms)
+    @testset "Greenhall Kalman" begin
+        rk = timescale(cc; algorithm=:greenhall, models=ms)
         @test vec(mean(rk.weights[late, :]; dims=1)) ≈ wopt rtol=0.01   # Greenhall 2003: ∝ 1/q1
         @test adev1(rk) ≈ sqrt(sum(wopt .^ 2 .* q)) rtol=0.05
         # Dissimilar clocks with white PM: quieter than every clock out to 100 s.
@@ -88,11 +88,18 @@ using Statistics
         cm, _ = simulate_ensemble(mix, 50000; reference=0, rng=Xoshiro(3))
         τs = [1, 10, 100]
         best = minimum(reduce(hcat, (adev(cm[i], τs; ci=false).dev for i in 1:4)); dims=2)
-        @test all(adev(timescale_phase(timescale(cm; algorithm=:rkt, models=mix)), τs; ci=false).dev .< vec(best))
+        @test all(adev(timescale_phase(timescale(cm; algorithm=:greenhall, models=mix)), τs; ci=false).dev .< vec(best))
         x = copy(cc.x); x[30000:30100, 1] .= NaN
-        g = timescale_phase(timescale(ClockComparisons(x, 1.0); algorithm=:rkt, models=ms))
+        g = timescale_phase(timescale(ClockComparisons(x, 1.0); algorithm=:greenhall, models=ms))
         @test maximum(abs, g.x[29000:31000] .- timescale_phase(rk).x[29000:31000]) < 5e-11
-        @test_throws ArgumentError timescale(cc; algorithm=:rkt)
+        @test_throws ArgumentError timescale(cc; algorithm=:greenhall)
+        # Noiseless readings: every pivot gives the same scale; with white PM
+        # they differ by the pivots' own reading noise.
+        @test timescale_phase(timescale(cc; algorithm=:greenhall, models=ms, pivot=3)).x ≈ timescale_phase(rk).x atol=1e-12
+        @test_throws ArgumentError timescale(cc; algorithm=:greenhall, models=ms, pivot=5)
+        a1 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix)).x
+        a2 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix, pivot=2)).x
+        @test 1e-13 < std(a1 .- a2) < 3e-12                    # about the readings' noise, √R = 1e-12 s
     end
 
     @test_throws ArgumentError timescale(cc; algorithm=:at3)

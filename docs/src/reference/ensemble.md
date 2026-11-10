@@ -49,15 +49,15 @@ what each clock's prediction error measures; at much longer averaging times,
 with clocks whose long-term behaviour differs from their short-term, the scale
 can be worse than the best clock.
 
-`:rkt` is the reduced Kalman timescale. One Kalman filter tracks every
+`:greenhall` is Greenhall's Kalman timescale. One Kalman filter tracks every
 clock's phase and frequency from the clock models; after each update the
 phase part of its covariance is reduced about a weighted mean of the
 corrected clocks, which keeps the frequency estimates and makes each step
 of the scale as small as it can be. Unlike AT1 it needs a model per clock,
-and it uses each clock's white PM level `R`.
+and it uses each clock's white PM level `R`. At `R = 0` it is the reduced Kalman timescale of the 2003 paper; at `R > 0` the filter is IEMx (2006). With reading noise the corrected clocks no longer agree and the implicit ensemble mean cannot be observed, so the scale is read at one clock, `pivot` (default 1): its reading less its estimated offset, which carries only that clock's reading noise. Pivots agree exactly at `R = 0`.
 
 ```julia
-timescale(cc; algorithm=:rkt, models=ms)
+timescale(cc; algorithm=:greenhall, models=ms)
 ```
 
 ```@docs
