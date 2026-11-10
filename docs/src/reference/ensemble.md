@@ -49,16 +49,18 @@ what each clock's prediction error measures; at much longer averaging times,
 with clocks whose long-term behaviour differs from their short-term, the scale
 can be worse than the best clock.
 
-`:rkt` is the reduced Kalman timescale. One Kalman filter tracks every
+`:greenhall` is Greenhall's Kalman timescale. One Kalman filter tracks every
 clock's phase and frequency from the clock models; after each update the
 phase part of its covariance is reduced about a weighted mean of the
 corrected clocks, which keeps the frequency estimates and makes each step
 of the scale as small as it can be. Unlike AT1 it needs a model per clock,
-and it uses each clock's white PM level `R`.
+and it uses each clock's white PM level `R`. At `R = 0` it is the reduced Kalman timescale of the 2003 paper; at `R > 0` the filter is IEMx (2006). With reading noise the corrected clocks no longer agree and the implicit ensemble mean cannot be observed, so the scale is read at one clock, `pivot` (default 1): its reading less its estimated offset, which carries only that clock's reading noise. The realized scale carries that clock's reading noise as white PM, so at `R > 0` it is not quieter than a weighted readout (with three equal clocks, √3 noisier at short τ). Pivots agree exactly at `R = 0`. While the pivot has no reading the first clock read stands in, and a pivot that starts late steps the scale at its first reading.
 
 ```julia
-timescale(cc; algorithm=:rkt, models=ms)
+timescale(cc; algorithm=:greenhall, models=ms)
 ```
+
+`:jones_tryon` is the same filter without the covariance reduction, the natural Jones–Tryon scale [jones-tryon-1983-estimating-time](@cite): a clock's reading less its estimated phase. It has the same frequency estimates and, with noiseless readings, the same scale at every clock, but it is slightly noisier at short τ (about 4% at τ = 1 on four white-FM clocks over ten seeds; single records up to 40% higher), which the reduction removes. Its reported weights are `NaN`. `R` is each clock's reading noise against the reference, so differences share the reference's noise; JT83 takes independent errors in each difference. JT83's error detection, step corrections and drift state are not included.
 
 ```@docs
 timescale

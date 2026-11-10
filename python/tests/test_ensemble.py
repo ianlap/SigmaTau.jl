@@ -79,7 +79,7 @@ def test_timescale_matches_julia(jl):
     ex = st.timescale(cc, bias="exact", tau_min=[50, 100, 100])
     direct = jl.seval("c -> timescale(c; bias=:exact, tau_min=[50.0, 100.0, 100.0])")(cc._jl())
     np.testing.assert_array_equal(ex.weights, np.array(direct.weights))
-    rk = st.timescale(cc, algorithm="rkt", models=models)
+    rk = st.timescale(cc, algorithm="greenhall", models=models)
     w = 1 / np.array([1.0, 4.0, 9.0])
     np.testing.assert_allclose(rk.weights[-1], w / w.sum(), rtol=0.02)
     with pytest.raises(ValueError):
