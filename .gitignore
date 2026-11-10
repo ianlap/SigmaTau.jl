@@ -33,14 +33,6 @@ app/web/ui/vendor/
 # Python bytecode
 __pycache__/
 
-# Local-only: paper manuscript sources and build outputs (figures and
-# figure scripts under paper/ that are already tracked stay tracked)
-paper/main.*
-paper/refs.bib
-paper/IEEE*
-paper/scripts/
-paper/figures/fig[0-9]_*.pdf
-
 # Local assistant settings and notes
 .claude/
 [Cc][Ll][Aa][Uu][Dd][Ee].md

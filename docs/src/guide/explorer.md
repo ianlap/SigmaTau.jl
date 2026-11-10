@@ -83,7 +83,7 @@ the core.
 | Page | Shows |
 |:---|:---|
 | **Data** | The file, the import settings, the record check and the phase plot. |
-| **Stability** | σ(τ) on log-log axes with confidence intervals as bars or a band. With one clock, the per-τ table (τ, deviation, interval, noise type, EDF); with several, "Compare at τ" with the most stable clock in bold. Click the plot to move τ. |
+| **Stability** | σ(τ) on log-log axes with confidence intervals as bars or a band. With one clock, the per-τ table (τ, deviation, interval, noise type, EDF); with several, "Compare at τ" with the most stable clock in bold. Click the plot to move τ. On the time axis, the mask menu draws an ITU-T wander mask (G.811, G.813, G.8262, G.823) over MTIE and TDEV and says whether each passes. |
 | **Spectrum** | S\_y(f) and either ℒ(f) at a carrier you choose or S\_x(f), Welch estimates with log-binned averaging and power-law slope guides. Changes here apply without a rerun. |
 | **Dynamic** | A DADEV or DHDEV map σ(t, τ), or a 3D waterfall: does the stability change during the record? Recomputes when its settings change; click a cell to pin it. |
 | **Synthesis** | Define the noise of one to eight simulated clocks and generate them. Each clock has white PM (`R`, h₂), white FM (`q₁`, h₀), random-walk FM (`q₂`, h₋₂) and random-run FM (`q₃`, h₋₄), set as the clock-model coefficient or as the power-law h_α; typing one fills in the other (see [`ClockModel`](@ref)). The plot shows the MDEV, ADEV or MHDEV each model predicts in closed form, without simulating; random-run FM has no ADEV or MDEV, so choose MHDEV for it. Generate simulates the clocks on the Data page, and two or more go on to the Ensemble page. |

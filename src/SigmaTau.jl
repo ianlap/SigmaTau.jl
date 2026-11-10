@@ -15,6 +15,7 @@ include("types.jl")
 include("io/results.jl")
 include("io/detrend.jl")
 include("io/fillgaps.jl")
+include("io/scan.jl")
 include("io/read.jl")
 include("io/formats.jl")
 include("io/save.jl")
@@ -48,6 +49,7 @@ include("deviations.jl")
 include("registry.jl")
 include("suite.jl")
 include("ensemble.jl")
+include("masks.jl")
 
 # ── Real-time streaming accumulators and live sources ──────────────────
 include("streaming.jl")
@@ -62,7 +64,7 @@ export SpectralResult, DynamicStabilityResult
 export ci_lower, ci_upper
 
 export save, load
-export read_phase, read_frequency, read_data, detect_format, INPUT_FORMATS
+export read_phase, read_frequency, read_data, detect_format, INPUT_FORMATS, start_time
 export detrend, fillgaps
 export find_outliers, remove_outliers
 
@@ -80,6 +82,7 @@ export adev, mdev, tdev
 export hdev, mhdev, htdev
 export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
+export TELECOM_MASKS, telecom_mask, mask_check
 export dadev, dhdev
 export ncornered_hat, groslambert
 export drift_fit, DriftFit

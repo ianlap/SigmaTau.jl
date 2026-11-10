@@ -8,6 +8,26 @@ _result(data::PhaseData, confidence::Real, dt::Symbol, tau, dev, noise, ci, edf,
     StabilityResult(dt, tau, dev, noise, ci, edf, neff, data.tau0, length(data.x),
                     isempty(ci) ? NaN : Float64(confidence))
 
+# Averaging factors count from 1; the kernels index with them unchecked.
+_check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
+    throw(ArgumentError("$est: averaging factors must be ≥ 1, got $(minimum(m_values))"))
+
+# Noise types for the Hadamard family. With `remove_drift` they are identified
+# on the record less its frequency drift (a least-squares quadratic in phase):
+# these statistics ignore drift, so the noise type that sets their EDF and
+# bias correction should too (SP1065 §5.5.6 removes deterministic components
+# before noise identification).
+_hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
+    identify_noise(remove_drift ? _remove_quadratic(x) : x, m_values, dmin=0, dmax=3)
+
+# The phase samples, for an estimator that cannot skip gaps.
+function _gapfree(est::Symbol, data::PhaseData, m_values::Vector{Int})
+    _check_m(est, m_values)
+    _has_gaps(data) && throw(ArgumentError(
+        "$est: the record has NaN gaps, which this estimator cannot skip; fill them with fillgaps first"))
+    return _f64(data.x)
+end
+
 """
     adev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
@@ -36,6 +56,7 @@ julia> round.(r.dev; sigdigits=4)
 """
 function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:adev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:adev, m_values)
     x = _f64(data.x)
     raw_devs = _adev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -47,7 +68,7 @@ function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:adev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :adev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -76,6 +97,7 @@ julia> round.(r.dev; sigdigits=4)
 """
 function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:mdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:mdev, m_values)
     x = _f64(data.x)
     raw_devs = _mdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -87,7 +109,7 @@ function mdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:mdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :mdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -145,7 +167,7 @@ tdev(data::FrequencyData; kwargs...) = tdev(data, _default_m_values(length(data.
 
 
 """
-    hdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    hdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Overlapping Hadamard deviation of a phase record, per NIST SP1065 §5.2.6. The
 third difference removes linear frequency drift, so `hdev` is the estimator to
@@ -153,13 +175,19 @@ use on rubidium, quartz or any clock with a frequency drift that would turn
 ADEV into a τ¹ ramp. It cannot separate white from flicker PM; use
 [`mhdev`](@ref) for that.
 
+`remove_drift=true` (default) identifies the noise type at each τ on the
+record less its least-squares frequency drift, so a drift the statistic
+ignores cannot bias the EDF; the deviation itself does not change.
+`remove_drift=false` identifies it on the record as given, as Stable32 does.
+
 Like every estimator, `hdev` also takes `FrequencyData`, a `TauMode` grid in
 place of `m_values` (`hdev(data, Decade)`), or no grid at all (`hdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:hdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
+    _check_m(:hdev, m_values)
     x = _f64(data.x)
     raw_devs = _hdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -170,28 +198,30 @@ function hdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
         return _result(data, confidence, :hdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=3)
+    noises = _hadamard_noise(x, m_values, remove_drift)
     edfs = calculate_edf(:hdev, raw_devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :hdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
-    mhdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    mhdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Modified Hadamard deviation of a phase record: the phase-averaged third
 difference, drift-immune like `hdev` and able to separate white PM from
 flicker PM like `mdev`. Not defined by SP1065; the EDF uses the
-Greenhall–Riley algorithm with the MHDEV filter.
+Greenhall–Riley algorithm with the MHDEV filter. `remove_drift` works as in
+[`hdev`](@ref).
 
 Like every estimator, `mhdev` also takes `FrequencyData`, a `TauMode` grid in
 place of `m_values` (`mhdev(data, Decade)`), or no grid at all (`mhdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, confidence=confidence)
+function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    _has_gaps(data) && return _gap_result(:mhdev, _gap_record(data), m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
+    _check_m(:mhdev, m_values)
     x = _f64(data.x)
     raw_devs = _mhdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
@@ -202,29 +232,29 @@ function mhdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
         return _result(data, confidence, :mhdev, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    noises = identify_noise(x, m_values, dmin=0, dmax=3)
+    noises = _hadamard_noise(x, m_values, remove_drift)
     edfs = calculate_edf(:mhdev, raw_devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :mhdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
-    htdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    htdev(data, m_values; ci=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Hadamard time deviation σ_x,HT(τ) = τ/√(10/3) · σ_y,MH(τ), the σ_x form of
 `mhdev` in seconds, as TDEV is of MDEV. The construction is original to this
 package; SP1065, IEEE 1139-2022 and NBS TN-1337 do not define it. Use it in
 place of [`tdev`](@ref) when the clock drifts. Confidence bounds are MHDEV's
-scaled by the same factor.
+scaled by the same factor, and `remove_drift` passes through to it.
 
 Like every estimator, `htdev` also takes `FrequencyData`, a `TauMode` grid in
 place of `m_values` (`htdev(data, Decade)`), or no grid at all (`htdev(data)`,
 octave-spaced up to the estimator's limit). See
 [Choosing an estimator](@ref) for when to use it.
 """
-function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    res = mhdev(data, m_values; ci=ci, confidence=confidence)
+function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    res = mhdev(data, m_values; ci=ci, remove_drift=remove_drift, confidence=confidence)
     factor = res.tau ./ sqrt(10.0 / 3.0)
 
     if !ci
@@ -276,7 +306,7 @@ increases σ at long τ. Stable32 applies the same correction by default; `corre
 returns the raw kernel value, which is what allantools reports.
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:totdev, data, m_values)
     raw_devs = _totdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
@@ -293,7 +323,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     end
 
     edfs = calculate_edf(:totdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :totdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -304,14 +334,17 @@ end
 Modified total deviation of a phase record, per NIST SP1065 §5.2.11, with the
 per-subsegment detrend and time-reverse extension of Howe and Vernotte.
 
-`correct_bias=true` (default) applies the SP1065 Table 11 correction
-`σ_unbiased = σ_raw / √B`, where `B ∈ {1.06, 1.17, 1.27, 1.30, 1.31}` for
-α ∈ {2, 1, 0, -1, -2}. MTOT is biased high, so the correction lowers σ by 3
-to 13 %. `correct_bias=false` returns the raw kernel, which is what Stable32
-and allantools report.
+`correct_bias=true` (default) applies the Howe and Peppler (2001, Table 2)
+correction `σ_unbiased = σ_raw / √B`, where
+`B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for α ∈ {2, 1, 0, -1, -2}.
+MTOT is biased low (a < 0), so the correction raises σ, by 0.3 % for white PM
+and 21 % for random-walk FM; the table holds from τ = 16 τ₀ and overcorrects
+by up to 3 % below that. At `m = 1` the estimator is exactly MDEV/√2 for any
+record, and B = 1/2. `correct_bias=false` returns the raw kernel, which is
+what Stable32 and allantools report.
 """
 function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:mtotdev, data, m_values)
     raw_devs = _mtotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
@@ -320,42 +353,49 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, taus, T)) : raw_devs
+    # At m = 1 the detrended three-point subsequence is (0, z, 0) with z half
+    # the second difference, and its reflection averages to half of MVAR.
+    B = need_noise ? bias_correction(noises, :mtot, taus, T) : Float64[]
+    correct_bias && (B[m_values .== 1] .= 0.5)
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(B) : raw_devs
 
     if !ci
         return _result(data, confidence, :mtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
     end
 
     edfs = calculate_edf(:mtotdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :mtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
 """
-    htotdev(data, m_values; ci=true, correct_bias=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
+    htotdev(data, m_values; ci=true, correct_bias=true, remove_drift=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
 
 Hadamard total deviation of a phase record, per NIST SP1065 §5.2.13, with the
 per-subsegment detrend and time-reverse extension of Howe et al. 2000.
 
-`correct_bias=true` (default) applies the FCS 2001 (Howe & Tasset)
-Table I unbias correction `σ_unbiased = σ_raw / √B`, where
+`correct_bias=true` (default) applies the Howe and Peppler (2001, Table 3)
+unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
 α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0), so the
 correction raises σ, substantially for divergent FM. PM noises (α > 0) get
 B = 1 (no published model), and so does `m = 1`, where the estimator is
 plain overlapping HDEV. Stable32 applies the same correction by default; `correct_bias=false`
 returns the raw kernel value, which is what allantools reports.
+
+`remove_drift` works as in [`hdev`](@ref). Here the noise type also selects
+the bias factor, so the keyword can change σ where the two labels differ.
 """
-function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
+    x = _gapfree(:htotdev, data, m_values)
     raw_devs = _htotdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     T = (length(x) - 1) * data.tau0
     neff = _neff_counts(:htotdev, length(x), m_values)
 
     need_noise = correct_bias || ci
-    noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=3) : Symbol[]
+    noises = need_noise ? _hadamard_noise(x, m_values, remove_drift) : Symbol[]
 
     # m = 1 is plain overlapping HDEV (see `_htotdev_core`), which is unbiased,
     # so the TotHvar correction applies only from m = 2 on (as in Stable32).
@@ -368,7 +408,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     end
 
     edfs = calculate_edf(:htotdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :htotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -415,7 +455,7 @@ the per-window detrend absorbs part of the variance). Pass
 Carlo fit; see the "MHTOTDEV bias and EDF" page for the method.
 """
 function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, remove_drift::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:mhtotdev, data, m_values)
     if remove_drift
         x = _remove_quadratic(x)
     end
@@ -434,7 +474,7 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     end
 
     edfs = calculate_edf(:mhtotdev, devs, noises, m_values, taus, length(x), T)
-    lower, upper = confidence_intervals(devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :mhtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -500,6 +540,7 @@ julia> r.dev
 """
 function mtie(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:mtie, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:mtie, m_values)
     raw_devs = _mtie_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:mtie, length(data.x), m_values)
@@ -558,6 +599,7 @@ julia> round.(r.dev; sigdigits=4)
 """
 function tierms(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     _has_gaps(data) && return _gap_result(:tierms, _gap_record(data), m_values; ci=ci, confidence=confidence)
+    _check_m(:tierms, m_values)
     raw_devs = _tierms_core(_f64(data.x), m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:tierms, length(data.x), m_values)
@@ -609,7 +651,7 @@ julia> round.(r.dev; sigdigits=4)
 ```
 """
 function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:pdev, data, m_values)
     raw_devs = _pdev_core(x, m_values, data.tau0)
     taus = m_values .* data.tau0
     neff = _neff_counts(:pdev, length(x), m_values)
@@ -620,7 +662,7 @@ function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:pdev, raw_devs, noises, m_values, taus, length(x), (length(x) - 1) * data.tau0)
-    lower, upper = confidence_intervals(raw_devs, edfs, noises, length(x), confidence)
+    lower, upper = confidence_intervals(raw_devs, edfs, confidence)
 
     return _result(data, confidence, :pdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -676,7 +718,7 @@ and bias-removed forms. The kernel's double sum is O(N·m) per τ, far
 costlier than the O(N) Allan kernels at large m.
 """
 function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:theo1, data, m_values)
     N = length(x)
     raw_devs = _theo1_core(x, m_values, data.tau0)
     taus = 0.75 .* m_values .* data.tau0
@@ -691,7 +733,7 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
 
     noises = identify_noise(x, m_values, dmin=0, dmax=2)
     edfs = calculate_edf(:theo1, devs, noises, m_values, taus, N, T)
-    lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :theo1, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -725,7 +767,7 @@ removal; there is no `correct_bias` switch (raw Thêo1 is available via
 `theo1(...; correct_bias=false)`).
 """
 function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
-    x = _f64(data.x)
+    x = _gapfree(:theoh, data, m_values)
     N = length(x)
     tau0 = data.tau0
     T = (N - 1) * tau0
@@ -775,7 +817,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
         edfs[theo_idx] = calculate_edf(:theo1, theo_devs, noises_t, theo_ms,
                                        taus[theo_idx], N, T)
     end
-    lower, upper = confidence_intervals(devs, edfs, noises, N, confidence)
+    lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :theoh, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
@@ -811,7 +853,7 @@ theoh(data::FrequencyData; kwargs...) = theoh(data, _default_m_values(length(dat
 function _dynamic_dev(core::F, dev_sym::Symbol, data::PhaseData,
                       m_values::Vector{Int};
                       window::Int, step::Int, min_window::Int) where {F}
-    x = _f64(data.x)
+    x = _gapfree(dev_sym, data, m_values)
     N = length(x)
     window <= N || throw(ArgumentError(
         "$dev_sym: window=$window exceeds the record length N=$N"))

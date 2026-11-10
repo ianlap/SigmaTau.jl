@@ -77,6 +77,18 @@ Stable32 does not detrend before the lag-1 estimate. The difference only
 matters on records with drift; `identify_noise(...; remove_drift=false)` follows
 Stable32, and [Validation](validation.md) quantifies the effect.
 
+The Hadamard family (`hdev`, `mhdev`, `htdev`, `htotdev`, `mhtotdev`) goes one
+step further, because it is the family used on drifting clocks. A frequency
+drift inflates the B1 ratio, which then reads random-walk FM at long τ
+whatever the noise, and the EDF and the HTOTDEV bias factor follow the wrong
+label. These estimators therefore identify noise on the record less its
+least-squares frequency drift (`remove_drift=true`), as SP1065 §5.5.6
+[riley-2008-sp1065](@cite) has deterministic components removed before noise
+identification; the deviation itself does not change. The removal also takes
+some of the slowest noise with it, so on a record without drift flicker FM
+near the longest τ is read as white FM more often. `remove_drift=false`
+identifies the noise on the record as given, which is what Stable32 does.
+
 ## Equivalent degrees of freedom
 
 An estimated variance from a record with Gaussian noise follows a scaled χ²
@@ -91,7 +103,8 @@ points of a stability plot carry wide intervals. SigmaTau computes it per τ
   [greenhall-2003-edf-stability](@cite), which evaluates the EDF exactly from
   the noise spectrum rather than from fitted approximations.
 - **Total family:** the published EDF coefficients of NIST SP1065
-  [riley-2008-sp1065](@cite) and Howe and Tasset, with the Greenhall–Riley
+  [riley-2008-sp1065](@cite) and Howe and Peppler
+  [howe-2001-total-estimators](@cite), with the Greenhall–Riley
   value where no coefficients exist (white and flicker PM for TOTDEV and
   HTOTDEV). For MHTOTDEV, which is new in SigmaTau, the coefficients were
   measured by Monte Carlo; see [MHTOTDEV bias and EDF](mhtotdev.md).
@@ -115,8 +128,11 @@ Given the deviation σ̂ and the EDF ν, the interval at confidence level p is
 (`DEFAULT_CONFIDENCE`), the ±1σ convention of Stable32; pass
 `confidence=0.95` for a 95 % interval. The interval is asymmetric about σ̂,
 wider above than below, because the χ² distribution is skewed at small ν.
-Where the EDF is below 1 (a single average at the longest τ), SigmaTau falls
-back to a symmetric Gaussian interval floored at zero.
+The formula holds for any ν > 0, so a point whose EDF falls below 1 (the
+last τ of MHTOTDEV on some records) keeps a χ² interval, a very wide one.
+Where an EDF model gives no positive value (SP1065's Thêo1 formula for
+random-walk FM beyond τ ≈ 0.63 T), the point has no interval and its bounds
+are `NaN`.
 
 ## Bias correction
 
@@ -129,10 +145,19 @@ SigmaTau divides it out using the identified noise type
 | Estimator | Correction |
 |:---|:---|
 | TOTDEV | Howe and Walter: τ/T-dependent, FLFM and RWFM only |
-| MTOTDEV, TTOTDEV | SP1065 Table 11 (MTOT overstates MVAR) |
-| HTOTDEV | Howe and Tasset, FM noises |
+| MTOTDEV, TTOTDEV | Howe and Peppler: MTOT reads 0.3 % (white PM) to 18 % (random-walk FM) low |
+| HTOTDEV | Howe and Peppler, FM noises |
 | MHTOTDEV | measured by Monte Carlo, τ/T-dependent |
 | Thêo1 | the ThêoBR ratio to ADEV, which needs no noise ID |
+
+The MTOT factors are Table 2 of Howe and Peppler
+[howe-2001-total-estimators](@cite): the expected Mod Totvar is 0.995, 0.851,
+0.771, 0.717 and 0.679 of MVAR from white PM to random-walk FM, as first
+simulated by Howe and Vernotte [howe-1999-modtotvar](@cite), and the test
+suite checks the kernel against them. SP1065 Table 11 prints factors of 1.06
+to 1.31 under a caption that reads as the same ratio; applied as printed they
+lower a statistic that already reads low. At τ = τ₀ MTOT is exactly half of
+MVAR for any record, and the correction is that factor of 2.
 
 `correct_bias=false` returns the raw statistic. Stable32 corrects TOTDEV and
 HTOTDEV the same way and reports MTOT and Thêo1 raw; the [validation page](validation.md)

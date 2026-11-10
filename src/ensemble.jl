@@ -114,7 +114,7 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
             edf = [_nch_edf(i, k, pairs, nbrs, s2, ν, var, w) for k in 1:n_tau]
         end
         results[i] = StabilityResult(ref.deviation_type, copy(ref.tau), dev, Symbol[],
-                                     with_ci ? _zip_ci(_edf_ci(dev, edf, confidence)...) : _CIBound[], edf,
+                                     with_ci ? _zip_ci(confidence_intervals(dev, edf, confidence)...) : _CIBound[], edf,
                                      copy(neff_min), ref.tau0, ref.n, with_ci ? confidence : NaN)
     end
     return results
@@ -224,7 +224,7 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         edf = [_gl_edf(i, q, couples, covar[q], s2, ν) for q in 1:K]
         dev = [v > 0 ? sqrt(v) : NaN for v in covar]
         results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[],
-                                     _zip_ci(_edf_ci(dev, edf, Float64(confidence))...), edf,
+                                     _zip_ci(confidence_intervals(dev, edf, Float64(confidence))...), edf,
                                      N .- 2 .* m_values, τ₀, N, Float64(confidence))
     end
     return results

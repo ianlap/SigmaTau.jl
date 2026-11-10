@@ -28,7 +28,7 @@ from .types import FrequencyData, PhaseData, StabilityResult, StabilitySuite
 DEFAULT_DEVIATIONS = tuple(str(s) for s in jl.DEFAULT_DEVIATIONS)
 
 # Build a possibly part-filled Julia StabilityResult matrix for the nch matrix
-# form: unassigned cells stay ``undef`` (the oracle reads the upper or lower
+# form: unassigned cells stay ``undef`` (Julia reads the upper or lower
 # triangle, so only the measured pairs need filling).
 _new_result_matrix = jl.seval("n -> Matrix{StabilityResult}(undef, n, n)")
 _new_data_matrix = jl.seval("n -> Matrix{AbstractTimingData}(undef, n, n)")
@@ -60,14 +60,15 @@ def stability(
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
     correct_bias: bool = True,
+    remove_drift: bool = True,
 ) -> StabilitySuite:
     """Compute several deviations on one record and collect them into a suite.
 
     ``devs`` is a sequence of deviation names (default ``DEFAULT_DEVIATIONS``,
     the four σ_y quantities ``("adev", "mdev", "hdev", "mhdev")``). ``m`` is a
     ``TauMode`` grid selector or an explicit sequence of averaging factors;
-    ``ci``/``confidence`` and (for the total family) ``correct_bias`` flow
-    through to each deviation.
+    ``ci``/``confidence``, ``correct_bias`` (total family) and ``remove_drift``
+    (Hadamard family) flow through to each deviation.
     """
     return suite_from_jl(
         jl.stability(
@@ -77,6 +78,7 @@ def stability(
             ci=bool(ci),
             confidence=float(confidence),
             correct_bias=bool(correct_bias),
+            remove_drift=bool(remove_drift),
         )
     )
 
@@ -87,7 +89,7 @@ def ncornered_hat(
 ) -> list[StabilityResult]:
     """N-cornered-hat noise separation (Gray–Allan three-cornered hat at N=3).
 
-    Two call forms, mirroring the Julia oracle:
+    Two call forms, mirroring the Julia package:
 
     - ``ncornered_hat(r_ab, r_bc, r_ca)`` — the three-cornered convenience form: the three
       pairwise deviations in cyclic order A−B, B−C, C−A. Returns ``[A, B, C]``.

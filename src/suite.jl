@@ -42,7 +42,7 @@ Returns a [`StabilitySuite`](@ref). Also accepts `FrequencyData`.
 or an integer vector of averaging factors applied to every deviation, as in
 the estimator functions.
 `correct_bias` reaches only the estimators that take it (the total family and
-`theo1`), and `remove_drift` only `mhtotdev`. Note that an explicit `m`
+`theo1`), and `remove_drift` only the Hadamard family. Note that an explicit `m`
 vector is passed to every deviation verbatim: `:theo1` interprets it as even
 Thêo1 factors (odd entries give NaN rows) and `:theoh` as τ-grid factors, so
 prefer a `TauMode` when mixing the Theo family with others.

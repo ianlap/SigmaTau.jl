@@ -18,6 +18,7 @@ using Test, Random, SigmaTau
         @test PhaseData(1:10; source="r").source == "r"
         @test length(pd) == 1024
         @test length(fd) == 1023
+        @test deviation(:adev, fd).tau == adev(fd).tau      # both on the 1024 phase samples
     end
 
     @testset "m as a range or other integer vector" begin
@@ -30,6 +31,16 @@ using Test, Random, SigmaTau
         @test theo1(pd, 10:10:40).tau == theo1(pd, [10, 20, 30, 40]).tau
         @test dadev(pd, 1:4; window=256).tau == dadev(pd, [1, 2, 3, 4]; window=256).tau
         @test dhdev(pd, 1:4; window=256).tau == dhdev(pd, [1, 2, 3, 4]; window=256).tau
+    end
+
+    @testset "m below 1 and gaps an estimator cannot skip are errors" begin
+        rejects(f, data, m) = try f(data, m); false catch e; e isa ArgumentError end
+        fns = (adev, mdev, tdev, hdev, mhdev, htdev, totdev, mtotdev, ttotdev,
+               htotdev, mhtotdev, mtie, tierms, pdev, theo1, theoh, dadev, dhdev)
+        @test all(f -> rejects(f, pd, [0, 1]) && rejects(f, fd, [-1]), fns)
+        gapped = PhaseData([x[1:99]; NaN; x[101:end]], 1.0)
+        @test all(f -> rejects(f, gapped, ms), (totdev, mtotdev, ttotdev, htotdev, mhtotdev,
+                                                pdev, theo1, theoh, dadev, dhdev))
     end
 
     @testset "identify_noise on a record" begin

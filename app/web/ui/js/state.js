@@ -17,6 +17,7 @@ export const state = {
   noiseId: true,           // noise-type strip and slope guides on the Stability plot
   fit: true,               // power-law model lines and the noise model table on Stability
   fitEdit: false,          // the noise model box shows the component editor
+  mask: "",                // ITU-T wander mask drawn over MTIE / TDEV on Stability ("" = none)
   bias: true,
   tauMin: null,            // averaging-time limits in seconds, null = none
   tauMax: null,
