@@ -60,6 +60,8 @@ and it uses each clock's white PM level `R`. At `R = 0` it is the reduced Kalman
 timescale(cc; algorithm=:greenhall, models=ms)
 ```
 
+`:jones_tryon` is the same filter without the covariance reduction, the natural Jones–Tryon scale [jones-tryon-1983-estimating-time](@cite): a clock's reading less its estimated phase. It has the same frequency estimates and, with noiseless readings, the same scale at every clock, but it is noisier at short τ, which the reduction removes. JT83's error detection, step corrections and drift state are not included.
+
 ```@docs
 timescale
 TimescaleResult

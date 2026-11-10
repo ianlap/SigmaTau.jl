@@ -10,7 +10,7 @@ Output of [`timescale`](@ref).
 $(TYPEDFIELDS)
 """
 struct TimescaleResult
-    "Algorithm that formed the scale (`:ewfa`, `:at1`, `:greenhall`)."
+    "Algorithm that formed the scale (`:ewfa`, `:at1`, `:greenhall`, `:jones_tryon`)."
     algorithm::Symbol
     "The clocks the scale was formed from."
     comparisons::ClockComparisons
@@ -190,6 +190,15 @@ the record, less the mean slope.
   scale. While the pivot has no reading the first clock read stands in; a
   pivot that starts late steps the scale at its first reading.
 
+- `:jones_tryon`, the natural Jones–Tryon timescale
+  [jones-tryon-1983-estimating-time, greenhall-2003-jones-tryon](@cite): the same
+  filter as `:greenhall` without the covariance reduction. The scale is a
+  clock's reading less its estimated phase (JT83 §4, after eq. 4.17;
+  Greenhall 2003 eq. 10); with noiseless readings it is the same at every
+  clock. The frequency estimates are the same as `:greenhall`'s; the scale is
+  noisier at short τ (the reduction is what minimizes its steps). JT83's error
+  detection, step corrections and drift state are not part of it.
+
 AT1 keywords:
 
 - `tau_min`: each clock's τ_min in seconds, a number or one per clock; the
@@ -219,15 +228,15 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
                    memory::Real=20 * 86400.0, bias::Symbol=:paper, wmax::Real=1.0,
                    outlier::Real=Inf, models::Union{Nothing,AbstractVector{ClockModel}}=nothing,
                    pivot::Integer=1)
-    algorithm in (:ewfa, :at1, :greenhall) ||
-        throw(ArgumentError("timescale: algorithm must be :ewfa, :at1 or :greenhall, got :$algorithm"))
+    algorithm in (:ewfa, :at1, :greenhall, :jones_tryon) ||
+        throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :greenhall or :jones_tryon, got :$algorithm"))
     bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
     N, k = size(cc.x)
     N >= 3 || throw(ArgumentError("timescale: needs three or more samples"))
-    if algorithm === :greenhall
-        models === nothing && throw(ArgumentError("timescale: :greenhall needs models, one ClockModel per clock"))
+    if algorithm === :greenhall || algorithm === :jones_tryon
+        models === nothing && throw(ArgumentError("timescale: :$algorithm needs models, one ClockModel per clock"))
         1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
-        return _reduced_kalman(cc, models, Int(pivot))
+        return _reduced_kalman(cc, models, Int(pivot), algorithm)
     end
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
     at1 = algorithm === :at1
@@ -302,7 +311,7 @@ function _iem_weights(Pxx::Matrix{Float64})
     return a ./ sum(a)
 end
 
-function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot::Int)
+function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot::Int, algorithm::Symbol)
     N, k = size(cc.x)
     length(models) == k || throw(ArgumentError("timescale: $(length(models)) models for $k clocks"))
     τ = cc.tau0
@@ -362,8 +371,10 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         # weights do when it is singular, and the gain's are reported.
         aᵣ = _iem_weights(P[1:k, 1:k])
         a = aᵣ !== nothing ? aᵣ : length(use) >= 2 ? λ : a
-        S[1:k, 1:k] = I - ones(k) * a'
-        P = S * P * S'
+        if algorithm === :greenhall
+            S[1:k, 1:k] = I - ones(k) * a'
+            P = S * P * S'
+        end
         # Clock i − scale: the reading less the pivot's offset, the pivot's
         # reading less its estimated phase.
         p = pivot in use ? pivot : (isempty(use) ? 0 : use[1])
@@ -375,5 +386,5 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         Y[n, :] = X̂[k+1:2k]
         W[n, :] = a
     end
-    return TimescaleResult(:greenhall, cc, collect((0:N-1) .* τ), X, Y, W, E)
+    return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E)
 end

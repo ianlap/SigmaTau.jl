@@ -97,6 +97,13 @@ using Statistics
         # they differ by the pivots' own reading noise.
         @test timescale_phase(timescale(cc; algorithm=:greenhall, models=ms, pivot=3)).x ≈ timescale_phase(rk).x atol=1e-12
         @test_throws ArgumentError timescale(cc; algorithm=:greenhall, models=ms, pivot=5)
+        # Jones–Tryon: the same filter unreduced; the scale is a clock's reading
+        # less its phase estimate, equal at every clock for noiseless readings.
+        jt = timescale(cc; algorithm=:jones_tryon, models=ms)
+        @test jt.algorithm === :jones_tryon
+        @test maximum(abs, jt.y .- rk.y) < 1e-3 * std(rk.y[late, 1])   # frequency estimates agree (Theorem 1)
+        @test timescale_phase(timescale(cc; algorithm=:jones_tryon, models=ms, pivot=3)).x ≈ timescale_phase(jt).x atol=1e-12
+        @test adev1(rk) < adev1(jt) < 1.6 * adev1(rk)             # the reduction quiets the scale at short τ
         a1 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix)).x
         a2 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix, pivot=2)).x
         @test 1e-13 < std(a1 .- a2) < 3e-12                    # about the readings' noise, √R = 1e-12 s

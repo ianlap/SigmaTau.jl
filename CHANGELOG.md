@@ -51,6 +51,9 @@ Clock models, the Kalman filter and timescales.
   after each step (the reduced Kalman timescale at `R = 0`, IEMx above), so
   the scale is quiet at short τ as well as long; without white PM its
   weights are the optimal 1/q1 ones. The scale is read at clock `pivot`.
+  `algorithm=:jones_tryon` is the same filter without the reduction, the
+  natural Jones–Tryon scale (JT83): a clock's reading less its estimated
+  phase.
 - Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
   model by hand, and the JSON `powerlaw` gains `mode`, `components`,
   `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`
