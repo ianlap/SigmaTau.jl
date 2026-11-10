@@ -249,6 +249,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   every τ after the gap. `sigmatau --freq` asks for `--fillgaps` on a
   frequency record with missing samples instead of integrating `NaN` into
   the rest of the phase.
+- `read_data` reads a time column of MJD values in days whatever its name
+  (MJD 30000 to 90000, steps under 0.05 d, more than four decimals), a
+  `ratio` column as frequency, and unnamed columns of median size under
+  1e-11 as frequency; ROCIT files now read as downloaded.
 
 ## [0.6.0] - 2026-11-08
 
