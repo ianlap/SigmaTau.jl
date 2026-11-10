@@ -1,7 +1,8 @@
-// Ensemble page: a timescale (AT1 or EWFA) formed from several clocks read
-// against one reference. The clocks are the value columns of one loaded file;
-// without such a file the core simulates four. The scale is computed when this
-// page needs it and recomputed when the settings or the clocks change.
+// Ensemble page: a timescale (AT1, AT2, EWFA or a Kalman scale) formed from
+// several clocks read against one reference. The clocks are the value columns
+// of one loaded file; without such a file the core simulates four. The scale
+// is computed when this page needs it and recomputed when the settings or the
+// clocks change.
 import { state, update, isReference } from "../state.js";
 import { timescale, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css } from "../plot.js";
@@ -10,7 +11,17 @@ import { sci, num, escapeHtml as h } from "../format.js";
 let root, ctx, Plotly;
 let inflight = null;           // key of the run in progress
 let inflightCtl = null;        // stops it (the core process too) when the settings change
-const ALGS = [["at1", "AT1"], ["at2", "AT2"], ["ewfa", "EWFA"]];
+const ALGS = [["at1", "AT1"], ["at2", "AT2"], ["ewfa", "EWFA"], ["greenhall", "Greenhall"], ["jones_tryon", "Jones–Tryon"]];
+const KALMAN = new Set(["greenhall", "jones_tryon"]);
+const ABOUT = {
+  at1: "AT1 weighs each clock by the inverse of its prediction-error variance, learned as it runs.",
+  at2: "AT2 keeps AT1's weights and follows each clock's frequency with a Kalman update.",
+  ewfa: "EWFA weighs every clock the same.",
+  greenhall: "Greenhall's Kalman scale fits a model to each clock and reads the scale at the pivot clock. It needs three or more clocks.",
+  jones_tryon: "The Jones–Tryon Kalman scale: Greenhall's filter without the covariance reduction, so it has no per-clock weights. It needs three or more clocks.",
+};
+// The pivot as the core takes it: 1-based, back to the first clock when out of range.
+const pivotOf = (n) => (state.ens.pivot <= n ? state.ens.pivot : 1);
 
 export const ownsPanel = true;
 
@@ -50,37 +61,42 @@ function request() {
     if (c.tau0) a.push("--tau0", c.tau0);
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
-  a.push("--algorithm", E.algorithm, "--wmax", E.wmax, ...(E.algorithm === "ewfa" && E.tauY ? ["--tau-y", E.tauY] : []), "--format", "json", "--series", 2000);
+  a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : ["--wmax", E.wmax]),
+    ...(E.algorithm === "ewfa" && E.tauY ? ["--tau-y", E.tauY] : []), "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
 export function controls() {
   const E = state.ens, clocks = fileClocks();
   return `<h2>Timescale</h2>
-    <div class="ctl-block"><label class="lbl">Algorithm</label><div class="seg" role="group" aria-label="Algorithm">${ALGS.map(([id, label]) =>
-      `<button type="button" data-ctl="alg" data-v="${id}" class="${E.algorithm === id ? "on" : ""}">${label}</button>`).join("")}</div></div>
+    <label class="opt"><span>Algorithm</span><select data-ctl="alg">${ALGS.map(([id, label]) =>
+      `<option value="${id}" ${E.algorithm === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     ${E.algorithm === "ewfa" ? `<label class="opt"><span>Frequency averaging τ<sub>y</sub> (s)</span><input type="text" data-ctl="tauY" value="${h(E.tauY)}" placeholder="100 τ₀" inputmode="decimal"></label>` : ""}
-    <label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>
+    ${KALMAN.has(E.algorithm)
+      ? `<label class="opt"><span>Pivot clock</span><select data-ctl="pivot">${(clocks.length ? clocks.map((c) => c.name) : [1, 2, 3, 4].map((k) => `clock ${k}`)).map((n, i) =>
+        `<option value="${i + 1}" ${pivotOf(clocks.length || 4) === i + 1 ? "selected" : ""}>${h(n)}</option>`).join("")}</select></label>`
+      : `<label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>`}
     <div class="rule"></div>
     <p class="muted small">${clocks.length
       ? (clocks[0].source.type === "synth"
         ? `${clocks.length} clocks simulated on the Data page, each against a perfect reference.`
         : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference.`)
       : "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."}</p>
-    <p class="muted small">AT1 weighs each clock by the inverse of its prediction-error variance, learned as it runs. EWFA weighs every clock the same.</p>`;
+    <p class="muted small">${ABOUT[E.algorithm]}</p>`;
 }
 
 export function onControl(e) {
   const t = e.target.closest("[data-ctl]");
   if (!t) return;
   const k = t.dataset.ctl;
-  if (k === "alg" && e.type === "click") update((s) => { s.ens.algorithm = t.dataset.v; });
   if (e.type !== "change") return;
   const v = t.value.trim();
   if (k === "tauY") {
     if (v === "" || Number(v) > 0) update((s) => { s.ens.tauY = v; });
     else { t.value = state.ens.tauY; ctx.status("error", "τ_y must be a time above 0 s, or empty for 100 τ₀."); }
   }
+  if (k === "alg") update((s) => { s.ens.algorithm = v; });
+  if (k === "pivot") update((s) => { s.ens.pivot = Number(v); });
   if (k === "wmax") {
     if (Number(v) > 0 && Number(v) <= 1) update((s) => { s.ens.wmax = Number(v); });
     else { t.value = state.ens.wmax; ctx.status("error", "The largest weight is a fraction between 0 and 1."); }
@@ -119,6 +135,8 @@ function ensure() {
   });
 }
 
+const weight = (w) => (w === null ? "–" : num(w, 3));
+
 function showEmpty(text) {
   const e = root.querySelector("[data-ref=empty]");
   e.innerHTML = text ? `<p>${text}</p>` : "";
@@ -137,12 +155,17 @@ export function refresh() {
   showEmpty("");
   const names = r.clocks.map((n, i) => clocks[i]?.name ?? n);
   const color = (i) => seriesColor(clocks[i]?.slot ?? i);
-  root.querySelector("[data-ref=sub]").textContent = `${r.algorithm.toUpperCase()} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || "the file's reference"}`;
+  // Jones–Tryon has no weights: its plot goes and the ADEV plot takes the room.
+  const weighted = r.weight.some((w) => w !== null);
+  const wcard = root.querySelector(".ens-weights"), relaid = wcard.hidden === weighted;
+  wcard.hidden = !weighted;
+  const alg = ALGS.find(([id]) => id === r.algorithm)?.[1] ?? r.algorithm;
+  root.querySelector("[data-ref=sub]").textContent = `${alg}${r.pivot ? ` at ${names[r.pivot - 1]}` : ""} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || "the file's reference"}`;
   table.innerHTML = `<div class="card-row"><h2>Clocks</h2></div>
     <div class="tbl"><div class="tbl-row tbl-head"><span>Clock</span><span>Weight</span><span>Mean</span><span>RMS error</span></div>
     ${names.map((n, i) => `<div class="tbl-row tbl-body"><span class="ens-name"><span class="clock-dot" style="background:${color(i)}"></span>${h(n)}</span>
-      <span>${num(r.weight[i], 3)}</span><span>${num(r.weight_mean[i], 3)}</span><span>${sci(r.error_rms[i], 2)} s</span></div>`).join("")}</div>
-    <p class="muted small ens-note">Mean weight and RMS prediction error cover the second half of the record.</p>`;
+      <span>${weight(r.weight[i])}</span><span>${weight(r.weight_mean[i])}</span><span>${sci(r.error_rms[i], 2)} s</span></div>`).join("")}</div>
+    <p class="muted small ens-note">${weighted ? "" : "The Jones–Tryon scale has no per-clock weights. "}Mean weight and RMS prediction error cover the second half of the record.</p>`;
   if (!Plotly) return;
   const scale = css("--accent");
   Plotly.react(root.querySelector("[data-ref=adev]"), [
@@ -151,8 +174,9 @@ export function refresh() {
     ...r.adev.clocks.map((dev, i) => ({ x: r.adev.tau, y: dev, name: names[i], mode: "lines", line: { color: color(i), width: 1.5, dash: "dot" },
       hovertemplate: `<b>${h(names[i])}</b> − scale<br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
   ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis("σ<sub>y</sub>(τ)"), showlegend: true, uirevision: "ens" }, CONFIG);
+  if (relaid) Plotly.Plots.resize(root.querySelector("[data-ref=adev]"));
   const s = r.series;
-  Plotly.react(root.querySelector("[data-ref=weights]"), s ? s.weights.map((w, i) => ({
+  Plotly.react(root.querySelector("[data-ref=weights]"), s && weighted ? s.weights.map((w, i) => ({
     x: s.t, y: w, name: names[i], mode: "lines", line: { color: color(i), width: 1.5 },
     hovertemplate: `<b>${h(names[i])}</b><br>t = %{x:.6g} s<br>w = %{y:.3f}<extra></extra>` })) : [],
   { ...baseLayout(), margin: { l: 62, r: 14, t: 8, b: 44 }, xaxis: linAxis("Time (s)"), yaxis: { ...linAxis("Weight"), range: [0, 1] }, showlegend: false, uirevision: "ens-w" }, CONFIG);
