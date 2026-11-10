@@ -88,7 +88,8 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 
 `correct_bias=:stable32` on any estimator, on [`deviation`](@ref) or on
 [`stability`](@ref) applies Stable32's bias convention: the first two rows
-and the last three of this table.
+and the last three of this table. The command line takes `--bias stable32`,
+and the explorer "As Stable32" under Bias correction.
 
 | | Stable32 | SigmaTau default | To match Stable32 |
 |---|---|---|---|

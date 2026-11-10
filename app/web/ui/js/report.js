@@ -2,7 +2,7 @@
 // SVG figures inline) that prints to PDF from any browser. It records what
 // was analysed and how, so the numbers can be traced and reproduced.
 import { state, visibleClocks, referenceClock } from "./state.js";
-import { byId, label, gridName, noiseLabel } from "./estimators.js";
+import { byId, label, gridName, noiseLabel, biasEntry } from "./estimators.js";
 import { loadPlotly, inLightTheme } from "./plot.js";
 import { analyzeCommand } from "./core.js";
 import { figure } from "./pages/stability.js";
@@ -110,7 +110,7 @@ export async function buildReport() {
   <dt>Estimators</dt><dd>${state.devs.map((d) => h(label(d))).join(", ")}</dd>
   <dt>τ grid</dt><dd>${h(gridName(state.grid))}${state.tauMin ? `, from ${h(state.tauMin)} s` : ""}${state.tauMax ? `, up to ${h(state.tauMax)} s` : ""}</dd>
   <dt>Confidence</dt><dd>${conf}${state.ci ? " (Greenhall EDF, χ² intervals)" : ""}</dd>
-  <dt>Bias correction</dt><dd>${state.bias ? "on" : "off"}</dd>
+  <dt>Bias correction</dt><dd>${biasEntry(state.bias)[1]}</dd>
   <dt>Reference clock</dt><dd>${ref ? h(ref.name) : "none (as measured)"}</dd>
 </dl>
 <h2>Records</h2>

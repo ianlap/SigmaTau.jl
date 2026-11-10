@@ -66,7 +66,7 @@ function analysis_results(o::Options, data::PhaseData)
         ms = isempty(o.m) ? tau_values(mode, N, d) : o.m
         ms = Int[m for m in ms if !(m * data.tau0 < o.tau_min * (1 - 1e-9)) && !(m * data.tau0 > o.tau_max * (1 + 1e-9))]
         isempty(ms) && continue
-        push!(results, deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=o.bias))
+        push!(results, deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=correct_bias(o)))
     end
     isempty(results) && !(isnan(o.tau_min) && isnan(o.tau_max)) &&
         throw(CLIError(EXIT_ANALYSIS, "no averaging time of the grid lies within --tau-min and --tau-max"))
@@ -96,7 +96,7 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "tau_max"); json_number(io, o.tau_max)
     json_key(io, "ci"); json_bool(io, o.ci)
     json_key(io, "confidence"); o.ci ? json_number(io, o.confidence) : print(io, "null")
-    json_key(io, "bias_correction"); json_bool(io, o.bias)
+    json_key(io, "bias_correction"); json_string(io, o.bias)
     json_key(io, "deviations"); json_array(io, String[String(d) for d in o.devs])
     json_preprocessing(io, o)
     print(io, '}')

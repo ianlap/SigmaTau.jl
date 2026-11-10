@@ -17,7 +17,7 @@ export const state = {
   noiseId: true,           // noise-type strip and slope guides on the Stability plot
   fit: true,               // power-law model lines and the noise model table on Stability
   mask: "",                // ITU-T wander mask drawn over MTIE / TDEV on Stability ("" = none)
-  bias: true,
+  bias: "exact",           // bias correction of the totals and Thêo1, one of BIASES
   tauMin: null,            // averaging-time limits in seconds, null = none
   tauMax: null,
   dataDrag: "zoom",        // Data plot drag: "zoom" | "range" (pick the analysis range)

@@ -87,3 +87,10 @@ test("a RINEX clock bias with a D exponent is read", () => {
     "AS G01  2025 08 17 23 59 30.000000  2   -.123000000000D-03  .250000000000D-10"]);
   assert.equal(s.columns[1][0], -1.23e-4);
 });
+
+test("a session saved with the on/off bias setting opens with its menu value", async () => {
+  const { applySession } = await import("../ui/js/session.js");
+  const s = {};
+  applySession(s, { settings: { bias: false } });
+  assert.equal(s.bias, "none");
+});

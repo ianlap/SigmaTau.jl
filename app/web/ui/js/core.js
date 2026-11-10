@@ -152,7 +152,7 @@ const analyzeRequest = (clock) => request(clock, "analyze", [
   "--devs", state.devs.join(","),
   "--grid", state.grid,
   ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
-  ...(state.bias ? [] : ["--no-bias-correction"]),
+  "--bias", state.bias,
   "--spectrum", "--fit", "--mask", "all",
 ]);
 
