@@ -18,11 +18,14 @@ The request and response formats are in app/web/README.md.
 import argparse
 import json
 import os
+import select
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -70,6 +73,42 @@ def request_to_args(req, workdir):
     path = Path(workdir) / name
     path.write_text(str(f.get("content", "")), encoding="utf-8")
     return [args[0], str(path), *args[1:]]
+
+
+def hung_up(sock):
+    """True once the page has closed its end of the connection."""
+    try:
+        if not select.select([sock], [], [], 0)[0]:
+            return False
+        return sock.recv(1, socket.MSG_PEEK) == b""
+    except BlockingIOError:
+        return False
+    except OSError:
+        return True
+
+
+def run_core(argv, env, sock=None, timeout=TIMEOUT_S):
+    """Run the core and return (returncode, stdout, stderr). If the page hangs
+    up first (it cancelled the run), stop the core and return None, so a
+    cancelled analysis does not keep the processor busy. Raises
+    subprocess.TimeoutExpired after `timeout` seconds."""
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+    done = {}
+    worker = threading.Thread(target=lambda: done.update(out=proc.communicate()), daemon=True)
+    worker.start()
+    deadline = time.monotonic() + timeout
+    while worker.is_alive():
+        worker.join(0.1)
+        if sock is not None and worker.is_alive() and hung_up(sock):
+            proc.kill()
+            worker.join()
+            return None
+        if worker.is_alive() and time.monotonic() > deadline:
+            proc.kill()
+            worker.join()
+            raise subprocess.TimeoutExpired(argv, timeout)
+    out, err = done["out"]
+    return proc.returncode, out, err
 
 
 class Live:
@@ -197,14 +236,17 @@ class Handler(SimpleHTTPRequestHandler):
                 # The compiled core runs on one thread unless told otherwise.
                 env = dict(os.environ)
                 env.setdefault("JULIA_NUM_THREADS", "auto")
-                proc = subprocess.run(cmd + args, capture_output=True, timeout=TIMEOUT_S, env=env)
+                result = run_core(cmd + args, env, self.connection)
             except subprocess.TimeoutExpired:
                 return self.send_json(504, {"error": "analysis timed out"})
-        out = proc.stdout.strip()
+        if result is None:
+            return          # the page cancelled the run and hung up; nobody is listening
+        code, stdout, stderr = result
+        out = stdout.strip()
         if out.startswith(b"{"):
-            return self.send_json(200 if proc.returncode == 0 else 422, out)
-        err = proc.stderr.decode(errors="replace").strip().splitlines()
-        return self.send_json(500, {"error": err[-1] if err else f"core exited with {proc.returncode}"})
+            return self.send_json(200 if code == 0 else 422, out)
+        err = stderr.decode(errors="replace").strip().splitlines()
+        return self.send_json(500, {"error": err[-1] if err else f"core exited with {code}"})
 
 
 def main():

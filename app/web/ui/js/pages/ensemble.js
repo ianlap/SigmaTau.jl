@@ -9,26 +9,41 @@ import { sci, num, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 let inflight = null;           // key of the run in progress
+let inflightCtl = null;        // stops it (the core process too) when the settings change
 const ALGS = [["at1", "AT1"], ["ewfa", "EWFA"]];
 
 export const ownsPanel = true;
 
-// The clocks of the first loaded file with two or more phase or frequency
-// columns, without the reference clock; [] = simulate.
+// The clocks the scale is formed from: the first loaded file with two or
+// more phase or frequency columns (without the reference clock), else the
+// first ensemble simulated on the Data page. [] = the core simulates four.
 function fileClocks() {
   const groups = new Map();
   for (const c of state.clocks) {
     if (c.source.type !== "file" || c.group === null || c.format || !c.record || isReference(c)) continue;
     groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
   }
-  return [...groups.values()].find((g) => g.length >= 2) ?? [];
+  const file = [...groups.values()].find((g) => g.length >= 2);
+  if (file) return file;
+  const sims = new Map();
+  for (const c of state.clocks) {
+    const src = c.source;
+    if (src.type !== "synth" || !(src.clocks > 1) || !c.record) continue;
+    const key = [src.n, src.seed, src.tau0, src.clocks].join("/");
+    sims.set(key, [...(sims.get(key) ?? []), c]);
+  }
+  const ens = [...sims.values()].find((g) => g.length === g[0].source.clocks);
+  return ens ? ens.sort((a, b) => a.source.index - b.source.index) : [];
 }
 
 function request() {
   const E = state.ens, clocks = fileClocks();
   const a = ["timescale"];
   let file = null;
-  if (clocks.length) {
+  if (clocks.length && clocks[0].source.type === "synth") {
+    const src = clocks[0].source;
+    a.push("--synth", src.n, "--clocks", src.clocks, "--seed", src.seed, "--tau0", src.tau0);
+  } else if (clocks.length) {
     const c = clocks[0];
     file = { name: c.source.name, content: c.source.content };
     a.push("--value-cols", clocks.map((k) => k.value_col).join(","), "--time-col", c.time_col, "--header", c.header, "--scaling", c.scaling);
@@ -48,8 +63,10 @@ export function controls() {
     <label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>
     <div class="rule"></div>
     <p class="muted small">${clocks.length
-      ? `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference.`
-      : "No file with several clocks is loaded, so four simulated clocks are used. Load a file with one column per clock on the Data page to use your own."}</p>
+      ? (clocks[0].source.type === "synth"
+        ? `${clocks.length} clocks simulated on the Data page, each against a perfect reference.`
+        : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference.`)
+      : "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."}</p>
     <p class="muted small">AT1 weighs each clock by the inverse of its prediction-error variance, learned as it runs. EWFA weighs every clock the same.</p>`;
 }
 
@@ -87,14 +104,16 @@ function ensure() {
   const { body } = request();
   const key = JSON.stringify(body);
   if (state.ens.result?.key === key || inflight === key || !state.core.ok) return;
+  inflightCtl?.abort();
+  const ctl = inflightCtl = new AbortController();
   inflight = key;
   state.ens.error = null;
-  timescale(body).then((doc) => {
+  timescale(body, ctl.signal).then((doc) => {
     if (inflight !== key) return;
     inflight = null;
     update((s) => { s.ens.result = { key, ts: doc.timescale }; });
   }).catch((err) => {
-    if (inflight !== key) return;
+    if (err.name === "AbortError" || inflight !== key) return;
     inflight = null;
     update((s) => { s.ens.error = err.message; s.ens.result = null; });
   });

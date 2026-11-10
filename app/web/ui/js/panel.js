@@ -7,7 +7,7 @@ import { seriesColor, strokeSvg } from "./plot.js";
 import { escapeHtml as h, thousands } from "./format.js";
 import { openPicker } from "./picker.js";
 
-let handlers = { run() {}, addClock() {}, selectClock() {}, setReference() {} };
+let handlers = { run() {}, cancel() {}, addClock() {}, selectClock() {}, setReference() {} };
 export function initPanel(h) {
   handlers = { ...handlers, ...h };
   const side = document.getElementById("side");
@@ -78,7 +78,8 @@ export function renderPanel(pageControls = null) {
   const nDev = state.devs.length;
   const run = state.run;
   const stale = run.stale && state.clocks.some((c) => c.record);
-  const runLabel = run.state === "running" ? "Running…"
+  const running = run.state === "running";
+  const runLabel = running ? "Cancel"
     : run.stale === "record" && state.clocks.some((c) => c.result) ? "New record, run analysis" : "Run analysis";
 
   const scroll = side.querySelector(".side-scroll");
@@ -103,8 +104,9 @@ export function renderPanel(pageControls = null) {
       : `<h2>Options</h2>${options()}`}`}
     </div>
     <div class="side-foot">
-      <button class="run-btn" type="button" data-act="run" ${run.state === "running" || !state.clocks.length || !nDev ? "disabled" : ""}>
-        ${stale ? `<span class="stale-dot" aria-hidden="true"></span>` : ""}${runLabel}<kbd>F5</kbd></button>
+      <button class="run-btn ${running ? "cancel" : ""}" type="button" data-act="run" ${running || (state.clocks.length && nDev) ? "" : "disabled"}
+        title="${running ? "Stop the analysis (F5 or Esc)" : "Run the analysis (F5)"}">
+        ${stale && !running ? `<span class="stale-dot" aria-hidden="true"></span>` : ""}${runLabel}<kbd>${running ? "Esc" : "F5"}</kbd></button>
       <div class="run-note">${h(run.note || "")}</div>
     </div>`;
   const ns = side.querySelector(".side-scroll");
@@ -128,7 +130,7 @@ function onClick(e) {
   if (row) { handlers.selectClock(Number(row.dataset.clock)); return; }
   const act = t.closest("[data-act]")?.dataset.act;
   if (act === "pick") openPicker();
-  else if (act === "run") handlers.run();
+  else if (act === "run") (state.run.state === "running" ? handlers.cancel : handlers.run)();
   else if (act === "add-clock") handlers.addClock();
   else if (act === "opts") update((s) => { s.optionsOpen = !s.optionsOpen; });
 }

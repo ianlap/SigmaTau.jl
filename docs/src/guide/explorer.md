@@ -74,7 +74,9 @@ the core.
    τ grid and the confidence level under Options.
 4. **Run analysis** (F5 or Ctrl+Enter). Nothing recomputes on its own: after
    you change the record, the estimators or the options, the Run button and
-   the status bar turn amber until you run again.
+   the status bar turn amber until you run again. While a run is going the
+   button reads **Cancel**; F5 or Esc stops it, and the results from before
+   stay on screen.
 
 ## The pages
 
@@ -84,7 +86,7 @@ the core.
 | **Stability** | σ(τ) on log-log axes with confidence intervals as bars or a band. With one clock, the per-τ table (τ, deviation, interval, noise type, EDF); with several, "Compare at τ" with the most stable clock in bold. Click the plot to move τ. |
 | **Spectrum** | S\_y(f) and either ℒ(f) at a carrier you choose or S\_x(f), Welch estimates with log-binned averaging and power-law slope guides. Changes here apply without a rerun. |
 | **Dynamic** | A DADEV or DHDEV map σ(t, τ), or a 3D waterfall: does the stability change during the record? Recomputes when its settings change; click a cell to pin it. |
-| **Ensemble** | A timescale, AT1 or EWFA, from the clocks in one loaded file (one value column per clock, all read against the same reference), or from four simulated clocks: each clock's weight over time, its mean weight and RMS prediction error, and the ADEV of the scale and of each clock against it. Recomputes when its settings change. |
+| **Ensemble** | A timescale, AT1 or EWFA, from the clocks in one loaded file (one value column per clock, all read against the same reference), or from the clocks you simulate on the Data page (Synthesize, Clocks 2 to 8, each noisier than the last by a factor of two against one perfect reference; four are used if there are none): each clock's weight over time, its mean weight and RMS prediction error, and the ADEV of the scale and of each clock against it. Recomputes when its settings change. |
 | **Live** | Readings from an instrument or the simulator as they arrive, with the running σ(τ); see below. |
 | **Help** | The pages, estimators, noise types, file formats and keyboard shortcuts. |
 
@@ -126,10 +128,10 @@ files like this"); **Import settings…** on the Data page reopens the dialog.
 
 | Key | Action |
 |:---|:---|
-| F5 or Ctrl+Enter | Run the analysis |
+| F5 or Ctrl+Enter | Run the analysis; while it runs, cancel it (or restart it if the inputs changed) |
 | 1–6 | Data, Stability, Spectrum, Dynamic, Ensemble, Live |
 | ? | Help |
-| Esc | Close a dialog |
+| Esc | Cancel a running analysis; close a dialog |
 
 On a plot, hover for values, drag to zoom and double-click to reset.
 

@@ -297,11 +297,12 @@ end
 
 # ── timescale ─────────────────────────────────────────────────────────────
 
-# Four white + random-walk FM clocks a factor of two apart in level, read
-# against a perfect reference.
+# White + random-walk FM clocks (four unless --clocks says otherwise), each a
+# factor of two above the last in level, read against a perfect reference.
 function synth_ensemble(o::Options)
     tau0 = isnan(o.tau0) ? 1.0 : o.tau0
-    ms = [ClockModel(; tau0, q1=1e-24 * 4.0^k, q2=1e-30 * 4.0^k) for k in 0:3]
+    k = o.clocks > 0 ? o.clocks : 4
+    ms = [ClockModel(; tau0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:k-1]
     cc, _ = simulate_ensemble(ms, o.synth, reference=0, rng=Random.Xoshiro(o.seed))
     return cc
 end

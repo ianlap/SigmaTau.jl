@@ -70,6 +70,7 @@ The record (all four analysis commands):
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
+| `--clocks K`, `--clock I` | with `--synth`: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2, and read clock I of them; `timescale --synth` uses all K (default 4) |
 
 `analyze`:
 

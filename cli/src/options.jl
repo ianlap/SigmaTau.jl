@@ -44,6 +44,8 @@ const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
     Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", ANY),
+    Opt("--clocks", "K", String[], false, "with --synth: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2; the analysis reads clock --clock, timescale uses all K (default 4)", ALL),
+    Opt("--clock", "I", String[], false, "with --synth --clocks: the simulated clock to read, 1 to K (default 1)", ALL),
     Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ANY),
     Opt("--freq", "", String[], false, "FILE holds fractional frequency", ANY),
     Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns)", ALL),
@@ -78,7 +80,7 @@ const OPTS = [
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
-    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble of four clocks)", ["timescale"]),
+    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights) or ewfa (equal weights)", ["timescale"]),
     Opt("--tau-y", "SECONDS", String[], false, "frequency averaging time of each clock (default 100 τ₀)", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
@@ -155,6 +157,8 @@ mutable struct Options
     tau_y::Float64            # NaN = 100 τ₀
     wmax::Float64
     components::Vector{Tuple{Int,Float64,Float64}}   # --component: α, τ from, τ to (NaN = open)
+    clocks::Int               # --clocks: simulated clocks; 0 = not given
+    clock::Int                # --clock: which simulated clock to read
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -162,7 +166,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
-                    Tuple{Int,Float64,Float64}[])
+                    Tuple{Int,Float64,Float64}[], 0, 1)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -273,6 +277,8 @@ end
 function set_option!(o::Options, name::String, v::String)
     if name == "--synth";              o.synth = parse_int(v, name)
     elseif name == "--seed";           o.seed = parse_int(v, name)
+    elseif name == "--clocks";         o.clocks = parse_int(v, name)
+    elseif name == "--clock";          o.clock = parse_int(v, name)
     elseif name == "--tau0";           o.tau0 = parse_float(v, name)
     elseif name == "--input-format";   o.input_format = check_choice(v, name, INPUT_LAYOUTS)
     elseif name == "--column";         o.column = v
@@ -373,6 +379,13 @@ function parse_args!(o::Options, args::Vector{String})
         throw(usage_error(o.command * ": give a FILE or --synth N (see `sigmatau help " * o.command * "`)"))
     end
     !isempty(o.input) && o.synth > 0 && throw(usage_error("give either a FILE or --synth, not both"))
+    if o.synth <= 0
+        (o.clocks != 0 || o.clock != 1) && throw(usage_error("--clocks and --clock go with --synth"))
+    else
+        o.clocks == 0 || 2 <= o.clocks <= 64 || throw(usage_error("--clocks must be between 2 and 64"))
+        1 <= o.clock <= max(o.clocks, 1) || throw(usage_error("--clock must be between 1 and the number of clocks"))
+        o.clocks == 0 && o.clock != 1 && throw(usage_error("--clock needs --clocks"))
+    end
     o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2"))
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
