@@ -449,7 +449,9 @@ second difference is taken at every interior sample:
 
 Arguments and the keywords `ci`, `noise` and `confidence` are those of
 [`adev`](@ref). The record must have no gaps; fill them with
-[`fillgaps`](@ref) first.
+[`fillgaps`](@ref) first. Each extension holds ``N - 2`` samples, so the
+deviation exists for ``m ≤ N - 1``. A larger averaging factor gives `NaN`
+with `neff` 0, and the grids stop at ``m = \\lfloor (N-1)/2 \\rfloor``.
 
 # Keywords
 - `correct_bias=true`: divide the deviation by ``\\sqrt{B}``, where ``B`` is

@@ -43,10 +43,9 @@ averaging time and cannot be accumulated this way.
 - `tau0`: sample interval in seconds.
 - `m_values`: averaging factors ``m``, with ``τ = mτ_0``.
 
-!!! warning "Missing samples"
-    Every sample must be a number. The estimators leave out the terms that
-    a missing sample enters; the accumulator cannot, and after a `NaN`
-    every estimate is `NaN`.
+Every sample must be finite. The estimators leave out the terms that a
+missing sample enters. A running sum cannot, so `push!` and `append!`
+refuse a sample that is not finite with an error.
 
 # Examples
 
@@ -108,8 +107,13 @@ averaging factor: the sum of squared second differences for `:adev`
 ([Dobrogowski and Kasznia (2007), Eq. (9)](@cite dobrogowski-2007-realtime-adev)),
 the inner sum and the sum of its squares for `:mdev` (their Eqs. (11) to
 (14)), and the same with third differences for `:hdev` and `:mhdev`.
+
+A sample that is not finite throws an `ArgumentError` and leaves the
+accumulator as it was.
 """
 function Base.push!(acc::StreamingStability, x_next::Real)
+    isfinite(x_next) || throw(ArgumentError(
+        "StreamingStability: samples must be finite, got $x_next"))
     t = acc.count + 1
     buf = acc.buf
     cap = acc.cap
@@ -190,7 +194,8 @@ end
     append!(acc::StreamingStability, xs) → acc
 
 Add the phase samples `xs`, in seconds and in order. The result is that of
-`push!` on each in turn.
+`push!` on each in turn: the samples before one that is not finite are
+added, and the error is thrown at that one.
 """
 function Base.append!(acc::StreamingStability, xs::AbstractVector{<:Real})
     for v in xs

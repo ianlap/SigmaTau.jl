@@ -65,7 +65,8 @@ One [`StabilityResult`](@ref) per clock, of the estimator of the inputs.
   For three clocks with a common EDF this is the loss of degrees of freedom
   of [SP1065, Eq. (70)](@cite riley-2008-sp1065). The interval is too
   narrow for a clock that is no longer resolved under the others (see
-  [`groslambert`](@ref)).
+  [`groslambert`](@ref)), and none is given below 1 EDF: the limits are
+  `NaN` there.
 - `noise_type` is empty, and `neff` is the smallest of the inputs' at each
   ``τ``.
 
@@ -125,7 +126,7 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
             edf = [_nch_edf(i, k, pairs, nbrs, s2, ν, var, w) for k in 1:n_tau]
         end
         results[i] = StabilityResult(ref.deviation_type, copy(ref.tau), dev, Symbol[],
-                                     with_ci ? _zip_ci(confidence_intervals(dev, edf, confidence)...) : _CIBound[], edf,
+                                     with_ci ? _sep_chi2_ci(dev, edf, confidence) : _CIBound[], edf,
                                      copy(neff_min), ref.tau0, ref.n, with_ci ? confidence : NaN)
     end
     return results
@@ -306,7 +307,7 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         end
         edf = [_gl_edf(i, q, couples, covar[q], s2, ν) for q in 1:K]
         dev = [v > 0 ? sqrt(v) : NaN for v in covar]
-        ci = klts === nothing ? _gl_chi2_ci(dev, edf, c) : klts[i]
+        ci = klts === nothing ? _sep_chi2_ci(dev, edf, c) : klts[i]
         results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[], ci, edf,
                                      N .- 2 .* m_values, τ₀, N, c)
     end
@@ -330,9 +331,10 @@ function _gl_edf(i, q, couples, v, s2, ν)
     return 2 * v^2 * length(couples)^2 / total
 end
 
-# χ² interval on the equivalent EDF. Below 1 EDF the χ² model degenerates (its
-# lower bound can pass the estimate), so no interval is given there.
-function _gl_chi2_ci(dev, edf, confidence)
+# χ² interval of a separated variance on its equivalent EDF. Below 1 EDF the χ²
+# model degenerates (its lower bound can pass the estimate), so no interval is
+# given there.
+function _sep_chi2_ci(dev, edf, confidence)
     lo, hi = confidence_intervals(dev, edf, confidence)
     for q in eachindex(edf)
         edf[q] >= 1 || (lo[q] = hi[q] = NaN)
