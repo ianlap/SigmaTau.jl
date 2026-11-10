@@ -19,7 +19,13 @@ lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
 fewer than `NEFF_RELIABLE` effective samples remain. Decimating the phase by
 `m` changes what the lag-1 test reads, and two steps allow for it. A white-PM
 result at `m ≥ 4` is confirmed with R(n), the ratio of MVAR to AVAR, because
-decimation whitens flicker PM. For `m ≥ 2` the limits between white FM,
+decimation whitens flicker PM. From `m = 16` any PM result, of either test,
+stands only if R(n) lies nearer its flicker-PM value than 1/2: R(n) is 1/2,
+27/40 and 33/40 for white, flicker and random-walk FM, and it is computed
+from every sample where the tests read one in `m`. A PM result that fails is
+reported as white FM. With few averaged points the tests mistake FM for PM
+often enough (white FM in one record in four at 32 points), and a PM label
+there gives an interval several times too narrow. For `m ≥ 2` the limits between white FM,
 flicker FM and random-walk FM sit halfway between the values the estimate
 takes on sampled noise (α = 0, −1.446, −2.4), not at the half-integers of
 [riley-2004-lag1-acf](@cite), which split flicker FM almost evenly between
@@ -98,18 +104,24 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
         alpha = NaN
 
         try
-            if N_eff >= NEFF_RELIABLE
-                alpha, _, _, _ = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)
-                # Decimation whitens flicker PM, so a white-PM result is
-                # confirmed with R(n) (SP1065 §5.5.2, step 5).
-                if alpha >= 1.5 && m >= 4
-                    x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
-                    _rn_flicker(x_rn, m, _adev_core(x_rn, [m], 1.0)[1]) && (alpha = 1.0)
+            lag1 = N_eff >= NEFF_RELIABLE
+            # Below B1_MIN_POINTS the label is the one at the longest m that has them.
+            mr = lag1 || b1_length !== :averaged ? m : clamp(N ÷ B1_MIN_POINTS, 1, m)
+            alpha = lag1 ? _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)[1] :
+                           _noise_id_b1rn(x_clean, mr; detrend=detrend, b1_length=b1_length)[1]
+            # A PM result is checked with R(n) = MVAR/AVAR (SP1065 §5.5.2, step 5),
+            # which uses every sample where the tests above use one in m. From
+            # m = 16 it must lie nearer its flicker-PM value than the 1/2 of white
+            # FM, or the noise is not PM. And decimation whitens flicker PM, so a
+            # white-PM result of the lag-1 test is confirmed with it from m = 4.
+            if alpha >= 0.5 && mr >= 4
+                x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
+                R = (_mdev_core(x_rn, [mr], 1.0)[1] / _adev_core(x_rn, [mr], 1.0)[1])^2
+                if mr >= 16 && R > sqrt(_rn_theory(mr, -1) / 2)
+                    alpha = 0.0
+                elseif lag1 && alpha >= 1.5 && R > sqrt(_rn_theory(mr, 0) * _rn_theory(mr, -1))
+                    alpha = 1.0
                 end
-            else
-                # Below B1_MIN_POINTS the label is the one at the longest m that has them.
-                mb = b1_length === :averaged ? clamp(N ÷ B1_MIN_POINTS, 1, m) : m
-                alpha, _, _ = _noise_id_b1rn(x_clean, mb; detrend=detrend, b1_length=b1_length)
             end
         catch
             alpha = NaN

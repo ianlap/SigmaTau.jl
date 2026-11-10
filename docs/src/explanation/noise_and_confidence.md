@@ -82,7 +82,24 @@ that value comes from simulation, not from the literature. Decimation whitens fl
 grows, and from m ≈ 16 the test reads it as white PM, whose ADEV has several
 times the EDF. A white-PM result is therefore confirmed with R(n), the ratio
 of MVAR to AVAR that SP1065 §5.5.2 uses to separate the two PM noises, and
-becomes flicker PM when R(n) says so. The result is always one of the five labels above, or for the
+becomes flicker PM when R(n) says so.
+
+R(n) also decides whether the noise is PM at all. With few averaged points
+both tests mistake FM for PM often: in simulation the lag-1 test gives white
+FM its own label in 91 % of records at 64 averaged points and in 75 % at 32,
+and most of the rest come out as PM. That is the costly mistake, because the
+EDF of PM noise follows the record length and not the number of averaged
+points, so the interval of ADEV or HDEV comes out several times too narrow.
+R(n) is 1/2, 27/40 and 33/40 for white, flicker and random-walk FM against
+0.26 for flicker PM at m = 16 and less beyond, and it is computed from every
+sample where the tests read one in m. From m = 16 a PM result therefore
+stands only if R(n) lies nearer its flicker-PM value than 1/2; one that fails
+is reported as white FM. On simulated white FM (N = 8192) this raises the
+share of 68.3 % ADEV intervals that hold the true value from 56–64 % to
+70–73 % at 4 to 32 averaged points, and it leaves PM records as they were.
+To set the noise type yourself, see [Stating the noise type](@ref).
+
+The result is always one of the five labels above, or for the
 Hadamard family one of seven (see below): estimates outside the range are
 clamped to its ends, and a τ where the estimate fails takes the type of its
 nearest neighbour.
