@@ -8,7 +8,10 @@ correction by default (``correct_bias=True``; ``"published"`` keeps to the
 published tables, ``"stable32"`` does what Stable32 does for each estimator,
 ``False`` returns the raw statistic, as allantools does); the Hadamard family identifies
 noise on the record less its frequency drift by default (``remove_drift=True``;
-``False`` uses the record as given, as Stable32 does).
+``False`` uses the record as given, as Stable32 does). ``noise`` states the
+noise type behind the EDF and the bias factor in place of identifying it
+(``"auto"``): one type for every τ (``"WHFM"``), a sequence with one per
+averaging factor, or a ``PowerLawFit``, whose strongest term at each τ is taken.
 ``mtie``/``tierms`` have no CI model — their ``ci``/``confidence`` kwargs are
 accepted and ignored, matching the Julia surface.
 """
@@ -17,12 +20,20 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ._convert import resolve_m, result_from_jl, to_jl_data
+from ._convert import powerlawfit_to_jl, resolve_m, result_from_jl, to_jl_data, to_jl_syms
 from ._julia import _map_errors, jl
 from .grids import Octave, TauMode
-from .types import FrequencyData, PhaseData, StabilityResult
+from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult
 
 DEFAULT_CONFIDENCE = float(jl.DEFAULT_CONFIDENCE)
+
+
+def _noise(noise: str | Sequence[str] | PowerLawFit):
+    """``noise`` for Julia: ``"auto"`` or one noise type as a Symbol, one per
+    averaging factor as a ``Vector{Symbol}``, or a ``PowerLawFit``."""
+    if isinstance(noise, str):
+        return jl.Symbol(noise)
+    return powerlawfit_to_jl(noise) if isinstance(noise, PowerLawFit) else to_jl_syms(noise)
 
 
 def _bias(correct_bias: bool | str):
@@ -42,11 +53,20 @@ def adev(
     *,
     ci: bool = True,
     overlapping: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Allan deviation σ_y(τ): overlapping, or the original non-overlapped one with
     ``overlapping=False`` (allantools' ``adev``, Stable32's Normal Allan)."""
-    return _run(jl.adev, data, m, ci=ci, overlapping=overlapping, confidence=float(confidence))
+    return _run(
+        jl.adev,
+        data,
+        m,
+        ci=ci,
+        overlapping=overlapping,
+        noise=_noise(noise),
+        confidence=float(confidence),
+    )
 
 
 def mdev(
@@ -54,10 +74,11 @@ def mdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Modified Allan deviation Mod σ_y(τ)."""
-    return _run(jl.mdev, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.mdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
 def tdev(
@@ -65,10 +86,11 @@ def tdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Time deviation σ_x(τ) = (τ/√3)·Mod σ_y(τ). Units of seconds."""
-    return _run(jl.tdev, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.tdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
 def hdev(
@@ -78,6 +100,7 @@ def hdev(
     ci: bool = True,
     remove_drift: bool = True,
     overlapping: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Hadamard deviation: overlapping, or non-overlapped with ``overlapping=False``
@@ -89,6 +112,7 @@ def hdev(
         ci=ci,
         remove_drift=remove_drift,
         overlapping=overlapping,
+        noise=_noise(noise),
         confidence=float(confidence),
     )
 
@@ -99,10 +123,19 @@ def mhdev(
     *,
     ci: bool = True,
     remove_drift: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Modified Hadamard deviation."""
-    return _run(jl.mhdev, data, m, ci=ci, remove_drift=remove_drift, confidence=float(confidence))
+    return _run(
+        jl.mhdev,
+        data,
+        m,
+        ci=ci,
+        remove_drift=remove_drift,
+        noise=_noise(noise),
+        confidence=float(confidence),
+    )
 
 
 def htdev(
@@ -111,10 +144,19 @@ def htdev(
     *,
     ci: bool = True,
     remove_drift: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Hadamard time deviation σ_x,HT(τ) = (τ/√(10/3))·Mod σ_y,MH(τ). Units of seconds."""
-    return _run(jl.htdev, data, m, ci=ci, remove_drift=remove_drift, confidence=float(confidence))
+    return _run(
+        jl.htdev,
+        data,
+        m,
+        ci=ci,
+        remove_drift=remove_drift,
+        noise=_noise(noise),
+        confidence=float(confidence),
+    )
 
 
 def pdev(
@@ -122,10 +164,11 @@ def pdev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Parabolic deviation σ_PDEV(τ) (Vernotte). PDEV(τ₀) ≡ ADEV(τ₀)."""
-    return _run(jl.pdev, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.pdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
 def theoh(
@@ -133,10 +176,11 @@ def theoh(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """ThêoH composite σ_y(τ) (SP1065 §5.2.16): overlapping ADEV at short τ, ThêoBR beyond."""
-    return _run(jl.theoh, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.theoh, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
 def mtie(
@@ -175,10 +219,19 @@ def totdev(
     *,
     ci: bool = True,
     correct_bias: bool | str = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Total deviation (Howe / SP1065 mean-flip extension)."""
-    return _run(jl.totdev, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
+    return _run(
+        jl.totdev,
+        data,
+        m,
+        ci=ci,
+        correct_bias=_bias(correct_bias),
+        noise=_noise(noise),
+        confidence=float(confidence),
+    )
 
 
 def mtotdev(
@@ -187,10 +240,19 @@ def mtotdev(
     *,
     ci: bool = True,
     correct_bias: bool | str = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Modified Total deviation (Greenhall extension)."""
-    return _run(jl.mtotdev, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
+    return _run(
+        jl.mtotdev,
+        data,
+        m,
+        ci=ci,
+        correct_bias=_bias(correct_bias),
+        noise=_noise(noise),
+        confidence=float(confidence),
+    )
 
 
 def ttotdev(
@@ -199,10 +261,19 @@ def ttotdev(
     *,
     ci: bool = True,
     correct_bias: bool | str = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Time Total deviation σ_x(τ) = (τ/√3)·Mod-Total σ_y(τ). Units of seconds."""
-    return _run(jl.ttotdev, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
+    return _run(
+        jl.ttotdev,
+        data,
+        m,
+        ci=ci,
+        correct_bias=_bias(correct_bias),
+        noise=_noise(noise),
+        confidence=float(confidence),
+    )
 
 
 def htotdev(
@@ -212,6 +283,7 @@ def htotdev(
     ci: bool = True,
     correct_bias: bool | str = True,
     remove_drift: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Hadamard Total deviation (Greenhall extension on y = diff(x))."""
@@ -222,6 +294,7 @@ def htotdev(
         ci=ci,
         correct_bias=_bias(correct_bias),
         remove_drift=remove_drift,
+        noise=_noise(noise),
         confidence=float(confidence),
     )
 
@@ -232,10 +305,19 @@ def theo1(
     *,
     ci: bool = True,
     correct_bias: bool | str = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Thêo1 deviation (SP1065 §5.2.15) — extends the usable τ range to 75 % of the record span."""
-    return _run(jl.theo1, data, m, ci=ci, correct_bias=_bias(correct_bias), confidence=float(confidence))
+    return _run(
+        jl.theo1,
+        data,
+        m,
+        ci=ci,
+        correct_bias=_bias(correct_bias),
+        noise=_noise(noise),
+        confidence=float(confidence),
+    )
 
 
 def mhtotdev(
@@ -245,6 +327,7 @@ def mhtotdev(
     ci: bool = True,
     correct_bias: bool | str = True,
     remove_drift: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Modified Hadamard Total deviation (SigmaTau-original; Greenhall methodology)."""
@@ -255,6 +338,7 @@ def mhtotdev(
         ci=ci,
         correct_bias=_bias(correct_bias),
         remove_drift=remove_drift,
+        noise=_noise(noise),
         confidence=float(confidence),
     )
 
@@ -269,12 +353,13 @@ def deviation(
     confidence: float = DEFAULT_CONFIDENCE,
     correct_bias: bool | str = True,
     remove_drift: bool = True,
+    noise: str | Sequence[str] | PowerLawFit = "auto",
 ) -> StabilityResult:
     """Run the estimator called ``name`` (any name from :func:`estimators`).
 
     ``correct_bias`` applies to the total family and ``remove_drift`` to the
     Hadamard family; each is ignored elsewhere, so one call shape works for
-    every estimator.
+    every estimator. ``noise`` states the noise type, as in :func:`adev`.
     """
     return result_from_jl(
         jl.deviation(
@@ -285,6 +370,7 @@ def deviation(
             confidence=float(confidence),
             correct_bias=_bias(correct_bias),
             remove_drift=bool(remove_drift),
+            noise=_noise(noise),
         )
     )
 

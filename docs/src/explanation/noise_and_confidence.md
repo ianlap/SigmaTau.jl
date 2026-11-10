@@ -82,7 +82,24 @@ that value comes from simulation, not from the literature. Decimation whitens fl
 grows, and from m ≈ 16 the test reads it as white PM, whose ADEV has several
 times the EDF. A white-PM result is therefore confirmed with R(n), the ratio
 of MVAR to AVAR that SP1065 §5.5.2 uses to separate the two PM noises, and
-becomes flicker PM when R(n) says so. The result is always one of the five labels above, or for the
+becomes flicker PM when R(n) says so.
+
+R(n) also decides whether the noise is PM at all. With few averaged points
+both tests mistake FM for PM often: in simulation the lag-1 test gives white
+FM its own label in 91 % of records at 64 averaged points and in 75 % at 32,
+and most of the rest come out as PM. That is the costly mistake, because the
+EDF of PM noise follows the record length and not the number of averaged
+points, so the interval of ADEV or HDEV comes out several times too narrow.
+R(n) is 1/2, 27/40 and 33/40 for white, flicker and random-walk FM against
+0.26 for flicker PM at m = 16 and less beyond, and it is computed from every
+sample where the tests read one in m. From m = 16 a PM result therefore
+stands only if R(n) lies nearer its flicker-PM value than 1/2; one that fails
+is reported as white FM. On simulated white FM (N = 8192) this raises the
+share of 68.3 % ADEV intervals that hold the true value from 56–64 % to
+70–73 % at 4 to 32 averaged points, and it leaves PM records as they were.
+To set the noise type yourself, see [Stating the noise type](@ref).
+
+The result is always one of the five labels above, or for the
 Hadamard family one of seven (see below): estimates outside the range are
 clamped to its ends, and a τ where the estimate fails takes the type of its
 nearest neighbour.
@@ -138,6 +155,32 @@ its label in 91 % of records with 64 averaged points left and 81 % with 32,
 where two differences alone keep 98 % and 93 %. A random-walk FM record
 labelled flicker-walk FM has an HDEV EDF 2 % lower and an HTOTDEV 3.7 %
 higher.
+
+### Stating the noise type
+
+The tests above read each τ on its own, and they assume power-law noise. On a
+measured record a slow periodic term, a step or a stretch of wander can
+mislead them where few averaged points remain, and the labels may then run
+against the order a sum of power laws allows (whiter noise at a longer τ
+than a redder one). Since the label sets the EDF and the bias factor, every
+estimator that reports intervals takes `noise` to state it instead (Stable32
+lets the user set the noise type too, and allantools' EDF functions take the
+exponent α):
+
+```julia
+adev(p; noise = :WHFM)                         # one type at every τ
+adev(p, [1, 16, 256]; noise = [:WHPM, :WHFM, :WHFM])
+hdev(p; noise = powerlaw_fit(p))               # strongest term of a model at each τ
+stability(p; noise = :WHFM)
+```
+
+A [`PowerLawFit`](@ref) gives, at each τ, the component with the most
+variance in the estimator's own kernel, so its labels can only redden as τ
+grows. It is as good as the fit: a short record may not resolve the reddest
+term. A type redder than an estimator covers counts as its reddest, as in
+identification (random-walk FM for the Allan family). The command line has
+`--noise auto|fit|TYPE`, the explorer a Noise type menu under Options, and
+the Python functions the same `noise` argument with the names as strings.
 
 ## Equivalent degrees of freedom
 

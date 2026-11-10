@@ -148,8 +148,8 @@ end
 
 """
     groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values=Octave;
-                confidence=DEFAULT_CONFIDENCE) → Vector{StabilityResult}
-    groslambert(x_ab, x_bc, x_ca, m_values=Octave; confidence) → Vector{StabilityResult}
+                confidence=DEFAULT_CONFIDENCE, interval=:chi2) → Vector{StabilityResult}
+    groslambert(x_ab, x_bc, x_ca, m_values=Octave; confidence, interval) → Vector{StabilityResult}
 
 Groslambert covariance (Vernotte et al., *IEEE Trans. UFFC* 63, 2016): each
 clock's Allan deviation from the cross Allan variance of two difference
@@ -174,17 +174,38 @@ model of [vernotte-2019-tch-gcov-uncertainty](@cite): each record's Allan
 variance carries its EDF for the identified noise type
 [greenhall-2003-edf-stability](@cite) (as in [`adev`](@ref)), the products of
 Gaussian second differences give the variance of every covariance estimate in
-closed form, and `edf = 2σ̂⁴/Var(σ̂²)` sets a χ² interval `ci`. The paper finds
-these intervals reliable from about 5 EDF; at the longest τ, where fewer
-remain, the Bayesian KLTS intervals of [lantz-2019-klts](@cite) are exact. A
-non-positive covariance gives `NaN`.
+closed form, and `edf = 2σ̂⁴/Var(σ̂²)` sets a χ² interval `ci` (none below
+1 EDF, where the χ² model degenerates). A non-positive covariance gives a
+`NaN` estimate.
+
+The χ² interval holds for a clock that dominates its two records. For a
+clock quieter than the others it is too narrow once the clock is no longer
+resolved, with its lower bound above the truth: in a Monte Carlo with one
+clock at a third of the others' level, its 95 % interval covered that
+clock's true value 94 % of the time at 10 τ₀ and 60 % at 100 τ₀.
+
+With three clocks, `interval = :klts` gives the KLTS interval of
+[lantz-2019-klts](@cite) instead: the quantiles of the posterior of the three
+clock variances given the sample covariance of the three records, under a
+log-uniform prior from 10⁻⁵ times the smallest to 10³ times the largest
+estimate, with the measurement noise read from the closure of the records
+and the geometric mean of their EDF. It is given also where the estimate is
+negative, and a lower bound of 0 means the data do not exclude zero (the
+bound would otherwise follow the prior's lower limit). In the same Monte
+Carlo it covered 92 % at 10 τ₀, 86 % at 20 τ₀, where the clock is barely
+resolved and the upper bound follows the prior, and 99–100 % from 50 τ₀ on.
+Each τ costs about 0.1 s.
 """
 function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::Vector{Int};
-                     confidence::Real=DEFAULT_CONFIDENCE)
+                     confidence::Real=DEFAULT_CONFIDENCE, interval::Symbol=:chi2)
     n_clocks = size(pairwise, 1)
     size(pairwise, 2) == n_clocks ||
         throw(ArgumentError("groslambert: pairwise matrix must be square"))
     n_clocks >= 3 || throw(ArgumentError("groslambert: need at least 3 clocks, got $n_clocks"))
+    interval in (:chi2, :klts) ||
+        throw(ArgumentError("groslambert: interval must be :chi2 or :klts, got :$interval"))
+    interval === :klts && n_clocks != 3 &&
+        throw(ArgumentError("groslambert: interval = :klts is defined for 3 clocks, got $n_clocks"))
     x = Matrix{Vector{Float64}}(undef, n_clocks, n_clocks)
     ref = nothing
     for i in 1:n_clocks, j in 1:n_clocks
@@ -209,6 +230,8 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         s2[i, j] = s2[j, i] = r.dev .^ 2
         ν[i, j] = ν[j, i] = r.edf
     end
+    c = Float64(confidence)
+    klts = interval === :klts ? _gl_klts(x, s2, ν, m_values, τ₀, c) : nothing
     results = Vector{StabilityResult}(undef, n_clocks)
     for i in 1:n_clocks
         others = [j for j in 1:n_clocks if j != i]
@@ -223,9 +246,9 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         end
         edf = [_gl_edf(i, q, couples, covar[q], s2, ν) for q in 1:K]
         dev = [v > 0 ? sqrt(v) : NaN for v in covar]
-        results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[],
-                                     _zip_ci(confidence_intervals(dev, edf, Float64(confidence))...), edf,
-                                     N .- 2 .* m_values, τ₀, N, Float64(confidence))
+        ci = klts === nothing ? _gl_chi2_ci(dev, edf, c) : klts[i]
+        results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[], ci, edf,
+                                     N .- 2 .* m_values, τ₀, N, c)
     end
     return results
 end
@@ -246,6 +269,47 @@ function _gl_edf(i, q, couples, v, s2, ν)
     end
     return 2 * v^2 * length(couples)^2 / total
 end
+
+# χ² interval on the equivalent EDF. Below 1 EDF the χ² model degenerates (its
+# lower bound can pass the estimate), so no interval is given there.
+function _gl_chi2_ci(dev, edf, confidence)
+    lo, hi = confidence_intervals(dev, edf, confidence)
+    for q in eachindex(edf)
+        edf[q] >= 1 || (lo[q] = hi[q] = NaN)
+    end
+    return _zip_ci(lo, hi)
+end
+
+# KLTS intervals [lantz-2019-klts](@cite) for clocks 1, 2, 3 at each τ, from the
+# sample covariance of the records 1−2, 2−3, 3−1, the measurement noise read
+# from their closure (σ²_N = σ²_closure / 3, eq 9) and the geometric mean of
+# the three records' EDF. A lower bound that depends on the prior is 0.
+function _gl_klts(x, s2, ν, m_values, τ₀, confidence)
+    rec = (x[1, 2], x[2, 3], x[3, 1])
+    cls = rec[1] .+ rec[2] .+ rec[3]
+    probs = ((1 - confidence) / 2, (1 + confidence) / 2)
+    ci = [Vector{_CIBound}(undef, length(m_values)) for _ in 1:3]
+    for (q, m) in enumerate(m_values)
+        w = 2 * (m * τ₀)^2 * (length(cls) - 2m)
+        S = [j == k ? s2[_gl_pair(j)...][q] : sum(_second_diff_products(rec[j], rec[k], m)[1]) / w
+             for j in 1:3, k in 1:3]
+        vN = sum(_second_diff_products(cls, cls, m)[1]) / w / 3
+        n = cbrt(ν[1, 2][q] * ν[2, 3][q] * ν[1, 3][q])
+        if !(isfinite(n) && all(isfinite, S))
+            for i in 1:3; ci[i][q] = (lo = NaN, hi = NaN); end
+            continue
+        end
+        Sk = vN <= 1e-9 * sum(S[k, k] for k in 1:3) / 3 ? S[1:2, 1:2] : S
+        qs, zero_lower = _klts(Sk, vN, n, probs)
+        for i in 1:3
+            ci[i][q] = (lo = zero_lower[i] ? 0.0 : sqrt(qs[i, 1]), hi = sqrt(qs[i, 2]))
+        end
+    end
+    return ci
+end
+
+# Clock indices of record j among (1−2, 2−3, 3−1).
+_gl_pair(j) = ((1, 2), (2, 3), (3, 1))[j]
 
 groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, taus::TauMode; kw...) =
     groslambert(pairwise, tau_values(taus, _gl_n(pairwise), :adev); kw...)
