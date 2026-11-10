@@ -126,6 +126,12 @@ mktempdir() do dir
         ref = totdev(pd, [1, 3, 9]; correct_bias=false)
         rows = csv_rows(run_cli("analyze", pf, "--devs", "totdev", "--m", "9,1,3", "--no-bias-correction").out)
         @test parse.(Float64, getindex.(rows, 5)) == ref.dev
+        for mode in (:published, :stable32)
+            ref = htotdev(pd, [3, 9]; correct_bias=mode)
+            rows = csv_rows(run_cli("analyze", pf, "--devs", "htotdev", "--m", "3,9", "--bias", String(mode)).out)
+            @test parse.(Float64, getindex.(rows, 5)) == ref.dev
+        end
+        @test run_cli("analyze", pf, "--bias", "sp1065").code == 1
     end
 
     @testset "frequency input" begin
@@ -681,6 +687,7 @@ mktempdir() do dir
                 return all(isapprox(x, y; rtol=1e-12, atol=0) for (x, y) in zip(xs, ys))
             end
             for args in (["analyze", pf, "--devs", "adev,mdev,tdev,totdev,theo1"],
+                         ["analyze", pf, "--devs", "totdev,mtotdev,theo1", "--bias", "stable32"],
                          ["analyze", pf, "--format", "json", "--spectrum", "--series", "100"],
                          ["check", pf, "--format", "json"],
                          ["spectrum", pf],
