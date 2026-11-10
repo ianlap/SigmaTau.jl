@@ -35,6 +35,10 @@ The paper leaves its starting values open, so these are this package's
 choices: the τ_min estimate, the starting variance τ²σ_y²(τ) taken from the
 record's first part, each clock's starting frequency (its fitted slope), and
 a variance memory of 20 days (`memory`) capped at a quarter of the record.
+`:at2` keeps AT1's weights and replaces each clock's frequency filter by a
+Kalman update that carries a frequency variance, which adapts as the clock's
+prediction error does; in steady state it is AT1's filter, so the scales are
+close. The paper's frequency-step detection is not included.
 [`timescale_phase`](@ref) returns the scale against the reference, for the
 usual stability analysis.
 

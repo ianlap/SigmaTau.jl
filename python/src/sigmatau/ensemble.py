@@ -401,12 +401,13 @@ def timescale(
 ) -> TimescaleResult:
     """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock the
     same (its frequencies average over ``tau_y`` seconds, default 100 τ₀),
-    ``"at1"`` follows Weiss & Weissert 1991, and ``"greenhall"`` runs
+    ``"at1"`` follows Weiss & Weissert 1991, ``"at2"`` adds their Kalman
+    frequency update, and ``"greenhall"`` runs
     Greenhall's Kalman timescale (reduced Kalman at ``R = 0``, IEMx above) on
     one ``ClockModel`` per clock in ``models``, read at clock ``pivot``
     (0-based, default 0).
 
-    AT1 options: ``tau_min`` (each clock's τ_min in seconds, a number or one per
+    AT1 and AT2 options: ``tau_min`` (each clock's τ_min in seconds, a number or one per
     clock; default estimated from the record), ``memory`` (the variance time
     constant in seconds, default 20 days, at most a quarter of the record),
     ``bias`` (``"paper"`` or ``"exact"``), ``wmax`` (largest weight) and

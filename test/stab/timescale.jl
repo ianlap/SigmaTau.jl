@@ -35,6 +35,32 @@ using Statistics
     short, _ = simulate_ensemble(rw, 4096; reference=0, rng=Xoshiro(42))
     @test all(<(0), diff(vec(mean(timescale(short).weights[2048:end, :]; dims=1))))
 
+    @testset "AT2" begin
+        # Same weights as AT1 (the time update is AT1's); frequency by the
+        # Kalman update, which in steady state is AT1's filter (eq 17).
+        a2 = timescale(cc; algorithm=:at2)
+        @test wlate(a2) ≈ wlate(at) rtol=0.05
+        @test all(sum(a2.weights; dims=2) .≈ 1)
+        τs = [1, 10, 100, 1000]
+        @test adev(timescale_phase(a2), τs; ci=false).dev ≈ adev(timescale_phase(at), τs; ci=false).dev rtol=0.1
+        # Units of eqs 13-18: from m(m+1) = σα²/(σ_β²τ) the steady state of the
+        # recursion has gain P̂/(σα²+P̂) = 1/(1+m), the AT1 constant of eq 17.
+        for (m, σα²) in ((0.5, 4e-26), (30.0, 1e-24), (4000.0, 3e-23))
+            s = σα² / (m * (m + 1))
+            P = SigmaTau._at2_steady(σα², s)
+            P̂ = P + s
+            @test σα² * P̂ / (σα² + P̂) ≈ P rtol=1e-12            # a fixed point of (15)
+            @test σα² / P̂ ≈ m rtol=1e-9                           # eq 17 with τ-scaled σ_β
+        end
+        # Random-walk FM clocks: the same steady state, so the same stability.
+        rw2 = timescale(short; algorithm=:at2)
+        @test adev(timescale_phase(rw2), [1, 100]; ci=false).dev ≈ adev(timescale_phase(timescale(short)), [1, 100]; ci=false).dev rtol=0.15
+        x = copy(cc.x); x[30000:30100, 1] .= NaN; x[1:5, 2] .= NaN
+        g = timescale(ClockComparisons(x, 1.0); algorithm=:at2)
+        @test all(isfinite, timescale_phase(g).x) && all(iszero, g.weights[30000:30100, 1])
+        @test all(isfinite, timescale(ClockComparisons(cc.x[1:10, :], 1.0); algorithm=:at2).x)
+    end
+
     @testset "caps, gaps and outliers" begin
         capped = timescale(cc; wmax=0.4)
         @test maximum(capped.weights[late, :]) <= 0.4 + 1e-12
