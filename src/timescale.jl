@@ -48,6 +48,13 @@ function timescale_phase(r::TimescaleResult)
     return PhaseData(u, r.comparisons.tau0; source=uppercase(String(r.algorithm)))
 end
 
+# Median by sorting: Statistics.median is not trim-safe.
+function _middle(v::Vector{Float64})
+    s = sort(v)
+    n = length(s)
+    return isodd(n) ? s[(n+1)÷2] : (s[n÷2] + s[n÷2+1]) / 2
+end
+
 # Cap the weights at wmax and hand the excess to the clocks below the cap,
 # in proportion to their own weight, until none is over.
 function _cap_weights!(w::Vector{Float64}, wmax::Float64)
@@ -236,7 +243,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
             # The median prediction error places the scale for the test, so
             # that one clock's jump cannot carry it.
             d = x̂ .- r[n, :]
-            keep = use .& (abs.(d .- median(d[use])) .<= outlier .* sqrt.(ε²))
+            keep = use .& (abs.(d .- _middle(d[use])) .<= outlier .* sqrt.(ε²))
             any(keep) && (use = keep)
         end
         if !any(use)

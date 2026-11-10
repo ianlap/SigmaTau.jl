@@ -31,6 +31,10 @@ clock being part of the scale (`bias=:paper`, or the exact
 `bias=:exact`), no cap on the weights (`wmax`), and no outlier test
 (`outlier`). Each clock's frequency constant comes from its own τ_min,
 which `tau_min` sets and which is otherwise read from the record.
+The paper leaves its starting values open, so these are this package's
+choices: the τ_min estimate, the starting variance τ²σ_y²(τ) taken from the
+record's first part, each clock's starting frequency (its fitted slope), and
+a variance memory of 20 days (`memory`) capped at a quarter of the record.
 [`timescale_phase`](@ref) returns the scale against the reference, for the
 usual stability analysis.
 
