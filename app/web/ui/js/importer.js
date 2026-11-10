@@ -90,8 +90,9 @@ export function openImport(file, prev = null) {
     };
   };
 
-  // Remembered format: load straight away when the file still makes sense.
-  if (fromMemory && !prev && s.nCols && !s.bad && derived().tau0 > 0) return Promise.resolve(settings());
+  // Remembered format: load straight away when the file still makes sense
+  // and no Stable32 zero would silently become a gap.
+  if (fromMemory && !prev && s.nCols && !s.bad && derived().tau0 > 0 && (!derived().zeros || st.keepZeros)) return Promise.resolve(settings());
 
   return new Promise((resolve) => {
     const finish = (out) => { dlg.close(); resolve(out); };
@@ -157,7 +158,7 @@ export function openImport(file, prev = null) {
         ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to fill them.</div>`
         : "";
       const zeroCard = zeros
-        ? `<div class="gap-card"><b>${thousands(zeros)} zero reading${zeros > 1 ? "s" : ""}</b>Stable32 marks a gap with 0, so ${zeros > 1 ? "they are" : "it is"} read as ${zeros > 1 ? "gaps" : "a gap"}.
+        ? `<div class="gap-card"><b>${thousands(zeros)} zero reading${zeros > 1 ? "s" : ""}</b>Stable32 marks a gap with 0${st.keepZeros ? `; ${zeros > 1 ? "they are" : "it is"} kept as ${zeros > 1 ? "readings" : "a reading"} here` : `, so ${zeros > 1 ? "they are" : "it is"} read as ${zeros > 1 ? "gaps" : "a gap"}`}.
             <label class="check"><input type="checkbox" id="imp-keep-zeros" ${st.keepZeros ? "checked" : ""}>Keep zeros as readings (a quantized record)</label></div>`
         : "";
       const tauLine = ts && ts.tau0 > 0

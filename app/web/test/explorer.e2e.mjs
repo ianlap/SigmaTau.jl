@@ -117,12 +117,21 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "0" : String(1e-12 * (2 + Math.sin(i / 3)))));
     const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
     await chooser.setFiles({ name: "z.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
-    assert.match(await page.locator("#import-dialog .gap-card").innerText(), /1 zero reading/);
+    await page.locator("#import-dialog .gap-card", { hasText: "1 zero reading" }).waitFor();
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
     assert.match(await page.locator("#record-chip-text").innerText(), /z\.frd.*51[23] samples/);
+  });
+
+  await t.test("Data: remembered .frd settings still show a file's zeros", async () => {
+    const y = Array.from({ length: 256 }, (_, i) => (i % 100 === 50 ? "0" : String(1e-12 * (2 + Math.cos(i / 5)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z2.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.locator("#import-dialog .gap-card", { hasText: "3 zero readings" }).waitFor();
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
   });
 
   await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
