@@ -77,6 +77,21 @@ becomes flicker PM when R(n) says so. The result is always one of the five label
 the range are clamped to WHPM or RWFM, and a τ where the estimate fails takes
 the type of its nearest neighbour.
 
+Decimation also moves the FM noises. The estimator of
+[riley-2004-lag1-acf](@cite) turns the lag-1 autocorrelation r₁ of the
+differenced series into α and rounds to the nearest integer, which is exact
+for discrete fractional noise. Phase decimated by m is instead a sampled
+continuous process. The second differences of sampled flicker FM and
+random-walk FM correlate at r₁ = (9 ln 3 − 16 ln 2)/(8 ln 2) = −0.217 and
+r₁ = 1/4, from their generalized autocovariances t² ln|t| and |t|³
+[greenhall-2003-edf-stability](@cite), and the estimator reads those as
+α = −1.446 and −2.4 where discrete noise gives −1 and −2. Simulated records
+reach those values by m ≈ 8. Rounding at −1.5 therefore splits flicker FM
+almost evenly between its own label and random-walk FM. For m ≥ 2 SigmaTau
+places the limits halfway between the readings 0, −1.446 and −2.4, at −0.72
+and −1.92; at m = 1 the record is not decimated and the published rounding
+stands.
+
 Stable32 does not detrend before the lag-1 estimate. The difference only
 matters on records with drift; `identify_noise(...; remove_drift=false)` follows
 Stable32, and [Validation](validation.md) quantifies the effect.

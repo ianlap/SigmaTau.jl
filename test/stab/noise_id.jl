@@ -20,6 +20,22 @@ using SigmaTau
         @test pm(2) == [:WHPM, :WHPM]
     end
 
+    @testset "flicker FM at long τ" begin
+        # On decimated phase flicker FM reads α ≈ −1.45 and random-walk FM
+        # −2.4, so for m ≥ 2 the limit between them sits at −1.92. This
+        # flicker FM record reads −1.73 at m = 64.
+        fm(alpha) = identify_noise(noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0),
+                                             rng=Xoshiro(11)), [16, 64])
+        @test fm(-1) == [:FLFM, :FLFM]
+        @test fm(-2) == [:RWFM, :RWFM]
+        @test SigmaTau._lag1_label(-1.73, 1) == -2    # not decimated: nearest integer
+        # The readings follow from the generalized autocovariances the EDF uses.
+        r1(alpha) = (s = t -> SigmaTau._compute_sw(Float64(t), alpha + 2);
+                     (s(3) - 4s(2) + 7s(1)) / (2s(2) - 8s(1)))
+        @test SigmaTau._LAG1_FLFM ≈ SigmaTau._lag1_reading(r1(-1))
+        @test SigmaTau._LAG1_RWFM ≈ SigmaTau._lag1_reading(r1(-2)) ≈ -2.4
+    end
+
     @testset "noise-ID scale invariance" begin
         # Regression for the eps*N threshold bug in `_lag1_acf` that
         # produced :unknown classifications on any phase record with std

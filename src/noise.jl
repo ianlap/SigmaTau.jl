@@ -15,9 +15,14 @@ family, as the deviation functions do.
 
 Identify the dominant power-law noise type at each averaging factor by the
 lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
-fewer than `NEFF_RELIABLE` effective samples remain. A white-PM result of the
-lag-1 test at `m ≥ 4` is confirmed with R(n), the ratio of MVAR to AVAR,
-because decimating the phase whitens flicker PM.
+fewer than `NEFF_RELIABLE` effective samples remain. Decimating the phase by
+`m` changes what the lag-1 test reads, and two steps allow for it. A white-PM
+result at `m ≥ 4` is confirmed with R(n), the ratio of MVAR to AVAR, because
+decimation whitens flicker PM. For `m ≥ 2` the limits between white FM,
+flicker FM and random-walk FM sit halfway between the values the estimate
+takes on sampled noise (α = 0, −1.446, −2.4), not at the half-integers of
+[riley-2004-lag1-acf](@cite), which split flicker FM almost evenly between
+its own label and random-walk FM.
 
 Every entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`; the
 function never returns `:unknown`. Estimates outside α ∈ [-2, 2] are
@@ -93,13 +98,7 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
         end
 
         isnan(alpha) && continue
-        # The lag-1 estimate is continuous and noisy: a white-PM record can
-        # come out at α ≈ 2.6, and at d = dmax a ρ near its 0.5 ceiling gives
-        # α ≈ -3 (and FWFM/RRFM-dominated data, or an infinite ratio, can go
-        # further). None of those has a symbol here, so clamp to the
-        # supported range and take the nearest power law instead of
-        # reporting :unknown.
-        alphas[k] = round(Int, clamp(alpha, -2.0, 2.0))
+        alphas[k] = _lag1_label(alpha, m)
         ok[k] = true
     end
 
@@ -112,6 +111,28 @@ identify_noise(data::PhaseData, m_values::AbstractVector{<:Integer}; kwargs...) 
     identify_noise(Vector{Float64}(data.x), collect(Int, m_values); kwargs...)
 identify_noise(data::FrequencyData, m_values::AbstractVector{<:Integer}; kwargs...) =
     identify_noise(_freq_to_phase(data), m_values; kwargs...)
+
+# Decimating the phase by m leaves a sampled continuous process, on which the
+# lag-1 estimate of flicker FM and random-walk FM settles at α = −1.446 and
+# −2.4 rather than −1 and −2: their second differences correlate at
+# (9 ln 3 − 16 ln 2)/(8 ln 2) and 1/4, from the generalized autocovariances
+# t² ln|t| and |t|³ of Greenhall & Riley (2003).
+_lag1_reading(r1) = -2 - 2r1 / (1 + r1)
+const _LAG1_FLFM = _lag1_reading((9log(3) - 16log(2)) / (8log(2)))
+const _LAG1_RWFM = _lag1_reading(1 / 4)
+
+# Integer α of a lag-1 estimate. The estimate is continuous and noisy (white
+# PM can come out at 2.6, a ρ near its ceiling at d = dmax below −3), so it is
+# clamped to the labelled range. At m = 1 it rounds to the nearest integer
+# (Riley & Greenhall 2004); for m ≥ 2 the limits between white FM, flicker FM
+# and random-walk FM sit halfway between the sampled-process readings
+# 0, −1.446 and −2.4, at −0.72 and −1.92 instead of −0.5 and −1.5.
+function _lag1_label(alpha::Real, m::Int)
+    m == 1 && return round(Int, clamp(alpha, -2.0, 2.0))
+    alpha < (_LAG1_FLFM + _LAG1_RWFM) / 2 && return -2
+    alpha < _LAG1_FLFM / 2 && return -1
+    return round(Int, clamp(alpha, 0.0, 2.0))
+end
 
 const _NOISE_SYMBOLS = (:RWFM, :FLFM, :WHFM, :FLPM, :WHPM)  # α = -2 … 2
 
