@@ -135,6 +135,27 @@ fmt(f) = joinpath(FMT, f)
         write(tbl, "MJD,ratio\n" * join(string.(mjd, ",", 1:2500), "\n"))
         q = read_data(tbl; column=2, kind=:frequency)
         @test q.tau0 == 1.0 && length(q) == 3000 && count(isnan, q.y) == 500
+        # MJD by its range under a column headed `t`, as optical clock
+        # comparisons write it, both as plain columns and as a table; a
+        # name that says seconds keeps seconds.
+        ratio = string.(mjd, " ", 1e-15 .* (1:2500), " 1")
+        dat = tempname() * ".dat"
+        write(dat, "# A-B comparison\n# t  ratio  flag\n" * join(ratio, "\n"))
+        c = read_data(dat)
+        @test c isa FrequencyData && c.tau0 == 1.0 && length(c) == 3000
+        @test start_time(c) == DateTime(2022, 3, 8, 22, 59, 57, 120)
+        write(tbl, "t,ratio\n" * join(string.(mjd, ",", 1e-15 .* (1:2500)), "\n"))
+        @test read_data(tbl) isa FrequencyData && read_data(tbl).tau0 == 1.0
+        # Seconds of day at 10 Hz lie in the MJD range too, and stay seconds.
+        sod = string.(43200 .+ (0:99) ./ 10, " ", 1e-9 .* (1:100))
+        write(dat, join(sod, "\n"))
+        @test read_data(dat).tau0 == 0.1 && start_time(read_data(dat)) === nothing
+        for name in ("time", "t", "UTC")
+            write(tbl, "$name,phase\n" * join(replace.(sod, " " => ","), "\n"))
+            @test read_data(tbl).tau0 == 0.1
+        end
+        write(tbl, "t (s),phase\n" * join(string.(50000 .+ (0:9) ./ 2, ",", 1:10), "\n"))
+        @test read_data(tbl).tau0 == 0.5
         # A column sampled every third row keeps its own step; a lone column
         # beside the time column is the clock.
         write(tbl, "MJD,a (ns),b (ns)\n" * join(["$(60000 + i / 86400),$(i % 3 == 0 ? i : NaN),$i" for i in 0:29], "\n"))
