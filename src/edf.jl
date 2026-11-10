@@ -81,10 +81,9 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             if m == 1
                 edfs[k] = _calc_edf_core(alpha, 3, 1, 1, 1, N)
             else
-                # No model below α = −2 yet: flicker-walk and random-run FM
-                # take random-walk FM's, here and in `bias_correction`.
-                b, c = _coeff_mhtot(max(alpha, -2))
-                edfs[k] = b * (T / tau) - c
+                b, c, d, e = _coeff_mhtot(alpha)
+                s = tau / T
+                edfs[k] = b / s - c + d * s + e * s^3
             end
         elseif method == :theo1
             edfs[k] = _theo1_edf(alpha, m, N)
@@ -270,19 +269,19 @@ function _coeff_totvar(alpha::Int)
     return (NaN, NaN)
 end
 
+# edf = b/s − c + d·s + e·s³ with s = τ/T, for α = 2 … −4: fitted to the exact
+# EDF of the statistic over 16 ≤ τ/τ0 and τ ≤ T/4 (tools/mhtot_models.jl),
+# largest residual 1 to 4.5 %. MHTOTDEV is original to SigmaTau, so there is
+# no published table; see docs mhtotdev.md.
 function _coeff_mhtot(alpha::Int)
-    # edf = b·(T/τ) − c, valid for τ/τ0 ≥ 16. Measured by Monte Carlo
-    # (tools/mc_mhtotdev.jl at git 9d7a408: per-window quadratic detrend,
-    # Kasdin–Walter synthesis, seed 20260531, R = 3000, N up to 32768); all
-    # fits R² ≥ 0.9988. The TotHvar form (T/τ)/(b0 + b1·τ/T) fits no better at
-    # any α. MHTOTDEV is novel to SigmaTau, so there is no external reference;
-    # see docs mhtotdev.md.
-    alpha == 2  && return (1.5429, 3.8504)
-    alpha == 1  && return (1.0409, 2.9661)
-    alpha == 0  && return (0.9355, 2.8108)
-    alpha == -1 && return (0.8780, 2.5258)
-    alpha == -2 && return (0.8580, 2.5361)
-    return (NaN, NaN)
+    alpha == 2  && return (1.5949, 6.535, 20.18, -52.1)
+    alpha == 1  && return (1.0656, 4.223, 10.19, 7.8)
+    alpha == 0  && return (0.9420, 3.506, 6.50, 23.3)
+    alpha == -1 && return (0.8938, 3.124, 3.94, 31.2)
+    alpha == -2 && return (0.8596, 2.676, 0.43, 48.8)
+    alpha == -3 && return (0.8129, 2.115, -4.27, 83.8)
+    alpha == -4 && return (0.6508, 1.991, -2.63, 78.3)
+    return (NaN, NaN, NaN, NaN)
 end
 
 # A(α) coefficient of the PVAR EDF approximation, Vernotte–Chen–Rubiola 2020
@@ -412,11 +411,10 @@ end
 # variance takes the same column at α = 0 … −4 (their Table 3).
 const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
 
-# B = b0 + b1·(τ/T) of the modified Hadamard total variance for α = 2 … −2,
-# E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo over τ/τ0 ≥ 16
-# (tools/mc_mhtotdev.jl at git 9d7a408, the same sweep as _coeff_mhtot).
-const _MHTOT_B0 = (0.9005, 0.8238, 0.7933, 0.7841, 0.7879)
-const _MHTOT_B1 = (-0.0083, -0.0541, -0.0422, -0.0357, -0.0325)
+# B = E[MHTOTVAR]/E[MHVAR] for α = 2 … −4: the exact expectation of the
+# statistic (tools/mhtot_models.jl). It depends on m only and is within 0.4 %
+# of these values from τ/τ0 = 16.
+const _MHTOT_B = (0.9000, 0.8218, 0.7917, 0.7828, 0.7867, 0.7996, 0.8196)
 
 """
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
@@ -445,14 +443,12 @@ Conventions per variance type:
   in α, for α ∈ {0, -1, -2, -3, -4}, because HTOT is the MTOT computation
   on frequency data. Biased low (B < 1). B = 1 for α > 0 (no published
   model; matches Stable32).
-- `:mhtot`: measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
-  `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
-  external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
-  `:totvar`): `b0 ∈ {0.901, 0.824, 0.793, 0.784, 0.788}` and
-  `b1 ∈ {-0.008, -0.054, -0.042, -0.036, -0.032}` for α ∈ {2, 1, 0, -1, -2}.
-  MHTOTDEV reads low (B ≈ 0.9 for WHPM, ≈ 0.79 for the FM noises) because
-  each window's quadratic detrend absorbs part of its variance.
-  See docs `mhtotdev.md`.
+- `:mhtot`: the exact expectation of the statistic over that of MHVAR
+  (`tools/mhtot_models.jl`), since MHTOTDEV is original to SigmaTau and has
+  no published table: `B ∈ {0.900, 0.822, 0.792, 0.783, 0.787, 0.800, 0.820}`
+  for α ∈ {2, 1, 0, -1, -2, -3, -4}, independent of τ/T and within 0.4 % of
+  these from τ = 16 τ₀. MHTOTDEV reads low because each window's quadratic
+  detrend absorbs part of its variance. See docs `mhtotdev.md`.
 
 Anything unrecognised falls through to B = 1.
 """
@@ -472,8 +468,7 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             # Defined for α ∈ {0, …, −4}; for the PM noises Stable32 leaves B = 1.
             B[k] = -4 <= alpha <= 0 ? 1 + _MTOT_NBIAS[1 - alpha] : 1.0
         elseif var_type == :mhtot
-            i = 3 - max(alpha, -2)
-            B[k] = _MHTOT_B0[i] + _MHTOT_B1[i] * (tau / T)
+            B[k] = _MHTOT_B[3 - alpha]
         end
     end
 

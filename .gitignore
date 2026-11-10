@@ -9,10 +9,8 @@ docs/build/
 docs/src/tutorials/
 docs/src/explanation/crosscheck.md
 
-# Monte Carlo run outputs (the full-sweep JSON is tracked as provenance)
-tools/artifacts/*
-!tools/artifacts/
-!tools/artifacts/mhtotdev_mc_full.json
+# Tool run outputs
+tools/artifacts/
 
 # Benchmark outputs (the timing JSONs are tracked as provenance; the input
 # sample files are not, as the measured record is not public)
