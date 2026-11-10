@@ -144,7 +144,7 @@ z = x + \sum_j p_j + v ,
 
 so flicker PM stays measurement noise, as white PM is, but with memory. The
 filter estimates the pⱼ and keeps them out of the phase, and in a timescale
-they leave the weights to the clocks' own noise.
+the weights stay close to those of the clocks' own noise.
 
 The states sit only where a flicker matters: across the τ, from τ₀ to
 `tau_max`, at which it holds at least a quarter of the model's Allan
@@ -164,6 +164,8 @@ the innovations have the variance the filter claims, where the fold into R
 claims nearly twice it, and the next reading is predicted 10 to 20 % better.
 In a scale of three equal clocks with flicker PM on two channels, the
 states leave the weights equal and give a scale 10 to 15 % quieter at 16 to
-64 s than the fold, 15 % noisier at 1 s, and the same from 1000 s. The levels are
+64 s than the fold, 15 % noisier at 1 s, and the same from 1000 s. Among
+unequal clocks the weights move a little: flicker PM thirty times a clock's
+own deviation at τ₀ on its readings took its weight from 0.76 to 0.69. The levels are
 only as good as the fit: at the longest τ of a short record, flicker FM and
 random-walk FM are hard to tell apart.

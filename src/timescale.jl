@@ -236,9 +236,10 @@ the record, less the mean slope.
   state (its §2: states that reach the readings only through the phases).
   The frequency reported for a clock then includes them. Flicker PM states
   are measurement noise with memory: they enter the readings, not the phases
-  the scale is formed from, so they leave the weights alone. That is outside
-  the 2006 paper, whose measurement noise is white; the reduction only needs
-  the readings to be differences of clocks, which they still are.
+  the scale is formed from, and move the weights little (strong flicker PM
+  on a clock's readings costs it about a tenth of its weight). That is
+  outside the 2006 paper, whose measurement noise is white; the reduction
+  only needs the readings to be differences of clocks, which they still are.
 
 - `:jones_tryon`, the natural Jones–Tryon timescale
   [jones-tryon-1983-estimating-time, greenhall-2003-jones-tryon](@cite): the same
