@@ -246,9 +246,11 @@ export function clockStats(s, time, values, unit) {
 }
 
 // Grid step and gaps of a time column, scanning the whole file: the same
-// step as the reader's _time_grid (the mean of the regular steps, rounded to
-// the shortest value that keeps every timestamp within a quarter step of its
-// slot), so coarse timestamps such as MJD to six decimals give the true τ0.
+// step as the reader's _time_grid (the mean of the regular steps, rounded
+// to the shortest value that the scatter of the timestamps cannot tell from
+// their least-squares step and that keeps every timestamp within a quarter
+// step of its slot), so coarse timestamps such as MJD to six decimals give
+// the true τ0 and exact ones their own step.
 export function timeStats(col, unit = 1) {
   const t = unit === 1 ? col : col.map((x) => x * unit);
   const d = [];
@@ -280,13 +282,39 @@ function gridStep(t, d) {
     return s;
   };
   for (let digits = 1; digits <= 6; digits++) {
-    const step = Number(est.toPrecision(digits));
-    if (Math.abs(step - est) >= 0.01 * est) continue;
-    const s = slots(step);
-    if (s && s.every((k, i) => Math.abs(t[i] - t[0] - k * step) <= 0.25 * step)) return step;
+    const step = roundSig(est, digits), s = slots(step);
+    if (!s) continue;
+    const [fit, tol] = stepTolerance(t, s);
+    if (Math.abs(step - fit) <= Math.min(tol, 0.01 * fit) &&
+        s.every((k, i) => Math.abs(t[i] - t[0] - k * step) <= 0.25 * step)) return step;
   }
   const s = slots(est);
   return s && s[s.length - 1] > 0 ? (t[t.length - 1] - t[0]) / s[s.length - 1] : est;
+}
+
+// Julia's round(x; sigdigits): ties to even on the same scaled value, so the
+// dialog and the reader pick the same step.
+function roundSig(x, digits) {
+  const k = digits - (1 + Math.floor(Math.log10(Math.abs(x))));
+  const even = (v) => { const r = Math.round(v); return r - v === 0.5 && r % 2 !== 0 ? r - 1 : r; };
+  return k >= 0 ? even(x * 10 ** k) / 10 ** k : even(x / 10 ** -k) * 10 ** -k;
+}
+
+// The reader's _step_tolerance: the least-squares step on the slots, and the
+// slope error that timestamp errors of twice the largest residual can cause.
+function stepTolerance(t, s) {
+  const n = s.length, xb = s.reduce((a, k) => a + k, 0) / n;
+  let tb = 0;
+  for (let i = 0; i < n; i++) tb += t[i] - t[0];
+  tb /= n;
+  let sxx = 0, sxy = 0, sax = 0;
+  for (let i = 0; i < n; i++) {
+    sxx += (s[i] - xb) ** 2; sax += Math.abs(s[i] - xb); sxy += (s[i] - xb) * (t[i] - t[0] - tb);
+  }
+  const b = sxy / sxx;
+  let r = 0;
+  for (let i = 0; i < n; i++) r = Math.max(r, Math.abs(t[i] - t[0] - tb - b * (s[i] - xb)));
+  return [b, Math.max(2 * r * sax / sxx, 1e-9 * Math.abs(b))];
 }
 
 // Evenly thinned copy of a column, for the small preview plot.

@@ -21,7 +21,7 @@ import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
 const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, ensemble, live, help };
 const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "ensemble", "live"];
-const pageEl = document.getElementById("page");
+let pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
 
@@ -39,6 +39,10 @@ function go(name) {
   if (page === PAGES[name]) return;
   state.page = name;
   page = PAGES[name];
+  // Each visit mounts on a fresh element, so the listeners of earlier mounts go with the old one.
+  const fresh = pageEl.cloneNode(false);
+  pageEl.replaceWith(fresh);
+  pageEl = fresh;
   pageEl.className = `page page-${name}`;
   page.mount(pageEl, ctx);
   render();
@@ -296,13 +300,13 @@ async function run() {
   }));
   if (ctl.signal.aborted) return;       // cancelled or replaced: whoever did that has the state
   const s = (performance.now() - t0) / 1000;
-  const nd = state.devs.length;
-  const what = clocks.length > 1 ? `${clocks.length} clocks` : `${thousands(clocks[0].record.n)} samples`;
+  const nd = state.devs.length, ok = clocks.length - failed;
+  const what = clocks.length > 1 ? `${ok === clocks.length ? "" : `${ok} of `}${clocks.length} clocks` : `${thousands(clocks[0].record.n)} samples`;
   update((st) => {
     st.run.state = failed ? "error" : "idle";
     // Inputs changed while this ran: the results are already out of date.
     if (!failed && (st.run.gen ?? 0) === gen) st.run.stale = null;
-    st.run.note = `Ran ${nd} estimator${nd === 1 ? "" : "s"} on ${what} in ${num(s, 2)} s`;
+    st.run.note = ok ? `Ran ${nd} estimator${nd === 1 ? "" : "s"} on ${what} in ${num(s, 2)} s` : "";
   });
   if (failed) ctx.status("error", `${failed} of ${clocks.length} clocks failed: ${clocks.find((c) => c.error)?.error}`);
 }
