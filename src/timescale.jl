@@ -184,8 +184,11 @@ the record, less the mean slope.
   unequal and the implicit ensemble mean unobservable, so the scale is
   realized at clock `pivot` (default 1; the first clock read when it has no
   reading): that clock's reading less its estimated offset from the implicit
-  mean. It carries that clock's own reading noise, and pivots differ by it;
-  at `R = 0` every pivot gives the same scale.
+  mean. It carries that clock's own reading noise as white PM, so it is not
+  quieter than a weighted readout (three equal clocks: √3 noisier at short
+  τ), and pivots differ by that noise; at `R = 0` every pivot gives the same
+  scale. While the pivot has no reading the first clock read stands in; a
+  pivot that starts late steps the scale at its first reading.
 
 AT1 keywords:
 
