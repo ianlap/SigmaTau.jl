@@ -1,7 +1,7 @@
 // The import dialog: shows the top of a file, lets the user say which column
 // is time and which is the value, the record type, units and τ0, and returns
 // the reader settings for the core. openImport() resolves to null on cancel.
-import { sniff, guessRoles, timeStats, thin, parseFactor, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
+import { sniff, guessRoles, timeStats, thin, parseFactor, scaleFields, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
 import { escapeHtml as h, thousands, duration, num } from "./format.js";
 import { seriesColor, hexAlpha } from "./plot.js";
 
@@ -29,15 +29,15 @@ export function openImport(file, prev = null) {
   const guess = guessRoles(s);
   const mem = prev ? null : remembered(s);
   const p = prev ?? mem;
+  const kind0 = s.kindHint ?? p?.kind ?? "phase";
   const st = {
-    kind: s.kindHint ?? p?.kind ?? "phase",
+    kind: kind0,
     time: p?.time_col ?? guess.time,          // 0 = no time column
     timeUnit: p?.timeUnit ?? guess.timeUnit,
     values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
-    scaling: p?.scaling ?? guess.scaling ?? 1,
     tau0In: p?.tau0 ?? s.tau0Hint ?? "",     // no guess: without a time column τ0 must be given
     against: p?.against ?? "",
-    factor: p?.factor ?? "",                  // a typed scale factor, which replaces the unit choice
+    ...scaleFields(kind0, p?.scaling ?? guess.scaling ?? 1, p?.factor ?? ""),  // factor: a typed scale, which replaces the unit choice
     remember: true,
   };
   if (!st.values.length) st.values = [guess.value];
@@ -122,7 +122,8 @@ export function openImport(file, prev = null) {
         : "";
       const err = !s.nCols ? "No numeric rows found in this file."
         : s.bad ? `Line ${s.bad} is not numeric. The core will refuse the file.`
-        : !(tau0 > 0) ? "Enter the sample interval τ₀: this file has no time column." : "";
+        : !(tau0 > 0) ? "Enter the sample interval τ₀: this file has no time column."
+        : st.factor.trim() && !factor ? "The scale factor is not a positive number." : "";
 
       // One normalised line per clock column.
       const lines = st.values.map((c, k) => {

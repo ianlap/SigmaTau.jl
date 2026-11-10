@@ -225,12 +225,37 @@ export function thin(col, n = 400) {
   return out;
 }
 
-// A typed scale: a number, or a short expression such as 1/(2*pi*518.295836590863e12)
-// (a phase in radians of a carrier). NaN when it is empty or not a positive number.
+// A typed scale: a number or a short expression with pi, + - * / and
+// parentheses, such as 1/(2*pi*518.295836590863e12) (a phase in radians of a
+// carrier). NaN when it is empty, malformed or not a positive number.
 export function parseFactor(text) {
-  const t = text.trim().replace(/\bpi\b/gi, "(" + Math.PI + ")");
-  if (!t || !/^[0-9eE+\-*/().\s]+$/.test(t)) return NaN;
-  try { const v = Function(`"use strict"; return (${t});`)(); return Number.isFinite(v) && v > 0 ? v : NaN; } catch { return NaN; }
+  const tok = text.toLowerCase().match(/\s*(\d+\.?\d*(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?|pi|[-+*/()]|\S)/gy)?.map((t) => t.trim()) ?? [];
+  let i = 0;
+  const expr = () => {
+    let v = term();
+    while (tok[i] === "+" || tok[i] === "-") v = tok[i++] === "+" ? v + term() : v - term();
+    return v;
+  };
+  const term = () => {
+    let v = unary();
+    while (tok[i] === "*" || tok[i] === "/") v = tok[i++] === "*" ? v * unary() : v / unary();
+    return v;
+  };
+  const unary = () => (tok[i] === "-" ? (i++, -unary()) : tok[i] === "+" ? (i++, unary()) : atom());
+  const atom = () => {
+    const t = tok[i++];
+    if (t === "(") { const v = expr(); return tok[i++] === ")" ? v : NaN; }
+    return t === "pi" ? Math.PI : /^[\d.]/.test(t ?? "") ? Number(t) : NaN;
+  };
+  const v = tok.length ? expr() : NaN;
+  return i === tok.length && Number.isFinite(v) && v > 0 ? v : NaN;
+}
+
+// Settings of a loaded clock hold one number for the scale. Back in the dialog
+// it is a menu unit, or else a typed factor and goes in the factor field.
+export function scaleFields(kind, scaling, factor = "") {
+  const menu = kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
+  return menu.some(([f]) => f === scaling) || factor ? { scaling, factor } : { scaling: 1, factor: String(scaling) };
 }
 
 export const PHASE_UNITS = [[1, "seconds"], [1e-3, "milliseconds"], [1e-6, "microseconds"], [1e-9, "nanoseconds"], [1e-12, "picoseconds"]];

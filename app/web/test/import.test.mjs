@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.window = {};
-const { sniff, guessRoles, parseFactor } = await import("../ui/js/import.js");
+const { sniff, guessRoles, parseFactor, scaleFields } = await import("../ui/js/import.js");
 
 const seq = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 const read = (name, lines) => { const s = sniff(name, lines.join("\n") + "\n"); return { s, g: guessRoles(s) }; };
@@ -41,6 +41,15 @@ test("readings far below a nanosecond are frequency, and a comment line can name
 
 test("a typed scale is a number or a short expression, nothing else", () => {
   assert.equal(parseFactor("1e-9"), 1e-9);
+  assert.equal(parseFactor(" 2 * (3 + 4) / 7 - .5"), 1.5);
+  assert.equal(parseFactor("500000"), 5e5);
   assert.ok(Math.abs(parseFactor("1/(2*pi*518.295836590863e12)") / 3.0709e-16 - 1) < 1e-4);
-  for (const bad of ["", "-1", "0", "abc", "process.exit()", "1/0", "2**"]) assert.ok(Number.isNaN(parseFactor(bad)), bad);
+  for (const bad of ["", "-1", "0", "abc", "process.exit()", "1/0", "2**", "1/*2*/", "2**3", "(1", "1)", "1 2", "1e"]) assert.ok(Number.isNaN(parseFactor(bad)), bad);
+});
+
+test("reopening a clock with a typed scale keeps it in the factor field", () => {
+  assert.deepEqual(scaleFields("phase", 1e-9), { scaling: 1e-9, factor: "" });
+  assert.deepEqual(scaleFields("phase", 3.07e-16), { scaling: 1, factor: "3.07e-16" });
+  assert.deepEqual(scaleFields("frequency", 1e-9, "5e5"), { scaling: 1e-9, factor: "5e5" });
+  assert.equal(parseFactor(scaleFields("phase", 3.07e-16).factor), 3.07e-16);
 });
