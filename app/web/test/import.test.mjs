@@ -61,3 +61,21 @@ test("a BIPM UTC - UTC(k) file is recognised by its header despite the '+/-' col
   assert.deepEqual([s.nCols, s.nRows, s.names[1], s.kindHint, s.bad], [2, 30, "UTC-UTC(LAB) (ns)", "phase", null]);
   assert.deepEqual([guessRoles(s).time, guessRoles(s).value, guessRoles(s).timeUnit, guessRoles(s).scaling], [1, 2, 86400, 1e-9]);
 });
+
+test("a RINEX clock file lists its clocks and takes the clock's own epochs", () => {
+  const rec = (kind, n, min, sec, x) => `${kind} ${n} 2025 08 17 00 ${String(min).padStart(2, "0")} ${String(sec).padStart(2, "0")}.000000  2   ${x}E-07  2.5E-11`;
+  const lines = ["     3.04                 C                    M                   RINEX VERSION / TYPE", "                                                            END OF HEADER"];
+  for (let k = 0; k < 8; k++) {
+    const m = k >> 1, sec = (k & 1) * 30;
+    lines.push(rec("AS", "G08", m, sec, 1 + k));
+    if (!sec && m % 2 === 0) lines.push(rec("AR", "ALGO00CAN", m, 0, 2 + m));
+  }
+  const { s, g } = read("clk.clk", lines);
+  assert.equal(s.format, "rinex_clk");
+  assert.deepEqual(s.names, ["MJD", "ALGO00CAN", "G08"]);
+  assert.equal(s.nRows, 8);
+  assert.deepEqual(s.clocks, ["station · 2 epochs", "satellite · 8 epochs"]);
+  assert.deepEqual([g.time, g.timeUnit], [1, 86400]);
+  assert.equal(s.columns[0][1] - s.columns[0][0] > 0, true);
+  assert.equal(s.columns[2][5], 6e-7);
+});

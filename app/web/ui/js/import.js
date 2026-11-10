@@ -90,9 +90,43 @@ function sniffBipm(name, lines, lab) {
   };
 }
 
+// A RINEX 3 clock file (IGS / CODE clock products): "AS G08 2025 08 17 00 00 00.000000  2  bias  sigma"
+// per satellite (AS) or station (AR) clock and epoch. One column per clock, on the union of the
+// epochs (MJD days, NaN where a clock has no record); the core reads one clock by name (rinex_clk).
+const RINEX_HEAD = /^\s*\d+\.\d+\s+C\b.*RINEX VERSION \/ TYPE/;
+function sniffRinex(name, lines) {
+  const body = lines.findIndex((l) => l.includes("END OF HEADER")) + 1;
+  const epochs = new Map(), mjd = [], series = new Map();
+  for (let j = body; j < lines.length; j++) {
+    const l = lines[j], kind = l.slice(0, 3);
+    if (kind !== "AS " && kind !== "AR ") continue;
+    const f = l.trim().split(/\s+/);
+    if (f.length < 10) continue;
+    const key = f.slice(2, 8).join(" ");
+    let e = epochs.get(key);
+    if (e === undefined) {
+      e = mjd.length; epochs.set(key, e);
+      mjd.push(Date.UTC(+f[2], f[3] - 1, +f[4], +f[5], +f[6]) / 86400000 + 40587 + Number(f[7]) / 86400);
+      for (const c of series.values()) c.col.push(NaN);
+    }
+    let c = series.get(f[1]);
+    if (!c) { c = { col: new Array(mjd.length).fill(NaN), kind: kind === "AS " ? "satellite" : "station", n: 0 }; series.set(f[1], c); }
+    c.col[e] = Number(f[9]); c.n++;
+  }
+  const names = [...series.keys()].sort();
+  return {
+    name, lines: lines.length, delimName: "whitespace-separated", comments: 0, header: body, namesLine: 0,
+    names: ["MJD", ...names], top: [], rows: [], nRows: mjd.length, nCols: names.length + 1,
+    columns: [mjd, ...names.map((n) => series.get(n).col)], bad: null, tau0Hint: null,
+    format: "rinex_clk", formatLabel: "RINEX clock file", kindHint: "phase", stable32: false,
+    clocks: names.map((n) => `${series.get(n).kind} · ${series.get(n).n.toLocaleString("en-US")} epochs`),
+  };
+}
+
 export function sniff(name, text) {
   const lines = text.split(/\r?\n/);
   if (lines.length && lines[lines.length - 1] === "") lines.pop();
+  if (lines.slice(0, 5).some((l) => RINEX_HEAD.test(l))) return sniffRinex(name, lines);
   const bipm = lines.slice(0, 5).map((l) => BIPM_HEAD.exec(l)).find(Boolean);
   if (bipm) return sniffBipm(name, lines, bipm[1]);
   const [split, delimName] = splitter(name, lines);
@@ -170,6 +204,7 @@ const unitOf = (name) => (NAME_UNITS.find(([re]) => re.test(name)) ?? [null, 1])
 // Guess which columns hold time and value: a strictly increasing first column
 // is time; the value is the next column that is not constant.
 export function guessRoles(s) {
+  if (s.clocks) return { time: 1, value: 2, timeUnit: 86400, scaling: 1 };   // MJD, then the first clock
   if (s.nCols <= 1) return { time: 0, value: 1, timeUnit: 1, scaling: unitOf(s.names[0] ?? "") };
   const inc = (c) => c.length > 1 && c.every((v, i) => i === 0 || v > c[i - 1]);
   const isMjd = (c, name) => /mjd/i.test(name) || (c[0] > 30000 && c[0] < 90000 && c[1] - c[0] < 1);

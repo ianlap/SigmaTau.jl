@@ -46,7 +46,10 @@ export function openImport(file, prev = null) {
   const fromMemory = !!mem;
 
   const derived = () => {
-    const ts = st.time ? timeStats(s.columns[st.time - 1] ?? [], st.timeUnit) : null;
+    let time = st.time ? s.columns[st.time - 1] ?? [] : null;
+    // A clock of a RINEX file is on its own grid (30 s satellites, 5 min stations): its own epochs.
+    if (time && s.clocks) { const v = s.columns[st.values[0] - 1] ?? []; time = time.filter((_, i) => Number.isFinite(v[i])); }
+    const ts = time ? timeStats(time, st.timeUnit) : null;
     const tau0 = ts && ts.tau0 > 0 ? ts.tau0 : Number(st.tau0In);
     return { ts, tau0 };
   };
@@ -150,12 +153,15 @@ export function openImport(file, prev = null) {
         </div>
         <div class="imp-body">
           <div class="imp-main">
-            <div class="roles" style="grid-template-columns: repeat(${Math.max(1, s.nCols)}, minmax(0, 1fr))">${pills}</div>
+            ${s.clocks ? `<input type="search" id="imp-find" class="wide-input" placeholder="Find a clock, e.g. G08 or ALGO" aria-label="Find a clock">
+            <div class="preview"><table class="clock-list"><tbody>${s.clocks.map((info, i) =>
+              `<tr class="names" data-find="${h(s.names[i + 1].toLowerCase())}"><td class="${cls(i + 2)}"${tint(i + 2, 0.2)} data-col="${i + 2}" title="Click to add or drop this clock">${h(s.names[i + 1])}</td><td class="muted">${h(info)}</td></tr>`).join("")}</tbody></table></div>`
+            : `            <div class="roles" style="grid-template-columns: repeat(${Math.max(1, s.nCols)}, minmax(0, 1fr))">${pills}</div>
             <div class="preview"><table>
               <colgroup><col style="width:44px">${"<col>".repeat(Math.max(1, s.nCols))}</colgroup>
               ${topRows}${bodyRows}
               ${more > 0 ? `<tr><td class="more" colspan="${s.nCols + 1}">… ${thousands(more)} more rows</td></tr>` : ""}
-            </table></div>
+            </table></div>`}
             <div class="imp-notes">
               ${s.comments ? `<span>Skipped: lines starting with #</span>` : ""}
               ${s.namesLine ? `<span>Column names from line ${s.namesLine}</span>` : s.header ? `<span>${s.header} header line${s.header > 1 ? "s" : ""} skipped</span>` : ""}
@@ -227,6 +233,11 @@ export function openImport(file, prev = null) {
     };
     dlg.oninput = (e) => {
       if (e.target.id === "imp-against") { st.against = e.target.value; return; }
+      if (e.target.id === "imp-find") {
+        const q = e.target.value.trim().toLowerCase();
+        for (const r of dlg.querySelectorAll("tr[data-find]")) r.hidden = !r.dataset.find.includes(q);
+        return;
+      }
       if (e.target.id === "imp-tau0") {
         st.tau0In = e.target.value;
         const { tau0 } = derived();
