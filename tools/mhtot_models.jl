@@ -1,5 +1,6 @@
 # tools/mhtot_models.jl — exact bias and EDF of MHTOTDEV: the source of
-# `_MHTOT_B` and `_coeff_mhtot` in src/edf.jl. No random numbers.
+# `_MHTOT_B`, `_MHTOT_B_SMALL`, `_coeff_mhtot` and `_MHTOT_WHPM_EDF_SMALL` in
+# src/edf.jl. No random numbers.
 #
 #   julia -t auto tools/mhtot_models.jl        # about five minutes
 #
@@ -38,9 +39,15 @@ end
 
 # F with Σ = F·F' for n consecutive phase samples: white noise, or flicker by
 # Kasdin's half-order filter over a 4n history, summed once per step down in α.
-function factor(alpha, n)
+# `sampled` takes flicker as a continuous 1/f process read every τ0 instead
+# (structure function D(k) = 2·Δ²[t² ln t](k)).
+function factor(alpha, n; sampled=false)
     F = Matrix{Float64}(I, n, n)
-    if isodd(alpha)
+    if isodd(alpha) && sampled
+        g(t) = t == 0 ? 0.0 : t^2 * log(abs(t))
+        D(k) = 2 * (g(k + 1) - 2g(k) + g(k - 1))
+        F = Matrix(cholesky(Symmetric([D(n) - D(abs(i - j)) / 2 for i in 1:n, j in 1:n])).L)
+    elseif isodd(alpha)
         h = ones(4n); for k in 1:4n-1; h[k+1] = h[k] * (k - 0.5) / k; end
         H = [i >= j ? h[i-j+1] : 0.0 for i in 3n+1:4n, j in 1:4n]
         F = Matrix(cholesky(Symmetric(H * H')).L)
@@ -49,14 +56,17 @@ function factor(alpha, n)
     return F
 end
 
-println("Bias B = E[MHTOTVAR] / E[MHVAR]\n\nnoise             m = 2      4      8     16     64    256")
+# One window gives the bias. Flicker rows: the mean of the two flicker models.
+function bias(a, m)
+    d = vcat(ones(m), fill(-3.0, m), fill(3.0, m), fill(-1.0, m)) ./ sqrt(6.0 * m^4)
+    B = [(F = factor(a, 4m; sampled); sum(abs2, window_op(m) * F) / sum(abs2, F' * d)) for sampled in (isodd(a) ? (false, true) : (false,))]
+    return sum(B) / length(B), (maximum(B) / minimum(B) - 1) / 2
+end
+println("Bias B = E[MHTOTVAR] / E[MHVAR]\n\nnoise              m = 16     64    256   and at m = 2 … 15")
 for (a, name) in NOISES
-    B = map((2, 4, 8, 16, 64, 256)) do m
-        F = factor(a, 4m)
-        d = vcat(ones(m), fill(-3.0, m), fill(3.0, m), fill(-1.0, m)) ./ sqrt(6.0 * m^4)
-        sum(abs2, window_op(m) * F) / sum(abs2, F' * d)
-    end
-    println(rpad(name, 16), join((@sprintf("%7.4f", b) for b in B)))
+    println(rpad(name, 16), join((@sprintf("%7.4f", bias(a, m)[1]) for m in (16, 64, 256))),
+            "   (", join((@sprintf("%.4f", bias(a, m)[1]) for m in 2:15), ", "), ")",
+            isodd(a) ? @sprintf("   flicker models ±%.1f %% at m = 2", 100 * bias(a, 2)[2]) : "")
 end
 
 println("\nEDF = b·T/τ − c + d·τ/T + e·(τ/T)³, least squares on relative residuals, 16 ≤ m ≤ N/4, N = 512, 1024, 2048\n")
@@ -76,4 +86,14 @@ for (a, name) in NOISES
     X = hcat(1 ./ s, -ones(length(s)), s, s .^ 3)
     c = (X ./ y) \ ones(length(y))
     println(rpad(name, 16), @sprintf("%8.4f%8.3f%8.2f%8.1f%10.1f %%", c..., 100 * maximum(abs.(X * c ./ y .- 1))))
+    a == 2 || continue
+    # Below m = 16 the white PM model reads high: exact over model, mean of two record lengths.
+    r = map((256, 1024)) do N
+        map(2:15) do m
+            n = N - 4m + 1; q = (W = window_op(m); W' * W); Q = zeros(N, N)
+            for o in 0:n-1; @views Q[o+1:o+4m, o+1:o+4m] .+= q; end
+            tr(Q)^2 / sum(abs2, Q) / ([(N - 1) / m, -1, m / (N - 1), (m / (N - 1))^3]' * c)
+        end
+    end
+    println("  white PM, exact EDF over the model at m = 2 … 15: (", join((@sprintf("%.3f", v) for v in sum(r) ./ 2), ", "), ")")
 end

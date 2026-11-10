@@ -72,6 +72,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 b, c, d, e = _coeff_mhtot(alpha)
                 s = tau / T
                 edfs[k] = b / s - c + d * s + e * s^3
+                alpha == 2 && m < 16 && (edfs[k] *= _MHTOT_WHPM_EDF_SMALL[m-1])
             end
         elseif method == :theo1
             edfs[k] = _theo1_edf(alpha, m, N)
@@ -399,10 +400,37 @@ end
 # variance takes the same column at α = 0 … −4 (their Table 3).
 const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
 
+# The published values hold from τ/τ0 = 16. Below it, the exact expectation
+# at m = 2 … 15, same rows (tools/total_pm_models.jl). White PM dips at odd m;
+# the flicker rows are the mean of two flicker models, each within 2.4 % of
+# it at m = 2 and 1 % from m = 5.
+const _MTOT_B_SMALL = (
+    (0.9979, 0.9375, 0.9960, 0.9726, 0.9956, 0.9828, 0.9955, 0.9871, 0.9954, 0.9894, 0.9954, 0.9908, 0.9953, 0.9917),
+    (0.8772, 0.8435, 0.8612, 0.8520, 0.8566, 0.8525, 0.8546, 0.8524, 0.8536, 0.8522, 0.8529, 0.8520, 0.8525, 0.8518),
+    (0.8144, 0.7811, 0.7837, 0.7765, 0.7766, 0.7739, 0.7740, 0.7727, 0.7727, 0.7720, 0.7721, 0.7716, 0.7717, 0.7713),
+    (0.7354, 0.7216, 0.7219, 0.7192, 0.7192, 0.7182, 0.7183, 0.7178, 0.7179, 0.7176, 0.7176, 0.7174, 0.7175, 0.7174),
+    (0.6866, 0.6814, 0.6812, 0.6800, 0.6799, 0.6794, 0.6794, 0.6791, 0.6792, 0.6790, 0.6790, 0.6789, 0.6790, 0.6789),
+)
+_mtot_bias(row::Int, m::Int) = m < 16 ? _MTOT_B_SMALL[row][m-1] : 1 + _MTOT_NBIAS[row]
+
 # B = E[MHTOTVAR]/E[MHVAR] for α = 2 … −4: the exact expectation of the
-# statistic (tools/mhtot_models.jl). It depends on m only and is within 0.4 %
-# of these values from τ/τ0 = 16.
+# statistic (tools/mhtot_models.jl). It depends on m only: the large-m value,
+# within 0.4 % from τ/τ0 = 16, and the values at m = 2 … 15 (flicker rows the
+# mean of two flicker models, each within 1.3 % of it at m = 2).
 const _MHTOT_B = (0.9000, 0.8218, 0.7917, 0.7828, 0.7867, 0.7996, 0.8196)
+const _MHTOT_B_SMALL = (
+    (0.9000, 0.8584, 0.9013, 0.8857, 0.9012, 0.8931, 0.9011, 0.8961, 0.9009, 0.8976, 0.9008, 0.8984, 0.9007, 0.8989),
+    (0.8475, 0.8233, 0.8340, 0.8275, 0.8292, 0.8266, 0.8269, 0.8256, 0.8256, 0.8249, 0.8248, 0.8243, 0.8243, 0.8239),
+    (0.8281, 0.8059, 0.8064, 0.8013, 0.7999, 0.7980, 0.7972, 0.7962, 0.7957, 0.7952, 0.7948, 0.7945, 0.7943, 0.7940),
+    (0.8052, 0.7948, 0.7927, 0.7900, 0.7887, 0.7876, 0.7869, 0.7864, 0.7859, 0.7856, 0.7853, 0.7851, 0.7849, 0.7847),
+    (0.8009, 0.7964, 0.7946, 0.7928, 0.7917, 0.7909, 0.7903, 0.7898, 0.7895, 0.7892, 0.7890, 0.7888, 0.7886, 0.7885),
+    (0.8025, 0.8063, 0.8057, 0.8046, 0.8039, 0.8033, 0.8028, 0.8024, 0.8021, 0.8019, 0.8017, 0.8015, 0.8014, 0.8013),
+    (0.8145, 0.8239, 0.8243, 0.8237, 0.8232, 0.8227, 0.8223, 0.8220, 0.8218, 0.8216, 0.8214, 0.8213, 0.8211, 0.8210),
+)
+
+# Exact EDF of MHTOTVAR on white PM over the `_coeff_mhtot` model at
+# m = 2 … 15, where the model, fitted from m = 16, reads high.
+const _MHTOT_WHPM_EDF_SMALL = (0.654, 0.746, 0.878, 0.889, 0.941, 0.941, 0.968, 0.966, 0.982, 0.980, 0.991, 0.989, 0.997, 0.995)
 
 # The total estimators on white and flicker PM, where nothing is published:
 # bias and EDF from the exact moments of each statistic
@@ -441,14 +469,14 @@ function _total_bias(var_type::Symbol, alpha::Int, m::Int, N::Int)
         alpha == -2 && return 1 - 0.75 * s
     elseif var_type == :mtot
         m == 1 && return 0.5
-        alpha >= -2 && return 1 + _MTOT_NBIAS[3 - alpha]
+        alpha >= -2 && return _mtot_bias(3 - alpha, m)
     elseif var_type == :htot
         m == 1 && return 1.0
         alpha == 2 && return isodd(m) ? 1.3697 - 0.8198 / m : 1.3838 - 0.2759 / m
         alpha == 1 && return (5.148 + 1.440 * log(m)) / (4.75 + log(m)) - (isodd(m) ? 0.396 : 0.114) / m
-        return 1 + _MTOT_NBIAS[1 - alpha]
+        return _mtot_bias(1 - alpha, m)
     elseif var_type == :mhtot
-        return m == 1 ? 124 / 225 : _MHTOT_B[3 - alpha]
+        return m == 1 ? 124 / 225 : m < 16 ? _MHTOT_B_SMALL[3-alpha][m-1] : _MHTOT_B[3-alpha]
     end
     return 1.0
 end
@@ -469,17 +497,19 @@ Apply as `σ_unbiased = σ_raw / √B`: `B < 1` means the raw σ reads low. With
   α ∈ {2, 1, 0, −1, −2} (Howe & Peppler 2001, Table 2), independent of τ
   from τ = 16 τ₀. SP1065 Table 11 lists reciprocals (1.06 to 1.31) under a
   caption that reads the other way; dividing by them lowers a statistic
-  that already reads low. `B = 1/2` at `m = 1`, exactly.
+  that already reads low. At `m = 2 … 15` the exact expectation at that m,
+  up to 6 % from the published value; `B = 1/2` at `m = 1`, exactly.
 - `:htot`: the same `a` two steps down in α, for α ∈ {0, …, −4} (their
   Table 3), because HTOT is the MTOT computation on frequency data. On PM it
   reads high: `B = 1.384 − 0.28/m` (even m) and `1.370 − 0.82/m` (odd m) for
   white PM, `(5.15 + 1.44 ln m)/(4.75 + ln m)` less `0.11/m` (even) or
   `0.40/m` (odd) for flicker PM. `B = 1` at `m = 1`, where the kernel is HDEV.
 - `:mhtot`: `B ∈ {0.900, 0.822, 0.792, 0.783, 0.787, 0.800, 0.820}` for
-  α ∈ {2, …, −4}, independent of τ/T, and 124/225 at `m = 1`.
+  α ∈ {2, …, −4}, independent of τ/T, with the exact value at each
+  `m = 2 … 15` and 124/225 at `m = 1`.
 
-The PM rows of `:totvar` and `:htot` and all of `:mhtot` have no published
-source: they are the exact expectation of each statistic
+The PM rows of `:totvar` and `:htot`, the `m < 16` values and all of `:mhtot`
+have no published source: they are the exact expectation of each statistic
 (`tools/total_pm_models.jl`, `tools/mhtot_models.jl`). Stable32 applies no
 factor on PM. Anything unrecognised gives `B = 1`.
 """

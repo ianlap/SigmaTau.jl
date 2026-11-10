@@ -87,7 +87,7 @@ Three per-estimator facts behind those rows:
   matches it to ≤ 0.004 % (and allantools to ≤ 1.1e-15). The raw
   estimator reads low against MDEV, and SigmaTau's default divides by
   `√B(α)` (Howe and Peppler 2001, Table 2, `B < 1`) to unbias it, which
-  places the default output 0.25 % (WHPM) to 18 % (FLFM) and 21 % (RWFM)
+  places the default output 0.1 to 0.25 % (WHPM) to 18 % (FLFM) and 21 % (RWFM)
   above Stable32 on this fixture, and 41 % at τ = τ₀, where
   the raw estimator is exactly MDEV/√2. Pass `correct_bias=false` to
   reproduce Stable32 and allantools.
@@ -252,7 +252,7 @@ default (corrected) output.
 Stable32 and allantools both report the raw estimator here; the SigmaTau
 raw column matches both (≤ 0.004 % / ≤ 1.1e-15). The corrected column is
 SigmaTau's default, the raw value divided by `√B(α)` from Howe and Peppler
-2001, Table 2, which on this fixture is 0.25 % (WHPM), 8.4 % (FLPM), 13.9 %
+2001, Table 2, which on this fixture is 0.1 to 0.25 % (WHPM), 8.4 % (FLPM), 13.9 %
 (WHFM), 18.1 % (FLFM) or 21.4 % (RWFM) above Stable32, and √2 above it at
 τ = 1 s. It is
 the column to compare with the Modified Allan table above: from 128 s to
@@ -263,9 +263,9 @@ like-for-like comparison with Stable32's bounds.
 | τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI (raw) |
 |---:|:---|:---|:---|:---|:---|:---|
 | 1 | 7.1400e-01 | 7.13999e-01 | 7.13999e-01 | 1.00975e+00 | [7.0639e-01, 7.2186e-01] | [7.0634e-01, 7.2191e-01] |
-| 2 | 3.5625e-01 | 3.56253e-01 | 3.56253e-01 | 3.57147e-01 | [3.5227e-01, 3.6037e-01] | [3.5225e-01, 3.6040e-01] |
-| 4 | 1.2570e-01 | 1.25704e-01 | 1.25704e-01 | 1.26020e-01 | [1.2394e-01, 1.2755e-01] | [1.2393e-01, 1.2756e-01] |
-| 8 | 4.6303e-02 | 4.63031e-02 | 4.63031e-02 | 4.64193e-02 | [4.5421e-02, 4.7239e-02] | [4.5415e-02, 4.7245e-02] |
+| 2 | 3.5625e-01 | 3.56253e-01 | 3.56253e-01 | 3.56628e-01 | [3.5227e-01, 3.6037e-01] | [3.5225e-01, 3.6040e-01] |
+| 4 | 1.2570e-01 | 1.25704e-01 | 1.25704e-01 | 1.25956e-01 | [1.2394e-01, 1.2755e-01] | [1.2393e-01, 1.2756e-01] |
+| 8 | 4.6303e-02 | 4.63031e-02 | 4.63031e-02 | 4.64076e-02 | [4.5421e-02, 4.7239e-02] | [4.5415e-02, 4.7245e-02] |
 | 16 | 1.5819e-02 | 1.58191e-02 | 1.58191e-02 | 1.58588e-02 | [1.5495e-02, 1.6165e-02] | [1.5461e-02, 1.6203e-02] |
 | 32 | 5.8856e-03 | 5.88559e-03 | 5.88559e-03 | 6.38007e-03 | [5.6979e-03, 6.0933e-03] | [5.6568e-03, 6.1446e-03] |
 | 64 | 2.4483e-03 | 2.44833e-03 | 2.44833e-03 | 2.65402e-03 | [2.3398e-03, 2.5737e-03] | [2.3167e-03, 2.6053e-03] |
