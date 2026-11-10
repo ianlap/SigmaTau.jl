@@ -33,7 +33,8 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => m.type() === "error" && !/fonts\.g/.test(m.location().url) && errors.push(m.text()));
+  // Web fonts, and the vendored Plotly that falls back to the CDN when ui/vendor is empty, may 404.
+  page.on("console", (m) => m.type() === "error" && !/fonts\.g|vendor\/plotly/.test(m.location().url) && errors.push(m.text()));
   const settled = () => page.waitForFunction(() => !/Reading|Running|Computing|Starting/.test(document.getElementById("status-text").textContent), null, SLOW);
   const plotted = (sel) => page.waitForFunction((s) => document.querySelector(s)?.data?.length > 0, sel, SLOW);
 
