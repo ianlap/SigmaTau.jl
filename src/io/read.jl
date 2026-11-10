@@ -163,7 +163,7 @@ end
 # readings (what the gap-tolerant estimators skip); `v` itself when nothing
 # is missing. With `fillgaps` the empty slots, and any NaN reading, are
 # filled. Returns the samples and the mask of filled ones.
-function _gridded(t::Vector{Float64}, v::Vector{Float64}, fillgaps::Bool)
+function _gridded(t::Vector{Float64}, v::Vector{Float64}, fillgaps::Bool, phase::Bool)
     s = _time_grid(t)[1]
     g = v
     if !isempty(s) && s[end] != length(v)
@@ -171,8 +171,7 @@ function _gridded(t::Vector{Float64}, v::Vector{Float64}, fillgaps::Bool)
         g[s] .= v
     end
     fillgaps || return g, falses(0)
-    f, mask = _howe_fillgaps_core(g)
-    return f, BitVector(mask)
+    return _fillgaps(g, phase, :auto), isnan.(g)
 end
 
 # Seconds since 2000-01-01T00:00Z, the epoch of `start`, of an MJD.
@@ -245,7 +244,7 @@ end
 # time grid, gap filling and detrending, the resolved τ₀ and the start time.
 function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int, value_col::Int,
                  header::Int, delim::Union{Char,Nothing}, scaling::Real, detrend::Symbol,
-                 fillgaps::Bool)
+                 fillgaps::Bool, hint::Int)
     isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
     nskip, header_tau0, start = _scan_comment_header(path)
     # A Stable32 header block is itself non-comment header lines, so an
@@ -280,9 +279,19 @@ function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int,
     else
         throw(ArgumentError("read: tau0 must be supplied when no time column is present"))
     end
-    v, _ = _gridded(t, v, fillgaps)
+    phase = _unnamed_phase(v, hint)
+    v, _ = _gridded(t, v, fillgaps, phase)
     detrend === :none || _detrend_core!(v, detrend)
-    return v, resolved_tau0, start
+    return v, resolved_tau0, start, phase
+end
+
+# Whether readings are phase: as `hint` says (1 phase, −1 frequency), else by
+# size. Unnamed readings of median size under 1e-11 are fractional frequency
+# (or a ratio): a time error that small is not a clock.
+function _unnamed_phase(v::Vector{Float64}, hint::Int)
+    hint == 0 || return hint > 0
+    f = filter(isfinite, v)
+    return isempty(f) || _median_nonan(abs.(f)) >= 1e-11
 end
 
 """
@@ -352,8 +361,8 @@ pd = read_phase("g.csv"; fillgaps=true, scaling=1e-9) # ns→s + Howe fill
 function read_phase(path::AbstractString; tau0::Union{Real,Nothing}=nothing, time_col::Int=1,
                     value_col::Int=2, header::Int=0, delim::Union{Char,Nothing}=nothing,
                     scaling::Real=1.0, detrend::Symbol=:none, fillgaps::Bool=false)
-    v, t0, start = _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
-                           delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps)
+    v, t0, start, _ = _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
+                              delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps, hint=1)
     return PhaseData(v, t0; source=String(path), start=start)
 end
 
@@ -369,7 +378,7 @@ The returned record carries `path` in its `source` field.
 function read_frequency(path::AbstractString; tau0::Union{Real,Nothing}=nothing, time_col::Int=1,
                         value_col::Int=2, header::Int=0, delim::Union{Char,Nothing}=nothing,
                         scaling::Real=1.0, detrend::Symbol=:none, fillgaps::Bool=false)
-    v, t0, start = _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
-                           delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps)
+    v, t0, start, _ = _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
+                              delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps, hint=-1)
     return FrequencyData(v, t0; source=String(path), start=start)
 end
