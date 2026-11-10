@@ -170,6 +170,13 @@ Clock models, the Kalman filter and timescales.
   CLI report and the Python docs name the two labels. At long τ some
   random-walk FM records are now labelled flicker-walk FM (6 % with 64
   averaged points left, 11 % with 32).
+- `identify_noise` and every estimator's noise type: with fewer than 30
+  averaged points the B1 ratio is compared with B1(N, μ) at the number of
+  averaged points (`b1_length=:averaged`, SP1065 §5.7), so random-walk FM
+  is reported at long τ; below 6 averaged points the label is the one
+  measured at 6. The labels, and with them the bias factor of the total
+  estimators (TOTDEV among them), change at the longest τ, where this
+  departs from Stable32; `b1_length=:record` keeps the old labels.
 
 ### Fixed
 

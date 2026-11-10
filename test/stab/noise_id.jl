@@ -119,9 +119,9 @@ using SigmaTau
 
     @testset "noise-ID B1 length (b1_length)" begin
         # Long-τ points (N/m < NEFF_RELIABLE) go through the B1 fallback.
-        # `b1_length=:averaged` evaluates B1 theory at the averaged-point
-        # count and finds random-walk FM far more often than the
-        # Stable32-compatible default `:record`.
+        # The default `b1_length=:averaged` evaluates B1 theory at the
+        # averaged-point count and finds random-walk FM far more often than
+        # `:record`, which is closer to Stable32's labels.
         rng = MersenneTwister(20261108)
         ms = [40, 64, 128]
         hits = Dict(:record => 0, :averaged => 0)
@@ -135,13 +135,15 @@ using SigmaTau
         total = trials * length(ms)
         @test hits[:averaged] / total > 0.4
         @test hits[:averaged] > 4 * hits[:record]
-        # Default is :record, and the lag-1 ACF path (N/m ≥ 30) ignores it.
+        # Default is :averaged, and the lag-1 ACF path (N/m ≥ 30) ignores it.
         x = noise_gen(PhaseData, 1024, 1.0; h=Dict(0 => 1.0), rng).x
-        @test identify_noise(x, ms) == identify_noise(x, ms; b1_length=:record)
-        @test identify_noise(x, [1, 4, 16]; b1_length=:averaged) == identify_noise(x, [1, 4, 16])
+        @test identify_noise(x, ms) == identify_noise(x, ms; b1_length=:averaged)
+        @test identify_noise(x, [1, 4, 16]; b1_length=:record) == identify_noise(x, [1, 4, 16])
         @test identify_noise(PhaseData(x, 1.0), ms; b1_length=:averaged) ==
               identify_noise(x, ms; b1_length=:averaged)
         @test_throws ArgumentError identify_noise(x, ms; b1_length=:bogus)
+        # Below 6 averaged points the label is the one measured at N ÷ 6.
+        @test identify_noise(x, [341, 512]) == identify_noise(x, [170, 170])
     end
 
     @testset "B1(N, μ) closed-form parity vs allantools canonical" begin

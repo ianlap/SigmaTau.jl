@@ -270,9 +270,16 @@ function stable32_rows()
         ms = [r.m for r in s]
         res = f(p, ms)
         for (k, r) in enumerate(s)
-            push!(rows, Row("Stable32 σ", "PHASE.DAT", est, r.m, r.sigma, res.dev[k], S32_TOL_SIGMA, note))
             a_st = SigmaTau._alpha_from_noise(res.noise_type[k])
             same = a_st == r.alpha
+            # TOTDEV's bias follows the noise type: where the labels differ the
+            # σ row takes the bias for Stable32's α and compares the estimator.
+            σ, σnote = res.dev[k], note
+            if !same && est == "totdev"
+                B = bias_correction([res.noise_type[k], _alpha_sym(r.alpha)], :totvar, fill(r.m * p.tau0, 2), T)
+                σ *= sqrt(B[1] / B[2]); σnote = "bias for Stable32's α (noise ID differs)"
+            end
+            push!(rows, Row("Stable32 σ", "PHASE.DAT", est, r.m, r.sigma, σ, S32_TOL_SIGMA, σnote))
             idnote = same ? "" : NOISE_ID_NOTE
             push!(rows, Row("Stable32 α", "PHASE.DAT", est, r.m, r.alpha, a_st, same ? 0.0 : Inf, idnote))
             # CI with SigmaTau's own noise ID (the default API output)

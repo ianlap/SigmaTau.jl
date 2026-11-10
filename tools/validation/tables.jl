@@ -55,7 +55,8 @@ function table(p, name, (est, kw, biased))
     for (k, m) in enumerate(ms)
         lo, sigma, hi = s32[m][4:6]
         mine = biased ? "$(s5(raw.dev[k])) | $(s5(r.dev[k]))" : s5(r.dev[k])
-        println(io, "| $m$(m == 256 ? "¹" : "") | $(s4(sigma)) | $(s5(at[m][3])) | $mine | ",
+        flag = SigmaTau._alpha_from_noise(r.noise_type[k]) == s32[m][3] ? "" : "¹"   # noise type differs
+        println(io, "| $m$flag | $(s4(sigma)) | $(s5(at[m][3])) | $mine | ",
                     band(lo, hi), " | ", band(shown.ci[k]...), " |")
     end
     return String(take!(io))
