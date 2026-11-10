@@ -171,7 +171,7 @@ function allantools_ci_rows()
     rows = Row[]
     for r in _csv(joinpath(AT, "ci.csv"))
         e = _f(r["edf"]); c = _f(r["confidence"])
-        lo, hi = confidence_intervals([1.0], [e], [:WHFM], 1000, c)
+        lo, hi = confidence_intervals([1.0], [e], c)
         push!(rows, Row("allantools CI", "edf=$(r["edf"][1:6]) c=$(r["confidence"][1:6])", "lo", 0, _f(r["lo_factor"]), lo[1], 1e-9, ""))
         push!(rows, Row("allantools CI", "edf=$(r["edf"][1:6]) c=$(r["confidence"][1:6])", "hi", 0, _f(r["hi_factor"]), hi[1], 1e-9, ""))
     end
@@ -213,13 +213,15 @@ const S32_RUNS = [
     ("phase_dat_oadev_octave.txt",   "oadev",   (p, m) -> adev(p, m),   :adev,    m -> 1.0, ""),
     ("phase_dat_mdev_octave.txt",    "mdev",    (p, m) -> mdev(p, m),   :mdev,    m -> 1.0, ""),
     ("phase_dat_tdev_octave.txt",    "tdev",    (p, m) -> tdev(p, m),   :mdev,    m -> m / sqrt(3), ""),
-    ("phase_dat_ohdev_octave.txt",   "ohdev",   (p, m) -> hdev(p, m),   :hdev,    m -> 1.0, ""),
+    ("phase_dat_ohdev_octave.txt",   "ohdev",   (p, m) -> hdev(p, m; remove_drift=false), :hdev, m -> 1.0,
+        "Stable32 identifies noise on the record as given; remove_drift=false"),
     ("phase_dat_totdev_octave.txt",  "totdev",  (p, m) -> totdev(p, m), :totdev,  m -> 1.0, ""),
     ("phase_dat_mtotdev_octave.txt", "mtotdev", (p, m) -> mtotdev(p, m; correct_bias=false), :mtotdev, m -> 1.0,
         "Stable32 reports MTOT raw; correct_bias=false"),
     ("phase_dat_ttotdev_octave.txt", "ttotdev", (p, m) -> ttotdev(p, m; correct_bias=false), :mtotdev, m -> m / sqrt(3),
         "Stable32 reports TTOT raw; correct_bias=false"),
-    ("phase_dat_htotdev_octave.txt", "htotdev", (p, m) -> htotdev(p, m), :htotdev, m -> 1.0, ""),
+    ("phase_dat_htotdev_octave.txt", "htotdev", (p, m) -> htotdev(p, m; remove_drift=false), :htotdev, m -> 1.0,
+        "Stable32 identifies noise on the record as given; remove_drift=false"),
 ]
 
 # σ-only runs over every τ (no CI columns in these files).
@@ -304,7 +306,7 @@ function stable32_ci_forced_alpha_rows()
             m = r.m
             σ = r.sigma / scale(m)                       # back to the σ_y statistic
             edf = calculate_edf(method, [σ], [_alpha_sym(r.alpha)], [m], [Float64(m)], N, T)[1]
-            lo, hi = confidence_intervals([σ], [edf], [_alpha_sym(r.alpha)], N, 0.683)
+            lo, hi = confidence_intervals([σ], [edf], 0.683)
             tol, cinote = s32_ci_tol(est, m)
             push!(rows, Row("Stable32 CI (S32 α)", "PHASE.DAT", est * " lo", m, r.lo, lo[1] * scale(m), tol, cinote))
             push!(rows, Row("Stable32 CI (S32 α)", "PHASE.DAT", est * " hi", m, r.hi, hi[1] * scale(m), tol, cinote))

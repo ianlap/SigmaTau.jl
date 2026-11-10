@@ -110,10 +110,16 @@
             @test p.x == [1.0e-9, 2.0e-9, 3.0e-9]
             @test p.tau0 == 1.0
 
-            # Median spacing with an even number of steps: (2 + 4) / 2 = 3.
+            # Steps that fit no grid: τ₀ is their median, (2 + 3) / 2, and the
+            # samples stay in file order.
             path = joinpath(dir, "even.csv")
-            write(path, "0,1\n2,1\n6,1\n")
-            @test read_phase(path).tau0 == 3.0
+            write(path, "0,1\n2,1\n5,1\n")
+            @test read_phase(path).tau0 == 2.5 && length(read_phase(path)) == 3
+
+            # Lines longer than the read buffer, and a last line without "\n".
+            path = joinpath(dir, "long.txt")
+            write(path, "0 1.0" * " "^(1 << 21) * "\n1 2.0")
+            @test read_phase(path).x == [1.0, 2.0]
 
             # Double-quoted CSV fields.
             path = joinpath(dir, "quoted.csv")
@@ -127,6 +133,25 @@
             path = joinpath(dir, "text.txt")
             write(path, "0 1.0\n1 abc\n")
             @test_throws ArgumentError read_phase(path)
+
+            # A missing timestamp is a NaN sample in its slot.
+            path = joinpath(dir, "gap.txt")
+            write(path, "0 1.0\n1 2.0\n3 4.0\n")
+            @test isequal(read_phase(path).x, [1.0, 2.0, NaN, 4.0])
+            @test read_phase(path; fillgaps=true).x[[1, 2, 4]] == [1.0, 2.0, 4.0]
+            @test read_phase(path; time_col=0, tau0=1.0, value_col=2).x == [1.0, 2.0, 4.0]
+
+            # One column is the values; the value column is never its own time
+            # axis; a blank-separated .csv still splits on blanks.
+            path = joinpath(dir, "one.txt")
+            write(path, "# phase data, unit: s\n# data interval 2.0 s\n1.0\n2.0\n4.0\n")
+            p = read_phase(path)
+            @test p.x == [1.0, 2.0, 4.0] && p.tau0 == 2.0
+            @test read_phase(path; value_col=1).tau0 == 2.0
+            @test read_data(path).x == [1.0, 2.0, 4.0]
+            path = joinpath(dir, "blank.csv")
+            write(path, "0 1.0\n1 2.0\n2 4.0\n")
+            @test read_phase(path).x == [1.0, 2.0, 4.0]
 
             # '#' lines inside the data are comments.
             path = joinpath(dir, "mid.txt")

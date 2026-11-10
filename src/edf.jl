@@ -9,7 +9,7 @@ Greenhall–Riley spectral integrals for ADEV / MDEV / HDEV / MHDEV (via
 total-family estimators, and the SP1065 Table 3 empirical formulas for
 `:theo1` (via `_theo1_edf`).
 
-WHPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 9 and
+WHPM/FLPM fallback for TOTDEV and HTOTDEV: NIST SP1065 Table 7 and
 FCS 2001 publish coefficients for α ∈ {0, -1, -2} only. For α ∈ {1, 2}
 this routine falls back to the ADEV-style (`d=2`, `F=m`, `S=m`) or
 HDEV-style (`d=3`, `F=m`, `S=m`) Greenhall–Riley formula so every
@@ -40,7 +40,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
         elseif method == :mhdev
             edfs[k] = _calc_edf_core(alpha, 3, m, 1, m, N)
         elseif method == :totdev
-            # SP1065 Table 9 covers α ∈ {0,-1,-2}. For WHPM/FLPM (α=2,1) TOTDEV
+            # SP1065 Table 7 covers α ∈ {0,-1,-2}. For WHPM/FLPM (α=2,1) TOTDEV
             # is dominated by the same noise-shape contribution as ADEV, so the
             # ADEV-style EDF (Greenhall/Riley with d=2, F=m, S=m, the overlapped
             # convention) is the accepted pragmatic substitute when no
@@ -313,7 +313,7 @@ end
 Equivalent degrees of freedom of PVAR (parabolic variance) for a record of `N`
 phase samples at averaging factor `m`, per Vernotte–Chen–Rubiola 2020
 (arXiv:2005.13631). The EDF feeds the χ² confidence interval the same way as the
-overlapped families (`ν = 2·E[σ²]²/V[σ²]`, their Eq. 19 ≡ the Wave-4 estimator).
+overlapped families (`ν = 2·E[σ²]²/V[σ²]`, their Eq. 19).
 
 Three regimes:
 
@@ -399,7 +399,7 @@ function _theo1_edf(alpha::Int, m::Int, N::Int)
 end
 
 function _coeff_htot(alpha::Int)
-    # FCS 2001 / Howe & Tasset 2005 Table I, columns b₀ and b₁ of
+    # Howe & Peppler 2001 Table 3, columns b₀ and b₁ of
     #   edf(τ) = (T/τ) / (b₀ + b₁·τ/T)
     # Valid for τ ≥ 16τ₀ and τ ≤ T/3; outside that range Stable32 uses an
     # undocumented fallback that is not reproduced here.
@@ -411,14 +411,10 @@ function _coeff_htot(alpha::Int)
     return (NaN, NaN)
 end
 
-function _kn_from_alpha(alpha::Int)
-    alpha == -2 && return 0.75
-    alpha == -1 && return 0.77
-    alpha == 0  && return 0.87
-    alpha == 1  && return 0.99
-    alpha == 2  && return 0.99
-    return 1.10
-end
+# Normalized bias a = E[total]/E[parent] − 1 of the modified total variance
+# for α = 2, 1, 0, −1, −2 (Howe & Peppler 2001, Table 2); the Hadamard total
+# variance takes the same column at α = 0 … −4 (their Table 3).
+const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
 
 """
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
@@ -436,15 +432,17 @@ Conventions per variance type:
 - `:totvar`: Howe/Walter (1994). `B = 1 − a·τ/T` with `a = 1/(3·ln 2)`
   for FLFM, `a = 0.75` for RWFM, zero elsewhere. Biased low for the
   divergent FM noises only.
-- `:mtot`: SP1065 Table 11 / Greenhall 1999. Independent of τ.
-  Biased high (B > 1); MTOT overstates MVAR, consistent with the Monte
-  Carlo of Howe & Vernotte 2003 (Table 1). Stable32 reports MTOT raw, so
-  `correct_bias=false` on `mtotdev` matches Stable32.
-- `:htot`: FCS 2001 (Howe & Tasset) Table I `a` column. `B = 1 + a`
-  with the published `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}`
-  for α ∈ {0, -1, -2, -3, -4}. Biased low (B < 1); HTOT understates
-  the divergent-FM variance. B = 1 for α > 0 (no published model;
-  matches Stable32).
+- `:mtot`: Howe & Peppler 2001, Table 2. `B = 1 + a` with the normalized
+  bias `a ∈ {-0.005, -0.149, -0.229, -0.283, -0.321}` for
+  α ∈ {2, 1, 0, -1, -2}, independent of τ for τ ≥ 16 τ₀. Biased low (B < 1),
+  as in the simulations of Howe & Vernotte 1999 (Table 1). SP1065 Table 11
+  lists reciprocals (1.06 to 1.31) under a caption that reads the other
+  way; dividing by them lowers a statistic that already reads low. Stable32
+  reports MTOT raw, so `correct_bias=false` on `mtotdev` matches it.
+- `:htot`: Howe & Peppler 2001, Table 3: the same `a` column two steps down
+  in α, for α ∈ {0, -1, -2, -3, -4}, because HTOT is the MTOT computation
+  on frequency data. Biased low (B < 1). B = 1 for α > 0 (no published
+  model; matches Stable32).
 - `:mhtot`: measured by Monte Carlo (`tools/mc_mhtotdev.jl`) over the
   `τ/τ0 ≥ 16` validity window, since MHTOTDEV is novel to SigmaTau and no
   external reference exists. Modeled τ/T-linearly, `B = b0 + b1·(τ/T)` (like
@@ -467,16 +465,10 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
             B[k] = 1 - a * (tau / T)
         elseif var_type == :mtot
-            table = Dict(2=>1.06, 1=>1.17, 0=>1.27, -1=>1.30, -2=>1.31)
-            B[k] = get(table, clamp(alpha, -2, 2), 1.0)
+            B[k] = 1 + _MTOT_NBIAS[3 - clamp(alpha, -2, 2)]
         elseif var_type == :htot
-            # FCS 2001 (Howe & Tasset) Table I, column `a`: normalized bias
-            # = E[TotHvar]/E[Hvar] - 1, negative because HTOT is biased low.
-            # B = 1 + a. Defined only for α ∈ {0, -1, -2, -3, -4}; for α > 0
-            # (PM noises) Stable32 leaves B = 1.
-            a_table = Dict(0=>-0.005, -1=>-0.149, -2=>-0.229,
-                           -3=>-0.283, -4=>-0.321)
-            B[k] = -4 <= alpha <= 0 ? 1 + a_table[alpha] : 1.0
+            # Defined for α ∈ {0, …, −4}; for the PM noises Stable32 leaves B = 1.
+            B[k] = -4 <= alpha <= 0 ? 1 + _MTOT_NBIAS[1 - alpha] : 1.0
         elseif var_type == :mhtot
             # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl
             # at git 9d7a408, the same sweep as _coeff_mhtot) over τ/τ0 ≥ 16,
@@ -493,37 +485,23 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
     return B
 end
 
-# χ² limits of each deviation from its equivalent degrees of freedom, as
-# (lower, upper); NaN where the deviation is not finite or ν < 1.
-function _edf_ci(devs::Vector{Float64}, edfs::Vector{Float64}, confidence::Float64)
+"""
+    confidence_intervals(devs, edfs, confidence) → (lower, upper)
+
+χ² confidence limits of each deviation from its equivalent degrees of
+freedom ν: `σ √(ν/χ²_{(1+p)/2}(ν))` and `σ √(ν/χ²_{(1−p)/2}(ν))` at level
+`p = confidence` (SP1065 §5.3.2). Any ν > 0 has an interval, however wide;
+a limit is `NaN` where the deviation is not finite or ν is not positive.
+"""
+function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, confidence::Float64)
     a = (1 - confidence) / 2
     lower = fill(NaN, length(devs))
     upper = fill(NaN, length(devs))
     for k in eachindex(devs)
         d, ν = devs[k], edfs[k]
-        isfinite(d) && isfinite(ν) && ν >= 1 || continue
+        isfinite(d) && isfinite(ν) && ν > 0 || continue
         lower[k] = d * sqrt(ν / quantile(Chisq(ν), 1 - a))
         upper[k] = d * sqrt(ν / quantile(Chisq(ν), a))
-    end
-    return lower, upper
-end
-
-"""
-    confidence_intervals(devs, edfs, noises, N, confidence) → (lower, upper)
-
-χ² confidence limits of each deviation from its EDF. Where the EDF is
-missing or below 1, a Gaussian interval on the record length `N` with the
-noise type's Kₙ factor stands in, its lower limit floored at zero.
-"""
-function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64)
-    lower, upper = _edf_ci(devs, edfs, confidence)
-    z = quantile(Normal(), 1 - (1 - confidence) / 2)
-    for k in eachindex(devs)
-        d = devs[k]
-        (isnan(d) || !isnan(lower[k])) && continue
-        half = _kn_from_alpha(_alpha_from_noise(noises[k])) * d * z / sqrt(Float64(N))
-        lower[k] = max(d - half, 0.0)
-        upper[k] = d + half
     end
     return lower, upper
 end

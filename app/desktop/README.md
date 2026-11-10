@@ -59,9 +59,17 @@ signs every library of the core and the app with the hardened runtime
 ### Releases
 
 `.github/workflows/DesktopRelease.yml` builds macOS (Apple silicon and Intel)
-and Linux packages on a manual run or a tag like `app-v0.1.0`; a tag also
-makes a draft GitHub release with the files. The workflow's header lists the
-secrets that turn on Developer ID signing.
+and Linux packages, and a `.tar.gz` of the `sigmatau` command line for each.
+On a release tag `v…` (the one TagBot pushes) it adds the files to that
+GitHub release; a tag like `app-v0.1.0` makes a draft release of its own; a
+manual run uploads them as workflow artifacts, listed in the run's summary.
+The workflow's header lists the secrets that turn on Developer ID signing.
+
+The AppImage runs on most x86_64 distributions; it needs FUSE 2
+(`sudo dnf install fuse` on Fedora, `sudo apt install libfuse2` on Ubuntu),
+or run it with `--appimage-extract-and-run`. Its launcher points
+`LD_LIBRARY_PATH` at the AppImage's own libraries, so the app starts the
+core without it and the core loads its own Julia runtime.
 
 Measured on an Intel MacBook Pro (macOS 15, Julia 1.13.3): a 5.7 MB shell,
 a 114 MB app (30 MB zipped), the page loaded about 1.1 s after launch, and

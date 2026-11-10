@@ -30,7 +30,8 @@ phase glitch at `x[j]` therefore produces two flagged differences (`Δⱼ₋₁`
 
 `NaN` samples (existing gaps) are excluded from the median/MAD estimates and
 are never flagged. Returns an empty vector when nothing exceeds the
-threshold.
+threshold, or when the MAD is zero (more than half the samples equal, as in
+a coarsely quantized record), which leaves no scale to test against.
 
 See also [`remove_outliers`](@ref), [`fillgaps`](@ref).
 """
@@ -55,6 +56,7 @@ function _mad_outliers(v::AbstractVector{<:Real}, nsigma::Real)
     isempty(finite) && return Int[]
     med       = _median_nonan(finite)
     mad       = _median_nonan(abs.(finite .- med))
+    mad > 0 || return Int[]
     threshold = nsigma * mad / 0.6745
     return [i for i in eachindex(v) if abs(v[i] - med) > threshold]
 end
@@ -105,7 +107,7 @@ function remove_outliers(data::PhaseData; nsigma::Real=5)
     @inbounds for i in 1:length(x) - 1
         out[i + 1] = out[i] + fd.y[i] * t0
     end
-    return PhaseData(out, t0; source=pd.source)
+    return PhaseData(out, t0; source=pd.source, start=pd.start)
 end
 
 function remove_outliers(data::FrequencyData; nsigma::Real=5)
@@ -113,5 +115,5 @@ function remove_outliers(data::FrequencyData; nsigma::Real=5)
     isempty(idx) && return data
     y = Vector{Float64}(data.y)
     y[idx] .= NaN
-    return fillgaps(FrequencyData(y, data.tau0; source=data.source))
+    return fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
 end

@@ -53,6 +53,8 @@ makedocs(
             "Using the explorer" => "guide/explorer.md",
             "Command line" => "guide/cli.md",
             "Python" => "guide/python.md",
+            "Coming from Stable32" => "guide/from_stable32.md",
+            "Coming from allantools" => "guide/from_allantools.md",
         ],
         "Background" => [
             "Noise, EDF and confidence" => "explanation/noise_and_confidence.md",

@@ -8,7 +8,7 @@ abstract type AbstractTimingData end
 
 
 """
-    PhaseData(x, tau0=1.0; source="user")
+    PhaseData(x, tau0=1.0; source="user", start=NaN)
 
 Phase residuals `x(t)` in seconds, sampled at uniform interval `tau0` (default
 `1.0` s). This is the record every estimator takes: wrap a vector once and the
@@ -35,23 +35,28 @@ struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
     [`detrend`](@ref), [`fillgaps`](@ref), and [`remove_outliers`](@ref), and
     recorded in the header written by [`save`](@ref)."""
     source::String
+    """UTC time of the first sample, in seconds since 2000-01-01T00:00Z;
+    `NaN` when unknown. Set by the readers from ISO 8601 or MJD timestamps
+    and by a `# start:` header, and read as a `DateTime` with
+    [`start_time`](@ref)."""
+    start::Float64
     function PhaseData(x::Vector{T}, tau0::Real = 1.0;
-                       source::AbstractString = "user") where {T<:AbstractFloat}
+                       source::AbstractString = "user", start::Real = NaN) where {T<:AbstractFloat}
         tau0 > 0 || throw(ArgumentError("PhaseData: tau0 must be positive, got $tau0"))
         length(x) >= 2 || throw(ArgumentError(
             "PhaseData: need at least 2 phase samples, got $(length(x))"))
-        return new{T}(x, Float64(tau0), String(source))
+        return new{T}(x, Float64(tau0), String(source), Float64(start))
     end
 end
 
 # Any real vector (a view, a range, integers): copied into a `Vector` of its
 # float type, so `PhaseData(view(x, 1:100), 1.0)` and `PhaseData(1:10)` work.
-PhaseData(x::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user") =
-    PhaseData(Vector{float(eltype(x))}(x), tau0; source=source)
+PhaseData(x::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user", start::Real = NaN) =
+    PhaseData(Vector{float(eltype(x))}(x), tau0; source=source, start=start)
 
 
 """
-    FrequencyData(y, tau0=1.0; source="user")
+    FrequencyData(y, tau0=1.0; source="user", start=NaN)
 
 Fractional-frequency samples `y(t)` (dimensionless) at uniform interval `tau0`
 (default `1.0` s). Every estimator accepts it and integrates it to phase,
@@ -77,17 +82,22 @@ struct FrequencyData{T<:AbstractFloat} <: AbstractTimingData
     [`detrend`](@ref), [`fillgaps`](@ref), and [`remove_outliers`](@ref), and
     recorded in the header written by [`save`](@ref)."""
     source::String
+    """UTC time of the first sample, in seconds since 2000-01-01T00:00Z;
+    `NaN` when unknown. Set by the readers from ISO 8601 or MJD timestamps
+    and by a `# start:` header, and read as a `DateTime` with
+    [`start_time`](@ref)."""
+    start::Float64
     function FrequencyData(y::Vector{T}, tau0::Real = 1.0;
-                           source::AbstractString = "user") where {T<:AbstractFloat}
+                           source::AbstractString = "user", start::Real = NaN) where {T<:AbstractFloat}
         tau0 > 0 || throw(ArgumentError("FrequencyData: tau0 must be positive, got $tau0"))
         length(y) >= 2 || throw(ArgumentError(
             "FrequencyData: need at least 2 frequency samples, got $(length(y))"))
-        return new{T}(y, Float64(tau0), String(source))
+        return new{T}(y, Float64(tau0), String(source), Float64(start))
     end
 end
 
-FrequencyData(y::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user") =
-    FrequencyData(Vector{float(eltype(y))}(y), tau0; source=source)
+FrequencyData(y::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = "user", start::Real = NaN) =
+    FrequencyData(Vector{float(eltype(y))}(y), tau0; source=source, start=start)
 
 """
     length(data::PhaseData) / length(data::FrequencyData) → Int
@@ -97,6 +107,44 @@ Number of samples in the record.
 Base.length(p::PhaseData) = length(p.x)
 Base.length(f::FrequencyData) = length(f.y)
 
+# Phase samples a record stands for: N frequency samples integrate to N + 1.
+_nphase(p::PhaseData) = length(p.x)
+_nphase(f::FrequencyData) = length(f.y) + 1
+
+"""
+    start_time(data::PhaseData) / start_time(data::FrequencyData) → DateTime or nothing
+
+UTC time of the record's first sample (to the millisecond), or `nothing`
+when the record does not know it. The readers take it from ISO 8601 or MJD
+timestamps and from the `# start:` line [`save`](@ref) writes; sample `i` is
+at `start_time(data) + (i − 1)·τ₀`.
+"""
+start_time(d::AbstractTimingData) =
+    isnan(d.start) ? nothing : Dates.DateTime(2000) + Dates.Millisecond(round(Int64, d.start * 1000))
+
+# ISO 8601 UTC text of seconds since 2000-01-01, to the nanosecond. By hand:
+# Dates.format and padding with a Char are not resolved under juliac --trim.
+function _pad(v::Int64, n::Int)
+    t = string(v)
+    while length(t) < n
+        t = "0" * t
+    end
+    return t
+end
+
+function _iso_text(sec::Float64)
+    whole = floor(Int64, sec)
+    ns = round(Int64, (sec - whole) * 1e9)
+    ns == 1_000_000_000 && (whole += 1; ns = 0)
+    day, s = fldmod(whole, 86400)
+    date = Dates.Date(2000, 1, 1) + Dates.Day(day)
+    y = Int64(Dates.year(date)); mo = Int64(Dates.month(date)); d = Int64(Dates.day(date))
+    t = _pad(y, 4) * "-" * _pad(mo, 2) * "-" * _pad(d, 2) * "T" * _pad(s ÷ 3600, 2) * ":" *
+        _pad(s % 3600 ÷ 60, 2) * ":" * _pad(s % 60, 2)
+    ns == 0 && return t * "Z"
+    return t * "." * rstrip(_pad(ns, 9), '0') * "Z"
+end
+
 # Compact one-line displays for the data records: sample count, τ₀, and the
 # provenance only when it is not the "user" default. Full-vector dumps would
 # swamp the REPL for realistic record lengths.
@@ -104,6 +152,7 @@ function Base.show(io::IO, p::PhaseData)
     print(io, "PhaseData{", eltype(p.x), "}(", length(p.x), " samples, τ₀=",
               _show4g(p.tau0), " s")
     p.source == "user" || print(io, ", source=", repr(p.source))
+    isnan(p.start) || print(io, ", start=", _iso_text(p.start))
     print(io, ")")
 end
 
@@ -111,6 +160,7 @@ function Base.show(io::IO, f::FrequencyData)
     print(io, "FrequencyData{", eltype(f.y), "}(", length(f.y), " samples, τ₀=",
               _show4g(f.tau0), " s")
     f.source == "user" || print(io, ", source=", repr(f.source))
+    isnan(f.start) || print(io, ", start=", _iso_text(f.start))
     print(io, ")")
 end
 

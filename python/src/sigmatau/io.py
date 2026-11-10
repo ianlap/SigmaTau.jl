@@ -3,7 +3,7 @@
 Readers ingest raw phase/frequency tables into ``PhaseData``/``FrequencyData``
 (carrying the file path in ``source``); ``detrend``/``fillgaps``/``remove_outliers``
 return cleaned records; ``save``/``load`` round-trip results, suites and records
-through the oracle's self-describing text format.
+through SigmaTau's self-describing text format.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from .types import FrequencyData, PhaseData, StabilityResult, StabilitySuite
 
 
 def _read_kwargs(tau0, time_col, value_col, header, delim, scaling, detrend, fillgaps) -> dict:
-    """Reader keyword arguments for the oracle: ``None`` ``tau0``/``delim`` are omitted."""
+    """Reader keyword arguments for Julia: ``None`` ``tau0``/``delim`` are omitted."""
     kwargs = {
         "time_col": int(time_col),
         "value_col": int(value_col),
@@ -162,7 +162,7 @@ def fillgaps(data: PhaseData | FrequencyData) -> PhaseData | FrequencyData:
 def find_outliers(data: PhaseData | FrequencyData, *, n_sigma: float = 5.0) -> np.ndarray:
     """Indices of outlying samples via the Stable32-style scaled-MAD test.
 
-    Returns a **0-based** integer array of sample indices (the oracle's 1-based
+    Returns a **0-based** integer array of sample indices (Julia's 1-based
     indices minus one). For ``PhaseData`` the test runs on first differences, so a
     single phase glitch flags the two samples the step spans.
     """

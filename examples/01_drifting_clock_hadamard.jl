@@ -156,12 +156,12 @@ end
 #
 # The total kernel is not drift-immune by itself (the boundary extension
 # re-admits residual drift), so `mhtotdev` removes the record's
-# least-squares frequency drift first (`remove_drift = true`). For a fair
-# comparison the record is detrended once here, so that `mhdev`'s noise
-# identification also sees the underlying noise rather than the drift:
+# least-squares frequency drift first (`remove_drift = true`). Both
+# estimators identify the noise type on that drift-removed record, so the
+# intervals describe the underlying noise rather than the drift:
 
 N_short  = 10_800   # three hours at 1 Hz
-fd_short = detrend(FrequencyData(y[1:N_short], τ₀))   # detrended once, for the mhdev comparison
+fd_short = FrequencyData(y[1:N_short], τ₀)
 m_short  = [16, 32, 64, 128, 256, 512, 1024, 2048]   # all ≥ the τ/τ₀ ≥ 16 floor
 
 r_mh  = mhdev(fd_short, m_short)

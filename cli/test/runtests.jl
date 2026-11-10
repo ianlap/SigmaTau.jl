@@ -167,6 +167,12 @@ mktempdir() do dir
         @test occursin("\"clock_model\":{\"R\":0.0,\"q1\":", r.out) && occursin("\"q2\":", r.out)
         @test occursin("\"error\":", run_cli("analyze", pf, "--format=json", "--component", "WHFM:1e9:").out)
         @test run_cli("analyze", pf, "--format=json", "--component", "PINK:1:2").code == 1
+        r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,mtie", "--mask", "G8262_opt1")
+        @test r.code == 0 && occursin("\"masks\":[{\"name\":\"G8262_opt1\"", r.out)
+        @test occursin("\"checks\":[{\"deviation\":\"tdev\"", r.out) && occursin("{\"deviation\":\"mtie\"", r.out)
+        @test run_cli("analyze", pf, "--mask", "G8262_opt1").code != 0      # JSON only
+        @test run_cli("analyze", pf, "--format=json", "--mask", "G999").code != 0
+        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 9
     end
 
     @testset "no CI: nulls in JSON, blanks in CSV, never NaN" begin
@@ -230,7 +236,11 @@ mktempdir() do dir
         @test parse.(Float64, getindex.(a, 5)) ≈ b.dev
         @test parse(Float64, a[1][4]) == 0.1                     # τ₀ from the header
         @test occursin("frequency", run_cli("analyze", fx("counter_53230a_freq.csv"), "--tau0", "1",
-                                            "--devs", "adev", "--no-ci").out)
+                                            "--devs", "adev", "--no-ci", "--fillgaps").out)
+        # A missing frequency reading (9.91E+37) must be filled, not integrated as NaN.
+        @test run_cli("analyze", fx("counter_53230a_freq.csv"), "--tau0", "1").code == 2
+        @test occursin("\"start\":\"2026-11-08T12:00:00Z\",\"gaps\":1",
+                       run_cli("check", fx("gpsdo.csv"), "--format", "json").out)
         @test run_cli("analyze", fx("counter_53230a_freq.csv")).code == 2   # no gate time
         g = run_cli("check", fx("gpsdo.csv"), "--column", "PPS offset (ns)", "--format", "json")
         @test g.code == 0 && occursin("\"quantity\":\"phase\"", g.out)

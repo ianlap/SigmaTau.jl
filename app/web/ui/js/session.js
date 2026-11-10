@@ -7,7 +7,7 @@ const FORMAT = "sigmatau-session";
 const VERSION = 1;
 
 // Settings saved as they are.
-const SETTINGS = ["devs", "grid", "ci", "confidence", "band", "noiseId", "fit", "bias", "tauMin", "tauMax", "axis", "spec", "dyn"];
+const SETTINGS = ["devs", "grid", "ci", "confidence", "band", "noiseId", "fit", "mask", "bias", "tauMin", "tauMax", "axis", "spec", "dyn"];
 // Per-clock fields that are results or bookkeeping, not inputs.
 const TRANSIENT = new Set(["id", "slot", "record", "result", "dynamic", "error", "loading", "source", "driftFit"]);
 
