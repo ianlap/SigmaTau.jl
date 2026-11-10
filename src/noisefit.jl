@@ -153,5 +153,4 @@ end
 
 _powerlaw_tau0(f::NoiseFit) = f.result.tau0
 _powerlaw_h(f::NoiseFit) = Dict(c.alpha => c.h for c in f.components)
-clock_model(f::NoiseFit; drift::Union{Bool,Nothing}=nothing) =
-    clock_model(_powerlaw_h(f); tau0=f.result.tau0, drift=drift)
+clock_model(f::NoiseFit; kw...) = clock_model(_powerlaw_h(f); tau0=f.result.tau0, kw...)

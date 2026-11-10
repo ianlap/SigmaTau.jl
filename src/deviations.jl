@@ -18,9 +18,12 @@ _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
 # on the record less its frequency drift (a least-squares quadratic in phase):
 # these statistics ignore drift, so the noise type that sets their EDF and
 # bias correction should too (SP1065 §5.5.6 removes deterministic components
-# before noise identification).
+# before noise identification). The B1 test is not used on that record: its
+# limits are for a record with the drift left in, where the ratio is about
+# twice as large, and it stops at random-walk FM.
 _hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
-    identify_noise(remove_drift ? _noise_detrend(x) : x, m_values, dmin=0, dmax=3)
+    remove_drift ? identify_noise(_noise_detrend(x), m_values, dmin=0, dmax=3, b1=false) :
+                   identify_noise(x, m_values, dmin=0, dmax=3)
 
 # What `noise=` takes: `:auto`, one noise type, one per τ, or a fitted model.
 const _NoiseChoice = Union{Symbol,AbstractVector{Symbol},PowerLawFit}
@@ -228,7 +231,10 @@ ADEV into a τ¹ ramp. It cannot separate white from flicker PM; use
 
 `remove_drift=true` (default) identifies the noise type at each τ on the
 record less its least-squares frequency drift, so a drift the statistic
-ignores cannot bias the EDF; the deviation itself does not change.
+ignores cannot bias the EDF; the deviation itself does not change. On that
+record the B1 ratio of [`identify_noise`](@ref) is not used: with fewer than
+30 averaged points an FM type is the one identified at the longest τ that
+has 30, so a change from one FM type to another beyond it needs `noise`.
 `remove_drift=false` identifies it on the record as given, as Stable32 does.
 
 `overlapping=false` gives the non-overlapped Hadamard deviation (SP1065
@@ -533,7 +539,7 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     mode = _bias_mode(correct_bias, :exact)
     need_noise = mode != :none || ci
     noises = !need_noise     ? Symbol[] :
-             noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=3) :
+             noise === :auto ? _hadamard_noise(x, m_values, remove_drift) :
                                _stated_noises(noise, :mhdev, taus, data.tau0)
 
     # At m = 1 the detrended four-point window is c·(−1, 3, −3, 1), and the
@@ -724,8 +730,21 @@ Conventions (SP1065 / Stable32):
   of the factors and interpolates the rest, within 0.5 % of the full
   average (see `_theobr_ratio`); this takes it from O(N³) to about 1 s at
   N = 65 536. ThêoBR needs `N ≥ 19` samples; shorter records
-  yield NaN rows. `correct_bias=false` or `:stable32` gives raw Thêo1,
-  which Stable32 reports as its "Theo1" run; `:published` is ThêoBR.
+  yield NaN rows. `:published` is the same ThêoBR. `:stable32` is ThêoBR
+  over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`, which is what a Stable32
+  Thêo1 run with automatic noise identification applies: on Stable32's own
+  `PHASE.DAT` (1001 points) it reproduces that run at every averaging factor
+  to the five digits printed. Stable32 limits the points it uses for this
+  factor (`MaxTheoBRPts`, 3000 by default in its manual); a longer record is
+  taken at every `b`-th phase, `b = ⌈N/3000⌉`, and 0.00055·(b − 1) is added
+  to the factor ([taylor-2010-fast-theobr](@cite), eq. 4, a slope its
+  authors fitted on the FM noises). That reproduces
+  Stable32's two bias-removed rows on an 8192-point record (b = 3) to the
+  five digits printed, where the ladder on the full record reads 1.8 % low;
+  the decimation and `b` are read from that output, and no other `b` is
+  checked. With a noise type entered by hand Stable32 applies a tabulated
+  bias instead, which no fixture here checks. `correct_bias=false` gives raw
+  Thêo1, a Stable32 run with Alpha set to 0.
 
 The EDF for the χ²-based CI uses the empirical per-noise-type Thêo1
 formulas of SP1065 §5.2.15 Table 3 (with `r = 0.75m`), for both the raw
@@ -740,7 +759,10 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     T = (N - 1) * data.tau0
     neff = _neff_counts(:theo1, N, m_values)
 
-    devs = _bias_mode(correct_bias, :none) == :none ? raw_devs : raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
+    mode = _bias_mode(correct_bias, :stable32)
+    devs = mode == :none ? raw_devs :
+           mode == :stable32 ? raw_devs .* sqrt(_stable32_theobr_ratio(x, data.tau0)) :
+                               raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
 
     if !ci
         return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)

@@ -30,8 +30,15 @@ end
 One-sided Welch PSD estimate of the real signal `z` sampled at `fs` Hz.
 
 Splits `z` into overlapping segments of length `nperseg` stepped by
-`nperseg - noverlap`, removes each segment's mean (constant detrend), applies
-the chosen `window`, periodograms each segment with a real FFT, and averages.
+`nperseg - noverlap`, removes each segment's mean, applies the chosen
+`window`, periodograms each segment with a real FFT, and averages. The mean
+is taken with the window's own weights, `Σ wᵢzᵢ / Σ wᵢ`, which leaves the
+tapered segment with no value at `f = 0`. The plain mean (scipy's
+`detrend="constant"`) differs in the first two values only for a Hann or
+Hamming window, and there it is the worse estimate when the spectrum rises
+with `f`: the plain mean of a differenced record is its end-point difference,
+which leaks through the window's main lobe into the first bin in proportion
+to `nperseg` (white PM read `1 + nperseg/(12π²)` times high).
 The normalization is the "density" convention: each periodogram is scaled by
 `1 / (fs · Σ wᵢ²)` and every bin except DC (and the Nyquist bin when `nperseg`
 is even) is doubled to fold negative-frequency power into the one-sided
@@ -87,12 +94,13 @@ function _welch(a::Vector{Float64}, b::Vector{Float64}, fs::Float64;
     Sab   = zeros(ComplexF64, same ? 0 : nfreq)
     seg   = Vector{Float64}(undef, nperseg)
 
+    wsum = sum(win)
     function taper!(z, off)
         μ = 0.0
         @inbounds for i in 1:nperseg
-            μ += z[off + i]
+            μ += win[i] * z[off + i]
         end
-        μ /= nperseg
+        μ /= wsum
         @inbounds for i in 1:nperseg
             seg[i] = (z[off + i] - μ) * win[i]
         end
@@ -174,6 +182,13 @@ low-frequency resolution, lower it for more averaging. `taper` is `:hann`,
 `:hamming`, or `:rectangular`.
 
 The estimate is variance-preserving: `Σ S_y(f)·Δf ≈ var(y)` over `[0, fs/2]`.
+Each segment's mean is removed with the taper's weights, so a frequency offset
+leaves no trace and the value at `f = 0` is zero. The first bin above it
+shares the taper's main lobe with the removed mean and reads 0.55 (flicker
+FM) to 1.09 (white PM) of the true density under the Hann taper, at any
+segment length; from the second bin the estimate equals scipy's
+`signal.welch`. A frequency drift is not removed; take it out first
+([`detrend`](@ref)).
 """
 function psd_y(data::FrequencyData; nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
     y  = _f64(data.y)
@@ -184,27 +199,52 @@ end
 
 psd_y(data::PhaseData; kwargs...) = psd_y(FrequencyData(data); kwargs...)
 
+# Response of the first difference y[k] = (x[k+1] − x[k])/τ₀ at each frequency,
+# |1 − e^{−2πifτ₀}|²/τ₀² = 4 sin²(πfτ₀)/τ₀², which is (2πf)² at low f. S_x is
+# S_y over it, and has no value at f = 0.
+_difference_response(freq::Vector{Float64}, tau0::Float64) =
+    [f > 0 ? 4 * sinpi(f * tau0)^2 / tau0^2 : NaN for f in freq]
+
+# Welch parameters of a phase spectrum: the default segment length comes from
+# the number of phase samples, and fits the one-fewer frequency samples.
+function _sx_welch_params(data::AbstractTimingData, nperseg, noverlap)
+    n = length(data) + (data isa FrequencyData)
+    np = nperseg === nothing ? min(_default_nperseg(n), n - 1) : Int(nperseg)
+    return np, noverlap === nothing ? np ÷ 2 : Int(noverlap)
+end
+
 """
     psd_x(data::PhaseData;     nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
     psd_x(data::FrequencyData; nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
 
 One-sided power spectral density of the phase (time) residual `x(t)`,
-`S_x(f)` in units of `s²/Hz` (IEEE Std 1139-2022 §3.3), estimated by Welch's
-method at sample rate `fs = 1/τ₀`.
+`S_x(f)` in units of `s²/Hz` (IEEE Std 1139-2022 §3.3), at sample rate
+`fs = 1/τ₀`.
 
-`FrequencyData` input is integrated to phase (`x[k] = τ₀·Σⱼ y[j]`) first. The
-estimators are related by `S_x(f) = S_y(f) / (2πf)²`; the two agree under that
-identity at low frequency, where the discrete integrator matches the continuous
-one. Keyword arguments match [`psd_y`](@ref).
+It is the Welch estimate of `S_y(f)` (see [`psd_y`](@ref), same keyword
+arguments) divided by the response of the first difference that takes phase to
+frequency, `4 sin²(πfτ₀)/τ₀²`, the sampled form of `S_x(f) = S_y(f)/(2πf)²`.
+The phase of FM noise has a spectrum as steep as f⁻² to f⁻⁴, which leaks
+through any taper into the lowest bins: a Welch estimate on the phase itself
+reads 3 times high at the second bin on flicker FM and about 100 times on
+random-walk FM, and is swamped at every low bin by a frequency offset. The
+first difference is two powers of f flatter, and a frequency offset is only
+its mean. Under the Hann taper the estimate is within 16 % of the true density
+from the third bin on every power-law noise (random-walk FM reads 1.5 at the
+second); the first bin is as in [`psd_y`](@ref), and the value at `f = 0` is
+`NaN`. The Hamming and rectangular tapers, whose side lobes fall slowly, let
+the top of a PM spectrum leak down into the low bins of a long segment.
+
+A segment holds `nperseg` frequency samples, one fewer than the phase samples
+it spans; the default is the largest power of two up to a quarter of the
+phase samples.
 """
-function psd_x(data::PhaseData; nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
-    x  = _f64(data.x)
-    np, no = _welch_params(length(x), nperseg, noverlap)
-    freq, psd = _welch_psd(x, 1 / data.tau0; nperseg=np, noverlap=no, window=taper)
-    return SpectralResult(:Sx, freq, psd, :s2_per_Hz, np, no, taper)
+function psd_x(data::AbstractTimingData; nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
+    np, no = _sx_welch_params(data, nperseg, noverlap)
+    sy = psd_y(data; nperseg=np, noverlap=no, taper=taper)
+    return SpectralResult(:Sx, sy.freq, sy.psd ./ _difference_response(sy.freq, data.tau0),
+                          :s2_per_Hz, np, no, taper)
 end
-
-psd_x(data::FrequencyData; kwargs...) = psd_x(_freq_to_phase(data); kwargs...)
 
 """
     ssb_phase_noise(data::PhaseData;     f_carrier, nperseg=nothing, noverlap=nothing, taper=:hann) → SpectralResult
@@ -220,7 +260,7 @@ direct comparison against oscillator-vendor phase-noise plots.
 The DC bin (`f = 0`) is dropped, since `ℒ(0)` is not meaningful and the dB
 conversion would be `-Inf`. Keyword arguments otherwise match [`psd_y`](@ref).
 """
-function ssb_phase_noise(data::PhaseData; f_carrier::Real, nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
+function ssb_phase_noise(data::AbstractTimingData; f_carrier::Real, nperseg=nothing, noverlap=nothing, taper::Symbol=:hann)
     f_carrier > 0 ||
         throw(ArgumentError("ssb_phase_noise: f_carrier must be > 0 Hz (got $f_carrier)"))
     sx = psd_x(data; nperseg=nperseg, noverlap=noverlap, taper=taper)
@@ -230,8 +270,6 @@ function ssb_phase_noise(data::PhaseData; f_carrier::Real, nperseg=nothing, nove
     script_l = 10 .* log10.(0.5 .* sphi)
     return SpectralResult(:L, freq, script_l, :dBc_per_Hz, sx.nperseg, sx.noverlap, taper)
 end
-
-ssb_phase_noise(data::FrequencyData; kwargs...) = ssb_phase_noise(_freq_to_phase(data); kwargs...)
 
 """
     integrated_jitter(s::SpectralResult; f_carrier, band=nothing) → (; phase, time, residual_fm)

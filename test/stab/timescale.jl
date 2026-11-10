@@ -162,6 +162,11 @@ using Statistics
         g = timescale_phase(timescale(ClockComparisons(x, 1.0); algorithm=:greenhall, models=ms))
         @test maximum(abs, g.x[29000:31000] .- timescale_phase(rk).x[29000:31000]) < 5e-11
         @test_throws ArgumentError timescale(cc; algorithm=:greenhall)
+        # Two noiseless clocks and one with reading noise: the weights stay ∝ 1/q1,
+        # not the gain's row mean (1/3 each for the noisy one).
+        mx = [ClockModel(; tau0=1.0, R=r, q1=q, q2=1e-30) for (r, q) in zip([0.0, 0.0, 1e-25], [1e-24, 4e-24, 2.5e-25])]
+        cx, _ = simulate_ensemble(mx, 4000; reference=0, rng=Xoshiro(5))
+        @test vec(mean(timescale(cx; algorithm=:greenhall, models=mx).weights[2000:end, :]; dims=1)) ≈ [0.190, 0.048, 0.762] atol=0.01
         # Noiseless readings: every pivot gives the same scale; with white PM
         # they differ by the pivots' own reading noise.
         @test timescale_phase(timescale(cc; algorithm=:greenhall, models=ms, pivot=3)).x ≈ timescale_phase(rk).x atol=1e-12
@@ -217,6 +222,39 @@ using Statistics
         @test_throws ArgumentError timescale(cc; algorithm=:stein)
         @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, pivot=9)
         @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, wmax=0.2)
+    end
+
+    @testset "flicker states in the Kalman scales" begin
+        # Flicker FM: the clocks' frequencies follow the truth through the
+        # Markov states, the reduction leaves the unreduced filter's
+        # frequencies as they are, and Stein's three-state clocks refuse.
+        mf = [ClockModel(; tau0=1.0, q1=1e-26, flicker_fm=1e-26, tau_max=1e3),
+              ClockModel(; tau0=1.0, q1=1e-26, flicker_fm=4e-26, tau_max=1e3), ClockModel(; tau0=1.0, q1=1e-24)]
+        cf, tf = simulate_ensemble(mf, 8192; reference=0, rng=MersenneTwister(11))
+        gf = timescale(cf; algorithm=:greenhall, models=mf)
+        rest = 2000:8192
+        @test cor(gf.y[rest, 1] .- gf.y[rest, 2], tf[rest, 2, 1] .- tf[rest, 2, 2]) > 0.75
+        @test maximum(abs, timescale(cf; algorithm=:jones_tryon, models=mf).y .- gf.y) < 1e-6 * std(gf.y[rest, 1])
+        @test_throws ArgumentError timescale(cf; algorithm=:stein, models=mf)
+        # Flicker PM on two of three equal clocks: the weights stay equal,
+        # and past the shortest τ the scale is quieter than with that
+        # flicker folded into R.
+        hp = [0.0, 2.2e-22, 2.2e-21]
+        mp = [ClockModel(; tau0=1.0, q1=1e-24, q2=1e-30, flicker_pm=h) for h in hp]
+        fold = [clock_model(Dict(1 => h, 0 => 2e-24, -2 => 1e-30 / 2π^2); tau0=1.0) for h in hp]
+        cp, _ = simulate_ensemble(mp, 16384; reference=0, rng=MersenneTwister(31))
+        gp = timescale(cp; algorithm=:greenhall, models=mp)
+        scale(r) = adev(timescale_phase(r), [16, 32, 64]; ci=false).dev
+        @test gp.weights[end, :] ≈ fill(1 / 3, 3) rtol=0.01
+        @test all(scale(gp) .< 0.95 .* scale(timescale(cp; algorithm=:greenhall, models=fold)))
+        @test maximum(abs, timescale(cp; algorithm=:jones_tryon, models=mp).y .- gp.y) < 1e-6 * std(gp.y[rest, 1])
+        # Two noiseless clocks and one whose readings carry flicker PM states: those
+        # readings are not noiseless, so only the first two share a weight (∝ 1/q1).
+        mq = [ClockModel(; tau0=1.0, q1=q, q2=1e-30, flicker_pm=i == 3 ? 2.2e-20 : 0.0) for (i, q) in enumerate([1e-24, 4e-24, 2.5e-25])]
+        cq, _ = simulate_ensemble(mq, 8192; reference=0, rng=Xoshiro(5))
+        wq = vec(mean(timescale(cq; algorithm=:greenhall, models=mq).weights[4000:end, :]; dims=1))
+        @test wq ≈ [0.407, 0.106, 0.488] atol=0.02
+        @test wq[1] / wq[2] ≈ 4 rtol=0.05
     end
 
     @test_throws ArgumentError timescale(cc; algorithm=:at3)

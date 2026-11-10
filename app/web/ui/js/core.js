@@ -193,15 +193,41 @@ export const driftKey = (clock) => JSON.stringify([request(clock, "drift", []), 
 export const dynamicKey = (clock) =>
   JSON.stringify([request(clock, "dynamic", rangeArgs(clock)), state.dyn.dev, state.dyn.frac, state.grid]);
 
+// Samples of the record, or of its analysis range.
+const samples = (clock) =>
+  clock.range ? Math.floor((clock.range[1] - clock.range[0]) / clock.record.tau0) + 1 : clock.record?.n ?? 0;
+
 // Sliding-window deviation map for one clock (window = record / frac).
 export function dynamic(clock, signal) {
-  const n = clock.range ? Math.floor((clock.range[1] - clock.range[0]) / clock.record.tau0) + 1 : clock.record?.n ?? 0;
   return run(request(clock, "dynamic", [
     ...rangeArgs(clock),
     "--grid", state.grid,
     "--dev", state.dyn.dev,
-    "--window", Math.max(16, Math.floor(n / state.dyn.frac)),
+    "--window", Math.max(16, Math.floor(samples(clock) / state.dyn.frac)),
   ]), signal);
+}
+
+// The holdover test of one clock (training stretch = record / frac, or with
+// frac 0 as many holdover times as the fit has terms: the test behind TDEV
+// and HTDEV), with the error its fitted noise model predicts.
+const holdoverRequest = (clock) => request(clock, "holdover", [
+  ...rangeArgs(clock),
+  ...(state.hold.frac ? ["--train", Math.max(4, Math.floor(samples(clock) / state.hold.frac)) * clock.record.tau0]
+    : ["--grow", state.hold.drift ? 3 : 2]),
+  ...(state.hold.drift ? ["--fit-drift"] : []),
+  ...(state.hold.anchor ? [] : ["--no-anchor"]),
+  ...(state.hold.limit ? ["--limit", state.hold.limit] : []),
+  "--confidence", state.hold.confidence, "--fit",
+]);
+
+// Settings that decide a clock's holdover test; a change means recompute.
+export const holdoverKey = (clock) => JSON.stringify(holdoverRequest(clock));
+
+// The core's JSON as is.
+export async function holdover(clock, signal) {
+  const doc = await post(holdoverRequest(clock), signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc;
 }
 
 // A timescale from several clocks; the core's JSON as is.

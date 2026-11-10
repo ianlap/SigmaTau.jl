@@ -123,13 +123,19 @@
         @test isempty(find_outliers(PhaseData(cumsum(steps), 1.0)))
     end
 
-    @testset "remove_outliers: phase record with gaps and a step" begin
+    @testset "remove_outliers: samples already missing stay missing" begin
         xs = copy(x_base)
         xs[90:end] .+= 5e-9
         xs[20] = NaN
         clean = remove_outliers(PhaseData(xs, 1.0))
-        @test all(isfinite, clean.x)
+        @test findall(isnan, clean.x) == [20]
         @test abs(clean.x[end] - x_base[end]) < 5e-11
+        y = copy(y_base)
+        y[20] = NaN
+        y[50] = 1e-9
+        clean = remove_outliers(FrequencyData(y, 1.0))
+        @test findall(isnan, clean.y) == [20]
+        @test abs(clean.y[50]) < 1e-10
         # Nothing flagged ⇒ the input comes back as-is.
         pd_ok = PhaseData(x_base, 1.0)
         @test remove_outliers(pd_ok) === pd_ok

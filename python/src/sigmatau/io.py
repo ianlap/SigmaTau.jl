@@ -149,13 +149,14 @@ def detrend(
 
 
 @_map_errors
-def fillgaps(data: PhaseData | FrequencyData) -> PhaseData | FrequencyData:
-    """Impute ``NaN`` samples with Howe & Schlossberger's reflect-and-filter algorithm.
+def fillgaps(data: PhaseData | FrequencyData, *, form: str = "auto") -> PhaseData | FrequencyData:
+    """Fill ``NaN`` samples by the reflection method of Howe and Schlossberger (2022).
 
-    Returns a new record with the same ``tau0``; the input is treated as already
-    equispaced and returned unchanged when it has no ``NaN`` samples.
+    ``form`` is the series that is filled: ``"phase"``, ``"frequency"``, or ``"auto"``
+    to take it from the record's noise. Returns a new record with the same ``tau0``;
+    the measured samples are returned as they came.
     """
-    return data_from_jl(jl.fillgaps(to_jl_data(data)))
+    return data_from_jl(jl.fillgaps(to_jl_data(data), form=jl.Symbol(str(form))))
 
 
 @_map_errors
@@ -196,7 +197,7 @@ def remove_outliers(
 
     The Stable32 deglitching idiom: flag samples more than ``n_sigma`` scaled MADs
     from the median, gap them, and fill. The input is returned as-is when nothing
-    is flagged.
+    is flagged. Samples already missing stay missing.
     """
     return data_from_jl(jl.remove_outliers(to_jl_data(data), nsigma=float(n_sigma)))
 

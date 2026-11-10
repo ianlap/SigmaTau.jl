@@ -69,14 +69,16 @@ Detect outliers with [`find_outliers`](@ref) and return a new record with the
 flagged samples replaced by imputed values from [`fillgaps`](@ref) (Howe &
 Schlossberger's reflect-and-filter algorithm, which preserves the local noise
 character). The `tau0` and `source` fields carry over; the input is left
-untouched. When nothing is flagged the input is returned as-is.
+untouched. When nothing is flagged the input is returned as-is. Samples
+already missing stay missing: only the outliers are replaced, and
+[`fillgaps`](@ref) fills the rest when that is wanted.
 
 `PhaseData` is cleaned in frequency space: the record is differenced to
 `yᵢ = (x[i+1] − x[i]) / τ₀`, the flagged frequency samples are gapped and
 filled, and the result is integrated back to phase from `x[1]`. A phase
 step is a single bad frequency sample, so this removes the step itself
 rather than refilling the phase sample it lands on (which would leave the
-step in place). Existing `NaN` gaps in the phase record are filled first.
+step in place).
 
 This is the Stable32 deglitching idiom [riley-2008-sp1065](@cite): flag
 samples more than `nsigma` scaled MADs from the median, gap them, and fill.
@@ -96,7 +98,9 @@ function remove_outliers(data::PhaseData; nsigma::Real=5)
     isempty(idx) && return data
     # Work in frequency space: a phase step is one outlying frequency sample,
     # so fix it there and integrate back, anchored at the first phase sample.
-    pd = any(isnan, data.x) ? fillgaps(data) : data
+    # The sum needs every sample, so the gaps are filled for it and put back.
+    gaps = isnan.(data.x)
+    pd = any(gaps) ? fillgaps(data) : data
     x  = pd.x
     T  = eltype(x)
     t0 = pd.tau0
@@ -107,6 +111,7 @@ function remove_outliers(data::PhaseData; nsigma::Real=5)
     @inbounds for i in 1:length(x) - 1
         out[i + 1] = out[i] + fd.y[i] * t0
     end
+    out[gaps] .= NaN
     return PhaseData(out, t0; source=pd.source, start=pd.start)
 end
 
@@ -115,5 +120,7 @@ function remove_outliers(data::FrequencyData; nsigma::Real=5)
     isempty(idx) && return data
     y = Vector{Float64}(data.y)
     y[idx] .= NaN
-    return fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
+    out = fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
+    out.y[isnan.(data.y)] .= NaN
+    return out
 end

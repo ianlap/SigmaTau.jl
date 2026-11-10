@@ -55,6 +55,7 @@ _sigmatau() {
         spectrum)   opts="@@OPTS_spectrum@@" ;;
         dynamic)    opts="@@OPTS_dynamic@@" ;;
         drift)      opts="@@OPTS_drift@@" ;;
+        holdover)   opts="@@OPTS_holdover@@" ;;
         report)     opts="@@OPTS_report@@" ;;
         live)       opts="@@OPTS_live@@" ;;
     esac
@@ -81,7 +82,7 @@ _sigmatau() {
       case $words[1] in
         completion) _values 'shell' @@SHELLS@@ ;;
         help)       _values 'command' @@SUBCMDS@@ ;;
-        analyze|check|spectrum|dynamic|drift|report|live)
+        analyze|check|spectrum|dynamic|drift|holdover|report|live)
           case $words[CURRENT-1] in
             --devs)    _values -s , 'deviation' @@DEVS@@ ;;
             --dev)     _values 'deviation' @@DYN@@ ;;
@@ -100,6 +101,7 @@ _sigmatau() {
                   spectrum) opts=(@@OPTS_spectrum@@) ;;
                   dynamic)  opts=(@@OPTS_dynamic@@) ;;
                   drift)    opts=(@@OPTS_drift@@) ;;
+                  holdover) opts=(@@OPTS_holdover@@) ;;
                   report)   opts=(@@OPTS_report@@) ;;
                   live)     opts=(@@OPTS_live@@) ;;
                 esac
@@ -124,10 +126,10 @@ complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze report live' -l 
 complete -c sigmatau -x -n '__fish_seen_subcommand_from dynamic' -l dev -a '@@DYN@@' -d 'dynamic deviation'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze dynamic report live' -l grid -a '@@GRIDS@@' -d 'τ grid'
 complete -c sigmatau -x -n '__fish_seen_subcommand_from drift' -l model -a '@@MODELS@@' -d 'drift model'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift' -l format -a '@@FMT@@' -d 'output format'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift report' -l detrend -a '@@DETREND@@' -d 'detrend mode'
-complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift report' -l remove-drift -a '@@DRIFT@@' -d 'drift to fit and remove'
-complete -c sigmatau -r -F -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift report' -l out -d 'write to PATH'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift holdover' -l format -a '@@FMT@@' -d 'output format'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift holdover report' -l detrend -a '@@DETREND@@' -d 'detrend mode'
+complete -c sigmatau -x -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift holdover report' -l remove-drift -a '@@DRIFT@@' -d 'drift to fit and remove'
+complete -c sigmatau -r -F -n '__fish_seen_subcommand_from analyze check spectrum dynamic drift holdover report' -l out -d 'write to PATH'
 """
 
 const POWERSHELL = raw"""
@@ -165,6 +167,7 @@ Register-ArgumentCompleter -Native -CommandName sigmatau -ScriptBlock {
             'spectrum' { return _res ('@@OPTS_spectrum@@' -split ' ') }
             'dynamic'  { return _res ('@@OPTS_dynamic@@' -split ' ') }
             'drift'    { return _res ('@@OPTS_drift@@' -split ' ') }
+            'holdover' { return _res ('@@OPTS_holdover@@' -split ' ') }
             'report'   { return _res ('@@OPTS_report@@' -split ' ') }
             'live'     { return _res ('@@OPTS_live@@' -split ' ') }
         }

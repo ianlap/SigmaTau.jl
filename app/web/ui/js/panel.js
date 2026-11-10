@@ -79,6 +79,8 @@ export function renderPanel(pageControls = null) {
   const several = multi();
   const nDev = state.devs.length;
   const run = state.run;
+  // The panel is drawn again on every change: the field being edited keeps the focus.
+  const focused = side.contains(document.activeElement) ? document.activeElement.dataset.opt : null;
   const stale = run.stale && state.clocks.some((c) => c.record);
   const running = run.state === "running";
   const runLabel = running ? "Cancel"
@@ -113,6 +115,7 @@ export function renderPanel(pageControls = null) {
     </div>`;
   const ns = side.querySelector(".side-scroll");
   if (ns) ns.scrollTop = top;
+  if (focused) side.querySelector(`[data-opt="${focused}"]`)?.focus();
 }
 
 function onClick(e) {
@@ -144,11 +147,14 @@ function onChange(e) {
   const opt = e.target.dataset.opt;
   if (!opt) return;
   const v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-  update((s) => {
+  const apply = () => update((s) => {
     if (opt === "grid") { s.grid = v; markStale(s, "inputs"); }
     if (opt === "confidence") { s.confidence = Number(v); markStale(s, "inputs"); }
     if (opt === "ci") { s.ci = v; markStale(s, "inputs"); }
     if (opt === "bias" || opt === "noise") { s[opt] = v; markStale(s, "inputs"); }
     if (opt === "tauMin" || opt === "tauMax") { s[opt] = Number(v) > 0 ? Number(v) : null; markStale(s, "inputs"); }
   });
+  // A typed value changes as the field is left: redraw once the focus has moved on.
+  if (e.target.type === "number") setTimeout(apply);
+  else apply();
 }

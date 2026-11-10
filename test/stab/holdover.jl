@@ -1,6 +1,6 @@
 # holdover.jl — the measured holdover test against the closed-form error
-# variances on a simulated clock, an exact parabola with gaps, and the time
-# to a limit.
+# variances on a simulated clock, an exact parabola with gaps, the time to a
+# limit, and the stretch that grows with τ against TDEV and HTDEV.
 
 using Test
 using SigmaTau
@@ -75,6 +75,25 @@ using Random
         d = holdover(p)
         @test d.train == 25_000 && d.tau == 2.0 .^ (0:14) && d.anchor && !d.drift
         @test occursin("trained on 2.5e+04 s", sprint(show, MIME"text/plain"(), d))
+    end
+
+    @testset "a stretch that grows with tau" begin
+        t = [1.0, 64.0, 1024.0]
+        g = holdover(p; grow=2, tau=t)
+        @test g.rms[2:3] ≈ holdover(m; grow=2, tau=t[2:3]).sigma rtol=0.1
+        # At τ₀ the error is the second difference TVAR is defined on; with a
+        # parabola and three times τ, the third difference of HTVAR.
+        @test g.rms[1] ≈ sqrt(6) * tdev(p, [1]; ci=false).dev[1]
+        @test holdover(p; grow=3, tau=t, drift=true).rms[1] ≈ sqrt(20) * htdev(p, [1]; ci=false).dev[1]
+        # Above τ₀, a constant over √6 TDEV: √(8/5) on white FM, √(452/231) on random-walk FM.
+        σ(α) = holdover(Dict(α => 1.0); tau0=1.0, grow=2, tau=[4096.0]).sigma[1]
+        @test σ(0) ≈ sqrt(8 / 5 * 4096 / 2) rtol=1e-3
+        @test σ(-2) ≈ sqrt(452 / 231 * 11π^2 * 4096.0^3 / 10) rtol=1e-3
+        d = holdover(p; grow=2)
+        @test isnan(d.train) && d.grow == 2 && d.tau == 2.0 .^ (0:14) && occursin("trained on 2 τ", sprint(show, d))
+        @test_throws ArgumentError holdover(p; grow=2, train=T)
+        @test_throws ArgumentError holdover(p; grow=2, drift=true)
+        @test_throws ArgumentError holdover(m; grow=2)
     end
 
     @test_throws ArgumentError holdover(p; train=0.5)

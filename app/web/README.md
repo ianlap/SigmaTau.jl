@@ -84,7 +84,10 @@ every change to `src/`, `cli/` or `app/web/`.
   without a rerun. Dynamic shows a DADEV or DHDEV map (or a 3D waterfall),
   computed on its own when the page opens or its settings change; click a
   cell to pin it. With several clocks Spectrum overlays them and Dynamic
-  draws one map per clock on a shared colour scale. Live reads an
+  draws one map per clock on a shared colour scale. Holdover shows the time
+  error after a training stretch against holdover time (RMS, a chosen share
+  of the trials, the worst trial, the noise model's prediction and √6·TDEV
+  for reference) and the time within a limit, also computed on its own. Live reads an
   instrument (LXI socket, serial port or file) or the simulator and redraws
   σ(τ) and the frequency as readings arrive; "Analyse readings" loads them
   as a clock for the full analysis. Help explains the pages,
