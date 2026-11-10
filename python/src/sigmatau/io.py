@@ -196,7 +196,7 @@ def remove_outliers(
 
     The Stable32 deglitching idiom: flag samples more than ``n_sigma`` scaled MADs
     from the median, gap them, and fill. The input is returned as-is when nothing
-    is flagged.
+    is flagged. Samples already missing stay missing.
     """
     return data_from_jl(jl.remove_outliers(to_jl_data(data), nsigma=float(n_sigma)))
 
