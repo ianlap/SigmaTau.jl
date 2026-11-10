@@ -12,6 +12,7 @@ fmt(f) = joinpath(FMT, f)
         @test detect_format(fmt("counter_53230a_ti.txt")) === :counter
         @test detect_format(fmt("gpsdo.csv")) === :table
         @test detect_format(fmt("bipm_utc_lab.txt")) === :bipm_utc
+        @test detect_format(fmt("rinex_clk_synth.clk")) === :rinex_clk
         @test detect_format(joinpath(@__DIR__, "..", "fixtures", "validation", "stable32gen.DAT")) === :columns
     end
 
@@ -25,6 +26,19 @@ fmt(f) = joinpath(FMT, f)
         q = read_data(fmt("bipm_utc_lab.txt"); fillgaps=true)
         @test !any(isnan, q.x) && length(q) == 60
         @test start_time(p) == DateTime(1998, 1, 1)               # MJD 50814
+    end
+
+    @testset "RINEX clock" begin
+        # Three clocks (G01 out of view for two epochs) on a 30 s grid.
+        g = read_data(fmt("rinex_clk_synth.clk"))                       # the first clock
+        @test g isa PhaseData && g.tau0 == 30 && length(g) == 40 && count(isnan, g.x) == 2
+        @test g.x[1] == 1.5e-4
+        @test start_time(g) == DateTime(2025, 8, 17, 12)
+        e = read_data(fmt("rinex_clk_synth.clk"); column="e02")          # by name, any case
+        @test e.tau0 == 30 && !any(isnan, e.x) && e.x[1] == 8.0e-5
+        @test read_data(fmt("rinex_clk_synth.clk"); column=2).x[1] == -3.2e-7   # by position: the station
+        @test !any(isnan, read_data(fmt("rinex_clk_synth.clk"); fillgaps=true).x)
+        @test_throws ArgumentError read_data(fmt("rinex_clk_synth.clk"); column="G99")
     end
 
     @testset "TimeLab .tim" begin

@@ -7,7 +7,7 @@
 Input formats [`read_data`](@ref) understands, as [`detect_format`](@ref)
 names them.
 """
-const INPUT_FORMATS = (:columns, :stable32, :timelab, :counter, :table, :bipm_utc)
+const INPUT_FORMATS = (:columns, :stable32, :timelab, :counter, :table, :bipm_utc, :rinex_clk)
 
 # What a format reader returns: the samples, τ₀, whether they are phase,
 # which samples fillgaps put back (empty when none were) and the start time
@@ -77,6 +77,11 @@ Name the layout of a data file from its extension and first lines, one of
 - `:bipm_utc`: a BIPM `UTC - UTC(k)` file from the time department's
   `utclab` directory (`MJD  [UTC-UTC(NIST)]/ns  uA/ns …`): one row every five
   days with the difference in nanoseconds, read as phase in seconds.
+- `:rinex_clk`: a RINEX 3 clock file (`.clk`, IGS and CODE clock products):
+  `AS` satellite and `AR` station clock biases in seconds, many clocks on one
+  epoch grid. `column` (1-based, in order of first appearance) or `column_name`
+  (`G08`, `ALGO00CAN`) picks the clock, by default the first. Unzip `.gz`
+  files first.
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
   [`read_frequency`](@ref).
 
@@ -86,6 +91,8 @@ data line holds one, else whitespace.
 detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing) =
     _detect_format(path, delim === nothing ? '\0' : Char(delim))
 
+const _RINEX_CLK_HEAD = r"^\s*\d+\.\d+\s+C\b.*RINEX VERSION / TYPE"
+
 function _detect_format(path::AbstractString, delim::Char)
     isfile(path) || throw(ArgumentError("detect_format: file not found: " * String(path)))
     lines = _head_lines(path, 200)
@@ -93,6 +100,7 @@ function _detect_format(path::AbstractString, delim::Char)
         any(l -> match(_TIMELAB_FIELD, l) !== nothing, lines) && return :timelab
     lowercase(splitext(path)[2]) in (".phd", ".frd") && return :stable32
     any(l -> occursin(_BIPM_UTC_HEAD, l), first(lines, 5)) && return :bipm_utc
+    any(l -> occursin(_RINEX_CLK_HEAD, l), first(lines, 5)) && return :rinex_clk
     # Any other Stable32 export (a text header closed by "# Header End") is
     # plain columns to read_phase.
     any(l -> strip(l) == "# Header End", lines) && return :columns
@@ -396,6 +404,50 @@ function _read_bipm_utc(path::AbstractString, tau0::Float64, fillgaps::Bool)
     return _Record(_gridded(t, v, fillgaps), t0, true, start)
 end
 
+# A RINEX 3 clock file: "AS G08 2025 08 17 00 00 00.000000  2  bias  sigma"
+# records after the header, a satellite (AS) or station (AR) clock bias in
+# seconds per line. The chosen clock's biases are the phase record, on the MJD
+# axis; an epoch it is missing from is a gap.
+function _read_rinex_clk(path::AbstractString, tau0::Float64, column::Int, column_name::String, fillgaps::Bool)
+    names = String[]
+    t = Float64[]; v = Float64[]
+    target = column_name
+    io = open(path, "r")
+    try
+        body = false
+        for line in eachline(io)
+            if !body
+                body = occursin("END OF HEADER", line)
+                continue
+            end
+            startswith(line, "AS ") || startswith(line, "AR ") || continue
+            f = split(line; keepempty=false)
+            length(f) >= 10 || continue
+            if isempty(target)
+                name = String(f[2])
+                name in names || push!(names, name)
+                length(names) >= max(column, 1) && (target = names[max(column, 1)])
+            end
+            (isempty(target) ? false : lowercase(f[2]) == lowercase(target)) || continue
+            y = tryparse(Int, f[3]); mo = tryparse(Int, f[4]); d = tryparse(Int, f[5])
+            h = tryparse(Int, f[6]); mi = tryparse(Int, f[7])
+            sec = tryparse(Float64, f[8]); x = tryparse(Float64, f[10])
+            (y === nothing || mo === nothing || d === nothing || h === nothing || mi === nothing ||
+             sec === nothing || x === nothing) && continue
+            days = Dates.value(Date(y, mo, d) - Date(1858, 11, 17))
+            push!(t, days + (3600h + 60mi + sec) / 86400); push!(v, x)
+        end
+    finally
+        close(io)
+    end
+    length(t) >= 2 || throw(ArgumentError("read_data: " * (isempty(target) ? "no clock records" : "no records for clock \"" * target * "\"") *
+                                          " in " * String(path)))
+    start = _mjd_seconds(t[1])
+    t .*= 86400
+    t0 = _resolve_tau0(tau0, NaN, t, "this RINEX clock file")
+    return _Record(_gridded(t, v, fillgaps), t0, true, start)
+end
+
 # The trim-friendly core of read_data: every argument concrete, NaN / 0 / ""
 # meaning "not given", `kind` one of :auto, :phase, :frequency.
 function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, column::Int=0,
@@ -416,6 +468,8 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
         _read_table(path, tau0, column, column_name, nominal, hint, delim, fillgaps)
     elseif fmt === :bipm_utc
         _read_bipm_utc(path, tau0, fillgaps)
+    elseif fmt === :rinex_clk
+        _read_rinex_clk(path, tau0, column, column_name, fillgaps)
     elseif fmt === :columns
         v, t0, start = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
                                header=0, delim=nothing, scaling=1.0, detrend=:none, fillgaps=fillgaps)

@@ -18,7 +18,7 @@ const COMMAND_HELP = [
 
 const SHELLS = ["bash", "zsh", "fish", "powershell"]
 const FORMATS = ["csv", "json"]
-const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "table", "bipm_utc"]
+const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "table", "bipm_utc", "rinex_clk"]
 const DETRENDS = ["none", "mean", "endpoint", "linear"]
 const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
@@ -44,8 +44,8 @@ const OPTS = [
     Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", ANY),
     Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ANY),
     Opt("--freq", "", String[], false, "FILE holds fractional frequency", ANY),
-    Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns), bipm_utc (BIPM UTC-UTC(k))", ALL),
-    Opt("--column", "NAME", String[], false, "clock column of a table file, by name (default: the column named phase / PPS / time error, else frequency)", ALL),
+    Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns), bipm_utc (BIPM UTC-UTC(k)), rinex_clk (RINEX clock file; pick the clock with --column)", ALL),
+    Opt("--column", "NAME", String[], false, "clock column of a table file, or the clock of a RINEX clock file (G08, ALGO00CAN), by name (default: the column named phase / PPS / time error, else frequency)", ALL),
     Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean to 4 significant figures)", ANY),
     Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column)", ANY),
     Opt("--time-col", "N", String[], false, "1-based time column, 0 = none (default 1)", ALL),
