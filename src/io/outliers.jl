@@ -74,8 +74,11 @@ A `PhaseData` record is cleaned as frequency: it is differenced, the
 outlying frequency samples are replaced, and the result is summed back to
 phase from the first sample. A phase jump is one outlying frequency sample,
 so this takes the jump out, where replacing the phase sample it lands on
-would leave it in. Missing phase samples are filled first, so the result
-has no gaps.
+would leave it in.
+
+Missing samples are filled with the outliers, so a record that has
+outliers comes back without gaps. One that has none comes back as it is,
+with its gaps.
 
 [SP1065 §10.11](@cite riley-2008-sp1065) and
 [Stable32](@cite hamilton-2008-stable32-manual) replace an outlier by a gap,
