@@ -416,6 +416,12 @@ end
 # variance takes the same column at α = 0 … −4 (their Table 3).
 const _MTOT_NBIAS = (-0.005, -0.149, -0.229, -0.283, -0.321)
 
+# B = b0 + b1·(τ/T) of the modified Hadamard total variance for α = 2 … −2,
+# E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo over τ/τ0 ≥ 16
+# (tools/mc_mhtotdev.jl at git 9d7a408, the same sweep as _coeff_mhtot).
+const _MHTOT_B0 = (0.9005, 0.8238, 0.7933, 0.7841, 0.7879)
+const _MHTOT_B1 = (-0.0083, -0.0541, -0.0422, -0.0357, -0.0325)
+
 """
     bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{Float64}, T::Float64) → Vector{Float64}
 
@@ -465,20 +471,12 @@ function bias_correction(noises::Vector{Symbol}, var_type::Symbol, taus::Vector{
             a = alpha == -1 ? 1 / (3 * log(2)) : (alpha == -2 ? 0.75 : 0.0)
             B[k] = 1 - a * (tau / T)
         elseif var_type == :mtot
-            B[k] = 1 + _MTOT_NBIAS[3 - clamp(alpha, -2, 2)]
+            B[k] = 1 + _MTOT_NBIAS[3 - alpha]
         elseif var_type == :htot
             # Defined for α ∈ {0, …, −4}; for the PM noises Stable32 leaves B = 1.
             B[k] = -4 <= alpha <= 0 ? 1 + _MTOT_NBIAS[1 - alpha] : 1.0
         elseif var_type == :mhtot
-            # B = E[MHTOTVAR]/E[MHVAR] measured by Monte Carlo (tools/mc_mhtotdev.jl
-            # at git 9d7a408, the same sweep as _coeff_mhtot) over τ/τ0 ≥ 16,
-            # modeled as B = b0 + b1·(τ/T) like :totvar. The per-window
-            # quadratic detrend absorbs part of each window's variance, so
-            # MHTOTDEV reads low: B ≈ 0.90 for WHPM, ≈ 0.79 for the FM noises.
-            b0_t = Dict(2=>0.9005, 1=>0.8238, 0=>0.7933, -1=>0.7841, -2=>0.7879)
-            b1_t = Dict(2=>-0.0083, 1=>-0.0541, 0=>-0.0422, -1=>-0.0357, -2=>-0.0325)
-            aa = clamp(alpha, -2, 2)
-            B[k] = get(b0_t, aa, 1.0) + get(b1_t, aa, 0.0) * (tau / T)
+            B[k] = _MHTOT_B0[3 - alpha] + _MHTOT_B1[3 - alpha] * (tau / T)
         end
     end
 

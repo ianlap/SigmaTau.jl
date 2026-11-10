@@ -587,11 +587,10 @@ function _nnls_symbol(alpha::Int)
     return :unknown
 end
 
-# Deviation dispatch: the RAW profile, uniform kwargs. `ci=false` skips the
-# lag-1/B1 classifier and `correct_bias=false` skips MHTOTDEV's bias divisor —
-# both of which are functions of `identify_noise`, i.e. of exactly the
-# classification this routine is meant to replace. Fitting a bias-corrected
-# profile would make the decomposition depend on the answer it is computing.
+# The raw profile: `ci=false` skips the lag-1/B1 classifier and
+# `correct_bias=false` MHTOTDEV's bias divisor. Both depend on
+# `identify_noise`, and fitting a profile that depends on a noise label would
+# make the decomposition depend on the answer it is computing.
 function _nnls_deviation(deviation::Symbol, data::PhaseData, m_values::Vector{Int})
     deviation === :mdev  && return mdev(data, m_values; ci=false)
     deviation === :mhdev && return mhdev(data, m_values; ci=false)
@@ -673,7 +672,7 @@ collect(zip(r.noise_types, r.amplitudes))   # amplitude per α
 r.dominant                                  # dominant type per τ
 ```
 """
-function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
+function noise_id_nnls(data::PhaseData, m_values::AbstractVector{<:Integer} = Int[];
                        deviation::Symbol = :mhdev,
                        alphas::AbstractVector{<:Integer} = _nnls_default_alphas(deviation),
                        weights::Union{Symbol, AbstractVector{<:Real}} = :edf)
@@ -681,7 +680,7 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
     τ₀ = data.tau0
     # The estimator's octave grid from m = NNLS_M_MIN; see the docstring.
     ms = isempty(m_values) ? filter(>=(NNLS_M_MIN), _default_m_values(length(x), deviation)) :
-                             m_values
+                             collect(Int, m_values)
     isempty(ms) && throw(ArgumentError(
         "noise_id_nnls: record of $(length(x)) samples is too short for the default " *
         "m ≥ $NNLS_M_MIN grid; pass `m_values` explicitly"))
@@ -742,6 +741,6 @@ function noise_id_nnls(data::PhaseData, m_values::Vector{Int} = Int[];
             contributions, dominant, residual = rss, weights = w)
 end
 
-function noise_id_nnls(data::FrequencyData, m_values::Vector{Int} = Int[]; kwargs...)
+function noise_id_nnls(data::FrequencyData, m_values::AbstractVector{<:Integer} = Int[]; kwargs...)
     return noise_id_nnls(_freq_to_phase(data), m_values; kwargs...)
 end
