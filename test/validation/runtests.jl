@@ -4,6 +4,8 @@
 #
 #   * allantools (Python) on the committed records (fixtures/validation/
 #     allantools/*.csv, regenerated in CI by tools/validation/gen_allantools.py),
+#   * AllanDeviations.jl on the power-law records (fixtures/validation/
+#     allandeviations/devs.csv, from tools/validation/gen_allandeviations.jl),
 #   * Stable32 runs on PHASE.DAT (fixtures/validation/stable32_phasedat/) and
 #     on a flicker PM frequency record (fixtures/validation/stable32_flickerpm/),
 #   * the NBS 1000-point published values (NIST SP1065 §12.3),
@@ -13,7 +15,8 @@
 # Each row carries the tolerance it is held to; rows with tol = Inf are
 # documented convention differences that are reported (by
 # tools/validation/report.jl) but not asserted. Point SIGMATAU_ALLANTOOLS_DIR
-# at a freshly generated directory to test against a live allantools run.
+# (or SIGMATAU_ALLANDEVIATIONS_DIR) at a freshly generated directory to test
+# against a live run.
 using Test
 using SigmaTau
 
@@ -25,6 +28,7 @@ const _CC = CrossCheck
 @testset "reference cross-check" begin
     for (label, f) in (
             ("allantools σ, every estimator × α = +2…−4", _CC.allantools_dev_rows),
+            ("AllanDeviations.jl σ, every estimator × α", _CC.allandeviations_dev_rows),
             ("NBS 1000-point published values",          _CC.nbs14_rows),
             ("Stable32 PHASE.DAT σ, α and CI",            _CC.stable32_rows),
             ("Stable32 CI with Stable32's α",             _CC.stable32_ci_forced_alpha_rows),
