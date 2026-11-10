@@ -1,6 +1,6 @@
-"""Clock models, the Kalman filter, clock ensembles and timescales — mirrors
-``clockmodel.jl``, ``noisefit.jl``, ``kalman.jl``, ``comparisons.jl`` and
-``timescale.jl``.
+"""Clock models, the Kalman filter, holdover, clock ensembles and timescales —
+mirrors ``clockmodel.jl``, ``noisefit.jl``, ``kalman.jl``, ``holdover.jl``,
+``comparisons.jl`` and ``timescale.jl``.
 
 Results that later calls build on (a filter run, a noise fit) keep their Julia
 object, so a smoother or a holdover estimate runs on exactly what the filter
@@ -246,6 +246,67 @@ def holdover_error(kf: KalmanResult, tau: Sequence[float]) -> np.ndarray:
     return np_f64(jl.holdover_error(kf._jl, to_jl_f64(tau)))
 
 
+@dataclass(frozen=True)
+class HoldoverResult:
+    """Return type of ``holdover``: the statistics of the time error at each
+    holdover time ``tau`` (s), over every start the record allows. ``quantile``
+    is the |error| that ``confidence`` of the trials stay within; ``limit`` and
+    ``time_to_limit`` are ``nan`` when no limit was asked for."""
+
+    tau: np.ndarray
+    rms: np.ndarray
+    quantile: np.ndarray
+    worst: np.ndarray
+    mean: np.ndarray
+    n: np.ndarray
+    train: float
+    drift: bool
+    anchor: bool
+    confidence: float
+    limit: float
+    time_to_limit: float
+
+
+@_map_errors
+def holdover(
+    data: PhaseData,
+    *,
+    train: float | None = None,
+    tau: Sequence[float] | None = None,
+    drift: bool = False,
+    anchor: bool = True,
+    limit: float | None = None,
+    confidence: float = 0.95,
+) -> HoldoverResult:
+    """Measured holdover: learn the frequency (and drift) on ``train`` seconds,
+    free-run from the last reading for each ``tau``, and compare with the
+    record, from every start it allows (Delporte et al. 2000)."""
+    kw: dict[str, Any] = {}
+    if train is not None:
+        kw["train"] = float(train)
+    if tau is not None:
+        kw["tau"] = to_jl_f64(tau)
+    if limit is not None:
+        kw["limit"] = float(limit)
+    r = jl.holdover(
+        to_jl_data(data), drift=bool(drift), anchor=bool(anchor), confidence=float(confidence), **kw
+    )
+    return HoldoverResult(
+        np_f64(r.tau),
+        np_f64(r.rms),
+        np_f64(r.quantile),
+        np_f64(r.worst),
+        np_f64(r.mean),
+        np.array(r.n, dtype=np.int64),
+        float(r.train),
+        bool(r.drift),
+        bool(r.anchor),
+        float(r.confidence),
+        float(r.limit),
+        float(r.time_to_limit),
+    )
+
+
 @_map_errors
 def innovation_check(kf: KalmanResult, *, confidence: float = 0.95) -> dict:
     """Whether the model fits: the NIS mean against its χ² interval and the lag-1
@@ -461,6 +522,8 @@ __all__ = [
     "kalman_filter",
     "kalman_smooth",
     "holdover_error",
+    "HoldoverResult",
+    "holdover",
     "innovation_check",
     "prediction_error",
     "tune_q",
