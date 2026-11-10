@@ -103,7 +103,8 @@ points of a stability plot carry wide intervals. SigmaTau computes it per τ
   [greenhall-2003-edf-stability](@cite), which evaluates the EDF exactly from
   the noise spectrum rather than from fitted approximations.
 - **Total family:** the published EDF coefficients of NIST SP1065
-  [riley-2008-sp1065](@cite) and Howe and Tasset, with the Greenhall–Riley
+  [riley-2008-sp1065](@cite) and Howe and Peppler
+  [howe-2001-total-estimators](@cite), with the Greenhall–Riley
   value where no coefficients exist (white and flicker PM for TOTDEV and
   HTOTDEV). For MHTOTDEV, which is new in SigmaTau, the coefficients were
   measured by Monte Carlo; see [MHTOTDEV bias and EDF](mhtotdev.md).
@@ -144,10 +145,19 @@ SigmaTau divides it out using the identified noise type
 | Estimator | Correction |
 |:---|:---|
 | TOTDEV | Howe and Walter: τ/T-dependent, FLFM and RWFM only |
-| MTOTDEV, TTOTDEV | SP1065 Table 11 (MTOT overstates MVAR) |
-| HTOTDEV | Howe and Tasset, FM noises |
+| MTOTDEV, TTOTDEV | Howe and Peppler: MTOT reads 0.3 % (white PM) to 18 % (random-walk FM) low |
+| HTOTDEV | Howe and Peppler, FM noises |
 | MHTOTDEV | measured by Monte Carlo, τ/T-dependent |
 | Thêo1 | the ThêoBR ratio to ADEV, which needs no noise ID |
+
+The MTOT factors are Table 2 of Howe and Peppler
+[howe-2001-total-estimators](@cite): the expected Mod Totvar is 0.995, 0.851,
+0.771, 0.717 and 0.679 of MVAR from white PM to random-walk FM, as first
+simulated by Howe and Vernotte [howe-1999-modtotvar](@cite), and the test
+suite checks the kernel against them. SP1065 Table 11 prints factors of 1.06
+to 1.31 under a caption that reads as the same ratio; applied as printed they
+lower a statistic that already reads low. At τ = τ₀ MTOT is exactly half of
+MVAR for any record, and the correction is that factor of 2.
 
 `correct_bias=false` returns the raw statistic. Stable32 corrects TOTDEV and
 HTOTDEV the same way and reports MTOT and Thêo1 raw; the [validation page](validation.md)

@@ -88,7 +88,7 @@ r.tau, r.dev, ci_lower(r), ci_upper(r), r.noise_type, r.edf
 
 | | Stable32 | SigmaTau default | To match Stable32 |
 |---|---|---|---|
-| MTOTDEV | raw estimator | divided by √B(α) (SP1065 Table 11), unbiased | `mtotdev(p; correct_bias=false)` |
+| MTOTDEV | raw estimator, which reads low | raised to MDEV's expected value (Howe and Peppler 2001, Table 2) | `mtotdev(p; correct_bias=false)` |
 | Thêo1 | raw Thêo1 run, ThêoBR a separate run | ThêoBR | `theo1(p; correct_bias=false)` |
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |

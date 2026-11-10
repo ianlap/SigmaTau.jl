@@ -52,6 +52,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The default bias correction of `mtotdev` and `ttotdev` went the wrong way.
+  Mod Totvar reads low against MVAR, by 0.5 % for white PM up to 32 % for
+  random-walk FM (Howe and Peppler 2001, Table 2; Howe and Vernotte 1999),
+  and the correction divided it by the factors of SP1065 Table 11, 1.06 to
+  1.31, which lowered σ by a further 3 to 13 %. It now divides by the Howe
+  and Peppler ratios (`bias_correction(…, :mtot, …)` returns 0.995, 0.851,
+  0.771, 0.717, 0.679), so the default tracks MDEV, and σ is 3 % (white PM)
+  to 39 % (random-walk FM) higher than before. At `m = 1`, where the
+  estimator is exactly MDEV/√2, the correction is that factor.
+  `correct_bias=false` is unchanged and still matches Stable32 and
+  allantools.
 - Confidence intervals where the EDF is below 1 are χ² intervals like every
   other, and so the widest on the plot. They used to be replaced by a
   Gaussian interval on the whole record length, which gave the least

@@ -32,6 +32,21 @@ using SigmaTau
         @test isempty(bad)
     end
 
+    @testset "MTOTDEV bias (Howe & Peppler 2001, Table 2)" begin
+        # Mod Totvar reads low against MVAR by B = 1 + a; at m = 16 one record
+        # pins the ratio to 2 %. At m = 1 it is one half for any record, and
+        # the default output is MDEV itself.
+        function ratio(alpha)
+            p = noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0), rng=Xoshiro(alpha + 7))
+            @test mtotdev(p, [1]).dev ≈ mdev(p, [1]; ci=false).dev rtol = 1e-8
+            (mtotdev(p, [1, 16]; ci=false, correct_bias=false).dev ./ mdev(p, [1, 16]; ci=false).dev) .^ 2
+        end
+        B(noise) = bias_correction([noise], :mtot, [16.0], 4095.0)[1]
+        @test [B(:WHFM), B(:RWFM)] ≈ [0.771, 0.679]
+        @test ratio(0)  ≈ [0.5, B(:WHFM)] rtol = 0.05
+        @test ratio(-2) ≈ [0.5, B(:RWFM)] rtol = 0.05
+    end
+
     @testset "TTOTDEV = MTOTDEV · τ/√3 identity" begin
         # ttotdev wraps mtotdev with a τ/√3 rescaling (analogous to tdev
         # over mdev). Verifies the wrapper produces the documented
