@@ -20,6 +20,9 @@ export Sy, Sx, L
 
 Base.@deprecate nch(args...) ncornered_hat(args...)
 
+Base.@deprecate(confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, noises::Vector{Symbol}, N::Int, confidence::Float64),
+                confidence_intervals(devs, edfs, confidence))
+
 Base.@deprecate save_result(path::AbstractString, r::StabilityResult) save(path, r)
 Base.@deprecate save_suite(path::AbstractString, s::StabilitySuite; kwargs...) save(path, s; kwargs...)
 Base.@deprecate load_result(path::AbstractString) load(path)

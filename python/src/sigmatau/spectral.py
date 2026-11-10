@@ -2,7 +2,7 @@
 
 One-sided Welch estimates at sample rate ``fs = 1/τ₀``, returned as a
 ``SpectralResult``. ``PhaseData`` and ``FrequencyData`` are accepted by every
-estimator (converted internally by the oracle as needed).
+estimator (converted internally by Julia as needed).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from .types import FrequencyData, PhaseData, SpectralResult
 
 
 def _welch_kwargs(nperseg: int | None, noverlap: int | None, taper: str) -> dict:
-    """Welch keyword arguments for the oracle: ``None`` segment sizes are omitted."""
+    """Welch keyword arguments for Julia: ``None`` segment sizes are omitted."""
     kwargs = {"taper": jl.Symbol(str(taper))}
     if nperseg is not None:
         kwargs["nperseg"] = int(nperseg)

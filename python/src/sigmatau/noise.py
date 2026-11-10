@@ -3,7 +3,7 @@
 ``identify_noise`` classifies the dominant power-law noise type per averaging
 factor (the lag-1 ACF / B1-ratio classifier the EDF/CI machinery consumes);
 ``noise_gen`` synthesizes a record with a chosen power-law frequency spectrum,
-drawing from Julia's RNG so a seeded draw matches the oracle bit-for-bit.
+drawing from Julia's RNG so a seeded draw matches Julia bit-for-bit.
 """
 
 from __future__ import annotations

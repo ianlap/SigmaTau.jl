@@ -28,6 +28,7 @@ const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const TIMESCALES = ["at1", "at2", "ewfa"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
+const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 
 struct Opt
     long::String
@@ -77,6 +78,7 @@ const OPTS = [
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only)", ["analyze"]),
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
+    Opt("--mask", "NAME", MASKS, false, "also check MTIE and TDEV against an ITU-T wander mask, or all of them (JSON only): G811, G813_opt1, G8262_opt1, G823_SSU ..., all", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
     Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE", ["cross"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
@@ -162,6 +164,7 @@ mutable struct Options
     clocks::Int               # --clocks: simulated clocks; 0 = not given
     clock::Int                # --clock: which simulated clock to read
     models::Vector{NTuple{4,Float64}}   # --noise-model: R, q1, q2, q3 per simulated clock
+    mask::String              # --mask: ITU-T mask checked in the JSON; "" = none
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -169,7 +172,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     Float64(DEFAULT_CONFIDENCE), true, false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", NaN, 1.0,
-                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[])
+                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -328,6 +331,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--format";         o.format = check_choice(v, name, FORMATS)
     elseif name == "--out";            o.out = v
     elseif name == "--with";           o.with = v
+    elseif name == "--mask";           o.mask = check_choice(v, name, MASKS)
     else throw(usage_error("option " * name * " takes no value"))
     end
     return o
@@ -418,6 +422,7 @@ function parse_args!(o::Options, args::Vector{String})
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
     o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
+    isempty(o.mask) || o.format == "json" || throw(usage_error("--mask adds to the JSON output; use --format json"))
     return o
 end
 

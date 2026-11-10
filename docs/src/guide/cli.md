@@ -3,6 +3,10 @@
 `sigmatau` is one compiled program with a subcommand per task. It runs the
 same library code as the Julia API, starts in about 30 ms, and needs no Julia
 install. The stability explorer runs the same binary with `--format json`.
+Each [release](https://github.com/ianlap/SigmaTau.jl/releases) carries it
+prebuilt as `sigmatau-<version>-<linux|macos>-<arch>.tar.gz`; unpack it and
+run `bin/sigmatau` (on macOS, clear the download flag first with
+`xattr -dr com.apple.quarantine sigmatau-*`).
 
 ```bash
 sigmatau analyze clock.dat --tau0 1 --devs adev,mdev,tdev
@@ -66,7 +70,7 @@ The record (all four analysis commands):
 | `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
-| `--fillgaps` | put the record on an even time grid and fill the gaps (needs a time column) |
+| `--fillgaps` | fill the missing samples by interpolation (needs a time column; without it, a reading missing from the time column is a gap the gap-tolerant estimators skip) |
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
@@ -139,7 +143,7 @@ numbers are `null`.
   "source": "clock.dat",
   "record": {
     "quantity": "phase", "n": 16384, "tau0": 1.0, "span_s": 16384.0,
-    "gaps": 0, "outliers": 2, "outlier_t": [812.0, 9031.0], "outlier_x": [3.1e-9, 3.4e-9],
+    "start": "2026-11-08T12:00:00Z", "gaps": 0, "outliers": 2, "outlier_t": [812.0, 9031.0], "outlier_x": [3.1e-9, 3.4e-9],
     "drift_per_day": 3.1e-14, "removed_offset": null, "removed_drift_per_day": null,
     "series": { "t": [0.0, 4.0], "x": [0.0, 1.2e-12] }
   },
@@ -161,7 +165,9 @@ numbers are `null`.
 
 - `record` is in every answer; `series` only with `--series N`, as an evenly
   strided subset of the phase. At most 500 outliers are listed in
-  `outlier_t`/`outlier_x`; `outliers` is the full count.
+  `outlier_t`/`outlier_x`; `outliers` is the full count. `start` is the
+  UTC time of the first sample from ISO 8601 or MJD timestamps, `""` when
+  the file has none; `gaps` counts the missing samples.
 - `axis` is `sigma_x` (seconds) for TDEV, HTDEV, TTOTDEV, MTIE and TIE rms,
   and `sigma_y` for the rest. With `--m`, `tau_mode` is `"m"` and `m` lists
   the factors.
@@ -177,6 +183,11 @@ numbers are `null`.
   `tau_from`, `tau_to`) and `residual`, the MHDEV the components leave. A
   record or a component the fit cannot use gives `{"error": "…"}` there
   instead.
+- `masks` comes from `analyze --mask NAME` (or `all`): for each ITU-T
+  mask (see [`TELECOM_MASKS`](@ref)) its `name`, `title`, the `mtie` and
+  `tdev` limits in seconds over `tau` (0.1 s to 10⁶ s, `null` outside the
+  recommendation's range), and in `checks` each MTIE / TDEV result's
+  `limit` at its τ, `pass` and `margin` (see [`mask_check`](@ref)).
 - `sigmatau dynamic` adds `"dynamic": {"deviation", "window", "step", "t",
   "tau", "dev"}`, where `dev` has one row per window (centre time `t`, in
   seconds) and one column per τ.

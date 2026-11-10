@@ -67,6 +67,9 @@ function markRecordStale(s) { s.run.stale = "record"; s.run.gen = (s.run.gen ?? 
 const DRIFT_FACT = { none: "drift kept", linear: "offset removed", quadratic: "drift removed" };
 const baseName = (n) => n.replace(/\.[^.]+$/, "");
 
+// A frequency record cannot be read with samples missing, so a file with gaps is filled from the start.
+const fillNeeded = (settings) => settings.kind === "frequency" && settings.gaps > 0;
+
 let nextGroup = 1;
 
 // Load a file through the import dialog. The first value column goes into
@@ -94,8 +97,8 @@ async function importFile(file, clock, prev) {
         source: { type: "file", name: file.name, content: file.text, sha256: file.sha256 ?? "" }, group,
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
-        hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo,
-        fillgaps: settings.hasTimeCol ? c.fillgaps : false, remove_outliers: false, range: null, result: null,
+        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo,
+        fillgaps: settings.hasTimeCol ? c.fillgaps || fillNeeded(settings) : false, remove_outliers: false, range: null, result: null,
       });
       touched.push(c);
     });
@@ -152,8 +155,8 @@ async function reimport(c) {
       Object.assign(k, {
         group: c.group, kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[i] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
-        hasTimeCol: settings.hasTimeCol, missing: settings.missing, sourceInfo: settings.sourceInfo, source: c.source,
-        fillgaps: settings.hasTimeCol ? k.fillgaps : false, result: null,
+        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo, source: c.source,
+        fillgaps: settings.hasTimeCol ? k.fillgaps || fillNeeded(settings) : false, result: null,
       });
       touched.push(k);
     });
@@ -184,7 +187,7 @@ async function useSynth(c, { n, tau0, seed, clocks = 1, models = null, names = n
       Object.assign(x, {
         source: { type: "synth", n, seed, tau0, ...(models ? { models } : {}), ...(k > 1 ? { clocks: k, index: i + 1 } : {}) },
         sourceInfo: k > 1 ? `simulated clock ${i + 1} of ${k}` : models ? "simulated clock" : "white + random-walk FM", kind: "phase", group: null,
-        tau0, hasTimeCol: false, missing: 0, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
+        tau0, hasTimeCol: false, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
       });
       if (names) x.name = names[i];
       else if (wasFile || DEFAULT_NAMES.test(x.name)) x.name = k > 1 ? `Sim ${i + 1}` : "Synthetic record";

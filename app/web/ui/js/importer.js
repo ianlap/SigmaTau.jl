@@ -1,7 +1,7 @@
 // The import dialog: shows the top of a file, lets the user say which column
 // is time and which is the value, the record type, units and τ0, and returns
 // the reader settings for the core. openImport() resolves to null on cancel.
-import { sniff, guessRoles, timeStats, thin, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
+import { sniff, guessRoles, timeStats, thin, parseFactor, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
 import { escapeHtml as h, thousands, duration, num } from "./format.js";
 import { seriesColor, hexAlpha } from "./plot.js";
 
@@ -16,7 +16,7 @@ function remembered(s) {
 function remember(s, st) {
   try {
     if (!st.remember) { localStorage.removeItem(formatKey(s)); return; }
-    localStorage.setItem(formatKey(s), JSON.stringify({ kind: st.kind, time_col: st.time, timeUnit: st.timeUnit, value_cols: st.values, scaling: st.scaling, tau0: st.tau0In, against: st.against }));
+    localStorage.setItem(formatKey(s), JSON.stringify({ kind: st.kind, time_col: st.time, timeUnit: st.timeUnit, value_cols: st.values, scaling: st.scaling, factor: st.factor, tau0: st.tau0In, against: st.against }));
   } catch { /* storage off: nothing to remember */ }
 }
 
@@ -34,9 +34,10 @@ export function openImport(file, prev = null) {
     time: p?.time_col ?? guess.time,          // 0 = no time column
     timeUnit: p?.timeUnit ?? guess.timeUnit,
     values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
-    scaling: p?.scaling ?? 1,
+    scaling: p?.scaling ?? guess.scaling ?? 1,
     tau0In: p?.tau0 ?? s.tau0Hint ?? "",     // no guess: without a time column τ0 must be given
     against: p?.against ?? "",
+    factor: p?.factor ?? "",                  // a typed scale factor, which replaces the unit choice
     remember: true,
     labels: { ...(prev?.clockNames ?? {}) },   // column → the name typed for its clock
   };
@@ -66,14 +67,13 @@ export function openImport(file, prev = null) {
       labels: st.values.map((c) => (st.labels[c] ?? "").trim() || null),
       against: st.against.trim(),
       header: s.header,
-      scaling: st.scaling,
+      scaling: parseFactor(st.factor) || st.scaling,
       tau0,
       hasTimeCol: st.time > 0 || !!s.format,  // instrument readers can fill gaps without one
       gaps: ts ? ts.gaps : 0,
-      missing: ts ? ts.missing : 0,         // samples missing from the time column
       sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind} · τ₀ ${num(tau0, 4)} s` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
-      unitName: (units.find(([f]) => f === st.scaling) ?? units[0])[1],
+      unitName: parseFactor(st.factor) ? `readings × ${num(parseFactor(st.factor), 4)}` : (units.find(([f]) => f === st.scaling) ?? units[0])[1],
       remembered: fromMemory && !prev,
     };
   };
@@ -88,7 +88,8 @@ export function openImport(file, prev = null) {
       const { ts, tau0 } = derived();
       const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
       if (!units.some(([f]) => f === st.scaling)) st.scaling = 1;
-      const unitName = units.find(([f]) => f === st.scaling)[1];
+      const factor = parseFactor(st.factor);
+      const unitName = factor ? `readings × ${num(factor, 4)}` : units.find(([f]) => f === st.scaling)[1];
       const role = (c) => (c === st.time ? "time" : st.values.includes(c) ? "value" : "ignore");
       const several = st.values.length > 1;
       const color = (c) => seriesColor(st.values.indexOf(c));
@@ -139,10 +140,10 @@ export function openImport(file, prev = null) {
       const spark = lines ? `<svg viewBox="0 0 330 92" preserveAspectRatio="none" width="100%" height="100%">${lines}</svg>` : "";
 
       const gap = ts && ts.gaps
-        ? `<div class="gap-card"><b>${ts.gaps} gap${ts.gaps > 1 ? "s" : ""} in the time column</b>${thousands(ts.missing)} missing sample${ts.missing === 1 ? "" : "s"}. Turn on <i>Fill gaps</i> on the Data page to put them back on an even grid.</div>`
+        ? `<div class="gap-card"><b>${ts.gaps} gap${ts.gaps > 1 ? "s" : ""} in the time column</b>${thousands(ts.missing)} missing sample${ts.missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to interpolate them.</div>`
         : "";
       const tauLine = ts && ts.tau0 > 0
-        ? `<div class="tau-line"><span class="mono">${num(ts.tau0, 4)} s</span><span class="ok">✓ from the time column${ts.even ? ", evenly spaced" : ", median step"}</span></div>`
+        ? `<div class="tau-line"><span class="mono">${num(ts.tau0, 4)} s</span><span class="ok">✓ from the time column${ts.even ? ", evenly spaced" : ", grid step"}</span></div>`
         : `<div class="tau-line"><input type="number" id="imp-tau0" min="0" step="any" value="${h(st.tau0In)}"> <span class="muted small">s${s.tau0Hint ? " · from the file header" : " · no time column"}</span></div>`;
 
       dlg.innerHTML = `
@@ -172,7 +173,9 @@ export function openImport(file, prev = null) {
             : `<div><label class="lbl">Record type</label>
               <div class="seg" role="group"><button type="button" data-kind="phase" class="${st.kind === "phase" ? "on" : ""}">Phase (time error)</button><button type="button" data-kind="frequency" class="${st.kind === "frequency" ? "on" : ""}">Fractional frequency</button></div></div>
             <div><label class="lbl" for="imp-units">${st.kind === "phase" ? "Phase units" : "Frequency units"}</label>
-              <select id="imp-units">${units.map(([f, l]) => `<option value="${f}" ${f === st.scaling ? "selected" : ""}>${l}</option>`).join("")}</select></div>`}
+              <select id="imp-units">${units.map(([f, l]) => `<option value="${f}" ${f === st.scaling ? "selected" : ""}>${l}</option>`).join("")}</select>
+              <input type="text" id="imp-factor" class="wide-input" placeholder="or a factor, e.g. 1/(2*pi*5e14) for radians" value="${h(st.factor)}" aria-label="Scale factor" style="margin-top:6px">
+              ${st.factor.trim() && !factor ? `<div class="muted small err" style="margin-top:4px">Not a positive number.</div>` : ""}</div>`}
             <div><label class="lbl">Sample interval τ<sub>0</sub></label>${tauLine}</div>
             ${gap}
             <div><label class="lbl" for="imp-against">Measured against</label>
@@ -224,7 +227,8 @@ export function openImport(file, prev = null) {
         }
         st.values.sort((a, b) => a - b);
         render();
-      } else if (t.id === "imp-units") { st.scaling = Number(t.value); render(); }
+      } else if (t.id === "imp-units") { st.scaling = Number(t.value); st.factor = ""; render(); }
+      else if (t.id === "imp-factor") { st.factor = t.value; render(); }
       else if (t.id === "imp-remember") st.remember = t.checked;
     };
     dlg.oninput = (e) => {

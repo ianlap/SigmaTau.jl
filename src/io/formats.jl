@@ -9,16 +9,18 @@ names them.
 """
 const INPUT_FORMATS = (:columns, :stable32, :timelab, :counter, :table)
 
-# What a format reader returns: the samples, τ₀, whether they are phase, and
-# which samples fillgaps put back (empty when none were).
+# What a format reader returns: the samples, τ₀, whether they are phase,
+# which samples fillgaps put back (empty when none were) and the start time
+# (NaN when unknown).
 struct _Record
     v::Vector{Float64}
     tau0::Float64
     phase::Bool
     filled::BitVector
+    start::Float64
 end
-_Record(v::Vector{Float64}, tau0::Float64, phase::Bool) = _Record(v, tau0, phase, falses(0))
-_Record(vf::Tuple{Vector{Float64},BitVector}, tau0::Float64, phase::Bool) = _Record(vf[1], tau0, phase, vf[2])
+_Record(vf::Tuple{Vector{Float64},BitVector}, tau0::Float64, phase::Bool, start::Float64) =
+    _Record(vf[1], tau0, phase, vf[2], start)
 
 _split_fields(line::AbstractString, d::Union{Char,Nothing}) =
     d === nothing ? split(line; keepempty=false) : map(strip, split(line, d))
@@ -46,11 +48,8 @@ _scpi_nan(v::Float64) = v == 9.91e37 ? NaN : v
 
 const _TIMELAB_FIELD = r"^(STR|DBL|S32|BLN|S64|U32) 0x[0-9A-Fa-f]+ \"([^\"]*)\"\s?(.*)$"
 
-function _delim_for(path::AbstractString, line::AbstractString, delim::Char='\0')
+function _delim_for(line::AbstractString, delim::Char)
     delim == '\0' || return delim
-    ext = lowercase(splitext(path)[2])
-    ext == ".csv" && return ','
-    ext == ".tsv" && return '\t'
     occursin(',', line) && return ','
     occursin('\t', line) && return '\t'
     return nothing
@@ -69,14 +68,14 @@ Name the layout of a data file from its extension and first lines, one of
 - `:stable32`: a Stable32 `.phd` (phase) or `.frd` (frequency) file.
 - `:counter`: frequency-counter readings in SCPI real format
   (`+1.00000000012345E+07`, as the Keysight 53230A and 53220A log them),
-  one per line, optionally after a timestamp.
+  one per line, optionally after a timestamp (seconds or ISO 8601).
 - `:table`: numeric columns under a line of column names (a CSV export,
   most GPSDO and logging-script output).
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
   [`read_frequency`](@ref).
 
-`delim` is the field delimiter, by default comma for `.csv`, tab for
-`.tsv`, else whitespace.
+`delim` is the field delimiter, by default a comma or tab when the first
+data line holds one, else whitespace.
 """
 detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing) =
     _detect_format(path, delim === nothing ? '\0' : Char(delim))
@@ -98,75 +97,73 @@ function _detect_format(path::AbstractString, delim::Char)
         length(data) >= 8 && break
     end
     isempty(data) && return :columns
-    d = _delim_for(path, data[1], delim)
+    d = _delim_for(data[1], delim)
+    # Counter readings, after a timestamp or none.
+    all(data) do l
+        f = _split_fields(l, d)
+        1 <= length(f) <= 2 && occursin(_SCPI_REAL, f[end]) &&
+            (length(f) == 1 || _isnumfield(f[1]) || !isnan(_iso_seconds(f[1])))
+    end && return :counter
     first_fields = _split_fields(data[1], d)
     if length(data) >= 2 && !all(_isnumfield, first_fields)
         next = _split_fields(data[2], d)
         length(next) == length(first_fields) && any(_isnumfield, next) && return :table
         return :columns
     end
-    all(data) do l
-        f = _split_fields(l, d)
-        1 <= length(f) <= 2 && occursin(_SCPI_REAL, f[end]) && all(_isnumfield, f)
-    end && return :counter
     return :columns
 end
 
-# τ₀: the explicit value, else the header's, else the median time step.
+# τ₀: the explicit value, else the header's, else the time column's step.
 function _resolve_tau0(tau0::Float64, header::Float64, t::Vector{Float64}, what::String)
     isnan(tau0) || return tau0
     isnan(header) || return header
-    length(t) >= 2 && return _median_step(t)
+    length(t) >= 2 && return _column_step(t)
     throw(ArgumentError("read_data: " * what * " has no sample interval; pass tau0"))
-end
-
-# With fillgaps, samples go on an even grid of the time column (or, without
-# one, stay where they are) and NaN samples are filled. Returns the samples
-# and the mask of filled ones.
-function _equispace(t::Vector{Float64}, v::Vector{Float64}, fillgaps::Bool)
-    fillgaps || return v, falses(0)
-    v_eq = length(t) >= 2 ? _make_equispaced(t, v)[2] : v
-    filled, mask = _howe_fillgaps_core(v_eq)
-    return filled, BitVector(mask)
 end
 
 function _read_timelab(path::AbstractString, tau0::Float64)
     fields = Dict{String,String}()
     v = Float64[]
-    block = ""
-    io = open(path, "r")
+    block = false
+    l = _Lines(path)
     try
-        for raw in eachline(io)
-            line = strip(raw)
-            (isempty(line) || startswith(line, ';')) && continue
-            if isempty(block)
-                m = match(_TIMELAB_FIELD, line)
-                if m !== nothing
-                    k = m.captures[2]; val = m.captures[3]
-                    (k === nothing || val === nothing) || (fields[String(k)] = String(strip(val)))
-                    continue
-                end
-                block = String(first(split(line)))
-                block == "TIC" || throw(ArgumentError(
-                    "read_data: TimeLab block \"" * block * "\" is not supported (only TIC phase blocks)"))
+        while true
+            r = _nextline!(l)
+            r === nothing && break
+            r = _strip(l.buf, r)
+            (isempty(r) || l.buf[first(r)] == UInt8(';')) && continue
+            if block
+                x = _parse_f64(l.buf, r)
+                x === nothing && throw(ArgumentError("read_data: non-numeric TimeLab sample \"" *
+                                                     _field_string(l.buf, r) * "\" in " * String(path)))
+                push!(v, x)
                 continue
             end
-            x = tryparse(Float64, line)
-            x === nothing && throw(ArgumentError("read_data: non-numeric TimeLab sample \"" * String(line) * "\" in " * String(path)))
-            push!(v, x)
+            line = _field_string(l.buf, r)
+            m = match(_TIMELAB_FIELD, line)
+            if m !== nothing
+                k = m.captures[2]; val = m.captures[3]
+                (k === nothing || val === nothing) || (fields[String(k)] = String(strip(val)))
+                continue
+            end
+            name = String(first(split(line)))
+            name == "TIC" || throw(ArgumentError(
+                "read_data: TimeLab block \"" * name * "\" is not supported (only TIC phase blocks)"))
+            block = true
         end
     finally
-        close(io)
+        close(l)
     end
-    isempty(block) && throw(ArgumentError("read_data: no TIC data block in " * String(path)))
+    block || throw(ArgumentError("read_data: no TIC data block in " * String(path)))
     scale = tryparse(Float64, get(fields, "Scale Factor", "1"))
     scale === nothing || scale == 1 || (v .*= scale)
     si = tryparse(Float64, get(fields, "Sample Interval", ""))
-    return _Record(v, _resolve_tau0(tau0, si === nothing ? NaN : si, Float64[], "this TimeLab file"), true)
+    t0 = _resolve_tau0(tau0, si === nothing ? NaN : si, Float64[], "this TimeLab file")
+    return _Record(v, t0, true, falses(0), NaN)
 end
 
 function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps::Bool)
-    nskip, htau = _scan_comment_header(path)
+    nskip, htau, hstart = _scan_comment_header(path)
     # Record type: the header's "Type:" line, else the extension.
     phase = lowercase(splitext(path)[2]) != ".frd"
     for l in _head_lines(path, nskip)
@@ -174,14 +171,17 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
         m === nothing || (phase = lowercase(something(m.captures[1], "phase")) == "phase")
     end
     hint == 0 || (phase = hint > 0)
-    M = _read_columns(path; header=nskip)
-    size(M, 1) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
-    v = Vector{Float64}(M[:, end])
-    t = size(M, 2) >= 2 ? Vector{Float64}(M[:, 1]) : Float64[]
+    (t, v), ncols = _read_cols(path, nskip, nothing, [1, 0])
+    length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
+    ncols >= 2 || (t = Float64[])
     # A Stable32 time tag is an MJD (days); a large value with sub-day steps.
-    length(t) >= 2 && t[1] > 30000 && _median_step(t) < 1 && (t .*= 86400)
-    t0 = _resolve_tau0(tau0, htau === nothing ? NaN : htau, t, "this Stable32 file")
-    return _Record(_equispace(t, v, fillgaps), t0, phase)
+    start = hstart
+    if length(t) >= 2 && t[1] > 30000 && _median_step(t) < 1
+        isnan(start) && (start = _mjd_seconds(t[1]))
+        t .*= 86400
+    end
+    t0 = _resolve_tau0(tau0, htau, t, "this Stable32 file")
+    return _Record(_gridded(t, v, fillgaps), t0, phase, start)
 end
 
 # Nominal frequency of a counter log: the mean reading to 4 significant
@@ -196,23 +196,45 @@ function _nominal(f::Vector{Float64}, nominal::Float64)
     return round(s / n; sigdigits=4)
 end
 
+# A time field: seconds (or days) as a number, else an ISO 8601 timestamp;
+# NaN if neither. Sets iso[] when it was a timestamp.
+function _time_field(buf::Vector{UInt8}, r::UnitRange{Int}, iso::Base.RefValue{Bool})
+    x = _parse_f64(buf, r)
+    x === nothing || return x
+    iso[] = true
+    return _iso_seconds(buf, r)
+end
+
 function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hint::Int,
                        delim::Char, fillgaps::Bool)
     t = Float64[]; v = Float64[]
-    for line in eachline(path)
-        s = strip(line)
-        (isempty(s) || startswith(s, '#')) && continue
-        f = _split_fields(s, _delim_for(path, s, delim))
-        x = tryparse(Float64, f[end])
-        x === nothing && throw(ArgumentError("read_data: non-numeric counter reading \"" * String(s) * "\" in " * String(path)))
-        push!(v, _scpi_nan(x))
-        if length(f) >= 2
-            tt = tryparse(Float64, f[1])
-            tt === nothing || push!(t, tt)
+    iso = Ref(false)
+    d = '\0'; first_line = true
+    fields = UnitRange{Int}[]
+    l = _Lines(path)
+    try
+        while true
+            r = _nextline!(l)
+            r === nothing && break
+            _blank_or_comment(l.buf, r) && continue
+            if first_line
+                dd = _delim_for(_field_string(l.buf, _strip(l.buf, r)), delim)
+                d = dd === nothing ? '\0' : dd
+                first_line = false
+            end
+            _fields!(fields, l.buf, r, d)
+            x = _parse_f64(l.buf, fields[end])
+            x === nothing && throw(ArgumentError("read_data: non-numeric counter reading \"" *
+                                                 _field_string(l.buf, _strip(l.buf, r)) * "\" in " * String(path)))
+            push!(v, _scpi_nan(x))
+            length(fields) >= 2 && push!(t, _time_field(l.buf, fields[1], iso))
         end
+    finally
+        close(l)
     end
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 readings in " * String(path)))
-    length(t) == length(v) || empty!(t)
+    (length(t) == length(v) && !any(isnan, t)) || empty!(t)
+    start = iso[] && !isempty(t) ? t[1] : NaN
     t0 = _resolve_tau0(tau0, NaN, t, "this counter log (no timestamps; pass tau0 = the gate time)")
     finite = filter(isfinite, v)
     isempty(finite) && throw(ArgumentError("read_data: no finite counter readings in " * String(path)))
@@ -223,7 +245,7 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
         f0 = _nominal(v, nominal)
         v = (v .- f0) ./ f0
     end
-    return _Record(_equispace(t, v, fillgaps), t0, phase)
+    return _Record(_gridded(t, v, fillgaps), t0, phase, start)
 end
 
 # Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "Hz"): the
@@ -247,26 +269,6 @@ const _PHASE_NAMES = r"phase|time ?err|\btie\b|pps|time ?offset|time ?diff|\bx\b
 const _FREQ_NAMES  = r"freq|\bffe\b|osc|fractional|\by\b"i
 const _TIME_NAMES  = r"^(t|mjd|time|timestamp|date|datetime|utc|epoch|elapsed|sec|seconds)\s*([(\[].*)?$"i
 
-# UTC seconds since 2000-01-01 of an ISO 8601 timestamp
-# ("2026-11-08T21:41:03.5", a space for the T, then Z, ±hh:mm, ±hhmm or
-# nothing); NaN if it is not one.
-function _iso_seconds(s::AbstractString)
-    m = match(r"^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)(Z|([+-])(\d{2}):?(\d{2}))?$", strip(s))
-    m === nothing && return NaN
-    c = Float64[]
-    for i in 1:6
-        x = m.captures[i]
-        x === nothing && return NaN
-        push!(c, parse(Float64, x))
-    end
-    days = Dates.value(Dates.Date(Int(c[1]), Int(c[2]), Int(c[3])) - Dates.Date(2000, 1, 1))
-    sec = days * 86400.0 + c[4] * 3600 + c[5] * 60 + c[6]
-    sign, hh, mm = m.captures[8], m.captures[9], m.captures[10]
-    (sign === nothing || hh === nothing || mm === nothing) && return sec
-    offset = parse(Int, hh) * 3600 + parse(Int, mm) * 60
-    return sign == "+" ? sec - offset : sec + offset
-end
-
 function _pick_column(names::Vector{String}, column::Int, column_name::String, time::Int)
     if column > 0
         column <= length(names) || throw(ArgumentError("read_data: column=" * string(column) * " exceeds " * string(length(names)) * " columns"))
@@ -277,6 +279,7 @@ function _pick_column(names::Vector{String}, column::Int, column_name::String, t
         i === nothing && throw(ArgumentError("read_data: no column named \"" * column_name * "\"; columns: " * join(names, ", ")))
         return i
     end
+    length(names) == 2 && time > 0 && return 3 - time
     for re in (_PHASE_NAMES, _FREQ_NAMES)
         hits = [i for i in eachindex(names) if i != time && occursin(re, names[i])]
         length(hits) == 1 && return hits[1]
@@ -285,41 +288,62 @@ function _pick_column(names::Vector{String}, column::Int, column_name::String, t
                         join(names, ", ")))
 end
 
+# A table is read in one pass that keeps only its clock and time columns,
+# chosen from the names and the first row.
 function _read_table(path::AbstractString, tau0::Float64, column::Int, column_name::String,
                      nominal::Float64, phase_hint::Int, delim::Char, fillgaps::Bool)
     names = String[]
-    rows = Vector{Vector{String}}()
-    d::Union{Char,Nothing} = nothing
-    for line in eachline(path)
-        s = strip(line)
-        (isempty(s) || startswith(s, '#')) && continue
-        if isempty(names)
-            d = _delim_for(path, s, delim)
-            names = String[String(strip(f, '"')) for f in _split_fields(s, d)]
-            continue
+    d = '\0'
+    c = 0; time = 0
+    v = Float64[]; t = Float64[]
+    iso = Ref(false)
+    fields = UnitRange{Int}[]
+    nrow = 0
+    l = _Lines(path)
+    try
+        while true
+            r = _nextline!(l)
+            r === nothing && break
+            _blank_or_comment(l.buf, r) && continue
+            if isempty(names)
+                dd = _delim_for(_field_string(l.buf, _strip(l.buf, r)), delim)
+                d = dd === nothing ? '\0' : dd
+                _fields!(fields, l.buf, r, d)
+                names = String[_field_string(l.buf, f) for f in fields]
+                continue
+            end
+            _fields!(fields, l.buf, r, d)
+            nrow += 1
+            length(fields) == length(names) || throw(ArgumentError(
+                "read_data: row " * string(nrow) * " has " * string(length(fields)) * " fields, expected " *
+                string(length(names))))
+            if nrow == 1
+                # The time column by name, else the first one holding ISO timestamps.
+                time = something(findfirst(n -> occursin(_TIME_NAMES, n), names),
+                                 findfirst(f -> !isnan(_iso_seconds(l.buf, f)), fields), 0)
+                c = _pick_column(names, column, column_name, time)
+            end
+            x = _parse_f64(l.buf, fields[c])
+            push!(v, x === nothing ? NaN : x)
+            time > 0 && push!(t, _time_field(l.buf, fields[time], iso))
         end
-        push!(rows, String[String(strip(f, '"')) for f in _split_fields(s, d)])
+    finally
+        close(l)
     end
-    length(rows) >= 2 || throw(ArgumentError("read_data: fewer than 2 rows under the column names in " * String(path)))
-    # The time column by name, else the first one holding ISO timestamps.
-    time = something(findfirst(n -> occursin(_TIME_NAMES, n), names),
-                     findfirst(f -> !isnan(_iso_seconds(f)), rows[1]), 0)
-    c = _pick_column(names, column, column_name, time)
-    v = Float64[]
-    for (k, r) in enumerate(rows)
-        length(r) == length(names) || throw(ArgumentError(
-            "read_data: row " * string(k) * " has " * string(length(r)) * " fields, expected " * string(length(names))))
-        x = tryparse(Float64, r[c])
-        push!(v, x === nothing ? NaN : x)
+    nrow >= 2 || throw(ArgumentError("read_data: fewer than 2 rows under the column names in " * String(path)))
+    any(isnan, t) && empty!(t)
+    # On a time axis a row without a reading is a missing reading, which the
+    # grid puts back where it belongs, so a column sampled more sparsely than
+    # the table keeps its own step.
+    if !isempty(t) && any(isnan, v)
+        keep = .!isnan.(v)
+        count(keep) >= 2 || throw(ArgumentError("read_data: fewer than 2 readings in column \"" * names[c] * "\""))
+        t = t[keep]; v = v[keep]
     end
-    t = Float64[]
-    if time > 0
-        for r in rows
-            x = tryparse(Float64, r[time])
-            push!(t, x === nothing ? _iso_seconds(r[time]) : x)
-        end
-        any(isnan, t) && empty!(t)
-        occursin(r"mjd"i, names[time]) && (t .*= 86400)
+    start = iso[] && !isempty(t) ? t[1] : NaN
+    if !isempty(t) && occursin(r"mjd"i, names[time])
+        start = _mjd_seconds(t[1])
+        t .*= 86400
     end
     phase = phase_hint == 0 ? !occursin(_FREQ_NAMES, names[c]) || occursin(_PHASE_NAMES, names[c]) :
             phase_hint > 0
@@ -336,7 +360,7 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         v .*= scale
     end
     t0 = _resolve_tau0(tau0, NaN, t, "this table (no time column)")
-    return _Record(_equispace(t, v, fillgaps), t0, phase)
+    return _Record(_gridded(t, v, fillgaps), t0, phase, start)
 end
 
 # The trim-friendly core of read_data: every argument concrete, NaN / 0 / ""
@@ -358,15 +382,15 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     elseif fmt === :table
         _read_table(path, tau0, column, column_name, nominal, hint, delim, fillgaps)
     elseif fmt === :columns
-        v, t0 = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
-                        header=0, delim=nothing, scaling=1.0, detrend=:none, fillgaps=fillgaps)
-        _Record(v, t0, hint >= 0)
+        v, t0, start = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
+                               header=0, delim=nothing, scaling=1.0, detrend=:none, fillgaps=fillgaps)
+        _Record(v, t0, hint >= 0, falses(0), start)
     else
         throw(ArgumentError("read_data: unknown format :" * String(fmt) * "; use one of " * join(map(String, INPUT_FORMATS), ", ")))
     end
     scaling == 1 || (r.v .*= scaling)
     phase = hint == 0 ? r.phase : hint > 0
-    return _Record(r.v, r.tau0, phase, r.filled)
+    return _Record(r.v, r.tau0, phase, r.filled, r.start)
 end
 
 """
@@ -380,11 +404,11 @@ the file: TimeLab logs and counter time-interval readings are phase,
 column is phase or frequency by its name.
 
 - `tau0`: sample interval in seconds; by default from the file header
-  (TimeLab `Sample Interval`, Stable32 `Tau:`) or the median step of the
+  (TimeLab `Sample Interval`, Stable32 `Tau:`) or the grid step of the
   time column (seconds, MJD days, or ISO 8601 timestamps).
 - `column`: the clock column of a `:table` file, by 1-based index or by
-  name. By default the one column whose name says phase / time error /
-  PPS, else frequency.
+  name. By default the only column besides the time column, else the one
+  whose name says phase / time error / PPS, else frequency.
 - `nominal`: nominal frequency in Hz for readings in Hz (counter logs, a
   table column named `… (Hz)`); converted to fractional frequency
   `(f − nominal)/nominal`. By default the mean reading rounded to four
@@ -392,10 +416,19 @@ column is phase or frequency by its name.
 - `kind`: `:phase` or `:frequency` overrides the record type.
 - `scaling`: multiplies the samples after any unit conversion from a
   column name (`(ns)`, `[ps]`, `ppb` …).
-- `delim`: field delimiter of counter and table files; by default comma
-  for `.csv`, tab for `.tsv`, else whitespace.
-- `fillgaps`: put samples on an even grid of the time column and fill the
-  missing ones (and any `NaN` reading) with [`fillgaps`](@ref).
+- `delim`: field delimiter of counter and table files; by default a comma
+  or tab when the first data line holds one, else whitespace.
+- `fillgaps`: fill the missing samples (and any `NaN` reading) with
+  [`fillgaps`](@ref).
+
+A time column (seconds, MJD days or ISO 8601 timestamps) places the samples
+as in [`read_phase`](@ref): a missing reading leaves a `NaN` sample in its
+slot, which the gap-tolerant estimators skip, and a record with none is read
+as written. A table row with no reading in the clock column is a missing
+reading too, so a column sampled more sparsely than the table keeps its own
+step. ISO 8601 and MJD timestamps also set the record's
+[`start_time`](@ref). Files are read line by line, keeping only the clock
+and time columns.
 
 Counter readings of `9.91E+37` (SCPI's "no reading") become `NaN`.
 
@@ -417,6 +450,6 @@ function read_data(path::AbstractString; format::Symbol=:auto, tau0::Union{Real,
                    nominal=nominal === nothing ? NaN : Float64(nominal),
                    kind=kind, scaling=Float64(scaling),
                    delim=delim === nothing ? '\0' : Char(delim), fillgaps=fillgaps)
-    return r.phase ? PhaseData(r.v, r.tau0; source=String(path)) :
-                     FrequencyData(r.v, r.tau0; source=String(path))
+    return r.phase ? PhaseData(r.v, r.tau0; source=String(path), start=r.start) :
+                     FrequencyData(r.v, r.tau0; source=String(path), start=r.start)
 end

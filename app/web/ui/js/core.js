@@ -117,7 +117,7 @@ function view(doc) {
   const record = {
     n: r.n, tau0: r.tau0, kind: r.quantity, source: doc.source, series: r.series,
     check: {
-      samples: r.n, span_s: r.span_s, gaps: r.gaps, outliers: r.outliers,
+      samples: r.n, span_s: r.span_s, start: r.start || "", gaps: r.gaps, outliers: r.outliers,
       outlier_t: r.outlier_t ?? [], outlier_x: r.outlier_x ?? [], drift_per_day: r.drift_per_day,
       removed_offset: r.removed_offset ?? null, removed_drift: r.removed_drift_per_day ?? null,
     },
@@ -136,7 +136,7 @@ function view(doc) {
   });
   const d = doc.dynamic;
   const dynamic = d && { dev: d.deviation, window: d.window, step: d.step, t: d.t, tau: d.tau, map: d.dev };
-  return { record, results, spectrum: doc.spectrum, powerlaw: doc.powerlaw, dynamic, drift: doc.drift, elapsed_ms: doc.elapsed_ms, doc };
+  return { record, results, spectrum: doc.spectrum, powerlaw: doc.powerlaw, masks: doc.masks ?? [], dynamic, drift: doc.drift, elapsed_ms: doc.elapsed_ms, doc };
 }
 
 const run = async (body, signal) => view(await post(body, signal));
@@ -162,7 +162,7 @@ const analyzeRequest = (clock) => request(clock, "analyze", [
   "--grid", state.grid,
   ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
   ...(state.bias ? [] : ["--no-bias-correction"]),
-  "--spectrum", "--fit",
+  "--spectrum", "--fit", "--mask", "all",
   ...clock.components.flatMap((k) => ["--component", `${k.noise}:${k.from ?? ""}:${k.to ?? ""}`]),
 ]);
 
@@ -172,7 +172,7 @@ export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
 // for reports.
 export function analyzeCommand(clock) {
   const { args, file } = analyzeRequest(clock);
-  const valued = new Set(["--format", "--component"]);   // JSON-only options and their values
+  const valued = new Set(["--format", "--component", "--mask"]);   // JSON-only options and their values
   const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--fit" && !valued.has(a) && !valued.has(args[i - 1]));
   const q = (a) => (/^[\w.,:+\/=-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
   return ["sigmatau", kept[0], ...(file ? [file.name] : []), ...kept.slice(1)].map(q).join(" ");

@@ -32,6 +32,21 @@ using SigmaTau
         @test isempty(bad)
     end
 
+    @testset "MTOTDEV bias (Howe & Peppler 2001, Table 2)" begin
+        # Mod Totvar reads low against MVAR by B = 1 + a; at m = 16 one record
+        # pins the ratio to 2 %. At m = 1 it is one half for any record, and
+        # the default output is MDEV itself.
+        function ratio(alpha)
+            p = noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0), rng=Xoshiro(alpha + 7))
+            @test mtotdev(p, [1]).dev ≈ mdev(p, [1]; ci=false).dev rtol = 1e-8
+            (mtotdev(p, [1, 16]; ci=false, correct_bias=false).dev ./ mdev(p, [1, 16]; ci=false).dev) .^ 2
+        end
+        B(noise) = bias_correction([noise], :mtot, [16.0], 4095.0)[1]
+        @test [B(:WHFM), B(:RWFM)] ≈ [0.771, 0.679]
+        @test ratio(0)  ≈ [0.5, B(:WHFM)] rtol = 0.05
+        @test ratio(-2) ≈ [0.5, B(:RWFM)] rtol = 0.05
+    end
+
     @testset "TTOTDEV = MTOTDEV · τ/√3 identity" begin
         # ttotdev wraps mtotdev with a τ/√3 rescaling (analogous to tdev
         # over mdev). Verifies the wrapper produces the documented
@@ -110,6 +125,28 @@ using SigmaTau
         raw = mhtotdev(PhaseData(x_trend, tau0), ms; ci=false, correct_bias=false,
                        remove_drift=false)
         @test raw.dev ≈ base.dev rtol = 1e-8
+    end
+
+    @testset "Hadamard noise ID ignores drift" begin
+        # A drift these statistics ignore must not reach the noise type that
+        # sets their EDF and bias factor. White FM with a drift that dominates
+        # ADEV at long τ: by default the result is the driftless record's;
+        # with remove_drift=false the long-τ label is the drift's.
+        Random.seed!(20261110)
+        N, ms = 4096, [64, 256, 1024]
+        x = noise_gen(PhaseData, N, 1.0; h=Dict(0 => 1.0)).x
+        clean, drifting = PhaseData(x, 1.0), PhaseData(x .+ 5e-4 .* (0:N-1) .^ 2, 1.0)
+
+        h, hd = hdev(clean, ms), hdev(drifting, ms)
+        @test hd.noise_type == h.noise_type
+        @test hd.edf ≈ h.edf
+        @test htotdev(drifting, ms).dev ≈ htotdev(clean, ms).dev rtol = 1e-8
+
+        asgiven = hdev(drifting, ms; remove_drift=false)
+        @test asgiven.noise_type == identify_noise(drifting.x, ms; dmin=0, dmax=3)
+        @test asgiven.noise_type[end] === :RWFM !== h.noise_type[end]
+        @test asgiven.dev == hd.dev
+        @test deviation(:hdev, drifting, ms; remove_drift=false).noise_type == asgiven.noise_type
     end
 
     @testset "ADEV/HDEV across all 5 power-law noise types" begin

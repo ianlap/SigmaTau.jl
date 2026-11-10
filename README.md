@@ -34,8 +34,13 @@ plot(suite)                 # log-log σ(τ) with CI error bars
 pkg> add SigmaTau
 ```
 
-Julia 1.11 or later. `Plots` is optional and enables the plot recipes. The
-explorer in `app/web/` has its own environment.
+Julia 1.11 or later. `Plots` is optional and enables the plot recipes.
+
+Each [release](https://github.com/ianlap/SigmaTau.jl/releases) also carries
+prebuilt downloads that need no Julia install: the desktop explorer (macOS
+`.dmg` for Apple silicon and Intel, Linux `.AppImage` and `.deb`) and the
+`sigmatau` command line as a `.tar.gz` per platform (unpack it and run
+`bin/sigmatau`).
 
 ## Estimators
 

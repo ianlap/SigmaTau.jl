@@ -7,16 +7,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Clock models, the Kalman filter and timescales.
 
-### Fixed
-
-- `timescale` no longer turns the whole scale into `NaN` when a clock has no
-  reading at the first sample: a clock joins the scale, at zero weight, at
-  its first reading.
-- `timescale_phase` reads the scale through any clock with a reading at
-  each sample, instead of returning `NaN` wherever the first clock has a
-  gap.
-
 ### Added
+
+- Docs: "Coming from Stable32" and "Coming from allantools" guides, mapping
+  their statistics, options and defaults onto SigmaTau.
+- ITU-T wander masks for MTIE and TDEV: `TELECOM_MASKS` (G.811 PRC,
+  G.813 SEC and G.8262 EEC options 1 and 2, and the G.823 network limits at
+  PRC, SSU, SEC and PDH interfaces), `telecom_mask` for the limit at any τ
+  and `mask_check` for pass or fail with the margin. `sigmatau analyze
+  --mask NAME|all` adds them to the JSON, and the explorer's Stability page
+  draws the chosen mask over MTIE and TDEV with pass or fail.
+- Prebuilt downloads on each release: the `sigmatau` command line as a
+  `.tar.gz` for Linux x86_64 and macOS (Apple silicon and Intel), next to
+  the explorer's `.AppImage`, `.deb` and `.dmg`. The desktop release
+  workflow now also runs on TagBot's `v…` tags and adds the files to that
+  release; a manual run lists its artifacts in the run summary.
+- `PhaseData` / `FrequencyData` carry the UTC time of their first sample
+  (`start`, read with `start_time`), set by the readers from ISO 8601 and
+  MJD timestamps, kept by `detrend`, `fillgaps`, `remove_outliers` and
+  `sigmatau --range`, and written by `save` as a `# start:` line. The CLI's
+  record JSON and the explorer's record check show it.
 
 - Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
   MDEV, HDEV or MHDEV result (or a total form), `add_component!` fits one
@@ -73,6 +83,94 @@ Clock models, the Kalman filter and timescales.
   `timescale_phase` wrap the Julia calls of the same names.
 - Tutorial "From one clock to an ensemble": noise fit, Kalman filter,
   holdover and an AT1 timescale on simulated clocks.
+
+### Changed
+
+- `hdev`, `mhdev`, `htdev` and `htotdev` identify the noise type on the
+  record less its least-squares frequency drift, as `mhtotdev` already did,
+  and take `remove_drift` (default `true`); `deviation`, `stability` and
+  the Python wrappers pass it on. A drift used to turn every long-τ label
+  into random-walk FM, which on white FM left `htotdev` 13 to 15 % high and
+  the intervals of all four too wide. The values of `hdev`, `mhdev` and
+  `htdev` do not change; intervals and the `htotdev` bias factor follow the
+  label. Without drift, flicker FM near the longest τ is read as white FM
+  more often. `remove_drift=false` identifies the noise on the record as
+  given, which is Stable32's convention.
+- `confidence_intervals(devs, edfs, confidence)` no longer takes the noise
+  types and record length, which only the removed Gaussian stand-in used
+  (see Fixed). The five-argument form still works in Julia, with a
+  deprecation warning; the Python wrapper takes the three arguments.
+- The readers stream files line by line and keep only the columns they
+  return: a 2-million-line two-column file reads in a third of the time and
+  a quarter of the memory, a named-column table in a quarter of the time
+  and a twentieth of the memory.
+- `fillgaps=true` places samples on the grid of the regular time steps
+  instead of the smallest step, so jittered timestamps no longer scatter
+  the record.
+
+### Fixed
+
+- `timescale` no longer turns the whole scale into `NaN` when a clock has no
+  reading at the first sample: a clock joins the scale, at zero weight, at
+  its first reading.
+- `timescale_phase` reads the scale through any clock with a reading at
+  each sample, instead of returning `NaN` wherever the first clock has a
+  gap.
+- The default bias correction of `mtotdev` and `ttotdev` went the wrong way.
+  Mod Totvar reads low against MVAR, by 0.5 % for white PM up to 32 % for
+  random-walk FM (Howe and Peppler 2001, Table 2; Howe and Vernotte 1999),
+  and the correction divided it by the factors of SP1065 Table 11, 1.06 to
+  1.31, which lowered σ by a further 3 to 13 %. It now divides by the Howe
+  and Peppler ratios (`bias_correction(…, :mtot, …)` returns 0.995, 0.851,
+  0.771, 0.717, 0.679), so the default tracks MDEV, and σ is 3 % (white PM)
+  to 39 % (random-walk FM) higher than before. At `m = 1`, where the
+  estimator is exactly MDEV/√2, the correction is that factor.
+  `correct_bias=false` is unchanged and still matches Stable32 and
+  allantools.
+- Confidence intervals where the EDF is below 1 are χ² intervals like every
+  other, and so the widest on the plot. They used to be replaced by a
+  Gaussian interval on the whole record length, which gave the least
+  certain point the tightest bounds: ±2.4 % at the last τ of `mhtotdev` on a
+  1024-sample record, where its neighbour had −29 % / +290 %. The same
+  applied to `theo1` and `theoh` at τ beyond about 0.6 of the record. A
+  point whose EDF model gives no positive value now has `NaN` bounds.
+- An averaging factor below 1 is an `ArgumentError` in every estimator. A
+  negative one used to return numbers read from outside the record, and 0
+  gave `Inf`, `NaN` or a `DivideError`.
+- `totdev`, `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev`, `pdev`, `theo1`,
+  `theoh`, `dadev` and `dhdev` on a record with `NaN` gaps throw an
+  `ArgumentError` that points to `fillgaps`, instead of returning `NaN` at
+  every τ with noise labels attached.
+- `find_outliers` flags nothing when the MAD is zero, as on a coarsely
+  quantized record where more than half the steps are equal. It used to
+  flag every sample off the median, and `remove_outliers`, `summarize` and
+  `sigmatau check` followed.
+- `deviation(name, data)` on a `FrequencyData` record uses the same τ grid
+  as `adev(data)` and `stability(data)`; it stopped one step short.
+- The readers take a one-column file as its values (a `# data interval
+  1.0 s` note gives τ₀), never use the value column as its own time axis,
+  and split a blank-separated `.csv` on blanks.
+- Timestamps rounded to a coarse resolution (MJD to six decimals, 0.0864 s)
+  give the true τ₀ and grid: the step is the mean of the regular steps,
+  rounded to the shortest value every timestamp fits, where the median gave
+  1.0368 s on 1 s data and joined the gaps.
+- A table column logged more sparsely than the table (5 min values in a
+  30 s file) keeps its own step instead of failing to fill; a lone column
+  beside the time column is picked as the clock.
+- `fillgaps` anchors each fill to the filtered samples beside its gap
+  instead of refiltering the whole record per gap: a month of 1 s data with
+  13 500 gaps fills in 5 s instead of over 7 minutes.
+- The Linux AppImage of the explorer could not run its analysis core: the
+  AppImage launcher's `LD_LIBRARY_PATH` made the core load the AppImage's
+  copy of libjulia, which then looked for `libgcc_s.so.1` beside it. The app
+  now starts the core without that variable.
+- A reading missing from a timestamped file is a `NaN` sample in its slot,
+  which the gap-tolerant estimators skip. Without `fillgaps` the samples
+  around it used to be joined end to end, shortening the record and moving
+  every τ after the gap. `sigmatau --freq` asks for `--fillgaps` on a
+  frequency record with missing samples instead of integrating `NaN` into
+  the rest of the phase.
+
 
 ## [0.6.0] - 2026-11-08
 
