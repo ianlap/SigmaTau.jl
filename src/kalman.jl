@@ -48,7 +48,11 @@ function _kalman_start(z::Vector{Float64}, τ₀::Float64, n::Int)
     k = idx[1:min(length(idx), max(4n, 16))]
     length(k) > n || throw(ArgumentError("kalman_filter: needs more than $n finite samples"))
     t = (k .- k[1]) .* τ₀
-    A = hcat((t .^ j ./ factorial(j) for j in 0:n-1)...)
+    # Filled in place: splatting a generator into hcat is not trim-safe.
+    A = Matrix{Float64}(undef, length(k), n)
+    for j in 1:n
+        A[:, j] .= t .^ (j - 1) ./ factorial(j - 1)
+    end
     c = A \ z[k]
     s² = max(sum(abs2, z[k] - A * c) / (length(k) - n), eps(maximum(abs, z[k]))^2)
     C = s² .* inv(A' * A)

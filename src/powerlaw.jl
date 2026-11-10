@@ -176,6 +176,26 @@ function powerlaw_fit(data::AbstractTimingData, m_values::Vector{Int}=Int[];
     res = deviation === :adev ? adev(data, ms; ci=false) :
           deviation === :mdev ? mdev(data, ms; ci=false) :
           deviation === :hdev ? hdev(data, ms; ci=false) : mhdev(data, ms; ci=false)
+    return _powerlaw_fit_curve(res, deviation, αs, τ₀, ms)
+end
+
+"""
+    powerlaw_fit(r::StabilityResult; alphas=…) → PowerLawFit
+
+The same fit to an existing ADEV, MDEV, HDEV or MHDEV result `r`, such as one
+clock's Allan deviation from [`groslambert`](@ref).
+"""
+function powerlaw_fit(r::StabilityResult; alphas=2:-1:-2)
+    deviation = r.deviation_type
+    deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
+        "powerlaw_fit: a result of $deviation cannot be fitted; use :adev, :mdev, :hdev or :mhdev"))
+    isfinite(r.tau0) && r.tau0 > 0 || throw(ArgumentError("powerlaw_fit: the result has no sample interval"))
+    αs = _powerlaw_alphas(alphas, deviation)
+    ms = round.(Int, r.tau ./ r.tau0)
+    return _powerlaw_fit_curve(r, deviation, αs, r.tau0, ms)
+end
+
+function _powerlaw_fit_curve(res::StabilityResult, deviation::Symbol, αs::Vector{Int}, τ₀::Real, ms::Vector{Int})
     keep = findall(k -> isfinite(res.dev[k]) && res.dev[k] > 0, eachindex(res.dev))
     length(keep) >= length(αs) || throw(ArgumentError(
         "powerlaw_fit: $(length(keep)) usable τ points for $(length(αs)) components; " *

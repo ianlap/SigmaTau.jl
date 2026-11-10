@@ -48,6 +48,27 @@ function timescale_phase(r::TimescaleResult)
     return PhaseData(u, r.comparisons.tau0; source=uppercase(String(r.algorithm)))
 end
 
+"""
+    implicit_mean(r::TimescaleResult, truth) → PhaseData
+
+The implicit ensemble mean of a `:greenhall` scale, in simulation: the weighted mean of
+the clocks' true phases, ``Σ aᵢ xᵢ``, with `r`'s weights and `truth` the
+states from [`simulate_ensemble`](@ref) (`truth[k, 1, i]` is clock `i`'s phase
+against true time). It is the scale's phase against true time without any
+clock's reading noise, so its stability is the scale's own. The readout
+[`timescale_phase`](@ref) at a pivot clock carries that clock's reading noise
+besides; with `R = 0` they are the same up to sign (`timescale_phase` is
+reference − scale) and the constant frequency offset the scale starts with. Only for `:greenhall`, whose weights define the mean.
+"""
+function implicit_mean(r::TimescaleResult, truth::AbstractArray{<:Real,3})
+    r.algorithm === :greenhall ||
+        throw(ArgumentError("implicit_mean: the implicit mean belongs to :greenhall, not :$(r.algorithm)"))
+    size(truth, 1) == size(r.weights, 1) && size(truth, 3) == size(r.weights, 2) ||
+        throw(ArgumentError("implicit_mean: truth is $(size(truth)), the scale has $(size(r.weights, 1)) samples and $(size(r.weights, 2)) clocks"))
+    m = Float64[sum(r.weights[n, i] * truth[n, 1, i] for i in axes(r.weights, 2)) for n in axes(r.weights, 1)]
+    return PhaseData(m, r.comparisons.tau0; source="IEM")
+end
+
 # Median by sorting: Statistics.median is not trim-safe.
 function _middle(v::Vector{Float64})
     s = sort(v)
