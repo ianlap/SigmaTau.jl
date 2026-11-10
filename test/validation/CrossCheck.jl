@@ -315,6 +315,46 @@ function stable32_ci_forced_alpha_rows()
     return rows
 end
 
+# ── Stable32 on a flicker PM frequency record (stable32_flickerpm/) ───────
+
+# Stable32 bias-corrects HTOTDEV for the α it identifies. At m = 256 it reads
+# white FM (B = 0.995) where SigmaTau reads flicker PM (B = 1), so the HTOT
+# rows apply the bias for Stable32's α and compare the estimator, not the
+# noise ID. TOTDEV's B is 1 on every row (PM or white FM), so the default
+# call serves; MTOT is printed raw.
+const S32_FPM_RUNS = Dict(
+    "Overlapping Allan"    => ("oadev",   (d, m, α) -> adev(d, m; ci=false).dev),
+    "Modified Allan"       => ("mdev",    (d, m, α) -> mdev(d, m; ci=false).dev),
+    "Overlapping Hadamard" => ("ohdev",   (d, m, α) -> hdev(d, m; ci=false, remove_drift=false).dev),
+    "Total"                => ("totdev",  (d, m, α) -> totdev(d, m; ci=false).dev),
+    "Modified Total"       => ("mtotdev", (d, m, α) -> mtotdev(d, m; ci=false, correct_bias=false).dev),
+    "Hadamard Total"       => ("htotdev", (d, m, α) ->
+        htotdev(d, m; ci=false, remove_drift=false, correct_bias=false).dev ./
+        sqrt.(bias_correction(_alpha_sym.(α), :htot, Float64.(m), length(d.y) * d.tau0))),
+)
+
+function stable32_flickerpm_rows()
+    dir = joinpath(FIX, "stable32_flickerpm")
+    d = read_frequency(joinpath(dir, "flickerpm_8192"); tau0=1.0)
+    tables = Pair{String,Vector{Vector{SubString{String}}}}[]   # Sigma Type => rows, in file order
+    for ln in eachline(joinpath(dir, "flickerpm_8192_tables.txt"))
+        t = match(r"Sigma Type: (.+)", ln)
+        t === nothing || (push!(tables, strip(t[1]) => []); continue)
+        v = split(ln)          # AF, τ, #, α, min, σ, max
+        length(v) == 7 && tryparse(Int, v[1]) !== nothing && push!(last(tables[end]), v)
+    end
+    rows = Row[]
+    for (est, tab) in tables
+        name, f = S32_FPM_RUNS[est]
+        ms = parse.(Int, getindex.(tab, 1))
+        got = f(d, ms, parse.(Int, getindex.(tab, 4)))
+        for (k, v) in enumerate(tab)
+            push!(rows, Row("Stable32 flicker PM σ", "flickerpm_8192", name, ms[k], parse(Float64, v[6]), got[k], S32_TOL_SIGMA, ""))
+        end
+    end
+    return rows
+end
+
 # ── NBS 1000-point published values (SP1065 §12.3; allantools nbs14 test) ──
 
 # (estimator, call, m values, values, note). m = τ/τ0 on the frequency record.
@@ -449,6 +489,7 @@ end
 
 "Every comparison row, in report order."
 all_rows() = vcat(allantools_dev_rows(), nbs14_rows(), stable32_rows(), stable32_ci_forced_alpha_rows(),
+                  stable32_flickerpm_rows(),
                   allantools_edf_rows(), allantools_ci_rows(), allantools_noiseid_rows(),
                   welch_rows(), dynamic_rows(), gap_rows(), drift_rows())
 

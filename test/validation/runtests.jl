@@ -4,7 +4,8 @@
 #
 #   * allantools (Python) on the committed records (fixtures/validation/
 #     allantools/*.csv, regenerated in CI by tools/validation/gen_allantools.py),
-#   * Stable32 runs on PHASE.DAT (fixtures/validation/stable32_phasedat/),
+#   * Stable32 runs on PHASE.DAT (fixtures/validation/stable32_phasedat/) and
+#     on a flicker PM frequency record (fixtures/validation/stable32_flickerpm/),
 #   * the NBS 1000-point published values (NIST SP1065 §12.3),
 #   * scipy.signal.welch for S_y / S_x and scipy.optimize.least_squares for
 #     the drift fits.
@@ -27,6 +28,7 @@ const _CC = CrossCheck
             ("NBS 1000-point published values",          _CC.nbs14_rows),
             ("Stable32 PHASE.DAT σ, α and CI",            _CC.stable32_rows),
             ("Stable32 CI with Stable32's α",             _CC.stable32_ci_forced_alpha_rows),
+            ("Stable32 σ on a flicker PM record",         _CC.stable32_flickerpm_rows),
             ("allantools Greenhall / SP1065 EDF",         _CC.allantools_edf_rows),
             ("allantools χ² interval factors",            _CC.allantools_ci_rows),
             ("allantools lag-1 ACF noise ID",             _CC.allantools_noiseid_rows),
