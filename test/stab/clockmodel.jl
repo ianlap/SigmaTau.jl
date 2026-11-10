@@ -31,6 +31,21 @@ using Random
         @test clock_model(Dict(:WHFM => 1e-24); tau0=1.0).q1 == 0.5e-24
         @test powerlaw_sigma(m, [0.1, 10.0]; deviation=:hdev) ≈ powerlaw_sigma(h, [0.1, 10.0]; deviation=:hdev, tau0=0.1)
         @test powerlaw_psd(m2, [1e-3, 1.0]) ≈ 2 * 3e-24 .+ 2e-30 / (2π^2) ./ [1e-3, 1.0] .^ 2
+        # Flicker PM folds into R: the white PM with the PM's Allan variance
+        # at the last lag where the PM still leads the FM.
+        pm, fm = Dict(2 => 1e-22, 1 => 2e-22), Dict(0 => 2e-24)
+        k = SigmaTau._pm_handover(merge(pm, fm), 1.0)
+        σ(h, m) = powerlaw_sigma(h, [m]; tau0=1.0)[1]
+        @test σ(pm, k) > σ(fm, k) && σ(pm, k + 1) < σ(fm, k + 1)
+        mf = clock_model(merge(pm, fm); tau0=1.0)
+        @test mf.R ≈ σ(pm, k)^2 * k^2 / 3 && mf.q1 == 1e-24
+        @test mf.R > σ(pm, 1)^2 / 3 > 1e-22 / 8π^2
+        @test clock_model(Dict(1 => 1e-26, 0 => 2e-24); tau0=1.0).R ≈ σ(Dict(1 => 1e-26), 1)^2 / 3
+        run = merge(pm, Dict(-4 => 1e-36))
+        kh = SigmaTau._pm_handover(run, 1.0)
+        σh(h, m) = powerlaw_sigma(h, [m]; tau0=1.0, deviation=:hdev)[1]
+        @test 1 < kh < 2^16 && σh(pm, kh) > σh(Dict(-4 => 1e-36), kh)
+        @test clock_model(run; tau0=1.0).R ≈ σ(pm, kh)^2 * kh^2 / 3
     end
 
     @testset "from a record's fit" begin

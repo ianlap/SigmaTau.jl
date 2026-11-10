@@ -29,8 +29,44 @@ these:
 | random-run FM | −4 | q₃ = 8π⁴ h₋₄ |
 
 Flicker noises (α = 1, −1, −3) have a spectrum no finite state produces.
-[`clock_model`](@ref) leaves them out; `powerlaw_sigma(model, τ)` next to
-`powerlaw_sigma(fit, τ)` shows how far that moves σ(τ).
+[`clock_model`](@ref) leaves flicker FM and flicker walk out;
+`powerlaw_sigma(model, τ)` next to `powerlaw_sigma(fit, τ)` shows how far
+that moves σ(τ).
+
+## Flicker PM
+
+Flicker PM is reading noise that is not white. A filter whose R is the
+white PM alone takes its readings for quieter than they are: on simulated
+clocks whose PM is nine tenths flicker, its innovations have 7 to 20 times
+the variance it expects and its phase estimate is 2 to 3 times noisier at
+τ₀. So [`clock_model`](@ref) folds the flicker PM into R. A filter averages
+the PM that is faster than its own response and follows the rest as if it
+were the clock, and R stands for the part it averages: the measurement
+variance of [van-dierendonck-1984-allan-kalman](@cite), the phase spectrum
+above the tracker's corner frequency. With σ²_PM(τ) the Allan variance of
+the white and flicker PM together, and m the last lag at which it exceeds
+that of the FM terms (in the Hadamard variance when the model has flicker
+walk or random-run FM, and at most 65 536 samples),
+
+```math
+R = \frac{(m\tau_0)^2\,\sigma^2_{\mathrm{PM}}(m\tau_0)}{3}.
+```
+
+For white PM alone σ² = 3R/τ² at every lag, so this is h₂/8π²τ₀ again. For
+flicker PM it grows with the logarithm of m: it is close to the variance of
+the flicker PM between f = 1/(9mτ₀) and the Nyquist frequency.
+
+No white R makes the filter right about flicker PM. Its slow part is still
+followed as clock phase, the innovations stay correlated, and the phase
+uncertainty the filter reports is too small. Read
+[`innovation_check`](@ref) with that in mind.
+
+The fit has to carry the flicker PM term (α = 1) for this to work. Fitted
+with white PM, white FM and random-walk FM only, flicker PM passes for white
+FM, and q₁ comes out several times too large. The exact response of a
+sampled record separates white from flicker PM in the Allan deviation, from
+m = 1; how the two share the level at τ₀ depends on the flicker's spectrum
+near the Nyquist frequency, their sum does not.
 
 ## Over one step
 
