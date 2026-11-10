@@ -196,6 +196,16 @@ Clock models, the Kalman filter and timescales.
 - `groslambert(...; interval=:klts)`: KLTS confidence intervals (Lantz et al.
   2019) for three clocks, valid for a clock quieter than the others; the χ²
   interval is no longer given below 1 EDF.
+- Flicker FM and flicker PM states in the Kalman clock model:
+  `clock_model(fit; flicker=true)` and `clock_models(cc; flicker=true)` give
+  a `ClockModel` with `flicker_fm`, `fm_band`, `flicker_pm`, `pm_band`, and
+  `kalman_filter`, `kalman_smooth`, `holdover_error`, `prediction_error`,
+  `tune_q`, `simulate_clock`, `simulate_ensemble` and the `:greenhall` and
+  `:jones_tryon` scales run on it. Flicker FM is the Markov frequency states
+  of Davis, Greenhall & Stacey (Metrologia 42, 2005); flicker PM states are
+  the package's own, held as measurement noise with memory. States sit only
+  across the τ where the flicker holds a quarter of the model's Allan
+  variance. Off by default; `:stein` refuses such models.
 
 ### Changed
 
@@ -280,6 +290,17 @@ Clock models, the Kalman filter and timescales.
   goes through filtered generator sums, and is shared between m = 1 and the
   R(n) check. The fast estimators' default call is about 15× faster than on
   0.6.0 (about 0.4 ms on 25 000 points).
+- `theo1(...; correct_bias=:stable32)` now reproduces Stable32's Thêo1 run
+  with automatic noise identification, which is ThêoBR over the ladder
+  SP1065 prints (to N/6), on every `⌈N/3000⌉`-th phase for records above
+  Stable32's 3000-point limit; checked on all 181 rows of its result file
+  for PHASE.DAT and on its two bias-removed rows for the 8192-point record.
+  It returned raw Thêo1, which Stable32 gives only with Alpha set to 0.
+  `correct_bias=false` still gives raw Thêo1.
+- `analyze --spectrum` on a record with gaps runs the estimators and reports
+  `"spectrum": {"error": …}` instead of stopping; `sigmatau spectrum` still
+  stops. The explorer analyses such a record and its Spectrum page says why
+  it has no spectrum.
 
 ### Removed
 
@@ -398,6 +419,15 @@ Clock models, the Kalman filter and timescales.
   reflected extension ends, read outside the record and returned an
   arbitrary value with an interval; it now gives a `NaN` row with `neff` 0,
   as the other estimators do past their limits.
+- Readers: exact timestamps keep their own sample interval on short records
+  (86400 s no longer reads as 86000 s below 55 rows); a unit in a table
+  column's name sets phase or frequency (`ppb`, `ppm`, `ns/s` are frequency;
+  `ns`, `ms` phase) and a time unit in the time column's name is applied
+  (`time (ms)`); `read_data` keeps `delim` for plain columns, and a
+  comma-separated file without column names reads whatever its extension.
+- Explorer: page buttons act once per click again. After a page was
+  revisited, "Pin run" pinned twice and the noise model's Edit could not be
+  opened.
 
 ## [0.6.0] - 2026-11-08
 
