@@ -171,6 +171,7 @@ mktempdir() do dir
         x = zeros(1000); x[437] = 1.0; x[800] = NaN
         idx = SigmaTauCLI.series_index(x, 30)
         @test 437 in idx && 800 in idx && issorted(idx) && length(idx) <= 30
+        @test idx[1] == 1 && idx[end] == 1000
         @test SigmaTauCLI.series_index(x[1:20], 30) == 1:20
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,totdev", "--fit")
         @test r.code == 0

@@ -180,9 +180,10 @@ numbers are `null`.
 ```
 
 - `record` is in every answer; `series` only with `--series N`: the phase
-  itself when it has at most N samples, otherwise, in each of N ÷ 3 equal
-  stretches, its lowest and highest sample and its first gap (`null`), so
-  that a plot keeps every outlier and gap. At most 500 outliers are listed in
+  itself when it has at most N samples, otherwise its first and last sample
+  and, in each of (N − 2) ÷ 3 equal stretches, its lowest and highest sample
+  and its first gap (`null`), so that a plot spans the record and keeps every
+  outlier and gap. At most 500 outliers are listed in
   `outlier_t`/`outlier_x`; `outliers` is the full count. `start` is the
   UTC time of the first sample from ISO 8601 or MJD timestamps, `""` when
   the file has none; `gaps` counts the missing samples.
