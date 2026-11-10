@@ -39,6 +39,7 @@ export function openImport(file, prev = null) {
     against: p?.against ?? "",
     ...scaleFields(kind0, p?.scaling ?? guess.scaling ?? 1, p?.factor ?? ""),  // factor: a typed scale, which replaces the unit choice
     remember: true,
+    labels: { ...(prev?.clockNames ?? {}) },   // column → the name typed for its clock
   };
   if (!st.values.length) st.values = [guess.value];
   st.values = st.values.filter((c) => c !== st.time);
@@ -55,6 +56,8 @@ export function openImport(file, prev = null) {
     return { ts, tau0, per, gaps: sum("gaps"), missing: sum("missing") };
   };
   const colName = (c) => s.names[c - 1] || `column ${c}`;
+  // What a clock is called when nothing is typed: its column name, or the file's name for a single clock.
+  const defaultName = (c) => (st.values.length > 1 ? colName(c) : file.name.replace(/\.[^.]+$/, ""));
   const settings = () => {
     const { tau0, gaps } = derived();
     const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
@@ -65,6 +68,7 @@ export function openImport(file, prev = null) {
       timeUnit: st.timeUnit,
       value_cols: [...st.values],
       names: st.values.map((c) => s.names[c - 1] || null),
+      labels: st.values.map((c) => (st.labels[c] ?? "").trim() || null),
       against: st.against.trim(),
       header: s.header,
       scaling: parseFactor(st.factor) || st.scaling,
@@ -187,6 +191,9 @@ export function openImport(file, prev = null) {
             <div><label class="lbl" for="imp-against">Measured against</label>
               <input type="text" id="imp-against" class="wide-input" placeholder="e.g. H-maser" value="${h(st.against)}">
               <div class="muted small" style="margin-top:6px">You can switch the reference to any clock later, in the Clocks list.</div></div>
+            <div><label class="lbl">${several ? "Clock names" : "Clock name"}</label>
+              <div class="name-list">${st.values.map((c) => `<label class="name-row"><span class="clock-dot" style="background:${color(c)}"></span>
+                <input type="text" data-name="${c}" placeholder="${h(defaultName(c))}" value="${h(st.labels[c] ?? "")}" aria-label="Name of the clock in column ${c}"></label>`).join("")}</div></div>
             <div><label class="lbl">${several ? `${st.values.length} clocks from this file` : `Preview of ${h(colName(st.values[0]))}`}</label><div class="mini-plot">${spark}</div></div>
             <label class="check"><input type="checkbox" id="imp-remember" ${st.remember ? "checked" : ""}>Remember for files like this</label>
           </div>
@@ -238,6 +245,7 @@ export function openImport(file, prev = null) {
     };
     dlg.oninput = (e) => {
       if (e.target.id === "imp-against") { st.against = e.target.value; return; }
+      if (e.target.dataset.name) { st.labels[Number(e.target.dataset.name)] = e.target.value; return; }
       if (e.target.id === "imp-find") {
         const q = e.target.value.trim().toLowerCase();
         for (const r of dlg.querySelectorAll("tr[data-find]")) r.hidden = !r.dataset.find.includes(q);
