@@ -27,9 +27,10 @@ it from the package kernels and holds the shipped models to the same moments.
 
 White PM is Σ = I. Flicker PM has no unique discrete form, and two are used:
 
-- the **sampled** process, a continuous 1/f phase noise read every τ₀, with
-  structure function D(k) = 2·Δ²[t² ln t](k). This is the model behind the
-  Greenhall–Riley EDF of every other estimator in the package.
+- the **sampled** process, a continuous 1/f phase noise read every τ₀, whose
+  structure function D(k) is twice the second central difference of t² ln t
+  at t = k. This is the model behind the Greenhall–Riley EDF of every other
+  estimator in the package.
 - the **filtered** process, white noise through the half-order filter of
   [`noise_gen`](@ref).
 
