@@ -44,6 +44,7 @@ makedocs(
             "tutorials/01_drifting_clock_hadamard.md",
             "tutorials/02_reading_your_data.md",
             "tutorials/03_three_cornered_hat.md",
+            "tutorials/04_clock_ensemble.md",
         ],
         "How-to guides" => [
             "Choosing an estimator" => "guide/choosing.md",
@@ -60,6 +61,7 @@ makedocs(
             "Validation" => "explanation/validation.md",
             "Cross-check report" => "explanation/crosscheck.md",
             "MHTOTDEV bias and EDF" => "explanation/mhtotdev.md",
+            "The clock model" => "explanation/clock_model.md",
             "Total estimators on PM noise" => "explanation/total_pm.md",
         ],
         "Reference" => [
@@ -69,6 +71,9 @@ makedocs(
             "Data and files" => "reference/data.md",
             "Preprocessing" => "reference/preprocessing.md",
             "Spectra" => "reference/spectra.md",
+            "Kalman filter" => "reference/kalman.md",
+            "Holdover" => "reference/holdover.md",
+            "Clock ensembles" => "reference/ensemble.md",
             "Noise and statistics" => "reference/statistics.md",
         ],
         "Bibliography" => "bibliography.md",

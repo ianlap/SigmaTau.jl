@@ -22,7 +22,7 @@ _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||
 # limits are for a record with the drift left in, where the ratio is about
 # twice as large, and it stops at random-walk FM.
 _hadamard_noise(x::Vector{Float64}, m_values::Vector{Int}, remove_drift::Bool) =
-    remove_drift ? identify_noise(_remove_quadratic(x), m_values, dmin=0, dmax=3, b1=false) :
+    remove_drift ? identify_noise(_noise_detrend(x), m_values, dmin=0, dmax=3, b1=false) :
                    identify_noise(x, m_values, dmin=0, dmax=3)
 
 # What `noise=` takes: `:auto`, one noise type, one per τ, or a fitted model.
@@ -362,6 +362,10 @@ TOTVAR reads low on FLFM and RWFM (SP1065) and high on white and flicker PM
 or `:stable32` applies the FM correction and none on PM, as SP1065 and
 Stable32 do; `false` returns the raw kernel value, which is what allantools
 reports.
+
+The extension reflects the record about each end, `N − 2` samples either way,
+so the statistic exists for `m ≤ N − 1`; a larger averaging factor gives a
+`NaN` row with `neff` 0. The default grids stop at `(N − 1) ÷ 2`.
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:totdev, data, m_values)

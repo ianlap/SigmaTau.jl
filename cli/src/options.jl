@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "model", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
@@ -9,6 +9,8 @@ const COMMAND_HELP = [
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
+    ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
+    ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "σ(τ) a clock noise model predicts (MDEV and ADEV), no simulation"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
@@ -26,6 +28,8 @@ const NOISES = ["auto", "fit", "WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
+const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
+const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 
 struct Opt
@@ -39,11 +43,14 @@ end
 
 const ALL = filter(!=("live"), COMMANDS)   # the commands that read a FILE
 const ANY = COMMANDS
-const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift"]   # CSV or JSON out (report writes HTML)
+const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "model"]   # CSV or JSON out (report writes HTML; model is always JSON)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
     Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", ANY),
+    Opt("--clocks", "K", String[], false, "with --synth: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2; the analysis reads clock --clock, timescale uses all K (default 4)", ALL),
+    Opt("--noise-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", ALL),
+    Opt("--clock", "I", String[], false, "with --synth --clocks: the simulated clock to read, 1 to K (default 1)", ALL),
     Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ANY),
     Opt("--freq", "", String[], false, "FILE holds fractional frequency", ANY),
     Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns), bipm_utc (BIPM UTC-UTC(k)), rinex_clk (RINEX clock file; pick the clock with --column)", ALL),
@@ -74,12 +81,18 @@ const OPTS = [
     Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only)", ["analyze"]),
+    Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
     Opt("--mask", "NAME", MASKS, false, "also check MTIE and TDEV against an ITU-T wander mask, or all of them (JSON only): G811, G813_opt1, G8262_opt1, G823_SSU ..., all", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
     Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE", ["cross"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
+    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
+    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
+    Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
+    Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
+    Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
     Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal (default: the first reading to 4 significant figures)", ["live"]),
@@ -149,14 +162,24 @@ mutable struct Options
     tau_min::Float64          # NaN = no limit
     tau_max::Float64
     fit::Bool                 # --fit: power-law model in the JSON
+    value_cols::Vector{Int}   # timescale: one value column per clock
+    algorithm::String
+    wmax::Float64
+    components::Vector{Tuple{Int,Float64,Float64}}   # --component: α, τ from, τ to (NaN = open)
+    clocks::Int               # --clocks: simulated clocks; 0 = not given
+    clock::Int                # --clock: which simulated clock to read
+    models::Vector{NTuple{4,Float64}}   # --noise-model: R, q1, q2, q3 per simulated clock
     mask::String              # --mask: ITU-T mask checked in the JSON; "" = none
+    pivot::Int                # --pivot: clock the Kalman timescales read at (1-based)
+    steps::String             # --steps: at2 frequency-step detection, "" = off
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
-                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, "")
+                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
+                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -180,6 +203,32 @@ function parse_float(s::String, flag::String)
     v = tryparse(Float64, s)
     (v === nothing || !isfinite(v)) && throw(usage_error(flag * " expects a finite number, got \"" * s * "\""))
     return v
+end
+
+# "R:Q1:Q2:Q3", all finite and not negative.
+function parse_noise_model!(o::Options, s::String)
+    parts = split(s, ':')
+    length(parts) == 4 || throw(usage_error("--noise-model expects R:Q1:Q2:Q3, got \"" * s * "\""))
+    v = Float64[parse_float(String(p), "--noise-model") for p in parts]
+    all(>=(0), v) || throw(usage_error("--noise-model levels must not be negative"))
+    push!(o.models, (v[1], v[2], v[3], v[4]))
+end
+
+# "NOISE:A:B", A and B in seconds; an empty side is open.
+function parse_component!(o::Options, s::String)
+    parts = split(s, ':')
+    length(parts) == 3 || throw(usage_error("--component expects NOISE:A:B, got \"" * s * "\""))
+    name = String(parts[1])
+    α = tryparse(Int, name)
+    if α === nothing
+        k = findfirst(==(uppercase(name)), NOISE_NAMES)
+        k === nothing && throw(usage_error("--component: unknown noise \"" * name * "\"; use " * join(NOISE_NAMES, ", ") * " or an α"))
+        α = 3 - k
+    end
+    a = isempty(parts[2]) ? NaN : parse_float(String(parts[2]), "--component")
+    b = isempty(parts[3]) ? NaN : parse_float(String(parts[3]), "--component")
+    push!(o.components, (α, a, b))
+    o.fit = true
 end
 
 # "A:B" in seconds; an empty side is open.
@@ -219,6 +268,18 @@ function parse_devs(s::String)
     return devs
 end
 
+# "2,3,5": value columns in the order given.
+function parse_cols(s::String)
+    cols = Int[]
+    for tok in split(s, ',')
+        v = tryparse(Int, strip(tok))
+        (v === nothing || v < 1) && throw(usage_error("--value-cols expects column numbers, got \"" * s * "\""))
+        push!(cols, v)
+    end
+    length(cols) >= 2 && allunique(cols) || throw(usage_error("--value-cols needs two or more different columns"))
+    return cols
+end
+
 function parse_m(s::String)
     ms = Int[]
     for tok in split(s, ',')
@@ -241,6 +302,9 @@ end
 function set_option!(o::Options, name::String, v::String)
     if name == "--synth";              o.synth = parse_int(v, name)
     elseif name == "--seed";           o.seed = parse_int(v, name)
+    elseif name == "--clocks";         o.clocks = parse_int(v, name)
+    elseif name == "--clock";          o.clock = parse_int(v, name)
+    elseif name == "--noise-model";    parse_noise_model!(o, v)
     elseif name == "--tau0";           o.tau0 = parse_float(v, name)
     elseif name == "--input-format";   o.input_format = check_choice(v, name, INPUT_LAYOUTS)
     elseif name == "--column";         o.column = v
@@ -260,6 +324,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--m";              o.m = parse_m(v)
     elseif name == "--confidence";     o.confidence = parse_float(v, name)
     elseif name == "--range";          parse_range!(o, v)
+    elseif name == "--component";      parse_component!(o, v)
     elseif name == "--tau-min";        o.tau_min = parse_float(v, name)
     elseif name == "--tau-max";        o.tau_max = parse_float(v, name)
     elseif name == "--nperseg";        o.nperseg = parse_int(v, name)
@@ -267,6 +332,11 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--window";         o.window = parse_int(v, name)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
+    elseif name == "--value-cols";     o.value_cols = parse_cols(v)
+    elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
+    elseif name == "--wmax";           o.wmax = parse_float(v, name)
+    elseif name == "--pivot";          o.pivot = parse_int(v, name)
+    elseif name == "--steps";          o.steps = check_choice(v, name, ["best", "real"])
     elseif name == "--series";         o.series = parse_int(v, name)
     elseif name == "--query";          o.query = v
     elseif name == "--every";          o.every = parse_int(v, name)
@@ -339,6 +409,16 @@ function parse_args!(o::Options, args::Vector{String})
         throw(usage_error(o.command * ": give a FILE or --synth N (see `sigmatau help " * o.command * "`)"))
     end
     !isempty(o.input) && o.synth > 0 && throw(usage_error("give either a FILE or --synth, not both"))
+    if o.synth <= 0
+        (o.clocks != 0 || o.clock != 1 || !isempty(o.models)) && throw(usage_error("--clocks, --clock and --noise-model go with --synth"))
+    else
+        nm = length(o.models)
+        nm <= 64 || throw(usage_error("--noise-model: at most 64 clocks"))
+        nm > 0 && o.clocks != 0 && o.clocks != nm && throw(usage_error("--clocks is " * string(o.clocks) * " but " * string(nm) * " --noise-model were given"))
+        nm == 0 && o.clocks != 0 && !(2 <= o.clocks <= 64) && throw(usage_error("--clocks must be between 2 and 64"))
+        1 <= o.clock <= max(o.clocks, nm, 1) || throw(usage_error("--clock must be between 1 and the number of clocks"))
+        o.clocks == 0 && nm == 0 && o.clock != 1 && throw(usage_error("--clock needs --clocks"))
+    end
     o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2"))
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
@@ -354,7 +434,7 @@ function parse_args!(o::Options, args::Vector{String})
     o.scaling != 0 || throw(usage_error("--scaling must not be 0"))
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
-    o.fit && o.format != "json" && throw(usage_error("--fit adds to the JSON output; use --format json"))
+    o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
     isempty(o.mask) || o.format == "json" || throw(usage_error("--mask adds to the JSON output; use --format json"))
     return o
 end

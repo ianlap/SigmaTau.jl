@@ -13,6 +13,7 @@ const SECTIONS = [
   ["range", "Range and pinned runs"],
   ["spectrum", "Spectra"],
   ["dynamic", "Dynamic deviation"],
+  ["ensemble", "Clock ensemble"],
   ["live", "Live measurement"],
   ["files", "Files"],
   ["keys", "Keyboard shortcuts"],
@@ -54,15 +55,17 @@ export function mount(root) {
       <section id="help-pages"><h2>The pages</h2>
         <dl class="gloss">
           <dt>Data</dt><dd>Load a file or synthesize a test record; the record check (samples, span, gaps, outliers, drift); drift removal, gap filling and outlier removal; the phase plot.</dd>
-          <dt>Stability</dt><dd>σ(τ) on log–log axes for σ<sub>y</sub> (frequency) or σ<sub>x</sub> (time) estimators, with confidence intervals as bars or a band (<b>CI band</b>) and the identified noise types along the top (<b>Noise ID</b>). <b>Fit</b> adds the fitted power-law noise model as dotted lines, with its h<sub>α</sub> and its ADEV at round τ under the table. One clock shows the per-τ table; several clocks show "Compare at τ" with the most stable clock in bold. Click the plot to move τ.</dd>
+          <dt>Stability</dt><dd>σ(τ) on log–log axes for σ<sub>y</sub> (frequency) or σ<sub>x</sub> (time) estimators, with confidence intervals as bars or a band (<b>CI band</b>) and the identified noise types along the top (<b>Noise ID</b>). <b>Fit</b> adds the fitted power-law noise model as dotted lines, with its h<sub>α</sub> and its ADEV at round τ under the table; <b>Edit</b> there builds the model by hand, one noise type over a τ span at a time, with the MHDEV it leaves dashed. One clock shows the per-τ table; several clocks show "Compare at τ" with the most stable clock in bold. Click the plot to move τ.</dd>
           <dt>Spectrum</dt><dd>S<sub>y</sub>(f) and either ℒ(f) at a carrier you choose or S<sub>x</sub>(f), on one frequency axis. Settings here apply at once.</dd>
           <dt>Dynamic</dt><dd>σ(t, τ) in sliding windows, to see whether the stability changes over the record. Recomputes when you change the estimator or window.</dd>
+          <dt>Synthesis</dt><dd>Define the noise of one or more simulated clocks, as the clock-model coefficients or as power-law h<sub>α</sub> (each follows the other), see the stability they predict, and generate them on the Data page. Two or more go on to the Ensemble page.</dd>
+          <dt>Ensemble</dt><dd>A timescale (AT1, AT2, EWFA or a Kalman scale) from several clocks read against one reference, with each clock's weight and the stability of the scale.</dd>
           <dt>Live</dt><dd>σ(τ) and the frequency of a measurement as it runs, from an instrument or the simulator.</dd>
         </dl>
       </section>
 
       <section id="help-clocks"><h2>Several clocks and a reference</h2>
-        <p>Add clocks with <b>+ Add clock</b>, or mark several columns as Clock in the import dialog. With more than one clock, colour means clock (eight colours, then they repeat) and line style means estimator. The eye button hides a clock from the plots.</p>
+        <p>Add clocks with <b>+ Add clock</b>, or mark several columns as Clock in the import dialog. With more than one clock, colour means clock (eight colours, then they repeat) and line style means estimator. The eye button hides a clock from the plots; × removes it (reopen <b>Import settings…</b> on its file to bring a column back).</p>
         <p>Clocks read from one file usually share the instrument's reference ("Measured against" in the import dialog). <b>Reference</b> in the Clocks list re-references them to one of the clocks, x<sub>i</sub> − x<sub>R</sub>; the reference itself leaves the plots. Clocks from other files have no shared reference or time stamps and stay as measured.</p>
       </section>
 
@@ -98,6 +101,9 @@ export function mount(root) {
         <p>DADEV and DHDEV compute ADEV or HDEV inside a window that slides across the record by half its length. Rows are window centre times, columns are τ, and darker means less stable. A stationary clock gives the same colours down every column; a drift, step or disturbed stretch changes them. DHDEV ignores linear drift inside each window. With several clocks, each gets its own map on one shared colour scale, and <b>Compare at τ</b> below them plots every clock's deviation over time at one τ (pick it there or click a map column), with each clock's whole-record value dotted.</p>
       </section>
 
+      <section id="help-ensemble"><h2>Clock ensemble</h2>
+        <p>The Ensemble page forms a timescale from several clocks read against one reference: the value columns of one loaded file, each a clock minus the same reference. To leave a clock out of the scale, remove it with × in the Clocks list; simulated clocks are then simulated again without it. With no such file it simulates four clocks. At each sample every clock's phase is predicted from its estimated frequency, and the scale sits where the weighted prediction errors sum to zero. <b>AT1</b> weighs each clock by the inverse of its prediction-error variance, learned as it runs, leaves out a clock whose error passes four times its own σ, and never gives one clock more than the <b>largest weight</b>. <b>AT2</b> keeps AT1's weights and follows each clock's frequency with a Kalman update; with <b>frequency steps</b> on it leaves out a clock whose frequency jumps for a while, and either reruns the scale from the step (<b>best</b>) or keeps the values already issued and corrects from the step on (<b>real</b>). <b>EWFA</b> weighs every clock the same. <b>Greenhall</b> and <b>Jones–Tryon</b> are Kalman timescales: the core fits a model to each clock from the data (three or more clocks), one filter tracks every clock's phase and frequency, and the scale is read at the <b>pivot clock</b>, its reading less its estimated offset. Greenhall reduces the filter's covariance after each step, which keeps each step of the scale as small as it can be; Jones–Tryon leaves it as is, so it is a little noisier at short τ and has no per-clock weights. <b>Stein</b> (KAS-2) filters each clock's difference from the pivot and weighs every clock's phase, frequency and aging by the inverse of its noise, each weight no larger than the <b>largest weight</b>. The solid line is the scale against the reference; the dotted lines are each clock against the scale.</p>
+      </section>
       <section id="help-live"><h2>Live measurement</h2>
         <p>The Live page reads an instrument one reading at a time and updates ADEV, MDEV, HDEV and MHDEV with every reading, in constant work per reading. <b>Network</b> talks to an LXI instrument's SCPI socket (host:port, usually port 5025) and sends the query, READ? by default, before each reading. <b>Serial / file</b> reads a serial port (set its speed first, e.g. <code>stty -F /dev/ttyUSB0 9600 raw</code>, or <code>stty -f</code> on macOS) or a log file, read to its end; leave the query empty for an instrument that streams on its own. The first number on each line is the reading: a counter frequency in Hz (against the nominal, or the first reading), a fractional frequency, or phase in seconds. τ₀ is the time between readings, such as the counter's gate time. <b>Simulator</b> makes up a clock with white PM, white FM and random-walk FM at one reading per τ₀.</p>
         <p>The live curves carry no intervals. Stop the measurement and press <b>Analyse readings</b> to load them as a clock and run the full analysis, or <b>Save readings</b> to keep them as a text file.</p>
@@ -109,10 +115,10 @@ export function mount(root) {
 
       <section id="help-keys"><h2>Keyboard shortcuts</h2>
         <ul class="keys">
-          <li><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run the analysis</li>
-          <li><kbd>1</kbd> Data · <kbd>2</kbd> Stability · <kbd>3</kbd> Spectrum · <kbd>4</kbd> Dynamic · <kbd>5</kbd> Live · <kbd>?</kbd> Help</li>
+          <li><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run the analysis; while it runs they cancel it</li>
+          <li><kbd>1</kbd> Data · <kbd>2</kbd> Synthesis · <kbd>3</kbd> Stability · <kbd>4</kbd> Spectrum · <kbd>5</kbd> Dynamic · <kbd>6</kbd> Ensemble · <kbd>7</kbd> Live · <kbd>?</kbd> Help</li>
           <li>On a plot: hover for values, drag to zoom, double-click to reset</li>
-          <li><kbd>Esc</kbd> closes a dialog</li>
+          <li><kbd>Esc</kbd> cancels a running analysis or closes a dialog</li>
         </ul>
       </section>
     </article>`;
