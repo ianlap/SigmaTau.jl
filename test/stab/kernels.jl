@@ -121,10 +121,6 @@ using SigmaTau
         @test hi[1] ≈ 1 / sqrt(0.039990) rtol=1e-4
         @test lo[2] < lo[1] && hi[2] > hi[1]          # fewer degrees of freedom, wider
         @test all(isnan, lo[3:4]) && all(isnan, hi[3:4])
-        # MHTOTDEV's EDF model drops below 1 at m = N/4 for the FM noises.
-        ν = calculate_edf(:mhtotdev, [1.0], [:RWFM], [256], [256.0], 1024, 1023.0)
-        @test 0 < ν[1] < 1
-        @test confidence_intervals([1.0], ν, 0.683)[2][1] > 5
     end
 
     @testset "MTIE core" begin

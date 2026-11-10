@@ -151,7 +151,7 @@ end
 # each analysis subsegment by detrended reflection, keeping every
 # subsegment in play at long τ and raising the equivalent degrees of
 # freedom. MHTOTDEV is original to this package, so its bias correction and
-# EDF model were measured by Monte Carlo (valid for `τ/τ₀ ≥ 16`); see
+# EDF model come from the exact moments of the statistic; see
 # [MHTOTDEV bias and EDF](../explanation/mhtotdev.md).
 #
 # The total kernel is not drift-immune by itself (the boundary extension

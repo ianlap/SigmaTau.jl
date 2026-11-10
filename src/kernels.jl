@@ -556,7 +556,7 @@ boundary-spanning third differences, and the estimator inherits MVAR's
 divergence (measured: log-log slope 2 instead of 3 at α = −4, level ∝ T).
 The matched quadratic detrend restores convergence over the full Hadamard
 range α > −5 (slope 3.00, level N-stable) while leaving the PM statistics
-healthy (B(WHPM) ≈ 0.91, flat in m and N) — verified by two independent
+healthy (B(WHPM) = 0.90, flat in m and N) — verified by two independent
 implementations. It also removes any deterministic frequency offset and
 drift exactly within each window, so this kernel IS drift-immune on its
 own; the wrapper's record-level removal (`remove_drift=true` default)
