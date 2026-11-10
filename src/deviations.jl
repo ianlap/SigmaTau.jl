@@ -416,7 +416,9 @@ end
 _unbias_divisor(B::AbstractVector{<:Real}) = [b > 0 ? sqrt(b) : NaN for b in B]
 
 # What `correct_bias` asks of one estimator: :exact (`true`), :none (`false`),
-# :published, or for `:stable32` whichever of the three Stable32 applies to it.
+# :published, or for `:stable32` the mode that the estimator passes: the one of
+# those three that Stable32 applies to it, or :stable32 where Stable32 has a
+# correction of its own (Thêo1).
 function _bias_mode(correct_bias::Union{Bool,Symbol}, stable32::Symbol)
     correct_bias === true && return :exact
     correct_bias === false && return :none
@@ -939,12 +941,31 @@ the factor 0.75, which the white-FM bias of 1 in its Table 2 requires.
   the noise type changes within the record, the ratio is that of the short
   averaging times at which it is measured, and the corrected variance at
   long ``τ`` fell to a quarter of the Allan variance in simulation. It
-  needs ``N ≥ 19``. `:published` is the same. `false` or
-  `:stable32` returns Thêo1 uncorrected. Stable32 applies to its Thêo1
-  results the noise-type bias of SP1065 Table 2, which is 1 for white FM, or
-  ThêoBR when the noise type is automatic
-  ([Stable32 User Manual](@cite hamilton-2008-stable32-manual)), so the
-  uncorrected value matches a Stable32 run made for white FM.
+  needs ``N ≥ 19``. `:published` is the same, and `false` returns Thêo1
+  uncorrected.
+- `correct_bias=:stable32`: the correction of a Stable32 Thêo1 or ThêoH
+  run with automatic noise identification. The
+  [Stable32 User Manual](@cite hamilton-2008-stable32-manual) gives it as
+  the same ratio with ``n = \\lfloor N/6 - 3 \\rfloor``, computed from at
+  most 3000 phase samples (its setting `MaxTheoBRPts`), and names
+  [Taylor and Howe (2010)](@cite taylor-2010-fast-theobr) as the method.
+  For a longer record this package takes every ``b``-th sample,
+  ``b = \\lceil N/3000 \\rceil``, and adds ``0.00055\\,(b - 1)`` to the
+  ratio. The term is the linear correction that Taylor and Howe fitted on
+  simulated FM noise for a record averaged in blocks of ``b`` samples
+  (their Eq. (4)). The deviations agree with Stable32's to the five digits
+  that it prints, at each of the 181 averaging factors of a Thêo1 run on
+  its 1001-point record `PHASE.DAT` (``b = 1``) and at the two Thêo1
+  points of a ThêoH run on an 8192-point record (``b = 3``), where block
+  averages give deviations 6.5 % higher. That Stable32 takes every
+  ``b``-th sample, and the value of ``b``, are inferred from that
+  agreement, and no other ``b`` has been compared.
+
+  With a noise type entered by hand, Stable32 applies the bias that its
+  manual tabulates for the type, which is that of
+  [SP1065 Table 2](@cite riley-2008-sp1065). It is 1 for white FM, so
+  `correct_bias=false` matches a Stable32 run made for white FM. This
+  package has no option for the tabulated bias of the other noise types.
 - `ci`, `noise`, `confidence`: as in [`adev`](@ref). The EDF is that of the
   empirical formulas of [SP1065 Table 3](@cite riley-2008-sp1065), with or
   without the correction.
@@ -957,11 +978,13 @@ the factor 0.75, which the white-FM bias of 1 in its Table 2 requires.
     ``n = \\lfloor 0.1N/3 - 3 \\rfloor``, which keeps the Allan variance
     terms within the first tenth of the record. SP1065 Eq. (33), the
     Stable32 manual and IEEE Std 1139-2022 Eq. (A.37) print
-    ``\\lfloor N/6 - 3 \\rfloor``. This package follows the papers.
+    ``\\lfloor N/6 - 3 \\rfloor``. This package follows the papers, and
+    takes the longer average only under `correct_bias=:stable32`.
 
 The double sum costs ``O(Nm)`` per averaging factor. On long records the
-ThêoBR ratio computes Thêo1 at 48 of its ``n + 1`` factors and interpolates
-the rest, which stays within 0.5 % of the full average.
+default ThêoBR ratio computes Thêo1 at 48 of its ``n + 1`` factors and
+interpolates the rest, which stays within 0.5 % of the full average. The
+`:stable32` ratio computes every factor.
 """
 function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:theo1, data, m_values)
@@ -971,7 +994,10 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     T = (N - 1) * data.tau0
     neff = _neff_counts(:theo1, N, m_values)
 
-    devs = _bias_mode(correct_bias, :none) == :none ? raw_devs : raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
+    mode = _bias_mode(correct_bias, :stable32)
+    devs = mode == :none ? raw_devs :
+           mode == :stable32 ? raw_devs .* sqrt(_stable32_theobr_ratio(x, data.tau0)) :
+                               raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
 
     if !ci
         return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)
@@ -1006,8 +1032,10 @@ time ``mτ_0`` and is computed according to its place in the record of length
 
 The crossover at 20 % of the record is that of SP1065. Howe (2006) places it
 at 10 %. The interval uses the EDF of ADEV below the crossover and of Thêo1
-above it. The bias removal is always applied and needs ``N ≥ 19``; for
-uncorrected Thêo1 call `theo1` with `correct_bias=false`.
+above it. The bias removal is always applied, with the default ratio of
+`theo1`, and needs ``N ≥ 19``. For uncorrected Thêo1, or for the ratio of
+a Stable32 ThêoH run, call `theo1` with `correct_bias=false` or
+`correct_bias=:stable32`.
 
 `data` and the keywords are as in [`adev`](@ref), less `overlapping`. The
 record must have no gaps.

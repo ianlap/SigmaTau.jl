@@ -101,17 +101,11 @@ record with no usable estimate, such as a constant one, is reported as
     four averaged values left and 18 % high with two, where the uncorrected
     one is within 1 %. The value 6 comes from simulation, not from the
     literature.
-
-!!! compat "SigmaTau 0.6"
-    `remove_drift` was called `detrend` before version 0.6. `detrend=false`
-    still works and gives a deprecation warning.
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
-                        remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:averaged)
+                        remove_drift::Bool=true, b1_length::Symbol=:averaged)
     b1_length in (:record, :averaged) ||
         throw(ArgumentError("b1_length must be :record or :averaged, got :$b1_length"))
-    detrend || Base.depwarn("identify_noise: `detrend` is deprecated, use `remove_drift`", :identify_noise)
-    detrend = remove_drift && detrend
     x_clean = _preprocess(x)
     N = length(x_clean)
     alphas = Vector{Int}(undef, length(m_values))
@@ -130,12 +124,12 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             # Below B1_MIN_POINTS the label is the one at the longest m that has them.
             mr = lag1 || b1_length !== :averaged ? m : clamp(N ÷ B1_MIN_POINTS, 1, m)
             if lag1 && m == 1
-                x_rn === nothing && (x_rn = detrend ? _noise_detrend(x_clean) : x_clean)
+                x_rn === nothing && (x_rn = remove_drift ? _noise_detrend(x_clean) : x_clean)
                 alpha = _noise_id_lag1acf(x_rn, 1, dmin, dmax; detrend=false)[1]
             elseif lag1
-                alpha = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)[1]
+                alpha = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=remove_drift)[1]
             else
-                alpha = _noise_id_b1rn(x_clean, mr; detrend=detrend, b1_length=b1_length)[1]
+                alpha = _noise_id_b1rn(x_clean, mr; detrend=remove_drift, b1_length=b1_length)[1]
             end
             # A PM result is checked with R(n) = MVAR/AVAR (SP1065 §5.5.2, step 5),
             # which uses every sample where the tests above use one in m. From
@@ -143,7 +137,7 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
             # FM, or the noise is not PM. And decimation whitens flicker PM, so a
             # white-PM result of the lag-1 test is confirmed with it from m = 4.
             if alpha >= 0.5 && mr >= 4
-                x_rn === nothing && (x_rn = detrend ? _noise_detrend(x_clean) : x_clean)
+                x_rn === nothing && (x_rn = remove_drift ? _noise_detrend(x_clean) : x_clean)
                 if rn_mdev === nothing
                     rn_adev = _adev_core(x_rn, m_values, 1.0)
                     rn_mdev = _mdev_core(x_rn, m_values, 1.0)

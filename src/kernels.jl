@@ -949,7 +949,7 @@ const _THEOBR_DENSE = 16
 const _THEOBR_SAMPLES = 32
 
 """
-    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false) → Float64
+    _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false, sp1065=false) → Float64
 
 ThêoBR bias-removal factor of Howe (2006), Eq. (6): the mean over
 `i = 0 … n`, `n = ⌊N/30 − 3⌋`, of the variance ratios
@@ -964,8 +964,9 @@ give the same `n`. SP1065 Eq. (33), the Stable32 manual and IEEE Std
 record, where it has one degree of freedom. On simulated white, flicker and
 random-walk FM (N = 1024) that ladder scatters the ratio by 25 to 30 % and
 biases the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to
-+3 % here. The formula gives `n ≥ 0` only for `N ≥ 90`; shorter records,
-outside the range the paper states, use the first term alone.
++3 % here. `sp1065=true` takes that ladder, which is the one Stable32 runs.
+The formula gives `n ≥ 0` only for `N ≥ 90`; shorter records, outside the
+range the paper states, use the first term alone.
 
 Unless `exact=true` or the ladder is short, Thêo1 is computed at the first
 16 factors and at 32 spread evenly over the rest, and interpolated between
@@ -980,10 +981,10 @@ Terms whose Thêo1 is not finite and positive are skipped, and the mean is
 taken over the terms that remain. Returns `NaN` when there is none
 (`N < 19`).
 """
-function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false)
+function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1065::Bool=false)
     N = length(x)
     N < 19 && return NaN
-    n = max(N ÷ 30 - 3, 0)
+    n = max(N ÷ (sp1065 ? 6 : 30) - 3, 0)
 
     # Factors i at which Thêo1 is computed: all of them, or the first 16
     # plus evenly spaced samples (always including the last).
@@ -1024,6 +1025,20 @@ function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false)
     end
 
     return cnt == 0 ? NaN : total / cnt
+end
+
+# ThêoBR ratio as Stable32 computes it: the ladder of SP1065 Eq. (33) on the
+# record, or on every `b`-th sample of a record longer than 3000, plus
+# 0.00055·(b − 1). The limit (`MaxTheoBRPts`) and the ladder are in the
+# Stable32 manual, which names Taylor and Howe (2010) as its method, and the
+# added term is their Eq. (4). They average the samples in blocks of `b`.
+# That Stable32 takes every `b`-th sample instead, with b = ⌈N/3000⌉, is
+# inferred from its output: this agrees with it to the five digits printed
+# for b = 1 (1001 samples) and for b = 3 (8192 samples), where block means
+# give deviations 6.5 % higher.
+function _stable32_theobr_ratio(x::Vector{Float64}, tau0::Float64)
+    b = cld(length(x), 3000)
+    return _theobr_ratio(x[1:b:end], b * tau0; exact=true, sp1065=true) + 0.00055 * (b - 1)
 end
 
 # ThêoH segment rule (SP1065 §5.2.16, Eq. (34)): requested grid points are

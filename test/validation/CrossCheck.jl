@@ -249,6 +249,7 @@ const S32_ALLTAU = [
     ("phase_dat_totdev.txt", "totdev", :totdev_s32alpha),
     ("phase_dat_tierms.txt", "tierms", (p, m) -> tierms(p, m)),
     ("phase_dat_mtie.txt",   "mtie",   (p, m) -> mtie(p, m)),
+    ("phase_dat_theo1.txt",               "theobr", (p, m) -> theo1(p, m; ci=false, correct_bias=:stable32)),
     ("phase_dat_theo1_alpha0.txt",        "theo1", (p, m) -> theo1(p, m; ci=false, correct_bias=false)),
     ("phase_dat_theo1_alpha0_decade.txt", "theo1", (p, m) -> theo1(p, m; ci=false, correct_bias=false)),
 ]
