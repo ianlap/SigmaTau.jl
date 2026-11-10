@@ -8,7 +8,8 @@ a Stable32 session onto SigmaTau and lists the few defaults that differ.
 ## Reading the file
 
 Stable32's `.phd` / `.frd` files, and text files with its header (`Tau:`
-lines closed by `# Header End`), read with no keywords:
+lines closed by `# Header End`, or the older bare `File:` … `Tau:` lines),
+read with no keywords:
 
 ```julia
 using SigmaTau
@@ -143,8 +144,10 @@ and SigmaTau reads flicker FM and random-walk FM; TOTDEV is then 3.1 %,
 
 ## Gaps
 
-Stable32 needs gaps filled before most runs. In SigmaTau `NaN` marks a
-missing sample; ADEV, MDEV, HDEV, MHDEV, TDEV, HTDEV, MTIE and TIE rms skip
+Stable32 needs gaps filled before most runs. Its files mark a gap with a
+zero (any zero in frequency data, any but the first and last point in phase
+data), and SigmaTau's Stable32 reader reads those zeros as gaps. In SigmaTau
+`NaN` marks a missing sample; ADEV, MDEV, HDEV, MHDEV, TDEV, HTDEV, MTIE and TIE rms skip
 the terms that touch it, and [`fillgaps`](@ref) (or `fillgaps=true` on the
 readers) fills the record for the rest ([Choosing an
 estimator](choosing.md)).
