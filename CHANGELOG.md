@@ -107,6 +107,17 @@ Clock models, the Kalman filter and timescales.
   al., PTTI 2000). It gives the RMS, a quantile, the worst case and the mean of
   the time error at each holdover time, and the time at which the quantile
   reaches a limit.
+- Predicted holdover: `holdover(model; train, tau, tau0, …)` predicts the
+  error the measured test finds from a `PowerLawFit`, a `ClockModel` or a
+  `Dict` of h_α, with `budget`, the variance each noise type adds
+  (`HoldoverPrediction`; Python too). Exact for the sampled spectrum,
+  flicker noises included; matches the closed forms of Delporte et al.
+  (PTTI 2000) within 0.4 %.
+- `sigmatau holdover FILE` runs the holdover test from the command line:
+  `--train`, `--tau`, `--fit-drift`, `--no-anchor`, `--limit`,
+  `--confidence`; CSV with one row per holdover time, or JSON, where `--fit`
+  adds the error predicted from the power-law fit with its budget by noise
+  type.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -190,6 +201,16 @@ Clock models, the Kalman filter and timescales.
 - `groslambert(...; interval=:klts)`: KLTS confidence intervals (Lantz et al.
   2019) for three clocks, valid for a clock quieter than the others; the χ²
   interval is no longer given below 1 EDF.
+- Flicker FM and flicker PM states in the Kalman clock model:
+  `clock_model(fit; flicker=true)` and `clock_models(cc; flicker=true)` give
+  a `ClockModel` with `flicker_fm`, `fm_band`, `flicker_pm`, `pm_band`, and
+  `kalman_filter`, `kalman_smooth`, `holdover_error`, `prediction_error`,
+  `tune_q`, `simulate_clock`, `simulate_ensemble` and the `:greenhall` and
+  `:jones_tryon` scales run on it. Flicker FM is the Markov frequency states
+  of Davis, Greenhall & Stacey (Metrologia 42, 2005); flicker PM states are
+  the package's own, held as measurement noise with memory. States sit only
+  across the τ where the flicker holds a quarter of the model's Allan
+  variance. Off by default; `:stein` refuses such models.
 
 ### Changed
 
@@ -274,13 +295,34 @@ Clock models, the Kalman filter and timescales.
   goes through filtered generator sums, and is shared between m = 1 and the
   R(n) check. The fast estimators' default call is about 15× faster than on
   0.6.0 (about 0.4 ms on 25 000 points).
+- `theo1(...; correct_bias=:stable32)` now reproduces Stable32's Thêo1 run
+  with automatic noise identification, which is ThêoBR over the ladder
+  SP1065 prints (to N/6), on every `⌈N/3000⌉`-th phase for records above
+  Stable32's 3000-point limit; checked on all 181 rows of its result file
+  for PHASE.DAT and on its two bias-removed rows for the 8192-point record.
+  It returned raw Thêo1, which Stable32 gives only with Alpha set to 0.
+  `correct_bias=false` still gives raw Thêo1.
+- `analyze --spectrum` on a record with gaps runs the estimators and reports
+  `"spectrum": {"error": …}` instead of stopping; `sigmatau spectrum` still
+  stops. The explorer analyses such a record and its Spectrum page says why
+  it has no spectrum.
+- `:greenhall` with some noiseless-reading clocks and some with reading
+  noise: the noiseless clocks are treated as one in the implicit-mean
+  weights, so the reported weights follow clock stability (before, the clock
+  with reading noise was pulled toward 1/k) and the scale changes slightly
+  with them (up to about 15 % in ADEV at short τ in the mixed case).
+  Frequencies are unchanged.
+- `theo1` and `theoh` sum Thêo1 in cache-sized blocks across all threads; a
+  default `theo1` call on 557 000 points takes 19 s instead of 2 minutes on
+  4 threads. Values move by rounding only.
 
 ### Removed
 
 - **Breaking:** the names deprecated in 0.6: `Sy`, `Sx`, `L`, `nch`,
   `save_result`, `save_suite`, `load_result`, `load_suite`, the five-argument
-  `confidence_intervals`, `SpectralResult.window` and `stability(; taus=)`;
-  their replacements are listed under 0.6.0, Deprecated.
+  `confidence_intervals`, `SpectralResult.window`, `stability(; taus=)` and
+  `identify_noise(; detrend=)`; their replacements are listed under 0.6.0,
+  Deprecated.
 
 ### Fixed
 
@@ -383,7 +425,27 @@ Clock models, the Kalman filter and timescales.
   (MJD 30000 to 90000, steps under 0.05 d, more than four decimals), a
   `ratio` column as frequency, and unnamed columns of median size under
   1e-11 as frequency; ROCIT files now read as downloaded.
-
+- `push!` on a `StreamingStability` throws on a sample that is not finite
+  instead of turning every later estimate into `NaN`.
+- `ncornered_hat` no longer gives a χ² interval below 1 EDF, as
+  `groslambert` now does.
+- `totdev` with an explicit averaging factor above N − 1, where the
+  reflected extension ends, read outside the record and returned an
+  arbitrary value with an interval; it now gives a `NaN` row with `neff` 0,
+  as the other estimators do past their limits.
+- Readers: exact timestamps keep their own sample interval on short records
+  (86400 s no longer reads as 86000 s below 55 rows); a unit in a table
+  column's name sets phase or frequency (`ppb`, `ppm`, `ns/s` are frequency;
+  `ns`, `ms` phase) and a time unit in the time column's name is applied
+  (`time (ms)`); `read_data` keeps `delim` for plain columns, and a
+  comma-separated file without column names reads whatever its extension.
+- Explorer: page buttons act once per click again. After a page was
+  revisited, "Pin run" pinned twice and the noise model's Edit could not be
+  opened.
+- `remove_outliers` replaces only the outliers: samples already missing stay
+  missing, where they were filled whenever the record held an outlier and
+  left when it held none. Fill them with `fillgaps` (`--fillgaps`) when that
+  is wanted.
 
 ## [0.6.0] - 2026-11-08
 

@@ -97,6 +97,34 @@ stands only if R(n) lies nearer its flicker-PM value than 1/2; one that fails
 is reported as white FM. On simulated white FM (N = 8192) this raises the
 share of 68.3 % ADEV intervals that hold the true value from 56–64 % to
 70–73 % at 4 to 32 averaged points, and it leaves PM records as they were.
+
+With fewer than 30 averaged points the rule is stricter, because noise only
+reddens with τ and the tests left are weak. A result is PM only if the
+result at the longest τ that has 30 points is PM and R(n) at the τ itself
+says so: from 6 averaged points it must lie below the midpoint of 1/m and
+1/2, the value it takes where white PM and white FM hold equal shares of the
+Allan variance, and with fewer it must be white PM outright. Everything else
+takes the FM type of the B1 ratio. The B1 ratio alone takes white PM for FM
+in one record in five at 16 averaged points and one in three at 8, which put
+the FM bias factor of TOTDEV, MTOTDEV and HTOTDEV on PM noise (white PM up
+to 33 %, 12 % and 19 % high in variance). In simulation (N = 1024) white PM
+is now within 2 % for all three down to 2 averaged points. Two costs remain.
+Flicker PM with fewer than 6 averaged points is reported as white FM, so its
+interval is wide and the three total variances read 19, 10 and 25 % high at
+4 points. And where PM gives way to FM inside the record no label is right
+near the crossing: the 68.3 % interval of ADEV, HDEV and TOTDEV then covers
+64–96 % at 16 to 4 points, that of MTOTDEV and HTOTDEV 58–86 %, as on main
+(54–96 %).
+
+The Hadamard family identifies the noise on the record less its frequency
+drift, and removing a drift roughly halves the B1 ratio (0.96, 1.65, 3.37
+for white, flicker and random-walk FM at 16 points, against the 1.0, 2.13
+and 8.0 its limits expect), which also stops at random-walk FM. So there
+the B1 ratio is not used: an FM type with fewer than 30 averaged points is
+the one found at the longest τ that has 30. HTOTDEV on flicker FM and redder
+noise then reads within 4 % of HDEV at 16 to 3 points, where it read 7–20 %
+low in variance; a change from one FM type to another beyond that τ is not
+seen, and `noise` states it.
 To set the noise type yourself, see [Stating the noise type](@ref).
 
 The result is always one of the five labels above, or for the

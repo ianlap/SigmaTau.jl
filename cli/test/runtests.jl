@@ -166,7 +166,12 @@ mktempdir() do dir
         r = run_cli("analyze", pf, "--format=json", "--spectrum", "--series", "10")
         @test r.code == 0
         @test occursin("\"spectrum\":{\"nperseg\":64", r.out)
-        @test occursin("\"series\":{\"t\":[0.0,26.0,", r.out)
+        @test occursin("\"series\":{\"t\":[", r.out)
+        # thinned by stretch: an outlier and a gap between strided samples stay
+        x = zeros(1000); x[437] = 1.0; x[800] = NaN
+        idx = SigmaTauCLI.series_index(x, 30)
+        @test 437 in idx && 800 in idx && issorted(idx) && length(idx) <= 30
+        @test SigmaTauCLI.series_index(x[1:20], 30) == 1:20
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,totdev", "--fit")
         @test r.code == 0
         @test occursin("\"powerlaw\":{\"deviation\":\"mhdev\",\"alphas\":[2,1,0,-1,-2]", r.out)
@@ -431,6 +436,14 @@ mktempdir() do dir
         coef = [ones(length(c)) c c .^ 2] \ xr
         @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]), coef[2]; rtol=1e-6)
         @test isapprox(parse(Float64, match(r"\"removed_drift_per_day\":([^,}]+)", r.out)[1]), 2 * coef[3] * 86400; rtol=1e-6)
+        # One column with NaN readings, filled: the filled readings stay out of the fit too.
+        nf = joinpath(dir, "nan.txt")
+        xn = X .+ 3e-11 .* (0:length(X)-1); xn[100:139] .= NaN
+        write(nf, join(xn, "\n"))
+        r = run_cli("check", nf, "--tau0", "1", "--fillgaps", "--remove-drift", "linear", "--format", "json")
+        ok = isfinite.(xn); c = (0:length(X)-1)[ok] .- (length(X) - 1) / 2
+        @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]),
+                       ([ones(length(c)) c] \ xn[ok])[2]; rtol=1e-6)
     end
 
     @testset "check" begin
@@ -678,6 +691,11 @@ mktempdir() do dir
         @test r.code == 0
         @test occursin("\"spectrum\":{\"error\":\"the spectrum needs a record without gaps\"}", r.out)
         @test occursin("\"deviation\":\"adev\"", r.out)
+        # A one-column frequency file with NaN readings is analyzed once filled.
+        yf = joinpath(dir, "y.txt")
+        write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
+        @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
+        @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
     end
 
     @testset "output error -> exit 4" begin

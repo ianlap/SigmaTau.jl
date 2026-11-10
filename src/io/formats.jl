@@ -196,7 +196,7 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
         t .*= 86400
     end
     t0 = _resolve_tau0(tau0, htau, t, "this Stable32 file")
-    return _Record(_gridded(t, v, fillgaps), t0, phase, start)
+    return _Record(_gridded(t, v, fillgaps, phase), t0, phase, start)
 end
 
 # Nominal frequency of a counter log: the mean reading to 4 significant
@@ -260,7 +260,7 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
         f0 = _nominal(v, nominal)
         v = (v .- f0) ./ f0
     end
-    return _Record(_gridded(t, v, fillgaps), t0, phase, start)
+    return _Record(_gridded(t, v, fillgaps, phase), t0, phase, start)
 end
 
 # Units a column name may carry ("(ns)", "[ps]", "_us", " ppb", "ns/s", "Hz"):
@@ -385,7 +385,7 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         v .*= scale
     end
     t0 = _resolve_tau0(tau0, NaN, t, "this table (no time column)")
-    return _Record(_gridded(t, v, fillgaps), t0, phase, start)
+    return _Record(_gridded(t, v, fillgaps, phase), t0, phase, start)
 end
 
 # A BIPM UTC - UTC(k) file: rows of an integer MJD and the difference in ns,
@@ -411,7 +411,7 @@ function _read_bipm_utc(path::AbstractString, tau0::Float64, fillgaps::Bool)
     start = _mjd_seconds(t[1])
     t .*= 86400
     t0 = _resolve_tau0(tau0, NaN, t, "this BIPM file")
-    return _Record(_gridded(t, v, fillgaps), t0, true, start)
+    return _Record(_gridded(t, v, fillgaps, true), t0, true, start)
 end
 
 # A RINEX 3 clock file: "AS G08 2025 08 17 00 00 00.000000  2  bias  sigma"
@@ -459,7 +459,7 @@ function _read_rinex_clk(path::AbstractString, tau0::Float64, column::Int, colum
     start = _mjd_seconds(t[1])
     t .*= 86400
     t0 = _resolve_tau0(tau0, NaN, t, "this RINEX clock file")
-    return _Record(_gridded(t, v, fillgaps), t0, true, start)
+    return _Record(_gridded(t, v, fillgaps, true), t0, true, start)
 end
 
 # The trim-friendly core of read_data: every argument concrete, NaN / 0 / ""
@@ -485,14 +485,10 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     elseif fmt === :rinex_clk
         _read_rinex_clk(path, tau0, column, column_name, fillgaps)
     elseif fmt === :columns
-        v, t0, start = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
-                               header=0, delim=delim == '\0' ? nothing : delim, scaling=1.0,
-                               detrend=:none, fillgaps=fillgaps)
-        # Unnamed readings of median size under 1e-11 are fractional
-        # frequency (or a ratio): a time error that small is not a clock.
-        f = filter(isfinite, v)
-        tiny = !isempty(f) && _median_nonan(abs.(f)) < 1e-11
-        _Record(v, t0, hint > 0 || (hint == 0 && !tiny), falses(0), start)
+        v, t0, start, phase = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
+                                      header=0, delim=delim == '\0' ? nothing : delim, scaling=1.0,
+                                      detrend=:none, fillgaps=fillgaps, hint=hint)
+        _Record(v, t0, phase, falses(0), start)
     else
         throw(ArgumentError("read_data: unknown format :" * String(fmt) * "; use one of " * join(map(String, INPUT_FORMATS), ", ")))
     end
@@ -607,8 +603,9 @@ timestamps and MJD values give the record its [`start_time`](@ref).
   or `:table` file. By default a `:columns` file follows the rule of
   [`read_phase`](@ref). In the other two a comma, else a tab, separates the
   fields when the first line holds one, and runs of blanks otherwise.
-- `fillgaps=false`: fill the missing samples with [`fillgaps`](@ref), with
-  the reservations stated there.
+- `fillgaps=false`: `true` fills the missing samples with
+  [`fillgaps`](@ref), with the reservations stated there: the readings
+  that the timestamps show to be absent, and those that are `NaN`.
 
 # Examples
 

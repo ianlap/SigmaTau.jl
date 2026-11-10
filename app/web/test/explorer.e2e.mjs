@@ -1,8 +1,8 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
-// Stability plot against the command line's own JSON, then visit Spectrum,
-// Dynamic, Live (simulated source) and Help, come back to Stability, and run
-// a record with gaps, with no page errors.
+// Stability plot and the Holdover curve against the command line's own JSON,
+// then visit Spectrum, Dynamic, Live (simulated source) and Help, come back to
+// Stability, and run a record with gaps, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -72,6 +72,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await plotted("#page [data-ref=map]");
   });
 
+  await t.test("Holdover: the plotted RMS equals the command line's", async () => {
+    await page.click("a[data-page=holdover]");
+    await plotted("#page [data-ref=plot]");
+    const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
+    const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
+    assert.deepEqual(rms, doc.holdover.rms);
+  });
+
   await t.test("Live: a simulated source streams and stops", async () => {
     await page.click("a[data-page=live]");
     await page.click("[data-ctl=go]");
@@ -110,6 +118,18 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator("#status-text").innerText(), /Up to date/);
     await page.click("a[data-page=spectrum]");
     await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
+  });
+
+  await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "NaN" : String(1e-12 * Math.sin(i / 3))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "y.txt", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
   });
 
   assert.deepEqual(errors, []);
