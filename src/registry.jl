@@ -92,14 +92,15 @@ estimators() = collect(_ESTIMATORS)
 
 """
     deviation(name::Symbol, data, m=Octave; ci=true, confidence=DEFAULT_CONFIDENCE,
-              correct_bias=true, remove_drift=true) → StabilityResult
+              correct_bias=true, remove_drift=true, noise=:auto) → StabilityResult
 
 Run the estimator called `name` (any `name` from [`estimators`](@ref)) on a
 `PhaseData` or `FrequencyData` record. `m` is a [`TauMode`](@ref), resolved
 against the estimator's own m-max, or any integer vector of averaging factors.
 `correct_bias` is passed only to the estimators that take it (the total family
 and `theo1`) and `remove_drift` only to the Hadamard family; `mtie` and `tierms`
-accept `ci` and `confidence` but report no intervals.
+accept `ci` and `confidence` but report no intervals. `noise` states the
+noise type in place of identifying it, as in [`adev`](@ref).
 
 `deviation(:adev, pd, m)` is `adev(pd, m)`; use it when the estimator is
 chosen at run time (a menu, a command-line flag, a loop). It is written as
@@ -135,23 +136,24 @@ _unknown_error(name::Symbol) = ArgumentError(
 
 function _deviation(name::Symbol, data::AbstractTimingData, ms::Vector{Int};
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
-                    correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true)
+                    correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true,
+                    noise::_NoiseChoice = :auto)
     c = Float64(confidence)
     b = correct_bias
-    name === :adev     && return adev(data, ms; ci=ci, confidence=c)
-    name === :mdev     && return mdev(data, ms; ci=ci, confidence=c)
-    name === :tdev     && return tdev(data, ms; ci=ci, confidence=c)
-    name === :hdev     && return hdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift)
-    name === :mhdev    && return mhdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift)
-    name === :htdev    && return htdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift)
-    name === :totdev   && return totdev(data, ms; ci=ci, confidence=c, correct_bias=b)
-    name === :mtotdev  && return mtotdev(data, ms; ci=ci, confidence=c, correct_bias=b)
-    name === :ttotdev  && return ttotdev(data, ms; ci=ci, confidence=c, correct_bias=b)
-    name === :htotdev  && return htotdev(data, ms; ci=ci, confidence=c, correct_bias=b, remove_drift=remove_drift)
-    name === :mhtotdev && return mhtotdev(data, ms; ci=ci, confidence=c, correct_bias=b, remove_drift=remove_drift)
-    name === :theo1    && return theo1(data, ms; ci=ci, confidence=c, correct_bias=b)
-    name === :theoh    && return theoh(data, ms; ci=ci, confidence=c)
-    name === :pdev     && return pdev(data, ms; ci=ci, confidence=c)
+    name === :adev     && return adev(data, ms; ci=ci, confidence=c, noise=noise)
+    name === :mdev     && return mdev(data, ms; ci=ci, confidence=c, noise=noise)
+    name === :tdev     && return tdev(data, ms; ci=ci, confidence=c, noise=noise)
+    name === :hdev     && return hdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift, noise=noise)
+    name === :mhdev    && return mhdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift, noise=noise)
+    name === :htdev    && return htdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift, noise=noise)
+    name === :totdev   && return totdev(data, ms; ci=ci, confidence=c, correct_bias=b, noise=noise)
+    name === :mtotdev  && return mtotdev(data, ms; ci=ci, confidence=c, correct_bias=b, noise=noise)
+    name === :ttotdev  && return ttotdev(data, ms; ci=ci, confidence=c, correct_bias=b, noise=noise)
+    name === :htotdev  && return htotdev(data, ms; ci=ci, confidence=c, correct_bias=b, remove_drift=remove_drift, noise=noise)
+    name === :mhtotdev && return mhtotdev(data, ms; ci=ci, confidence=c, correct_bias=b, remove_drift=remove_drift, noise=noise)
+    name === :theo1    && return theo1(data, ms; ci=ci, confidence=c, correct_bias=b, noise=noise)
+    name === :theoh    && return theoh(data, ms; ci=ci, confidence=c, noise=noise)
+    name === :pdev     && return pdev(data, ms; ci=ci, confidence=c, noise=noise)
     name === :mtie     && return mtie(data, ms; ci=ci, confidence=c)
     name === :tierms   && return tierms(data, ms; ci=ci, confidence=c)
     name in (:dadev, :dhdev) && throw(_dynamic_error(name))

@@ -10,10 +10,37 @@ const _DETREND_MODES_STR = string(_DETREND_MODES)
 
 # ── Least squares ────────────────────────────────────────────────────────
 
-# Column norms of X over the rows where `ok`, to scale the columns to unit
-# length so a t² column in seconds does not wreck the conditioning.
-_col_scale(X::Matrix{Float64}, ok::BitVector) =
-    [max(sqrt(sum(abs2(X[i, j]) for i in eachindex(ok) if ok[i])), floatmin()) for j in 1:size(X, 2)]
+# Upper triangle of XᵀX (two or three columns) over the rows where `ok`, in
+# one pass so the six sums run side by side; each adds in row order, as `sum`
+# over the rows would.
+function _gram(X::Matrix{Float64}, ok::BitVector)
+    p = size(X, 2)
+    s11 = s12 = s13 = s22 = s23 = s33 = 0.0
+    @inbounds for i in eachindex(ok)
+        ok[i] || continue
+        a, b, c = X[i, 1], X[i, 2], p == 3 ? X[i, 3] : 0.0
+        s11 += a * a; s12 += a * b; s13 += a * c
+        s22 += b * b; s23 += b * c; s33 += c * c
+    end
+    return reshape([s11, s12, s13, s12, s22, s23, s13, s23, s33], 3, 3)[1:p, 1:p]
+end
+
+# Xᵀr over the rows where `ok`, in one pass and row order like `_gram`.
+function _gram_rhs(X::Matrix{Float64}, r::Vector{Float64}, ok::BitVector)
+    p = size(X, 2)
+    s1 = s2 = s3 = 0.0
+    @inbounds for i in eachindex(ok)
+        ok[i] || continue
+        s1 += X[i, 1] * r[i]; s2 += X[i, 2] * r[i]
+        p == 3 && (s3 += X[i, 3] * r[i])
+    end
+    return p == 3 ? [s1, s2, s3] : [s1, s2]
+end
+
+# Column norms (over the rows where `ok`) from the Gram matrix, to scale the
+# columns to unit length so a t² column in seconds does not wreck the
+# conditioning.
+_col_scale(G::Matrix{Float64}) = [max(sqrt(G[j, j]), floatmin()) for j in axes(G, 1)]
 
 # Inverse of a symmetric 2×2 or 3×3 matrix, by cofactors (no hvcat literal:
 # that call is not resolved under juliac --trim).
@@ -28,32 +55,42 @@ function _sym_inv(A::Matrix{Float64})
     return reshape([C11, C12, C13, C12, C22, C23, C13, C23, C33], 3, 3) ./ (a * C11 + b * C12 + c * C13)
 end
 
-# Inverse of the scaled normal matrix XᵀX (two or three columns) over the
-# rows where `ok`.
-function _normal_inv(X::Matrix{Float64}, ok::BitVector, sc::Vector{Float64})
-    p = size(X, 2)
-    return _sym_inv([sum(X[i, j] * X[i, k] for i in eachindex(ok) if ok[i]) / (sc[j] * sc[k])
-                     for j in 1:p, k in 1:p])
-end
+# Inverse of the scaled normal matrix from the Gram matrix G and the scales.
+_normal_inv(G::Matrix{Float64}, sc::Vector{Float64}) =
+    _sym_inv([G[j, k] / (sc[j] * sc[k]) for j in axes(G, 1), k in axes(G, 2)])
 
 # Least squares on the columns of X over the rows where `ok`; returns the
 # coefficients and the residual sum of squares. A second pass on the
 # residual recovers the digits the normal equations lose.
 function _lsq(X::Matrix{Float64}, y::Vector{Float64}, ok::BitVector)
     p = size(X, 2)
-    sc = _col_scale(X, ok)
-    Ainv = _normal_inv(X, ok, sc)
+    G = _gram(X, ok)
+    sc = _col_scale(G)
+    Ainv = _normal_inv(G, sc)
     beta = zeros(p)
-    r = [ok[i] ? y[i] : 0.0 for i in eachindex(y)]
+    r = copy(y)   # rows outside `ok` are never read
     for _ in 1:2
-        b = [sum(X[i, j] * r[i] for i in eachindex(ok) if ok[i]) / sc[j] for j in 1:p]
+        b = _gram_rhs(X, r, ok) ./ sc
         step = [sum(Ainv[j, k] * b[k] for k in 1:p) for j in 1:p]
         beta .+= step
-        for i in eachindex(r)
-            ok[i] && (r[i] -= sum(X[i, j] * step[j] / sc[j] for j in 1:p))
+        w1, w2, w3 = step[1], step[2], p == 3 ? step[3] : 0.0
+        c1, c2, c3 = sc[1], sc[2], p == 3 ? sc[3] : 1.0
+        # Every row, so the loop vectorises.
+        if p == 3
+            @inbounds @simd for i in eachindex(r)
+                r[i] -= X[i, 1] * w1 / c1 + X[i, 2] * w2 / c2 + X[i, 3] * w3 / c3
+            end
+        else
+            @inbounds @simd for i in eachindex(r)
+                r[i] -= X[i, 1] * w1 / c1 + X[i, 2] * w2 / c2
+            end
         end
     end
-    return beta ./ sc, sum(abs2(r[i]) for i in eachindex(r) if ok[i])
+    rss = 0.0
+    @inbounds for i in eachindex(r)
+        ok[i] && (rss += abs2(r[i]))
+    end
+    return beta ./ sc, rss
 end
 
 # Least-squares polynomial of `degree` 1 or 2 in the centred sample index
@@ -61,8 +98,12 @@ end
 # for a line). Centring makes c1 the slope at the record's middle.
 function _index_polyfit(x::Vector{Float64}, ok::BitVector, degree::Int)
     N = length(x)
-    t = [(i - 1) - (N - 1) / 2 for i in 1:N]
-    X = degree == 1 ? hcat(ones(N), t) : hcat(ones(N), t, t .^ 2)
+    X = Matrix{Float64}(undef, N, degree + 1)
+    @inbounds for i in 1:N
+        t = (i - 1) - (N - 1) / 2
+        X[i, 1] = 1.0; X[i, 2] = t
+        degree == 2 && (X[i, 3] = t * t)
+    end
     c, _ = _lsq(X, x, ok)
     return degree == 1 ? [c[1], c[2], 0.0] : c
 end

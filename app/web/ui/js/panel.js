@@ -2,7 +2,7 @@
 // the Run button. One clock: colour = estimator. Several: colour = clock and
 // line style = estimator.
 import { state, update, markStale, multi, isReference, referenceColFor } from "./state.js";
-import { byId, GRIDS, CONFIDENCES, BIASES, gridName } from "./estimators.js";
+import { byId, GRIDS, CONFIDENCES, BIASES, NOISES, gridName } from "./estimators.js";
 import { seriesColor, strokeSvg } from "./plot.js";
 import { escapeHtml as h, thousands } from "./format.js";
 import { openPicker } from "./picker.js";
@@ -68,6 +68,7 @@ function options() {
       <span class="tau-range"><input type="number" min="0" step="any" placeholder="min" data-opt="tauMin" value="${state.tauMin ?? ""}" aria-label="Smallest τ in seconds">
       <span class="muted">–</span><input type="number" min="0" step="any" placeholder="max" data-opt="tauMax" value="${state.tauMax ?? ""}" aria-label="Largest τ in seconds"></span></div>
     <label class="opt" title="Bias correction of TOTDEV, MTOTDEV, HTOTDEV, MHTOTDEV, TTOTDEV and Thêo1 for the identified noise type: exact, the published tables only, what Stable32 applies to each, or none"><span>Bias correction</span><select class="wide" data-opt="bias">${BIASES.map(([v, l]) => `<option value="${v}" ${v === state.bias ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label class="opt" title="Noise type that sets the intervals and the bias factors: identified at each τ, the strongest term of the power-law model fitted to MHDEV, or one type you state for every τ"><span>Noise type</span><select class="wide" data-opt="noise">${NOISES.map(([v, l]) => `<option value="${v}" ${v === state.noise ? "selected" : ""}>${l}</option>`).join("")}</select></label>
   </div>`;
 }
 
@@ -147,7 +148,7 @@ function onChange(e) {
     if (opt === "grid") { s.grid = v; markStale(s, "inputs"); }
     if (opt === "confidence") { s.confidence = Number(v); markStale(s, "inputs"); }
     if (opt === "ci") { s.ci = v; markStale(s, "inputs"); }
-    if (opt === "bias") { s.bias = v; markStale(s, "inputs"); }
+    if (opt === "bias" || opt === "noise") { s[opt] = v; markStale(s, "inputs"); }
     if (opt === "tauMin" || opt === "tauMax") { s[opt] = Number(v) > 0 ? Number(v) : null; markStale(s, "inputs"); }
   });
 }

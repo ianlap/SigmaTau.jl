@@ -19,6 +19,7 @@ export const state = {
   fitEdit: false,          // the noise model box shows the component editor
   mask: "",                // ITU-T wander mask drawn over MTIE / TDEV on Stability ("" = none)
   bias: "exact",           // bias correction of the totals and Thêo1, one of BIASES
+  noise: "auto",           // noise type behind the intervals, one of NOISES
   tauMin: null,            // averaging-time limits in seconds, null = none
   tauMax: null,
   dataDrag: "zoom",        // Data plot drag: "zoom" | "range" (pick the analysis range)

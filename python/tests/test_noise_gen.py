@@ -35,3 +35,12 @@ def test_sigma1_and_h_both_rejected():
 def test_numpy_generator_rejected():
     with pytest.raises(TypeError):
         st.noise_gen(PhaseData, 512, 1.0, sigma1={0: 1e-12}, rng=np.random.default_rng(1))
+
+
+def test_noise_id_nnls_finds_the_mixture():
+    rec = st.noise_gen(PhaseData, 8192, 1.0, sigma1={0: 1e-12, -2: 1e-14}, rng=3)
+    r = st.noise_id_nnls(rec)
+    assert r["deviation"] == "mhdev"
+    assert r["contributions"].shape == (r["tau"].size, r["alphas"].size)
+    np.testing.assert_allclose(r["fit"], r["contributions"].sum(axis=1))
+    assert r["dominant"][0] == "WHFM" and r["dominant"][-1] == "RWFM"

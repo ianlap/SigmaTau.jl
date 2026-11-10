@@ -22,6 +22,7 @@ SigmaTauRecipesBaseExt = "RecipesBase"
 SigmaTauTablesExt = "Tables"
 
 [compat]
+Aqua = "0.8"
 Dates = "1"
 Distributions = "0.25"
 DocStringExtensions = "0.9"
@@ -38,6 +39,7 @@ Test = "1"
 julia = "1.11"
 
 [extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -45,4 +47,4 @@ Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Random", "RecipesBase", "Sockets", "Tables", "Test"]
+test = ["Aqua", "Random", "RecipesBase", "Sockets", "Tables", "Test"]

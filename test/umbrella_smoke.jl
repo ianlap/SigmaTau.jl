@@ -30,9 +30,7 @@ using SigmaTau
         :KalmanResult, :kalman_filter, :kalman_smooth, :holdover_error, :innovation_check, :simulate_clock,
         :prediction_error, :tune_q, :holdover, :HoldoverResult, :HoldoverPrediction,
         :ClockComparisons, :simulate_ensemble, :clock_models, :TimescaleResult, :timescale, :timescale_phase, :implicit_mean])
-    deprecated = Set([:Sy, :Sx, :L, :nch, :save_result, :save_suite,
-                      :load_result, :load_suite])
-    @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public ∪ deprecated
+    @test setdiff(Set(names(SigmaTau)), [:SigmaTau]) == public
     # The kernels stay internal but reachable as SigmaTau._adev_core etc.
     @test isdefined(SigmaTau, :_adev_core)
 end

@@ -158,7 +158,9 @@ settings.
    `ncornered_hat`, `groslambert`, `drift_fit`, `powerlaw_fit` / `powerlaw_sigma` /
    `powerlaw_psd`, `cross_adev` / `cross_psd_y` / `cross_psd_x`, `read_data`,
    `deviation(name, ...)` and `estimators()`, `find_outliers` (returns 0-based
-   indices), `remove_outliers`, plus `tau_values` grids for the new kernels.
+   indices), `remove_outliers`, `noise_id_nnls` (returns a dict), `StreamingStability`
+   (`push` / `extend` / `snapshot`), `start_time` (a UTC `datetime`; records carry
+   `start` in seconds since 2000-01-01), plus `tau_values` grids for the new kernels.
 6. `theo1` reports τ = 0.75·m·τ₀ (the Julia/SP1065 convention), not τ = m·τ₀.
 7. Names follow SigmaTau.jl 0.6: `psd_y` / `psd_x` / `ssb_phase_noise` (with
    `taper=`) for the port's `Sy` / `Sx` / `L` (`window=`); `ncornered_hat` for

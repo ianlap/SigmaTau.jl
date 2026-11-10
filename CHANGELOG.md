@@ -66,6 +66,21 @@ Clock models, the Kalman filter and timescales.
   statistic that allantools reports. `bias_correction` takes
   `published=true` for the same factors; the Python wrappers take
   `"published"` and `"stable32"`. MHTOTDEV has no published factor.
+- Python: `noise_id_nnls`, `StreamingStability`, `start_time`, and a `start`
+  field on `PhaseData` / `FrequencyData`.
+- `noise` keyword on every estimator that reports intervals (`adev` …
+  `theoh`), on `deviation` and on `stability`: `:auto` (identified at each
+  τ, the default), one noise type for every τ, a vector with one per
+  averaging factor, or a `PowerLawFit`, whose strongest term at each τ is
+  taken. The stated type sets the EDF and, in the total family, the bias
+  factor. `sigmatau analyze` and `report` take `--noise auto|fit|TYPE` and
+  the JSON gains `analysis.noise`; the explorer has a Noise type menu under
+  Options; the Python functions take the same `noise` argument.
+- Cross-checked against AllanDeviations.jl 0.3.0 in the Cross-check CI job
+  (every shared estimator within 1.5e-9 relative), and timed beside
+  allantools in the benchmark.
+- Explorer: end-to-end browser smoke test, run in the Web core CI job; no
+  Plotly error when leaving the Data page.
 
 - Interactive noise fit: `noise_fit` starts a power-law model on an ADEV,
   MDEV, HDEV or MHDEV result (or a total form), `add_component!` fits one
@@ -86,6 +101,12 @@ Clock models, the Kalman filter and timescales.
   default), `prediction_error`
   reports that error, and `simulate_clock` draws a record and its true
   states from a model.
+- Measured holdover test: `holdover(data; train, tau, drift, anchor, limit)`
+  learns the frequency (and drift) from a training stretch, free-runs from
+  the last reading and compares with the record from every start (Delporte et
+  al., PTTI 2000). It gives the RMS, a quantile, the worst case and the mean of
+  the time error at each holdover time, and the time at which the quantile
+  reaches a limit.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -129,9 +150,12 @@ Clock models, the Kalman filter and timescales.
   weight cap). On white FM clocks it matches `:greenhall` to a few percent.
   Also in the command line (`--algorithm stein`) and Python.
 - `clock_models(cc)` fits a `ClockModel` per clock from the comparisons alone
-  (Groslambert variances, then a power-law fit), so `:greenhall` and
-  `:jones_tryon` need no hand-built `models`. `powerlaw_fit` accepts a
-  `StabilityResult`.
+  (Groslambert variances, then a power-law fit with white PM, flicker PM,
+  white FM and random-walk FM, `alphas = [2, 1, 0, -2]`), so `:greenhall` and
+  `:jones_tryon` need no hand-built `models`. `clock_model` folds flicker PM
+  into the reading noise `R` as the PM the filter does not follow (Van
+  Dierendonck, McGraw & Brown 1984); left as white FM, flicker PM inflated
+  `q1`. `powerlaw_fit` accepts a `StabilityResult`.
 - EWFA follows section 3.1 of Kettering's 2023 thesis: equal weights, and
   the scale's frequency is the mean of the clocks' frequency steps, so
   without gaps it is the plain mean of the phases. The `tau_y` option (an
@@ -158,8 +182,9 @@ Clock models, the Kalman filter and timescales.
   and of each clock against it.
 - Python: `ClockModel`, `clock_model`, `noise_fit`, `kalman_filter`,
   `kalman_smooth`, `holdover_error`, `innovation_check`, `tune_q`,
-  `simulate_clock`, `ClockComparisons`, `simulate_ensemble`, `timescale` and
-  `timescale_phase` wrap the Julia calls of the same names.
+  `simulate_clock`, `ClockComparisons`, `simulate_ensemble`, `timescale`,
+  `timescale_phase`, `clock_models`, `implicit_mean`, `holdover` and
+  `HoldoverResult` wrap the Julia calls of the same names.
 - Tutorial "From one clock to an ensemble": noise fit, Kalman filter,
   holdover and an AT1 timescale on simulated clocks.
 
@@ -234,6 +259,14 @@ Clock models, the Kalman filter and timescales.
   is now that word instead of `true`/`false`. The explorer's bias checkbox
   is a menu of the same four; saved sessions still open, as Exact (was on)
   or None (was off).
+- The test suite runs the Aqua.jl package checks.
+
+### Removed
+
+- **Breaking:** the names deprecated in 0.6: `Sy`, `Sx`, `L`, `nch`,
+  `save_result`, `save_suite`, `load_result`, `load_suite`, the five-argument
+  `confidence_intervals`, `SpectralResult.window` and `stability(; taus=)`;
+  their replacements are listed under 0.6.0, Deprecated.
 
 ### Fixed
 
@@ -332,6 +365,10 @@ Clock models, the Kalman filter and timescales.
   every τ after the gap. `sigmatau --freq` asks for `--fillgaps` on a
   frequency record with missing samples instead of integrating `NaN` into
   the rest of the phase.
+- `read_data` reads a time column of MJD values in days whatever its name
+  (MJD 30000 to 90000, steps under 0.05 d, more than four decimals), a
+  `ratio` column as frequency, and unnamed columns of median size under
+  1e-11 as frequency; ROCIT files now read as downloaded.
 
 
 ## [0.6.0] - 2026-11-08
