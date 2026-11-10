@@ -14,8 +14,8 @@ def test_public_name_resolves(name):
 
 
 def test_all_is_complete():
-    # 77 public names, per the packaged contract.
-    assert len(st.__all__) == 77
+    # 80 public names, per the packaged contract.
+    assert len(st.__all__) == 80
 
 
 def test_version_matches_julia_package():
