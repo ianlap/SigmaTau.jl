@@ -42,13 +42,48 @@ record. A mean error that grows as τ² under a line is drift the line
 cannot follow.
 
 With `anchor = false` the fit's own end value replaces the last reading,
-which is the extrapolated fit Delporte et al. analyze; their closed-form
-variances (eqs 11 and 13 for a parabola on white and random-walk FM, 17
-to 19 for a line on white, flicker and random-walk FM) are what the tests
-check the function against. [`holdover_error`](@ref) gives the error a
-[`ClockModel`](@ref) predicts from a Kalman filter's last estimate.
+which is the extrapolated fit Delporte et al. analyze.
+
+## Predicted from a noise model
+
+The same call on a noise model predicts what the record should show: a
+[`PowerLawFit`](@ref), a [`ClockModel`](@ref), or a `Dict` of h_α such as a
+data sheet's levels.
+
+```julia
+fit = powerlaw_fit(p)
+m = holdover(p;   train=86400, limit=1e-6)      # measured
+q = holdover(fit; train=86400, limit=1e-6)      # predicted
+q.sigma            # against m.rms
+sqrt.(q.budget)    # what each noise type adds, one column per q.alphas
+```
+
+The error is a weighted sum of phase samples, so its variance follows
+exactly from the spectrum of the sampled record, the one
+[`powerlaw_sigma`](@ref) uses. Summing the weights once turns them into
+weights on the frequency samples, twice into weights on the frequency
+steps; that leaves white FM and random-walk FM as plain sums of squares
+and the flicker noises as a quadratic form with the kernel
+1/(1 − 4k²), the covariance of a sequence whose spectrum is sin(πfτ₀).
+The flicker noises are therefore predicted on the same footing as the
+rest, with no state model standing in for them.
+
+For long stretches the prediction gives the closed forms of Delporte et
+al. (their eqs 11 to 13 for a parabola and 17 to 19 for a line, on white,
+flicker and random-walk FM, all with `anchor = false`); the tests hold it
+to them within 0.4 % at 2048 samples in the stretch, and hold the measured
+test to the prediction on all five noise types. The first term of each
+bracket above, q₁τ and q₂τ³/3, is τσ_y(τ), the error of the best possible
+predictor on that noise [allan-1987-prediction](@cite): what remains is
+the price of learning the frequency from a finite stretch.
+
+The prediction holds noise only. A drift D that a line does not follow
+adds the mean ½ D τ (τ + T). [`holdover_error`](@ref) gives the error a
+[`ClockModel`](@ref) predicts from a Kalman filter's last estimate
+instead of a fitted line.
 
 ```@docs
 holdover
 HoldoverResult
+HoldoverPrediction
 ```

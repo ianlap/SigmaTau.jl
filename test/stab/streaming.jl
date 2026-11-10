@@ -94,6 +94,14 @@ using SigmaTau
         @test snapshot(acc).neff == [0, 0, 0]
     end
 
+    @testset "a sample that is not finite is refused, the sums stay intact" begin
+        acc = append!(StreamingStability(:adev, 1.0, [1, 2]), cumsum(sin.(1:20)))
+        before = snapshot(acc).dev
+        @test_throws ArgumentError push!(acc, NaN)
+        @test_throws ArgumentError push!(acc, Inf)
+        @test nsamples(acc) == 20 && snapshot(acc).dev == before
+    end
+
     @testset "memory bound: ring buffer sized to the kernel's deepest lag" begin
         @test [length(StreamingStability(d, 1.0, [1, 5, 64]).buf) for d in (:adev, :mdev, :hdev, :mhdev)] ==
               [2, 3, 3, 4] .* 64 .+ 1

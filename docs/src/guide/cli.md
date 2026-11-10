@@ -66,7 +66,7 @@ The record (all four analysis commands):
 | `--time-col N`, `--value-col N` | 1-based columns; `--time-col 0` means no time column |
 | `--reference-col N` | subtract this column from the value column (several clocks against one reference) |
 | `--header N` | extra header lines to skip |
-| `--delim CHAR` | field delimiter; default from the extension, `'\t'` for a tab |
+| `--delim CHAR` | field delimiter; default a comma when the first data line holds one, else whitespace; `'\t'` for a tab |
 | `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
@@ -175,7 +175,9 @@ numbers are `null`.
   and `sigma_y` for the rest. With `--m`, `tau_mode` is `"m"` and `m` lists
   the factors.
 - `spectrum` comes from `sigmatau spectrum`, or `analyze --spectrum`. Its
-  arrays leave out the DC bin.
+  arrays leave out the DC bin. Under `analyze`, a record with gaps gives
+  `{"error": "…"}` there and the estimators still run; `sigmatau spectrum`
+  stops on it with exit code 3.
 - `powerlaw` comes from `analyze --fit`: the fitted model
   (`deviation`, `alphas`, `h`, `noise_types`; see [`powerlaw_fit`](@ref)),
   its σ(τ) for each ADEV, MDEV, TDEV, HDEV and MHDEV result in `curves`, and
