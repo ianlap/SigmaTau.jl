@@ -256,8 +256,6 @@ const S32_ALLTAU = [
 const S32_TOL_SIGMA = 1e-4   # Stable32 prints 5 significant figures
 const S32_TOL_CI    = 1e-3
 
-const NOISE_ID_NOTE = "noise ID differs: N/m < 30 is the B1/R(n) fallback, which reads 7 averaged samples here"
-
 # CI rows outside the published EDF models: reported, not asserted.
 function s32_ci_tol(est, m)
     if est in ("mtotdev", "ttotdev") && m >= 16
@@ -280,7 +278,6 @@ function stable32_rows()
         res = f(p, ms)
         for (k, r) in enumerate(s)
             a_st = SigmaTau._alpha_from_noise(res.noise_type[k])
-            same = a_st == r.alpha
             # The bias of TOTDEV and HTOTDEV follows the noise type and m, and
             # Stable32's differs on PM and below m = 16: the σ row takes
             # Stable32's factor for its α and compares the estimator.
@@ -288,14 +285,11 @@ function stable32_rows()
             var = est == "totdev" ? :totvar : est == "htotdev" ? :htot : nothing
             if var !== nothing
                 σ *= sqrt(bias_correction([res.noise_type[k]], var, [r.m], N)[1] / s32_bias([r.alpha], var, [r.m], N)[1])
-                same || (σnote = "bias for Stable32's α (noise ID differs)")
             end
             push!(rows, Row("Stable32 σ", "PHASE.DAT", est, r.m, r.sigma, σ, S32_TOL_SIGMA, σnote))
-            idnote = same ? "" : NOISE_ID_NOTE
-            push!(rows, Row("Stable32 α", "PHASE.DAT", est, r.m, r.alpha, a_st, same ? 0.0 : Inf, idnote))
+            push!(rows, Row("Stable32 α", "PHASE.DAT", est, r.m, r.alpha, a_st, 0.0, ""))
             # CI with SigmaTau's own noise ID (the default API output)
             tol, cinote = s32_ci_tol(est, r.m)
-            same || ((tol, cinote) = (Inf, idnote))
             push!(rows, Row("Stable32 CI", "PHASE.DAT", est * " lo", r.m, r.lo, res.ci[k].lo, tol, cinote))
             push!(rows, Row("Stable32 CI", "PHASE.DAT", est * " hi", r.m, r.hi, res.ci[k].hi, tol, cinote))
         end

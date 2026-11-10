@@ -20,6 +20,14 @@ using SigmaTau
         @test pm(2) == [:WHPM, :WHPM]
     end
 
+    @testset "FM read as PM on few points" begin
+        # 32 decimated points of this white FM record read α = 1.63, white PM.
+        # R(n), from every sample, is near the 1/2 of white FM and far from PM.
+        x = noise_gen(PhaseData, 2048, 1.0; h=Dict(0 => 1.0), rng=Xoshiro(23)).x
+        @test SigmaTau._noise_id_lag1acf(x, 64)[1] ≈ 1.63 atol=0.01
+        @test identify_noise(x, [64]) == [:WHFM]
+    end
+
     @testset "flicker FM at long τ" begin
         # On decimated phase flicker FM reads α ≈ −1.45 and random-walk FM
         # −2.4, so for m ≥ 2 the limit between them sits at −1.92. This
