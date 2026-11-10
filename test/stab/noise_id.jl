@@ -11,6 +11,15 @@ using SigmaTau
     m_values = [1, 2, 4]
     tau0 = 1.0
 
+    @testset "flicker PM at long τ" begin
+        # Decimated flicker-PM phase has too little lag-1 correlation left to
+        # tell it from white PM; R(n) does, and leaves white PM alone.
+        pm(alpha) = identify_noise(noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0),
+                                             rng=Xoshiro(11)), [16, 64])
+        @test pm(1) == [:FLPM, :FLPM]
+        @test pm(2) == [:WHPM, :WHPM]
+    end
+
     @testset "noise-ID scale invariance" begin
         # Regression for the eps*N threshold bug in `_lag1_acf` that
         # produced :unknown classifications on any phase record with std

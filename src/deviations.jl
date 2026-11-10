@@ -1,6 +1,8 @@
 # Public deviation API: PhaseData / FrequencyData in, StabilityResult out.
 # Wraps the kernels in kernels.jl with noise identification, EDF and
-# confidence intervals from noise.jl and edf.jl.
+# confidence intervals from noise.jl and edf.jl. The methods here take phase
+# data and a `Vector{Int}` of averaging factors; registry.jl adds the other
+# call forms (frequency data, a `TauMode` grid or none, any integer vector).
 
 # Every estimator builds its result through here so the record metadata
 # (τ₀, sample count, confidence level) rides along.
@@ -141,29 +143,6 @@ end
 
 # FrequencyData entry points: convert via _freq_to_phase, dispatch to PhaseData;
 # a record with gaps goes to the gap-tolerant path (src/gaps.jl).
-adev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:adev, _gap_record(data), m_values; kwargs...) : adev(_freq_to_phase(data), m_values; kwargs...)
-mdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:mdev, _gap_record(data), m_values; kwargs...) : mdev(_freq_to_phase(data), m_values; kwargs...)
-tdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:tdev, _gap_record(data), m_values; kwargs...) : tdev(_freq_to_phase(data), m_values; kwargs...)
-
-# TauMode grid selector: resolve to the explicit m_values form via `tau_values`.
-adev(data::PhaseData,     taus::TauMode; kwargs...) = adev(data, tau_values(taus, length(data.x), :adev); kwargs...)
-adev(data::FrequencyData, taus::TauMode; kwargs...) = adev(data, tau_values(taus, length(data.y) + 1, :adev); kwargs...)
-mdev(data::PhaseData,     taus::TauMode; kwargs...) = mdev(data, tau_values(taus, length(data.x), :mdev); kwargs...)
-mdev(data::FrequencyData, taus::TauMode; kwargs...) = mdev(data, tau_values(taus, length(data.y) + 1, :mdev); kwargs...)
-tdev(data::PhaseData,     taus::TauMode; kwargs...) = tdev(data, tau_values(taus, length(data.x), :tdev); kwargs...)
-tdev(data::FrequencyData, taus::TauMode; kwargs...) = tdev(data, tau_values(taus, length(data.y) + 1, :tdev); kwargs...)
-
-# Zero-arg convenience: octave-spaced m_values up to the kernel's algorithmic
-# m-max (see `_default_m_values`). All kwargs pass through unchanged.
-adev(data::PhaseData;     kwargs...) = adev(data, _default_m_values(length(data.x), :adev); kwargs...)
-adev(data::FrequencyData; kwargs...) = adev(data, _default_m_values(length(data.y) + 1, :adev); kwargs...)
-mdev(data::PhaseData;     kwargs...) = mdev(data, _default_m_values(length(data.x), :mdev); kwargs...)
-mdev(data::FrequencyData; kwargs...) = mdev(data, _default_m_values(length(data.y) + 1, :mdev); kwargs...)
-tdev(data::PhaseData;     kwargs...) = tdev(data, _default_m_values(length(data.x), :tdev); kwargs...)
-tdev(data::FrequencyData; kwargs...) = tdev(data, _default_m_values(length(data.y) + 1, :tdev); kwargs...)
 
 
 """
@@ -264,27 +243,6 @@ function htdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, remove_dri
     return _result(data, confidence, :htdev, res.tau, res.dev .* factor, res.noise_type,
                            _scale_ci(res.ci, factor), res.edf, res.neff)
 end
-
-hdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:hdev, _gap_record(data), m_values; kwargs...) : hdev(_freq_to_phase(data), m_values; kwargs...)
-mhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:mhdev, _gap_record(data), m_values; kwargs...) : mhdev(_freq_to_phase(data), m_values; kwargs...)
-htdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:htdev, _gap_record(data), m_values; kwargs...) : htdev(_freq_to_phase(data), m_values; kwargs...)
-
-hdev(data::PhaseData,      taus::TauMode; kwargs...) = hdev(data,  tau_values(taus, length(data.x), :hdev);  kwargs...)
-hdev(data::FrequencyData,  taus::TauMode; kwargs...) = hdev(data,  tau_values(taus, length(data.y) + 1, :hdev);  kwargs...)
-mhdev(data::PhaseData,     taus::TauMode; kwargs...) = mhdev(data, tau_values(taus, length(data.x), :mhdev); kwargs...)
-mhdev(data::FrequencyData, taus::TauMode; kwargs...) = mhdev(data, tau_values(taus, length(data.y) + 1, :mhdev); kwargs...)
-htdev(data::PhaseData,     taus::TauMode; kwargs...) = htdev(data, tau_values(taus, length(data.x), :htdev); kwargs...)
-htdev(data::FrequencyData, taus::TauMode; kwargs...) = htdev(data, tau_values(taus, length(data.y) + 1, :htdev); kwargs...)
-
-hdev(data::PhaseData;      kwargs...) = hdev(data,  _default_m_values(length(data.x), :hdev);  kwargs...)
-hdev(data::FrequencyData;  kwargs...) = hdev(data,  _default_m_values(length(data.y) + 1, :hdev);  kwargs...)
-mhdev(data::PhaseData;     kwargs...) = mhdev(data, _default_m_values(length(data.x), :mhdev); kwargs...)
-mhdev(data::FrequencyData; kwargs...) = mhdev(data, _default_m_values(length(data.y) + 1, :mhdev); kwargs...)
-htdev(data::PhaseData;     kwargs...) = htdev(data, _default_m_values(length(data.x), :htdev); kwargs...)
-htdev(data::FrequencyData; kwargs...) = htdev(data, _default_m_values(length(data.y) + 1, :htdev); kwargs...)
 
 
 # Deviation-scale unbias divisor √B, with NaN for B ≤ 0: :totvar's
@@ -479,34 +437,6 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
     return _result(data, confidence, :mhtotdev, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
-totdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)   = totdev(_freq_to_phase(data),   m_values; kwargs...)
-mtotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = mtotdev(_freq_to_phase(data),  m_values; kwargs...)
-ttotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = ttotdev(_freq_to_phase(data),  m_values; kwargs...)
-htotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...)  = htotdev(_freq_to_phase(data),  m_values; kwargs...)
-mhtotdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = mhtotdev(_freq_to_phase(data), m_values; kwargs...)
-
-totdev(data::PhaseData,       taus::TauMode; kwargs...) = totdev(data,   tau_values(taus, length(data.x), :totdev);   kwargs...)
-totdev(data::FrequencyData,   taus::TauMode; kwargs...) = totdev(data,   tau_values(taus, length(data.y) + 1, :totdev);   kwargs...)
-mtotdev(data::PhaseData,      taus::TauMode; kwargs...) = mtotdev(data,  tau_values(taus, length(data.x), :mtotdev);  kwargs...)
-mtotdev(data::FrequencyData,  taus::TauMode; kwargs...) = mtotdev(data,  tau_values(taus, length(data.y) + 1, :mtotdev);  kwargs...)
-ttotdev(data::PhaseData,      taus::TauMode; kwargs...) = ttotdev(data,  tau_values(taus, length(data.x), :ttotdev);  kwargs...)
-ttotdev(data::FrequencyData,  taus::TauMode; kwargs...) = ttotdev(data,  tau_values(taus, length(data.y) + 1, :ttotdev);  kwargs...)
-htotdev(data::PhaseData,      taus::TauMode; kwargs...) = htotdev(data,  tau_values(taus, length(data.x), :htotdev);  kwargs...)
-htotdev(data::FrequencyData,  taus::TauMode; kwargs...) = htotdev(data,  tau_values(taus, length(data.y) + 1, :htotdev);  kwargs...)
-mhtotdev(data::PhaseData,     taus::TauMode; kwargs...) = mhtotdev(data, tau_values(taus, length(data.x), :mhtotdev); kwargs...)
-mhtotdev(data::FrequencyData, taus::TauMode; kwargs...) = mhtotdev(data, tau_values(taus, length(data.y) + 1, :mhtotdev); kwargs...)
-
-totdev(data::PhaseData;       kwargs...) = totdev(data,   _default_m_values(length(data.x), :totdev);   kwargs...)
-totdev(data::FrequencyData;   kwargs...) = totdev(data,   _default_m_values(length(data.y) + 1, :totdev);   kwargs...)
-mtotdev(data::PhaseData;      kwargs...) = mtotdev(data,  _default_m_values(length(data.x), :mtotdev);  kwargs...)
-mtotdev(data::FrequencyData;  kwargs...) = mtotdev(data,  _default_m_values(length(data.y) + 1, :mtotdev);  kwargs...)
-ttotdev(data::PhaseData;      kwargs...) = ttotdev(data,  _default_m_values(length(data.x), :ttotdev);  kwargs...)
-ttotdev(data::FrequencyData;  kwargs...) = ttotdev(data,  _default_m_values(length(data.y) + 1, :ttotdev);  kwargs...)
-htotdev(data::PhaseData;      kwargs...) = htotdev(data,  _default_m_values(length(data.x), :htotdev);  kwargs...)
-htotdev(data::FrequencyData;  kwargs...) = htotdev(data,  _default_m_values(length(data.y) + 1, :htotdev);  kwargs...)
-mhtotdev(data::PhaseData;     kwargs...) = mhtotdev(data, _default_m_values(length(data.x), :mhtotdev); kwargs...)
-mhtotdev(data::FrequencyData; kwargs...) = mhtotdev(data, _default_m_values(length(data.y) + 1, :mhtotdev); kwargs...)
-
 
 """
     mtie(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
@@ -546,15 +476,6 @@ function mtie(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
     neff = _neff_counts(:mtie, length(data.x), m_values)
     return _result(data, confidence, :mtie, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
 end
-
-mtie(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:mtie, _gap_record(data), m_values; kwargs...) : mtie(_freq_to_phase(data), m_values; kwargs...)
-
-mtie(data::PhaseData,     taus::TauMode; kwargs...) = mtie(data, tau_values(taus, length(data.x), :mtie); kwargs...)
-mtie(data::FrequencyData, taus::TauMode; kwargs...) = mtie(data, tau_values(taus, length(data.y) + 1, :mtie); kwargs...)
-
-mtie(data::PhaseData;     kwargs...) = mtie(data, _default_m_values(length(data.x), :mtie); kwargs...)
-mtie(data::FrequencyData; kwargs...) = mtie(data, _default_m_values(length(data.y) + 1, :mtie); kwargs...)
 
 
 """
@@ -606,17 +527,6 @@ function tierms(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidenc
     return _result(data, confidence, :tierms, taus, raw_devs, Symbol[], _CIBound[], Float64[], neff)
 end
 
-tierms(data::FrequencyData, m_values::Vector{Int}; kwargs...) =
-    _has_gaps(data) ? _gap_result(:tierms, _gap_record(data), m_values; kwargs...) : tierms(_freq_to_phase(data), m_values; kwargs...)
-
-tierms(data::PhaseData,     taus::TauMode; kwargs...) = tierms(data, tau_values(taus, length(data.x), :tierms); kwargs...)
-tierms(data::FrequencyData, taus::TauMode; kwargs...) = tierms(data, tau_values(taus, length(data.y) + 1, :tierms); kwargs...)
-
-# Zero-arg convenience: octave-spaced m_values up to TIE rms' algorithmic
-# m-max (`N − 1`, see `_default_m_values`).
-tierms(data::PhaseData;     kwargs...) = tierms(data, _default_m_values(length(data.x), :tierms); kwargs...)
-tierms(data::FrequencyData; kwargs...) = tierms(data, _default_m_values(length(data.y) + 1, :tierms); kwargs...)
-
 
 """
     pdev(data, m_values; ci=true, confidence=DEFAULT_CONFIDENCE) → StabilityResult
@@ -666,16 +576,6 @@ function pdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence:
 
     return _result(data, confidence, :pdev, taus, raw_devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
-
-pdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = pdev(_freq_to_phase(data), m_values; kwargs...)
-
-pdev(data::PhaseData,     taus::TauMode; kwargs...) = pdev(data, tau_values(taus, length(data.x), :pdev); kwargs...)
-pdev(data::FrequencyData, taus::TauMode; kwargs...) = pdev(data, tau_values(taus, length(data.y) + 1, :pdev); kwargs...)
-
-# Zero-arg convenience: octave-spaced m_values up to PDEV's algorithmic
-# m-max (`(N − 2) ÷ 2`, see `_default_m_values`).
-pdev(data::PhaseData;     kwargs...) = pdev(data, _default_m_values(length(data.x), :pdev); kwargs...)
-pdev(data::FrequencyData; kwargs...) = pdev(data, _default_m_values(length(data.y) + 1, :pdev); kwargs...)
 
 
 """
@@ -822,21 +722,6 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, confidence
     return _result(data, confidence, :theoh, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
 end
 
-theo1(data::FrequencyData, m_values::Vector{Int}; kwargs...) = theo1(_freq_to_phase(data), m_values; kwargs...)
-theoh(data::FrequencyData, m_values::Vector{Int}; kwargs...) = theoh(_freq_to_phase(data), m_values; kwargs...)
-
-# TauMode grid selector: resolve to the explicit m_values form via `tau_values`
-# (the :theo1 grid is rounded to even averaging factors there).
-theo1(data::PhaseData,     taus::TauMode; kwargs...) = theo1(data, tau_values(taus, length(data.x), :theo1); kwargs...)
-theo1(data::FrequencyData, taus::TauMode; kwargs...) = theo1(data, tau_values(taus, length(data.y) + 1, :theo1); kwargs...)
-theoh(data::PhaseData,     taus::TauMode; kwargs...) = theoh(data, tau_values(taus, length(data.x), :theoh); kwargs...)
-theoh(data::FrequencyData, taus::TauMode; kwargs...) = theoh(data, tau_values(taus, length(data.y) + 1, :theoh); kwargs...)
-
-theo1(data::PhaseData;     kwargs...) = theo1(data, _default_m_values(length(data.x), :theo1); kwargs...)
-theo1(data::FrequencyData; kwargs...) = theo1(data, _default_m_values(length(data.y) + 1, :theo1); kwargs...)
-theoh(data::PhaseData;     kwargs...) = theoh(data, _default_m_values(length(data.x), :theoh); kwargs...)
-theoh(data::FrequencyData; kwargs...) = theoh(data, _default_m_values(length(data.y) + 1, :theoh); kwargs...)
-
 
 # Dynamic (time-resolved) deviations.
 # Both slide an analysis window of `window` phase samples across the record
@@ -935,8 +820,6 @@ function dhdev(data::PhaseData, m_values::Vector{Int};
                         window=window, step=step, min_window=5)
 end
 
-dadev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = dadev(_freq_to_phase(data), m_values; kwargs...)
-dhdev(data::FrequencyData, m_values::Vector{Int}; kwargs...) = dhdev(_freq_to_phase(data), m_values; kwargs...)
 
 # TauMode grid selector: resolve against the *window* length (every window
 # computes the same m grid; the record length is irrelevant to the clamp).
@@ -954,17 +837,6 @@ function _default_window(N::Int)
         w *= 2
     end
     return min(w, N)
-end
-
-# ── Any integer vector of averaging factors ──────────────────────────────
-# The methods above take `Vector{Int}`; these accept ranges (`1:10`), views
-# and other integer vectors and forward a `Vector{Int}` copy, so
-# `adev(pd, 1:10)` works like `adev(pd, collect(1:10))`.
-for f in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev,
-          :totdev, :mtotdev, :ttotdev, :htotdev, :mhtotdev,
-          :mtie, :tierms, :pdev, :theo1, :theoh, :dadev, :dhdev)
-    @eval $f(data::AbstractTimingData, m_values::AbstractVector{<:Integer}; kwargs...) =
-        $f(data, collect(Int, m_values); kwargs...)
 end
 
 identify_noise(data::AbstractTimingData, taus::TauMode; kwargs...) =

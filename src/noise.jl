@@ -15,7 +15,9 @@ family, as the deviation functions do.
 
 Identify the dominant power-law noise type at each averaging factor by the
 lag-1 autocorrelation of the differenced phase, with a B1/R(n) fallback when
-fewer than `NEFF_RELIABLE` effective samples remain.
+fewer than `NEFF_RELIABLE` effective samples remain. A white-PM result of the
+lag-1 test at `m ≥ 4` is confirmed with R(n), the ratio of MVAR to AVAR,
+because decimating the phase whitens flicker PM.
 
 Every entry is one of `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`; the
 function never returns `:unknown`. Estimates outside α ∈ [-2, 2] are
@@ -68,6 +70,7 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
     N = length(x_clean)
     alphas = Vector{Int}(undef, length(m_values))
     ok = falses(length(m_values))
+    x_rn = nothing   # drift-removed record for R(n), made on first use
 
     for (k, m) in enumerate(m_values)
         N_eff = N ÷ m
@@ -76,6 +79,12 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
         try
             if N_eff >= NEFF_RELIABLE
                 alpha, _, _, _ = _noise_id_lag1acf(x_clean, m, dmin, dmax; detrend=detrend)
+                # Decimation whitens flicker PM, so a white-PM result is
+                # confirmed with R(n) (SP1065 §5.5.2, step 5).
+                if alpha >= 1.5 && m >= 4
+                    x_rn === nothing && (x_rn = detrend ? _remove_quadratic(x_clean) : x_clean)
+                    _rn_flicker(x_rn, m, _adev_core(x_rn, [m], 1.0)[1]) && (alpha = 1.0)
+                end
             else
                 alpha, _, _ = _noise_id_b1rn(x_clean, m; detrend=detrend, b1_length=b1_length)
             end
@@ -246,18 +255,18 @@ function _noise_id_b1rn(x::Vector{Float64}, m::Int; detrend::Bool=true, b1_lengt
         end
     end
 
-    if mu_best == -2
-        adev_val = sqrt(avar_val)
-        mdev_val = _mdev_core(x, [m], 1.0)[1]
-        if !isnan(mdev_val) && adev_val > 0
-            Rn_obs = (mdev_val / adev_val)^2
-            R_hi = _rn_theory(m, 0)
-            R_lo = _rn_theory(m, -1)
-            alpha_int = Rn_obs > sqrt(R_hi * R_lo) ? 1 : 2
-        end
-    end
+    mu_best == -2 && (alpha_int = _rn_flicker(x, m, sqrt(avar_val)) ? 1 : 2)
 
     return (alpha_int, mu_best, B1_obs)
+end
+
+# R(n) = MVAR/AVAR at averaging factor m separates the PM noises, which ADEV
+# and the decimated phase cannot: true when it lies nearer its flicker-PM
+# value than 1/m, its white-PM value.
+function _rn_flicker(x::Vector{Float64}, m::Int, adev_val::Float64)
+    mdev_val = _mdev_core(x, [m], 1.0)[1]
+    (isnan(mdev_val) || !(adev_val > 0)) && return false
+    return (mdev_val / adev_val)^2 > sqrt(_rn_theory(m, 0) * _rn_theory(m, -1))
 end
 
 function _b1_theory(N::Int, mu::Int)
