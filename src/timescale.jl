@@ -511,15 +511,28 @@ function _at2_step(X, yh, Pfh, ε², σβτ, use, blocked, Lmax, n, τ, thr)
     return n0b, ib
 end
 
-# IEM weights a (Σa = 1) minimizing aᵀ Pxx a: Pxx⁻¹1 / 1ᵀPxx⁻¹1; `nothing`
-# when Pxx is singular, as noiseless readings make it.
-function _iem_weights(Pxx::Matrix{Float64})
-    s = maximum(diag(Pxx))
+# IEM weights a (Σa = 1) minimizing aᵀ Pxx a: Pxx⁻¹1 / 1ᵀPxx⁻¹1. Clocks with
+# noiseless readings (`quiet`) differ by known offsets, so only their total
+# weight is determined: it is found with one of them standing for the group,
+# and split among them as `split` (the gain's). `nothing` when Pxx is singular
+# for another reason.
+function _iem_weights(Pxx::Matrix{Float64}, quiet::AbstractVector{Bool}, split::Vector{Float64})
+    g = findall(quiet)
+    keep = [i for i in axes(Pxx, 1) if !(i in g) || i == first(g)]
+    length(g) < 2 && (keep = collect(axes(Pxx, 1)))
+    P = Pxx[keep, keep]
+    s = maximum(diag(P))
     s > 0 || return nothing
-    C = cholesky(Symmetric(Pxx ./ s); check=false)
+    C = cholesky(Symmetric(P ./ s); check=false)
     (issuccess(C) && minimum(diag(C.U)) > 1e-6) || return nothing
-    a = C \ ones(size(Pxx, 1))
-    return a ./ sum(a)
+    w = C \ ones(length(keep))
+    a = zeros(size(Pxx, 1))
+    a[keep] = w ./ sum(w)
+    if length(g) >= 2
+        t = sum(split[g])
+        a[g] = a[first(g)] .* (t > 0 ? split[g] ./ t : fill(1 / length(g), length(g)))
+    end
+    return a
 end
 
 function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot::Int, algorithm::Symbol)
@@ -578,9 +591,10 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
             # weighted mean of the prediction errors: a row of I − KH.
             λ = vec(mean(I - K[1:k, :] * H[:, 1:k]; dims=1))
         end
-        # Reduce the phase covariance about the implicit ensemble mean; any
-        # weights do when it is singular, and the gain's are reported.
-        aᵣ = _iem_weights(P[1:k, 1:k])
+        # Reduce the phase covariance about the implicit ensemble mean. Among
+        # clocks with noiseless readings the split of weight is free; the gain's
+        # is reported (all the clocks, when every reading is noiseless).
+        aᵣ = _iem_weights(P[1:k, 1:k], [i in use && r[i] == 0 for i in 1:k], length(use) >= 2 ? λ : a)
         a = aᵣ !== nothing ? aᵣ : length(use) >= 2 ? λ : a
         if algorithm === :greenhall
             S[1:k, 1:k] = I - ones(k) * a'

@@ -162,6 +162,11 @@ using Statistics
         g = timescale_phase(timescale(ClockComparisons(x, 1.0); algorithm=:greenhall, models=ms))
         @test maximum(abs, g.x[29000:31000] .- timescale_phase(rk).x[29000:31000]) < 5e-11
         @test_throws ArgumentError timescale(cc; algorithm=:greenhall)
+        # Two noiseless clocks and one with reading noise: the weights stay ∝ 1/q1,
+        # not the gain's row mean (1/3 each for the noisy one).
+        mx = [ClockModel(; tau0=1.0, R=r, q1=q, q2=1e-30) for (r, q) in zip([0.0, 0.0, 1e-25], [1e-24, 4e-24, 2.5e-25])]
+        cx, _ = simulate_ensemble(mx, 4000; reference=0, rng=Xoshiro(5))
+        @test vec(mean(timescale(cx; algorithm=:greenhall, models=mx).weights[2000:end, :]; dims=1)) ≈ [0.190, 0.048, 0.762] atol=0.01
         # Noiseless readings: every pivot gives the same scale; with white PM
         # they differ by the pivots' own reading noise.
         @test timescale_phase(timescale(cc; algorithm=:greenhall, models=ms, pivot=3)).x ≈ timescale_phase(rk).x atol=1e-12
