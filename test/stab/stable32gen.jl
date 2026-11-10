@@ -72,6 +72,12 @@ using SigmaTau
     end
     @test_throws ArgumentError totdev(pd, [4]; correct_bias=:sp1065)
 
+    # Thêo1 with Stable32's bias removal, past its 3000-point limit: the two
+    # rows of its ThêoH run that are not ADEV.
+    th = filter(r -> r[1] == "ThêoH" && parse(Float64, r[7]) > 0, csv)
+    @test theo1(pd, [parse(Int, r[2]) for r in th]; ci=false, correct_bias=:stable32).dev ≈
+          parse.(Float64, getindex.(th, 7)) rtol = 1e-4
+
     # allantools CSV columns: Type, AF, Tau, N, Sigma (raw totdev is _totdev_core)
     raw["Total"] = (m -> SigmaTau._totdev_core(x, [m], 1.0)[1], 0.0)
     at = [(r[1], parse(Int, r[2]), parse(Float64, r[5]))
