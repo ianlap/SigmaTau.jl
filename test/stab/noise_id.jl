@@ -142,6 +142,8 @@ using SigmaTau
         @test identify_noise(PhaseData(x, 1.0), ms; b1_length=:averaged) ==
               identify_noise(x, ms; b1_length=:averaged)
         @test_throws ArgumentError identify_noise(x, ms; b1_length=:bogus)
+        # Below 6 averaged points the label is the one measured at N ÷ 6.
+        @test identify_noise(x, [341, 512]) == identify_noise(x, [170, 170])
     end
 
     @testset "B1(N, μ) closed-form parity vs allantools canonical" begin

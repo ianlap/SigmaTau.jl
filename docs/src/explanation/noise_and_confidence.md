@@ -76,7 +76,9 @@ points N, the length the ratio is defined for. With 8 to 24 points no test
 separates neighbouring noise types better than about two times in three, so
 labels at the longest τ are weak evidence; `b1_length=:record` gives the
 labels closer to Stable32's, which almost never include random-walk FM
-there. Decimation whitens flicker PM: its lag-1 correlation fades as m
+there. Below 6 averaged points the ratio says almost nothing, and SigmaTau
+reports the label measured at the longest averaging factor that still has 6;
+that value comes from simulation, not from the literature. Decimation whitens flicker PM: its lag-1 correlation fades as m
 grows, and from m ≈ 16 the test reads it as white PM, whose ADEV has several
 times the EDF. A white-PM result is therefore confirmed with R(n), the ratio
 of MVAR to AVAR that SP1065 §5.5.2 uses to separate the two PM noises, and

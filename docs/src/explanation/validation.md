@@ -105,7 +105,9 @@ reads white FM; SigmaTau compares the ratio with B1(N, μ) at the number of
 averaged points, the N that B1 is defined for (SP1065 §5.7), and reads
 flicker FM at 1024 s and random-walk FM beyond, which is what σ(τ) does on
 this record: ADEV is flat from 512 s to 1024 s and rises by a factor 1.47 to
-2048 s. With eight points or fewer either reading is weak evidence. `identify_noise(x, m_values; remove_drift=false,
+2048 s. The labels at 2048 s and 4096 s are the one measured with six
+averaged points (m = 1365), the fewest SigmaTau runs the ratio on. With
+eight points or fewer either reading is weak evidence. `identify_noise(x, m_values; remove_drift=false,
 b1_length=:record)` reproduces Stable32's α at every τ but 256 s, where the
 R(n) confirmation of white PM gives +1, and the test suite checks TOTDEV's σ
 with Stable32's α at all 13 τ.

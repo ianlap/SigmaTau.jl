@@ -2,6 +2,7 @@
 # calibrated power-law noise synthesis and the NNLS variance decomposition.
 
 const NEFF_RELIABLE = 30
+const B1_MIN_POINTS = 6   # fewest averaged points the averaged-length B1 test is run on
 
 """
     identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2, remove_drift::Bool=true, b1_length::Symbol=:averaged) → Vector{Symbol}
@@ -72,6 +73,13 @@ random-walk FM in 60–75 % of records and flicker FM in 34–79 %, where
 `:record` finds them in 1–2 % and 24–48 %. White FM pays for it, 33–82 %
 against 65–88 %. With so few points no test separates neighbouring noise
 types better than about two times in three.
+
+Below `B1_MIN_POINTS` = 6 averaged points `:averaged` reports the label
+measured at the longest averaging factor that still has 6, `N ÷ 6`. With 2
+to 4 points the ratio is close to a coin toss, and on white FM the labels it
+gave over-corrected the total variance by 13–33 %; taken at 6 points the
+error is 5–13 % and random-walk FM keeps its gain. The value 6 comes from
+that simulation, not from the literature.
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
                         remove_drift::Bool=true, detrend::Bool=true, b1_length::Symbol=:averaged)
@@ -99,7 +107,9 @@ function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, 
                     _rn_flicker(x_rn, m, _adev_core(x_rn, [m], 1.0)[1]) && (alpha = 1.0)
                 end
             else
-                alpha, _, _ = _noise_id_b1rn(x_clean, m; detrend=detrend, b1_length=b1_length)
+                # Below B1_MIN_POINTS the label is the one at the longest m that has them.
+                mb = b1_length === :averaged ? clamp(N ÷ B1_MIN_POINTS, 1, m) : m
+                alpha, _, _ = _noise_id_b1rn(x_clean, mb; detrend=detrend, b1_length=b1_length)
             end
         catch
             alpha = NaN
