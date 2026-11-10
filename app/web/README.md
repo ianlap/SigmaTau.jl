@@ -105,5 +105,12 @@ every change to `src/`, `cli/` or `app/web/`.
   and the reference itself leaves the plots. With "Remember for files like
   this" (on by default) a file with the same extension and header loads
   without the dialog; Import settings… reopens it.
+- Run analysis turns into Cancel while a run is going; F5, Ctrl+Enter or Esc
+  stops it (F5 restarts it when the inputs changed meanwhile), and `serve.py`
+  stops the core process when the page hangs up. F5 never reloads the page.
+- Every clock can be renamed: in the import dialog (one name per Clock column)
+  or in the name field on the Data page. Synthesize can make several clocks
+  at once (`--clocks`, up to 8), each noisier than the last by a factor of two,
+  all against one perfect reference; the Ensemble page uses them.
 - Keys: F5 or Ctrl+Enter runs, 1 to 4 switch pages, ? opens Help, a file dropped anywhere opens the
   import dialog.
