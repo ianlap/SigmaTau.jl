@@ -34,10 +34,12 @@ def adev(
     m: TauMode | Sequence[int] = Octave,
     *,
     ci: bool = True,
+    overlapping: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Overlapping Allan deviation σ_y(τ)."""
-    return _run(jl.adev, data, m, ci=ci, confidence=float(confidence))
+    """Allan deviation σ_y(τ): overlapping, or the original non-overlapped one with
+    ``overlapping=False`` (allantools' ``adev``, Stable32's Normal Allan)."""
+    return _run(jl.adev, data, m, ci=ci, overlapping=overlapping, confidence=float(confidence))
 
 
 def mdev(
@@ -68,10 +70,20 @@ def hdev(
     *,
     ci: bool = True,
     remove_drift: bool = True,
+    overlapping: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Overlapping Hadamard deviation."""
-    return _run(jl.hdev, data, m, ci=ci, remove_drift=remove_drift, confidence=float(confidence))
+    """Hadamard deviation: overlapping, or non-overlapped with ``overlapping=False``
+    (allantools' ``hdev``, Stable32's Normal Hadamard)."""
+    return _run(
+        jl.hdev,
+        data,
+        m,
+        ci=ci,
+        remove_drift=remove_drift,
+        overlapping=overlapping,
+        confidence=float(confidence),
+    )
 
 
 def mhdev(

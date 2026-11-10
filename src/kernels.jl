@@ -2,29 +2,32 @@
 # deviations.jl wraps these.
 
 """
-    _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping=true) → Vector{Float64}
 
-Overlapping Allan deviation at each averaging factor `m`. Allocation-free
-SIMD inner loop.
+Allan deviation at each averaging factor `m`: overlapping, or with
+`overlapping=false` the original non-overlapped estimator, whose second
+differences start every `m` samples (SP1065 §5.2.2). Allocation-free SIMD
+inner loop.
 """
-function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
     for (k, m) in enumerate(m_values)
-        L = N - 2m
-        if L < 2          # need ≥2 analysis windows; one window is a single difference
+        idx = 1:(overlapping ? 1 : m):(N - 2m)
+        n = length(idx)
+        if n < 2          # need ≥2 analysis windows; one window is a single difference
             devs[k] = NaN
             continue
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in 1:L
+        @inbounds @simd for i in idx
             d2 = x[i+2m] - 2x[i+m] + x[i]
             sum_sq += d2^2
         end
 
-        devs[k] = sqrt(sum_sq / (2.0 * L * Float64(m)^2 * tau0^2))
+        devs[k] = sqrt(sum_sq / (2.0 * n * Float64(m)^2 * tau0^2))
     end
 
     return devs
@@ -104,29 +107,31 @@ end
 
 
 """
-    _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping=true) → Vector{Float64}
 
-Overlapping Hadamard deviation at each averaging factor `m`. Allocation-free
-SIMD inner loop.
+Hadamard deviation at each averaging factor `m`: overlapping, or with
+`overlapping=false` non-overlapped, third differences every `m` samples
+(SP1065 §5.2.8). Allocation-free SIMD inner loop.
 """
-function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
+function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
     for (k, m) in enumerate(m_values)
-        L = N - 3m
-        if L < 2          # need ≥2 analysis windows
+        idx = 1:(overlapping ? 1 : m):(N - 3m)
+        n = length(idx)
+        if n < 2          # need ≥2 analysis windows
             devs[k] = NaN
             continue
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in 1:L
+        @inbounds @simd for i in idx
             d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
             sum_sq += d3^2
         end
 
-        devs[k] = sqrt(sum_sq / (6.0 * L * Float64(m)^2 * tau0^2))
+        devs[k] = sqrt(sum_sq / (6.0 * n * Float64(m)^2 * tau0^2))
     end
 
     return devs
