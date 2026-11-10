@@ -383,7 +383,14 @@ Clock models, the Kalman filter and timescales.
   (MJD 30000 to 90000, steps under 0.05 d, more than four decimals), a
   `ratio` column as frequency, and unnamed columns of median size under
   1e-11 as frequency; ROCIT files now read as downloaded.
-
+- `push!` on a `StreamingStability` throws on a sample that is not finite
+  instead of turning every later estimate into `NaN`.
+- `ncornered_hat` no longer gives a χ² interval below 1 EDF, as
+  `groslambert` now does.
+- `totdev` with an explicit averaging factor above N − 1, where the
+  reflected extension ends, read outside the record and returned an
+  arbitrary value with an interval; it now gives a `NaN` row with `neff` 0,
+  as the other estimators do past their limits.
 
 ## [0.6.0] - 2026-11-08
 
