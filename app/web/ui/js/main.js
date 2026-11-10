@@ -14,7 +14,7 @@ import { label, gridName } from "./estimators.js";
 import { openFile, saveFile, readFile } from "./platform.js";
 import { buildReport } from "./report.js";
 import { sessionText, parseSession, applySession, isSession } from "./session.js";
-import { loadPlotly } from "./plot.js";
+import { loadPlotly, css } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
 const PAGES = { data, stability, spectrum, dynamic: dynamicPage, live, help };
@@ -288,6 +288,7 @@ function render() {
   renderStatus();
 }
 subscribe(() => { if (transient && Date.now() > transient.until) transient = null; render(); });
+window.addEventListener("themechange", render);
 
 // ── File menu: exports, report, session ──
 const exportBtn = document.getElementById("export-btn");
@@ -324,7 +325,9 @@ exportMenu.addEventListener("click", async (e) => {
     const el = page?.plotElement();
     if (!el?.data) return ctx.status("warn", "Nothing to export on this page yet.");
     const P = await loadPlotly();
-    const url = await P.toImage(el, { format: kind, scale: kind === "png" ? 2 : 1, width: el.clientWidth, height: el.clientHeight });
+    // A dark plot keeps its card behind it; light plots export on clear paper.
+    const fig = document.documentElement.dataset.theme === "dark" ? { data: el.data, layout: { ...el.layout, paper_bgcolor: css("--bg-card") } } : el;
+    const url = await P.toImage(fig, { format: kind, scale: kind === "png" ? 2 : 1, width: el.clientWidth, height: el.clientHeight });
     saveFile(`sigmatau-${state.page}.${kind}`, await (await fetch(url)).blob());
   } else if (!analysed.length) {
     ctx.status("warn", "Run the analysis first; there are no results to export.");

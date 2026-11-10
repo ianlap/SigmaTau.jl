@@ -3,7 +3,7 @@
 // was analysed and how, so the numbers can be traced and reproduced.
 import { state, visibleClocks, referenceClock } from "./state.js";
 import { byId, label, gridName, noiseLabel } from "./estimators.js";
-import { loadPlotly } from "./plot.js";
+import { loadPlotly, inLightTheme } from "./plot.js";
 import { analyzeCommand } from "./core.js";
 import { figure } from "./pages/stability.js";
 import { sci, num, thousands, duration, escapeHtml as h } from "./format.js";
@@ -22,7 +22,7 @@ async function figureSvg(clocks, axis) {
   const devs = state.devs.filter((d) => byId[d].axis === axis && clocks.some((c) => c.result?.results.some((r) => r.dev === d)));
   if (!devs.length) return "";
   const P = await loadPlotly();
-  const { data, layout } = figure(clocks, devs, axis);
+  const { data, layout } = inLightTheme(() => figure(clocks, devs, axis));
   layout.legend = { ...layout.legend, traceorder: "normal" };
   Object.assign(layout, { showlegend: true, width: 820, height: 460, paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff" });
   layout.font = { ...layout.font, color: "#1d1d1f" };

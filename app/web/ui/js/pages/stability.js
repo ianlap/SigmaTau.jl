@@ -177,7 +177,7 @@ function traces(clocks, devs) {
       const name = several ? `${c.name} · ${label(d)}` : label(d);
       if (ci && state.band) {
         out.push({ x: r.tau, y: r.ci_hi, mode: "lines", line: { width: 0 }, hoverinfo: "skip", showlegend: false });
-        out.push({ x: r.tau, y: r.ci_lo, mode: "lines", line: { width: 0 }, fill: "tonexty", fillcolor: hexAlpha(color, 0.14), hoverinfo: "skip", showlegend: false });
+        out.push({ x: r.tau, y: r.ci_lo, mode: "lines", line: { width: 0 }, fill: "tonexty", fillcolor: hexAlpha(color, css("--ci-alpha")), hoverinfo: "skip", showlegend: false });
       }
       out.push({
         x: r.tau, y: r.sigma, name, mode: several ? "lines" : "lines+markers",
