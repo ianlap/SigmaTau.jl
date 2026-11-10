@@ -135,6 +135,8 @@ end
 # ── allantools EDF / CI / noise ID / spectra / dynamic ─────────────────────
 
 _alpha_sym(a) = a == 2 ? :WHPM : a == 1 ? :FLPM : a == 0 ? :WHFM : a == -1 ? :FLFM : :RWFM
+# Stable32's bias factor for its α: the published FM tables, and none on PM.
+s32_bias(α, var, ms, N) = ifelse.(α .> 0, 1.0, bias_correction(_alpha_sym.(α), var, ms, N))
 
 function allantools_edf_rows()
     rows = Row[]
@@ -272,12 +274,13 @@ function stable32_rows()
         for (k, r) in enumerate(s)
             a_st = SigmaTau._alpha_from_noise(res.noise_type[k])
             same = a_st == r.alpha
-            # TOTDEV's bias follows the noise type: where the labels differ the
-            # σ row takes the bias for Stable32's α and compares the estimator.
+            # TOTDEV's bias follows the noise type, and on PM Stable32 applies
+            # none: the σ row takes Stable32's factor for its α and compares
+            # the estimator.
             σ, σnote = res.dev[k], note
-            if !same && est == "totdev"
-                B = bias_correction([res.noise_type[k], _alpha_sym(r.alpha)], :totvar, fill(r.m * p.tau0, 2), T)
-                σ *= sqrt(B[1] / B[2]); σnote = "bias for Stable32's α (noise ID differs)"
+            if est == "totdev"
+                σ *= sqrt(bias_correction([res.noise_type[k]], :totvar, [r.m], N)[1] / s32_bias([r.alpha], :totvar, [r.m], N)[1])
+                same || (σnote = "bias for Stable32's α (noise ID differs)")
             end
             push!(rows, Row("Stable32 σ", "PHASE.DAT", est, r.m, r.sigma, σ, S32_TOL_SIGMA, σnote))
             idnote = same ? "" : NOISE_ID_NOTE
@@ -298,7 +301,7 @@ function stable32_rows()
             # the TOTVAR bias). Apply the bias for Stable32's α so the rows
             # compare the estimator, not the noise ID.
             raw = totdev(p, ms; ci=false, correct_bias=false).dev
-            B = bias_correction([_alpha_sym(r.alpha) for r in s], :totvar, Float64.(ms), T)
+            B = s32_bias([r.alpha for r in s], :totvar, ms, N)
             devs = raw ./ sqrt.(B)
             note = "bias for Stable32's α (noise ID differs at N/m < 5)"
         else
@@ -333,20 +336,20 @@ end
 
 # ── Stable32 on a flicker PM frequency record (stable32_flickerpm/) ───────
 
-# Stable32 bias-corrects HTOTDEV for the α it identifies. At m = 256 it reads
-# white FM (B = 0.995) where SigmaTau reads flicker PM (B = 1), so the HTOT
-# rows apply the bias for Stable32's α and compare the estimator, not the
-# noise ID. TOTDEV's B is 1 on every row (PM or white FM), so the default
-# call serves; MTOT is printed raw.
+# Stable32 bias-corrects TOTDEV and HTOTDEV for the α it identifies, with no
+# factor on PM, where SigmaTau applies its own. The rows take the raw kernel
+# with Stable32's factor for its α and compare the estimator; MTOT is
+# printed raw.
 const S32_FPM_RUNS = Dict(
     "Overlapping Allan"    => ("oadev",   (d, m, α) -> adev(d, m; ci=false).dev),
     "Modified Allan"       => ("mdev",    (d, m, α) -> mdev(d, m; ci=false).dev),
     "Overlapping Hadamard" => ("ohdev",   (d, m, α) -> hdev(d, m; ci=false, remove_drift=false).dev),
-    "Total"                => ("totdev",  (d, m, α) -> totdev(d, m; ci=false).dev),
+    "Total"                => ("totdev",  (d, m, α) ->
+        totdev(d, m; ci=false, correct_bias=false).dev ./ sqrt.(s32_bias(α, :totvar, m, length(d.y) + 1))),
     "Modified Total"       => ("mtotdev", (d, m, α) -> mtotdev(d, m; ci=false, correct_bias=false).dev),
     "Hadamard Total"       => ("htotdev", (d, m, α) ->
         htotdev(d, m; ci=false, remove_drift=false, correct_bias=false).dev ./
-        sqrt.(bias_correction(_alpha_sym.(α), :htot, Float64.(m), length(d.y) * d.tau0))),
+        sqrt.(s32_bias(α, :htot, m, length(d.y) + 1))),
 )
 
 function stable32_flickerpm_rows()
@@ -379,7 +382,8 @@ const NBS14_TABLE = [
     ("mdev",    (d, m) -> mdev(d, m; ci=false),   [1, 10, 100], [2.922319e-01, 6.172376e-02, 2.170921e-02], ""),
     ("tdev",    (d, m) -> tdev(d, m; ci=false),   [1, 10, 100], [1.687202e-01, 3.563623e-01, 1.253382e+00], ""),
     ("ohdev",   (d, m) -> hdev(d, m; ci=false),   [1, 10, 100], [2.943883e-01, 9.581083e-02, 3.237638e-02], ""),
-    ("totdev",  (d, m) -> totdev(d, m),           [1, 10, 100], [2.922319e-01, 9.134743e-02, 3.406530e-02], ""),
+    ("totdev",  (d, m) -> totdev(d, m; correct_bias=false), [1, 10, 100], [2.922319e-01, 9.134743e-02, 3.406530e-02],
+        "published values are raw; the set is white FM by construction (B = 1)"),
     ("htotdev", (d, m) -> htotdev(d, m; correct_bias=false).dev ./ [mm == 1 ? 1.0 : sqrt(0.995) for mm in m],
         [1, 10, 100], [2.943883e-01, 9.614787e-02, 3.058103e-02],
         "published values carry the white-FM TotHvar bias (B = 0.995) above m = 1; the set is white FM by construction"),

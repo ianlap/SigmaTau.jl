@@ -47,5 +47,5 @@ def test_calculate_edf_and_ci_reproduce_adev(small_phase):
 
 
 def test_bias_correction_unknown_var_type_is_identity():
-    b = st.bias_correction(["WHFM"], "unknown", [1.0], 512.0)
+    b = st.bias_correction(["WHFM"], "unknown", [1], 512)
     assert np.all(b == 1.0)

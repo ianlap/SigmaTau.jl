@@ -41,7 +41,7 @@ using SigmaTau
             @test mtotdev(p, [1]).dev ≈ mdev(p, [1]; ci=false).dev rtol = 1e-8
             (mtotdev(p, [1, 16]; ci=false, correct_bias=false).dev ./ mdev(p, [1, 16]; ci=false).dev) .^ 2
         end
-        B(noise) = bias_correction([noise], :mtot, [16.0], 4095.0)[1]
+        B(noise) = bias_correction([noise], :mtot, [16], 4096)[1]
         @test [B(:WHFM), B(:RWFM)] ≈ [0.771, 0.679]
         @test ratio(0)  ≈ [0.5, B(:WHFM)] rtol = 0.05
         @test ratio(-2) ≈ [0.5, B(:RWFM)] rtol = 0.05

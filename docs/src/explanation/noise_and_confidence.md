@@ -154,10 +154,10 @@ points of a stability plot carry wide intervals. SigmaTau computes it per τ
   the noise spectrum rather than from fitted approximations.
 - **Total family:** the published EDF coefficients of NIST SP1065
   [riley-2008-sp1065](@cite) and Howe and Peppler
-  [howe-2001-total-estimators](@cite), with the Greenhall–Riley
-  value where no coefficients exist (white and flicker PM for TOTDEV and
-  HTOTDEV). For MHTOTDEV, which is new in SigmaTau, the model is fitted
-  to the exact EDF of the statistic; see [MHTOTDEV bias and EDF](mhtotdev.md).
+  [howe-2001-total-estimators](@cite). Where none are published the model
+  is fitted to the exact EDF of the statistic: for TOTDEV and HTOTDEV on
+  white and flicker PM ([Total estimators on PM noise](total_pm.md)) and for
+  MHTOTDEV, which is new in SigmaTau ([MHTOTDEV bias and EDF](mhtotdev.md)).
 - **Thêo1 and ThêoH:** the empirical per-noise formulas of SP1065 Table 3.
 - **PDEV:** the PVAR model of Vernotte, Chen and Rubiola.
 - **MTIE and TIE rms** have no χ² model and carry no interval.
@@ -194,9 +194,9 @@ SigmaTau divides it out using the identified noise type
 
 | Estimator | Correction |
 |:---|:---|
-| TOTDEV | Howe and Walter: τ/T-dependent, FLFM and RWFM only |
+| TOTDEV | Greenhall, Howe and Percival: reads low with τ/T on FLFM and RWFM; on PM its exact expectation, high with τ/T |
 | MTOTDEV, TTOTDEV | Howe and Peppler: MTOT reads 0.3 % (white PM) to 18 % (random-walk FM) low |
-| HTOTDEV | Howe and Peppler, FM noises |
+| HTOTDEV | Howe and Peppler on the FM noises; on PM its exact expectation, 25 to 38 % (white) and 4 to 28 % (flicker) high in variance |
 | MHTOTDEV | its exact expectation: 10 % (white PM) to 22 % (flicker FM) low in variance |
 | Thêo1 | the ThêoBR ratio to ADEV, which needs no noise ID |
 
@@ -209,9 +209,13 @@ to 1.31 under a caption that reads as the same ratio; applied as printed they
 lower a statistic that already reads low. At τ = τ₀ MTOT is exactly half of
 MVAR for any record, and the correction is that factor of 2.
 
+The PM rows of TOTDEV and HTOTDEV have no published source and are derived
+in [Total estimators on PM noise](total_pm.md).
+
 `correct_bias=false` returns the raw statistic. Stable32 corrects TOTDEV and
-HTOTDEV the same way and reports MTOT and Thêo1 raw; the [validation page](validation.md)
-shows both against Stable32.
+HTOTDEV the same way on the FM noises, applies no factor on PM, and reports
+MTOT and Thêo1 raw; the [validation page](validation.md) shows both against
+Stable32.
 
 ## Drift
 

@@ -278,12 +278,13 @@ _unbias_divisor(B::AbstractVector{<:Real}) = [b > 0 ? sqrt(b) : NaN for b in B]
 Total deviation of a phase record, per NIST SP1065 eq. 25 (Howe 1995), with
 the whole-record mean-flip extension.
 
-`correct_bias=true` (default) applies the SP1065 noise-type-dependent
-unbias correction `σ_unbiased = σ_raw / √B`, where `B = E[TOTVAR]/AVAR`
-is the variance-scale bias factor from [`bias_correction`](@ref). TOTVAR
-is biased low for FLFM and RWFM as τ approaches T, so the correction
-increases σ at long τ. Stable32 applies the same correction by default; `correct_bias=false`
-returns the raw kernel value, which is what allantools reports.
+`correct_bias=true` (default) applies the noise-type-dependent unbias
+correction `σ_unbiased = σ_raw / √B`, where `B = E[TOTVAR]/AVAR` is the
+variance-scale bias factor from [`bias_correction`](@ref). As τ approaches T,
+TOTVAR reads low on FLFM and RWFM (SP1065) and high on white and flicker PM
+(see "Total estimators on PM noise" in the docs). Stable32 applies the FM
+correction and none on PM; `correct_bias=false` returns the raw kernel value,
+which is what allantools reports.
 """
 function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Bool=true, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:totdev, data, m_values)
@@ -296,7 +297,7 @@ function totdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_b
     need_noise = correct_bias || ci
     noises = need_noise ? identify_noise(x, m_values, dmin=0, dmax=2) : Symbol[]
 
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, taus, T)) : raw_devs
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :totvar, m_values, length(x))) : raw_devs
 
     if !ci
         return _result(data, confidence, :totdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -335,9 +336,7 @@ function mtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
 
     # At m = 1 the detrended three-point subsequence is (0, z, 0) with z half
     # the second difference, and its reflection averages to half of MVAR.
-    B = need_noise ? bias_correction(noises, :mtot, taus, T) : Float64[]
-    correct_bias && (B[m_values .== 1] .= 0.5)
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(B) : raw_devs
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mtot, m_values, length(x))) : raw_devs
 
     if !ci
         return _result(data, confidence, :mtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -358,11 +357,13 @@ per-subsegment detrend and time-reverse extension of Howe et al. 2000.
 `correct_bias=true` (default) applies the Howe and Peppler (2001, Table 3)
 unbias correction `σ_unbiased = σ_raw / √B`, where
 `B = 1 + a ∈ {0.995, 0.851, 0.771, 0.717, 0.679}` for
-α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0), so the
-correction raises σ, substantially for divergent FM. PM noises (α > 0) get
-B = 1 (no published model), and so does `m = 1`, where the estimator is
-plain overlapping HDEV. Stable32 applies the same correction by default; `correct_bias=false`
-returns the raw kernel value, which is what allantools reports.
+α ∈ {0, -1, -2, -3, -4}. HTOT is biased *low* (a < 0) on FM, so the
+correction raises σ, substantially for divergent FM. On white and flicker PM
+it reads high, by 25 to 38 % and 4 to 28 % in variance, and the factor is its
+exact expectation (see "Total estimators on PM noise" in the docs). At
+`m = 1` the estimator is plain overlapping HDEV and B = 1. Stable32 applies
+the FM correction and none on PM; `correct_bias=false` returns the raw kernel
+value, which is what allantools reports.
 
 `remove_drift` works as in [`hdev`](@ref). Here the noise type also selects
 the bias factor, so the keyword can change σ where the two labels differ.
@@ -377,11 +378,7 @@ function htotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     need_noise = correct_bias || ci
     noises = need_noise ? _hadamard_noise(x, m_values, remove_drift) : Symbol[]
 
-    # m = 1 is plain overlapping HDEV (see `_htotdev_core`), which is unbiased,
-    # so the TotHvar correction applies only from m = 2 on (as in Stable32).
-    B = need_noise ? bias_correction(noises, :htot, taus, T) : Float64[]
-    correct_bias && (B[m_values .== 1] .= 1.0)
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(B) : raw_devs
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :htot, m_values, length(x))) : raw_devs
 
     if !ci
         return _result(data, confidence, :htotdev, taus, devs, noises, _CIBound[], Float64[], neff)
@@ -449,9 +446,7 @@ function mhtotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct
 
     # At m = 1 the detrended four-point window is c·(−1, 3, −3, 1), and the
     # nine third differences of its reflection average to 124/225 of MHVAR.
-    B = need_noise ? bias_correction(noises, :mhtot, taus, T) : Float64[]
-    correct_bias && (B[m_values .== 1] .= 124 / 225)
-    devs = correct_bias ? raw_devs ./ _unbias_divisor(B) : raw_devs
+    devs = correct_bias ? raw_devs ./ _unbias_divisor(bias_correction(noises, :mhtot, m_values, length(x))) : raw_devs
 
     if !ci
         return _result(data, confidence, :mhtotdev, taus, devs, noises, _CIBound[], Float64[], neff)
