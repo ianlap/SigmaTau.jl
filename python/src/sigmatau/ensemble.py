@@ -430,11 +430,14 @@ def simulate_ensemble(
 
 
 @_map_errors
-def clock_models(cc: ClockComparisons, *, alphas: Sequence[int] = (2, 0, -2)) -> list[ClockModel]:
+def clock_models(cc: ClockComparisons, *, alphas: Sequence[int] | None = None) -> list[ClockModel]:
     """One ``ClockModel`` per clock, fitted from the comparisons alone (three or
     more clocks): each clock's Allan deviation from the Groslambert covariance,
-    then a power-law fit with the components ``alphas``."""
-    return [_model_from_jl(m) for m in jl.clock_models(cc._jl(), alphas=to_jl_ints(alphas))]
+    then a power-law fit with the components ``alphas`` (by default Julia's:
+    white and flicker PM, white FM and random-walk FM), the flicker PM folded
+    into ``R``."""
+    kw = {} if alphas is None else {"alphas": to_jl_ints(alphas)}
+    return [_model_from_jl(m) for m in jl.clock_models(cc._jl(), **kw)]
 
 
 @dataclass(frozen=True)
