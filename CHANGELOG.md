@@ -124,6 +124,8 @@ Clock models, the Kalman filter and timescales.
 - Explorer: the Ensemble page offers the Greenhall and Jones–Tryon Kalman
   timescales, with a pivot clock; Jones–Tryon shows no weights (#166).
 - Explorer: AT2's frequency-step detection (best or real) on the Ensemble page (#174).
+- Explorer: a × on each clock in the Clocks list removes it; the Ensemble page
+  forms the scale from the clocks that are left (#182).
 - Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
   model by hand, and the JSON `powerlaw` gains `mode`, `components`,
   `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`
