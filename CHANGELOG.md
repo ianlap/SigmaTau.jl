@@ -66,6 +66,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   `"published"` and `"stable32"`. MHTOTDEV has no published factor.
 - Python: `noise_id_nnls`, `StreamingStability`, `start_time`, and a `start`
   field on `PhaseData` / `FrequencyData`.
+- `noise` keyword on every estimator that reports intervals (`adev` …
+  `theoh`), on `deviation` and on `stability`: `:auto` (identified at each
+  τ, the default), one noise type for every τ, a vector with one per
+  averaging factor, or a `PowerLawFit`, whose strongest term at each τ is
+  taken. The stated type sets the EDF and, in the total family, the bias
+  factor. `sigmatau analyze` and `report` take `--noise auto|fit|TYPE` and
+  the JSON gains `analysis.noise`; the explorer has a Noise type menu under
+  Options; the Python functions take the same `noise` argument.
 
 ### Changed
 
