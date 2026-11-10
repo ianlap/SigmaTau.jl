@@ -87,17 +87,20 @@ record with no usable estimate, such as a constant one, is reported as
 
 !!! note "Labels from fewer than 30 points"
     In simulation (``N = 1024``, 6 to 24 averaged values) `:averaged` finds
-    random-walk FM in 60 to 75 % of records and flicker FM in 34 to 79 %,
-    where `:record` finds them in 1 to 2 % and 24 to 48 %. White FM pays
-    for it: 33 to 82 % against 65 to 88 %. With so few values no test
-    separates neighboring noise types better than about two times in three.
+    random-walk FM in 60 to 74 % of records and flicker FM in 33 to 79 %,
+    where `:record` finds them in 1 to 2 % and 23 to 46 %. White FM pays
+    for it: 62 to 96 % against 86 to 100 %. With ten values or fewer,
+    flicker FM and random-walk FM get their own label in a third to two
+    thirds of records, so a label at the longest averaging times is weak
+    evidence.
 
     Below 6 averaged values `:averaged` reports the label found at the
-    longest averaging factor that still has 6. With 2 to 4 values the ratio
-    is close to a coin toss, and on white FM the labels it gave
-    over-corrected the total variance by 13 to 33 %; taken at 6 values the
-    error is 5 to 13 %. The value 6 comes from that simulation, not from
-    the literature.
+    longest averaging factor that still has 6, because with 2 to 4 values
+    the ratio is close to a coin toss. The labels still cost white FM
+    something there: its bias-corrected total variance reads 4 % high with
+    four averaged values left and 18 % high with two, where the uncorrected
+    one is within 1 %. The value 6 comes from simulation, not from the
+    literature.
 
 !!! compat "SigmaTau 0.6"
     `remove_drift` was called `detrend` before version 0.6. `detrend=false`
