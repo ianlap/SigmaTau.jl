@@ -57,6 +57,25 @@ using Random
         @test_throws ArgumentError holdover(unit; train=Tm)
     end
 
+    @testset "Kalman filter as the predictor" begin
+        k = holdover(p, m; train=2000, tau=τ)
+        @test k.rms ≈ k.claimed rtol=0.05                  # the filter's claim holds on its own model
+        @test all(k.rms .< h.rms)
+        @test k.rms ≈ holdover(p; train=180, tau=τ).rms rtol=0.1    # the line at its best stretch, √(42q1/13q2)
+        @test k.claimed .^ 2 ≈ holdover_error(kalman_filter(p, m), τ) .^ 2 .+ m.R rtol=1e-6
+        @test k.n == 100_000 - 2000 + 1 .- Int.(τ) && !k.anchor
+        low = holdover(p, ClockModel(; tau0=1.0, q1=m.q1 / 100, q2=m.q2 / 100); train=2000, tau=τ)
+        @test all(low.rms .> 5 .* low.claimed)             # a model with too little noise claims too little
+        g = copy(p.x); g[[5000, 5001, 70_000]] .= NaN
+        @test holdover(PhaseData(g, 1.0), m; train=2000, tau=τ).n == k.n .- [3, 3, 3]
+        @test holdover(p, m).train == 25_000 && isempty(h.claimed)
+        # Flicker FM and PM as Markov states: the claim holds there too.
+        fm = ClockModel(; tau0=1.0, R=1e-24, q1=1e-24, flicker_fm=1e-24, flicker_pm=1e-22)
+        f = holdover(simulate_clock(fm, 100_000; rng=MersenneTwister(1))[1], fm; train=2000, tau=τ)
+        @test f.rms ≈ f.claimed rtol=0.05
+        @test_throws ArgumentError holdover(p, m; train=2000, tau=[1e6])
+    end
+
     @testset "drift and gaps" begin
         D, n = 1e-15, 100
         x = 1e-6 .+ 3e-10 .* (0:999) .+ D / 2 .* (0:999) .^ 2

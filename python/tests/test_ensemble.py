@@ -84,6 +84,17 @@ def test_holdover_matches_julia(clock, jl):
     assert st.holdover(m, grow=2, tau=[1, 10]).grow == 2
 
 
+def test_holdover_with_a_kalman_filter(clock, jl):
+    m, data, _ = clock
+    k = st.holdover(data, m, train=200, tau=[10, 100])
+    direct = jl.holdover(
+        _convert.to_jl_data(data), m._jl(), train=200, tau=_convert.to_jl_f64([10, 100])
+    )
+    np.testing.assert_array_equal(k.rms, np.array(direct.rms))
+    np.testing.assert_array_equal(k.claimed, np.array(direct.claimed))
+    assert k.train == 200.0 and st.holdover(data, train=200).claimed.size == 0
+
+
 def test_holdover_prediction_matches_julia(clock, jl):
     m, _, _ = clock
     p = st.holdover(m, train=200, tau=[10, 100])
