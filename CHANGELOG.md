@@ -64,6 +64,21 @@ versions follow [Semantic Versioning](https://semver.org/).
   statistic that allantools reports. `bias_correction` takes
   `published=true` for the same factors; the Python wrappers take
   `"published"` and `"stable32"`. MHTOTDEV has no published factor.
+- Python: `noise_id_nnls`, `StreamingStability`, `start_time`, and a `start`
+  field on `PhaseData` / `FrequencyData`.
+- `noise` keyword on every estimator that reports intervals (`adev` …
+  `theoh`), on `deviation` and on `stability`: `:auto` (identified at each
+  τ, the default), one noise type for every τ, a vector with one per
+  averaging factor, or a `PowerLawFit`, whose strongest term at each τ is
+  taken. The stated type sets the EDF and, in the total family, the bias
+  factor. `sigmatau analyze` and `report` take `--noise auto|fit|TYPE` and
+  the JSON gains `analysis.noise`; the explorer has a Noise type menu under
+  Options; the Python functions take the same `noise` argument.
+- Cross-checked against AllanDeviations.jl 0.3.0 in the Cross-check CI job
+  (every shared estimator within 1.5e-9 relative), and timed beside
+  allantools in the benchmark.
+- Explorer: end-to-end browser smoke test, run in the Web core CI job; no
+  Plotly error when leaving the Data page.
 
 ### Changed
 
@@ -136,6 +151,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   is now that word instead of `true`/`false`. The explorer's bias checkbox
   is a menu of the same four; saved sessions still open, as Exact (was on)
   or None (was off).
+- The test suite runs the Aqua.jl package checks.
+
+### Removed
+
+- **Breaking:** the names deprecated in 0.6: `Sy`, `Sx`, `L`, `nch`,
+  `save_result`, `save_suite`, `load_result`, `load_suite`, the five-argument
+  `confidence_intervals`, `SpectralResult.window` and `stability(; taus=)`;
+  their replacements are listed under 0.6.0, Deprecated.
 
 ### Fixed
 
@@ -226,6 +249,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   every τ after the gap. `sigmatau --freq` asks for `--fillgaps` on a
   frequency record with missing samples instead of integrating `NaN` into
   the rest of the phase.
+- `read_data` reads a time column of MJD values in days whatever its name
+  (MJD 30000 to 90000, steps under 0.05 d, more than four decimals), a
+  `ratio` column as frequency, and unnamed columns of median size under
+  1e-11 as frequency; ROCIT files now read as downloaded.
 
 ## [0.6.0] - 2026-11-08
 
