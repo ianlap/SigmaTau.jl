@@ -42,6 +42,7 @@ each call pays Julia's start-up.
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
 | `sigmatau cross FILE --with FILE2` | two channels measuring one device: cross Allan deviation and cross-spectrum ([two-channel measurements](cross.md)) |
+| `sigmatau timescale FILE --value-cols LIST` | a timescale (AT1 or EWFA) from several clocks read against one reference: each clock's weight and prediction error, and with JSON the ADEV of the scale and of each clock against it |
 | `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
 | `sigmatau report FILE` | a self-contained HTML report: record, settings, σ(τ) plots, per-τ tables and the command line (prints to PDF) |
 | `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
@@ -65,7 +66,7 @@ The record (all four analysis commands):
 | `--time-col N`, `--value-col N` | 1-based columns; `--time-col 0` means no time column |
 | `--reference-col N` | subtract this column from the value column (several clocks against one reference) |
 | `--header N` | extra header lines to skip |
-| `--delim CHAR` | field delimiter; default from the extension, `'\t'` for a tab |
+| `--delim CHAR` | field delimiter; default a comma when the first data line holds one, else whitespace; `'\t'` for a tab |
 | `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
@@ -73,6 +74,8 @@ The record (all four analysis commands):
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
+| `--noise-model R:Q1:Q2:Q3` | with `--synth`: one simulated clock with these [`ClockModel`](@ref) levels (white PM variance in s², then the white FM, random-walk FM and random-run FM diffusions). Repeat it for each clock, which sets the number of clocks; `--clock I` then picks the one to read. `sigmatau model --synth N --noise-model …` prints the σ(τ) (MDEV, ADEV, MHDEV) the models predict without simulating |
+| `--clocks K`, `--clock I` | with `--synth`: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2, and read clock I of them; `timescale --synth` uses all K (default 4) |
 
 `analyze`:
 
@@ -89,6 +92,7 @@ The record (all four analysis commands):
 | `--spectrum` | add the spectrum to the JSON output |
 | `--nperseg N` | Welch segment length for `--spectrum` |
 | `--fit` | add the power-law noise model fitted to MHDEV to the JSON output |
+| `--component NOISE:A:B` | build that model by hand instead: fit NOISE (`WHFM`, `RWFM`, … or an α) on MHDEV between A and B seconds, against what the other components leave; repeat for each one (see [`noise_fit`](@ref)) |
 
 `spectrum`: `--nperseg N` (default: the largest power of two ≤ N/4, at least 16).
 
@@ -169,13 +173,19 @@ numbers are `null`.
   and `sigma_y` for the rest. With `--m`, `tau_mode` is `"m"` and `m` lists
   the factors.
 - `spectrum` comes from `sigmatau spectrum`, or `analyze --spectrum`. Its
-  arrays leave out the DC bin.
+  arrays leave out the DC bin. Under `analyze`, a record with gaps gives
+  `{"error": "…"}` there and the estimators still run; `sigmatau spectrum`
+  stops on it with exit code 3.
 - `powerlaw` comes from `analyze --fit`: the fitted model
   (`deviation`, `alphas`, `h`, `noise_types`; see [`powerlaw_fit`](@ref)),
   its σ(τ) for each ADEV, MDEV, TDEV, HDEV and MHDEV result in `curves`, and
   `sigma_at`, the model's ADEV at 1 s, 10 s, 100 s, 1000 s, 10⁴ s and one day
-  (those within half the record). A record the fit cannot use gives
-  `{"error": "…"}` there instead.
+  (those within half the record), and `clock_model`, the `R`, `q1`, `q2`,
+  `q3` of [`clock_model`](@ref). `mode` is `"fit"`, or `"components"` with
+  `--component`, which adds `components` (each one's `alpha`, `h`,
+  `tau_from`, `tau_to`) and `residual`, the MHDEV the components leave. A
+  record or a component the fit cannot use gives `{"error": "…"}` there
+  instead.
 - `masks` comes from `analyze --mask NAME` (or `all`): for each ITU-T
   mask (see [`TELECOM_MASKS`](@ref)) its `name`, `title`, the `mtie` and
   `tdev` limits in seconds over `tau` (0.1 s to 10⁶ s, `null` outside the
@@ -191,6 +201,11 @@ numbers are `null`.
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`
   without the DC bin.
+- `timescale`: `"timescale": {"algorithm", "tau0", "n", "reference", "wmax", "clocks", "weight", "weight_mean", "error_rms", "adev": {"tau", "scale", "clocks"}}`.
+  `weight` is the last sample's, while `weight_mean` and `error_rms` cover the
+  second half of the record. `adev.scale` is the scale against the reference.
+  `--series N` adds `"series": {"t", "scale", "weights"}`. The CSV form has
+  one row per clock: `clock,weight,weight_mean,error_rms`.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 

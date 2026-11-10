@@ -23,6 +23,7 @@ const MODELS = [
   ["diffusion", "Diffusion", "y = a + b·√(t + c)"],
 ];
 
+const MAX_SIM_CLOCKS = 8;
 let root, plotEl, Plotly, ctx, relayoutBound = false;
 const inflight = new Map();   // clock id → drift key being fitted
 
@@ -57,12 +58,12 @@ export function mount(el, c) {
 
 function fileCard(c) {
   const isFile = c?.source.type === "file";
-  const nameField = multi()
+  const nameField = isFile
     ? `<input class="clock-name" data-field="name" value="${h(c.name)}" aria-label="Clock name" title="Rename this clock">`
-    : `<b>${h(isFile ? c.source.name : c?.name ?? "")}</b>`;
+    : `<b>${h(c?.name ?? "")}</b>`;
   return `<div class="card file-card">
     ${isFile ? `<div class="file-title">${FILE_ICON}<div style="flex:1;min-width:0">${nameField}
-        <span class="muted small">${multi() ? `${h(c.source.name)} · ` : ""}${h(c.sourceInfo)}</span></div></div>
+        <span class="muted small">${h(c.source.name)} · ${h(c.sourceInfo)}</span></div></div>
       <div class="file-actions"><button class="btn" data-act="import">Import settings…</button><button class="btn" data-act="open">Open another file…</button>${addClockBtn()}</div>`
     : `<div class="file-actions"><button class="btn btn-primary" data-act="open">Open a file…</button>${addClockBtn()}</div>`}
     <div class="dropzone" data-ref="drop">Drop a data file anywhere in the window</div>
@@ -73,13 +74,17 @@ function fileCard(c) {
 const addClockBtn = () => state.clocks.some((c) => c.record) ? `<button class="btn" data-act="add-clock">+ Add clock</button>` : "";
 
 function synthCard(c) {
-  const s = c?.source.type === "synth" ? c.source : { n: 16384, seed: 42, tau0: 1 };
+  const isSynth = c?.source.type === "synth";
+  const s = isSynth ? c.source : { n: 16384, seed: 42, tau0: 1 };
   return `<div class="card synth-card">
-    <div><b>Synthetic record</b><div class="muted small">White plus random-walk frequency noise, made in the core. Same seed, same record.</div></div>
+    <div><b>Synthetic record</b><div class="muted small">White plus random-walk frequency noise, made in the core. Same seed, same record.
+      With several clocks, each is noisier than the last by a factor of two, all against one perfect reference; the Ensemble page forms its timescale from them.</div></div>
     <div class="synth-grid">
-      <label>Samples<input type="number" data-synth="n" min="64" max="10000000" step="1" value="${s.n}"></label>
-      <label>τ<sub>0</sub> (s)<input type="number" data-synth="tau0" min="0" step="any" value="${s.tau0}"></label>
-      <label>Seed<input type="number" data-synth="seed" min="0" step="1" value="${s.seed}"></label>
+      <label><span>Clocks</span><input type="number" data-synth="clocks" min="1" max="${MAX_SIM_CLOCKS}" step="1" value="${s.clocks ?? 1}"></label>
+      <label><span>Samples</span><input type="number" data-synth="n" min="64" max="10000000" step="1" value="${s.n}"></label>
+      <label><span>τ<sub>0</sub> (s)</span><input type="number" data-synth="tau0" min="0" step="any" value="${s.tau0}"></label>
+      <label><span>Seed</span><input type="number" data-synth="seed" min="0" step="1" value="${s.seed}"></label>
+      ${isSynth ? `<label class="synth-name"><span>Name of this clock</span><input class="clock-name" data-field="name" value="${h(c.name)}" aria-label="Clock name"></label>` : ""}
     </div>
     <div class="file-actions"><button class="btn btn-primary" data-act="synth">${c?.source.type === "synth" ? "Make record" : "Use a synthetic record"}</button>${addClockBtn()}</div>
   </div>`;
@@ -309,9 +314,10 @@ function onClick(e) {
   else if (act === "clear-range") setRange(c, null);
   else if (act === "synth") {
     const v = (k) => Number(root.querySelector(`[data-synth=${k}]`).value);
-    const n = Math.round(v("n")), tau0 = v("tau0"), seed = Math.round(v("seed"));
+    const n = Math.round(v("n")), tau0 = v("tau0"), seed = Math.round(v("seed")), clocks = Math.round(v("clocks"));
     if (!(n >= 64) || !(tau0 > 0) || !(seed >= 0)) { ctx.status("error", "Samples must be at least 64 and τ₀ above zero."); return; }
-    ctx.useSynth(c, { n, tau0, seed });
+    if (!(clocks >= 1 && clocks <= MAX_SIM_CLOCKS)) { ctx.status("error", `Simulate between 1 and ${MAX_SIM_CLOCKS} clocks.`); return; }
+    ctx.useSynth(c, { n, tau0, seed, clocks });
   }
 }
 

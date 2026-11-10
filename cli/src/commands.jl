@@ -29,6 +29,7 @@ function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args:
     c == "dynamic"  && return cmd_dynamic(io, o, data, t_start)
     c == "cross"    && return cmd_cross(io, o, data, t_start)
     c == "drift"    && return cmd_drift(io, o, data, t_start)
+    c == "timescale" && return cmd_timescale(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
 
@@ -117,10 +118,15 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     print(io, ']')
     if o.spectrum
         json_key(io, "spectrum")
-        sy, sx = spectra(o, data)
-        json_spectrum(io, sy, sx)
+        if any(isnan, data.x)
+            # The estimators skip gaps; the spectrum cannot, so it is left out.
+            print(io, '{'); json_key(io, "error", true); json_string(io, "the spectrum needs a record without gaps"); print(io, '}')
+        else
+            sy, sx = spectra(o, data)
+            json_spectrum(io, sy, sx)
+        end
     end
-    o.fit && (json_key(io, "powerlaw"); json_powerlaw(io, data, results))
+    o.fit && (json_key(io, "powerlaw"); json_powerlaw(io, o, data, results))
     isempty(o.mask) || (json_key(io, "masks"); json_masks(io, o.mask, results))
     return elapsed(io, t_start)
 end
@@ -298,6 +304,149 @@ function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         json_key(io, "y"); json_array(io, f.y[idx])
         json_key(io, "fit"); json_array(io, f.fit[idx])
         print(io, '}')
+    end
+    print(io, '}')
+    return elapsed(io, t_start)
+end
+
+# ── model ─────────────────────────────────────────────────────────────────
+
+# σ(τ) the --noise-model clocks predict (MDEV, ADEV, MHDEV) at the τ of an N = --synth record.
+function run_model(io::IO, o::Options)
+    isempty(o.models) && throw(usage_error("model: give a clock with --noise-model R:Q1:Q2:Q3"))
+    tau0 = isnan(o.tau0) ? 1.0 : o.tau0
+    ms = tau_values(tau_mode(o.grid), o.synth, :mdev)
+    tau = tau0 .* ms
+    json_head(io, o, "model")
+    json_key(io, "model"); print(io, '{')
+    json_key(io, "tau0", true); json_number(io, tau0)
+    json_key(io, "n"); print(io, o.synth)
+    json_key(io, "tau"); json_array(io, tau)
+    json_key(io, "clocks"); print(io, '[')
+    for (i, (R, q1, q2, q3)) in enumerate(o.models)
+        i > 1 && print(io, ',')
+        m = ClockModel(; tau0, R, q1, q2, q3)
+        print(io, '{')
+        # Random-run FM (q3) diverges in ADEV and MDEV; only the Hadamard family converges.
+        for (j, d) in enumerate((:mdev, :adev, :mhdev))
+            json_key(io, String(d), j == 1)
+            q3 > 0 && d !== :mhdev ? print(io, "null") : json_array(io, powerlaw_sigma(m, tau; deviation=d))
+        end
+        print(io, '}')
+    end
+    print(io, "]}}\n")
+    return nothing
+end
+
+# ── timescale ─────────────────────────────────────────────────────────────
+
+# White + random-walk FM clocks (four unless --clocks says otherwise), each a
+# factor of two above the last in level, read against a perfect reference.
+function synth_ensemble(o::Options)
+    tau0 = isnan(o.tau0) ? 1.0 : o.tau0
+    ms = if isempty(o.models)
+        [ClockModel(; tau0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:(o.clocks > 0 ? o.clocks : 4) - 1]
+    else
+        [ClockModel(; tau0, R, q1, q2, q3) for (R, q1, q2, q3) in o.models]
+    end
+    cc, _ = simulate_ensemble(ms, o.synth, reference=0, rng=Random.Xoshiro(o.seed))
+    return cc
+end
+
+# Each --value-cols column read like FILE, with the same options.
+function read_ensemble(o::Options)
+    isempty(o.value_cols) && throw(usage_error("timescale needs --value-cols with two or more columns, or --synth"))
+    col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
+    records = PhaseData{Float64}[]
+    try
+        for c in o.value_cols
+            o.value_col = c
+            push!(records, load_record(o))
+        end
+    catch e
+        e isa CLIError && rethrow()
+        throw(CLIError(EXIT_INPUT, error_message(e)))   # read after the input phase
+    finally
+        o.value_col, o.removed_offset, o.removed_drift = col, offset, drift
+    end
+    allequal(length(r.x) for r in records) && allequal(r.tau0 for r in records) ||
+        throw(CLIError(EXIT_INPUT, "the clock columns differ in length or τ₀"))
+    return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
+end
+
+# The Kalman scales fit a model per clock and read the scale at --pivot.
+function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
+    alg = Symbol(o.algorithm)
+    if !kalman
+        isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
+        isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax)
+        return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps))
+    end
+    k = size(cc.x, 2)
+    k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
+    1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
+    return timescale(cc; algorithm=alg, models=clock_models(cc), pivot=o.pivot, wmax=o.wmax)
+end
+
+function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
+    cc = o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
+    N, k = size(cc.x)
+    N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
+    kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
+    r = run_timescale(cc, o, kalman)
+    late = max(1, N ÷ 2):N
+    wmean = [sum(r.weights[late, i]) / length(late) for i in 1:k]
+    rms = Float64[]
+    for i in 1:k
+        e = filter(isfinite, r.error[late, i])
+        push!(rms, isempty(e) ? NaN : sqrt(sum(abs2, e) / length(e)))
+    end
+    if o.format != "json"
+        print(io, "clock,weight,weight_mean,error_rms\n")
+        for i in 1:k
+            csv_field(io, cc.names[i]); print(io, ',')
+            csv_number(io, r.weights[end, i]); print(io, ',')
+            csv_number(io, wmean[i]); print(io, ',')
+            csv_number(io, rms[i]); print(io, '\n')
+        end
+        return nothing
+    end
+    ms = tau_values(tau_mode(o.grid), N, :adev)
+    json_head(io, o, o.synth > 0 ? "synthetic" : o.input)
+    json_key(io, "timescale"); print(io, '{')
+    json_key(io, "algorithm", true); json_string(io, o.algorithm)
+    json_key(io, "tau0"); json_number(io, cc.tau0)
+    json_key(io, "n"); print(io, N)
+    json_key(io, "reference"); json_string(io, cc.reference)
+    json_key(io, "wmax"); json_number(io, o.wmax)
+    kalman && (json_key(io, "pivot"); json_number(io, o.pivot))
+    isempty(o.steps) || (json_key(io, "steps"); json_string(io, o.steps))
+    json_key(io, "clocks"); json_array(io, cc.names)
+    json_key(io, "weight"); json_array(io, r.weights[end, :])
+    json_key(io, "weight_mean"); json_array(io, wmean)
+    json_key(io, "error_rms"); json_array(io, rms)
+    # ADEV of the scale against the reference, and of each clock against the scale.
+    json_key(io, "adev"); print(io, '{')
+    s = adev(timescale_phase(r), ms; ci=false)
+    json_key(io, "tau", true); json_array(io, s.tau)
+    json_key(io, "scale"); json_array(io, s.dev)
+    json_key(io, "clocks"); print(io, '[')
+    for i in 1:k
+        i > 1 && print(io, ',')
+        json_array(io, adev(PhaseData(r.x[:, i], cc.tau0), ms; ci=false).dev)
+    end
+    print(io, "]}")
+    if o.series > 0
+        idx = collect(1:max(1, cld(N, o.series)):N)
+        json_key(io, "series"); print(io, '{')
+        json_key(io, "t", true); json_array(io, r.t[idx])
+        json_key(io, "scale"); json_array(io, timescale_phase(r).x[idx])
+        json_key(io, "weights"); print(io, '[')
+        for i in 1:k
+            i > 1 && print(io, ',')
+            json_array(io, r.weights[idx, i])
+        end
+        print(io, "]}")
     end
     print(io, '}')
     return elapsed(io, t_start)

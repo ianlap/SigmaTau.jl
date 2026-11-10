@@ -99,8 +99,14 @@ scheme [dobrogowski-2007-realtime-adev](@cite): the squared-difference sum
 update of their eq. 9 for `:adev` (third-difference form for `:hdev`), the
 inner-sum build/slide of their eqs. 12–13 plus the overall-sum update of
 eq. 11 for `:mdev` (third-difference generalization for `:mhdev`).
+
+Throws an `ArgumentError` on a sample that is not finite and leaves the
+accumulator as it was: a running sum cannot skip a missing reading the way
+the batch estimators do.
 """
 function Base.push!(acc::StreamingStability, x_next::Real)
+    isfinite(x_next) || throw(ArgumentError(
+        "StreamingStability: samples must be finite, got $x_next"))
     t = acc.count + 1
     buf = acc.buf
     cap = acc.cap
