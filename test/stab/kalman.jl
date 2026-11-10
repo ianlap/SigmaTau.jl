@@ -71,9 +71,9 @@ using Statistics
         kw = kalman_filter(pf, clock_model(powerlaw_fit(adev(pf); alphas=[2, 0, -2])))
         @test size(kf.x, 2) == 7
         @test innovation_check(kf).nis ≈ 1 rtol=0.03
-        err = prediction_error(kf, pf, [1000, 10000]; burnin=8192)
-        @test all(err .< 0.8 .* prediction_error(kw, pf, [1000, 10000]; burnin=8192))
-        @test holdover_error(kf, [1000.0, 10000.0]) ≈ err rtol=0.3
+        err = prediction_error(kf, pf, [100, 1000, 10000]; burnin=8192)
+        @test all(err[2:3] .< 0.8 .* prediction_error(kw, pf, [1000, 10000]; burnin=8192))
+        @test holdover_error(kf, [100.0, 1000.0]) ≈ err[1:2] rtol=0.25   # 10 000 s: six spans, too few
         @test tune_q(pf, mf; points=3).model.fm_band == mf.fm_band
         # A record of the model itself has flicker FM's ADEV, and the filter
         # follows its frequency, Markov states included.
