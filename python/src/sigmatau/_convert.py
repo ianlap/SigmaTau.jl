@@ -73,6 +73,19 @@ def powerlaw_to_jl(h: PowerLawFit | dict) -> Any:
     return to_jl_dict_int_f64(h)
 
 
+def powerlawfit_to_jl(f: PowerLawFit) -> Any:
+    """A ``PowerLawFit`` as Julia's own type."""
+    return jl.PowerLawFit(
+        to_jl_ints(f.alphas),
+        to_jl_f64(f.h),
+        jl.Symbol(f.source),
+        float(f.tau0),
+        to_jl_f64(f.x),
+        to_jl_f64(f.y),
+        to_jl_f64(f.fit),
+    )
+
+
 def resolve_m(m: TauMode | object) -> Any:
     """The ``m`` argument as Julia sees it: a TauMode enum instance or ``Vector{Int}``.
 

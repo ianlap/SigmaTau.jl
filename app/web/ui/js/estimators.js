@@ -68,5 +68,15 @@ export const BIASES = [
 ];
 export const biasEntry = (b) => BIASES.find(([v]) => v === b) ?? BIASES[0];
 
+// Noise type behind the intervals and bias factors (the command line's
+// --noise): identified at each τ, the strongest term of the fitted model, or
+// one type for every τ. Value, menu label.
+export const NOISES = [
+  ["auto", "Identified at each τ"],
+  ["fit", "From the fitted model"],
+  ...Object.keys(NOISE_ALPHA).map((k) => [k, `${NOISE_NAMES[k]}, ${NOISE_LONG[k]}`]),
+];
+export const noiseChoice = (n) => (NOISES.find(([v]) => v === n) ?? NOISES[0])[1];
+
 // Estimators the bias-correction option changes.
 export const BIAS_CORRECTED = new Set(["totdev", "mtotdev", "htotdev", "mhtotdev", "ttotdev", "theo1"]);

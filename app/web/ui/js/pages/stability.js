@@ -80,7 +80,7 @@ export function refresh() {
   const conf = state.ci ? `${(CONFIDENCES.find(([v]) => v === state.confidence) ?? [0, state.confidence])[1]} confidence · ` : "";
   const biased = state.devs.some((d) => BIAS_CORRECTED.has(d));
   const bias = biased ? ` · ${biasEntry(state.bias)[2]}` : "";
-  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}`;
+  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}${state.noise === "auto" ? "" : ` · noise ${state.noise === "fit" ? "from the fit" : noiseLabel(state.noise)}`}`;
   const maskSel = root.querySelector("[data-ref=mask]");
   maskSel.value = state.mask;
   maskSel.hidden = state.axis !== "sigma_x";
