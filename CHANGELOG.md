@@ -79,6 +79,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 - `fillgaps=true` places samples on the grid of the regular time steps
   instead of the smallest step, so jittered timestamps no longer scatter
   the record.
+- `identify_noise(...; dmax=3)`, and with it the Hadamard family (`hdev`,
+  `mhdev`, `htdev`, `htotdev`, `mhtotdev`), now labels flicker-walk FM
+  (`:FWFM`, α = −3) and random-run FM (`:RRFM`, α = −4) instead of
+  reporting both as `:RWFM`. HDEV, MHDEV and HTOTDEV take their EDF, and
+  HTOTDEV its bias factor, at the identified α: read as random-walk FM,
+  random-run FM had an HDEV EDF 26 % too high and an HTOTDEV 6 % too low.
+  MHTOTDEV keeps random-walk FM's model for both labels. The explorer, the
+  CLI report and the Python docs name the two labels. At long τ some
+  random-walk FM records are now labelled flicker-walk FM (6 % with 64
+  averaged points left, 11 % with 32).
 
 ### Fixed
 
