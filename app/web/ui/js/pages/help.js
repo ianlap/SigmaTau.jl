@@ -72,7 +72,7 @@ export function mount(root) {
       <section id="help-estimators"><h2>Estimators</h2>
         <p>Every estimator works on phase x(t) (frequency records are integrated first) at averaging times τ = m·τ₀ from the τ grid in Options. σ<sub>y</sub> estimators are dimensionless; σ<sub>x</sub> estimators are in seconds.</p>
         ${estimatorTable()}
-        <p class="muted">Thêo1 and ThêoH reach τ up to three quarters of the record but take seconds on long records. The total estimators and Thêo1 are bias-corrected when "Bias-correct totals and Thêo1" is on.</p>
+        <p class="muted">Thêo1 and ThêoH reach τ up to three quarters of the record but take seconds on long records. Bias correction in Options sets how the total estimators and Thêo1 are corrected: Exact (every noise type and averaging factor), Published tables (SP1065, Howe and Peppler), As Stable32 (what Stable32 applies to each estimator) or None (raw, as allantools).</p>
       </section>
 
       <section id="help-noise"><h2>Noise types</h2>

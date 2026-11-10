@@ -87,7 +87,7 @@ The record (all four analysis commands):
 | `--tau-min S`, `--tau-max S` | leave out averaging times below or above S seconds |
 | `--confidence P` | interval level (default 0.683, one sigma) |
 | `--no-ci` | skip intervals, EDF and noise identification |
-| `--no-bias-correction` | leave the total estimators and Thêo1 uncorrected |
+| `--bias MODE` | bias correction of the total estimators and Thêo1: `exact` (default), `published`, `stable32` or `none`, the library's [`correct_bias`](../explanation/noise_and_confidence.md#Matching-a-reference); `--no-bias-correction` is `--bias none` |
 | `--spectrum` | add the spectrum to the JSON output |
 | `--nperseg N` | Welch segment length for `--spectrum` |
 | `--fit` | add the power-law noise model fitted to MHDEV to the JSON output |
@@ -149,7 +149,7 @@ numbers are `null`.
   },
   "analysis": {
     "quantity": "phase", "tau0": 1.0, "n": 16384, "tau_mode": "octave",
-    "ci": true, "confidence": 0.683, "bias_correction": true,
+    "ci": true, "confidence": 0.683, "bias_correction": "exact",
     "deviations": ["adev", "tdev"],
     "detrend": "none", "remove_drift": "none", "fillgaps": false, "remove_outliers": false, "reference_col": 0
   },

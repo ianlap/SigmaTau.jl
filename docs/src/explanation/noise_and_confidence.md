@@ -249,7 +249,9 @@ that scales with it, not the noise identification or the EDF; where SigmaTau
 and Stable32 read a different noise type at a τ, the FM factor still differs
 ([Coming from Stable32](../guide/from_stable32.md)). The
 [validation page](validation.md) shows the default and the raw statistic
-against Stable32.
+against Stable32. The command line names the four values
+`--bias exact|published|stable32|none`, and the explorer offers them under
+Bias correction.
 
 ## Drift
 
