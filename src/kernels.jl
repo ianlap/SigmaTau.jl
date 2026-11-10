@@ -988,7 +988,8 @@ the record, where it has one degree of freedom: on simulated white, flicker
 and random-walk FM that ladder scatters the ratio by 25 to 30 % and biases
 the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to +3 % here
 (N = 1024).
-Below `N = 120`, where `n` would be negative, the first rung is used alone.
+The paper's formula needs `N ≥ 90` for `n ≥ 0`; shorter records, outside its
+stated range, use the first rung alone.
 
 Unless `exact=true` or the ladder is short, Thêo1 is computed only at the
 first 16 factors and at 32 evenly spaced along the rest, and interpolated

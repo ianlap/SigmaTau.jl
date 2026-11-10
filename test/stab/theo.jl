@@ -107,7 +107,7 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         ppm = noise_gen(PhaseData, 2048, 1.0; sigma1 = Dict(2 => 1e-12))
         @test 0.05 < _theobr_ratio(_f64(ppm.x), 1.0) < 0.45
 
-        # Below N = 120 the first rung stands alone.
+        # Below N = 90, where the formula gives n < 0, the first rung stands alone.
         x60 = _f64(p.x[1:60])
         @test _theobr_ratio(x60, 1.0) ≈
               adev(PhaseData(x60, 1.0), [9]; ci=false).dev[1]^2 / _theo1_core(x60, [12], 1.0)[1]^2
