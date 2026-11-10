@@ -52,7 +52,7 @@ using SigmaTau
         @test SigmaTau._LAG1_RRFM ≈ SigmaTau._lag1_reading(r1(-4), 3)
         # HTOT has published bias factors down to α = −4 (Howe & Peppler 2001,
         # Table 3).
-        @test bias_correction([:FWFM, :RRFM], :htot, [16.0, 16.0], 4095.0) ≈ [0.717, 0.679]
+        @test bias_correction([:FWFM, :RRFM], :htot, [16, 16], 4096) ≈ [0.717, 0.679]
     end
 
     @testset "noise-ID scale invariance" begin
