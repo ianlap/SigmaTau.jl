@@ -63,7 +63,8 @@ noise_residual
 [`clock_model`](@ref) turns a power-law fit into the state-space
 [`ClockModel`](@ref) the Kalman filters run on: white PM becomes the
 measurement noise, white, random-walk and random-run FM drive the phase,
-frequency and drift states. [The clock model](../explanation/clock_model.md)
+frequency and drift states, and with `flicker = true` flicker FM and
+flicker PM become Markov states. [The clock model](../explanation/clock_model.md)
 derives the mapping and the matrices.
 
 ```julia

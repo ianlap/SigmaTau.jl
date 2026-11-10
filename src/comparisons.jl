@@ -67,10 +67,11 @@ end
 
 `N` samples of an ensemble whose clock i follows `models[i]`, read against
 clock `reference` (or, with `reference = 0`, against a perfect outside
-reference). Each reading carries its clock's white PM `R`. Returns the
-comparisons and the true states, `truth[k, s, i]` for sample k, state s
-and clock i (phase, frequency, and drift for a model with drift; zero
-beyond a clock's own states). The models must share one τ₀.
+reference). Each reading carries its clock's white PM `R` and flicker PM.
+Returns the comparisons and the true states, `truth[k, s, i]` for sample k,
+state s and clock i (phase, frequency, and drift for a model with drift;
+zero beyond a clock's own states). The frequency includes the Markov states
+of a model with flicker FM. The models must share one τ₀.
 """
 function simulate_ensemble(models::AbstractVector{ClockModel}, N::Int; reference::Int=1, rng=nothing)
     k = length(models)
@@ -78,20 +79,25 @@ function simulate_ensemble(models::AbstractVector{ClockModel}, N::Int; reference
     0 <= reference <= k || throw(ArgumentError("simulate_ensemble: reference must be 0 or a clock index"))
     τ₀ = models[1].tau0
     all(m -> m.tau0 == τ₀, models) || throw(ArgumentError("simulate_ensemble: the models must share one τ₀"))
-    truth = zeros(N, 3, k)
-    noise(m) = (draw = rng === nothing ? randn(N) : randn(rng, N); sqrt(m.R) .* draw)
+    truth, pm = zeros(N, 3, k), zeros(N, k)
+    noise(m) = (draw = rng === nothing ? randn(N) : randn(rng, N); sqrt(_reading_var(m)) .* draw)
     for (i, m) in enumerate(models)
-        _, X = simulate_clock(ClockModel(m.tau0, 0.0, m.q1, m.q2, m.q3, m.drift), N; rng)
-        truth[:, 1:size(X, 2), i] = X
+        _, X = simulate_clock(m, N; rng)
+        np = _npoly(m)
+        truth[:, 1:np, i] = X[:, 1:np]
+        nf = np + length(_fm_taus(m))
+        for j in np+1:size(X, 2)
+            j <= nf ? (truth[:, 2, i] .+= X[:, j]) : (pm[:, i] .+= X[:, j])
+        end
     end
     ref = reference == 0 ? zeros(N) : truth[:, 1, reference]
-    x = reduce(hcat, (i == reference ? zeros(N) : truth[:, 1, i] .- ref .+ noise(models[i]) for i in 1:k))
+    x = reduce(hcat, (i == reference ? zeros(N) : truth[:, 1, i] .- ref .+ pm[:, i] .+ noise(models[i]) for i in 1:k))
     names = ["clock $i" for i in 1:k]
     return ClockComparisons(x, τ₀; names, reference=reference == 0 ? "ideal reference" : names[reference]), truth
 end
 
 """
-    clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2]) → Vector{ClockModel}
+    clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2], flicker=false) → Vector{ClockModel}
 
 One [`ClockModel`](@ref) per clock, fitted from the comparisons alone, for the
 Kalman timescales (`:greenhall`, `:jones_tryon`), which need one. Needs three
@@ -102,14 +108,19 @@ and the other clocks' noise drop out, and the power-law fit of
 flicker PM, white FM and random-walk FM by default), gives the model by
 [`clock_model`](@ref), which folds the flicker PM into `R`. Fitted without its
 own term, flicker PM in the readings would pass for white FM and inflate `q1`.
-A clock whose curve the fit cannot use (too few positive points) throws.
+With `flicker = true` flicker FM joins the fit and each model carries its
+flicker FM and flicker PM as Markov states where they are needed (see
+[`ClockModel`](@ref)); the levels at the longest τ of a short record are then
+poorly separated, so check them against the curve. A clock whose curve the
+fit cannot use (too few positive points) throws.
 """
-function clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2])
+function clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2], flicker::Bool=false)
     k = size(cc.x, 2)
     k >= 3 || throw(ArgumentError("clock_models: needs three or more clocks, got $k"))
     pair = Matrix{PhaseData{Float64}}(undef, k, k)
     for i in 1:k, j in (i + 1):k
         pair[i, j] = cc[i, j]
     end
-    return ClockModel[clock_model(powerlaw_fit(r; alphas)) for r in groslambert(pair)]
+    flicker && (alphas = union(alphas, [1, -1]))
+    return ClockModel[clock_model(powerlaw_fit(r; alphas); flicker) for r in groslambert(pair)]
 end

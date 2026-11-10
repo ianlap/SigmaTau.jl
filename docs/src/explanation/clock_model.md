@@ -29,9 +29,11 @@ these:
 | random-run FM | −4 | q₃ = 8π⁴ h₋₄ |
 
 Flicker noises (α = 1, −1, −3) have a spectrum no finite state produces.
-[`clock_model`](@ref) leaves flicker FM and flicker walk out;
-`powerlaw_sigma(model, τ)` next to `powerlaw_sigma(fit, τ)` shows how far
-that moves σ(τ).
+By default [`clock_model`](@ref) leaves flicker FM and flicker walk out and
+folds flicker PM into R; `powerlaw_sigma(model, τ)` next to
+`powerlaw_sigma(fit, τ)` shows how far that moves σ(τ). With
+`flicker = true` it keeps flicker FM and flicker PM as the Markov states
+described [below](@ref "Flicker states").
 
 ## Flicker PM
 
@@ -59,7 +61,8 @@ the flicker PM between f = 1/(9mτ₀) and the Nyquist frequency.
 No white R makes the filter right about flicker PM. Its slow part is still
 followed as clock phase, the innovations stay correlated, and the phase
 uncertainty the filter reports is too small. Read
-[`innovation_check`](@ref) with that in mind.
+[`innovation_check`](@ref) with that in mind, or give the flicker PM
+[states](@ref "Flicker states"): R is then the white PM alone.
 
 The fit has to carry the flicker PM term (α = 1) for this to work. Fitted
 with white PM, white FM and random-walk FM only, flicker PM passes for white
@@ -92,3 +95,77 @@ q_3\delta^3/6 & q_3\delta^2/2 & q_3\delta
 Because the drives are white, two steps compose into one:
 Q(a + b) = Φ(b) Q(a) Φ(b)ᵀ + Q(b). The filters use this to step over gaps
 and irregular sampling with one call to [`process_noise`](@ref).
+
+## Flicker states
+
+A finite state cannot make a 1/f spectrum, but a few single-pole processes
+can follow one over the span that matters. Davis, Greenhall and Stacey
+[davis-greenhall-stacey-2005-flicker](@cite) model flicker FM as a sum of
+independent Markov frequency processes mⱼ that add to the frequency,
+
+```math
+\dot x = y + \sum_j m_j + \xi_1, \qquad \dot m_j = -m_j / T_j + \eta_j,
+```
+
+each stationary with the same variance σ², and with time constants Tⱼ that
+rise geometrically (their eqs 2.1 and 2.10). One process has the one-sided
+spectrum 4σ²T/(1 + (2πfT)²) and the Allan variance σ² g(x)/x², with
+x = τ/T and g(x) = 2x − 3 + 4e⁻ˣ − e⁻²ˣ (their eq. 2.5), which peaks at
+τ = 1.89 T. Over a step, with a = e^(−δ/T), the state decays by a and moves
+the phase by T(1 − a) times itself (eq. 2.7), and it adds
+
+```math
+Q_{11} \mathrel{+}= \sigma^2 T^2 g(\delta/T), \qquad Q_{1m} = \sigma^2 T (1 - a)^2, \qquad Q_{mm} = \sigma^2 (1 - a^2)
+```
+
+to the process noise (eqs 2.8–2.9, written there with σ_M² = 2σ²/T). The
+filter starts each state at zero with variance σ².
+
+The paper spaces the time constants by 8 or 16 and fits the levels to the
+measured Hadamard deviation. Here they are a decade apart and the level
+comes from h₋₁: a ladder with ratio ρ has the spectrum σ²/(f ln ρ) inside
+its span, so S_y = h₋₁/f needs
+
+```math
+\sigma^2 = h_{-1} \ln 10 ,
+```
+
+with a ripple of ±2/cosh(π²/ln ρ), 5.5 % in the spectrum at a decade. In
+σ(τ) the sum stays within about 3 % of flicker FM across the span. The same
+relation gives the level and the ripple of the paper's figure 4.
+
+Flicker PM gets the same construction one integration up, which is this
+package's own: no published clock filter carries it. Markov phase processes
+pⱼ of variance σ² = h₁ ln 10 / 4π² add to each reading and not to the phase,
+
+```math
+z = x + \sum_j p_j + v ,
+```
+
+so flicker PM stays measurement noise, as white PM is, but with memory. The
+filter estimates the pⱼ and keeps them out of the phase, and in a timescale
+the weights stay close to those of the clocks' own noise.
+
+The states sit only where a flicker matters: across the τ, from τ₀ to
+`tau_max`, at which it holds at least a quarter of the model's Allan
+variance, a decade apart from the first such τ to at least the last. A
+flicker that never reaches a quarter gets no states. What the states leave
+out at τ₀ becomes white noise: white FM that brings the model's Allan
+variance at τ₀ to the 2h₋₁ of sampled flicker FM, and white PM that does
+the same for flicker PM. `fm_band` and `pm_band` place the states by hand.
+
+In simulation, on a record with a flicker floor between white and
+random-walk FM, the white-only fit predicts a third worse at 1000 s and a
+half worse or more at 10 000 s than the model with states, and claims up to
+four times the error it makes. Narrowing the states from the whole record to the
+quarter band leaves the predictions where they were; the innovations keep a
+small correlation from the flicker below the band. With flicker PM states
+the innovations have the variance the filter claims, where the fold into R
+claims nearly twice it, and the next reading is predicted 10 to 20 % better.
+In a scale of three equal clocks with flicker PM on two channels, the
+states leave the weights equal and give a scale 10 to 15 % quieter at 16 to
+64 s than the fold, 15 % noisier at 1 s, and the same from 1000 s. Among
+unequal clocks the weights move a little: flicker PM thirty times a clock's
+own deviation at τ₀ on its readings took its weight from 0.76 to 0.69. The levels are
+only as good as the fit: at the longest τ of a short record, flicker FM and
+random-walk FM are hard to tell apart.

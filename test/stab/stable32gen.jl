@@ -50,6 +50,14 @@ using SigmaTau
         l, h = confidence_intervals(σ, edf, 0.683)
         @test all(isapprox.(l, lo; rtol=1e-3)) && all(isapprox.(h, hi; rtol=1e-3))
     end
+    # Without the per-m drift removal, and with B1 at the record length, the
+    # labels are Stable32's at every τ but 256 s, where R(n) reads its white PM
+    # as flicker PM.
+    oa = filter(r -> r[1] == "Overlapping Allan", csv)
+    ms = [parse(Int, r[2]) for r in oa]
+    ours = identify_noise(x, ms; remove_drift=false, b1_length=:record)
+    @test ms[ours .!= [αsym[parse(Int, r[5])] for r in oa]] == [256]
+    @test ours[ms .== 256] == [:FLPM]
     # From τ = 1024 Stable32 reads white FM, where σ(τ) runs flat and then
     # rises and SigmaTau reads flicker FM and random-walk FM.
     tot = filter(r -> r[1] == "Total", csv)
@@ -71,6 +79,12 @@ using SigmaTau
         @test r.dev[same] ≈ parse.(Float64, getindex.(s32, 7))[same] rtol = 1e-4
     end
     @test_throws ArgumentError totdev(pd, [4]; correct_bias=:sp1065)
+
+    # Thêo1 with Stable32's bias removal, past its 3000-point limit: the two
+    # rows of its ThêoH run that are not ADEV.
+    th = filter(r -> r[1] == "ThêoH" && parse(Float64, r[7]) > 0, csv)
+    @test theo1(pd, [parse(Int, r[2]) for r in th]; ci=false, correct_bias=:stable32).dev ≈
+          parse.(Float64, getindex.(th, 7)) rtol = 1e-4
 
     # allantools CSV columns: Type, AF, Tau, N, Sigma (raw totdev is _totdev_core)
     raw["Total"] = (m -> SigmaTau._totdev_core(x, [m], 1.0)[1], 0.0)

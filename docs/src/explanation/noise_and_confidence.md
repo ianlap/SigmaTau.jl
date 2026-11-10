@@ -283,7 +283,7 @@ Stable32 or allantools, so `correct_bias` also takes the convention of each:
 |:---|:---|:---|:---|:---|:---|
 | `true` (default) | all noises | exact below 16τ₀ | all noises, exact below 16τ₀ | ThêoBR | |
 | `:published` | FM only | published factor at every τ | FM only, published factor at every τ | ThêoBR | SP1065, Howe and Peppler |
-| `:stable32` | FM only | raw | FM only, published factor at every τ | raw | Stable32 |
+| `:stable32` | FM only | raw | FM only, published factor at every τ | ThêoBR over SP1065's ladder, to N/6 | Stable32 |
 | `false` | raw | raw | raw | raw | allantools |
 
 MHTOTDEV has no published factor and exists in neither program: it is raw

@@ -42,6 +42,14 @@ using Statistics
     @test clock_models(noisy)[3].q1 ≈ ms[3].q1 rtol=0.3
     @test clock_models(noisy; alphas=[2, 0, -2])[3].q1 > 2ms[3].q1
     @test_throws ArgumentError clock_models(ClockComparisons(ones(10, 2), 1.0))
+    # With flicker: the levels come back and each clock carries its states;
+    # the reference's readings are exact, so it shows no flicker PM.
+    fl = [ClockModel(; tau0=1.0, q1=1e-24 * k, q2=1e-31, flicker_fm=1.6e-26 * k, flicker_pm=2.2e-22) for k in 1:3]
+    cf, _ = simulate_ensemble(fl, 65536; rng=MersenneTwister(4))
+    ff = clock_models(cf; flicker=true)
+    @test [m.flicker_fm for m in ff] ≈ [m.flicker_fm for m in fl] rtol=0.5
+    @test [m.flicker_pm for m in ff] ≈ [0, 2.2e-22, 2.2e-22] rtol=0.3
+    @test all(m -> m.fm_band[1] > 1, ff) && ff[2].pm_band[1] == 1
     ideal, _ = simulate_ensemble(ms[[1, 3]], 100; reference=0)
     @test ideal.reference == "ideal reference" && !iszero(ideal.x[:, 1])
     @test_throws ArgumentError simulate_ensemble(ms[1:1], 10)
