@@ -13,9 +13,10 @@ versions follow [Semantic Versioning](https://semver.org/).
   `.csv` files, one-column files and comment-line names load as downloaded.
 - `read_data` / `--input-format` read BIPM `UTC - UTC(k)` files (`:bipm_utc`)
   and RINEX 3 clock files (`:rinex_clk`, the IGS and CODE clock products: one
-  satellite or station clock per call, picked with `column` / `--column`). The
-  explorer opens both as downloaded, unpacks `.gz` files, and lists a RINEX
-  file's clocks to pick from.
+  satellite or station clock per call, picked with `column` / `--column`; old
+  files with `D` exponents too). The explorer opens both as downloaded, unpacks
+  `.gz` files, and lists a RINEX file's clocks to pick from, each on its own
+  sample interval.
 - Docs: "Coming from Stable32" and "Coming from allantools" guides, mapping
   their statistics, options and defaults onto SigmaTau.
 - ITU-T wander masks for MTIE and TDEV: `TELECOM_MASKS` (G.811 PRC,
