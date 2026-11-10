@@ -55,6 +55,16 @@ versions follow [Semantic Versioning](https://semver.org/).
   MJD timestamps, kept by `detrend`, `fillgaps`, `remove_outliers` and
   `sigmatau --range`, and written by `save` as a `# start:` line. The CLI's
   record JSON and the explorer's record check show it.
+- `correct_bias` also takes the convention of a reference, on the total
+  estimators, `theo1`, `deviation` and `stability`: `:published` keeps to
+  the published bias tables (no factor on PM for TOTDEV and HTOTDEV, the
+  τ ≥ 16τ₀ factor of MTOTDEV and HTOTDEV at every τ), `:stable32` does what
+  Stable32 does for each estimator (published factors for TOTDEV and
+  HTOTDEV, raw MTOTDEV, TTOTDEV and Thêo1), and `false` remains the raw
+  statistic that allantools reports. `bias_correction` takes
+  `published=true` for the same factors; the Python wrappers take
+  `"published"` and `"stable32"`. MHTOTDEV has no published factor. The
+  CLI and the explorer still switch the correction only on or off.
 
 ### Changed
 
