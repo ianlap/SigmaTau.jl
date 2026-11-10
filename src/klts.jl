@@ -50,7 +50,7 @@ function _klts(S::AbstractMatrix{Float64}, vN::Float64, ν::Float64, probs)
     pos = filter(>(0), collect(est))
     lo = log(_KLTS_PRIOR[1] * minimum(pos)); hi = log(_KLTS_PRIOR[2] * maximum(pos))
     box = fill((lo, hi), 3)
-    u = Vector{StepRangeLen{Float64}}(undef, 3); m = Vector{Vector{Float64}}(undef, 3)
+    u = [range(b[1], b[2]; length=40) for b in box]; m = Vector{Vector{Float64}}(undef, 3)
     for pass in 1:6
         n = pass == 6 ? 128 : 40
         u .= [range(b[1], b[2]; length=n) for b in box]

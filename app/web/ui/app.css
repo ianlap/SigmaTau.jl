@@ -92,6 +92,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .stroke { flex: none; }
 .row-x, .eye { width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 16px; cursor: pointer; flex: none; }
 .row-x:hover, .eye:hover { background: var(--accent-soft); color: var(--accent); }
+.row-btns { display: flex; align-items: center; flex: none; }
 .clock-row { min-height: 46px; cursor: pointer; text-align: left; font: inherit; color: inherit; width: 100%; }
 .clock-row.active { border-color: var(--line-strong); box-shadow: inset 3px 0 0 var(--accent); }
 .clock-row.hidden-clock .row-main { opacity: 0.45; }
@@ -112,6 +113,9 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .run-btn { height: 44px; border: 0; border-radius: 7px; background: var(--accent-fill); color: #fff; font: inherit; font-size: 14.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
 .run-btn:hover { background: var(--accent-fill-hover); }
 .run-btn:disabled { opacity: 0.5; cursor: default; }
+.run-btn.cancel { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.run-btn.cancel:hover { background: var(--accent-soft); }
+.run-btn.cancel kbd { color: var(--muted); }
 .run-btn .stale-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--warn-dot); }
 .run-note { font-size: 11.5px; color: var(--muted); min-height: 1.3em; }
 
@@ -168,7 +172,10 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .check-card .rule { margin: 10px 0; }
 .check-card .opt select { width: 150px; }
 .synth-card { flex: 1; padding: 22px 20px; display: flex; flex-direction: column; gap: 14px; }
-.synth-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; }
+.synth-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 18px; }
+.synth-grid input { width: 100%; min-width: 0; box-sizing: border-box; }
+.synth-grid .synth-name { grid-column: 1 / -1; }
+.synth-grid .clock-name { height: 30px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-popover); color: var(--ink); font: inherit; padding: 0 8px; }
 .synth-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); }
 .record-card { flex: 1; min-height: 0; padding: 18px 18px 10px; display: flex; flex-direction: column; position: relative; }
 .record-card .card-row { display: flex; justify-content: space-between; align-items: baseline; }
@@ -200,7 +207,10 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .imp-head .grow + span { font-size: 12px; color: var(--muted); }
 .imp-body { display: flex; min-height: 0; }
 .imp-main { flex: 1; min-width: 0; padding: 20px 26px 16px; display: flex; flex-direction: column; gap: 12px; }
-.imp-side { width: 384px; flex: none; background: var(--bg-panel); border-left: 1px solid var(--line-soft); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.imp-side { width: 384px; flex: none; background: var(--bg-panel); border-left: 1px solid var(--line-soft); padding: 22px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; min-height: 0; }
+.name-list { display: flex; flex-direction: column; gap: 6px; max-height: 148px; overflow-y: auto; }
+.name-row { display: flex; align-items: center; gap: 10px; }
+.name-row input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; background: var(--bg-popover); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); font: inherit; }
 .imp-side label.lbl { display: block; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
 .imp-side .seg { width: 100%; }
 .imp-side .seg button { flex: 1; height: 30px; }
@@ -360,3 +370,29 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .btn.btn-sm { padding: 3px 9px; font-size: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; background: var(--bg-card); }
 .chip .link-btn { padding: 0 4px; }
+.model-box h3 .link-btn { float: right; font-weight: 400; }
+.model-edit { margin: 8px 0 4px; display: grid; gap: 6px; }
+.model-steps { margin: 0; padding-left: 18px; font-family: var(--font-mono); }
+.model-steps li { margin: 2px 0; }
+.model-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.model-add input { width: 70px; font-family: var(--font-mono); font-size: 12px; }
+
+/* ── Ensemble page ── */
+.ens-weights { flex: 0.6; }
+.ens-table { align-self: flex-start; }
+.ens-table .tbl-row { grid-template-columns: minmax(0, 1.4fr) 56px 56px 1fr; }
+.ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
+.ens-table .card-row { padding: 14px 16px 8px; }
+.ens-note { padding: 8px 16px 14px; }
+.ens-warn { color: var(--warn); }
+
+/* Synthesis page */
+.synth-clocks { align-self: flex-start; min-width: 0; overflow: auto; }
+.synth-clocks .card-row { padding: 14px 16px 8px; }
+.synth-clock { padding: 10px 16px 14px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 10px; }
+.synth-clock .clock-name { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-popover); color: var(--ink); font: inherit; padding: 0 8px; }
+.noise-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; }
+.noise-grid input { width: 100%; min-width: 0; box-sizing: border-box; height: 28px; padding: 0 8px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-popover); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
+.noise-name { font-size: 12px; color: var(--ink-2); }
+.synth-note { padding: 8px 16px 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
