@@ -105,6 +105,15 @@ versions follow [Semantic Versioning](https://semver.org/).
   own rows. Corrected deviations move by at most 0.7 % (2.5 % on random-run
   FM); intervals in the last octave narrow. `tools/mhtot_models.jl`
   replaces `tools/mc_mhtotdev.jl`.
+- TOTDEV and HTOTDEV on white and flicker PM now divide out their bias and
+  take the EDF of the total statistic itself, both from the exact moments of
+  each estimator (`tools/total_pm_models.jl`, docs "Total estimators on PM
+  noise"). HTOTDEV read 25 to 38 % high in variance on white PM and 4 to
+  28 % on flicker PM; TOTDEV reads high in proportion to τ/T (33 % on white
+  PM at τ = T/4). Stable32 applies no factor on PM, so the defaults differ
+  from it on rows labelled PM; `correct_bias=false` matches it.
+  **Breaking:** `bias_correction` now takes `(noises, var_type, m_values, N)`
+  in place of `(noises, var_type, taus, T)`, in Julia and Python.
 
 ### Fixed
 
