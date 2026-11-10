@@ -46,6 +46,9 @@ Clock models, the Kalman filter and timescales.
   variance memory `N_τ` of 20 days and the starting variance τ²σ_y²(τ). The
   exact bias correction (`bias=:exact`), a weight cap (`wmax`) and an outlier
   test (`outlier`) are options.
+- AT2: `timescale(cc; algorithm=:at2)` is AT1 with the paper's Kalman
+  frequency update (eqs 13 to 18), also in the CLI (`--algorithm at2`) and the
+  explorer; the frequency-step detection (19 to 22) is not included.
 - Greenhall Kalman timescale: `timescale(cc; algorithm=:greenhall, models, pivot)`
   runs one Kalman filter over every clock with the covariance reduction
   after each step (the reduced Kalman timescale at `R = 0`, IEMx above), so

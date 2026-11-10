@@ -10,7 +10,7 @@ Output of [`timescale`](@ref).
 $(TYPEDFIELDS)
 """
 struct TimescaleResult
-    "Algorithm that formed the scale (`:ewfa`, `:at1`, `:greenhall`, `:jones_tryon`)."
+    "Algorithm that formed the scale (`:ewfa`, `:at1`, `:at2`, `:greenhall`, `:jones_tryon`)."
     algorithm::Symbol
     "The clocks the scale was formed from."
     comparisons::ClockComparisons
@@ -167,6 +167,17 @@ the record, less the mean slope.
   ``K_i = 2ε_x²/√(2πε_i²)`` (6) making up for each clock being part of the
   scale. Each clock's frequency is filtered (9) with its own constant from
   its τ_min (10).
+- `:at2`, AT1 plus a frequency variance
+  [weiss-weissert-1991-at2](@cite): the weights are AT1's, and each clock's
+  frequency ``y`` is a Kalman filter on its average frequency ``ŷ`` (8): the
+  variance ``P`` grows by the random-walk FM impulse ``σ_β²τ`` (13), then
+  ``y ← (σ_α² y + P̂ ŷ)/(σ_α² + P̂)`` (14) and ``P ← σ_α² P̂/(σ_α² + P̂)`` (15), with the
+  white FM ``σ_α² = ε_i²/τ²`` from the prediction error, so the filter
+  adapts as ``ε_i`` does. ``σ_β²τ`` is fixed per clock from its τ_min by the
+  steady state ``m(m+1) = σ_α²/(σ_β²τ)`` (18), the starting ``σ_α²`` being the
+  starting variance, and ``P`` starts at its steady state (16). In steady state
+  this is AT1's filter (17). The paper's frequency-step detection (19–22) is
+  not included. Takes the AT1 keywords.
 - `:greenhall`, Greenhall's Kalman timescale
   [greenhall-2003-jones-tryon, greenhall-2006-measurement-noise](@cite):
   one Kalman filter over every clock's phase and frequency (and drift),
@@ -233,8 +244,8 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
                    memory::Real=20 * 86400.0, bias::Symbol=:paper, wmax::Real=1.0,
                    outlier::Real=Inf, models::Union{Nothing,AbstractVector{ClockModel}}=nothing,
                    pivot::Integer=1)
-    algorithm in (:ewfa, :at1, :greenhall, :jones_tryon) ||
-        throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :greenhall or :jones_tryon, got :$algorithm"))
+    algorithm in (:ewfa, :at1, :at2, :greenhall, :jones_tryon) ||
+        throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :at2, :greenhall or :jones_tryon, got :$algorithm"))
     bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
     N, k = size(cc.x)
     N >= 3 || throw(ArgumentError("timescale: needs three or more samples"))
@@ -244,7 +255,8 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
         return _reduced_kalman(cc, models, Int(pivot), algorithm)
     end
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
-    at1 = algorithm === :at1
+    at2 = algorithm === :at2
+    at1 = algorithm === :at1 || at2
     τ = cc.tau0
     τmin = tau_min === nothing ? (at1 ? _estimate_tau_min(cc) : fill(τ, k)) :
            tau_min isa Real ? fill(Float64(tau_min), k) : Float64.(tau_min)
@@ -261,6 +273,11 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
     X[1, :] = r[1, :] .+ u
     seen = copy(ok)             # a clock joins the scale at its first reading
     y = _initial_frequency(cc)
+    # AT2: the random-walk FM impulse σ_β²τ of each clock from its τ_min through
+    # the steady state m(m+1) = σα²/(σ_β²τ) (eq 18), and the frequency variance P
+    # at its steady state (eq 16), both from the starting σα² = ε²/τ².
+    σβτ = ε² ./ τ^2 ./ (mf .* (mf .+ 1))
+    Pf = (.-σβτ .+ sqrt.(σβτ .^ 2 .+ 4 .* ε² ./ τ^2 .* σβτ)) ./ 2
     W[1, :] = ok ./ count(ok)
     for n in 2:N
         x̂ = X[n-1, :] .+ y .* τ
@@ -288,12 +305,22 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
             elseif isfinite(r[n, i])
                 X[n, i] = r[n, i] + u
                 E[n, i] = X[n, i] - x̂[i]
-                # a clock the outlier test left out keeps its frequency
-                use[i] && (y[i] = (mf[i] * y[i] + (X[n, i] - X[n-1, i]) / τ) / (mf[i] + 1))
                 if at1 && use[i]
                     ε̂² = bias === :paper ? (abs(E[n, i]) + 2εx² / sqrt(2π * ε²[i]))^2 :
                          E[n, i]^2 / (1 - min(wu[i], 0.9))
                     ε²[i] = (ε̂² + Nτ * ε²[i]) / (1 + Nτ)
+                end
+                # a clock the outlier test left out keeps its frequency
+                if use[i]
+                    ŷ = (X[n, i] - X[n-1, i]) / τ
+                    if at2          # Kalman update of y (eqs 13-15), σα² = ε²/τ²
+                        σα² = ε²[i] / τ^2
+                        P̂ = Pf[i] + σβτ[i]
+                        y[i] = (σα² * y[i] + P̂ * ŷ) / (σα² + P̂)
+                        Pf[i] = σα² * P̂ / (σα² + P̂)
+                    else
+                        y[i] = (mf[i] * y[i] + ŷ) / (mf[i] + 1)
+                    end
                 end
             else
                 X[n, i] = x̂[i]

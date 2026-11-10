@@ -10,7 +10,7 @@ import { sci, num, escapeHtml as h } from "../format.js";
 let root, ctx, Plotly;
 let inflight = null;           // key of the run in progress
 let inflightCtl = null;        // stops it (the core process too) when the settings change
-const ALGS = [["at1", "AT1"], ["ewfa", "EWFA"]];
+const ALGS = [["at1", "AT1"], ["at2", "AT2"], ["ewfa", "EWFA"]];
 
 export const ownsPanel = true;
 

@@ -26,7 +26,7 @@ const DRIFTS = ["none", "linear", "quadratic"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
-const TIMESCALES = ["at1", "ewfa"]
+const TIMESCALES = ["at1", "at2", "ewfa"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 
 struct Opt
@@ -83,7 +83,7 @@ const OPTS = [
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
     Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
-    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights) or ewfa (equal weights)", ["timescale"]),
+    Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update) or ewfa (equal weights)", ["timescale"]),
     Opt("--tau-y", "SECONDS", String[], false, "frequency averaging time of each clock (default 100 τ₀)", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
