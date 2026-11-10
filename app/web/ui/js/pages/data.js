@@ -99,7 +99,8 @@ function gapRow(k) {
 
 function checkCard(c) {
   const k = c?.record?.check;
-  if (!k) return `<div class="card check-card"><h2>Record check</h2><p class="muted small">${c?.error ? "The core could not read this record." : c ? "Reading…" : "No record yet."}</p></div>`;
+  // A record the core refused (a frequency record with gaps, unfilled) keeps the box that fills it.
+  if (!k) return `<div class="card check-card"><h2>Record check</h2><p class="muted small">${c?.error ? "The core could not read this record." : c ? "Reading…" : "No record yet."}</p>${c?.error ? fillBox(c) : ""}</div>`;
   const drift = Number.isFinite(k.drift_per_day) ? `${sci(k.drift_per_day, 2)} /day` : "–";
   const out = c.remove_outliers
     ? `<span class="mono">removed · <button class="link-btn" data-act="keep-outliers">undo</button></span>`
@@ -115,10 +116,12 @@ function checkCard(c) {
     <div class="kv" title="Least-squares linear frequency drift of the record as analysed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
     <div class="rule"></div>
     ${driftBlock(c, k)}
-    <label class="check" title="Fill the missing samples and NaN readings from the data beside each gap, reflected (Howe and Schlossberger)">
-      <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""}>Fill gaps by reflection</label>
+    ${fillBox(c)}
   </div>`;
 }
+
+const fillBox = (c) => `<label class="check" title="Fill the missing samples and NaN readings from the data beside each gap, reflected (Howe and Schlossberger)">
+      <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""}>Fill gaps by reflection</label>`;
 
 function driftBlock(c, k) {
   const mode = c.drift ?? "none";

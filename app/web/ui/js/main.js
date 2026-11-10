@@ -103,7 +103,7 @@ async function importFile(file, clock, prev) {
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         sourceInfo: settings.sourceInfo,
-        fillgaps: c.fillgaps || fillNeeded(settings), remove_outliers: false, range: null, result: null,
+        fillgaps: fillNeeded(settings), remove_outliers: false, range: null, result: null,
       });
       touched.push(c);
     });

@@ -128,8 +128,24 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor();   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
-    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
+  });
+
+  await t.test("Data: Fill gaps turned off and on again; the next file starts without it", async () => {
+    const n = errors.length;
+    await page.uncheck("input[data-field=fillgaps]");
+    await page.locator("#record-chip-text", { hasText: "No record" }).waitFor();
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // the core refuses the unfilled record
+    await page.check("input[data-field=fillgaps]");
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor();
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    const rows = Array.from({ length: 600 }, (_, i) => i).filter((i) => i < 300 || i >= 310);
+    // (read with the settings remembered from gapped.csv, without the dialog)
+    await chooser.setFiles({ name: "p.csv", mimeType: "text/csv", buffer: Buffer.from(rows.map((i) => `${i},${(1e-9 * Math.sin(i * 0.7)).toExponential(6)}`).join("\n")) });
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /p\.csv/ }).waitFor();
+    assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
   });
 
   assert.deepEqual(errors, []);
