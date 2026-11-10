@@ -184,7 +184,9 @@ the record, less the mean slope.
 - `:ewfa`, equal-weight frequency averaging: every clock weighs the same.
   Each clock's frequency is an exponential average of its phase steps
   over `tau_y` seconds (default 100 τ₀). With every clock read at every
-  sample the scale is the plain mean of the clocks' phases.
+  sample the scale is the plain mean of the clocks' phases. It differs from
+  the plain mean only where readings are missing: the plain mean jumps when a
+  clock drops out, EWFA carries on from its own prediction.
 - `:at1`, the NIST scale as Weiss & Weissert describe it
   [weiss-weissert-1991-at2](@cite) (equation numbers are the paper's):
   weights ``w_i = ε_x²/ε_i²`` (3), with ``ε_x² = (Σ 1/ε_i²)⁻¹`` (4), where
@@ -202,8 +204,8 @@ the record, less the mean slope.
   adapts as ``ε_i`` does. ``σ_β²τ`` is fixed per clock from its τ_min by the
   steady state ``m(m+1) = σ_α²/(σ_β²τ)`` (18), the starting ``σ_α²`` being the
   starting variance, and ``P`` starts at its steady state (16). In steady state
-  this is AT1's filter (17). The paper's frequency-step detection (19–22) is
-  not included. Takes the AT1 keywords.
+  this is AT1's filter (17). With `steps=true` the paper's frequency-step
+  detection (19–22) runs too, see below. Takes the AT1 keywords.
 - `:greenhall`, Greenhall's Kalman timescale
   [greenhall-2003-jones-tryon, greenhall-2006-measurement-noise](@cite):
   one Kalman filter over every clock's phase and frequency (and drift),
@@ -253,6 +255,27 @@ AT1 keywords:
 - `bias`: `:paper` (default) for ``K_i`` above, or `:exact` for the squared
   error divided by ``1 − w_i``, which is exact when the clocks' own errors
   are independent and the weights optimal.
+- `steps` (`:at2`, default `false`): detect a clock's frequency step and rerun
+  the scale without it. After each sample, for windows of 1 to `lmax − 1`
+  intervals (`lmax` defaults to the clock's τ_min in samples, at least 4),
+  the clock's mean frequency against the scale over the window is compared
+  with its frequency estimate before the window (eqs 19–20). A difference
+  above `step_threshold` (default 4) standard deviations is a step at the
+  window's start: the scale is rerun from there with that clock's weight
+  zero until τ_min later and its frequency variance raised, and it comes back
+  with ``ε_i²`` multiplied by `step_inflate` (default 4, σ_α doubled), the
+  paper's "increased by a fixed amount". Departures: eq 20 as printed mixes
+  units (τ_min/L is a time), so the deviation is the variance of the
+  difference, in fractional frequency squared,
+  ``P_{−L} + (σ_{α,i}² + σ_{αx}²)/s + (σ_{β,i}²τ + σ_{βx}²τ) s/3``
+  for a window of ``s`` intervals: the estimate's variance, the white FM of
+  the mean over the window (clock and scale, eq 21), and the frequency random
+  walk over it (the mean of a random walk of impulse σ_β²τ per interval over
+  ``s`` intervals has variance σ_β²τ s/3; scale term as eq 22). The scale
+  already issued is recomputed (the paper leaves the issued values and steers
+  forward), and a clock is not tested over windows that reach into its
+  exclusion. With a 4σ threshold on clean data expect about one false
+  detection per 10⁵ clock-samples, each costing that clock a few τ_min.
 - `wmax` (default 1, no cap): the largest weight any clock may have.
 - `outlier` (default `Inf`, off): a clock whose prediction error passes
   `outlier` ε_i is left out of that sample and of its variance; if that
@@ -269,7 +292,8 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
                    tau_min::Union{Nothing,Real,AbstractVector{<:Real}}=nothing,
                    memory::Real=20 * 86400.0, bias::Symbol=:paper, wmax::Real=1.0,
                    outlier::Real=Inf, models::Union{Nothing,AbstractVector{ClockModel}}=nothing,
-                   pivot::Integer=1)
+                   pivot::Integer=1, steps::Bool=false, step_threshold::Real=4.0,
+                   lmax::Union{Nothing,Integer}=nothing, step_inflate::Real=4.0)
     algorithm in (:ewfa, :at1, :at2, :greenhall, :jones_tryon) ||
         throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :at2, :greenhall or :jones_tryon, got :$algorithm"))
     bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
@@ -280,6 +304,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
         1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
         return _reduced_kalman(cc, models, Int(pivot), algorithm)
     end
+    steps && algorithm !== :at2 && throw(ArgumentError("timescale: steps needs algorithm :at2"))
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
     at2 = algorithm === :at2
     at1 = algorithm === :at1 || at2
@@ -305,9 +330,20 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
     σβτ = ε² ./ τ^2 ./ (mf .* (mf .+ 1))
     Pf = Float64[_at2_steady(ε²[i] / τ^2, σβτ[i]) for i in 1:k]
     W[1, :] = ok ./ count(ok)
-    for n in 2:N
+    # Step detector state (AT2, eqs 19-22): the state after each sample, kept
+    # to rerun the scale from a detected step; `blocked[i]` is the last sample
+    # clock i is kept out of the scale; no detection until `replay`.
+    Lmax = [lmax === nothing ? max(4, round(Int, t / τ)) : Int(lmax) for t in τmin]
+    ε²h, yh, Pfh = zeros(N, k), zeros(N, k), zeros(N, k)
+    blocked, replay = zeros(Int, k), 0
+    n = 2
+    while n <= N
+        ε²h[n-1, :], yh[n-1, :], Pfh[n-1, :] = ε², y, Pf
+        for i in 1:k
+            n == blocked[i] + 1 && (ε²[i] *= step_inflate)   # back in, with σα raised
+        end
         x̂ = X[n-1, :] .+ y .* τ
-        use = isfinite.(r[n, :]) .& seen
+        use = isfinite.(r[n, :]) .& seen .& (n .> blocked)
         if at1 && isfinite(outlier) && n > 2 && any(use)
             # The median prediction error places the scale for the test, so
             # that one clock's jump cannot carry it.
@@ -317,6 +353,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
         end
         if !any(use)
             X[n, :] = x̂
+            n += 1
             continue
         end
         wu = at1 ? use ./ ε² : Float64.(use)
@@ -354,8 +391,56 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1, tau_y::Real=100
         end
         Y[n, :] = y
         W[n, :] = wu
+        if steps && n > replay
+            n0, i0 = _at2_step(X, yh, Pfh, ε², σβτ, use, blocked, Lmax, n, τ, step_threshold)
+            if i0 > 0       # a frequency step: rerun from its start without that clock
+                blocked[i0] = n0 + max(1, round(Int, τmin[i0] / τ))
+                replay = n
+                ε², y, Pf = ε²h[n0, :], yh[n0, :], Pfh[n0, :]
+                Pf[i0] = ε²[i0] / τ^2          # P raised at the step
+                for i in 1:k
+                    seen[i] = any(isfinite, view(r, 1:n0, i))
+                end
+                n = n0 + 1
+                continue
+            end
+        end
+        n += 1
     end
     return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E)
+end
+
+# AT2 frequency-step test (Weiss & Weissert 1991, eqs 19-22), run on the clocks
+# kept at sample n: for each window of s = 1 … Lmax−1 intervals, the clock's mean
+# frequency against the scale over the window, y_avg = (x[n] − x[n−s])/(sτ),
+# is compared with the frequency estimate y₋ₗ before it. Eq 20 as printed
+# mixes units; this is the variance of the difference, in fractional frequency²:
+#   P₋ₗ + (σα,i² + σαx²)/s + (σβτ,i + σβτx) s/3
+# the estimate's variance, the white-FM noise of the mean over s intervals (the
+# clock's and the scale's), and the random walk of the frequency over the window
+# (the mean of a random walk of impulse σβτ per interval over s intervals has
+# variance σβτ s/3). σαx² and σβτx combine the clocks' levels as in eqs 21-22,
+# with σβτ the paper's σβ²τ. Returns (start sample, clock) of the window with
+# the largest ratio above `thr`, or (0, 0).
+function _at2_step(X, yh, Pfh, ε², σβτ, use, blocked, Lmax, n, τ, thr)
+    σαx⁻, σβx⁻ = 0.0, 0.0
+    for j in eachindex(use)
+        use[j] || continue
+        σαx⁻ += τ^2 / ε²[j]
+        σβx⁻ += 1 / σβτ[j]
+    end
+    best, n0b, ib = thr, 0, 0
+    for i in eachindex(use)
+        use[i] || continue
+        σα² = ε²[i] / τ^2
+        for s in 1:min(Lmax[i] - 1, n - max(1, blocked[i] + 1))
+            n0 = n - s
+            var = Pfh[n0, i] + (σα² + 1 / σαx⁻) / s + (σβτ[i] + 1 / σβx⁻) * s / 3
+            z = abs((X[n, i] - X[n0, i]) / (s * τ) - yh[n0, i]) / sqrt(var)
+            z > best && ((best, n0b, ib) = (z, n0, i))
+        end
+    end
+    return n0b, ib
 end
 
 # IEM weights a (Σa = 1) minimizing aᵀ Pxx a: Pxx⁻¹1 / 1ᵀPxx⁻¹1; `nothing`

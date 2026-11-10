@@ -67,7 +67,11 @@ Clock models, the Kalman filter and timescales.
   test (`outlier`) are options.
 - AT2: `timescale(cc; algorithm=:at2)` is AT1 with the paper's Kalman
   frequency update (eqs 13 to 18), also in the CLI (`--algorithm at2`) and the
-  explorer; the frequency-step detection (19 to 22) is not included.
+  explorer. `steps=true` adds the paper's frequency-step detection (19 to 22):
+  a clock whose frequency jumps is left out for its τ_min and the scale rerun
+  from the step. The threshold of eq 20 is rewritten as a variance in
+  consistent units (the printed form mixes time and frequency), so it is a
+  documented departure; off by default.
 - Greenhall Kalman timescale: `timescale(cc; algorithm=:greenhall, models, pivot)`
   runs one Kalman filter over every clock with the covariance reduction
   after each step (the reduced Kalman timescale at `R = 0`, IEMx above), so

@@ -61,6 +61,27 @@ using Statistics
         @test all(isfinite, timescale(ClockComparisons(cc.x[1:10, :], 1.0); algorithm=:at2).x)
     end
 
+    @testset "AT2 frequency-step detector" begin
+        sms = [ClockModel(; tau0=1.0, q1=q, q2=q * 1e-8) for q in (1e-22, 2e-22, 4e-22, 8e-22)]
+        sc, _ = simulate_ensemble(sms, 8000; reference=0, rng=MersenneTwister(5))
+        sx = copy(sc.x); sx[4001:end, 2] .+= (1:4000) .* 5e-11     # clock 2 steps in frequency
+        stepped = ClockComparisons(sx, 1.0)
+        off = timescale(stepped; algorithm=:at2)
+        on = timescale(stepped; algorithm=:at2, steps=true)
+        # Caught at once, the clock kept out of the scale for τ_min and the scale
+        # rerun from the step: much steadier at long τ than letting the filter adapt.
+        @test all(iszero, on.weights[4001:4020, 2]) && off.weights[4005, 2] > 0.1
+        @test adev(timescale_phase(on), [1000]; ci=false).dev[1] < 0.6 * adev(timescale_phase(off), [1000]; ci=false).dev[1]
+        @test timescale(stepped; algorithm=:at2, steps=false).x == off.x
+        # Eq 20 reads the same however the units are chosen: a scaled phase
+        # (all variances ∝ c²) and a scaled τ₀ (frequencies ∝ 1/a) change nothing.
+        for (c, a) in ((1e3, 1.0), (1.0, 10.0))
+            u = timescale(ClockComparisons(sx .* c, a); algorithm=:at2, steps=true)
+            @test u.weights ≈ on.weights rtol=1e-6
+        end
+        @test_throws ArgumentError timescale(stepped; steps=true)
+    end
+
     @testset "caps, gaps and outliers" begin
         capped = timescale(cc; wmax=0.4)
         @test maximum(capped.weights[late, :]) <= 0.4 + 1e-12
