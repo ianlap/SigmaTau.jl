@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "model", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "timescale", "model", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
@@ -9,6 +9,7 @@ const COMMAND_HELP = [
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
+    ("holdover",   "FILE", "holdover test: the time error after a training stretch against holdover time, and the time to reach a limit"),
     ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
     ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "σ(τ) a clock noise model predicts (MDEV and ADEV), no simulation"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
@@ -43,7 +44,7 @@ end
 
 const ALL = filter(!=("live"), COMMANDS)   # the commands that read a FILE
 const ANY = COMMANDS
-const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "timescale", "model"]   # CSV or JSON out (report writes HTML; model is always JSON)
+const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "timescale", "model"]   # CSV or JSON out (report writes HTML; model is always JSON)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
@@ -74,13 +75,13 @@ const OPTS = [
     Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
     Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
-    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683)", ["analyze", "report"]),
+    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "report", "holdover"]),
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
     Opt("--no-bias-correction", "", String[], false, "the same as --bias none", ["analyze", "report"]),
     Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
-    Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only)", ["analyze"]),
+    Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only); with holdover, the error that model predicts and each noise type's share", ["analyze", "holdover"]),
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
     Opt("--mask", "NAME", MASKS, false, "also check MTIE and TDEV against an ITU-T wander mask, or all of them (JSON only): G811, G813_opt1, G8262_opt1, G823_SSU ..., all", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
@@ -93,6 +94,11 @@ const OPTS = [
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
+    Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record)", ["holdover"]),
+    Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch)", ["holdover"]),
+    Opt("--fit-drift", "", String[], false, "fit a parabola to the stretch, so the frequency drift is learned and carried on (default: a line)", ["holdover"]),
+    Opt("--no-anchor", "", String[], false, "start from the fit's value at the end of the stretch, not from the last reading", ["holdover"]),
+    Opt("--limit", "SECONDS", String[], false, "also give the holdover time at which the error reaches SECONDS (1e-6 for a microsecond)", ["holdover"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
     Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal (default: the first reading to 4 significant figures)", ["live"]),
@@ -172,6 +178,11 @@ mutable struct Options
     mask::String              # --mask: ITU-T mask checked in the JSON; "" = none
     pivot::Int                # --pivot: clock the Kalman timescales read at (1-based)
     steps::String             # --steps: at2 frequency-step detection, "" = off
+    train::Float64            # holdover: training stretch in seconds; NaN = a quarter of the record
+    taus::Vector{Float64}     # holdover: holdover times in seconds; empty = the octave grid
+    fit_drift::Bool           # holdover: parabola instead of a line
+    anchor::Bool              # holdover: start from the last reading
+    limit::Float64            # holdover: NaN = none
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
@@ -179,7 +190,8 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
-                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "")
+                    Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
+                    NaN, Float64[], false, true, NaN)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -293,6 +305,17 @@ function parse_m(s::String)
     return sort!(unique!(ms))
 end
 
+# "60,3600,14400": holdover times in seconds, rising.
+function parse_taus(s::String)
+    taus = Float64[]
+    for tok in split(s, ',')
+        v = parse_float(String(strip(tok)), "--tau")
+        v > 0 || throw(usage_error("--tau expects positive times in seconds"))
+        push!(taus, v)
+    end
+    return sort!(unique!(taus))
+end
+
 function parse_delim(s::String)
     s == "\\t" && return '\t'
     length(s) == 1 || throw(usage_error("--delim expects one character, got \"" * s * "\""))
@@ -332,6 +355,9 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--window";         o.window = parse_int(v, name)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
+    elseif name == "--train";          o.train = parse_float(v, name)
+    elseif name == "--tau";            o.taus = parse_taus(v)
+    elseif name == "--limit";          o.limit = parse_float(v, name)
     elseif name == "--value-cols";     o.value_cols = parse_cols(v)
     elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
@@ -361,6 +387,8 @@ function set_flag!(o::Options, name::String)
     elseif name == "--hz";                 o.hz = true
     elseif name == "--fast";               o.fast = true
     elseif name == "--fit";                o.fit = true
+    elseif name == "--fit-drift";          o.fit_drift = true
+    elseif name == "--no-anchor";          o.anchor = false
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end
@@ -422,6 +450,8 @@ function parse_args!(o::Options, args::Vector{String})
     o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2"))
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
+    (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
+        throw(usage_error("--train and --limit must be positive"))
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))
@@ -467,6 +497,7 @@ function print_help(io::IO)
     print(io, "  sigmatau spectrum --synth 65536\n")
     print(io, "  sigmatau dynamic clock.dat --dev dhdev --window 4096\n")
     print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
+    print(io, "  sigmatau holdover gpsdo.dat --train 86400 --tau 3600,14400,86400 --limit 1e-6\n")
     print(io, "  sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1\n")
     print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
 end
