@@ -88,6 +88,7 @@ function recordArgs(clock) {
     } else if (clock.format === "rinex_clk") opt("--column", clock.column_name);
   } else recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
+  if (clock.keep_zeros) a.push("--keep-zeros");
   if (clock.fillgaps) a.push("--fillgaps");
   if (clock.remove_outliers) a.push("--remove-outliers");
   a.push("--format", "json");

@@ -219,11 +219,13 @@ end
 # - a block of leading `#` comment lines, as `save` writes them, with
 #   `# tau0: <seconds>` and `# start: <ISO 8601>`;
 # - a Stable32 export header: text lines such as `Tau: 1.0` closed by a
-#   `# Header End` line within the first 64 lines, all skipped.
+#   `# Header End` line within the first 64 lines, all skipped; or the
+#   older header of bare `File:`, `Date:`, `Type:`, `Points:`, `Tau:` lines
+#   with no closing line.
 function _scan_comment_header(path::AbstractString)
     ncomment = 0
     tau0 = NaN; start = NaN; s32_tau = NaN
-    s32_end = 0
+    s32_end = 0; bare = 0
     leading = true
     lineno = 0
     # Plain open/close rather than a do-block: the closure would box the
@@ -256,12 +258,14 @@ function _scan_comment_header(path::AbstractString)
                 s32_end = lineno
                 break
             end
-            m = match(r"^Tau:\s*(\S+)", st)
+            lineno == ncomment + bare + 1 && occursin(r"^(File|Date|Type|Points|Tau):"i, st) && (bare += 1)
+            m = match(r"^Tau:\s*(\S+)"i, st)
             m === nothing || (s32_tau = something(tryparse(Float64, something(m.captures[1], "")), NaN))
         end
     finally
         close(io)
     end
+    s32_end > 0 || bare == 0 || (s32_end = ncomment + bare)
     s32_end > 0 && return s32_end, (isnan(tau0) ? s32_tau : tau0), start
     return ncomment, tau0, start
 end

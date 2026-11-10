@@ -700,6 +700,11 @@ mktempdir() do dir
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
         @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
+        # A zero in a Stable32 frequency file is a gap, unless it is kept as a reading.
+        zf = joinpath(dir, "z.frd")
+        write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
+        @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
+        @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
     end
 
     @testset "output error -> exit 4" begin
