@@ -1,7 +1,7 @@
 // The import dialog: shows the top of a file, lets the user say which column
 // is time and which is the value, the record type, units and τ0, and returns
 // the reader settings for the core. openImport() resolves to null on cancel.
-import { sniff, guessRoles, timeStats, thin, parseFactor, scaleFields, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
+import { sniff, guessRoles, clockStats, thin, parseFactor, scaleFields, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
 import { escapeHtml as h, thousands, duration, num } from "./format.js";
 import { seriesColor, hexAlpha } from "./plot.js";
 
@@ -44,18 +44,19 @@ export function openImport(file, prev = null) {
   st.values = st.values.filter((c) => c !== st.time);
   if (!st.values.length) st.time = 0, st.values = [guess.value];
   const fromMemory = !!mem;
+  // In a clock list the first clock is only a default: the first click picks instead of adding.
+  let picked = !!p;
 
+  // `ts` and `tau0` of the first clock; `per`, each clock's stats (their own grids in a RINEX file).
   const derived = () => {
-    let time = st.time ? s.columns[st.time - 1] ?? [] : null;
-    // A clock of a RINEX file is on its own grid (30 s satellites, 5 min stations): its own epochs.
-    if (time && s.clocks) { const v = s.columns[st.values[0] - 1] ?? []; time = time.filter((_, i) => Number.isFinite(v[i])); }
-    const ts = time ? timeStats(time, st.timeUnit) : null;
+    const per = clockStats(s, st.time, st.values, st.timeUnit), ts = per[0].ts;
     const tau0 = ts && ts.tau0 > 0 ? ts.tau0 : Number(st.tau0In);
-    return { ts, tau0 };
+    const sum = (k) => per.reduce((a, p) => a + (p.ts?.[k] ?? 0), 0);
+    return { ts, tau0, per, gaps: sum("gaps"), missing: sum("missing") };
   };
   const colName = (c) => s.names[c - 1] || `column ${c}`;
   const settings = () => {
-    const { ts, tau0 } = derived();
+    const { tau0, gaps } = derived();
     const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
     return {
       kind: st.kind,
@@ -69,8 +70,9 @@ export function openImport(file, prev = null) {
       scaling: parseFactor(st.factor) || st.scaling,
       tau0,
       hasTimeCol: st.time > 0 || !!s.format,  // instrument readers can fill gaps without one
-      gaps: ts ? ts.gaps : 0,
-      sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind} · τ₀ ${num(tau0, 4)} s` +
+      gaps,
+      // (the clocks of a RINEX file differ in τ₀: the Data page gives each its own)
+      sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind}${s.clocks ? "" : ` · τ₀ ${num(tau0, 4)} s`}` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
       unitName: parseFactor(st.factor) ? `readings × ${num(parseFactor(st.factor), 4)}` : (units.find(([f]) => f === st.scaling) ?? units[0])[1],
       remembered: fromMemory && !prev,
@@ -84,7 +86,7 @@ export function openImport(file, prev = null) {
     const finish = (out) => { dlg.close(); resolve(out); };
 
     const render = () => {
-      const { ts, tau0 } = derived();
+      const { ts, tau0, per, gaps, missing } = derived();
       const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
       if (!units.some(([f]) => f === st.scaling)) st.scaling = 1;
       const factor = parseFactor(st.factor);
@@ -118,10 +120,11 @@ export function openImport(file, prev = null) {
           `<td class="${cls(i + 1)}"${tint(i + 1, 0.1)}>${h(f[i] ?? "")}</td>`).join("")}</tr>`).join("");
       const more = s.nRows - s.rows.length;
 
-      const n = s.nRows + (ts ? ts.missing : 0);
-      const spanS = ts ? ts.span : tau0 * (s.nRows - 1);
+      const counts = per.map((p) => p.n), lo = Math.min(...counts), hi = Math.max(...counts);
+      const taus = [...new Set(per.filter((p) => p.ts?.tau0 > 0).map((p) => p.ts.tau0).sort((a, b) => a - b).map((t) => num(t, 4)))];
+      const spanS = ts ? Math.max(...per.map((p) => p.ts?.span ?? 0)) : tau0 * (s.nRows - 1);
       const summary = s.nCols
-        ? `${several ? `${st.values.length} clocks · ${thousands(s.nRows)} samples each` : `${thousands(s.nRows)} samples`} · ${duration(spanS)} · ${st.kind === "phase" ? "phase" : "frequency"} in ${unitName}${st.against.trim() ? ` · vs ${h(st.against.trim())}` : ""}`
+        ? `${several ? `${st.values.length} clocks · ${lo === hi ? `${thousands(hi)} samples each` : `${thousands(lo)} to ${thousands(hi)} samples`}` : `${thousands(hi)} samples`} · ${duration(spanS)} · ${st.kind === "phase" ? "phase" : "frequency"} in ${unitName}${st.against.trim() ? ` · vs ${h(st.against.trim())}` : ""}`
         : "";
       const err = !s.nCols ? "No numeric rows found in this file."
         : s.bad ? `Line ${s.bad} is not numeric. The core will refuse the file.`
@@ -139,23 +142,23 @@ export function openImport(file, prev = null) {
       }).join("");
       const spark = lines ? `<svg viewBox="0 0 330 92" preserveAspectRatio="none" width="100%" height="100%">${lines}</svg>` : "";
 
-      const gap = ts && ts.gaps
-        ? `<div class="gap-card"><b>${ts.gaps} gap${ts.gaps > 1 ? "s" : ""} in the time column</b>${thousands(ts.missing)} missing sample${ts.missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to interpolate them.</div>`
+      const gap = gaps
+        ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to interpolate them.</div>`
         : "";
       const tauLine = ts && ts.tau0 > 0
-        ? `<div class="tau-line"><span class="mono">${num(ts.tau0, 4)} s</span><span class="ok">✓ from the time column${ts.even ? ", evenly spaced" : ", grid step"}</span></div>`
+        ? `<div class="tau-line"><span class="mono">${taus.join(" and ")} s</span><span class="ok">✓ ${taus.length > 1 ? "each clock from its own epochs" : `from the time column${per.every((p) => p.ts?.even) ? ", evenly spaced" : ", grid step"}`}</span></div>`
         : `<div class="tau-line"><input type="number" id="imp-tau0" min="0" step="any" value="${h(st.tau0In)}"> <span class="muted small">s${s.tau0Hint ? " · from the file header" : " · no time column"}</span></div>`;
 
       dlg.innerHTML = `
         <div class="imp-head">${FILE_ICON}
           <div><b>Import ${h(s.name)}</b><span class="muted small">${thousands(s.lines)} lines · ${s.formatLabel ?? `${s.delimName}${s.stable32 ? " · Stable32 file" : ""}`}</span></div>
-          <span class="grow"></span><span>Click a column heading to choose what it holds</span>
+          <span class="grow"></span><span>${s.clocks ? "Click a clock to pick it, then more to add them" : "Click a column heading to choose what it holds"}</span>
         </div>
         <div class="imp-body">
           <div class="imp-main">
             ${s.clocks ? `<input type="search" id="imp-find" class="wide-input" placeholder="Find a clock, e.g. G08 or ALGO" aria-label="Find a clock">
             <div class="preview"><table class="clock-list"><tbody>${s.clocks.map((info, i) =>
-              `<tr class="names" data-find="${h(s.names[i + 1].toLowerCase())}"><td class="${cls(i + 2)}"${tint(i + 2, 0.2)} data-col="${i + 2}" title="Click to add or drop this clock">${h(s.names[i + 1])}</td><td class="muted">${h(info)}</td></tr>`).join("")}</tbody></table></div>`
+              `<tr class="names" data-find="${h(s.names[i + 1].toLowerCase())}"><td class="${cls(i + 2)}"${tint(i + 2, 0.2)} data-col="${i + 2}" title="${picked ? "Click to add or drop this clock" : "Click to pick this clock"}">${h(s.names[i + 1])}</td><td class="muted">${h(info)}</td></tr>`).join("")}</tbody></table></div>`
             : `            <div class="roles" style="grid-template-columns: repeat(${Math.max(1, s.nCols)}, minmax(0, 1fr))">${pills}</div>
             <div class="preview"><table>
               <colgroup><col style="width:44px">${"<col>".repeat(Math.max(1, s.nCols))}</colgroup>
@@ -201,8 +204,10 @@ export function openImport(file, prev = null) {
       const col = e.target.closest("tr.names td[data-col]")?.dataset.col;
       if (col) {
         const c = Number(col);
-        if (st.values.includes(c)) { if (st.values.length > 1) st.values = st.values.filter((v) => v !== c); }
+        if (s.clocks && !picked) st.values = [c];
+        else if (st.values.includes(c)) { if (st.values.length > 1) st.values = st.values.filter((v) => v !== c); }
         else { st.values.push(c); st.values.sort((a, b) => a - b); if (st.time === c) st.time = 0; }
+        picked = true;
         render(); return;
       }
       const act = e.target.closest("[data-act]")?.dataset.act;

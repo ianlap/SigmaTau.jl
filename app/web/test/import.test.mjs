@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.window = {};
-const { sniff, guessRoles, parseFactor, scaleFields } = await import("../ui/js/import.js");
+const { sniff, guessRoles, clockStats, parseFactor, scaleFields } = await import("../ui/js/import.js");
 
 const seq = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 const read = (name, lines) => { const s = sniff(name, lines.join("\n") + "\n"); return { s, g: guessRoles(s) }; };
@@ -78,4 +78,12 @@ test("a RINEX clock file lists its clocks and takes the clock's own epochs", () 
   assert.deepEqual([g.time, g.timeUnit], [1, 86400]);
   assert.equal(s.columns[0][1] - s.columns[0][0] > 0, true);
   assert.equal(s.columns[2][5], 6e-7);
+  // Each clock on its own grid: the station every 2 min, the satellite every 30 s.
+  assert.deepEqual(clockStats(s, 1, [2, 3], 86400).map((p) => [p.ts.tau0, p.n]), [[120, 2], [30, 8]]);
+});
+
+test("a RINEX clock bias with a D exponent is read", () => {
+  const { s } = read("old.clk", ["     2.00           C                   G                   RINEX VERSION / TYPE", "                                                            END OF HEADER",
+    "AS G01  2025 08 17 23 59 30.000000  2   -.123000000000D-03  .250000000000D-10"]);
+  assert.equal(s.columns[1][0], -1.23e-4);
 });

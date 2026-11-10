@@ -111,7 +111,7 @@ function sniffRinex(name, lines) {
     }
     let c = series.get(f[1]);
     if (!c) { c = { col: new Array(mjd.length).fill(NaN), kind: kind === "AS " ? "satellite" : "station", n: 0 }; series.set(f[1], c); }
-    c.col[e] = Number(f[9]); c.n++;
+    c.col[e] = Number(f[9].replace(/d/i, "e")); c.n++;   // old IGS files: -.123D-03
   }
   const names = [...series.keys()].sort();
   return {
@@ -234,6 +234,18 @@ export function guessRoles(s) {
 // step as the reader's _time_grid (the mean of the regular steps, rounded to
 // the shortest value that keeps every timestamp within a quarter step of its
 // slot), so coarse timestamps such as MJD to six decimals give the true τ0.
+// Time stats and sample count of each picked clock. The clocks of a RINEX file keep
+// their own grids (30 s satellites, 5 min stations), so each is timed on its own
+// epochs; the columns of any other file share the time column.
+export function clockStats(s, time, values, unit) {
+  const t = time ? s.columns[time - 1] ?? [] : null;
+  if (!s.clocks || !t) { const shared = { ts: t ? timeStats(t, unit) : null, n: s.nRows }; return values.map(() => shared); }
+  return values.map((c) => {
+    const v = s.columns[c - 1] ?? [], e = t.filter((_, i) => Number.isFinite(v[i]));
+    return { ts: timeStats(e, unit), n: e.length };
+  });
+}
+
 export function timeStats(col, unit = 1) {
   const t = unit === 1 ? col : col.map((x) => x * unit);
   const d = [];
