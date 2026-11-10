@@ -83,7 +83,8 @@ Name the layout of a data file from its extension and first lines, one of
   (`G08`, `ALGO00CAN`) picks the clock, by default the first. Old files'
   `D` exponents (`-.123D-03`) are read too. Unzip `.gz` files first.
 - `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
-  [`read_frequency`](@ref).
+  [`read_frequency`](@ref). `read_data` takes them as phase, unless the
+  readings' median size is under 1e-11, which only fractional frequency has.
 
 `delim` is the field delimiter, by default a comma or tab when the first
 data line holds one, else whitespace.
@@ -189,9 +190,9 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
     (t, v), ncols = _read_cols(path, nskip, nothing, [1, 0])
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
     ncols >= 2 || (t = Float64[])
-    # A Stable32 time tag is an MJD (days); a large value with sub-day steps.
+    # A Stable32 time tag is an MJD (days).
     start = hstart
-    if length(t) >= 2 && t[1] > 30000 && _median_step(t) < 1
+    if _is_mjd(t)
         isnan(start) && (start = _mjd_seconds(t[1]))
         t .*= 86400
     end
@@ -281,7 +282,7 @@ function _unit(name::AbstractString)
 end
 
 const _PHASE_NAMES = r"phase|time ?err|\btie\b|pps|time ?offset|time ?diff|\bx\b"i
-const _FREQ_NAMES  = r"freq|\bffe\b|osc|fractional|\by\b"i
+const _FREQ_NAMES  = r"freq|\bffe\b|osc|fractional|ratio|\by\b"i
 const _TIME_NAMES  = r"^(t|mjd|time|timestamp|date|datetime|utc|epoch|elapsed|sec|seconds)\s*([(\[].*)?$"i
 
 function _pick_column(names::Vector{String}, column::Int, column_name::String, time::Int)
@@ -356,7 +357,9 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         t = t[keep]; v = v[keep]
     end
     start = iso[] && !isempty(t) ? t[1] : NaN
-    if !isempty(t) && occursin(r"mjd"i, names[time])
+    # MJD by name, or by its range unless the name says seconds.
+    if !isempty(t) && (occursin(r"mjd"i, names[time]) ||
+                       (_unit(names[time])[2] <= 0 && !occursin(r"sec|elapsed"i, names[time]) && _is_mjd(t)))
         start = _mjd_seconds(t[1])
         t .*= 86400
     end
@@ -477,7 +480,11 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     elseif fmt === :columns
         v, t0, start = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
                                header=0, delim=nothing, scaling=1.0, detrend=:none, fillgaps=fillgaps)
-        _Record(v, t0, hint >= 0, falses(0), start)
+        # Unnamed readings of median size under 1e-11 are fractional
+        # frequency (or a ratio): a time error that small is not a clock.
+        f = filter(isfinite, v)
+        tiny = !isempty(f) && _median_nonan(abs.(f)) < 1e-11
+        _Record(v, t0, hint > 0 || (hint == 0 && !tiny), falses(0), start)
     else
         throw(ArgumentError("read_data: unknown format :" * String(fmt) * "; use one of " * join(map(String, INPUT_FORMATS), ", ")))
     end
@@ -498,7 +505,9 @@ column is phase or frequency by its name.
 
 - `tau0`: sample interval in seconds; by default from the file header
   (TimeLab `Sample Interval`, Stable32 `Tau:`) or the grid step of the
-  time column (seconds, MJD days, or ISO 8601 timestamps).
+  time column (seconds, MJD days, or ISO 8601 timestamps). A column named
+  `MJD`, or one whose values lie between MJD 30000 and 90000 with sub-day
+  steps and whose name does not say seconds, is read in days.
 - `column`: the clock column of a `:table` file, by 1-based index or by
   name. By default the only column besides the time column, else the one
   whose name says phase / time error / PPS, else frequency.

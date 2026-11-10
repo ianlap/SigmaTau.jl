@@ -178,6 +178,11 @@ end
 # Seconds since 2000-01-01T00:00Z, the epoch of `start`, of an MJD.
 _mjd_seconds(mjd::Float64) = (mjd - 51544.0) * 86400.0
 
+# A time column in MJD days: values from MJD 30000 to 90000 (1941 to 2105)
+# with sub-day steps, the range the explorer's import also reads as MJD.
+_is_mjd(t::Vector{Float64}) =
+    length(t) >= 2 && all(isfinite, t) && 30000 < t[1] && t[end] < 90000 && _median_step(t) < 1
+
 # Header lines to skip before the data, and the sample interval and start
 # time the header states (NaN when it does not):
 #
@@ -255,6 +260,10 @@ function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int,
     cols, _ = _read_cols(path, skip, delim, have_time ? [time_col, value_col] : [value_col])
     v = cols[end]
     t = have_time ? cols[1] : Float64[]
+    if _is_mjd(t)
+        isnan(start) && (start = _mjd_seconds(t[1]))
+        t .*= 86400
+    end
     scaling == 1 || (v .*= scaling)
     # τ₀: explicit kwarg > `# tau0:` comment header > time column.
     resolved_tau0 = if tau0 !== nothing
@@ -288,6 +297,9 @@ are read the same way, with `Tau:` supplying the sample interval. `#` lines
 later in the file are skipped too. The file is read line by line, keeping
 only the time and value columns, so multi-day records at high rates load in
 the memory of their samples.
+
+A time column of MJD values (from MJD 30000 to 90000, with sub-day steps)
+is read in days and sets the record's [`start_time`](@ref).
 
 The time column places the samples on a grid: its step is the mean of the
 regular steps, rounded to the shortest value that keeps every timestamp
