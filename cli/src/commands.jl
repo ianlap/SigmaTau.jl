@@ -364,7 +364,11 @@ end
 # The Kalman scales fit a model per clock and read the scale at --pivot.
 function run_timescale(cc::ClockComparisons, o::Options, tau_y::Float64, kalman::Bool)
     alg = Symbol(o.algorithm)
-    kalman || return timescale(cc; algorithm=alg, tau_y, wmax=o.wmax)
+    if !kalman
+        isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
+        isempty(o.steps) && return timescale(cc; algorithm=alg, tau_y, wmax=o.wmax)
+        return timescale(cc; algorithm=alg, tau_y, wmax=o.wmax, steps=Symbol(o.steps))
+    end
     k = size(cc.x, 2)
     k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
     1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
@@ -405,6 +409,7 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     json_key(io, "tau_y"); json_number(io, tau_y)
     json_key(io, "wmax"); json_number(io, o.wmax)
     kalman && (json_key(io, "pivot"); json_number(io, o.pivot))
+    isempty(o.steps) || (json_key(io, "steps"); json_string(io, o.steps))
     json_key(io, "clocks"); json_array(io, cc.names)
     json_key(io, "weight"); json_array(io, r.weights[end, :])
     json_key(io, "weight_mean"); json_array(io, wmean)

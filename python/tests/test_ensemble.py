@@ -76,6 +76,10 @@ def test_timescale_matches_julia(jl):
     assert r.weights[-1, 0] > r.weights[-1, 2]
     np.testing.assert_array_equal(st.timescale_phase(r).x, np.array(jl.timescale_phase(direct).x))
     assert np.all(st.timescale(cc, algorithm="ewfa").weights == pytest.approx(1 / 3))
+    for mode in ("best", "real"):
+        assert st.timescale(cc, algorithm="at2", steps=mode).weights.shape == (3000, 3)
+    with pytest.raises(Exception):
+        st.timescale(cc, steps="best")
     ex = st.timescale(cc, bias="exact", tau_min=[50, 100, 100])
     direct = jl.seval("c -> timescale(c; bias=:exact, tau_min=[50.0, 100.0, 100.0])")(cc._jl())
     np.testing.assert_array_equal(ex.weights, np.array(direct.weights))
