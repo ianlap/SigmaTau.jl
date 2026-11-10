@@ -120,6 +120,14 @@ Clock models, the Kalman filter and timescales.
   phase. In
   simulation `implicit_mean(r, truth)` gives the scale's own phase, the mean
   of the clocks' true phases, free of the pivot clock's reading noise.
+- Stein's Kalman timescale: `timescale(cc; algorithm=:stein, models, pivot, wmax)`
+  differences every clock against the pivot, runs a Kalman filter on each
+  difference and gets the pivot's own shocks from the constraints that the
+  weighted shocks of all clocks sum to zero, with separate weights for the
+  phase, frequency and aging noise, each inversely proportional to the
+  matching noise variance (Stein 2003; the KAS-2 algorithm, with `wmax` as its
+  weight cap). On white FM clocks it matches `:greenhall` to a few percent.
+  Also in the command line (`--algorithm stein`) and Python.
 - `clock_models(cc)` fits a `ClockModel` per clock from the comparisons alone
   (Groslambert variances, then a power-law fit), so `:greenhall` and
   `:jones_tryon` need no hand-built `models`. `powerlaw_fit` accepts a
