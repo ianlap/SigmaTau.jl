@@ -285,8 +285,9 @@ Clock models, the Kalman filter and timescales.
 
 - **Breaking:** the names deprecated in 0.6: `Sy`, `Sx`, `L`, `nch`,
   `save_result`, `save_suite`, `load_result`, `load_suite`, the five-argument
-  `confidence_intervals`, `SpectralResult.window` and `stability(; taus=)`;
-  their replacements are listed under 0.6.0, Deprecated.
+  `confidence_intervals`, `SpectralResult.window`, `stability(; taus=)` and
+  `identify_noise(; detrend=)`; their replacements are listed under 0.6.0,
+  Deprecated.
 
 ### Fixed
 
