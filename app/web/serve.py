@@ -68,9 +68,12 @@ def request_to_args(req, workdir):
         raise ValueError("--out is not allowed here")
     f = req.get("file")
     if f is None:
-        # The record is the uploaded file or a synthetic one, never a path on this machine.
-        if not any(a == "--synth" or a.startswith("--synth=") for a in args):
-            raise ValueError("a request without a file must use --synth")
+        # The record is the uploaded file or a synthetic one, never a path on this
+        # machine: --synth N right after the command (where it cannot be another
+        # option's value) and nowhere else; the program refuses a path beside it.
+        n = args[2] if len(args) > 2 else ""
+        if args[1:2] != ["--synth"] or not n.isdigit() or int(n) <= 0 or any(a.startswith("--synth") for a in args[3:]):
+            raise ValueError("a request without a file must start with --synth N")
         return list(args)
     name = Path(str(f.get("name") or "record.txt")).name or "record.txt"
     path = Path(workdir) / name
@@ -201,7 +204,7 @@ class Handler(SimpleHTTPRequestHandler):
         host = urlparse("//" + (self.headers.get("Host") or "")).hostname
         if self.server.server_address[0] in LOOPBACK and host not in LOOPBACK:
             return True
-        return self.command == "POST" and self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json"
+        return self.command == "POST" and self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json"
 
     def send_json(self, status, payload):
         body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
