@@ -31,11 +31,14 @@ test("every address of the help, in its text and in the pages, names a section",
   }
 });
 
-test("search: each word begins a word, accents aside, and a Greek letter answers to its name", () => {
+test("search: each word begins a word, accents aside; a Greek letter answers to its name, a subscript to _", () => {
   const grid = search("tau grid");
   assert.ok(titles(grid).includes("The side panel / Options"));
   assert.equal(grid[0].snippet[1], "τ");
   assert.ok(search("theo1").some((h) => h.snippet[1] === "Thêo1"));
+  assert.equal(search("sigma_y")[0].snippet[1], "σy");
+  assert.deepEqual(titles(search("σ_y")), titles(search("sigma_y")));
+  assert.ok(search("psd_y").some((h) => h.snippet[1] === "psd_y"));
   assert.ok(titles(search("export csv")).includes("Exports, sessions and reports / The report"));
   assert.deepEqual([search(""), search("zzz"), search("grid zzz")], [[], [], []]);
   assert.ok(search("(").length > 0);

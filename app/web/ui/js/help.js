@@ -20,6 +20,7 @@ const plain = (html) => html.replace(/<\/(p|li|td|th|h\d|pre)>/g, " ").replace(/
 // Text as it is compared: lower case and without accents, each character still in its place.
 const fold = (s) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 // A Greek letter of the manual answers to its name: "tau grid" finds the τ grid.
+// A subscript follows its letter in the text: "sigma_y" and "σ_y" find σy.
 export const GREEK = { alpha: "α", chi: "χ", nu: "ν", omega: "ω", pi: "π", sigma: "σ", tau: "τ" };
 
 let index = null;      // every section with its text, made at the first search
@@ -31,7 +32,8 @@ let index = null;      // every section with its text, made at the first search
 // around its first match, as [before, match, after].
 export function search(query) {
   const words = fold(query).split(/\s+/).filter(Boolean).map((w) => {
-    const forms = [w, GREEK[w]].filter(Boolean).map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const forms = [...new Set([w, w.replaceAll("_", ""), w.split("_").map((p) => GREEK[p] ?? p).join("")])]
+      .filter(Boolean).map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     return new RegExp(`(^|[^\\p{L}\\p{N}])(${forms.join("|")})`, "gu");
   });
   if (!words.length) return [];

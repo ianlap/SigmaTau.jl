@@ -225,10 +225,12 @@ async fn save_file(app: AppHandle, name: String, data: Vec<u8>) -> Result<bool, 
 }
 
 /// The window opens no pages of the web itself: the links of the help to the
-/// documentation go to the system browser.
+/// documentation go to the system browser. The address of a link is printable
+/// ASCII without spaces or quotes; anything else is refused, as rundll32
+/// splits its command line by its own rule.
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") {
+    if !url.starts_with("https://") || !url.bytes().all(|b| b.is_ascii_graphic() && b != b'"') {
         return Err(format!("not a web address: {url}"));
     }
     let mut browser = if cfg!(target_os = "macos") {

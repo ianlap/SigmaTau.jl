@@ -148,6 +148,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.keyboard.press("F1");
     await page.waitForFunction(() => location.hash === "#help/spectrum");
     assert.deepEqual(await page.locator("#page article h1, #page .help-nav a.on").allInnerTexts(), ["Spectrum", "Spectrum"]);
+    // An address that names no section of the topic is put right.
+    await page.evaluate(() => { location.hash = "#help/spectrum/nowhere"; });
+    await page.waitForFunction(() => location.hash === "#help/spectrum");
   });
 
   await t.test("Stability, revisited: one click pins one run and opens the model editor", async () => {

@@ -12,9 +12,10 @@ export function mount(el) {
   root.innerHTML = `<nav class="help-nav card" aria-label="Help topics"></nav><article class="help card"></article>`;
 }
 
-// Show the topic of the route, at its section.
+// Show the topic of the route, at its section. An address that names neither is put right.
 export function route(parts) {
-  const at = find(parts);
+  const at = find(parts), here = address(at.topic, at.section);
+  if (parts.length && here !== `#help/${parts.join("/")}`) history.replaceState(null, "", here);
   if (at.topic !== topic) {
     topic = at.topic;
     const i = TOPICS.indexOf(topic);
