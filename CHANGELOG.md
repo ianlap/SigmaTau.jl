@@ -338,6 +338,18 @@ Clock models, the Kalman filter and timescales.
   covariance with the KLTS interval, from clocks read against one reference
   or from three pairwise columns, and plots each clock with its interval
   over the pairs as measured.
+- `spectrum_sigma`: the Allan, modified Allan, Hadamard or modified Hadamard
+  deviation from a table of ℒ(f), S_φ(f), S_x(f) or S_y(f), integrated
+  through the transfer function of the estimator over the band of the table.
+  The result states the band and what the noise below and above it could
+  add, which has no limit where the deviation depends on the bandwidth of
+  the measurement (white and flicker PM in the Allan and Hadamard
+  deviations). Also in Python.
+- `sigmatau phasenoise TABLE --carrier HZ`: σ(τ) from a table of phase
+  noise, as ADEV, MDEV, TDEV, HDEV or MHDEV, with `--density`, `--tau` and
+  `--band`, in CSV or JSON.
+- `quantity=:Sphi`, S_φ(f) in rad²/Hz, in `powerlaw_fit`, `powerlaw_psd` and
+  `integrated_jitter`, and `"Sphi"` in Python.
 
 ### Changed
 
@@ -553,6 +565,16 @@ Clock models, the Kalman filter and timescales.
   forms every scale from the first row that has one.
 - `sigmatau timescale`: `--fillgaps` no longer hands a clock readings it did
   not have; the filled samples are left out of the scale.
+- Explorer: the import dialog proposes every column named for a reading
+  (`maser1 phase (s)`, `UTC-UTC(PTB) (ns)`) as a clock, of the first one's
+  kind and stated unit, so a file of several clocks loads in one step
+  ("Load 6 clocks"); a file without column names still proposes one. A
+  clock's automatic name gives way to the column of a newly opened file; a
+  typed name stays.
+- Explorer: refusals of the core that named command-line flags and library
+  functions (`--algorithm greenhall`, `wmax`, `powerlaw_fit … alphas`, the
+  steady state of a steer every n samples) are said in the page's words. The
+  Ensemble ADEV plot has no legend.
 
 ### Removed
 
@@ -856,6 +878,17 @@ Clock models, the Kalman filter and timescales.
   `add_component!`, `clock_model`, `powerlaw_sigma`, `powerlaw_psd` and
   `holdover`; the message began "noise_gen:" whoever called, and listed the
   types in no order.
+- Explorer: Holdover and Steering name a clock whose computation fails, with
+  the reason, on a line above the plot beside the clocks that worked; they
+  dropped it without a word.
+- Explorer: removing a clock on the Synthesis page no longer raises a
+  TypeError; the plot stays until the new preview arrives. The report's
+  SHA-256 of a Live record is that of the file Save readings writes. The
+  Ensemble sub line names the typed reference; clocks of two files with one
+  name say which file the later one is from; the record check's start time
+  is rounded to the microsecond. On the Data page a message over the plot
+  covers the plot row only, in all four views, so the view buttons stay
+  reachable.
 
 ### Security
 
