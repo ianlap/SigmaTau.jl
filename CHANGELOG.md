@@ -95,12 +95,12 @@ Clock models, the Kalman filter and timescales.
   start), `kalman_smooth` is the Rauch–Tung–Striebel smoother,
   `holdover_error` gives the 1σ time error after free-running for τ, and
   `innovation_check` tests the normalized innovations for unit variance and
-  whiteness. `tune_q` retunes the white and random-walk FM levels for the
-  smallest phase prediction error at chosen horizons (each level is resolved
-  only to the grid step, a factor of 10^(2·decades/(points−1)), 3.2 by
-  default), `prediction_error`
-  reports that error, and `simulate_clock` draws a record and its true
-  states from a model.
+  whiteness. `tune_q` retunes the white and random-walk FM levels by
+  maximizing the likelihood of the innovations over `q1` and `q2` (Tryon
+  and Jones 1983, Eq. 5.1) by Nelder–Mead, with `burnin` and `maxiter`, and
+  returns `(model, cost, converged, evaluations)`; `prediction_error`
+  reports the phase prediction error at chosen horizons, and
+  `simulate_clock` draws a record and its true states from a model.
 - Measured holdover test: `holdover(data; train, tau, drift, anchor, limit)`
   learns the frequency (and drift) from a training stretch, free-runs from
   the last reading and compares with the record from every start (Delporte et
@@ -811,11 +811,6 @@ Clock models, the Kalman filter and timescales.
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
   reads a table with named columns without `--header`, and its read errors
   name the CLI flags.
-- `tune_q` returned a model whose claimed error was arbitrary, because its
-  prediction-error criterion does not see a common factor on `R`, `q1` and
-  `q2`. The tuned levels are now scaled by the mean squared normalized
-  innovation (Tryon and Jones 1983, Eq. 5.1), and the result carries `scale`
-  and `edge` (best pair on the edge of the grid).
 - `sigmatau model` writes to `--out`, which it accepted and ignored, and
   refuses a FILE and the options of the record, which it never used; its
   errors are answered in JSON. `sigmatau help` sets the long command
@@ -885,7 +880,7 @@ Clock models, the Kalman filter and timescales.
 - `confidence` outside 0 to 1 is an error.
 - Clearer errors: `ttotdev` on a gapped record, `calculate_edf` and
   `bias_correction` with vectors of different lengths, `load` of a file
-  `save` did not write, `tune_q(points = 1)`, `simulate_clock(m, 0)`.
+  `save` did not write, `simulate_clock(m, 0)`.
 - `ttotdev` with `ci = false` returns the noise types its bias correction
   used, as `mtotdev` does.
 - Explorer: on the Data page in a narrow window a long file name wraps
