@@ -615,6 +615,11 @@ Clock models, the Kalman filter and timescales.
   step detector's windows do not reach behind the sample a clock joined at.
   `:jones_tryon` still steps at a return, and `:stein` needs its pivot read
   throughout; both are documented.
+- `timescale` with `:ewfa`, `:at1` or `:at2` diverged to NaN when the clocks
+  were read less often than the grid. The interval of the equations is now
+  the time since the last sample with a reading (Weiss & Weissert 1991,
+  §2.8), so a sparse record gives the scale of its readings alone; records
+  read at every sample are unchanged.
 - `read_phase` and `read_frequency` take the unit of a time column from its
   name in the line that `header` skips, as `read_data` does, so a column
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
