@@ -170,6 +170,7 @@ sigmatau_json("analyze missing.dat --format json") # hide
 | `--confidence P` | confidence level of the intervals. By default 0.683 |
 | `--no-ci` | no intervals, EDF or noise types |
 | `--noise TYPE` | noise type behind the intervals and the bias factors: `auto` (the default, identified at each averaging time), `fit` (the dominant term at each averaging time of the model that [`powerlaw_fit`](@ref) fits to the record), or one of `WHPM`, `FLPM`, `WHFM`, `FLFM`, `RWFM`, `FWFM`, `RRFM` for every averaging time |
+| `--dead-time S` | for frequency readings with `S` seconds unmeasured between them: the Allan deviation divided by the bias functions, the `dead_time` keyword of [`adev`](@ref) ([Dead time](@ref)). It needs `--devs adev`, a `--noise` from `WHPM` to `RWFM`, and `--tau0`, the averaging time of one reading; the time column of such a file holds the period between readings. The JSON echoes it as `dead_time` |
 | `--bias MODE` | bias correction of the total deviations and Thêo1: `exact` (the default), `published`, `stable32` or `none`, for `correct_bias = true`, `:published`, `:stable32` and `false` ([Bias correction](../explanation/bias.md)). `--no-bias-correction` is `--bias none` |
 
 The deviations are `adev`, `mdev`, `hdev`, `mhdev`, `pdev`, `totdev`,

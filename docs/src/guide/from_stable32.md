@@ -60,6 +60,7 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 | Drift | [`drift_fit`](@ref) for the fit, [`detrend`](@ref) for the removal |
 | Sigma | an estimator at one averaging factor, `adev(p, [16])` |
 | Run | an estimator, or [`stability`](@ref) for several |
+| Dead Time, T/Tau, in Sigma and Run | `adev(f; dead_time, noise)`, with the time between readings in seconds in place of the ratio ([Dead time](@ref)) |
 | Dynamic Stability | [`dadev`](@ref), [`dhdev`](@ref) |
 | Power | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref) |
 | Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref) |
@@ -77,8 +78,8 @@ phase data. The average of second differences, the three-point fit and the
 bisection fit are not here.
 
 Not in this package: the Filter, Histogram and Autocorrelation functions,
-the detection of frequency jumps, the dead-time corrections and the scaling
-of a result for one of two identical units. For the last, divide `r.dev` by
+the detection of frequency jumps and the scaling of a result for one of
+two identical units. For the last, divide `r.dev` by
 ``\sqrt{2}``.
 
 ## Variance types

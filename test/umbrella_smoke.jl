@@ -17,6 +17,7 @@ using SigmaTau
         :dadev, :dhdev, :stability, :deviation, :estimators, :summarize,
         :ncornered_hat, :groslambert, :StreamingStability, :snapshot, :nsamples,
         :identify_noise, :noise_id_nnls, :calculate_edf, :confidence_intervals, :bias_correction,
+        :bias_b1, :bias_b2, :bias_b3,
         :LiveStability, :SimulatedSource, :InstrumentSource, :read_reading,
         :psd_y, :psd_x, :ssb_phase_noise, :integrated_jitter, :noise_gen,
         :cross_psd_y, :cross_psd_x, :cross_adev, :CrossSpectralResult, :CrossStabilityResult,

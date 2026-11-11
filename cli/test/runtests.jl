@@ -199,6 +199,18 @@ mktempdir() do dir
         r = run_cli("analyze", ff, "--freq", "--tau0", "1", "--devs", "adev", "--m", "1,2,4")
         ref = adev(FrequencyData(diff(X), 1.0), [1, 2, 4]; ci=false)
         @test parse.(Float64, getindex.(csv_rows(r.out), 5)) ≈ ref.dev rtol=1e-12
+        # --dead-time is the dead_time keyword of adev.
+        dead = ("--freq", "--tau0", "1", "--devs", "adev", "--m", "1,2,4", "--dead-time", "3")
+        r = run_cli("analyze", ff, dead..., "--noise", "FLFM")
+        ref = adev(FrequencyData(diff(X), 1.0), [1, 2, 4]; dead_time=3, noise=:FLFM)
+        @test parse.(Float64, getindex.(csv_rows(r.out), 5)) ≈ ref.dev rtol=1e-12
+        @test parse.(Float64, getindex.(csv_rows(r.out), 7)) ≈ [c.hi for c in ref.ci] rtol=1e-12
+        @test occursin("\"dead_time\":3", run_cli("analyze", ff, dead..., "--noise", "FLFM", "--format", "json").out)
+        @test run_cli("analyze", ff, dead...).code == 1                                   # noise not stated
+        @test run_cli("analyze", ff, dead[1:end-2]..., "--dead-time", "-1", "--noise", "FLFM").code == 1
+        @test run_cli("analyze", ff, "--freq", "--tau0", "1", "--dead-time", "3", "--noise", "FLFM").code == 1   # not adev alone
+        @test run_cli("analyze", ff, dead[1:1]..., dead[4:end]..., "--noise", "FLFM").code == 1                   # no --tau0
+        @test run_cli("analyze", pf, dead[2:end]..., "--noise", "FLFM").code == 1         # phase record
     end
 
     @testset "analyze -> JSON" begin

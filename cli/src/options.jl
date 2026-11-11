@@ -85,6 +85,7 @@ const OPTS = [
     Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
     Opt("--no-bias-correction", "", String[], false, "the same as --bias none", ["analyze", "report"]),
     Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
+    Opt("--dead-time", "SECONDS", String[], false, "frequency readings with SECONDS unmeasured between them: divide the ADEV by the bias functions √(B2·B3). Needs --devs adev, --noise TYPE and --tau0, the averaging time of one reading", ["analyze"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only); with holdover, the error that model predicts and each noise type's share", ["analyze", "holdover"]),
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
@@ -203,6 +204,7 @@ mutable struct Options
     integral::Bool            # steer: an integral gain
     cost::Vector{Float64}     # steer: --cost weights on phase, frequency and steer; empty = not given
     interval::Float64         # steer: seconds between steers; NaN = τ₀
+    dead_time::Float64        # --dead-time: seconds unmeasured between frequency readings
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
@@ -212,7 +214,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
-                    NaN, false, Float64[], NaN)
+                    NaN, false, Float64[], NaN, 0.0)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -408,6 +410,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--out";            o.out = v
     elseif name == "--with";           o.with = v
     elseif name == "--mask";           o.mask = check_choice(v, name, MASKS)
+    elseif name == "--dead-time";      o.dead_time = parse_float(v, name)
     else throw(usage_error("option " * name * " takes no value"))
     end
     return o
@@ -524,6 +527,14 @@ function parse_args!(o::Options, args::Vector{String})
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
     o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
     isempty(o.mask) || o.format == "json" || throw(usage_error("--mask adds to the JSON output; use --format json"))
+    if o.dead_time != 0
+        o.devs == [:adev] || throw(usage_error("--dead-time corrects the Allan deviation alone; give --devs adev"))
+        o.noise in ("WHPM", "FLPM", "WHFM", "FLFM", "RWFM") ||
+            throw(usage_error("--dead-time needs the noise type: --noise WHPM, FLPM, WHFM, FLFM or RWFM"))
+        isnan(o.tau0) && throw(usage_error("--dead-time needs --tau0, the averaging time of one reading; a time column holds the period between readings"))
+        isfinite(o.dead_time) && o.dead_time > -o.tau0 || throw(usage_error("--dead-time must be above −τ₀"))
+        o.fillgaps && throw(usage_error("--dead-time needs a record without gaps, so it goes without --fillgaps"))
+    end
     return o
 end
 

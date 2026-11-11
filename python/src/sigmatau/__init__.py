@@ -34,7 +34,7 @@ from .deviations import (
 )
 from .drift import DRIFT_MODELS, drift_fit
 from .dynamic import dadev, dhdev
-from .edf import bias_correction, calculate_edf, confidence_intervals
+from .edf import bias_b1, bias_b2, bias_b3, bias_correction, calculate_edf, confidence_intervals
 from .ensemble import (
     ClockComparisons,
     ClockModel,
@@ -212,6 +212,9 @@ __all__ = [
     "calculate_edf",
     "confidence_intervals",
     "bias_correction",
+    "bias_b1",
+    "bias_b2",
+    "bias_b3",
     # noise identification + generation
     "identify_noise",
     "noise_id_nnls",
