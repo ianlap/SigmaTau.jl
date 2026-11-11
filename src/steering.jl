@@ -22,7 +22,9 @@ clock until the next steer adds to it. ``g_P`` and ``g_D`` are the gains
 [Matsakis (2019), Eqs. (A.17)–(A.18)](@cite matsakis-2019-steering); the
 integral gain ``g_I`` is that of
 [Matsakis (2020), Eq. (3.1)](@cite matsakis-2020-pid). Build the gains with
-[`steering_gains`](@ref).
+[`steering_gains`](@ref) or [`lqg_gains`](@ref).
+
+# Fields
 
 $(TYPEDFIELDS)
 """
@@ -81,11 +83,13 @@ with ``e_1 = \\sum w_i`` and ``e_2 = \\sum_{i<j} w_i w_j``. These follow from
 the characteristic polynomial given under [`steering_poles`](@ref).
 
 # Arguments
+
 - `T`: time constant of the loop in seconds.
 - `interval`: seconds between steers.
 - `poles`: two or three poles in the z-plane; complex poles in conjugate pairs.
 
 # Keywords
+
 - `integral`: whether the loop has an integral gain.
 
 # Examples
@@ -128,7 +132,7 @@ end
 
 Gains of the steering loop that minimizes a quadratic cost: the linear
 quadratic Gaussian (LQG) design of
-[Koppang & Leland (1999), §III](@cite koppang-1999-lqg-masers).
+[Koppang and Leland (1999), §III](@cite koppang-1999-lqg-masers).
 
 The cost is the sum over the steers of
 
@@ -156,22 +160,24 @@ integral gain: the cost is least without one
 ([Matsakis (2020), §III](@cite matsakis-2020-pid)).
 
 # Arguments
+
 - `interval`: seconds between steers.
 
 # Keywords
+
 - `phase`: weight ``W_p`` on the square of the phase (s), positive.
 - `frequency`: weight ``W_f`` on the square of the frequency.
 - `steer`: weight ``W_u`` on the square of the steer, positive.
 
 # Examples
 
-The first design of [Koppang & Leland (1999), §IV](@cite koppang-1999-lqg-masers),
+The first design of [Koppang and Leland (1999), §IV](@cite koppang-1999-lqg-masers),
 for a steer each hour, which prints the gains as `6.503e-5` and `0.5771`:
 
 ```jldoctest
 julia> using SigmaTau
 
-julia> lqg_gains(3600.0; phase=1e-3, frequency=1e-3, steer=1e5)
+julia> lqg_gains(3600.0; phase = 1e-3, frequency = 1e-3, steer = 1e5)
 SteeringGains(phase=6.503e-05 /s, frequency=0.5771, every 3600 s)
 ```
 """
@@ -204,15 +210,19 @@ quadratic of
 [Matsakis (2019), Eqs. (3.8)–(3.9)](@cite matsakis-2019-steering).
 
 # Returns
+
 A named tuple with
-- `poles`: the roots, complex.
+
+- `poles`: the roots, complex;
 - `time_constants`: for each pole the ``T`` (s) of its decay ``e^{-t/T}``,
-  from ``|z| = e^{-τ/T}``; negative for a pole that grows.
-- `frequencies`: the frequency (Hz) each pole rings at: zero on the positive
-  real axis, ``1/2τ`` on the negative.
-- `stable`: whether every pole is inside the unit circle. For two gains that
-  is ``g_P > 0``, ``g_D > 0`` and ``τ g_P + 2 g_D < 4``
-  ([Matsakis (2019), Eq. (3.17)](@cite matsakis-2019-steering)).
+  from ``|z| = e^{-τ/T}``, negative for a pole that grows;
+- `frequencies`: the frequency (Hz) each pole rings at, zero on the positive
+  real axis and ``1/2τ`` on the negative;
+- `stable`: whether every pole is inside the unit circle.
+
+For two gains the loop is stable when ``g_P > 0``, ``g_D > 0`` and
+``τ g_P + 2 g_D < 4``
+([Matsakis (2019), Eq. (3.17) and the text after Eq. (3.18)](@cite matsakis-2019-steering)).
 
 !!! note "Repeated poles"
     A pole placed twice or three times is found to about the square or cube
@@ -225,7 +235,7 @@ julia> using SigmaTau
 
 julia> p = steering_poles(SteeringGains(0.02, 0.3, 0, 2.0));
 
-julia> p.stable, round.(p.time_constants; digits=3)
+julia> p.stable, round.(p.time_constants; digits = 3)
 (true, [11.215, 11.215])
 ```
 """
@@ -271,6 +281,8 @@ end
 Output of [`steer`](@ref) on a record: the record as the loop would have
 left it, and what the loop did.
 
+# Fields
+
 $(TYPEDFIELDS)
 """
 struct SteeringResult
@@ -302,14 +314,14 @@ Kalman filter for `model` follows the clock ([`kalman_filter`](@ref)), and
 every `g.interval` the frequency of the clock is changed by the ``u`` of
 [`SteeringGains`](@ref), computed from the estimates just after the reading
 and applied at once, as in
-[Koppang & Leland (1999), Eqs. (1)–(3)](@cite koppang-1999-lqg-masers) and
+[Koppang and Leland (1999), Eqs. (1)–(3)](@cite koppang-1999-lqg-masers) and
 [Matsakis (2019), Eqs. (A.11)–(A.17)](@cite matsakis-2019-steering). The
 steered record is each reading plus the phase the steers have added by
 then, so any deviation of it shows the stability of the steered clock.
 
 The filter runs at every sample and the steers come every `g.interval`, a
 whole multiple of the sample interval, with gains computed for that
-interval ([Gödel et al. (2019)](@cite goedel-2019-steering-comparison)).
+interval ([Gödel et al. (2019), §3.1](@cite goedel-2019-steering-comparison)).
 The filter knows each steer exactly, so its estimate of the steered clock
 is its estimate of the free-running one plus the correction, and one pass
 of the filter serves any gains.
@@ -330,6 +342,7 @@ of the filter serves any gains.
     the estimated phase to zero, not that lag.
 
 # Arguments
+
 - `data`: phase of the free-running clock against its reference; `NaN`
   samples are gaps, which the filter predicts across.
 - `model`: clock model of the pair, with `model.tau0` the sample interval.
@@ -338,9 +351,9 @@ of the filter serves any gains.
 # Examples
 
 ```julia
-using SigmaTau
+using SigmaTau, Random
 m = ClockModel(; tau0 = 1.0, R = 1e-20, q1 = 1e-22, q2 = 1e-26)
-p, _ = simulate_clock(m, 65536)
+p, _ = simulate_clock(m, 65536; rng = Xoshiro(1))
 r = steer(p, m, steering_gains(300.0, 1.0))
 adev(r.steered)             # the steered clock against its reference
 ```
@@ -374,6 +387,8 @@ end
     SteeringPrediction
 
 Output of [`steer`](@ref) on a clock model: the steady state of the loop.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
@@ -446,7 +461,8 @@ function _steady_filter(m::ClockModel)
 end
 
 """
-    steer(model::ClockModel, g::SteeringGains; tau, readings=false) → SteeringPrediction
+    steer(model::ClockModel, g::SteeringGains; tau,
+          readings=false) → SteeringPrediction
 
 The steady state a steering loop settles to on a clock with the noise of
 `model`: the RMS of the steered clock's time and frequency error and of the
@@ -459,7 +475,7 @@ covariances are those of the free-running clock, and its estimate obeys
 [Matsakis (2019), §2 and Appendix B](@cite matsakis-2019-steering) and, with
 an integral gain, [Matsakis (2020), §II](@cite matsakis-2020-pid). The
 figures are for the clock itself, without the noise of the readings that a
-measured record carries; `readings=true` gives the time error and the
+measured record carries; `readings = true` gives the time error and the
 Allan deviation of the readings, to set beside a replayed record.
 
 The loop steers at every sample here, `g.interval == model.tau0`; for a
@@ -467,10 +483,12 @@ longer interval replay a simulated record. A drift state is taken as
 steered out. Random-run FM (`q3 > 0`) has no steady state.
 
 # Arguments
+
 - `model`: clock model of the pair of clock and reference.
 - `g`: gains of a stable loop.
 
 # Keywords
+
 - `tau`: averaging times (s) of the Allan deviation, whole multiples of
   `model.tau0`; by default the octaves up to 32 times the longest time
   constant of the loop.

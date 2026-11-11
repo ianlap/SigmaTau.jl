@@ -20,6 +20,7 @@
       <a href="#spectrum" data-page="spectrum">Spectrum</a>
       <a href="#dynamic" data-page="dynamic">Dynamic</a>
       <a href="#holdover" data-page="holdover">Holdover</a>
+      <a href="#steering" data-page="steering">Steering</a>
       <a href="#ensemble" data-page="ensemble">Ensemble</a>
       <a href="#live" data-page="live">Live</a>
     </nav>
@@ -45,7 +46,13 @@
       <svg class="i-light" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13M3 13l1.4-1.4M11.6 4.4 13 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       <svg class="i-dark" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 10A6 6 0 0 1 6 2.5a6 6 0 1 0 7.5 7.5z" fill="currentColor"/></svg>
     </button>
-    <a class="btn btn-round" id="help-btn" href="#help" aria-label="Help">?</a>
+    <div class="menu-wrap">
+      <button class="btn btn-round" id="help-btn" type="button" aria-label="Help" aria-haspopup="true" aria-expanded="false">?</button>
+      <div class="menu help-menu" id="help-menu" hidden>
+        <input type="search" id="help-search" placeholder="Search the help" aria-label="Search the help" autocomplete="off">
+        <div id="help-items"></div>
+      </div>
+    </div>
   </header>
 
   <div class="body">

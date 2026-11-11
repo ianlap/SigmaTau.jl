@@ -9,19 +9,21 @@ import * as data from "./pages/data.js";
 import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
 import * as holdover from "./pages/holdover.js";
+import * as steering from "./pages/steering.js";
 import * as live from "./pages/live.js";
 import * as ensemble from "./pages/ensemble.js";
 import * as synthesis from "./pages/synthesis.js";
 import * as help from "./pages/help.js";
 import { label, gridName } from "./estimators.js";
-import { openFile, saveFile, readFile } from "./platform.js";
+import { openFile, saveFile, readFile, webLinks } from "./platform.js";
+import { openHelpMenu } from "./helpmenu.js";
 import { buildReport } from "./report.js";
 import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly, css } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, ensemble, live, help };
-const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "ensemble", "live"];
+const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, steering, ensemble, live, help };
+const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "steering", "ensemble", "live"];
 let pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
@@ -34,21 +36,33 @@ const ctx = {
 };
 
 // ── Routing ──
-function go(name) {
-  if (!PAGES[name]) name = "stability";
-  if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
-  if (page === PAGES[name]) return;
-  state.page = name;
-  page = PAGES[name];
-  // Each visit mounts on a fresh element, so the listeners of earlier mounts go with the old one.
-  const fresh = pageEl.cloneNode(false);
-  pageEl.replaceWith(fresh);
-  pageEl = fresh;
-  pageEl.className = `page page-${name}`;
-  page.mount(pageEl, ctx);
-  render();
+// The address after "#": a page, and for the help its topic and section, as in "help/data/The-record-check".
+const route = () => { try { return decodeURIComponent(location.hash.slice(1)); } catch { return ""; } };
+
+function go(to) {
+  let [name, ...rest] = to.split("/");
+  if (!PAGES[name]) [name, rest] = ["stability", []];
+  to = [name, ...rest].join("/");
+  if (route() !== to) history.replaceState(null, "", `#${to}`);
+  if (page !== PAGES[name]) {
+    state.page = name;
+    page = PAGES[name];
+    // Each visit mounts on a fresh element, so the listeners of earlier mounts go with the old one.
+    const fresh = pageEl.cloneNode(false);
+    pageEl.replaceWith(fresh);
+    pageEl = fresh;
+    pageEl.className = `page page-${name}`;
+    page.mount(pageEl, ctx);
+    render();
+  }
+  page.route?.(rest);
 }
-window.addEventListener("hashchange", () => go(location.hash.slice(1)));
+window.addEventListener("hashchange", () => go(route()));
+// A link to the address already shown brings no hashchange: a help section that was scrolled away comes back.
+document.addEventListener("click", (e) => {
+  const href = e.target.closest?.("a")?.getAttribute("href");
+  if (href?.startsWith("#") && href.slice(1) === route()) go(route());
+});
 
 // ── Records ──
 const controllers = new Map();
@@ -353,7 +367,7 @@ function renderStatus() {
 function render() {
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.page === state.page));
   document.getElementById("help-btn").classList.toggle("on", state.page === "help");
-  // One clock: Spectrum, Dynamic and Holdover put their settings in the panel. Several
+  // One clock: Spectrum, Dynamic, Holdover and Steering put their settings in the panel. Several
   // clocks: the panel keeps the clocks and the page shows a toolbar.
   renderPanel(page?.controls && (!multi() || page.ownsPanel) ? page.controls() : null);
   renderChip();
@@ -370,8 +384,13 @@ exportBtn.addEventListener("click", () => {
   exportMenu.hidden = !exportMenu.hidden;
   exportBtn.setAttribute("aria-expanded", String(!exportMenu.hidden));
 });
+// A click outside a menu of the top bar closes it.
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".menu-wrap")) { exportMenu.hidden = true; exportBtn.setAttribute("aria-expanded", "false"); }
+  for (const wrap of document.querySelectorAll(".menu-wrap")) {
+    if (wrap.contains(e.target)) continue;
+    wrap.querySelector(".menu").hidden = true;
+    wrap.querySelector("button").setAttribute("aria-expanded", "false");
+  }
 });
 exportMenu.addEventListener("click", async (e) => {
   const kind = e.target.closest("[data-export]")?.dataset.export;
@@ -449,7 +468,6 @@ async function plotImage(kind) {
 
 // ── Header buttons and keys ──
 document.getElementById("record-chip").addEventListener("click", () => go("data"));
-document.getElementById("help-btn").addEventListener("click", () => go("help"));
 // Page settings (data-ctl) live in the panel or in a page toolbar.
 for (const type of ["click", "change"]) {
   document.addEventListener(type, (e) => { if (e.target.closest?.("[data-ctl]")) page?.onControl?.(e); });
@@ -459,11 +477,12 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "F5" && !e.ctrlKey && !e.metaKey && !e.shiftKey) e.preventDefault();
   if (document.querySelector("dialog[open]")) return;
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
+  if (e.key === "F1") { e.preventDefault(); go(state.page === "help" ? "help" : `help/${state.page}`); return; }
   if (e.key === "Escape" && state.run.state === "running") { e.preventDefault(); cancelRun(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const i = "12345678".indexOf(e.key);
+  const i = "123456789".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
-  if (e.key === "?") go("help");
+  if (e.key === "?") { e.preventDefault(); openHelpMenu(); }
 });
 
 // ── Drag and drop anywhere ──
@@ -484,8 +503,9 @@ document.addEventListener("drop", async (e) => {
 });
 
 // ── Start ──
+webLinks((message) => ctx.status("error", message));
 initPanel({ run, cancel: cancelRun, addClock, selectClock, setReference, removeClock });
-go(location.hash.slice(1) || "stability");
+go(route() || "stability");
 (async () => {
   const hc = await health();
   update((s) => { s.core = { ok: !!hc.ok, name: hc.core }; });

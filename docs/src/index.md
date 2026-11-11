@@ -32,7 +32,7 @@ adev(p)
 | Noise | [`identify_noise`](@ref), [`powerlaw_fit`](@ref), [`noise_gen`](@ref) |
 | Preparing a record | [`read_data`](@ref), [`fillgaps`](@ref), [`remove_outliers`](@ref), [`detrend`](@ref), [`drift_fit`](@ref) |
 | Clock model and Kalman filter | [`noise_fit`](@ref), [`clock_model`](@ref), [`kalman_filter`](@ref), [`holdover`](@ref) |
-| Steering | [`steering_gains`](@ref), [`steer`](@ref) |
+| Steering | [`steering_gains`](@ref), [`lqg_gains`](@ref), [`steer`](@ref) |
 | Time scales | [`timescale`](@ref), [`simulate_ensemble`](@ref) |
 
 The estimators take a [`PhaseData`](@ref) or [`FrequencyData`](@ref)

@@ -1,141 +1,36 @@
-// Help page: how to use the explorer, what each estimator and noise type
-// means, and the keyboard shortcuts. Static text.
-import { GROUPS, ESTIMATORS } from "../estimators.js";
+// Help page: the manual of the explorer, a topic at a time, at the address
+// #help/topic/section. The text is help-content.js (see ../help.js).
+import { TOPICS } from "../help-content.js";
+import { find, address } from "../help.js";
+import { escapeHtml as h } from "../format.js";
 
-const SECTIONS = [
-  ["start", "Getting started"],
-  ["pages", "The pages"],
-  ["clocks", "Several clocks and a reference"],
-  ["estimators", "Estimators"],
-  ["noise", "Noise types"],
-  ["intervals", "Confidence intervals"],
-  ["drift", "Drift removal"],
-  ["range", "Range and pinned runs"],
-  ["spectrum", "Spectra"],
-  ["dynamic", "Dynamic deviation"],
-  ["holdover", "Holdover"],
-  ["ensemble", "Clock ensemble"],
-  ["live", "Live measurement"],
-  ["files", "Files"],
-  ["keys", "Keyboard shortcuts"],
-];
+let root, topic;
 
-const NOISE = [
-  ["WPM", "White phase modulation", "α = 2", "μ = −2", "ADEV ∝ τ⁻¹; MDEV separates it from flicker PM (MDEV ∝ τ⁻³ᐟ²)."],
-  ["FPM", "Flicker phase modulation", "α = 1", "μ = −2", "ADEV ∝ τ⁻¹ like white PM; MDEV ∝ τ⁻¹."],
-  ["WFM", "White frequency modulation", "α = 0", "μ = −1", "ADEV ∝ τ⁻¹ᐟ². The usual floor of a passive atomic standard."],
-  ["FFM", "Flicker frequency modulation", "α = −1", "μ = 0", "ADEV flat: the flicker floor."],
-  ["RWFM", "Random-walk frequency modulation", "α = −2", "μ = 1", "ADEV ∝ τ¹ᐟ². Long-term wander, often from the environment."],
-  ["FWFM", "Flicker-walk frequency modulation", "α = −3", "μ = 2", "HDEV ∝ τ. Too steep for ADEV; identified for the Hadamard family only."],
-  ["RRFM", "Random-run frequency modulation", "α = −4", "μ = 3", "HDEV ∝ τ³ᐟ². The steepest noise the Hadamard family converges for."],
-];
-
-function estimatorTable() {
-  return GROUPS.map((g) => `
-    <h3>${g.title} <span class="muted">· ${g.sub}</span></h3>
-    <dl class="gloss">${ESTIMATORS.filter((e) => e.group === g.id).map((e) =>
-      `<dt>${e.label}</dt><dd>${e.family}: ${e.note}.</dd>`).join("")}</dl>`).join("");
+export function mount(el) {
+  root = el;
+  topic = null;
+  root.innerHTML = `<nav class="help-nav card" aria-label="Help topics"></nav><article class="help card"></article>`;
 }
 
-export function mount(root) {
-  root.innerHTML = `
-    <nav class="help-nav card" aria-label="Help sections">${SECTIONS.map(([id, t]) => `<a href="#help" data-goto="${id}">${t}</a>`).join("")}</nav>
-    <article class="help card">
-      <h1>Using the SigmaTau explorer</h1>
-
-      <section id="help-start"><h2>Getting started</h2>
-        <ol>
-          <li>Open a phase or frequency record on <b>Data</b>, or drop a file anywhere in the window. The import dialog asks which column is time and which columns are clocks.</li>
-          <li>Check the record: gaps, points past 5σ and drift are listed next to the phase plot.</li>
-          <li>Pick estimators in the panel (<b>+ Add estimator</b>) and press <b>Run analysis</b> (F5).</li>
-          <li>Read the result on <b>Stability</b>, <b>Spectrum</b> and <b>Dynamic</b>. Export the plot, every number or a printable report from the <b>File</b> menu, which also saves and reopens a whole session.</li>
-        </ol>
-        <p>Nothing recomputes behind your back on Stability and Spectrum: after you change the record, the estimators or the options, the Run button and the status bar turn amber until you run again.</p>
-      </section>
-
-      <section id="help-pages"><h2>The pages</h2>
-        <dl class="gloss">
-          <dt>Data</dt><dd>Load a file or synthesize a test record; the record check (samples, span, gaps, outliers, drift); drift removal, gap filling and outlier removal; the phase plot.</dd>
-          <dt>Stability</dt><dd>σ(τ) on log–log axes for σ<sub>y</sub> (frequency) or σ<sub>x</sub> (time) estimators, with confidence intervals as bars or a band (<b>CI band</b>) and the identified noise types along the top (<b>Noise ID</b>). <b>Fit</b> adds the fitted power-law noise model as dotted lines, with its h<sub>α</sub> and its ADEV at round τ under the table; <b>Edit</b> there builds the model by hand, one noise type over a τ span at a time, with the MHDEV it leaves dashed. One clock shows the per-τ table; several clocks show "Compare at τ" with the most stable clock in bold. Click the plot to move τ.</dd>
-          <dt>Spectrum</dt><dd>S<sub>y</sub>(f) and either ℒ(f) at a carrier you choose or S<sub>x</sub>(f), on one frequency axis. Settings here apply at once.</dd>
-          <dt>Dynamic</dt><dd>σ(t, τ) in sliding windows, to see whether the stability changes over the record. Recomputes when you change the estimator or window.</dd>
-          <dt>Holdover</dt><dd>The time error after the reference is gone, against holdover time, and how long the clock stays within a limit. Recomputes when its settings change.</dd>
-          <dt>Synthesis</dt><dd>Define the noise of one or more simulated clocks, as the clock-model coefficients or as power-law h<sub>α</sub> (each follows the other), see the stability they predict, and generate them on the Data page. Two or more go on to the Ensemble page.</dd>
-          <dt>Ensemble</dt><dd>A timescale (AT1, AT2, EWFA or a Kalman scale) from several clocks read against one reference, with each clock's weight and the stability of the scale.</dd>
-          <dt>Live</dt><dd>σ(τ) and the frequency of a measurement as it runs, from an instrument or the simulator.</dd>
-        </dl>
-      </section>
-
-      <section id="help-clocks"><h2>Several clocks and a reference</h2>
-        <p>Add clocks with <b>+ Add clock</b>, or mark several columns as Clock in the import dialog. With more than one clock, colour means clock (eight colours, then they repeat) and line style means estimator. The eye button hides a clock from the plots; × removes it (reopen <b>Import settings…</b> on its file to bring a column back).</p>
-        <p>Clocks read from one file usually share the instrument's reference ("Measured against" in the import dialog). <b>Reference</b> in the Clocks list re-references them to one of the clocks, x<sub>i</sub> − x<sub>R</sub>; the reference itself leaves the plots. Clocks from other files have no shared reference or time stamps and stay as measured.</p>
-      </section>
-
-      <section id="help-estimators"><h2>Estimators</h2>
-        <p>Every estimator works on phase x(t) (frequency records are integrated first) at averaging times τ = m·τ₀ from the τ grid in Options. σ<sub>y</sub> estimators are dimensionless; σ<sub>x</sub> estimators are in seconds.</p>
-        ${estimatorTable()}
-        <p class="muted">Thêo1 and ThêoH reach τ up to three quarters of the record but take seconds on long records. Bias correction in Options sets how the total estimators and Thêo1 are corrected: Exact (every noise type and averaging factor), Published tables (SP1065, Howe and Peppler), As Stable32 (what Stable32 applies to each estimator) or None (raw, as allantools). Noise type in Options sets the noise behind the intervals and those corrections: identified at each τ, taken from the fitted power-law model (its strongest term at each τ), or one type you state, for a record whose labels do not fit what you know of the clock.</p>
-      </section>
-
-      <section id="help-noise"><h2>Noise types</h2>
-        <p>The noise column of the per-τ table is SigmaTau's identification at each τ (lag-1 autocorrelation where there are enough averaged samples, the B1 and R(n) ratios at long τ). It sets the equivalent degrees of freedom and so the confidence interval. S<sub>y</sub>(f) ∝ f<sup>α</sup>; σ<sub>y</sub>²(τ) ∝ τ<sup>μ</sup>.</p>
-        <p><b>Noise ID</b> on Stability shows the same identification as a strip above the plot, one run per noise type (one strip per clock when several are shown). It comes from the first σ<sub>y</sub> estimator in the panel. With one clock, dashed guides give the slope each noise type implies for that estimator: τ<sup>−1</sup> for white and flicker PM on ADEV (τ<sup>−3/2</sup> and τ<sup>−1</sup> on MDEV), τ<sup>−1/2</sup> for white FM, flat for flicker FM and τ<sup>+1/2</sup> for random-walk FM. A curve that bends away from its guide is a sign of a mixed or misidentified region. Noise identification runs with the confidence intervals, so both need them on.</p>
-        <table class="help-tbl"><thead><tr><th>Label</th><th>Name</th><th>S<sub>y</sub></th><th>σ²(τ)</th><th>Signature</th></tr></thead>
-          <tbody>${NOISE.map((n) => `<tr><td><span class="badge">${n[0]}</span></td><td>${n[1]}</td><td>${n[2]}</td><td>${n[3]}</td><td>${n[4]}</td></tr>`).join("")}</tbody></table>
-      </section>
-
-      <section id="help-intervals"><h2>Confidence intervals</h2>
-        <p>Intervals use the χ² distribution with the equivalent degrees of freedom (EDF) for the identified noise type and the number of samples at each τ, at the confidence level in Options (68.3 % is ±1σ). EDF falls as τ grows, so the last points carry wide intervals. n<sub>eff</sub> and the interval bounds are in the row tooltips and in every export.</p>
-      </section>
-
-      <section id="help-range"><h2>Range and pinned runs</h2>
-        <p>On the Data page, <b>Select range</b> makes a drag across the phase plot set the part of the record to analyse; the range is shaded and <b>whole record</b> clears it. <b>τ range</b> in the options leaves out averaging times outside its limits. <b>Pin run</b> on the Stability page keeps the current curves, dashed, to compare with the next run; hover a pin for its settings.</p></section>
-      <section id="help-drift"><h2>Drift removal</h2>
-        <p><b>Frequency drift</b> on the Data plot fits a model to the fractional frequency by least squares and reports the drift rate at the end of the record per day, with its standard error: <b>Linear</b> a + b·t, <b>Quadratic</b> a + b·t + c·t², <b>Log</b> a·ln(1 + b·t) + c (the MIL-PRF-55310 aging model) and <b>Diffusion</b> a + b·√(t + c). <b>Residuals</b> plots what the model leaves. The standard error assumes white residuals, so it is optimistic when flicker or random-walk FM dominates. Hover the rate for the fitted coefficients.</p>
-        <p><b>Drift removal</b> in the record check fits the phase by least squares, over the samples that are not gaps, and removes the fit before every analysis. <b>Linear</b> removes a frequency offset (a straight line in phase); <b>Quadratic</b> also removes a linear frequency drift (a parabola in phase), which SP1065 asks for before the total estimators. The check lists what was removed, and the phase plot shows the residual. HDEV and its relatives ignore a linear drift anyway; ADEV, MDEV and the totals rise as τ<sup>+1</sup> when one is left in.</p>
-      </section>
-
-      <section id="help-spectrum"><h2>Spectra</h2>
-        <p>S<sub>y</sub>(f) (1/Hz) and S<sub>x</sub>(f) (s²/Hz) are one-sided Welch estimates with a Hann window and 50 % overlap; the segment is the largest power of two up to a quarter of the record. ℒ(f) = ½·(2π·f<sub>carrier</sub>)²·S<sub>x</sub>(f), in dBc/Hz. "Log-binned" averages ten bins per decade; "Welch, every bin" shows the raw estimate. Slope guides name stretches whose slope is close to a whole power law. A record with gaps must be filled first.</p>
-      </section>
-
-      <section id="help-dynamic"><h2>Dynamic deviation</h2>
-        <p>DADEV and DHDEV compute ADEV or HDEV inside a window that slides across the record by half its length. Rows are window centre times, columns are τ, and darker means less stable. A stationary clock gives the same colours down every column; a drift, step or disturbed stretch changes them. DHDEV ignores linear drift inside each window. With several clocks, each gets its own map on one shared colour scale, and <b>Compare at τ</b> below them plots every clock's deviation over time at one τ (pick it there or click a map column), with each clock's whole-record value dotted.</p>
-      </section>
-
-      <section id="help-holdover"><h2>Holdover</h2>
-        <p>The Holdover page measures on the record how far a clock wanders once its reference is gone. A least-squares line through a <b>training stretch</b> gives the clock's frequency (a parabola gives frequency and drift); the clock then runs on from the last reading of the stretch, and the error after a holdover time τ is the phase the record shows less the phase predicted. The stretch moves along the record one sample at a time, so every τ gets many trials: the plot shows their RMS, the error that the chosen <b>share of trials</b> stayed within, and the worst trial. With a <b>time error limit</b> (in seconds, 1e-6 for a microsecond) the page gives the holdover time at which that share of the trials is still within it. The grey curve is the RMS predicted for the same test by the power-law noise model of the Stability page's Fit (h<sub>α</sub> fitted to the record's MHDEV): the variance of the test's own error under that model, not τ times a deviation, and the card lists what each noise type adds at the longest τ. The thin curve is √6·TDEV (√20·HTDEV when the drift is learned): the RMS error of predicting the next τ-average of the phase from the two (three) before it, which is what the time deviation measures. With the stretch <b>2τ</b> (3τ), which grows with the holdover time, the test equals it at τ₀ and then runs a constant 1.2 to 1.4 above wherever FM noise dominates; where white PM dominates the two part, because TDEV averages the readings and the test compares single ones. Learn the drift only when the clock has one: on a clock without drift the line holds better. The trials overlap, so the worst trial is the worst on this record, not a bound.</p>
-        <p>With <b>Kalman filter</b> the predictor is a Kalman filter in place of the fit: it reads the record up to each start and is then run on with no readings. Its clock model is the power-law fit to the first training stretch alone, flicker included, so no trial is predicted with noise levels learned from the readings it is compared with. The grey curve is then the standard deviation the filter itself claims; where the RMS runs above it, the clock did worse than the model said it would. At the longest holdover times the RMS rests on a few independent trials and the model on a short stretch, which may not show the noise that takes over later: the two can differ severalfold there. The filter trains on a share of the record, not on a stretch that grows.</p>
-      </section>
-
-      <section id="help-ensemble"><h2>Clock ensemble</h2>
-        <p>The Ensemble page forms a timescale from several clocks read against one reference: the value columns of one loaded file, each a clock minus the same reference. To leave a clock out of the scale, remove it with × in the Clocks list; simulated clocks are then simulated again without it. With no such file it simulates four clocks. At each sample every clock's phase is predicted from its estimated frequency, and the scale sits where the weighted prediction errors sum to zero. <b>AT1</b> weighs each clock by the inverse of its prediction-error variance, learned as it runs, leaves out a clock whose error passes four times its own σ, and never gives one clock more than the <b>largest weight</b>. <b>AT2</b> keeps AT1's weights and follows each clock's frequency with a Kalman update; with <b>frequency steps</b> on it leaves out a clock whose frequency jumps for a while, and either reruns the scale from the step (<b>best</b>) or keeps the values already issued and corrects from the step on (<b>real</b>). <b>EWFA</b> weighs every clock the same. <b>Greenhall</b> and <b>Jones–Tryon</b> are Kalman timescales: the core fits a model to each clock from the data (three or more clocks), one filter tracks every clock's phase and frequency, and the scale is read at the <b>pivot clock</b>, its reading less its estimated offset. Greenhall reduces the filter's covariance after each step, which keeps each step of the scale as small as it can be; Jones–Tryon leaves it as is, so it is a little noisier at short τ and has no per-clock weights. With <b>flicker states</b> on, each clock's model also carries the flicker FM and flicker PM its fit finds, as a few Markov states across the τ where that flicker matters; off, flicker PM is folded into the reading noise and flicker FM is left out. The Clocks list then says how many states each clock carries. The levels are only as good as the fit: on a short record flicker FM and random-walk FM are hard to tell apart at the longest τ, so states can appear on a clock that has no flicker. <b>Stein</b> (KAS-2) filters each clock's difference from the pivot and weighs every clock's phase, frequency and aging by the inverse of its noise, each weight no larger than the <b>largest weight</b>. The solid line is the scale against the reference; the dotted lines are each clock against the scale.</p>
-      </section>
-      <section id="help-live"><h2>Live measurement</h2>
-        <p>The Live page reads an instrument one reading at a time and updates ADEV, MDEV, HDEV and MHDEV with every reading, in constant work per reading. <b>Network</b> talks to an LXI instrument's SCPI socket (host:port, usually port 5025) and sends the query, READ? by default, before each reading. <b>Serial / file</b> reads a serial port (set its speed first, e.g. <code>stty -F /dev/ttyUSB0 9600 raw</code>, or <code>stty -f</code> on macOS) or a log file, read to its end; leave the query empty for an instrument that streams on its own. The first number on each line is the reading: a counter frequency in Hz (against the nominal, or the first reading), a fractional frequency, or phase in seconds. τ₀ is the time between readings, such as the counter's gate time. <b>Simulator</b> makes up a clock with white PM, white FM and random-walk FM at one reading per τ₀.</p>
-        <p>The live curves carry no intervals. Stop the measurement and press <b>Analyse readings</b> to load them as a clock and run the full analysis, or <b>Save readings</b> to keep them as a text file.</p>
-      </section>
-
-      <section id="help-files"><h2>Files</h2>
-        <p>Text files with one record per line: .dat, .txt, .csv (commas), .tsv (tabs), anything else split on spaces. Lines starting with # are comments wherever they are; Stable32 headers ending in "# Header End" are skipped and their Tau: line gives τ₀. Without a time column you must give τ₀. NaN marks a missing sample. Instrument files are recognised by their layout: TimeLab .tim logs (τ₀ from the header), Stable32 .phd and .frd, BIPM UTC − UTC(k) files (the time department's utclab files, read as phase in seconds), RINEX clock files (.clk, also gzipped: the IGS and CODE clock products, with a list to pick the clocks from), and counter readings such as the Keysight 53230A writes (readings in Hz become fractional frequency; give the gate time as τ₀). Settings are remembered for files with the same extension and header; Import settings… on the Data page reopens the dialog.</p>
-      </section>
-
-      <section id="help-keys"><h2>Keyboard shortcuts</h2>
-        <ul class="keys">
-          <li><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd> run the analysis; while it runs they cancel it</li>
-          <li><kbd>1</kbd> Data · <kbd>2</kbd> Synthesis · <kbd>3</kbd> Stability · <kbd>4</kbd> Spectrum · <kbd>5</kbd> Dynamic · <kbd>6</kbd> Holdover · <kbd>7</kbd> Ensemble · <kbd>8</kbd> Live · <kbd>?</kbd> Help</li>
-          <li>On a plot: hover for values, drag to zoom, double-click to reset</li>
-          <li><kbd>Esc</kbd> cancels a running analysis or closes a dialog</li>
-        </ul>
-      </section>
-    </article>`;
-  root.addEventListener("click", (e) => {
-    const id = e.target.closest("[data-goto]")?.dataset.goto;
-    if (!id) return;
-    e.preventDefault();
-    root.querySelector(`#help-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+// Show the topic of the route, at its section. An address that names neither is put right.
+export function route(parts) {
+  const at = find(parts), here = address(at.topic, at.section);
+  if (parts.length && here !== `#help/${parts.join("/")}`) history.replaceState(null, "", here);
+  if (at.topic !== topic) {
+    topic = at.topic;
+    const i = TOPICS.indexOf(topic);
+    const turn = (t, text) => (t ? `<a href="${address(t)}">${text(t.nav)}</a>` : "<span></span>");
+    root.querySelector(".help").innerHTML = `
+      ${topic.sections.map((s) => `<section data-id="${h(s.id)}">${s.html.join("")}</section>`).join("")}
+      <footer>${turn(TOPICS[i - 1], (t) => `← ${t}`)}
+        <a href="${topic.web}" target="_blank" rel="noopener">This page in the documentation</a>
+        ${turn(TOPICS[i + 1], (t) => `${t} →`)}</footer>`;
+    root.querySelector(".help-nav").innerHTML = TOPICS.map((t) => `<a href="${address(t)}" class="${t === topic ? "on" : ""}">${t.nav}</a>${
+      t === topic ? t.sections.slice(1).map((s) => `<a href="${h(address(t, s))}" class="sub l${s.level}">${s.title}</a>`).join("") : ""}`).join("");
+  }
+  const el = at.section.id && [...root.querySelectorAll("section")].find((s) => s.dataset.id === at.section.id);
+  if (el) el.scrollIntoView(); else root.scrollTo(0, 0);
 }
 
 export function refresh() {}
-export function hint() { return "Methods, glossary and shortcuts"; }
+export function hint() { return "The manual of the explorer. ? opens the help menu on any page"; }

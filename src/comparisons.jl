@@ -1,21 +1,50 @@
-# Several clocks read against one reference: the input of every timescale
+# Several clocks read against one reference: the input of every time scale
 # algorithm, and a simulator that makes one with a known truth.
 
 """
-    ClockComparisons(x::Matrix, tau0; names, reference="")
-    ClockComparisons(records::Vector{<:PhaseData}; names, reference="")
+    ClockComparisons(x::AbstractMatrix, tau0; names, reference="")
+    ClockComparisons(records::AbstractVector{<:PhaseData}; names, reference="")
 
-Phase readings of several clocks against one reference, sampled together:
-column i of `x` is clock i minus the reference, in seconds, one row per
-sample, `NaN` where a reading is missing. The reference may be one of the
-clocks (a switch or counter measuring each against clock 1, whose column is
-then zero) or an outside one, named by `reference`.
+Phase readings of several clocks against one reference, taken at the same
+instants: the input of [`timescale`](@ref).
 
-`comparisons[i]` is clock i's record as `PhaseData`, and
-`comparisons[i, j]` the difference clock i − clock j, which no longer
-depends on the reference.
+Column ``i`` of `x` is clock ``i`` minus the reference, in seconds, with
+one row per sample and `NaN` where a reading is missing. The reference may
+be one of the clocks, as with a switch or a counter that measures each
+against clock 1, whose column is then zero, or an outside one. `cc[i]` is
+the record of clock ``i`` as [`PhaseData`](@ref), and `cc[i, j]` the
+difference clock ``i`` − clock ``j``, in which the reference cancels.
+
+# Arguments
+
+- `x`: the readings, samples by clocks, for two or more clocks.
+- `tau0`: sample interval in seconds.
+- `records`: one phase record per clock, all of one length and one `tau0`.
+
+# Keywords
+
+- `names`: one name per clock, all different; `"clock 1"`, `"clock 2"`, …
+  by default.
+- `reference`: what the clocks were read against, for display.
+
+# Fields
 
 $(TYPEDFIELDS)
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> x = [0.0 1e-9; 0.0 3e-9; 0.0 4e-9];    # clock 2 read against clock 1
+
+julia> cc = ClockComparisons(x, 1.0; reference = "clock 1")
+ClockComparisons: 2 clocks × 3 samples at τ₀ = 1.0 s, against clock 1
+  clock 1, clock 2
+
+julia> cc[2, 1].x == x[:, 2]
+true
+```
 """
 struct ClockComparisons
     "Phase of each clock against the reference (s), one column per clock."
@@ -62,16 +91,44 @@ function Base.show(io::IO, ::MIME"text/plain", c::ClockComparisons)
 end
 
 """
-    simulate_ensemble(models::Vector{ClockModel}, N; reference=1, rng=nothing)
+    simulate_ensemble(models::AbstractVector{ClockModel}, N; reference=1, rng=nothing)
         → (ClockComparisons, Array{Float64,3})
 
-`N` samples of an ensemble whose clock i follows `models[i]`, read against
-clock `reference` (or, with `reference = 0`, against a perfect outside
-reference). Each reading carries its clock's white PM `R` and flicker PM.
-Returns the comparisons and the true states, `truth[k, s, i]` for sample k,
-state s and clock i (phase, frequency, and drift for a model with drift;
-zero beyond a clock's own states). The frequency includes the Markov states
-of a model with flicker FM. The models must share one τ₀.
+`N` samples of an ensemble in which clock ``i`` follows `models[i]`, with
+the true states behind the readings.
+
+Each clock is drawn as by [`simulate_clock`](@ref) and read against clock
+`reference`, whose own column is zero, or against a perfect outside
+reference with `reference = 0`. A reading carries the white PM and the
+flicker PM of its own clock's model.
+
+# Arguments
+
+- `models`: one [`ClockModel`](@ref) per clock, two or more, with one
+  `tau0`.
+- `N`: number of samples.
+
+# Keywords
+
+- `reference`: index of the clock the others are read against, or `0`.
+- `rng`: a random number generator, such as `Xoshiro(1)`, for a
+  reproducible ensemble.
+
+# Returns
+
+The comparisons, and the true states `truth[k, s, i]` of clock ``i`` at
+sample ``k`` against true time: phase (``s = 1``), frequency (2) and, for a
+model with drift, drift (3). The frequency includes the Markov states of a
+model with flicker FM.
+
+# Examples
+
+```julia
+using SigmaTau, Random
+ms = [ClockModel(; tau0 = 1.0, q1 = q, q2 = 1e-6q) for q in (1e-24, 4e-24, 1.6e-23)]
+cc, truth = simulate_ensemble(ms, 20_000; reference = 0, rng = Xoshiro(1))
+adev(cc[2, 1])       # clock 2 − clock 1, whatever the reference
+```
 """
 function simulate_ensemble(models::AbstractVector{ClockModel}, N::Int; reference::Int=1, rng=nothing)
     k = length(models)
@@ -97,22 +154,46 @@ function simulate_ensemble(models::AbstractVector{ClockModel}, N::Int; reference
 end
 
 """
-    clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2], flicker=false) → Vector{ClockModel}
+    clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2], flicker=false)
+        → Vector{ClockModel}
 
-One [`ClockModel`](@ref) per clock, fitted from the comparisons alone, for the
-Kalman timescales (`:greenhall`, `:jones_tryon`), which need one. Needs three
-or more clocks: each clock's Allan deviation comes from the Groslambert
-covariance of the clock differences ([`groslambert`](@ref)), so the reference
-and the other clocks' noise drop out, and the power-law fit of
-[`powerlaw_fit`](@ref) on that curve, with the components `alphas` (white and
-flicker PM, white FM and random-walk FM by default), gives the model by
-[`clock_model`](@ref), which folds the flicker PM into `R`. Fitted without its
-own term, flicker PM in the readings would pass for white FM and inflate `q1`.
-With `flicker = true` flicker FM joins the fit and each model carries its
-flicker FM and flicker PM as Markov states where they are needed (see
-[`ClockModel`](@ref)); the levels at the longest τ of a short record are then
-poorly separated, so check them against the curve. A clock whose curve the
-fit cannot use (too few positive points) throws.
+One [`ClockModel`](@ref) per clock, fitted from the comparisons alone, for
+the Kalman time scales of [`timescale`](@ref).
+
+Each clock's Allan deviation is separated from the others' by the
+Groslambert covariance of the clock differences ([`groslambert`](@ref)),
+in which the reference cancels. [`powerlaw_fit`](@ref) fits the components
+`alphas` to that curve, and [`clock_model`](@ref) turns the fit into a
+model. This takes three or more clocks.
+
+The default components are white PM, flicker PM, white FM and random-walk
+FM, and the flicker PM is folded into `R`. Flicker PM needs its own term
+in the fit: without one it passes for white FM and inflates `q1`. With
+`flicker = true`, flicker FM joins the fit and each model keeps its
+flicker FM and flicker PM as Markov states. At the longest τ of a short
+record the levels are poorly separated, so compare each model with its
+curve. A clock whose curve leaves the fit too few positive points throws an
+error.
+
+# Arguments
+
+- `cc`: the comparisons, of three or more clocks.
+
+# Keywords
+
+- `alphas`: exponents ``α`` of the components fitted.
+- `flicker`: fit flicker FM as well and keep both flickers as Markov
+  states.
+
+# Examples
+
+```julia
+using SigmaTau, Random
+ms = [ClockModel(; tau0 = 1.0, q1 = q, q2 = 1e-6q) for q in (1e-24, 4e-24, 1.6e-23)]
+cc, _ = simulate_ensemble(ms, 20_000; reference = 0, rng = Xoshiro(1))
+fitted = clock_models(cc)
+[m.q1 for m in fitted]        # near 1e-24, 4e-24, 1.6e-23
+```
 """
 function clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2], flicker::Bool=false)
     k = size(cc.x, 2)

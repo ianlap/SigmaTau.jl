@@ -7,6 +7,8 @@
 Output of [`kalman_filter`](@ref) or [`kalman_smooth`](@ref): the state
 estimate at every sample, its covariance, and the innovations.
 
+# Fields
+
 $(TYPEDFIELDS)
 """
 struct KalmanResult
@@ -14,13 +16,13 @@ struct KalmanResult
     model::ClockModel
     "Sample times in seconds from the first sample."
     t::Vector{Float64}
-    "State estimates, one row per sample: phase (s), frequency, drift (1/s) with a drift state, then the Markov states of the flicker FM, which add to the frequency, and of the flicker PM, which add to the readings."
+    "State estimates, one row per sample: phase (s), frequency, drift (1/s) for a model with a drift state, then the Markov frequency states, which add to the frequency, and the Markov phase states, which add to the readings."
     x::Matrix{Float64}
     "State covariances, `P[:, :, k]` at sample k."
     P::Array{Float64,3}
-    "Innovations z − H x̂⁻ (s); `NaN` at gaps."
+    "Innovations ``ν_k``, each reading less its prediction (s); `NaN` at gaps."
     innovation::Vector{Float64}
-    "Innovation variances H P⁻ Hᵀ + R (s²); `NaN` at gaps."
+    "Innovation variances ``S_k`` (s²); `NaN` at gaps."
     innovation_var::Vector{Float64}
     "Whether `x` and `P` are smoothed."
     smoothed::Bool
@@ -84,32 +86,72 @@ function _model_start(z::Vector{Float64}, m::ClockModel)
 end
 
 """
-    kalman_filter(data::PhaseData, m::ClockModel; x0, P0) → KalmanResult
+    kalman_filter(data::PhaseData, m::ClockModel; x0=nothing, P0=nothing)
+        → KalmanResult
 
-Run the Kalman filter for clock model `m` over a phase record. The state is
-phase and frequency, plus drift when `m.drift` and the Markov states of a
-model with flicker; each sample is a reading of the phase with white PM of
-variance `m.R` and, for a model with flicker PM, its Markov phase states. `NaN` samples are gaps: the filter
-predicts across them without an update. A model with no noise at all is
-refused: its gain is undefined once the start is used up.
+Kalman filter of clock model `m` over a phase record.
 
-The start `x0`, `P0` defaults to a least-squares polynomial through the
-first samples, with its covariance inflated tenfold, and the Markov states
-at zero with their stationary variance. The covariance update
-uses the Joseph form, which keeps P symmetric and positive under round-off.
+Each sample is a reading ``z_k = h^{\\mathsf T} X_k + v_k`` of the state
+``X_k`` of [`ClockModel`](@ref): the phase, plus the Markov phase states of
+a model with flicker PM, plus white noise ``v_k`` of variance ``R``. From
+one sample to the next the state moves by ``Φ``
+([`state_transition`](@ref)) and gathers noise of covariance ``Q``
+([`process_noise`](@ref)). The filter is the standard recursion
+([Särkkä and Svensson (2023), Theorem 6.6](@cite sarkka-2023-bayesian-filtering)):
 
-Pass the result to [`kalman_smooth`](@ref), [`holdover_error`](@ref) or
-[`innovation_check`](@ref).
+```math
+\\begin{aligned}
+X^-_k &= Φ X_{k-1}, & P^-_k &= Φ P_{k-1} Φ^{\\mathsf T} + Q, \\\\
+ν_k &= z_k - h^{\\mathsf T} X^-_k, & S_k &= h^{\\mathsf T} P^-_k h + R, \\\\
+K_k &= P^-_k h / S_k, & X_k &= X^-_k + K_k ν_k .
+\\end{aligned}
+```
+
+The covariance is updated in the Joseph form
+([Stein (2003), Eq. (5.8)](@cite stein-2003-demystified)), which stays
+symmetric and positive semidefinite under round-off:
+
+```math
+P_k = (I - K_k h^{\\mathsf T})\\, P^-_k\\, (I - K_k h^{\\mathsf T})^{\\mathsf T}
+      + R\\, K_k K_k^{\\mathsf T} .
+```
+
+A `NaN` sample is a gap: the state is predicted across it without an
+update.
+
+The filter needs no prior from the caller. It starts from a least-squares
+line through the first 16 readings (a parabola for a model with drift),
+with the covariance of that fit multiplied by ten, and with the Markov
+states at zero with their stationary variances.
+
+Pass the result to [`kalman_smooth`](@ref), [`holdover_error`](@ref),
+[`innovation_check`](@ref) or [`prediction_error`](@ref).
+
+# Arguments
+
+- `data`: the phase record. Its `tau0` must be the model's.
+- `m`: the clock model. A model with no noise at all is refused: the gain
+  would be undefined once the start is used up.
+
+# Keywords
+
+- `x0`, `P0`: state and covariance at the first sample, before its reading
+  is used, in place of the default start.
 
 # Examples
 
-```julia
-using SigmaTau
-p = noise_gen(PhaseData, 4096, 1.0; h = Dict(2 => 1e-22, 0 => 1e-24, -2 => 1e-30))
-m = clock_model(powerlaw_fit(p; alphas = [2, 0, -2]))
-kf = kalman_filter(p, m)
-kf.x[end, 2]               # frequency estimate at the last sample
-holdover_error(kf, [60.0, 3600.0])
+```jldoctest
+julia> using SigmaTau
+
+julia> p = PhaseData(2e-9 .* (0:199), 1.0);    # a clock that gains 2 ns each second
+
+julia> m = ClockModel(; tau0 = 1.0, R = 1e-20, q1 = 1e-22, q2 = 1e-26);
+
+julia> kf = kalman_filter(p, m)
+KalmanResult, 200 samples, 2 states
+
+julia> kf.x[end, 2] ≈ 2e-9
+true
 ```
 """
 function kalman_filter(data::PhaseData, m::ClockModel;
@@ -154,9 +196,38 @@ end
 """
     kalman_smooth(kf::KalmanResult) → KalmanResult
 
-Rauch–Tung–Striebel smoother over a filtered run: each state estimate then
-uses the whole record, before and after it. The innovations are the
-filter's.
+Rauch–Tung–Striebel smoother over a filtered run: every estimate then uses
+the whole record, the samples after it as well as those before.
+
+Running backward from the last sample
+([Särkkä and Svensson (2023), Theorem 12.2](@cite sarkka-2023-bayesian-filtering)),
+
+```math
+\\begin{aligned}
+G_k &= P_k Φ^{\\mathsf T} (P^-_{k+1})^{-1}, \\\\
+X^s_k &= X_k + G_k (X^s_{k+1} - X^-_{k+1}), \\\\
+P^s_k &= P_k + G_k (P^s_{k+1} - P^-_{k+1})\\, G_k^{\\mathsf T} ,
+\\end{aligned}
+```
+
+with ``X_k``, ``P_k`` the filter's estimates and ``X^-_k``, ``P^-_k`` its
+predictions. The innovations of the result are the filter's.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> m = ClockModel(; tau0 = 1.0, R = 1e-20, q1 = 1e-22, q2 = 1e-26);
+
+julia> kf = kalman_filter(PhaseData(zeros(200), 1.0), m);
+
+julia> ks = kalman_smooth(kf)
+Smoothed KalmanResult, 200 samples, 2 states
+
+julia> ks.P[1, 1, 100] < kf.P[1, 1, 100]    # the later samples add information
+true
+```
 """
 function kalman_smooth(kf::KalmanResult)
     kf.smoothed && throw(ArgumentError("kalman_smooth: the result is already smoothed"))
@@ -174,10 +245,35 @@ end
 """
     holdover_error(kf::KalmanResult, tau) → Vector{Float64}
 
-Standard deviation (s) of the time error after free-running for each τ in
-`tau` (seconds) from the last sample, with the filter's last estimate as the
-starting point: `√[Φ(τ) P Φ(τ)ᵀ + Q(τ)]₁₁`. It is the clock's error; the
-noise of a reading, white or flicker PM, is not in it.
+Standard deviation, in seconds, of the clock's time error after running
+free for each τ in `tau` (seconds) from the last sample, as the model gives
+it:
+
+```math
+σ_x(τ) = \\sqrt{\\left[Φ(τ)\\, P\\, Φ(τ)^{\\mathsf T} + Q(τ)\\right]_{11}} ,
+```
+
+with ``P`` the covariance of the filter at the last sample. The first term
+is the error of the last estimate carried forward and the second the noise
+the clock gathers on the way. It is the error of the clock's phase: the
+noise of a reading, white or flicker PM, is not in it. [`holdover`](@ref)
+measures the same error on the record.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> m = ClockModel(; tau0 = 1.0, R = 1e-20, q1 = 1e-22, q2 = 1e-26);
+
+julia> kf = kalman_filter(PhaseData(zeros(200), 1.0), m);
+
+julia> round.(holdover_error(kf, [10.0, 100.0, 1000.0]); sigdigits = 3)
+3-element Vector{Float64}:
+ 4.82e-11
+ 1.63e-10
+ 2.12e-9
+```
 """
 function holdover_error(kf::KalmanResult, tau::AbstractVector{<:Real})
     P = kf.P[:, :, end]
@@ -190,16 +286,54 @@ end
 """
     innovation_check(kf::KalmanResult; confidence=0.95) → NamedTuple
 
-Whether the model fits the record, from the normalized innovations
-eₖ = νₖ/√Sₖ, which are white with unit variance when it does:
+Test of the model against the record, from the innovations of the filter.
 
-- `nis`: mean of eₖ², with the χ² interval `nis_bounds` it falls in at
-  `confidence` when the model is right. Above the interval, the model's
-  noise is too low; below, too high.
-- `acf`: lag-1 autocorrelation of eₖ, with `acf_bound`, the ±bound it
-  stays within for white innovations. Outside it, a noise type is missing
-  or mislevelled.
-- `ok`: both inside.
+Under the model the normalized innovations ``e_k = ν_k/\\sqrt{S_k}`` are
+independent, with zero mean and unit variance
+([Särkkä and Svensson (2023), Theorem 6.6](@cite sarkka-2023-bayesian-filtering)).
+Two statistics of the ``n`` innovations test that:
+
+- The sum of ``e_k^2`` is then χ² distributed with ``n`` degrees of
+  freedom, which bounds their mean. A mean above the interval says the
+  noise of the model is too low; below, too high.
+- The lag-1 autocorrelation of ``e_k`` then stays within
+  ``± z_{1-α/2}/\\sqrt{n}``, the band of an uncorrelated sequence
+  ([NIST/SEMATECH e-Handbook, §1.3.3.1](@cite guthrie-2020-nist-ehandbook)).
+  Outside it, a noise type is missing from the model or at the wrong
+  level.
+
+!!! note "A long record resolves small departures"
+    Both intervals narrow as ``1/\\sqrt{n}``, so on a long record the test
+    fails a model that departs a little from the noise and still predicts
+    well. A model with flicker states is one, since its Markov processes
+    only approximate a flicker spectrum; [What the states buy](@ref) has
+    measured cases. Compare `rms` with `claimed` in [`holdover`](@ref)
+    before discarding the model.
+
+# Keywords
+
+- `confidence`: probability that each statistic falls inside its interval
+  under the model.
+
+# Returns
+
+A named tuple with
+
+- `nis`: mean of ``e_k^2``, the normalized innovation squared;
+- `nis_bounds`: its interval at `confidence`;
+- `acf`: lag-1 autocorrelation of ``e_k``;
+- `acf_bound`: the bound on its magnitude at `confidence`;
+- `ok`: whether both are inside.
+
+# Examples
+
+```julia
+using SigmaTau, Random
+m = ClockModel(; tau0 = 1.0, R = 1e-22, q1 = 1e-24, q2 = 1e-30)
+p, _ = simulate_clock(m, 4096; rng = Xoshiro(1))
+innovation_check(kalman_filter(p, m))        # the model that made the record
+innovation_check(kalman_filter(p, ClockModel(; tau0 = 1.0, R = 1e-22, q1 = 1e-25)))
+```
 """
 function innovation_check(kf::KalmanResult; confidence::Real=0.95)
     keep = findall(isfinite, kf.innovation)
@@ -218,12 +352,40 @@ function innovation_check(kf::KalmanResult; confidence::Real=0.95)
 end
 
 """
-    simulate_clock(m::ClockModel, N; rng=nothing) → (PhaseData, Matrix)
+    simulate_clock(m::ClockModel, N; rng=nothing) → (PhaseData, Matrix{Float64})
 
-A phase record of `N` samples from clock model `m`, and its true states
-(one row per sample), for checking filters against a known truth. The
-clock starts at zero phase, frequency and drift, and its Markov states from
-their stationary distribution.
+A phase record of `N` samples drawn from clock model `m`, with the true
+states behind it, for checking a filter against a known truth.
+
+The clock starts at zero phase, frequency and drift, with its Markov states
+drawn from their stationary distribution, and each step adds noise of
+covariance [`process_noise`](@ref). A reading is the phase, plus the
+Markov phase states, plus white noise of the model's reading variance.
+
+# Arguments
+
+- `m`: the clock model.
+- `N`: number of samples.
+
+# Keywords
+
+- `rng`: a random number generator, such as `Xoshiro(1)`, for a
+  reproducible record.
+
+# Returns
+
+The record, and the true states with one row per sample and the columns of
+`x` in [`KalmanResult`](@ref).
+
+# Examples
+
+```julia
+using SigmaTau, Random
+m = ClockModel(; tau0 = 1.0, R = 1e-22, q1 = 1e-24, q2 = 1e-30)
+p, X = simulate_clock(m, 4096; rng = Xoshiro(1))
+kf = kalman_filter(p, m)
+sqrt(sum(abs2, kf.x[:, 1] .- X[:, 1]) / 4096)    # RMS error of the phase estimate
+```
 """
 function simulate_clock(m::ClockModel, N::Int; rng=nothing)
     np, n = _npoly(m), _nstates(m)
@@ -246,11 +408,37 @@ function _psd_sqrt(Q::AbstractMatrix)
 end
 
 """
-    prediction_error(kf::KalmanResult, data::PhaseData, horizons; burnin=0) → Vector{Float64}
+    prediction_error(kf::KalmanResult, data::PhaseData, horizons; burnin=0)
+        → Vector{Float64}
 
-RMS error (s) of the filter's predictions `horizons` samples ahead: from
-the estimate at each sample k past `burnin`, carry the state to k + h and
-compare the reading it predicts with the reading there. Gaps are skipped.
+RMS error, in seconds, of the filter's predictions of the readings
+`horizons` samples ahead.
+
+From the estimate at each sample ``k`` past `burnin`, the state is carried
+to ``k + h`` by [`state_transition`](@ref), and the reading it predicts is
+compared with the reading there. The error therefore holds the noise of
+that reading as well as the clock's. Pairs with a gap at either end are
+skipped.
+
+# Arguments
+
+- `kf`: the filter's run over `data`; not a smoothed one, whose estimates
+  already use the later readings.
+- `data`: the record the filter ran on.
+- `horizons`: prediction horizons in samples.
+
+# Keywords
+
+- `burnin`: samples at the start left out of the error.
+
+# Examples
+
+```julia
+using SigmaTau, Random
+m = ClockModel(; tau0 = 1.0, R = 1e-22, q1 = 1e-24, q2 = 1e-30)
+p, _ = simulate_clock(m, 20_000; rng = Xoshiro(1))
+prediction_error(kalman_filter(p, m), p, [1, 10, 100]; burnin = 1000)
+```
 """
 function prediction_error(kf::KalmanResult, data::PhaseData, horizons::AbstractVector{<:Integer}; burnin::Integer=0)
     z, X, n = data.x, kf.x, size(kf.x, 2)
@@ -267,20 +455,58 @@ function prediction_error(kf::KalmanResult, data::PhaseData, horizons::AbstractV
 end
 
 """
-    tune_q(data::PhaseData, m::ClockModel; horizons=[10, 100, 1000], decades=2, points=9, burnin)
-        → (model, q1, q2, cost)
+    tune_q(data::PhaseData, m::ClockModel; horizons=[10, 100, 1000], decades=2,
+           points=9, burnin=length(data.x) ÷ 10) → NamedTuple
 
-Retune the white FM and random-walk FM levels of `m` for prediction: run
-the filter over a log grid of `points` values spanning ± `decades` around
-`m.q1` and `m.q2`, and keep the pair whose phase predictions
-`horizons` samples ahead have the smallest summed log RMS error (see
-[`prediction_error`](@ref)). `R`, `q3` and the flicker levels stay as they are. The burn-in
-defaults to a tenth of the record. Returns the tuned model, the grid axes
-and the cost on the grid (rows q1, columns q2).
+Retune the white FM and random-walk FM levels of `m` for prediction.
 
-A noise fit gives levels that match σ(τ); tuning gives the ones that
-predict best, which differ when the record has noise the model lacks, such
-as flicker FM; a model with flicker states carries it instead.
+The filter is run for every pair of levels on a logarithmic grid of
+`points` values that spans `decades` decades either side of `m.q1` and
+`m.q2`. The pair is kept whose predictions `horizons` samples ahead have
+the smallest sum of the logarithms of their RMS errors
+([`prediction_error`](@ref)). `R`, `q3` and the flicker levels stay as
+they are.
+
+A noise fit gives the levels that match ``σ(τ)``; tuning gives the levels
+that predict best. The two differ when the record has noise that the model
+lacks, such as flicker FM. The tuned levels are then no longer those of
+the noise, and the covariance of the tuned filter is not the error of its
+estimates: in simulation the error it claimed was wrong by a factor of 2
+to 9 ([What the states buy](@ref)). A model with flicker states,
+`clock_model(fit; flicker = true)`, carries that noise instead, and
+predicted better there.
+
+# Arguments
+
+- `data`: the phase record.
+- `m`: the model to start from, with `q1 > 0` and `q2 > 0`, which center
+  the grid.
+
+# Keywords
+
+- `horizons`: prediction horizons in samples. Those longer than the record
+  past the burn-in are dropped.
+- `decades`: half-width of the grid in decades. A level tuned to the edge
+  of the grid calls for a wider one.
+- `points`: grid points on each axis; the filter runs `points^2` times.
+- `burnin`: samples at the start left out of the error.
+
+# Returns
+
+A named tuple `(model, q1, q2, cost)`: the tuned model, the two grid axes,
+and the cost on the grid, with one row for each `q1` and one column for
+each `q2`.
+
+# Examples
+
+```julia
+using SigmaTau, Random
+h = Dict(0 => 2e-24, -1 => 1e-27, -2 => 1e-32)
+p = noise_gen(PhaseData, 20_000, 1.0; h, rng = Xoshiro(1))
+m = clock_model(powerlaw_fit(p; alphas = [2, 0, -2]))    # without flicker FM
+t = tune_q(p, m)
+t.model.q1 / m.q1, t.model.q2 / m.q2
+```
 """
 function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integer}=[10, 100, 1000],
                 decades::Real=2, points::Integer=9, burnin::Integer=length(data.x) ÷ 10)

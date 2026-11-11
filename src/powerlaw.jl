@@ -314,8 +314,9 @@ PM it is 19 % above at ``τ_0`` and still 4 % above at ``64τ_0``.
 
 # Arguments
 
-- `h`: a [`PowerLawFit`](@ref), a [`ClockModel`](@ref), or a `Dict` of
-  ``h_α`` keyed by ``α`` or by noise type, as in [`noise_gen`](@ref).
+- `h`: a [`PowerLawFit`](@ref), a [`NoiseFit`](@ref), a
+  [`ClockModel`](@ref), or a `Dict` of ``h_α`` keyed by ``α`` or by noise
+  type, as in [`noise_gen`](@ref).
 - `tau`: averaging times in seconds, each a whole multiple of `tau0`.
 
 # Keywords
@@ -357,8 +358,9 @@ end
     powerlaw_psd(h, f; quantity=:Sy, f_carrier=nothing) → Vector{Float64}
 
 The power-law model `h` as a spectrum at the Fourier frequencies `f`, in
-Hz. `h` is a [`PowerLawFit`](@ref), a [`ClockModel`](@ref), or a `Dict` of
-``h_α`` keyed by ``α`` or by noise type. `quantity` selects the spectrum
+Hz. `h` is a [`PowerLawFit`](@ref), a [`NoiseFit`](@ref), a
+[`ClockModel`](@ref), or a `Dict` of ``h_α`` keyed by ``α`` or by noise
+type. `quantity` selects the spectrum
 ([IEEE Std 1139-2022, Eqs. (A.13), (A.15) and (A.16)](@cite ieee1139-2022-definitions)):
 
 - `:Sy`: ``S_y(f) = \\sum_α h_α f^α``, in 1/Hz.

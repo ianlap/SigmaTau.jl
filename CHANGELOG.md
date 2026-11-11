@@ -153,6 +153,16 @@ Clock models, the Kalman filter and timescales.
   Allan deviation free-running, steered and as the clock model predicts.
   Gains from `--time-constant` (with `--integral`) or `--cost P:F:U`; the
   clock model is fitted to the first `--train` stretch alone.
+- `steer(model, gains; readings=true)`: the predicted time error and Allan
+  deviation of the readings of a steered clock, with the noise each reading
+  carries, to set beside a replayed record. `sigmatau steer`'s `predicted`
+  column now uses it; before, it was for the clock without that noise and
+  sat below the steered column at short averaging times. Also in Python.
+- Explorer: a Steering page. It replays a steering loop on the record, with
+  gains from a time constant or a cost, and shows the Allan deviation
+  free-running, steered and as the clock model predicts, or the steered
+  phase with the frequency correction in force. Keys: 7 Steering, 8
+  Ensemble, 9 Live.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -184,9 +194,9 @@ Clock models, the Kalman filter and timescales.
   weights are the optimal 1/q1 ones. The scale is read at clock `pivot`.
   `algorithm=:jones_tryon` is the same filter without the reduction, the
   natural Jones–Tryon scale (JT83): a clock's reading less its estimated
-  phase. In
-  simulation `implicit_mean(r, truth)` gives the scale's own phase, the mean
-  of the clocks' true phases, free of the pivot clock's reading noise.
+  phase. In simulation `implicit_mean(r, truth)` gives the scale's own
+  phase, the mean of the corrected clocks, free of the pivot clock's reading
+  noise.
 - Stein's Kalman timescale: `timescale(cc; algorithm=:stein, models, pivot, wmax)`
   differences every clock against the pivot, runs a Kalman filter on each
   difference and gets the pivot's own shocks from the constraints that the
@@ -399,6 +409,20 @@ Clock models, the Kalman filter and timescales.
 - Documentation: every docstring checked against the code and its cited
   source and rewritten in one style; bibliography verified against publisher
   records, with DOIs, and 21 sources added.
+- Documentation site, Tutorials 1 to 3 and the READMEs rewritten from the
+  code and the cited sources, in six parts: tutorials, how-to guides,
+  explorer, background, reference, bibliography. New: a manual of the
+  explorer with screenshots of simulated records, a command-line reference
+  whose samples the docs build produces by running the program, a guide to
+  gaps, outliers and drift, and a page on related software. The cross-check
+  group "NBS 1000-point" is now "1000-point test suite" (SP1065 §12.4), and
+  the benchmark table of a measured record is removed with its two result
+  files.
+- Documentation: a background page, "The Hadamard time deviation", on where
+  the 10/3 of `htdev` comes from, and √6·TDEV and √20·HTDEV as the errors of
+  predicting the next τ-average with a line and with a parabola.
+- `bench/README.md` re-timed on a Fedora workstation, with a Thêo1 timing on
+  the public allantools Cs 5071A record.
 - The Stable32 reader (`.phd`, `.frd`) reads a value of zero as a gap, as
   Stable32 does (all zeros in frequency data; all but the first and last
   point in phase data), and reads Stable32's older header of bare `File:` …
@@ -555,6 +579,57 @@ Clock models, the Kalman filter and timescales.
   Markov states; without them the filter of a flicker FM clock claimed a
   tenth of its error or stopped on NaN. `holdover(data, model)` refuses a
   model with no noise.
+- Explorer: *Fill gaps* no longer stays on from the previous file, and its
+  box stays on the Data page when a frequency record with gaps fails to read
+  without it.
+- AT2 step detector (`timescale(...; algorithm=:at2, steps=…)`): a clock
+  kept out of the scale after a frequency step is still estimated, as in
+  Weiss & Weissert 1991 §4, so it comes back with its new frequency. Before,
+  it came back with the old one, was taken out again, and a large step moved
+  the scale at the return.
+- `implicit_mean(r, truth)` returns Greenhall's implicit ensemble mean,
+  `Σ aᵢ (xᵢ − x̂ᵢ)` (Greenhall 2006, Eqs. (3.8), (3.13)). It returned
+  `Σ aᵢ xᵢ`, which is the same only for clocks of one noise shape: on clocks
+  that differ in their random-walk FM it read up to 2.6 times noisier than
+  the scale at long τ. `TimescaleResult` has a new field `xhat` (Julia and
+  Python).
+- The interval of bias-removed Thêo1 (`theo1`, and `theoh` beyond 20 % of
+  the record) carries the scatter of the bias ratio on FM noise: its EDF was
+  that of Thêo1 alone, and the 68.3 % interval held the true value in 15 to
+  62 % of simulated FM records; it now holds it in 63 to 84 %.
+  `calculate_edf` accepts `:theobr`. The EDF of Thêo1 is no longer taken
+  below 1, which gives `theo1` an interval on random-walk FM beyond 63 % of
+  the record. Deviations are unchanged.
+- `timescale(...; algorithm=:greenhall)`: a clock without a reading has no
+  weight in the implicit ensemble mean and runs on its prediction (Greenhall
+  2006, §10). It kept a weight through a gap, and the scale took a phase
+  step when the clock returned, or when a clock or the pivot joined late (in
+  simulation, a median of 440 times the scale's rms step after a 2000-sample
+  gap on Greenhall's three clocks; now 1.5). Records with every clock read
+  are unchanged.
+- `timescale`: in `:ewfa`, `:at1`, `:at2` and `:stein` a clock read again
+  after a gap joins as a new clock does and no longer moves the scale. It
+  went straight back into the average with the prediction error of the whole
+  gap (in simulation, a median step of 60 to 580 times the scale's rms step
+  after a 2000-sample gap on four white-FM clocks; now about 1). The AT2
+  step detector's windows do not reach behind the sample a clock joined at.
+  `:jones_tryon` still steps at a return, and `:stein` needs its pivot read
+  throughout; both are documented.
+- `timescale` with `:ewfa`, `:at1` or `:at2` diverged to NaN when the clocks
+  were read less often than the grid. The interval of the equations is now
+  the time since the last sample with a reading (Weiss & Weissert 1991,
+  §2.8), so a sparse record gives the scale of its readings alone; records
+  read at every sample are unchanged.
+- In `timescale` with `:ewfa`, `:at1` or `:at2`, a clock that joins late
+  starts from its own first readings (Weiss & Weissert 1991, §2.7). It took
+  the largest starting variance of the other clocks and a starting frequency
+  of zero, so a good clock that joined late had almost no weight for the
+  rest of the record and one with a rate offset moved the scale's rate.
+- `read_phase` and `read_frequency` take the unit of a time column from its
+  name in the line that `header` skips, as `read_data` does, so a column
+  named MJD is read in days at any step; `sigmatau timescale --value-cols`
+  reads a table with named columns without `--header`, and its read errors
+  name the CLI flags.
 
 ### Security
 

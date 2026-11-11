@@ -58,7 +58,7 @@ def _mat(a: Any) -> np.ndarray:
 @dataclass(frozen=True)
 class ClockModel:
     """Discrete clock model: phase, frequency and (with ``drift``) drift driven by
-    white noise (Zucca & Tavella 2005), with flicker noise as Markov states.
+    white noise (Zucca & Tavella 2015), with flicker noise as Markov states.
 
     ``R`` is the variance of a reading's noise, taken as white (s²), ``q1`` the white FM
     (s), ``q2`` the random-walk FM (1/s) and ``q3`` the random-run FM (1/s³)
@@ -717,8 +717,10 @@ def clock_models(
 @dataclass(frozen=True)
 class TimescaleResult:
     """Return type of ``timescale``: each clock minus the scale (``x``), its
-    estimated frequency (``y``), its weight (rows sum to 1) and its prediction
-    error (``nan`` without a reading), one column per clock."""
+    estimated frequency (``y``), its weight (rows sum to 1), its prediction
+    error (``nan`` without a reading) and its phase as the algorithm estimated
+    it (``xhat``: the filter's phase state for the Kalman scales, where ``x`` is
+    read at the pivot; equal to ``x`` for the others), one column per clock."""
 
     algorithm: str
     comparisons: ClockComparisons
@@ -727,6 +729,7 @@ class TimescaleResult:
     y: np.ndarray
     weights: np.ndarray
     error: np.ndarray
+    xhat: np.ndarray
 
     def __repr__(self) -> str:
         n, k = self.x.shape
@@ -783,7 +786,8 @@ def timescale(
         kw["steps"] = jl.Symbol("best" if steps is True else str(steps))
     r = jl.timescale(cc._jl(), **kw)
     return TimescaleResult(
-        str(r.algorithm), cc, np_f64(r.t), _mat(r.x), _mat(r.y), _mat(r.weights), _mat(r.error)
+        str(r.algorithm), cc, np_f64(r.t), _mat(r.x), _mat(r.y), _mat(r.weights), _mat(r.error),
+        _mat(r.xhat),
     )
 
 
@@ -799,10 +803,11 @@ def timescale_phase(r: TimescaleResult) -> PhaseData:
 
 
 def implicit_mean(r: TimescaleResult, truth: np.ndarray) -> PhaseData:
-    """The implicit ensemble mean of a ``"greenhall"`` scale, in simulation: the
-    weighted mean ``Σ aᵢ xᵢ`` of the clocks' true phases, ``truth`` as from
-    ``simulate_ensemble``. Its stability is the scale's own, free of any clock's
-    reading noise."""
+    """The implicit ensemble mean of a ``"greenhall"`` scale against true time, in
+    simulation: the weighted mean ``Σ aᵢ (xᵢ − x̂ᵢ)`` of the corrected clocks, each
+    clock's true phase (``truth`` as from ``simulate_ensemble``) less the filter's
+    estimate ``r.xhat`` (Greenhall 2006, Eqs. (3.8) and (3.13)). Its stability is
+    the scale's own, free of any clock's reading noise."""
     if r.algorithm != "greenhall":
         raise ValueError(f"implicit_mean: the implicit mean belongs to greenhall, not {r.algorithm}")
     truth = np.asarray(truth, dtype=np.float64)
@@ -811,7 +816,8 @@ def implicit_mean(r: TimescaleResult, truth: np.ndarray) -> PhaseData:
             f"implicit_mean: truth is {truth.shape}, the scale has {r.weights.shape[0]} samples "
             f"and {r.weights.shape[1]} clocks"
         )
-    return PhaseData((r.weights * truth[:, 0, :]).sum(axis=1), r.comparisons.tau0, source="IEM")
+    mean = (r.weights * (truth[:, 0, :] - r.xhat)).sum(axis=1)
+    return PhaseData(mean, r.comparisons.tau0, source="IEM")
 
 
 __all__ = [

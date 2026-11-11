@@ -1,7 +1,7 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
-// Stability plot and the Holdover curve against the command line's own JSON,
-// then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
+// Stability plot and the Holdover and Steering curves against the command
+// line's own JSON, then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
 // Live (simulated source) and Help, come back to Stability, and run a record
 // with gaps, with no page errors.
 //
@@ -92,6 +92,25 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.deepEqual(await claimed, JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover.claimed);
   });
 
+  await t.test("Steering: the plotted σ equal the command line's", async () => {
+    await page.click("a[data-page=steering]");
+    await plotted("#page.page-steering [data-ref=plot]");
+    const curve = (name) => page.evaluate((n) => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === n)?.y, name);
+    const args = ["steer", FIXTURE, "--format", "json"];   // the page's stretch, a quarter of the record, is the default
+    const doc = JSON.parse(execFileSync(CLI, [...args, "--time-constant", "64"])).steer;
+    assert.deepEqual(await curve("Steered"), doc.steered);
+    assert.deepEqual(await curve("Predicted (clock model)"), doc.predicted.adev);
+    // Gains from a cost: the loop card shows the command line's phase gain.
+    await page.click('[data-ctl=from][data-v="cost"]');
+    await page.waitForFunction(() => /Rings/.test(document.querySelector("#page .steer-card")?.innerText ?? ""), null, SLOW);
+    const cost = JSON.parse(execFileSync(CLI, [...args, "--cost", "1:0:1e8"])).steer;
+    assert.deepEqual(await curve("Steered"), cost.steered);
+    assert.ok((await page.locator("#page .steer-card").innerText()).includes(cost.gains.phase.toExponential(3)));
+    // The steered phase over the record, with the correction on its own axis.
+    await page.click('[data-ctl=view][data-v="record"]');
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.some((d) => d.yaxis === "y2"));
+  });
+
   await t.test("Ensemble: a Kalman scale with flicker states", async () => {
     await page.click("a[data-page=ensemble]");
     await page.selectOption("#side [data-ctl=alg]", "greenhall");
@@ -109,10 +128,29 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /Stopped/.test(document.querySelector("#page .live-state")?.textContent ?? ""), null, SLOW);
   });
 
-  await t.test("Help opens", async () => {
-    await page.click("#help-btn");
-    await page.waitForFunction(() => document.querySelector("#page")?.className.includes("page-help"));
-    assert.ok((await page.locator("#page").innerText()).length > 200);
+  await t.test("Help: the menu lists the page in view, a search opens a section, F1 the page's own help", async () => {
+    await page.keyboard.press("?");
+    await page.waitForSelector("#help-menu:not([hidden])");
+    assert.match(await page.locator("#help-items").textContent(), /On this page\s*About Live[\s\S]*While it runs/);
+    await page.fill("#help-search", "pinned runs");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => location.hash === "#help/stability/Pinned-runs" && document.querySelector("#page").className.includes("page-help"));
+    assert.ok(await page.locator("#help-menu").isHidden());
+    const at = await page.evaluate(() => ({
+      heading: document.querySelector('#page section[data-id="Pinned-runs"] h2').getBoundingClientRect().top,
+      button: document.getElementById("help-btn").getBoundingClientRect().right,
+    }));
+    const { width, height } = page.viewportSize();
+    assert.ok(at.heading >= 0 && at.heading < height, `the section is in view (its heading at ${at.heading} px)`);
+    assert.ok(at.button <= width, `the ? button is inside the window (its right edge at ${at.button} px)`);
+    await page.click("a[data-page=spectrum]");
+    await page.waitForSelector("#page.page-spectrum");
+    await page.keyboard.press("F1");
+    await page.waitForFunction(() => location.hash === "#help/spectrum");
+    assert.deepEqual(await page.locator("#page article h1, #page .help-nav a.on").allInnerTexts(), ["Spectrum", "Spectrum"]);
+    // An address that names no section of the topic is put right.
+    await page.evaluate(() => { location.hash = "#help/spectrum/nowhere"; });
+    await page.waitForFunction(() => location.hash === "#help/spectrum");
   });
 
   await t.test("Stability, revisited: one click pins one run and opens the model editor", async () => {

@@ -33,6 +33,19 @@ definition, apart from the kernels of the package, and use no random
 numbers. `test/stab/mhtotdev_models.jl` and `test/stab/total_pm_models.jl`
 hold the kernels to the numbers they print.
 
+## Simulated EDF model
+
+`theobr_edf.jl` measures, on simulated FM noise, the scatter of the ThêoBR
+bias ratio and its correlation with Thêo1, and checks the EDF model built on
+them. It is the source of `_THEOBR_SCATTER` in `src/edf.jl`. No source gives
+ThêoBR an EDF of its own, and
+[Confidence intervals](https://ianlap.github.io/SigmaTau.jl/dev/explanation/confidence/)
+describes the model.
+
+```bash
+julia -t auto --project=. tools/theobr_edf.jl    # about two minutes on four cores
+```
+
 ## `validation/`
 
 The scripts behind the cross-check of `test/validation/`

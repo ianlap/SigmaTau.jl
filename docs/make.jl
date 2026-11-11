@@ -23,6 +23,11 @@ let src = joinpath(@__DIR__, "..", "tools", "validation", "REPORT.md")
     write(joinpath(@__DIR__, "src", "explanation", "crosscheck.md"), body)
 end
 
+# The help of the explorer is its manual, written into the app by
+# explorer_help.jl, which lists the pages. Stop when the app is behind them.
+include("explorer_help.jl")
+ExplorerHelp.check()
+
 bib = CitationBibliography(joinpath(@__DIR__, "src", "refs.bib"); style=:authoryear)
 
 DocMeta.setdocmeta!(SigmaTau, :DocTestSetup, :(using SigmaTau); recursive=true)
@@ -60,21 +65,7 @@ makedocs(
             "Coming from Stable32" => "guide/from_stable32.md",
             "Coming from allantools" => "guide/from_allantools.md",
         ],
-        "Explorer" => [
-            "Overview" => "explorer/index.md",
-            "Install and run" => "explorer/install.md",
-            "The side panel" => "explorer/panel.md",
-            "Data" => "explorer/data.md",
-            "Synthesis" => "explorer/synthesis.md",
-            "Stability" => "explorer/stability.md",
-            "Spectrum" => "explorer/spectrum.md",
-            "Dynamic" => "explorer/dynamic.md",
-            "Holdover" => "explorer/holdover.md",
-            "Ensemble" => "explorer/ensemble.md",
-            "Live" => "explorer/live.md",
-            "Exports, sessions and reports" => "explorer/export.md",
-            "Estimators and noise types" => "explorer/estimators.md",
-        ],
+        "Explorer" => ExplorerHelp.PAGES,
         "Background" => [
             "Conventions" => "explanation/conventions.md",
             "Power-law noise" => "explanation/noise.md",

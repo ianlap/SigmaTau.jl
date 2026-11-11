@@ -2,13 +2,14 @@
 
 The side panel holds what an analysis is made of: the clocks, the
 estimators and the options, with the **Run analysis** button below them.
-The Data, Stability, Spectrum, Dynamic and Holdover pages share it. The
-Synthesis, Ensemble and Live pages show their own settings in its place.
+The Data, Stability, Spectrum, Dynamic, Holdover and Steering pages share
+it. The Synthesis, Ensemble and Live pages show their own settings in its
+place.
 
-With one clock, the Spectrum, Dynamic and Holdover pages put their settings
-in the panel too, in place of the estimators and options. With several
-clocks the panel keeps its content, and those three pages show their
-settings in a bar above the plots.
+With one clock, the Spectrum, Dynamic, Holdover and Steering pages put
+their settings in the panel too, in place of the estimators and options.
+With several clocks the panel keeps its content, and those four pages show
+their settings in a bar above the plots.
 
 ## Clocks
 

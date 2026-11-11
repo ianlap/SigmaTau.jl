@@ -144,7 +144,8 @@ missing. **undo** brings the outliers back.
     a complete record stops the run with an error, and the
     [Spectrum](spectrum.md#Records-with-gaps) page has no spectrum for the
     record. A frequency record with missing samples cannot be read while
-    **Fill gaps by reflection** is off.
+    **Fill gaps by reflection** is off, and the record check then keeps
+    that box alone, to turn the filling back on.
 
 ## The phase plot and the analysis range
 
@@ -157,10 +158,10 @@ that it keeps every outlying sample.
 
 **Select range** turns the drag into a choice of the part of the record to
 analyze. The range is shaded, and the line above the plot gives its limits.
-It needs at least 16 samples. The Stability, Spectrum, Dynamic and
-Holdover pages then use that part alone, with the drift removal fitted to
-it. The check and the plot keep the whole record. **whole record** clears
-the range. Each clock has its own.
+It needs at least 16 samples. The Stability, Spectrum, Dynamic, Holdover
+and Steering pages then use that part alone, with the drift removal fitted
+to it. The check and the plot keep the whole record. **whole record**
+clears the range. Each clock has its own.
 
 ## Frequency drift
 
