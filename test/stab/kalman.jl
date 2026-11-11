@@ -63,6 +63,8 @@ using Statistics
         big = tune_q(p, ClockModel(; tau0=1.0, R=1e-18, q1=1e-19, q2=1e-27); horizons=[10, 100], points=5)
         @test [big.model.R, big.model.q1, big.model.q2] ≈ [t.model.R, t.model.q1, t.model.q2] rtol=1e-3
         @test_throws ArgumentError tune_q(p, ClockModel(; tau0=1.0, q1=1e-22))
+        @test_throws "points must be at least 2" tune_q(p, ClockModel(; tau0=1.0, R=1e-18, q1=1e-19, q2=1e-27); points=1)
+        @test_throws "N must be ≥ 1" simulate_clock(ClockModel(; tau0=1.0, q1=1e-22), 0)
     end
 
     @testset "flicker FM states" begin

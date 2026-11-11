@@ -658,6 +658,7 @@ Arguments and keywords are those of [`mtotdev`](@ref). The interval is
 MTOTDEV's scaled by the same factor, with the same EDF.
 """
 function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+    _gapfree(:ttotdev, data, m_values)
     res = mtotdev(data, m_values; ci=ci, correct_bias=correct_bias, noise=noise, confidence=confidence)
     factor = res.tau ./ sqrt(3.0)
 
