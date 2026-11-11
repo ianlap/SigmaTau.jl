@@ -607,6 +607,14 @@ Clock models, the Kalman filter and timescales.
   simulation, a median of 440 times the scale's rms step after a 2000-sample
   gap on Greenhall's three clocks; now 1.5). Records with every clock read
   are unchanged.
+- `timescale`: in `:ewfa`, `:at1`, `:at2` and `:stein` a clock read again
+  after a gap joins as a new clock does and no longer moves the scale. It
+  went straight back into the average with the prediction error of the whole
+  gap (in simulation, a median step of 60 to 580 times the scale's rms step
+  after a 2000-sample gap on four white-FM clocks; now about 1). The AT2
+  step detector's windows do not reach behind the sample a clock joined at.
+  `:jones_tryon` still steps at a return, and `:stein` needs its pivot read
+  throughout; both are documented.
 
 ### Security
 
