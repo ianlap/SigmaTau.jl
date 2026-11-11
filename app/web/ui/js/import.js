@@ -199,13 +199,16 @@ export function sniff(name, text) {
 // The scale a column name states: "(ns)", "[ps]" for time, "ppb" for frequency.
 const NAME_UNITS = [[/[(\[]\s*ns\s*[)\]]/i, 1e-9], [/[(\[]\s*(?:us|µs|μs)\s*[)\]]/i, 1e-6], [/[(\[]\s*ms\s*[)\]]/i, 1e-3],
   [/[(\[]\s*ps\s*[)\]]/i, 1e-12], [/ppb/i, 1e-9], [/ppm/i, 1e-6], [/ppt/i, 1e-12]];
+const READING = /phase|freq|value|^[xy]$|UTC-UTC\(/i, FREQ_NAME = /freq|^y$/i;
 const unitOf = (name) => (NAME_UNITS.find(([re]) => re.test(name)) ?? [null, 1])[1];
 
 // Guess which columns hold time and value: a strictly increasing first column
-// is time; the value is the next column that is not constant.
+// is time; the value is the next column that is not constant. `values` lists
+// every clock the names show: all columns named for a reading ("maser1 phase (s)",
+// "UTC-UTC(PTB) (ns)") of the kind the first one has.
 export function guessRoles(s) {
-  if (s.clocks) return { time: 1, value: 2, timeUnit: 86400, scaling: 1 };   // MJD, then the first clock
-  if (s.nCols <= 1) return { time: 0, value: 1, timeUnit: 1, scaling: unitOf(s.names[0] ?? "") };
+  if (s.clocks) return { time: 1, value: 2, values: [2], timeUnit: 86400, scaling: 1 };   // MJD, then the first clock
+  if (s.nCols <= 1) return { time: 0, value: 1, values: [1], timeUnit: 1, scaling: unitOf(s.names[0] ?? "") };
   const inc = (c) => c.length > 1 && c.every((v, i) => i === 0 || v > c[i - 1]);
   // MJD by name, or by range: MJD 30000 to 90000, steps under 0.05 d, and digits past the fourth
   // decimal, which a sub-day MJD needs and seconds of day at 10 Hz (43200.1, …) do not carry.
@@ -216,7 +219,7 @@ export function guessRoles(s) {
   const nm = (c) => s.names[c - 1] ?? "";
   // A clock column that only drifts upward is increasing too, so names count:
   // a column named for a phase or frequency is never time.
-  const reading = (c) => /phase|freq|ratio|value|offset|clock|^[xy]$/i.test(nm(c));
+  const reading = (c) => /phase|freq|ratio|value|offset|clock|^[xy]$|UTC-UTC\(/i.test(nm(c));
   const timeLike = cand.filter((c) => !reading(c));
   // A column named like elapsed seconds wins; then the first increasing
   // column that is not MJD; then the first one, read in days when it is MJD.
@@ -225,12 +228,16 @@ export function guessRoles(s) {
   // Unnamed columns: the first one is time when it is increasing.
   if (!time && cand[0] === 1) time = 1;
   const timeUnit = time && isMjd(s.columns[time - 1], nm(time)) ? 86400 : 1;
-  const named = s.names.findIndex((n, i) => i + 1 !== time && !timeLike.includes(i + 1) && /phase|freq|value|^x$|^y$/i.test(n));
-  if (named >= 0) return { time, value: named + 1, timeUnit, scaling: unitOf(nm(named + 1)) };
+  const named = s.names.map((n, i) => i + 1).filter((c) => c !== time && !timeLike.includes(c) && READING.test(nm(c)));
+  if (named.length) {
+    const kind = (c) => (FREQ_NAME.test(nm(c)) ? "frequency" : "phase");
+    // One scale reads them all: a column stating another unit is left for the user to add.
+    return { time, value: named[0], values: named.filter((c) => kind(c) === kind(named[0]) && unitOf(nm(c)) === unitOf(nm(named[0]))), timeUnit, scaling: unitOf(nm(named[0])) };
+  }
   let value = 1;
   while (value <= s.nCols && (value === time || timeLike.includes(value))) value++;
   if (value > s.nCols) value = time === 1 ? 2 : 1;
-  return { time, value, timeUnit, scaling: unitOf(nm(value)) };
+  return { time, value, values: [value], timeUnit, scaling: unitOf(nm(value)) };
 }
 
 // Time stats and sample count of each picked clock. The clocks of a RINEX file keep

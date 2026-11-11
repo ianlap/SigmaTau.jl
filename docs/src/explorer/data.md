@@ -39,7 +39,10 @@ A file compressed with gzip (`.gz`) is unpacked as it is opened.
 
 The dialog shows the top of the file and what the explorer proposes to read
 from it. The proposal comes from the names of the columns, the header and
-the size of the values. Check it before loading, the record type above all.
+the size of the values. When several columns are named for readings, such as
+`maser1 phase (s)` and `maser2 phase (s)`, each is proposed as a clock, and the
+button counts them (**Load 6 clocks**). Check the proposal before loading, the record
+type above all.
 
 [![The import dialog with a file of three clocks](../assets/explorer/import.png)](../assets/explorer/import.png)
 

@@ -44,7 +44,7 @@ jobs:
           python-version: '3.12'
 
       - name: Import dialog and help tests
-        run: node --test app/web/test/import.test.mjs app/web/test/help.test.mjs
+        run: node --test app/web/test/import.test.mjs app/web/test/format.test.mjs app/web/test/help.test.mjs
 
       - name: Install JuliaC
         run: |

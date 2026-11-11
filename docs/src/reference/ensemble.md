@@ -288,16 +288,17 @@ readings return:
 In simulation, three clocks with white FM of 1, 2 and ``4 × 10^{-12}`` at
 1 s ran at frequency offsets of 0, ``1 × 10^{-12}`` and ``-2 × 10^{-12}``,
 and one of them went unread for ``g`` samples. The table gives the step of
-the scale at the return over its RMS step, in the median of 500 records,
-which is good to 10 %. For an ordinary step that ratio is 0.67.
+the scale at the return over its RMS step, in the median of 2000 records,
+with a standard error of about 3 %. For an ordinary step that ratio is
+0.67.
 
 | Scale, and the clock unread | ``g = 10`` | ``g = 100`` | ``g = 2000`` |
 |:---|---:|---:|---:|
 | all but `:jones_tryon`, the noisiest clock | 0.7 to 0.8 | 0.7 to 0.8 | 0.7 to 0.8 |
-| all but `:jones_tryon`, the best clock | 1.0 to 1.4 | 1.1 to 1.5 | 1.0 to 1.3 |
-| `:jones_tryon`, the noisiest clock | 0.8 | 1.5 | 8.4 |
-| `:jones_tryon`, the best clock | 3.1 | 12 | 61 |
-| `:stein`, its pivot | 2.7 | 8.0 | 41 |
+| all but `:jones_tryon`, the best clock | 1.0 to 1.4 | 1.1 to 1.4 | 1.1 to 1.4 |
+| `:jones_tryon`, the noisiest clock | 0.8 | 1.5 | 8.0 |
+| `:jones_tryon`, the best clock | 3.4 | 11 | 63 |
+| `:stein`, its pivot | 2.6 | 7.6 | 40 |
 
 At the sample of a return the scale is carried by the other clocks, and
 its step is theirs: larger than usual when the best clock is the one that

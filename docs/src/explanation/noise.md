@@ -87,9 +87,9 @@ h = Dict(:WHFM => 2e-24, :RWFM => 1e-30)       # S_y(f) = 2e-24 + 1e-30 f⁻²
 round.(powerlaw_sigma(h, [1.0, 100.0, 1e4]; tau0 = 1.0); sigdigits = 4)
 ```
 
-[`powerlaw_psd`](@ref) gives the same model as ``S_y(f)``, ``S_x(f)`` or
-``ℒ(f)``, and [`powerlaw_fit`](@ref) goes the other way, from a measured
-deviation or spectrum to the ``h_α``.
+[`powerlaw_psd`](@ref) gives the same model as ``S_y(f)``, ``S_x(f)``,
+``S_φ(f)`` or ``ℒ(f)``, and [`powerlaw_fit`](@ref) goes the other way,
+from a measured deviation or spectrum to the ``h_α``.
 
 !!! note "Hadamard conversions"
     Table B.2 of IEEE Std 1139-2022 also has a column for the Hadamard
@@ -97,6 +97,113 @@ deviation or spectrum to the ``h_α``.
     standard's own Eq. (A.31) gives, for example ``h_0/(3τ)`` on white FM
     where the definition gives ``h_0/(2τ)``. The package follows the
     definition, as [SP1065 §5.2.8](@cite riley-2008-sp1065) does.
+
+!!! note "The flicker PM term in print"
+    Eq. (67) of SP1065 prints the flicker PM term over ``2π^2τ^2``. The
+    integral gives ``4π^2τ^2``, as in the table above and in Table B.2 of
+    the IEEE standard.
+
+## A measured spectrum
+
+A spectrum that is not a sum of power laws, such as the ``ℒ(f)`` curve of
+a phase-noise analyzer, is converted by the integral that the forms above
+come from ([SP1065 §7, Eqs. (63) to (66)](@cite riley-2008-sp1065)):
+
+```math
+σ^2(τ) = \int_{f_1}^{f_h} S_y(f)\,\lvert H_τ(f) \rvert^2\,df .
+```
+
+``\lvert H_τ(f) \rvert^2`` is the transfer function of the estimator.
+With ``u = πfτ`` it is ``2\sin^4 u/u^2`` for the Allan variance and
+``(8/3)\sin^6 u/u^2`` for the Hadamard variance. The modified variances
+have ``2\sin^6 u/u^4`` and ``(8/3)\sin^8 u/u^4`` in the limit of a sample
+interval far below ``τ``. [`spectrum_sigma`](@ref) evaluates the integral
+over the points of a table, with the spectrum between neighboring points
+taken as a power law:
+
+```@example noise
+f = [1, 10, 100, 1e3, 1e4, 1e5]              # offset from a 10 MHz carrier, Hz
+L = [-100, -130, -150, -160, -165, -165]     # ℒ(f), dBc/Hz
+s = spectrum_sigma(f, L, [1e-3, 1e-2, 1e-1]; f_carrier = 10e6)
+round.(s.dev; sigdigits = 4)
+```
+
+The table says nothing of the noise below 1 Hz or above 100 kHz, and the
+result is the Allan deviation of the noise between them. Two fields tell
+what the rest could add. Each continues the spectrum on the slope of its
+last decade and gives the variance of the continuation as a fraction of
+the variance found:
+
+```@example noise
+round.(s.below; sigdigits = 2), s.above
+```
+
+At 0.1 s the noise below 1 Hz would add 6 % in variance, and beyond that
+the table does not reach low enough. `above` is infinite at every ``τ``.
+This spectrum ends flat, which is white PM, and the Allan deviation of
+white PM grows with the bandwidth ``f_h`` without limit, as the table of
+the last section shows. The result therefore holds for a measurement
+whose bandwidth is 100 kHz and for no other. The keyword `band` sets
+another bandwidth inside the table. The modified deviations converge:
+
+```@example noise
+m = spectrum_sigma(f, L, [1e-3, 1e-2, 1e-1]; f_carrier = 10e6, deviation = :mdev)
+round.(m.above; sigdigits = 2)
+```
+
+On one power law ``h_α f^α`` over all frequencies the integral is
+``K\,h_α\,τ^{-α-1}``, with these values of ``K``:
+
+| Noise | MDEV | HDEV | MHDEV |
+|:---|:---|:---|:---|
+| white PM | ``3/(8π^2)`` | ``f_h`` | ``5/(12π^2)`` |
+| flicker PM | ``(24\ln 2 - 9\ln 3)/(8π^2)`` | ``f_h`` | ``(6\ln 2 - 3\ln 3)/π^2`` |
+| white FM | ``1/4`` | ``1/2`` | ``2/9`` |
+| flicker FM | ``(27\ln 3 - 32\ln 2)/8`` | ``(8\ln 2 - 3\ln 3)/2`` | ``(27\ln 3 - 40\ln 2)/3`` |
+| random-walk FM | ``11π^2/20`` | ``π^2/3`` | ``2π^2/9`` |
+| flicker-walk FM | | ``π^2(27\ln 3 - 32\ln 2)/6`` | ``π^2(832\ln 2 - 486\ln 3)/45`` |
+| random-run FM | | ``11π^4/15`` | ``604π^4/945`` |
+
+``f_h`` marks the two cases that depend on the bandwidth, and an empty
+cell an integral that does not converge. The MDEV column is the limit of
+the ratios to the Allan variance in
+[Sullivan et al. (1990)](@cite sullivan-1990-tn1337), §A.6, Table 2. The
+test suite holds [`spectrum_sigma`](@ref) to every entry, and to the
+Allan forms of the last section, within ``10^{-10}``.
+
+These are the deviations of a continuous signal. A sampled record with
+the same spectrum up to ``f_h = 1/(2τ_0)`` has a modified variance up to
+3 times the limit at ``τ_0``, at most 2.4 % above it at ``8τ_0`` and
+0.7 % at ``16τ_0``. In simulation, with white PM, white FM and flicker FM
+together in 40 records of ``2^{17}`` samples, the four deviations that
+`spectrum_sigma` gives from the Welch spectrum of each record, with the
+continuation below the band added, agree with the deviations of the
+record itself within 1 % from ``8τ_0`` to ``512τ_0``.
+
+!!! note "The Hadamard transfer function in print"
+    Table 15 of SP1065 prints the transfer function of the Hadamard
+    variance as ``2^4 \sin^6 u/u^2``. That is six times the function
+    above, which is the one of the variance of
+    [SP1065 §5.2.8](@cite riley-2008-sp1065) with its factor 1/6.
+
+## From a deviation to a spectrum
+
+The way back has no general form. Two different spectra can have the same
+Allan variance at every ``τ``
+([Greenhall 1998](@cite greenhall-1998-spectral-ambiguity)), so a curve
+``σ_y(τ)`` does not determine ``S_y(f)``. The conversion is made through a
+model: [`powerlaw_fit`](@ref) fits the ``h_α`` to a measured deviation,
+and [`powerlaw_psd`](@ref) gives their ``S_y(f)``, ``S_x(f)``,
+``S_φ(f)`` or ``ℒ(f)``. What it returns is the spectrum of the fitted
+power laws, with none of the structure, such as a spur or a servo bump,
+that the deviation averages over.
+
+```@example noise
+fit = powerlaw_fit(adev(noise_gen(PhaseData, 8192, 1.0; rng = Xoshiro(3),
+                                  sigma1 = Dict(:WHFM => 1e-12, :RWFM => 3e-14))))
+round.(powerlaw_psd(fit, [1e-3, 1e-2, 0.1]; quantity = :L, f_carrier = 10e6);
+       digits = 1)
+```
 
 ## Simulated noise
 

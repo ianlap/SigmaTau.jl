@@ -32,6 +32,10 @@ let N = 4096, t = 0:N-1, keep = setdiff(1:N, 1000:1009)
     write_columns("b.dat", t, device .- wfm(1e-23, 4))
 end
 
+# ocxo.txt: the phase noise of a 10 MHz oscillator, offset in Hz and ℒ(f)
+# in dBc/Hz.
+write_columns("ocxo.txt", [1, 10, 100, 1e3, 1e4, 1e5], [-100, -130, -150, -160, -165, -165])
+
 # A number with a decimal point that stands as a CSV field or a JSON value.
 const NUMBER = r"(?<=[,:\[\n])-?\d+\.\d+(?:e-?\d+)?(?=[,\]}\n])"
 
