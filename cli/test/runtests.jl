@@ -422,6 +422,32 @@ mktempdir() do dir
         @test run_cli("holdover", hf, "--fit").code == 1                           # CSV has no room for it
     end
 
+    @testset "steer" begin
+        p, _ = simulate_clock(ClockModel(; tau0=1.0, R=1e-20, q1=1e-22, q2=1e-26), 8192; rng=Random.Xoshiro(5))
+        sf = write_table(joinpath(dir, "steer.csv"), p.x)
+        # The model comes from the first stretch alone; every result from its end on.
+        model = clock_model(powerlaw_fit(PhaseData(p.x[1:2048], 1.0)); flicker=true, tau_max=8192)
+        g = steering_gains(30.0, 1.0)
+        s = steer(p, model, g)
+        rows = csv_rows(run_cli("steer", sf, "--time-constant", "30", "--m", "1,16,256").out)
+        @test parse.(Float64, getindex.(rows, 3)) ≈ adev(PhaseData(p.x[2049:end], 1.0), [1, 16, 256]; ci=false).dev
+        @test parse.(Float64, getindex.(rows, 4)) ≈ adev(PhaseData(s.steered.x[2049:end], 1.0), [1, 16, 256]; ci=false).dev
+        @test parse.(Float64, getindex.(rows, 5)) ≈ steer(model, g; tau=[1.0, 16.0, 256.0]).adev
+        # Gains from a cost, a steer every fourth sample: no prediction at that interval.
+        r = run_cli("steer", sf, "--cost", "1:0:1e4", "--interval", "4", "--train", "1024", "--format", "json", "--series", "50")
+        @test r.code == 0 && occursin("\"predicted\":{\"error\":", r.out) && occursin("\"correction\":[", r.out)
+        @test parse(Float64, match(r"\"gains\":\{\"phase\":([^,]*)", r.out)[1]) ≈ lqg_gains(4.0; phase=1, steer=1e4).phase
+        @test all(isempty, getindex.(csv_rows(run_cli("steer", sf, "--cost", "1:0:1e4", "--interval", "4").out), 5))
+        r = run_cli("steer", sf, "--time-constant", "30", "--integral", "--fit-drift", "--format", "json")
+        @test r.code == 0 && occursin("\"drift\":true", r.out) && !occursin("\"integral\":0,", r.out)
+        @test run_cli("steer", sf).code == 1
+        @test run_cli("steer", sf, "--time-constant", "30", "--cost", "1:0:1").code == 1
+        @test run_cli("steer", sf, "--cost", "1:0:1", "--integral").code == 1
+        @test run_cli("steer", sf, "--cost", "0:0:1").code == 1
+        @test run_cli("steer", sf, "--time-constant", "30", "--interval", "1.5").code == 3
+        @test run_cli("steer", sf, "--time-constant", "30", "--train", "8190").code == 3
+    end
+
     @testset "--remove-drift" begin
         # A known offset and drift on top of X: linear removes the offset,
         # quadratic both, and what was removed is reported.
@@ -781,6 +807,8 @@ mktempdir() do dir
                          ["holdover", pf, "--grow", "3", "--fit-drift", "--fit", "--format", "json"],
                          ["holdover", pf, "--train", "512", "--kalman", "--format", "json"],
                          ["holdover", joinpath(dir, "flicker.csv"), "--kalman", "--format", "json"],
+                         ["steer", joinpath(dir, "steer.csv"), "--time-constant", "30", "--integral", "--format", "json", "--series", "40"],
+                         ["steer", joinpath(dir, "steer.csv"), "--cost", "1:0:1e4", "--fit-drift"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],

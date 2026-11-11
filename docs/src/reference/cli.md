@@ -28,6 +28,7 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | `dynamic FILE` | the Allan or Hadamard deviation in a window that slides along the record |
 | `drift FILE` | the fit of a frequency drift model |
 | `holdover FILE` | the time error of the clock left to run on a frequency learned from the record, against holdover time |
+| `steer FILE` | the Allan deviation of the record steered to its reference in replay, beside that of the record and of the steady state that the clock model predicts |
 | `cross FILE --with FILE2` | the cross Allan deviation and cross-spectrum of two channels |
 | `timescale FILE --value-cols LIST` | a time scale from several clocks read against one reference |
 | `model --synth N --noise-model R:Q1:Q2:Q3` | the deviations that a clock model predicts |
@@ -365,6 +366,56 @@ at each holdover time. The JSON output has it as an array, with a member
 `flicker_pm` of the model, and with `anchor` `false`. The two columns agree where the model fits the clock, and
 an `rms` above `claimed` says that the clock has more noise at that
 holdover time than the model.
+
+## `steer`
+
+| Option | Meaning |
+|:---|:---|
+| `--time-constant SECONDS` | the gains of a critically damped loop with this time constant, by pole placement |
+| `--integral` | with `--time-constant`, a third gain, on the running sum of the phase |
+| `--cost P:F:U` | in place of `--time-constant`, the gains that minimize the sum of `P`·phase², `F`·frequency² and `U`·steer². `P` and `U` are above 0 |
+| `--interval SECONDS` | time between steers, a whole multiple of the sample interval. By default every sample |
+| `--train SECONDS` | length of the first stretch, to which the clock model is fitted. By default a quarter of the record |
+| `--fit-drift` | give the clock model a drift state, which the loop steers out |
+| `--grid GRID`, `--m LIST` | the averaging times, as for `analyze` |
+
+The record is the clock running free against its reference, and the
+command replays it through the loop that [Steering](steering.md)
+describes. One of `--time-constant` and `--cost` is required:
+[`steering_gains`](@ref) or [`lqg_gains`](@ref) gives the gains, and
+[`steer`](@ref) the steered record. The clock model is that of
+`holdover --kalman`, fitted to the first stretch alone, so its noise levels
+are not learned from the readings that the loop is judged on. The loop runs
+over the whole record, and every result is taken from the end of that
+stretch on. The record needs 64 samples or more, and the stretch must
+leave 16 on either side of its end. The CSV output has a row for each
+averaging time:
+
+```@example cliref
+sigmatau("steer clock.dat --time-constant 64 --m 1,16,256") # hide
+```
+
+`free` and `steered` are the Allan deviations of the record and of the
+steered record. `predicted` is that of the steady state that
+`steer(model, gains)` gives for the clock model, and it is empty when the
+steers come less often than every sample or the model has random-run FM.
+
+```@example cliref
+sigmatau_json("steer clock.dat --time-constant 64 --m 1,16,256 --format json"; only = "steer") # hide
+```
+
+`gains` holds the phase gain in s⁻¹, the frequency gain and the integral
+gain in s⁻¹, as in [`SteeringGains`](@ref). `time_constants`, in seconds,
+and `frequencies`, in Hz, are those of the poles of the loop, from
+[`steering_poles`](@ref). `drift` tells whether the model has a drift
+state, and `model` holds its coefficients as for `holdover --kalman`.
+`phase_rms` is the RMS of the steered phase in seconds, and `steers_rms`
+that of the steers, in fractional frequency. `predicted` holds the standard
+deviations `phase`, `frequency` and `steers` and the `adev` of the
+[`SteeringPrediction`](@ref), or an `error` message where there is none.
+With `--series N`, a member `series` holds the times `t`, the `steered`
+phase and the frequency `correction` in force, at up to `N` points over the
+whole record.
 
 ## `cross`
 
