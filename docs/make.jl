@@ -83,6 +83,7 @@ makedocs(
             "Bias correction" => "explanation/bias.md",
             "Total estimators on PM noise" => "explanation/total_pm.md",
             "MHTOTDEV bias and EDF" => "explanation/mhtotdev.md",
+            "The Hadamard time deviation" => "explanation/htdev.md",
             "The clock model" => "explanation/clock_model.md",
             "Validation" => "explanation/validation.md",
             "Cross-check report" => "explanation/crosscheck.md",

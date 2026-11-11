@@ -135,7 +135,7 @@ it. So √6 [`tdev`](@ref) is the RMS error of a holdover test that learns
 the frequency from two τ-averages and predicts the third. The third
 difference does the same with three averages and a parabola, drift
 learned: its mean square is 6τ² Mod σ²_H(τ), which makes that error
-√20 [`htdev`](@ref).
+√20 [`htdev`](@ref). [The Hadamard time deviation](@ref) has the steps.
 
 `grow = k` in place of `train` gives the measured test the matching
 stretch, k times each holdover time, so that a longer holdover is learned
