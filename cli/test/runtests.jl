@@ -171,6 +171,7 @@ mktempdir() do dir
         x = zeros(1000); x[437] = 1.0; x[800] = NaN
         idx = SigmaTauCLI.series_index(x, 30)
         @test 437 in idx && 800 in idx && issorted(idx) && length(idx) <= 30
+        @test idx[1] == 1 && idx[end] == 1000
         @test SigmaTauCLI.series_index(x[1:20], 30) == 1:20
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,totdev", "--fit")
         @test r.code == 0
@@ -350,6 +351,10 @@ mktempdir() do dir
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"stein\"", r.out)
         @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
+        # --flicker fits flicker states per clock; these clocks have no flicker, so none.
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--flicker", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"flicker\":{\"fm\":[0,0,0],\"pm\":[0,0,0]}", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--flicker").code != 0
         @test run_cli("timescale", tf, "--value-cols", "2,3", "--algorithm", "greenhall").code != 0
         @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
         # --clocks sets how many clocks are simulated (four by default).
@@ -714,6 +719,11 @@ mktempdir() do dir
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
         @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
+        # A zero in a Stable32 frequency file is a gap, unless it is kept as a reading.
+        zf = joinpath(dir, "z.frd")
+        write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
+        @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
+        @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
     end
 
     @testset "output error -> exit 4" begin

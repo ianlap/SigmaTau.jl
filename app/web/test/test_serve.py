@@ -49,7 +49,8 @@ class RequestToArgsTests(unittest.TestCase):
                     {"args": ["analyze", "--out", "/tmp/x"]}, {"args": ["analyze", "--out=/tmp/x"]},
                     {"args": ["analyze", 3]}, {"args": ["check", "/etc/hostname"], "file": None},
                     {"args": ["check", "/etc/hostname", "--column", "--synth"]}, {"args": ["check", "/etc/hostname", "--synth=0"]},
-                    {"args": ["check", "--synth", "64", "--synth=0", "/etc/hostname"]}):
+                    {"args": ["check", "--synth", "64", "--synth=0", "/etc/hostname"]},
+                    *({"args": ["check"], "file": f} for f in (False, "", [], {"name": "..", "content": "1\n"}))):
             with self.assertRaises(ValueError, msg=req):
                 serve.request_to_args(req, "/nonexistent")
 
@@ -239,6 +240,8 @@ class ServeTests(unittest.TestCase):
         status, doc = self.post(raw=b"{not json")
         self.assertEqual(status, 400)
         self.assertIn("bad JSON", doc["error"])
+        status, doc = self.post(raw=b"[]")
+        self.assertEqual(status, 400)
         status, doc = self.post({"args": ["rm", "-rf"]})
         self.assertEqual(status, 400)
         status, doc = self.post({"args": ["analyze", "--out", "x"]})

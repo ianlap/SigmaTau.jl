@@ -93,7 +93,7 @@ function synthCard(c) {
 // NaN samples from the core, which puts a reading missing from the time
 // column in its slot as one.
 function gapRow(k) {
-  const tip = `${thousands(k.gaps)} missing sample${k.gaps === 1 ? "" : "s"}, skipped by the gap-tolerant estimators${k.gaps ? " (turn on Fill gaps to interpolate them)" : ""}`;
+  const tip = `${thousands(k.gaps)} missing sample${k.gaps === 1 ? "" : "s"}, skipped by the gap-tolerant estimators${k.gaps ? " (turn on Fill gaps to fill them)" : ""}`;
   return `<div class="kv" title="${tip}"><span>Gaps</span><span class="mono ${k.gaps ? "warnv" : ""}">${thousands(k.gaps)}</span></div>`;
 }
 

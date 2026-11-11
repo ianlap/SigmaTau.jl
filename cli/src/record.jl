@@ -194,7 +194,7 @@ function read_instrument(o::Options, fmt::Symbol)
     o.reference_col > 0 && throw(usage_error("--reference-col applies to column files only"))
     r = SigmaTau._read_data(o.input, fmt; tau0=o.tau0, column_name=o.column, nominal=o.nominal,
                             kind=o.freq ? :frequency : o.phase_given ? :phase : :auto, scaling=o.scaling, delim=o.delim,
-                            fillgaps=o.fillgaps)
+                            fillgaps=o.fillgaps, keep_zeros=o.keep_zeros)
     o.freq = !r.phase
     # A filled frequency sample leaves the phase sample after it unmeasured.
     o.measured = isempty(r.filled) ? falses(0) : r.phase ? .!r.filled : [true; .!r.filled]
