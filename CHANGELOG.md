@@ -194,9 +194,9 @@ Clock models, the Kalman filter and timescales.
   weights are the optimal 1/q1 ones. The scale is read at clock `pivot`.
   `algorithm=:jones_tryon` is the same filter without the reduction, the
   natural Jones–Tryon scale (JT83): a clock's reading less its estimated
-  phase. In
-  simulation `implicit_mean(r, truth)` gives the scale's own phase, the mean
-  of the clocks' true phases, free of the pivot clock's reading noise.
+  phase. In simulation `implicit_mean(r, truth)` gives the scale's own
+  phase, the mean of the corrected clocks, free of the pivot clock's reading
+  noise.
 - Stein's Kalman timescale: `timescale(cc; algorithm=:stein, models, pivot, wmax)`
   differences every clock against the pivot, runs a Kalman filter on each
   difference and gets the pivot's own shocks from the constraints that the
@@ -418,6 +418,9 @@ Clock models, the Kalman filter and timescales.
   group "NBS 1000-point" is now "1000-point test suite" (SP1065 §12.4), and
   the benchmark table of a measured record is removed with its two result
   files.
+- Documentation: a background page, "The Hadamard time deviation", on where
+  the 10/3 of `htdev` comes from, and √6·TDEV and √20·HTDEV as the errors of
+  predicting the next τ-average with a line and with a parabola.
 - `bench/README.md` re-timed on a Fedora workstation, with a Thêo1 timing on
   the public allantools Cs 5071A record.
 - The Stable32 reader (`.phd`, `.frd`) reads a value of zero as a gap, as
@@ -584,6 +587,12 @@ Clock models, the Kalman filter and timescales.
   Weiss & Weissert 1991 §4, so it comes back with its new frequency. Before,
   it came back with the old one, was taken out again, and a large step moved
   the scale at the return.
+- `implicit_mean(r, truth)` returns Greenhall's implicit ensemble mean,
+  `Σ aᵢ (xᵢ − x̂ᵢ)` (Greenhall 2006, Eqs. (3.8), (3.13)). It returned
+  `Σ aᵢ xᵢ`, which is the same only for clocks of one noise shape: on clocks
+  that differ in their random-walk FM it read up to 2.6 times noisier than
+  the scale at long τ. `TimescaleResult` has a new field `xhat` (Julia and
+  Python).
 
 ### Security
 
