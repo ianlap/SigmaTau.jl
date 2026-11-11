@@ -353,6 +353,13 @@ Clock models, the Kalman filter and timescales.
 - Python: `ClockComparisons.from_records`, one phase record per clock.
 - Explorer: **Phase noise…** on the Stability page draws the σ(τ) that a
   table of ℒ(f) gives, beside the deviations of the record.
+- `groslambert(...; weighted = true)` weighs each pair of the other clocks
+  by the inverse of the product of its records' Allan variances (Python:
+  `weighted=True`).
+- `sigmatau timescale`: the JSON output of a Kalman scale has `models`, the
+  model fitted to each clock, and a message on stderr names a clock whose
+  fit has no white FM; the explorer's Ensemble page shows the fitted white
+  FM.
 
 ### Changed
 
@@ -585,6 +592,12 @@ Clock models, the Kalman filter and timescales.
 - Explorer: on the Data page the plot keeps a usable height in a small
   window (the page scrolls); the hat plot's legend sits above the curves,
   not over them.
+- `clock_models` weighs the pairs by their noise, so the fitted models
+  change for four clocks or more; a quiet clock beside noisy ones is now
+  resolved.
+- `timescale` refuses `steps` with a Kalman scale, `models` with an
+  averaging scale, and a `tau_min`, `memory` or `step_threshold` that is out
+  of range.
 
 ### Removed
 
