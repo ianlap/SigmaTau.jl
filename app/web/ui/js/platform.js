@@ -2,9 +2,22 @@
 // and in the desktop shell (app/desktop):
 //   openFile()  -> { name, text, sha256 } or null   (a file input in both)
 //   saveFile(name, blob)                      (browser download, or the shell's save dialog)
+//   webLinks(onError)                         (links to the web, from the shell)
 // The core itself is reached through core.js.
 
 const tauri = window.__TAURI__?.core;
+
+// A link to the web (target="_blank") opens a tab in a browser. The window of
+// the shell opens none: there the link goes to the system browser.
+export function webLinks(onError) {
+  if (!tauri) return;
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest?.('a[target="_blank"]');
+    if (!a) return;
+    e.preventDefault();
+    tauri.invoke("open_url", { url: a.href }).catch((err) => onError(String(err)));
+  });
+}
 
 // A picked or dropped file: its text, and the SHA-256 of its bytes for reports
 // (empty where Web Crypto is unavailable).

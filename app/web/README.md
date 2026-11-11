@@ -78,17 +78,17 @@ The desktop app answers the same requests through commands of its own.
 
 ```bash
 SIGMATAU_CLI=cli/build/bin/sigmatau python3 -m unittest discover -s app/web/test -v
-node --test app/web/test/import.test.mjs
+node --test app/web/test/import.test.mjs app/web/test/help.test.mjs
 SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 ```
 
 The first sends `serve.py` the requests of the pages. The second tests
-what the import dialog makes of the top of a file. The third drives the
-pages in Chromium against the compiled program, and needs Playwright
-(`npm install playwright`, then `npx playwright install chromium`). The
-*Web core* workflow builds the program with `--trim=safe` and runs all
-three, with the tests of `cli/`, on every change to `src/`, `cli/` or
-`app/web/`.
+what the import dialog makes of the top of a file, and the addresses and
+the search of the help. The third drives the pages in Chromium against the
+compiled program, and needs Playwright (`npm install playwright`, then
+`npx playwright install chromium`). The *Web core* workflow builds the
+program with `--trim=safe` and runs all three, with the tests of `cli/`,
+on every change to `src/`, `cli/` or `app/web/`.
 
 ## The code of the pages
 
@@ -106,3 +106,9 @@ three, with the tests of `cli/`, on every change to `src/`, `cli/` or
   look that every plot shares.
 - `ui/js/session.js` writes and reads session files, and `ui/js/report.js`
   writes the HTML report.
+- `ui/js/help-content.js` is the help: the
+  [manual](../../docs/src/explorer/), as `julia docs/explorer_help.jl`
+  writes it. Change the pages of the manual and run that script. The build
+  of the documentation stops when the file is behind them. `ui/js/help.js`
+  finds and searches its sections, `ui/js/helpmenu.js` is the menu under
+  **?** and `ui/js/pages/help.js` the page.

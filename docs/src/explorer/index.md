@@ -47,7 +47,7 @@ open.
 | Record chip | The record in use: its name, the number of samples, the sample interval, the span and what was removed from it. With several clocks, their number and the samples in all. A click opens the Data page |
 | **File** menu | The [exports](export.md): the plot, the results, a report, and saving and opening a session |
 | Theme button | Switches between the colors of the system, a light theme and a dark theme. The choice is remembered |
-| **?** | The help |
+| **?** | The [help](#The-help): a search through this manual and its sections on the page in view |
 | [Side panel](panel.md) | The clocks, the estimators and the options of the analysis, with the **Run analysis** button. On Synthesis, Ensemble and Live it holds the settings of that page |
 | Status bar | Whether the results on screen belong to the inputs on screen |
 
@@ -80,8 +80,25 @@ loaded; and after each change to a noise model built by hand.
 |:----|:-------|
 | F5, or Ctrl+Enter (Cmd+Enter on macOS) | Run the analysis. During a run: cancel it, or start it again if the inputs have changed since |
 | 1 to 9 | Data, Synthesis, Stability, Spectrum, Dynamic, Holdover, Steering, Ensemble, Live |
-| ? | Help |
-| Esc | Cancel a run, close a dialog |
+| ? | The help menu |
+| F1 | The help on the page in view |
+| Esc | Cancel a run, close a dialog or the help menu |
 
 On a plot, hovering shows the values, a drag zooms and a double click
 restores the full range.
+
+## The help
+
+The help is this manual inside the explorer, without its screenshots.
+**?** in the top bar, or the ? key, opens the help menu:
+
+| Entry | Opens |
+|:------|:------|
+| **Search the help** | The sections in which every word typed begins a word, those with the words in their title first. `tau`, `sigma` and the names of the other Greek letters of the manual also find the letter. Enter opens the first section listed |
+| **On this page** | The sections of the manual on the page in view |
+| **Contents of the help** | The manual from its first page, with its pages listed beside the text |
+| **Keyboard and mouse**, **Estimators and noise types** | Those two parts of the manual |
+| **Documentation on the web** | The documentation of the package in the browser, with the reference of the Julia functions and of the command line |
+
+F1 opens the help on the page in view. A link from the help to another part
+of the documentation opens in the browser.

@@ -90,6 +90,7 @@ The pages detect the app through `window.__TAURI__` in `ui/js/core.js` and
 | `analyze(id, req)` | Takes the request of `POST /api/analyze` and returns the JSON of the program |
 | `cancel(id)` | Stops the program of a running `analyze` |
 | `save_file(name, data)` | Opens a save dialog and writes the bytes; `false` when the dialog is cancelled |
+| `open_url(url)` | Shows an `https` address in the browser of the system: the links from the help to the documentation |
 | `live_start(args)`, `live_poll(id, since)`, `live_stop()` | The three requests of the Live page |
 
 Each `analyze` writes the record to a new temporary folder, runs the
