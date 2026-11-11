@@ -453,7 +453,7 @@ const CSV_STEER = "source,tau,free,steered,predicted"
 # The steady state the clock model predicts for the loop, or why there is none.
 function steer_prediction(model::ClockModel, g::SteeringGains, tau::Vector{Float64})
     return try
-        steer(model, g; tau)
+        steer(model, g; tau, readings=true)
     catch err
         err isa ArgumentError || rethrow()
         error_message(err)

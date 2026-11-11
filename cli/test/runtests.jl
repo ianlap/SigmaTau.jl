@@ -432,7 +432,7 @@ mktempdir() do dir
         rows = csv_rows(run_cli("steer", sf, "--time-constant", "30", "--m", "1,16,256").out)
         @test parse.(Float64, getindex.(rows, 3)) ≈ adev(PhaseData(p.x[2049:end], 1.0), [1, 16, 256]; ci=false).dev
         @test parse.(Float64, getindex.(rows, 4)) ≈ adev(PhaseData(s.steered.x[2049:end], 1.0), [1, 16, 256]; ci=false).dev
-        @test parse.(Float64, getindex.(rows, 5)) ≈ steer(model, g; tau=[1.0, 16.0, 256.0]).adev
+        @test parse.(Float64, getindex.(rows, 5)) ≈ steer(model, g; tau=[1.0, 16.0, 256.0], readings=true).adev
         # Gains from a cost, a steer every fourth sample: no prediction at that interval.
         r = run_cli("steer", sf, "--cost", "1:0:1e4", "--interval", "4", "--train", "1024", "--format", "json", "--series", "50")
         @test r.code == 0 && occursin("\"predicted\":{\"error\":", r.out) && occursin("\"correction\":[", r.out)
