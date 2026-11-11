@@ -43,8 +43,9 @@ command as `POST /api/analyze` with the body
 ```
 
 The first argument must be `check`, `analyze`, `spectrum`, `dynamic`,
-`drift`, `holdover`, `steer`, `timescale`, `hat` or `model`, and `--out` is
-refused. The server saves `file` in a temporary folder and puts its path after the
+`drift`, `holdover`, `steer`, `timescale`, `hat`, `model` or `phasenoise`,
+and `--out` is refused. The server saves `file` in a temporary folder and
+puts its path after the
 command. A request for a simulated record has no `file`, and `--synth N`
 must then follow the command directly, so that no request names a path on
 the machine of the server. The answer is the JSON of the program, with
