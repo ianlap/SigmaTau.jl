@@ -193,6 +193,11 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(len(doc["steer"]["steered"]), len(doc["steer"]["tau"]))
         self.assertEqual(len(doc["steer"]["predicted"]["adev"]), len(doc["steer"]["tau"]))
 
+    def test_hat(self):
+        status, doc = self.post({"args": ["hat", "--synth", "4096", "--clocks", "3", "--format", "json"]})
+        self.assertEqual(status, 200, doc)
+        self.assertEqual(len(doc["hat"]["results"][0]["clocks"]), 3)
+
     def test_live(self):
         status, doc = self.post({"args": ["live", "sim", "--fast", "--count", "20", "--every", "10", "--m", "1"]},
                                 path="/api/live/start")
