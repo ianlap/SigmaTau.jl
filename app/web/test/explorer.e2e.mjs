@@ -241,7 +241,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
   });
 
-  await t.test("Ensemble: a file with gaps forms an averaging scale, and a Kalman scale says why it cannot", async () => {
+  await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
     const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
     const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
@@ -249,12 +249,11 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     for (const col of [3, 4]) await page.selectOption(`#import-dialog select[data-col="${col}"]`, "value");
     await page.click("#import-dialog [data-act=load]");
     await settled();
-    const n = errors.length;
+    const scale = (alg) => page.waitForFunction((a) => new RegExp(`^${a}.* 1200 samples`).test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), alg, SLOW);
     await page.click("a[data-page=ensemble]");   // Greenhall, as the Ensemble step above left it
-    await page.locator("#page.page-ensemble [data-ref=empty]", { hasText: "needs a file without missing samples" }).waitFor(SLOW);
-    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+    await scale("Greenhall");
     await page.selectOption("#side [data-ctl=alg]", "at1");
-    await plotted("#page [data-ref=adev]");
+    await scale("AT1");
   });
 
   assert.deepEqual(errors, []);

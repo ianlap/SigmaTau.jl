@@ -47,10 +47,10 @@ function Base.show(io::IO, r::CrossSpectralResult)
               r.nseg, " averages, nperseg=", r.nperseg, ")")
 end
 
-function _cross_pair(a::AbstractTimingData, b::AbstractTimingData)
+function _cross_pair(a::AbstractTimingData, b::AbstractTimingData; gaps::Bool=false)
     (a isa PhaseData) == (b isa PhaseData) ||
         throw(ArgumentError("cross: pass two PhaseData or two FrequencyData records"))
-    (any(isnan, _samples(a)) || any(isnan, _samples(b))) &&
+    gaps || (any(isnan, _samples(a)) || any(isnan, _samples(b))) &&
         throw(ArgumentError("cross: the records have gaps (NaN); fill them first with fillgaps"))
     a.tau0 == b.tau0 ||
         throw(ArgumentError("cross: the channels have different τ₀ ($(a.tau0) vs $(b.tau0))"))

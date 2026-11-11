@@ -462,6 +462,13 @@ Clock models, the Kalman filter and timescales.
   times less error than it made on a clock with a flicker floor.
   `flicker = false` gives the former model, which the `:stein` time scale
   needs.
+- `timescale` with `:stein` starts the difference of each clock from its
+  filter's estimate over the clock's first tenth of the record, smoothed
+  back to its first reading, and starts the scale at the weighted mean of
+  its clocks. A clock that joins late no longer shifts the rate of the scale
+  by many times what the noise of the clocks gives, the rate and drift of
+  the scale no longer depend on the pivot at the start, and models with
+  aging no longer run the scale away. Every `:stein` result changes.
 
 ### Removed
 
@@ -716,6 +723,13 @@ Clock models, the Kalman filter and timescales.
   against the Julia ones, among them the sign of `timescale_phase`, what
   `remove_outliers` does and the formats of `read_data`, and `help()` of an
   estimator lists the keywords it shares with the others.
+- `identify_noise`, `calculate_edf` and `bias_correction` throw an
+  `ArgumentError` for an averaging factor below 1, as the estimators do;
+  before, 0 raised `DivideError` or `InexactError` and a negative factor
+  returned a label, an EDF or a bias factor.
+- `sigmatau model` refuses `--format csv`: it wrote JSON all the same, and
+  an error later on that line came as plain text. Its error object names
+  `"source":"model"`, as its result does.
 
 ### Security
 
