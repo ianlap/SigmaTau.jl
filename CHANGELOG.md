@@ -149,6 +149,10 @@ Clock models, the Kalman filter and timescales.
   frequency and steer, the linear quadratic Gaussian design (Koppang &
   Leland 1999); it reproduces the three designs that paper prints. Also in
   Python.
+- `sigmatau steer`: replays a record through a steering loop and writes the
+  Allan deviation free-running, steered and as the clock model predicts.
+  Gains from `--time-constant` (with `--integral`) or `--cost P:F:U`; the
+  clock model is fitted to the first `--train` stretch alone.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
