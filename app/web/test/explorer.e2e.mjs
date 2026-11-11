@@ -13,7 +13,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -328,6 +329,72 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     }));
     assert.deepEqual(outside, []);
     assert.ok((await page.locator("[data-ref=plot-hint]").boundingBox()).width >= 100, "the hint keeps 100 px");
+  });
+
+  await t.test("Data: a file of named clocks is proposed whole; Holdover and Steering name the clock they cannot compute", async () => {
+    // Clock a has no readings in its first 800 samples, so no stretch to learn a noise model from.
+    const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
+    const rows = Array.from({ length: 1200 }, (_, i) => [i, i < 800 ? "NaN" : clock(i, 1), clock(i, 2), clock(i, 3)].join(","));
+    await page.goto(base + "#data");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "late.csv", mimeType: "text/csv", buffer: Buffer.from(`t (s),a phase (s),b phase (s),c phase (s)\n${rows.join("\n")}\n`) });
+    await page.getByRole("button", { name: "Load 3 clocks" }).click();   // all three, none marked by hand
+    await settled();
+    const n = errors.length;
+    await page.click("a[data-page=holdover]");
+    await page.click('[data-ctl=kalman][data-v="1"]');
+    const note = page.locator("#page [data-ref=note]", { hasText: "a phase (s)" });
+    await note.waitFor(SLOW);
+    assert.match(await note.innerText(), /noise model has 0 usable τ points/);
+    await page.waitForFunction(() => { const n = document.querySelector("#page [data-ref=plot]")?.data?.map((d) => d.name) ?? []; return ["b", "c"].every((k) => n.some((x) => x.startsWith(`${k} phase (s)`))); }, null, SLOW);
+    assert.ok(!(await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.some((d) => d.name.startsWith("a phase (s)")))));
+    await page.click("a[data-page=steering]");
+    await page.locator("#page [data-ref=note]", { hasText: "a phase (s)" }).waitFor(SLOW);
+    await plotted("#page [data-ref=plot]");
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+  });
+
+  await t.test("Data: with no drift fit to show, the buttons above the plot stay clickable", async () => {
+    await page.goto(base + "#data");
+    const n = errors.length;
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "tiny.csv", mimeType: "text/csv", buffer: Buffer.from("0,1e-9\n1,3e-9\n2,2e-9\n") });
+    await page.locator("#import-dialog [data-act=load]").click({ timeout: 5000 }).catch(() => {});   // (the dialog, unless settings were remembered)
+    await settled();
+    const reachable = () => page.evaluate(() => [...document.querySelectorAll("[data-view]")].map((b) => { const r = b.getBoundingClientRect(); return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest("[data-view]") === b; }));
+    await page.click("[data-view=drift]");
+    await page.locator("#page [data-ref=empty]", { hasText: "No fit for this record" }).waitFor(SLOW);
+    for (const view of ["drift", "hist", "acf", "phase"]) {   // whatever the view shows, the view buttons stay reachable
+      await page.click(`[data-view=${view}]`);
+      await settled();
+      assert.deepEqual(await reachable(), [true, true, true, true], view);
+    }
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // the core refuses a record and a fit of three samples
+  });
+
+  await t.test("Live: the readings analyzed are the file that Save readings writes", async () => {
+    await page.click("a[data-page=live]");
+    const n = errors.length;
+    await page.click("[data-ctl=go]");
+    await plotted("#page [data-ref=sigma]");
+    await page.waitForTimeout(3000);   // readings enough to analyze (16)
+    await page.click("[data-ctl=go]");
+    await page.locator("[data-act=analyze]:not([disabled])").waitFor(SLOW);
+    const [download] = await Promise.all([page.waitForEvent("download"), page.click("[data-act=save]")]);
+    const file = readFileSync(await download.path());
+    const saved = createHash("sha256").update(file).digest("hex");
+    const readings = file.toString().split("\n").filter((l) => l && !l.startsWith("#")).length;
+    await page.click("[data-act=analyze]");
+    await settled();
+    const analyzed = await page.evaluate(async (url) => {
+      const { state } = await import(url);
+      const bytes = new TextEncoder().encode(state.clocks.at(-1).source.content);
+      return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    }, base + "js/state.js");
+    assert.equal(analyzed, saved);
+    // Analyze readings runs every loaded clock: the 422s are the records the earlier steps left (three samples, TOTDEV on gaps), not the Live record.
+    assert.equal(await page.evaluate(async (url) => (await import(url)).state.clocks.at(-1).record?.n, base + "js/state.js"), readings);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
   assert.deepEqual(errors, []);

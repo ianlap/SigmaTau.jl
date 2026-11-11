@@ -14,6 +14,20 @@ test("a clock column that only drifts upward is not the time column", () => {
   assert.deepEqual([g.time, g.value, g.timeUnit], [1, 2, 86400]);
 });
 
+test("every column named for a reading is proposed as a clock, of the first one's kind", () => {
+  const six = read("ens.csv", ["t (s),maser1 phase (s),maser2 phase (s),cs1 phase (s)", ...seq(30, (i) => `${i},${1e-9 * i},${2e-9 * i * i},${3e-9 * Math.sin(i)}`)]);
+  assert.deepEqual([six.g.time, six.g.value, six.g.values], [1, 2, [2, 3, 4]]);
+  const utc = read("labs.csv", ["MJD,UTC-UTC(NIST) (ns),UTC-UTC(PTB) (ns)", ...seq(30, (i) => `${50814 + 5 * i},${(i * 7) % 5},${(i * 3) % 4}`)]);
+  assert.deepEqual([utc.g.values, utc.g.scaling], [[2, 3], 1e-9]);
+  const mixed = read("m.csv", ["t,A phase (s),B freq,C phase (s)", ...seq(30, (i) => `${i},${1e-9 * i},${1e-12 * (i % 3)},${2e-9 * i}`)]);
+  assert.deepEqual(mixed.g.values, [2, 4]);
+  const units = read("u.csv", ["t (s),A phase (ns),B phase (s),C phase (ns)", ...seq(30, (i) => `${i},${1e-9 * i},${2e-9 * Math.sin(i)},${3 * Math.cos(i)}`)]);
+  assert.deepEqual([units.g.values, units.g.scaling], [[2, 4], 1e-9]);
+  const flag = read("f.dat", ["# t  ratio  flag", ...seq(30, (i) => `${59646 + i / 86400}\t${(i % 3 - 1) * 1e-15}\t1`)]);
+  assert.deepEqual(flag.g.values, [2]);
+  assert.deepEqual(read("plain.csv", seq(20, (i) => `${i},${1e-9 * Math.cos(i)},${3e-9 * Math.sin(i)}`)).g.values, [2]);
+});
+
 test("MJD in a column headed t is days; seconds of day at 10 Hz stay seconds", () => {
   const mjd = read("r.dat", ["# t  ratio  flag", ...seq(30, (i) => `${(59638.801389 + i / 86400).toFixed(6)} ${-7e-15 + i * 1e-17} 1`)]);
   assert.deepEqual([mjd.g.time, mjd.g.timeUnit], [1, 86400]);

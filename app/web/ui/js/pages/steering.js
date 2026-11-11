@@ -9,7 +9,7 @@
 import { state, update, visibleClocks, multi } from "../state.js";
 import { steer as fetchSteer, steerKey, steerDefault } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, timeUnit } from "../plot.js";
-import { sci, num, duration, modelText, escapeHtml as h } from "../format.js";
+import { sci, num, duration, modelText, inWords, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
@@ -75,6 +75,7 @@ export function mount(el, c) {
   root.innerHTML = `
     <div class="col">
       <div class="toolbar hold-bar steer-bar" data-ref="toolbar"></div>
+      <p class="spec-note muted small" data-ref="note"></p>
       <div class="card plot-card"><div class="card-row"><h2 data-ref="title"></h2><span class="muted small" data-ref="sub"></span></div>
         <div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
     </div>
@@ -142,7 +143,7 @@ function renderSide(box, clocks) {
       ${kv("Steers, RMS", both(st.steers_rms, p?.steers, ""), "Fractional frequency per steer")}
     </div>
     <p class="muted small hold-note">Model fitted to the first ${duration(st.train)}: ${modelText(st.model)}${st.drift ? ", with a drift state" : ""}.</p>
-    ${p ? "" : `<p class="muted small hold-note">No predicted curve: ${h(st.predicted.error)}</p>`}
+    ${p ? "" : `<p class="muted small hold-note">No predicted curve. ${h(inWords(st.predicted.error))}</p>`}
     <div class="tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>free</span><span>steered</span><span>predicted</span></div>
     ${st.tau.map((t, i) => `<div class="tbl-row tbl-body"><span>${num(t, 5)}</span><span>${sci(st.free[i], 3)}</span><span>${sci(st.steered[i], 3)}</span><span>${sci(p?.adev[i], 3)}</span></div>`).join("")}</div>`;
 }
@@ -225,7 +226,9 @@ export function refresh() {
   const ready = current.filter((c) => !c.steer.error);
   const failed = current.filter((c) => c.steer.error);
   renderSide(side, ready);
-  if (!ready.length) return showEmpty(`<p>${failed.length ? h(failed.map((c) => `${several ? `${c.name}: ` : ""}${c.steer.error}`).join(" · ")) : "Replaying the steering loop…"}</p>`);
+  // A clock whose replay failed is named with the reason, beside the ones that worked.
+  root.querySelector("[data-ref=note]").innerHTML = ready.length ? failed.map((c) => `No steering replay for <b>${h(c.name)}</b>: ${h(inWords(c.steer.error))}`).join("<br>") : "";
+  if (!ready.length) return showEmpty(`<p>${failed.length ? h(failed.map((c) => `${several ? `${c.name}: ` : ""}${inWords(c.steer.error)}`).join(" · ")) : "Replaying the steering loop…"}</p>`);
   showEmpty("");
   if (!Plotly) return;
   root.querySelector("[data-ref=sub]").textContent = record ? "the whole record, as the loop would have left it"

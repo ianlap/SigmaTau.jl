@@ -86,4 +86,6 @@ With several clocks, the settings move to a bar above the plot, and each
 clock has one color. With **σ(τ)** its steered deviation is a solid line
 and its free-running one a dashed line, and the prediction is not drawn.
 With **Record** the plot gives the steered phase of each clock. The card
-lists the RMS of the steered phase and of the steers of each clock.
+lists the RMS of the steered phase and of the steers of each clock. A clock
+whose replay cannot be computed is named with the reason on a line above the
+plot and is left out of the card.
