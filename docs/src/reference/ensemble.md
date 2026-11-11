@@ -69,8 +69,9 @@ the equations is the time since the last sample with a reading
 read together at every tenth sample give the scale of those readings alone.
 They do have to be read together: a clock read less often than the others
 joins anew at each of its readings and never has a weight. For clocks on
-different schedules use `:greenhall`, whose filter takes each reading when it
-comes.
+different schedules, form the scale on the samples they share: the Kalman
+scales take each reading when it comes, but then lean on the clock read most
+often.
 
 `:greenhall` is Greenhall's Kalman timescale. One Kalman filter tracks every
 clock's phase and frequency from the clock models; after each update the
