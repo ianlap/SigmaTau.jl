@@ -645,6 +645,11 @@ Clock models, the Kalman filter and timescales.
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
   reads a table with named columns without `--header`, and its read errors
   name the CLI flags.
+- `tune_q` returned a model whose claimed error was arbitrary, because its
+  prediction-error criterion does not see a common factor on `R`, `q1` and
+  `q2`. The tuned levels are now scaled by the mean squared normalized
+  innovation (Tryon and Jones 1983, Eq. 5.1), and the result carries `scale`
+  and `edge` (best pair on the edge of the grid).
 
 ### Security
 
