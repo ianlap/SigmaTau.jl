@@ -173,6 +173,15 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(status, 200, doc)
         self.assertEqual(doc["record"]["n"], 1024)
 
+    def test_phasenoise_table(self):
+        table = "offset,L\n" + "".join(f"{10.0**k},{-100 - 20 * k}\n" for k in range(6))
+        status, doc = self.post({
+            "args": ["phasenoise", "--carrier", "10e6", "--header", "1", "--devs", "adev,tdev", "--format", "json"],
+            "file": {"name": "ocxo.csv", "content": table}})
+        self.assertEqual(status, 200, doc)
+        self.assertEqual(doc["spectrum"]["band"], [1.0, 1e5])
+        self.assertEqual([r["deviation"] for r in doc["results"]], ["adev", "tdev"])
+
     def test_dynamic(self):
         status, doc = self.post({"args": ["dynamic", "--synth", "4096", "--dev", "dhdev",
                                           "--format", "json"]})

@@ -28,6 +28,7 @@ type when it is not identified at each averaging time.
 | **CI band** | Draws the confidence intervals as a shaded band. Without it they are error bars |
 | **Fit** | Draws the [noise model](#The-noise-model) and lists its coefficients |
 | **Pin run** | Keeps the curves of this run on the plot, as [pinned runs](#Pinned-runs) |
+| **Phase noise…** | Draws the deviations that a [table of phase noise](#A-phase-noise-table) gives |
 | Mask menu | On the time axis, draws a [telecom mask](#Masks) |
 
 Hovering over a point shows its averaging time and value, with the EDF and
@@ -151,6 +152,32 @@ removes the pin.
 A pin shows what a change does: pin, change the drift removal, the range or
 the bias correction, and run again. Pins are part of the plot and of its
 image. They are not in the other exports or in a saved session.
+
+## A phase-noise table
+
+**Phase noise…** opens a file with two columns, the offset frequency in Hz
+and the phase noise ``ℒ(f)`` in dBc/Hz, as a phase-noise analyzer exports
+it or as a data sheet lists it. Lines of text above the numbers are
+skipped. The explorer converts the table to ADEV, MDEV, TDEV, HDEV and
+MHDEV with [`spectrum_sigma`](@ref), at the carrier frequency set on the
+[Spectrum page](spectrum.md), and draws those of the estimators in the
+list as broken lines, like a pinned run. Its chip is **ℒ(f) 1**, and ×
+removes it.
+
+A table covers a band of offset frequencies, and the curves are the
+deviations of the noise inside that band. They run from the shortest
+averaging time that the band resolves, one over its highest offset, to a
+tenth of one over its lowest. Hovering over the chip gives the band, how
+much the noise below it would add to the Allan variance at the longest
+averaging time, and whether ADEV and HDEV depend on the bandwidth of the
+measurement: on white and flicker PM they do, and the curves then hold for
+a bandwidth equal to the highest offset of the table.
+[Power-law noise](../explanation/noise.md#A-measured-spectrum) has the
+conversion.
+
+A table of a few offsets beside a record measured at one-second intervals
+puts the short and the long averaging times of one oscillator on one plot.
+Like a pin, the table is not in a saved session.
 
 ## Several clocks
 

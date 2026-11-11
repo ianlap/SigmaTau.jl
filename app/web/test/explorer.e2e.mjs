@@ -197,6 +197,18 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("[data-axis=sigma_y]");
   });
 
+  await t.test("Stability: a phase-noise table is drawn as the command line converts it", async () => {
+    const table = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "ocxo.csv");
+    writeFileSync(table, "Offset (Hz),L(f) (dBc/Hz)\n1,-100\n10,-130\n100,-150\n1000,-160\n1e4,-165\n1e5,-165\n");
+    await page.setInputFiles("#page [data-ref=pn-file]", table);
+    await page.waitForFunction(() => document.querySelectorAll("#page [data-unpin]").length === 2, null, SLOW);
+    assert.match(await page.locator("#page .chip").last().getAttribute("title"), /from 1 Hz to 100 kHz, carrier 10 MHz[^]*hold for 100 kHz/);
+    const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ℒ(f) 2 · MDEV"));
+    const doc = JSON.parse(execFileSync(CLI, ["phasenoise", table, "--header", "1", "--carrier", "10e6", "--devs", "mdev", "--format", "json"]));
+    assert.deepEqual([shown.x, shown.y], [doc.results[0].tau, doc.results[0].dev]);
+    await page.click("#page .chip:last-child [data-unpin]");
+  });
+
   await t.test("A record with gaps runs without its spectrum", async () => {
     const gapped = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "gapped.csv");
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
