@@ -285,7 +285,7 @@ which is good to 10 %. For an ordinary step that ratio is 0.67.
 | all but `:jones_tryon`, the best clock | 1.0 to 1.4 | 1.1 to 1.3 | 1.0 to 1.3 |
 | `:jones_tryon`, the noisiest clock | 0.8 | 1.5 | 8.4 |
 | `:jones_tryon`, the best clock | 3.1 | 12 | 61 |
-| `:stein`, its pivot | 2.4 | 7.5 | 38 |
+| `:stein`, its pivot | 2.7 | 8.0 | 41 |
 
 At the sample of a return the scale is carried by the other clocks, and
 its step is theirs: larger than usual when the best clock is the one that
@@ -308,9 +308,12 @@ of 8192, the rate of the `:ewfa`, `:greenhall` and `:jones_tryon` scales
 changed at the join by what the noise of the clocks gives. That of `:at1`
 and `:at2` changed by 1.3 times as much when the best clock was the late
 one: the error of its frequency, measured over 819 samples, times its
-weight of 0.75. `:stein` starts a difference from 16 readings and passes
-the later corrections of its filter to the pivot, and its rate changed by
-9 times as much when the best clock was the late one.
+weight of 0.75. `:stein` measures the late clock against its pivot over
+the clock's first tenth of the record, with the noise of the pivot in the
+measure. When the best clock was the late one its rate changed by 1.2
+times as much with the middle clock as pivot and by 2.4 times with the
+noisiest: give `:stein` the quietest clock that is read from the start as
+its pivot.
 
 `:stein` measures every clock against its pivot. While the pivot is unread
 no difference is measured, every clock runs on its prediction, and the

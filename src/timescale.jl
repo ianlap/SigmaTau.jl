@@ -517,6 +517,13 @@ pair of clocks; with the filters of one pivot only, the scale depends on
 the pivot. Models with flicker states are refused; `clock_model` makes
 one without them with `flicker = false`.
 
+The paper starts from given values of the states (after Eq. (7.3)). Here
+the difference of each clock starts from the estimate of its filter at the
+first reading of the clock, smoothed back over the clock's first tenth of
+the record, 16 readings at least. The scale starts as the weighted mean of
+the clocks read at the first sample, in phase, frequency and aging, each
+with the weights of that state. The procedure is the package's own.
+
 The paper does not treat missing readings. Here a clock without a reading
 runs on its prediction, and at its first reading after a gap it takes no
 part in the shocks of the pivot, because its innovation spans the gap; the
@@ -969,6 +976,20 @@ function _inverse_weights(v::Vector{Float64}, use::Vector{Int}, wmax::Float64)
     return wmax < 1 ? _cap_weights!(w, wmax) : w
 end
 
+# Start of a clock's difference against the pivot, of model `m`: the model's
+# estimate at the difference's first reading from the readings of the `stop`
+# samples from there (16 readings at least), which is the Kalman filter over
+# them smoothed back, then carried back to sample 1 with zero added noise. The
+# filter starts wide, so that it does not count its first readings twice.
+function _stein_start(d::Vector{Float64}, m::ClockModel, stop::Int)
+    idx = findall(isfinite, d)
+    z = d[idx[1]:max(min(length(d), idx[1] + stop - 1), idx[min(length(idx), 16)])]
+    x0, P0 = _model_start(z, m; widen=1e5)
+    ks = kalman_smooth(kalman_filter(PhaseData(z, m.tau0), m; x0, P0))
+    Φ = state_transition(m, -(idx[1] - 1) * m.tau0)
+    return Φ * ks.x[1, :], Φ * ks.P[:, :, 1] * Φ'
+end
+
 # Stein's Kalman timescale (Stein 2003, eqs 4.1–7.3; Levine 2012 §XVI, KAS-2).
 # Each clock is a three-state model (phase, frequency, aging; two states when no
 # model has aging noise) driven by independent shocks of variance ε² = q1τ,
@@ -1002,17 +1023,24 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     p = pivot
     isfinite(cc.x[1, p]) || throw(ArgumentError("timescale: the pivot clock $p has no reading at the first sample"))
     X, Y, W, E, Xh = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k), zeros(N, k)
-    # Pivot against the scale: the start scale is the plain mean of the first readings.
-    ok = isfinite.(cc.x[1, :])
-    xs = zeros(ns)
-    xs[1], xs[2] = cc.x[1, p] - sum(cc.x[1, ok]) / count(ok), _initial_frequency(cc)[p]
     S = zeros(ns, k)                                  # difference states, clock i − pivot
     P = [zeros(ns, ns) for _ in 1:k]
     for i in 1:k
         i == p && continue
         d = cc.x[:, i] .- cc.x[:, p]
         count(isfinite, d) > ns || continue
-        S[:, i], P[i] = _kalman_start(d, τ, ns)
+        md = ClockModel(τ, r[i] + r[p], (V[1, i] + V[1, p]) / τ, (V[2, i] + V[2, p]) / τ, ns == 3 ? (V[3, i] + V[3, p]) / τ : 0.0, ns == 3)
+        S[:, i], P[i] = _stein_start(d, md, min(N, max(16, N ÷ 10)))
+    end
+    # Pivot against the scale: the scale starts as the weighted mean of the
+    # clocks read at the first sample, state by state.
+    members = findall(isfinite, cc.x[1, :])
+    xs = zeros(ns)
+    for m in 1:ns
+        w = _inverse_weights(V[m, :], members, wmax)
+        for i in members
+            xs[m] -= w[i] * S[m, i]
+        end
     end
     W .= 1.0 / k
     for n in 1:N
