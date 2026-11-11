@@ -280,6 +280,24 @@ Clock models, the Kalman filter and timescales.
   fits models from comparisons with missing readings, at the octaves of each
   clock's interval between readings, and `sigmatau timescale` and the
   explorer form the Kalman scales on files with gaps.
+- Telecom masks of G.8272 (`:G8272_PRTC_A`, `:G8272_PRTC_B`), G.8272.1
+  (`:G8272_1`), G.811.1 (`:G811_1`), G.812 (`:G812_I`, `:G812_II_III`) and
+  G.8262.1 (`:G8262_1`) in `telecom_mask`, `mask_check`,
+  `sigmatau analyze --mask`, Python and the explorer's mask menu, which is
+  grouped into clocks and network limits. Each mask names the edition and
+  the tables its limits were read from: `source` in the JSON of `--mask`,
+  and on the explorer's card.
+- `drift_fit` takes `method` for the linear model: `:frequency_fit` (the
+  default, as before), `:phase_fit` (a least-squares parabola through the
+  phase), `:bisection` (the three-point fit), `:second_difference` (the mean
+  second difference of the phase) and `:four_point` (Greenhall 1997). These
+  are the drift methods of NIST SP1065 §5.21 and §5.22 and of Stable32's
+  Drift function, and the four-point estimator. `DriftFit` has a `method`
+  field, and a standard error the method does not give is `NaN`.
+  `detrend(data, fit)` removes the model of a fit. In Python,
+  `drift_fit(..., method=)`, `detrend(data, fit)` and `DRIFT_METHODS`.
+- `sigmatau drift --method`; its CSV row has a `method` column after
+  `model`. Explorer: an Estimator list on the Frequency drift view.
 
 ### Changed
 
@@ -484,6 +502,8 @@ Clock models, the Kalman filter and timescales.
   Kalman scales do not change.
 - `clock_models` names the clock whose curve leaves the fit too few points,
   in place of the `powerlaw_fit` error.
+- `sigmatau analyze --mask` works with CSV output: each check of MTIE or
+  TDEV is one line on standard error, silenced by `--quiet`.
 
 ### Removed
 
@@ -745,6 +765,23 @@ Clock models, the Kalman filter and timescales.
 - `sigmatau model` refuses `--format csv`: it wrote JSON all the same, and
   an error later on that line came as plain text. Its error object names
   `"source":"model"`, as its result does.
+- The TDEV mask of `:G811` ends below 10 000 s, as G.811 clause 6.1 states;
+  τ = 10 000 s had a limit of 30 ns.
+- `steer` and `sigmatau steer`: the predicted Allan deviation is right for
+  loops with a time constant of 10⁶ sample intervals or more; it was wrong,
+  or 0.0, from there on.
+- `sigmatau spectrum` and `analyze --spectrum` accept `--nperseg` at or
+  above the length of the record (the segment is cut to the record) and work
+  on a record of 16 samples.
+- `sigmatau live` stops when the program reading its output closes the pipe,
+  and no command prints the runtime's `broken pipe` line on stderr any more.
+- `holdover --kalman` and `steer` say that the clock model needs a training
+  stretch of 65 samples, and `steer` a record of 81, in place of
+  `powerlaw_fit … pass fewer alphas`; the reference had said 64 and 16
+  samples.
+- `timescale` refuses `--wmax` outside 0 to 1 and `--steps` with any
+  algorithm but `at2` as usage errors (exit 1); `sigmatau help nosuch` is a
+  usage error; `--delim` help states its default.
 
 ### Security
 

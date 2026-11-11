@@ -507,7 +507,8 @@ number of Markov states in the model of each clock.
 | `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference, as for `timescale` |
 | `--pairs` | the three columns hold the differences A−B, B−C and C−A, each as it was measured, in place of clocks read against one reference |
 | `--no-reference` | leave the reference out, for three clocks or more |
-| `--method METHOD` | `hat` (the default), `groslambert` or `klts` |
+| `--covariance` | the Groslambert covariance in place of the hat |
+| `--klts` | the covariance with the KLTS interval, for three clocks |
 | `--devs LIST` | deviations, of `adev`, `mdev`, `hdev`, `mhdev`, `pdev`, `tdev` and `htdev`. By default `adev` |
 | `--grid GRID`, `--m LIST` | averaging factors, as for `analyze` |
 | `--confidence P` | confidence level of the intervals. By default 0.683 |
@@ -526,19 +527,19 @@ counts as no clock.
 
 | Method | Estimate |
 |:---|:---|
-| `hat` | [`ncornered_hat`](@ref) on the deviations of every pair, for each deviation of `--devs` |
-| `groslambert` | [`groslambert`](@ref): the Allan deviation from the covariance of the difference records. The noise that each record of `--pairs` has on its own, such as that of its counter, stays out of it. On clocks read against one reference it equals `hat` on `adev` |
-| `klts` | `groslambert` with the interval of [Lantz et al. (2019)](@cite lantz-2019-klts), for three clocks. It is given also where the estimate is negative, and its lower limit is 0 where the records do not exclude a clock without noise |
+| the hat, by default | [`ncornered_hat`](@ref) on the deviations of every pair, for each deviation of `--devs` |
+| `--covariance` | [`groslambert`](@ref): the Allan deviation from the covariance of the difference records. The noise that each record of `--pairs` has on its own, such as that of its counter, stays out of it. On clocks read against one reference it equals the hat on `adev` |
+| `--klts` | `--covariance` with the interval of [Lantz et al. (2019)](@cite lantz-2019-klts), for three clocks. It is given also where the estimate is negative, and its lower limit is 0 where the records do not exclude a clock without noise |
 
 The estimate of a clock's variance can be negative: for a clock much more
 stable than the others, for clocks that are correlated, and where few terms
 are averaged. The clock is then not resolved at that averaging time, and its
-`dev` is empty in CSV and `null` in JSON. The intervals of `hat` and
-`groslambert` are too narrow for a clock that is close to that
-([`groslambert`](@ref)). The records need 16 samples or more. `hat` and
-`groslambert` leave out the terms that a missing sample touches, and `klts`
-takes no records with gaps. The CSV output has a row for each clock,
-deviation and averaging time:
+`dev` is empty in CSV and `null` in JSON. The intervals of the hat and of
+`--covariance` are too narrow for a clock that is close to that
+([`groslambert`](@ref)). The records need 16 samples or more. The hat and
+`--covariance` leave out the terms that a missing sample touches, and
+`--klts` takes no records with gaps. The CSV output has a row for each
+clock, deviation and averaging time:
 
 ```text
 clock,deviation,tau,dev,ci_lower,ci_upper,edf,neff
