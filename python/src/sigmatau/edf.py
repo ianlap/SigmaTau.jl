@@ -119,8 +119,9 @@ def _mu(mu: float | str):
 
 
 def _count(n: float) -> int | float:
-    """A sample count for Julia: an int, or ``inf`` kept as a float."""
-    return float(n) if n == float("inf") else int(n)
+    """A sample count for Julia: an integer, or a float left for Julia, which
+    takes ``inf`` and refuses a fraction."""
+    return float(n) if isinstance(n, (float, np.floating)) else as_int(n, "n")
 
 
 @_map_errors
@@ -164,7 +165,7 @@ def bias_b3(n: int, m: int, r: float, mu: float | str) -> float:
     expression for ``n`` = 2; for more samples the function evaluates the
     definition by the same steps. ``r`` and ``mu`` are as in :func:`bias_b1`.
     """
-    return float(jl.bias_b3(int(n), int(m), float(r), _mu(mu)))
+    return float(jl.bias_b3(as_int(n, "n"), as_int(m, "m"), float(r), _mu(mu)))
 
 
 __all__ = [
