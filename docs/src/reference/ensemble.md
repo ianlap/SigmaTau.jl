@@ -31,17 +31,17 @@ the docstring of [`timescale`](@ref) are the paper's. Three choices are
 the paper's and can be swapped: the bias term `K` that makes up for each
 clock being part of the scale (`bias=:paper`, or the exact
 `bias=:exact`), no cap on the weights (`wmax`), and no outlier test
-(`outlier`). Each clock's frequency constant comes from its own τ_min,
+(`outlier`). Each clock's frequency constant comes from its own τ\_min,
 which `tau_min` sets and which is otherwise read from the record.
 The paper leaves its starting values open, so these are this package's
-choices: the τ_min estimate, the starting variance τ²σ_y²(τ) taken from the
+choices: the τ\_min estimate, the starting variance τ²σ\_y²(τ) taken from the
 record's first part, each clock's starting frequency (its fitted slope), and
 a variance memory of 20 days (`memory`) capped at a quarter of the record.
 `:at2` keeps AT1's weights and replaces each clock's frequency filter by a
 Kalman update that carries a frequency variance, which adapts as the clock's
 prediction error does; in steady state it is AT1's filter, so the scales are
 close. `steps=:best` or `:real` adds the paper's frequency-step detection (eqs 19–22):
-a clock whose frequency jumps is left out for τ_min and the scale rerun from
+a clock whose frequency jumps is left out for τ\_min and the scale rerun from
 the step; the threshold's units are corrected from the printed equation (see
 the docstring), and off by default.
 [`timescale_phase`](@ref) returns the scale against the reference, for the

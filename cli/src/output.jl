@@ -68,14 +68,15 @@ function write_error_json(io::IO, o::Options, code::Int, msg::String)
     print(io, "}\n")
 end
 
-# Samples of x to plot with at most about n points: x itself when short enough,
-# otherwise, in each of n ÷ 3 equal stretches, its lowest and highest sample and
-# its first gap, in time order, so no outlier or gap falls between drawn points.
+# Samples of x to plot with at most n points: x itself when short enough,
+# otherwise its first and last sample and, in each of (n - 2) ÷ 3 equal
+# stretches, the lowest and highest sample and the first gap, in time order, so
+# the plot spans the record and no outlier or gap falls between drawn points.
 function series_index(x::AbstractVector, n::Int)
     N = length(x)
     N <= n && return collect(1:N)
-    nb = max(1, n ÷ 3)
-    idx = Int[]
+    nb = max(1, (n - 2) ÷ 3)
+    idx = [1]
     for b in 1:nb
         imin = imax = inan = 0
         for i in ((b - 1) * N ÷ nb + 1):(b * N ÷ nb)
@@ -88,9 +89,10 @@ function series_index(x::AbstractVector, n::Int)
             end
         end
         for i in sort!([imin, imax, inan])
-            i > 0 && (isempty(idx) || idx[end] != i) && push!(idx, i)
+            i > 0 && idx[end] != i && push!(idx, i)
         end
     end
+    idx[end] == N || push!(idx, N)
     return idx
 end
 

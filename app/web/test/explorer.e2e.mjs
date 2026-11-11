@@ -1,8 +1,9 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
 // Stability plot and the Holdover curve against the command line's own JSON,
-// then visit Spectrum, Dynamic, Live (simulated source) and Help, come back to
-// Stability, and run a record with gaps, with no page errors.
+// then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
+// Live (simulated source) and Help, come back to Stability, and run a record
+// with gaps, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -78,6 +79,26 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
     const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
     assert.deepEqual(rms, doc.holdover.rms);
+    // A stretch of twice the holdover time: equal to √6·TDEV at τ₀.
+    await page.click("[data-ctl=frac][data-v='0']");
+    await page.waitForFunction(() => document.querySelector("#page .hold-card .cell-kv")?.innerText.includes("2τ"));
+    const at0 = await page.evaluate(() => ["RMS", "√6·TDEV"].map((n) => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === n).y[0]));
+    const grown = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--grow", "2", "--format", "json"])).holdover;
+    assert.deepEqual(at0, [grown.rms[0], grown.reference[0]]);
+    assert.ok(Math.abs(at0[0] / at0[1] - 1) < 1e-9);
+    // A Kalman filter as the predictor: its claim equals the command line's.
+    await page.click('[data-ctl=kalman][data-v="1"]');
+    const claimed = (await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "Claimed by the filter")?.y, null, SLOW)).jsonValue();
+    assert.deepEqual(await claimed, JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover.claimed);
+  });
+
+  await t.test("Ensemble: a Kalman scale with flicker states", async () => {
+    await page.click("a[data-page=ensemble]");
+    await page.selectOption("#side [data-ctl=alg]", "greenhall");
+    await page.selectOption("#side [data-ctl=flicker]", "on");
+    await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
+    assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
+    await plotted("#page [data-ref=adev]");
   });
 
   await t.test("Live: a simulated source streams and stops", async () => {
@@ -120,6 +141,29 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
   });
 
+  await t.test("Data: a zero in a Stable32 frequency file is a gap, filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "0" : String(1e-12 * (2 + Math.sin(i / 3)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.locator("#import-dialog .gap-card", { hasText: "1 zero reading" }).waitFor(SLOW);
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /z\.frd.*51[23] samples/ }).waitFor(SLOW);   // the new record, not the last one
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+  });
+
+  await t.test("Data: remembered .frd settings still show a file's zeros", async () => {
+    const y = Array.from({ length: 256 }, (_, i) => (i % 100 === 50 ? "0" : String(1e-12 * (2 + Math.cos(i / 5)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z2.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.locator("#import-dialog .gap-card", { hasText: "3 zero readings" }).waitFor(SLOW);
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /z2\.frd.*25[67] samples/ }).waitFor(SLOW);
+  });
+
   await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
     await page.goto(base + "#data");
     const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "NaN" : String(1e-12 * Math.sin(i / 3))));
@@ -128,8 +172,24 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor(SLOW);   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
-    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
+  });
+
+  await t.test("Data: Fill gaps turned off and on again; the next file starts without it", async () => {
+    const n = errors.length;
+    await page.uncheck("input[data-field=fillgaps]");
+    await page.locator(".check-card", { hasText: "could not read" }).waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // the core refuses the unfilled record
+    await page.click("input[data-field=fillgaps]");   // (click: the card re-renders as the record reloads)
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor(SLOW);
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    const rows = Array.from({ length: 600 }, (_, i) => i).filter((i) => i < 300 || i >= 310);
+    // (read with the settings remembered from gapped.csv, without the dialog)
+    await chooser.setFiles({ name: "p.csv", mimeType: "text/csv", buffer: Buffer.from(rows.map((i) => `${i},${(1e-9 * Math.sin(i * 0.7)).toExponential(6)}`).join("\n")) });
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /p\.csv/ }).waitFor(SLOW);
+    assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
   });
 
   assert.deepEqual(errors, []);

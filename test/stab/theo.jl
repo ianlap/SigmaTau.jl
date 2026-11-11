@@ -92,14 +92,18 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         ratio = _theobr_ratio(_f64(p.x), 1.0)
         @test cor.dev ≈ raw.dev .* sqrt(ratio)
         @test cor.tau == raw.tau
-        # Thêo1 is unbiased for white FM, so the ratio sits near 1.
-        @test 0.7 < ratio < 1.3
+        # Thêo1 is unbiased for white FM, so the ratio sits near 1; rungs out to
+        # T/2 scatter it more than Howe's, which stop at T/10.
+        @test 0.5 < ratio < 2
+        @test 0.7 < _theobr_ratio(_f64(p.x), 1.0; howe=true) < 1.3
 
-        # Howe 2006 eq. 6: the mean of AVAR(9+3i)/Theo1(12+4i) over i = 0…⌊N/30 − 3⌋.
+        # The mean of AVAR(9+3i)/Theo1(12+4i) over i = 0…⌊N/6 − 3⌋ (SP1065 eq. 33),
+        # or over i = 0…⌊N/30 − 3⌋ (Howe 2006 eq. 6) for :published.
         x = _f64(p.x)
-        i = 0:(2048 ÷ 30 - 3)
-        @test _theobr_ratio(x, 1.0; exact=true) ≈
-              mean(adev(p, collect(9 .+ 3i); ci=false).dev .^ 2 ./ _theo1_core(x, collect(12 .+ 4i), 1.0) .^ 2)
+        ladder(n) = (i = 0:n; mean(adev(p, collect(9 .+ 3i); ci=false).dev .^ 2 ./ _theo1_core(x, collect(12 .+ 4i), 1.0) .^ 2))
+        @test _theobr_ratio(x, 1.0; exact=true) ≈ ladder(2048 ÷ 6 - 3)
+        @test _theobr_ratio(x, 1.0; exact=true, howe=true) ≈ ladder(2048 ÷ 30 - 3)
+        @test theo1(p, ms; ci=false, correct_bias=:published).dev ≈ raw.dev .* sqrt(_theobr_ratio(x, 1.0; howe=true))
 
         # White PM: Table 2 bias a + b/m^c ≈ 0.09 + 0.74/m^0.4 — the ratio
         # average lands well below 1.
@@ -107,9 +111,9 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         ppm = noise_gen(PhaseData, 2048, 1.0; sigma1 = Dict(2 => 1e-12))
         @test 0.05 < _theobr_ratio(_f64(ppm.x), 1.0) < 0.45
 
-        # Below N = 90, where the formula gives n < 0, the first rung stands alone.
+        # Below N = 90, where Howe's formula gives n < 0, the first rung stands alone.
         x60 = _f64(p.x[1:60])
-        @test _theobr_ratio(x60, 1.0) ≈
+        @test _theobr_ratio(x60, 1.0; howe=true) ≈
               adev(PhaseData(x60, 1.0), [9]; ci=false).dev[1]^2 / _theo1_core(x60, [12], 1.0)[1]^2
 
         # Records too short for one rung (N < 19): NaN, and the corrected
@@ -121,12 +125,12 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
 
     @testset "fast ThêoBR ratio against the exact ladder" begin
         # The ratio computes Thêo1 at a sample of the ladder and
-        # interpolates the rest; it stays within 0.5 % of the full average.
+        # interpolates the rest; it stays within 1 % of the full average.
         for alpha in (2, 1, 0, -1, -2)
             p = noise_gen(PhaseData, 3000, 1.0; sigma1 = Dict(alpha => 1e-12),
                           rng = MersenneTwister(50 + alpha))
             x = _f64(p.x)
-            @test _theobr_ratio(x, 1.0) ≈ _theobr_ratio(x, 1.0; exact=true) rtol = 5e-3
+            @test _theobr_ratio(x, 1.0) ≈ _theobr_ratio(x, 1.0; exact=true) rtol = 1e-2
         end
         # Short ladders are computed in full.
         x = _f64(noise_gen(PhaseData, 200, 1.0; sigma1 = Dict(0 => 1e-12),

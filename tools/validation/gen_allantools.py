@@ -9,7 +9,7 @@ Inputs are the committed phase records, so SigmaTau and allantools read the
 same numbers:
 
   noise/alpha_*.txt   power-law records, alpha = +2 ... -4, N = 4096
-  PHASE.DAT           Stable32's PHASE.DAT (the NBS 1000-point set as phase)
+  PHASE.DAT           Stable32's PHASE.DAT (the 1000-point test suite of SP1065 as phase)
   stable32gen.DAT     8192-point Stable32-generated record
 
 Outputs (CSV, values at %.17e so Float64 round-trips):

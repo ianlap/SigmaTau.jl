@@ -118,6 +118,37 @@ Clock models, the Kalman filter and timescales.
   `--confidence`; CSV with one row per holdover time, or JSON, where `--fit`
   adds the error predicted from the power-law fit with its budget by noise
   type.
+- Explorer: a Holdover page shows the time error after a training stretch
+  against holdover time (RMS, a chosen share of the trials, the worst trial
+  and the noise model's prediction) and how long each clock stays within a
+  limit.
+- Holdover with a stretch that grows with the holdover time:
+  `holdover(…; grow=k)`, `sigmatau holdover --grow K`, a "2τ" stretch on the
+  explorer's Holdover page. At `grow = 2` (3 with drift) it equals √6·TDEV
+  (√20·HTDEV) at τ₀ and runs a constant factor above on FM noise; the page
+  and the CLI's JSON (`reference`) show that curve.
+- Holdover with a Kalman filter as the predictor:
+  `holdover(data, model::ClockModel; …)` carries the filter's estimate ahead
+  from every sample past the training stretch; `HoldoverResult.claimed` is
+  the filter's own standard deviation for that error, to set beside the
+  measured RMS (Python too).
+- `sigmatau holdover --kalman` and a "Predicted by" choice on the explorer's
+  Holdover page: the holdover test with a Kalman filter as the predictor, on
+  a clock model fitted to the first training stretch alone, with the error
+  the filter itself claims (`claimed`) beside the one measured. The CSV
+  gains a trailing `claimed` column, empty without `--kalman`, so its header
+  changes for existing readers.
+- Clock steering: `steering_gains` sets the gains of a steering loop by pole
+  placement, from a time constant or from poles, with or without an integral
+  gain (Matsakis 2019, 2020); `steering_poles` gives the poles, time
+  constants and stability of any gains; `steer(data, model, gains)` replays
+  a phase record through the loop on one Kalman filter pass, and
+  `steer(model, gains)` predicts the steady-state RMS of phase, frequency
+  and steers and the Allan deviation of the steered clock. Also in Python.
+- `lqg_gains`: steering gains that minimize a quadratic cost in phase,
+  frequency and steer, the linear quadratic Gaussian design (Koppang &
+  Leland 1999); it reproduces the three designs that paper prints. Also in
+  Python.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -211,6 +242,12 @@ Clock models, the Kalman filter and timescales.
   the package's own, held as measurement noise with memory. States sit only
   across the τ where the flicker holds a quarter of the model's Allan
   variance. Off by default; `:stein` refuses such models.
+- `sigmatau timescale --flicker` fits the Greenhall and Jones–Tryon scales'
+  clock models with flicker states and reports the number each clock carries
+  (`"flicker": {"fm", "pm"}`); the explorer's Ensemble page has the same
+  choice. Python's `ClockModel` mirrors `flicker_fm`, `fm_band`,
+  `flicker_pm` and `pm_band`, and `clock_model` and `clock_models` take
+  `flicker=True`.
 
 ### Changed
 
@@ -313,8 +350,57 @@ Clock models, the Kalman filter and timescales.
   with them (up to about 15 % in ADEV at short τ in the mixed case).
   Frequencies are unchanged.
 - `theo1` and `theoh` sum Thêo1 in cache-sized blocks across all threads; a
-  default `theo1` call on 557 000 points takes 19 s instead of 2 minutes on
-  4 threads. Values move by rounding only.
+  default `theo1` call on 557 000 points takes 48 s on 4 threads. Values
+  move by rounding only.
+- `psd_x`, `cross_psd_x` and `ssb_phase_noise` estimate S_x as the Welch S_y
+  over the response of the first difference, 4 sin²(πfτ₀)/τ₀². A Welch
+  estimate on the phase itself read high at the lowest bins on FM noise
+  (random-walk FM about 100 times at the second bin) and was swamped by a
+  frequency offset. The value at f = 0 is now `NaN`, and `nperseg` counts
+  frequency samples, at most one fewer than the phase samples. The Welch
+  estimators remove each segment's taper-weighted mean instead of its plain
+  mean, which read white PM `1 + nperseg/(12π²)` times high at the first
+  bin; `psd_y` changes at its first two values only and equals scipy from
+  the second bin.
+- `fillgaps` follows Howe and Schlossberger (2022) and their script where it
+  had departed (the reflected samples are inserted unfiltered and the
+  filter, now their 16-sample form, only sets the line that joins them),
+  sets the series' trend aside while filling, and takes the series it fills
+  (phase or frequency, `form=:auto`) and the filter's averaging span from
+  the record's own two-sample deviation. A filled record read 8 % low at
+  short τ, a phase record with a frequency offset several times high, and a
+  frequency record of white PM 55 times high at long τ after a 30 % fill;
+  with one to six gaps ADEV is now within 5 % of the gap-free record's on
+  every power-law noise. The docstring states what a fill does not recover:
+  many gaps in a frequency record, a strong periodic term (remove it before
+  filling), MDEV at the longest τ on white PM. `form=:phase` or `:frequency`
+  forces the series; Python takes `form=`.
+- Noise labels where an averaging factor leaves fewer than 30 averaged
+  points. A result is PM only if it is PM at the longest τ with 30 points
+  and R(n) at the τ itself agrees; otherwise it is the FM type of the B1
+  ratio. `hdev`, `mhdev`, `htotdev` and `mhtotdev` with `remove_drift=true`
+  no longer use the B1 ratio on the drift-removed record: an FM type there
+  is the one at the longest τ with 30 points
+  (`identify_noise(...; b1=false)`). Default `htotdev` on flicker FM and
+  redder was 7–20 % low in variance at 16 points and fewer; `totdev`,
+  `mtotdev` and `htotdev` on white PM were up to 33, 12 and 19 % high.
+  Flicker PM with fewer than 6 averaged points is now reported as white FM.
+- `--series N` keeps each stretch's lowest and highest sample and its first
+  gap, instead of an evenly strided subset.
+- `adev` and `hdev`: the overlapping kernels vectorise again on Julia 1.12
+  and newer, about 8× faster than since `overlapping=false` was added;
+  values move by rounding at most.
+- Every estimator's `NaN`-gap check is one vectorised pass; a call on a
+  25 000-point record saves about 9 µs.
+- Documentation: every docstring checked against the code and its cited
+  source and rewritten in one style; bibliography verified against publisher
+  records, with DOIs, and 21 sources added.
+- The Stable32 reader (`.phd`, `.frd`) reads a value of zero as a gap, as
+  Stable32 does (all zeros in frequency data; all but the first and last
+  point in phase data), and reads Stable32's older header of bare `File:` …
+  `Tau:` lines. `read_data(path; keep_zeros=true)`, CLI `--keep-zeros` and
+  the explorer's *Keep zeros as readings* box keep them as readings for
+  quantized records.
 
 ### Removed
 
@@ -337,14 +423,14 @@ Clock models, the Kalman filter and timescales.
   Table 2, from τ = 16τ₀, in place of SP1065 Table 8, which runs from 16 %
   high to 41 % low against simulation; Table 2 stays within 8 % for
   T/τ ≥ 16.
-- ThêoBR (`theo1` by default, and the Thêo segment of `theoh`) averages its
-  AVAR/Thêo1 ratio over `i = 0…⌊N/30 − 3⌋`, as Howe (2006), McGee and Howe
-  (2007) and Taylor and Howe (2010) define it. SP1065 eq. 33 prints
-  `⌊N/6 − 3⌋`, which runs AVAR out to half the record: the ratio scattered
-  by 25 to 30 % and biased the corrected variance by −9 to +11 %, against
-  8 to 11 % and −5 to +3 % now. Output moves by a few percent. Below
-  N = 90, where the papers' formula has no rung, the first rung is used
-  alone.
+- ThêoBR (`theo1` by default, and the Thêo segment of `theoh`) keeps the
+  ladder of SP1065 eq. 33, IEEE Std 1139-2022 eq. A.37 and Stable32,
+  `i = 0…⌊N/6 − 3⌋`. `correct_bias=:published` takes the ladder of Howe
+  (2006), McGee and Howe (2007) and Taylor and Howe (2010), `⌊N/30 − 3⌋`,
+  which stops at a tenth of the record: where PM gives way to FM beyond that
+  point it applies the PM ratio to FM noise and reads 0.18 to 0.77 of the
+  true variance at long τ, though on a record of one FM noise its factor
+  scatters 2.5 times less.
 - Flicker FM keeps its label at medium and long τ. On phase decimated by m
   the lag-1 estimate of flicker FM settles at α = −1.45 and of random-walk
   FM at −2.4, so rounding to the nearest integer sent pure flicker FM to
@@ -446,6 +532,31 @@ Clock models, the Kalman filter and timescales.
   missing, where they were filled whenever the record held an outlier and
   left when it held none. Fill them with `fillgaps` (`--fillgaps`) when that
   is wanted.
+- A record without a time column can have its `NaN` readings filled
+  (`fillgaps=true`, `--fillgaps`, the explorer's Fill gaps), so a one-column
+  frequency file with missing readings can be analyzed; the explorer turns
+  Fill gaps on for such a file.
+- Explorer: hover labels are readable in both themes; the Data page's phase
+  plot breaks at a gap instead of dropping to zero and draws every outlier;
+  τ min then τ max can be typed in one go; the run note counts the analysis
+  range; PDEV's white PM slope guide is τ^−3/2; PNG and SVG export holds
+  every plot of the page.
+- The explorer's local server answers 400 to a request body that is not a
+  JSON object or whose `file` is malformed, where it used to drop the
+  connection.
+- `--series N` keeps the record's first and last sample, so the phase plot
+  spans the whole record.
+- `sigmatau holdover --kalman` and the explorer's Kalman predictor keep the
+  flicker FM and flicker PM that the fit of the training stretch finds, as
+  Markov states; without them the filter of a flicker FM clock claimed a
+  tenth of its error or stopped on NaN. `holdover(data, model)` refuses a
+  model with no noise.
+
+### Security
+
+- `serve.py` runs a request without a file only when it starts with
+  `--synth N`, and its API refuses another host name on loopback and a POST
+  that is not JSON.
 
 ## [0.6.0] - 2026-11-08
 

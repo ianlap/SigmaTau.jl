@@ -312,15 +312,16 @@ end
 
 # ── holdover ──────────────────────────────────────────────────────────────
 
-const CSV_HOLDOVER = "source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit"
+const CSV_HOLDOVER = "source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit,claimed"
 
 # The error the power-law model fitted to the record predicts for the same
 # test, and each noise type's share of its variance.
 function json_holdover_fit(io::IO, data::PhaseData, h::HoldoverResult)
     p = try
         pf = powerlaw_fit(data)
-        holdover(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=Float64(data.tau0), train=h.train, tau=h.tau,
-                 drift=h.drift, anchor=h.anchor, limit=isnan(h.limit) ? nothing : h.limit, confidence=h.confidence)
+        hα, τ₀, limit = Dict{Int,Float64}(zip(pf.alphas, pf.h)), Float64(data.tau0), isnan(h.limit) ? nothing : h.limit
+        h.grow > 0 ? holdover(hα; tau0=τ₀, grow=h.grow, tau=h.tau, drift=h.drift, anchor=h.anchor, limit, confidence=h.confidence) :
+                     holdover(hα; tau0=τ₀, train=h.train, tau=h.tau, drift=h.drift, anchor=h.anchor, limit, confidence=h.confidence)
     catch err
         err isa ArgumentError || rethrow()
         print(io, '{'); json_key(io, "error", true); json_string(io, error_message(err)); print(io, '}')
@@ -342,22 +343,47 @@ function json_holdover_fit(io::IO, data::PhaseData, h::HoldoverResult)
     return nothing
 end
 
+# The error of the same extrapolation made from τ-averages of the phase, two
+# for a line and three for a parabola: √6 TDEV and √20 HTDEV by definition.
+# NaN past the τ the record gives them.
+function holdover_reference(data::PhaseData, h::HoldoverResult)
+    ms = Int[round(Int, t / data.tau0) for t in h.tau]
+    return h.drift ? sqrt(20.0) .* htdev(data, ms; ci=false).dev : sqrt(6.0) .* tdev(data, ms; ci=false).dev
+end
+
+# The clock model of a Kalman predictor: the power-law fit to the first
+# training stretch alone, so no trial is predicted with noise levels learned
+# from the readings it is compared with. Flicker the fit finds is kept, as
+# Markov states out to the record's span: without it the filter of a flicker
+# FM clock claims a tenth of the error it makes.
+function holdover_model(data::PhaseData, train::Float64, drift::Bool)
+    τ₀ = Float64(data.tau0)
+    b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
+    pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
+    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, flicker=true, tau_max=length(data.x) * τ₀)
+end
+
 function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 16, "a holdover test")
     τ₀ = Float64(data.tau0)
     train = isnan(o.train) ? (length(data.x) ÷ 4) * τ₀ : o.train
     limit = isnan(o.limit) ? nothing : o.limit
-    h = holdover(data; train, tau=isempty(o.taus) ? nothing : o.taus, drift=o.fit_drift, anchor=o.anchor,
-                 limit, confidence=o.confidence)
+    tau = isempty(o.taus) ? nothing : o.taus
+    model = o.kalman ? holdover_model(data, train, o.fit_drift) : nothing
+    # One call per predictor and kind of stretch: the trimmed build resolves each on its own.
+    h = model !== nothing ? holdover(data, model; train, tau, limit, confidence=o.confidence) :
+        o.grow > 0 ? holdover(data; grow=o.grow, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence) :
+                     holdover(data; train, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence)
     src = source_name(o, data)
     if o.format != "json"
         print(io, CSV_HOLDOVER); print(io, '\n')
         for i in eachindex(h.tau)
-            csv_field(io, src); print(io, ','); csv_number(io, h.train); print(io, ',')
+            csv_field(io, src); print(io, ','); csv_number(io, h.grow > 0 ? h.grow * h.tau[i] : h.train); print(io, ',')
             csv_number(io, h.tau[i]); print(io, ','); csv_number(io, h.rms[i]); print(io, ',')
             csv_number(io, h.quantile[i]); print(io, ','); csv_number(io, h.worst[i]); print(io, ',')
             csv_number(io, h.mean[i]); print(io, ','); print(io, h.n[i]); print(io, ',')
-            csv_number(io, h.limit); print(io, ','); csv_number(io, h.time_to_limit); print(io, '\n')
+            csv_number(io, h.limit); print(io, ','); csv_number(io, h.time_to_limit); print(io, ',')
+            model === nothing || csv_number(io, h.claimed[i]); print(io, '\n')
         end
         return nothing
     end
@@ -368,6 +394,7 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_preprocessing(io, o); print(io, '}')
     json_key(io, "holdover"); print(io, '{')
     json_key(io, "train", true); json_number(io, h.train)
+    json_key(io, "grow"); print(io, h.grow)
     json_key(io, "drift"); json_bool(io, h.drift)
     json_key(io, "anchor"); json_bool(io, h.anchor)
     json_key(io, "confidence"); json_number(io, h.confidence)
@@ -377,9 +404,21 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "worst"); json_array(io, h.worst)
     json_key(io, "mean"); json_array(io, h.mean)
     json_key(io, "n"); json_array(io, h.n)
+    json_key(io, "reference"); json_array(io, holdover_reference(data, h))
     json_key(io, "limit"); json_number(io, h.limit)
     json_key(io, "time_to_limit"); json_number(io, h.time_to_limit)
     o.fit && (json_key(io, "predicted"); json_holdover_fit(io, data, h))
+    if model !== nothing
+        json_key(io, "claimed"); json_array(io, h.claimed)
+        json_key(io, "model"); print(io, '{')
+        json_key(io, "R", true); json_number(io, model.R)
+        json_key(io, "q1"); json_number(io, model.q1)
+        json_key(io, "q2"); json_number(io, model.q2)
+        json_key(io, "q3"); json_number(io, model.q3)
+        json_key(io, "flicker_fm"); json_number(io, model.flicker_fm)
+        json_key(io, "flicker_pm"); json_number(io, model.flicker_pm)
+        print(io, '}')
+    end
     print(io, '}')
     return elapsed(io, t_start)
 end
@@ -449,18 +488,21 @@ function read_ensemble(o::Options)
     return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
 end
 
-# The Kalman scales fit a model per clock and read the scale at --pivot.
+# The Kalman scales fit a model per clock (with --flicker, flicker states
+# included) and read the scale at --pivot. Returns the scale and the models.
 function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     alg = Symbol(o.algorithm)
+    o.flicker && !(alg === :greenhall || alg === :jones_tryon) && throw(usage_error("--flicker needs --algorithm greenhall or jones_tryon"))
     if !kalman
         isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
-        isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax)
-        return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps))
+        isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax), ClockModel[]
+        return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps)), ClockModel[]
     end
     k = size(cc.x, 2)
     k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
     1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
-    return timescale(cc; algorithm=alg, models=clock_models(cc), pivot=o.pivot, wmax=o.wmax)
+    models = clock_models(cc; flicker=o.flicker)
+    return timescale(cc; algorithm=alg, models, pivot=o.pivot, wmax=o.wmax), models
 end
 
 function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
@@ -468,7 +510,7 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     N, k = size(cc.x)
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
     kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
-    r = run_timescale(cc, o, kalman)
+    r, models = run_timescale(cc, o, kalman)
     late = max(1, N ÷ 2):N
     wmean = [sum(r.weights[late, i]) / length(late) for i in 1:k]
     rms = Float64[]
@@ -496,6 +538,12 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     json_key(io, "wmax"); json_number(io, o.wmax)
     kalman && (json_key(io, "pivot"); json_number(io, o.pivot))
     isempty(o.steps) || (json_key(io, "steps"); json_string(io, o.steps))
+    if o.flicker   # Markov states each clock's model carries
+        json_key(io, "flicker"); print(io, '{')
+        json_key(io, "fm", true); json_array(io, Int[length(SigmaTau._fm_taus(m)) for m in models])
+        json_key(io, "pm"); json_array(io, Int[length(SigmaTau._pm_taus(m)) for m in models])
+        print(io, '}')
+    end
     json_key(io, "clocks"); json_array(io, cc.names)
     json_key(io, "weight"); json_array(io, r.weights[end, :])
     json_key(io, "weight_mean"); json_array(io, wmean)

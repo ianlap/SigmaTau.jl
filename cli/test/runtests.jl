@@ -171,6 +171,7 @@ mktempdir() do dir
         x = zeros(1000); x[437] = 1.0; x[800] = NaN
         idx = SigmaTauCLI.series_index(x, 30)
         @test 437 in idx && 800 in idx && issorted(idx) && length(idx) <= 30
+        @test idx[1] == 1 && idx[end] == 1000
         @test SigmaTauCLI.series_index(x[1:20], 30) == 1:20
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,totdev", "--fit")
         @test r.code == 0
@@ -350,6 +351,10 @@ mktempdir() do dir
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"stein\"", r.out)
         @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
+        # --flicker fits flicker states per clock; these clocks have no flicker, so none.
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--flicker", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"flicker\":{\"fm\":[0,0,0],\"pm\":[0,0,0]}", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--flicker").code != 0
         @test run_cli("timescale", tf, "--value-cols", "2,3", "--algorithm", "greenhall").code != 0
         @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
         # --clocks sets how many clocks are simulated (four by default).
@@ -390,6 +395,28 @@ mktempdir() do dir
         r = run_cli("holdover", hf, "--train", "512", "--fit-drift", "--no-anchor", "--limit", "1", "--fit", "--format", "json")
         @test r.code == 0 && occursin("\"drift\":true,\"anchor\":false,\"confidence\":0.95", r.out)
         @test occursin("\"limit\":1.0,\"time_to_limit\":null,\"predicted\":{\"alphas\":[2,1,0,-1,-2]", r.out)
+        # A stretch twice each holdover time, beside √6 TDEV at the same τ.
+        g = holdover(p; grow=2, tau=[1, 16, 256])
+        rows = csv_rows(run_cli("holdover", hf, "--grow", "2", "--tau", "1,16,256").out)
+        @test parse.(Float64, getindex.(rows, 2)) == 2 .* g.tau && parse.(Float64, getindex.(rows, 4)) ≈ g.rms
+        r = run_cli("holdover", hf, "--grow", "2", "--tau", "1,16,256", "--fit", "--format", "json")
+        @test occursin("\"train\":null,\"grow\":2,", r.out) && occursin("\"predicted\":{\"alphas\"", r.out)
+        @test parse.(Float64, split(match(r"\"reference\":\[([^\]]*)\]", r.out)[1], ',')) ≈ sqrt(6) .* tdev(p, [1, 16, 256]; ci=false).dev
+        @test run_cli("holdover", hf, "--grow", "2", "--train", "512").code == 1
+        @test run_cli("holdover", hf, "--grow", "2", "--fit-drift").code == 1
+        # A Kalman filter as the predictor, its model learned on the first stretch alone, flicker kept.
+        kmodel(x) = clock_model(powerlaw_fit(PhaseData(x[1:512], 1.0)); flicker=true, tau_max=length(x))
+        k = holdover(p, kmodel(p.x); train=512, tau=[16, 64, 256])
+        rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--tau", "16,64,256", "--kalman").out)
+        @test parse.(Float64, getindex.(rows, 4)) ≈ k.rms && parse.(Float64, getindex.(rows, 11)) ≈ k.claimed
+        r = run_cli("holdover", hf, "--train", "512", "--kalman", "--format", "json")
+        @test r.code == 0 && occursin("\"claimed\":[", r.out) && occursin("\"model\":{\"R\":", r.out)
+        ff = noise_gen(PhaseData, 4096, 1.0; h=Dict(-1 => 3e-25), rng=Random.Xoshiro(7))
+        r = run_cli("holdover", write_table(joinpath(dir, "flicker.csv"), ff.x), "--train", "512", "--tau", "1,16", "--kalman", "--format", "json")
+        @test parse.(Float64, split(match(r"\"claimed\":\[([^\]]*)\]", r.out)[1], ',')) ≈ holdover(ff, kmodel(ff.x); train=512, tau=[1, 16]).claimed
+        @test parse(Float64, match(r"\"flicker_fm\":([^,}]*)", r.out)[1]) > 1e-26
+        @test run_cli("holdover", hf, "--kalman", "--no-anchor").code == 1
+        @test run_cli("holdover", hf, "--kalman", "--grow", "2").code == 1
         @test run_cli("holdover", hf, "--train", "0.5").code == 3
         @test run_cli("holdover", hf, "--limit", "-1").code == 1
         @test run_cli("holdover", hf, "--fit").code == 1                           # CSV has no room for it
@@ -696,6 +723,11 @@ mktempdir() do dir
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
         @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
+        # A zero in a Stable32 frequency file is a gap, unless it is kept as a reading.
+        zf = joinpath(dir, "z.frd")
+        write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
+        @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
+        @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
     end
 
     @testset "output error -> exit 4" begin
@@ -746,6 +778,9 @@ mktempdir() do dir
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],
                          ["holdover", pf, "--train", "64", "--limit", "1e-9", "--fit", "--format", "json"],
+                         ["holdover", pf, "--grow", "3", "--fit-drift", "--fit", "--format", "json"],
+                         ["holdover", pf, "--train", "512", "--kalman", "--format", "json"],
+                         ["holdover", joinpath(dir, "flicker.csv"), "--kalman", "--format", "json"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],

@@ -1,35 +1,32 @@
-# Gap imputation by reflection, after D. A. Howe and N. Schlossberger,
-# "Characterizing Frequency Stability Measurements Having Multiple Data
-# Gaps", IEEE Trans. Ultrason. Ferroelectr. Freq. Control 69(2), 468–472
-# (2022), doi:10.1109/TUFFC.2021.3137425, and the script that paper names as
-# its algorithm (C. Champagne, D. A. Howe and N. Schlossberger, fillgaps.py,
-# doi:10.5281/zenodo.5594587).
+# Gap filling by reflection, after Howe and Schlossberger (2022) and the
+# script their paper names as its algorithm (Champagne, Howe and
+# Schlossberger (2021), fillgaps.py). A gap of n samples takes the n samples
+# beside it, reversed and inverted, and a straight line is added so that the
+# low-pass-filtered fill meets the filtered data at both ends. The samples
+# come from the run before the gap, from the run after it when that one is
+# too short, and half from each side when neither is long enough. Gaps are
+# filled outward from the longest run of data, so a fill can serve the next
+# gap.
 #
-# Their method: a gap of n samples takes the n samples beside it (the run
-# before it, the run after it when that one is too short, half from each
-# when neither is long enough), reflected and inverted, and adds a straight
-# line so that the low-pass-filtered fill meets the filtered data at both
-# ends. Gaps are filled outward from the longest run, so a fill can serve
-# the next gap.
+# The method leaves two things open, which `_fillgaps` sets from the record
+# (see `fillgaps`): the series that is filled, phase or frequency, and the
+# span the filter averages over. The trend of the series, a frequency offset
+# and drift, is taken out first and put back after: the filter pads a block
+# with its mirror image, which turns a slope into a triangle wave and pulls
+# the filtered end points off the data.
 #
-# Where this file differs from the script, on purpose: the script's filter
-# gain is one bin off in the mirrored half of the spectrum; its line stops
-# short of the end offset; where half the fill comes from each side it
-# filters the left half twice and adds a middle sample only for gaps of
-# 4j + 1 samples; and it filters whole runs for the levels beside a gap,
-# where a window serves.
-#
-# What the method leaves open is set from the record (see `fillgaps`): which
-# series is filled, phase or frequency, and the span the filter averages
-# over. The series' trend (a frequency offset and drift) is taken out first
-# and put back after, since the filter pads a block with its mirror image,
-# which turns a slope into a triangle wave and pulls the filtered endpoints
-# off the data.
+# Four details differ from the script on purpose. The script's filter gain
+# is one bin off in the mirrored half of the spectrum. Its line stops short
+# of the end offset. Where half the fill comes from each side it filters the
+# left half twice and adds a middle sample only for gaps of 4j + 1 samples.
+# And it filters whole runs for the levels beside a gap, where a window
+# serves here.
 
-# The low-pass filter of the paper's eq. 3 as the script has it: `x` padded
-# with its mirror image on both sides, its spectrum multiplied by
-# exp(−span·|k|/L) over the L bins, the middle third returned. It averages
-# over about `span` samples; the script's constant is 16.
+# The low-pass filter of the paper's Eq. (3) as the script has it. `x` is
+# padded with its mirror image on both sides, its spectrum is multiplied by
+# exp(−span·|k|/L) over the L bins of the padded block, and the middle third
+# is returned. It averages over about `span` samples; the script's constant
+# is 16.
 function _howe_filter(x::AbstractVector{<:Real}, span::Int)
     n = length(x)
     n == 0 && return Float64[]
@@ -80,9 +77,9 @@ end
 """
     _fill_singletons!(x::Vector{Float64}, gaps::Vector{Tuple{Int,Int}})
 
-Fill any 1-sample gaps in `x` (mean of the two neighbours, or nearest
-neighbour at the edges) and remove those entries from `gaps`. Returns the
-mutated `gaps` vector.
+Fill the gaps of one sample in `x` with the mean of the two neighbors, or
+with the one neighbor at an end of the record, and remove them from `gaps`.
+Returns `gaps`.
 """
 function _fill_singletons!(x::Vector{Float64}, gaps::Vector{Tuple{Int,Int}})
     keep_mask = trues(length(gaps))
@@ -274,10 +271,11 @@ end
 
 reverse_view(v) = collect(Iterators.reverse(v))
 
-# The reflection fill of every gap of `x` (NaN runs), with the filter span and
-# `free` of `_fill_one_gap!`; gaps of one sample are filled before it (see
-# `_fillgaps`). Throws when the layout cannot be filled, for instance gaps at
-# both record ends with no run between them long enough to mirror.
+# The reflection fill of every gap (run of NaN) of `x`, with the filter span
+# and the `free` of `_fill_one_gap!`. Gaps of one sample are filled before it
+# (see `_fillgaps`). Throws when the gaps cannot be filled, as when both ends
+# of the record are missing and no run between them is long enough to
+# reflect.
 function _howe_fill(x::Vector{Float64}, span::Int; free::Bool=false)
     xv = copy(x)
     gaps = _identify_gaps(xv)
@@ -404,84 +402,114 @@ function _fillgaps(v::AbstractVector{<:Real}, phase::Bool, form::Symbol)
 end
 
 """
-    fillgaps(data::PhaseData;     form=:auto) → PhaseData
-    fillgaps(data::FrequencyData; form=:auto) → FrequencyData
+    fillgaps(data; form=:auto) → PhaseData or FrequencyData
 
-Fill the missing (`NaN`) samples of an equispaced record by the reflection
-method of D. A. Howe and N. Schlossberger, IEEE Trans. UFFC 69(2), 468–472
-(2022), doi:10.1109/TUFFC.2021.3137425, as their script has it (C. Champagne,
-D. A. Howe and N. Schlossberger, `fillgaps.py`, doi:10.5281/zenodo.5594587),
-so that an estimator which cannot skip gaps can run. The measured samples are
-returned as they came, with the same `tau0`, `source` and `start`. The readers
-put timestamped samples on their grid first, so `read_data(path;
-fillgaps=true)` fills the readings a file is missing.
+Copy of a record with its missing samples (`NaN`) filled by the reflection
+method of [Howe and Schlossberger (2022)](@cite howe-2022-gap-imputation),
+after the script the paper gives for it
+([Champagne et al. (2021)](@cite champagne-2021-gap-filling-script)). The
+measured samples, the sample interval, the source and the start time are
+returned as they came, and a record without missing samples is returned as
+a copy. With `fillgaps=true`, [`read_data`](@ref), [`read_phase`](@ref) and
+[`read_frequency`](@ref) fill a record as they read it.
 
-A gap of n samples takes the n samples beside it (the run before it, the run
-after it when that one is too short, half from each when neither is long
-enough), reflected and inverted, and a straight line is added so that the
-low-pass-filtered fill meets the filtered data at both ends. A gap of one
-sample takes the mean of its neighbours. Gaps are filled outward from the
-longest run, so a fill can serve the next gap; a layout with no run long
-enough to mirror throws an `ErrorException`.
+A gap of ``n`` samples takes ``n`` of the samples beside it, reversed in
+time and inverted in sign, and a straight line is added so that the
+low-pass filtered fill meets the filtered data at both ends. Filling starts
+at the gap after the longest run of data between two gaps and proceeds to
+the right, then to the left, so a fill may rest on an earlier one. The
+samples come from the run just passed, from the run on the other side
+where that one is shorter than the gap, and half from each side where both
+are. A gap of one sample takes the mean of its neighbors. An
+`ErrorException` is thrown if the gaps are too long for the data between
+them.
 
 The reflected samples carry the noise of the record only where the series
-being filled lies between white and random walk. A smoother series shows the
-added line as a step at each join (the phase of random-walk FM read 10 times
-high at τ₀ after a 30 % fill), and in a rougher one the error of the level at
-the joins is integrated across the gap (the frequency of white PM read 12
-times high at 256 τ₀). Two things the paper leaves open are therefore set
-from the record:
+that is filled lies between white noise and a random walk. In a smoother
+series, such as the phase of flicker or random-walk FM, the joins stand out
+of the noise. In a rougher one, such as the frequency of white or flicker
+PM, the error of the level at a join adds up across the gap. The paper
+prescribes neither the series nor the length of the filter, and this
+package sets both from the record:
 
-- `form`, the series that is filled. `:auto` reads the two-sample deviation
-  of the frequency samples past the gaps, at the octaves of m samples that
-  at least 8m terms measure. It fills the frequency when that deviation
-  nowhere falls to 1/√2 of its value at τ₀, the fall of white FM in one
-  octave, or turns up again by the last octave: flicker or random-walk FM
-  is then present and the phase too smooth. It fills the phase otherwise.
-  `:phase` and `:frequency` force the choice. A phase record filled as
-  frequency has the filled differences corrected to sum to the measured
-  phase change across each gap; a frequency record filled as phase leaves
-  the phase step across each gap free.
-- The span the filter averages over (16 samples in the script): the longest
-  of those octaves at which the two-sample deviation of the series being
-  filled is within 10 % of its lowest, so the level beside a gap is averaged
-  for as long as averaging improves it.
+- **Series.** `form=:auto` reads the two-sample deviation of the frequency
+  samples past the gaps, at the averaging factors ``m = 1, 2, 4, …`` that
+  at least ``8m`` terms measure. The frequency is filled when that
+  deviation has nowhere fallen to ``1/\\sqrt{2}`` of its value at ``τ_0``,
+  the fall of white FM in one octave, or has risen more than 10 % above
+  its lowest value by the last factor: flicker or random-walk FM is then
+  present. Otherwise the phase is filled.
+- **Filter.** The script's filter averages over about 16 samples. Here it
+  averages over the longest of those factors at which the two-sample
+  deviation of the series being filled is within 10 % of its lowest value.
+- **Trend.** A least-squares parabola in phase, or line in frequency, is
+  set aside while the series is filled and put back after. The filter
+  mirrors each block of samples at its ends, and a slope would pull the
+  filtered ends off the data. In simulation a phase record with a
+  frequency offset of ``100σ_y(τ_0)`` and one gap of 30 %, filled with the
+  script's filter and the trend left in, read 48 times high at ``τ_0``.
 
-The trend of the series, a least-squares parabola in phase or line in
-frequency through the measured samples, is set aside while it is filled. The
-filter mirrors each block at its ends, so a slope would pull the filtered
-endpoints off the data: with a frequency offset of 100 σ_y(τ₀) a phase record
-filled as scripted read 48 times high at τ₀.
+# Keywords
 
-On simulated records of 4096 samples (twelve mixes of the five power-law
-noises, as phase and as frequency records, one to six gaps removing up to
-30 %, with and without offset and drift, 100 records each) the Allan
-deviation of the filled record stayed within 5 % of the original's from τ₀ to
-256 τ₀, or 11 % at 256 τ₀ for a 30 % gap at the end of the record, which has
-data on one side only; the modified Allan deviation stayed within 4 % to
-16 τ₀. Three things a fill does not recover:
+- `form=:auto`: the series that is filled: `:phase`, `:frequency`, or
+  `:auto` for the choice above. A phase record filled as frequency keeps
+  its measured phases, because the filled differences are adjusted to sum
+  to the measured change across each gap. In a frequency record filled as
+  phase, the phase step across each gap is not measured and is left free.
 
-- MDEV at the longest τ where white PM dominates: 1.1 to 1.3 times high, and
-  1.9 for a frequency record with six gaps. Averaging m phases resolves a
-  level error that ADEV does not see.
-- The phase step across a gap in a frequency record, which is not measured,
-  so the errors of many gaps add. With gaps of 1 to 12 samples removing a
-  quarter of a frequency record, white PM read 1.3 and 1.9 times high in ADEV
-  at 64 and 256 τ₀ (4.8 and 19 in MDEV), flicker PM 1.5 at 256 τ₀ and white FM
-  1.06; the same gaps in a phase record stayed within 8 % in ADEV.
-- A periodic term that stands out of the noise, which neither form carries in
-  every layout. A sine in the frequency (period 512 samples, amplitude
-  3 σ_y(τ₀)) on white FM read 1.15 high in ADEV and 1.40 in MDEV at 256 τ₀
-  across one 30 % gap, where the frequency is filled and reflection inverts
-  the sine (1.00 with `form=:phase`), and 1.42 at τ₀ past gaps of 1 to 12
-  samples, where the phase is filled (1.00 with `form=:frequency`; 1.05 at a
-  third of the amplitude). Remove such a term before filling and put it back
-  after.
+!!! warning "A filled record is not the record"
+    Fill only for a function that needs a complete record, such as the
+    spectra, the total, Thêo, parabolic and dynamic deviations and the
+    cross estimators. The Allan and Hadamard deviations, their modified
+    and time forms and [`tierms`](@ref) leave out the terms a missing
+    sample enters, which does not bias them, and [`mtie`](@ref) takes the
+    peak-to-peak of the samples measured (see [Timestamps and gaps](@ref)).
 
-The estimators that skip gaps (`adev`, `mdev`, `hdev`, `mhdev` and their time
-forms, on the record with its `NaN`s) need no fill and have none of these
-errors. The choice of form and span is this package's, checked by those
-simulations; the paper prescribes neither.
+    In simulation (4096 samples; the five power-law noises and seven sums
+    of two of them; phase and frequency records; one to six gaps removing
+    up to 30 % of the record; with and without a frequency offset and
+    drift; 100 records each) the Allan deviation of the filled record was
+    within 5 % of that of the whole record from ``τ_0`` to ``256τ_0``, and
+    within 11 % at ``256τ_0`` for a gap of 30 % at the end of the record.
+    The modified Allan deviation was within 4 % up to ``16τ_0``. A fill
+    does not recover three things:
+
+    - The modified Allan deviation of white PM at long ``τ``, which
+      resolves an error of level that the Allan deviation does not. With
+      30 % of the record missing it read up to 1.3 times high at
+      ``256τ_0``, and 1.9 times for a frequency record with six gaps.
+    - The phase step across a gap of a frequency record, so that the
+      errors of many gaps add. With gaps of 1 to 12 samples removing a
+      quarter of a frequency record, white PM read 1.3 and 1.9 times high
+      in the Allan deviation at ``64τ_0`` and ``256τ_0`` (4.8 and 19 times
+      in the modified one), flicker PM 1.5 times high at ``256τ_0`` and
+      white FM 6 % high, and white PM with flicker FM read 15 % low there.
+      The same gaps in a phase record left the Allan deviation within 8 %.
+    - A periodic term that stands out of the noise. On a phase record of
+      white FM with a sine in the frequency, of period 512 samples and
+      amplitude ``3σ_y(τ_0)``, the Allan deviation read 1.15 times high
+      and the modified one 1.40 times at ``256τ_0`` across one gap of
+      30 %, where the frequency is filled (1.00 with `form=:phase`). Past
+      gaps of 1 to 12 samples, where the phase is filled in nine records
+      in ten, it read 1.42 times high at ``τ_0`` (1.00 with
+      `form=:frequency`), and 1.05 times at a third of that amplitude.
+      Remove such a term before filling and put it back after.
+
+    The choice of series matters most where gaps are many. Random-walk FM
+    filled as phase read 1.4 times high at ``τ_0`` with one gap of 30 %
+    and 12 times with the short gaps above. A frequency record of white PM
+    filled as frequency read 1.9 and 5 times high at ``256τ_0``.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> x = PhaseData([0.0, 1.0, NaN, 3.0, 4.0], 1.0);
+
+julia> print(fillgaps(x).x)
+[0.0, 1.0, 2.0, 3.0, 4.0]
+```
 """
 fillgaps(pd::PhaseData; form::Symbol=:auto) =
     PhaseData(_fillgaps(pd.x, true, form), pd.tau0; source=pd.source, start=pd.start)

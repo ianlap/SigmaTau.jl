@@ -16,7 +16,7 @@ function remembered(s) {
 function remember(s, st) {
   try {
     if (!st.remember) { localStorage.removeItem(formatKey(s)); return; }
-    localStorage.setItem(formatKey(s), JSON.stringify({ kind: st.kind, time_col: st.time, timeUnit: st.timeUnit, value_cols: st.values, scaling: st.scaling, factor: st.factor, tau0: st.tau0In, against: st.against }));
+    localStorage.setItem(formatKey(s), JSON.stringify({ kind: st.kind, time_col: st.time, timeUnit: st.timeUnit, value_cols: st.values, scaling: st.scaling, factor: st.factor, tau0: st.tau0In, against: st.against, keep_zeros: st.keepZeros }));
   } catch { /* storage off: nothing to remember */ }
 }
 
@@ -37,6 +37,7 @@ export function openImport(file, prev = null) {
     values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
     tau0In: p?.tau0 ?? s.tau0Hint ?? "",     // no guess: without a time column τ0 must be given
     against: p?.against ?? "",
+    keepZeros: p?.keep_zeros ?? false,          // Stable32 file: zeros are readings, not gaps
     ...scaleFields(kind0, p?.scaling ?? guess.scaling ?? 1, p?.factor ?? ""),  // factor: a typed scale, which replaces the unit choice
     remember: true,
     labels: { ...(prev?.clockNames ?? {}) },   // column → the name typed for its clock
@@ -53,13 +54,16 @@ export function openImport(file, prev = null) {
     const per = clockStats(s, st.time, st.values, st.timeUnit), ts = per[0].ts;
     const tau0 = ts && ts.tau0 > 0 ? ts.tau0 : Number(st.tau0In);
     const sum = (k) => per.reduce((a, p) => a + (p.ts?.[k] ?? 0), 0);
-    return { ts, tau0, per, gaps: sum("gaps"), missing: sum("missing") };
+    // A Stable32 file marks a gap with 0, except the end points of phase data.
+    const zeros = s.format !== "stable32" ? 0 : st.values.reduce((a, c) => a + (s.columns[c - 1] ?? [])
+      .filter((x, i, v) => x === 0 && !(st.kind === "phase" && (i === 0 || i === v.length - 1))).length, 0);
+    return { ts, tau0, per, gaps: sum("gaps"), missing: sum("missing"), zeros };
   };
   const colName = (c) => s.names[c - 1] || `column ${c}`;
   // What a clock is called when nothing is typed: its column name, or the file's name for a single clock.
   const defaultName = (c) => (st.values.length > 1 ? colName(c) : file.name.replace(/\.[^.]+$/, ""));
   const settings = () => {
-    const { tau0, gaps } = derived();
+    const { tau0, gaps, zeros } = derived();
     const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
     return {
       kind: st.kind,
@@ -74,8 +78,10 @@ export function openImport(file, prev = null) {
       scaling: parseFactor(st.factor) || st.scaling,
       tau0,
       gaps,
-      // NaN (and SCPI 9.91E+37) readings, which a frequency record must have filled
-      blanks: st.values.reduce((a, c) => a + (s.columns[c - 1] ?? []).filter((x) => !Number.isFinite(x) || x === 9.91e37).length, 0),
+      keep_zeros: st.keepZeros,
+      // NaN readings (SCPI 9.91E+37, Stable32 zeros), which a frequency record must have filled
+      blanks: st.values.reduce((a, c) => a + (s.columns[c - 1] ?? []).filter((x) => !Number.isFinite(x) || x === 9.91e37).length, 0)
+        + (st.kind === "frequency" && !st.keepZeros ? zeros : 0),
       // (the clocks of a RINEX file differ in τ₀: the Data page gives each its own)
       sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind}${s.clocks ? "" : ` · τ₀ ${num(tau0, 4)} s`}` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
@@ -84,14 +90,15 @@ export function openImport(file, prev = null) {
     };
   };
 
-  // Remembered format: load straight away when the file still makes sense.
-  if (fromMemory && !prev && s.nCols && !s.bad && derived().tau0 > 0) return Promise.resolve(settings());
+  // Remembered format: load straight away when the file still makes sense
+  // and no Stable32 zero would silently become a gap.
+  if (fromMemory && !prev && s.nCols && !s.bad && derived().tau0 > 0 && (!derived().zeros || st.keepZeros)) return Promise.resolve(settings());
 
   return new Promise((resolve) => {
     const finish = (out) => { dlg.close(); resolve(out); };
 
     const render = () => {
-      const { ts, tau0, per, gaps, missing } = derived();
+      const { ts, tau0, per, gaps, missing, zeros } = derived();
       const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
       if (!units.some(([f]) => f === st.scaling)) st.scaling = 1;
       const factor = parseFactor(st.factor);
@@ -150,6 +157,10 @@ export function openImport(file, prev = null) {
       const gap = gaps
         ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to fill them.</div>`
         : "";
+      const zeroCard = zeros
+        ? `<div class="gap-card"><b>${thousands(zeros)} zero reading${zeros > 1 ? "s" : ""}</b>Stable32 marks a gap with 0${st.keepZeros ? `; ${zeros > 1 ? "they are" : "it is"} kept as ${zeros > 1 ? "readings" : "a reading"} here` : `, so ${zeros > 1 ? "they are" : "it is"} read as ${zeros > 1 ? "gaps" : "a gap"}`}.
+            <label class="check"><input type="checkbox" id="imp-keep-zeros" ${st.keepZeros ? "checked" : ""}>Keep zeros as readings (a quantized record)</label></div>`
+        : "";
       const tauLine = ts && ts.tau0 > 0
         ? `<div class="tau-line"><span class="mono">${taus.join(" and ")} s</span><span class="ok">✓ ${taus.length > 1 ? "each clock from its own epochs" : `from the time column${per.every((p) => p.ts?.even) ? ", evenly spaced" : ", grid step"}`}</span></div>`
         : `<div class="tau-line"><input type="number" id="imp-tau0" min="0" step="any" value="${h(st.tau0In)}"> <span class="muted small">s${s.tau0Hint ? " · from the file header" : " · no time column"}</span></div>`;
@@ -188,7 +199,7 @@ export function openImport(file, prev = null) {
               <input type="text" id="imp-factor" class="wide-input" placeholder="or a factor, e.g. 1/(2*pi*5e14) for radians" value="${h(st.factor)}" aria-label="Scale factor" style="margin-top:6px">
               ${st.factor.trim() && !factor ? `<div class="muted small err" style="margin-top:4px">Not a positive number.</div>` : ""}</div>`}
             <div><label class="lbl">Sample interval τ<sub>0</sub></label>${tauLine}</div>
-            ${gap}
+            ${gap}${zeroCard}
             <div><label class="lbl" for="imp-against">Measured against</label>
               <input type="text" id="imp-against" class="wide-input" placeholder="e.g. H-maser" value="${h(st.against)}">
               <div class="muted small" style="margin-top:6px">You can switch the reference to any clock later, in the Clocks list.</div></div>
@@ -243,6 +254,7 @@ export function openImport(file, prev = null) {
       } else if (t.id === "imp-units") { st.scaling = Number(t.value); st.factor = ""; render(); }
       else if (t.id === "imp-factor") { st.factor = t.value; render(); }
       else if (t.id === "imp-remember") st.remember = t.checked;
+      else if (t.id === "imp-keep-zeros") { st.keepZeros = t.checked; render(); }
     };
     dlg.oninput = (e) => {
       if (e.target.id === "imp-against") { st.against = e.target.value; return; }

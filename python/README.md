@@ -1,109 +1,97 @@
 # sigmatau
 
-Python bindings for [SigmaTau.jl](https://github.com/ianlap/SigmaTau.jl). `sigmatau`
-is a [juliacall](https://github.com/JuliaPy/PythonCall.jl)-based wrapper — the same
-architecture as [PySR](https://github.com/MilesCranmer/PySR) — where every
-computation runs in an embedded Julia runtime with SigmaTau.jl loaded, so results are
-bit-identical to the Julia package, not a reimplementation. It supersedes the earlier
-pure-Python/NumPy port ([sigmatau.py](https://github.com/ianlap/sigmatau.py)), which
-is being deprecated; this package mirrors that port's public API and extends it.
+The Python package of [SigmaTau.jl](https://github.com/ianlap/SigmaTau.jl),
+for the analysis of clock and oscillator stability. It is a wrapper, not a
+second implementation: each function calls the Julia function of the same
+name in a Julia runtime inside the Python process, through
+[juliacall](https://github.com/JuliaPy/PythonCall.jl). The numbers are
+those of the Julia package, and the
+[documentation](https://ianlap.github.io/SigmaTau.jl/dev/) serves for
+both. Its [Python page](https://ianlap.github.io/SigmaTau.jl/dev/guide/python/)
+lists what differs between the two languages.
 
 ## Install
 
 ```bash
-pip install sigmatau
+pip install sigmatau        # the latest release on PyPI
+pip install -e python       # from a checkout of the repository, as it stands
 ```
 
-or, for development, from a checkout of this repo:
+The package needs Python 3.11 or later. From a checkout the install has to
+be an editable one (`-e`), because the package finds the Julia code by its
+path in the checkout.
 
-```bash
-pip install -e "python/[dev]"
-```
+The first `import sigmatau` sets up Julia through
+[juliapkg](https://github.com/JuliaPy/pyjuliapkg): it finds a Julia of
+version 1.11 or later, or installs one, creates a Julia environment inside
+the Python environment, installs SigmaTau.jl there and precompiles it. That
+takes a few minutes. Later imports take a few seconds.
 
-The first `import sigmatau` performs a one-time
-[juliapkg](https://github.com/JuliaPy/pyjuliapkg) resolve: it installs Julia 1.11
-(via juliaup if needed), creates a private Julia environment under the venv,
-dev-installs this repo into it, and precompiles — about two minutes. Warm imports
-after that take a few seconds (Julia boot time).
-
-Import `sigmatau` before `juliacall`. On import, `sigmatau` sets
-`PYTHON_JULIACALL_HANDLE_SIGNALS=yes` (so Ctrl-C during a long-running call
-interrupts Julia cleanly instead of risking a crash) and
-`PYTHON_JULIACALL_THREADS=auto` (so the threaded total-family kernels get all
-cores — the juliacall default is a single thread). Both respect values you set
-yourself; if `juliacall` is imported first, neither can take effect and
+Import `sigmatau` before `juliacall`. On import it sets
+`PYTHON_JULIACALL_HANDLE_SIGNALS=yes`, so that Ctrl-C interrupts a long
+calculation in Julia, and `PYTHON_JULIACALL_THREADS=auto`, so that the
+estimators that use threads run on all cores. It leaves a value that you
+have set yourself. Once `juliacall` is loaded neither can take effect, and
 `sigmatau` warns.
 
-Python's `faulthandler` mistakes the signals Julia's threads use internally
-for crashes. Leave it off with sigmatau (no `-X faulthandler`), and run
-pytest with `-p no:faulthandler`, as this package's own test config does.
+Leave Python's `faulthandler` off: it takes the signals that Julia's
+threads use among themselves for crashes. Under pytest that is
+`-p no:faulthandler`, as in the configuration of this package.
 
-## 30-second example
+## Example
 
 ```python
 import sigmatau as st
 
-pd = st.noise_gen(st.PhaseData, 4096, 1.0, sigma1={0: 1e-12}, rng=42)
-r = st.adev(pd)  # Octave grid, noise ID + 68.3% CIs
-print(r.tau, r.dev, r.ci_lower, r.ci_upper, r.noise_type)
+p = st.noise_gen(st.PhaseData, 8192, 1.0, sigma1={0: 1e-12, -2: 3e-14}, rng=5)
 
-suite = st.stability(pd)  # adev+mdev+hdev+mhdev in one call
-suite["adev"].dev
+r = st.adev(p)                     # octave spacing, with intervals
+r.tau, r.dev, r.ci_lower, r.ci_upper, r.noise_type
 
-st.deviation("mhtotdev", pd)  # any estimator by name; see st.estimators()
-st.save("adev.tsv", r)  # results, suites and records; st.load reads them back
+suite = st.stability(p)            # ADEV, MDEV, HDEV and MHDEV in one call
+suite["mdev"].dev
+
+st.mhtotdev(p, [1, 2, 4, 8])       # averaging factors of your own
+st.deviation("theo1", p)           # any estimator by name: st.estimators()
+st.save("adev.tsv", r)             # st.load("adev.tsv") reads it back
 ```
 
-Explicit τ (averaging factors instead of a named grid):
+A record of your own comes from a file or from a NumPy array:
 
 ```python
-st.mhtotdev(pd, [1, 2, 4, 8])
+p = st.read_data("clock.csv")      # also st.read_phase, st.read_frequency
+p = st.PhaseData(x, 1.0)           # phase in seconds, sample interval in seconds
+f = st.FrequencyData(y, 1.0)       # fractional frequency
 ```
 
-Reading a data file:
+The rest of the Julia package is there under the same names:
 
 ```python
-st.read_phase("clock.dat", tau0=1.0)
+st.summarize(p)                                  # samples, gaps, outliers, drift
+st.psd_y(p)                                      # spectrum of the frequency
+st.dadev(p, window=512)                          # deviation in a sliding window
+st.drift_fit(p, model="log").rate                # a drift model, rate per day
+st.mask_check(st.tdev(p), "G8262_opt1").passed   # an ITU-T wander mask
+
+fit = st.powerlaw_fit(p)                         # power-law model of the noise
+model = st.clock_model(fit)                      # clock model with those levels
+kf = st.kalman_smooth(st.kalman_filter(p, model))
+st.holdover(p, train=1024, limit=1e-9).time_to_limit
+
+gains = st.steering_gains(3600.0, p.tau0)        # a steering loop with a time constant of 1 h
+st.adev(st.steer(p, model, gains).steered)       # the record as that loop would leave it
+
+cc, truth = st.simulate_ensemble([model] * 3, 10_000, rng=1)
+st.timescale(cc, algorithm="at1").weights        # a time scale from three clocks
 ```
 
-Dynamic (time-resolved) deviation:
+Of the Julia package, the Python package leaves out live measurement
+(`LiveStability`, the instrument sources and `read_reading`), the plot
+recipes, and the helpers `nsamples`, `tau_mode` and `INPUT_FORMATS`.
 
-```python
-st.dadev(pd, window=512)
-```
+## Development
 
-Drift and noise models, two channels, clock ensembles:
-
-```python
-st.drift_fit(pd, model="log").rate  # aging per day, MIL-PRF-55310 log model
-f = st.powerlaw_fit(pd)  # h_α of S_y(f) = Σ h_α f^α, from MHDEV
-st.powerlaw_sigma(f, [1.0, 10.0, 100.0])  # the model's ADEV
-st.cross_adev(a, b)  # two channels measuring one device
-st.groslambert(x_ab, x_bc, x_ca)  # each clock's ADEV with χ² intervals
-m = st.clock_model(f, tau0=1.0)  # Kalman model from the h_α fit
-kf = st.kalman_smooth(st.kalman_filter(pd, m))  # phase, frequency (, drift) estimates
-st.holdover_error(kf, [3600.0, 86400.0])  # 1σ time error after free-running
-st.holdover(pd, train=86400, limit=1e-6).time_to_limit  # measured: seconds within 1 µs
-st.holdover(f, train=86400, limit=1e-6).budget  # predicted from the fit, by noise type
-cc, _ = st.simulate_ensemble([m, m, m], 10000)  # three clocks against one reference
-st.timescale(cc, algorithm="at1").weights  # AT1 weights over time
-```
-
-Record check and ITU-T wander masks:
-
-```python
-st.summarize(pd)                               # samples, span, gaps, outliers, drift per day
-c = st.mask_check(st.tdev(pd), "G8262_opt1")   # limit per τ, passed, margin
-st.telecom_mask("G811", "mtie", [1.0, 100.0])  # the limit in seconds
-```
-
-Julia only, not wrapped here: live measurement (`LiveStability` and the
-instrument sources, see `sigmatau live`), `noise_id_nnls` and the
-`StreamingStability` accumulator.
-
-## Development configuration vs release
-
-`python/src/sigmatau/juliapkg.json` currently points at this checkout:
+`python/src/sigmatau/juliapkg.json` names the checkout:
 
 ```json
 {
@@ -118,63 +106,29 @@ instrument sources, see `sigmatau live`), `noise_id_nnls` and the
 }
 ```
 
-The `"dev": true` is load-bearing: without it, juliapkg `Pkg.add`s a git snapshot of
-the path instead of dev-installing it, and local Julia edits become invisible to the
-Python package until the next resolve.
-
-A wheel cannot use a path, so the release build runs
-`python/tools/pin_juliapkg.py`, which replaces this entry with the
-General-registry release of the same version (`"version": "=0.6.0"`) and stops
-if that version is not registered yet. The repo copy keeps the dev path.
-
-`sigmatau.__version__` always equals SigmaTau.jl's version (a test checks it).
-
-### Publishing to PyPI
-
-`.github/workflows/PythonPublish.yml` runs on a `python-v*` tag, for example
-`python-v0.6.0`. It checks that the tag, `__version__` and `Project.toml` agree,
-pins SigmaTau.jl to the registry release, builds the sdist and wheel, installs
-the wheel on a clean runner and runs the tests, then uploads through PyPI
-trusted publishing. Push the `python-v<version>` tag only after SigmaTau.jl
-`<version>` is merged into the General registry.
-
-One-time setup: on PyPI, add a pending trusted publisher for project `sigmatau`
-(owner `ianlap`, repository `SigmaTau.jl`, workflow `PythonPublish.yml`,
-environment `pypi`); on GitHub, create the `pypi` environment in the repository
-settings.
-
-## Differences from sigmatau.py (the retired pure-Python port)
-
-1. `DEFAULT_DEVIATIONS` is `("adev", "mdev", "hdev", "mhdev")` — the Julia truth. The
-   port's fourth slot was `tdev`.
-2. `StabilityResult` gains `neff`, plus the record metadata `tau0`, `n` and
-   `confidence` (`None` when no intervals were computed).
-3. `PhaseData`/`FrequencyData` gain a `source` field; the file readers record the
-   path they were read from.
-4. `noise_gen(rng=int)` seeds Julia's Xoshiro RNG. The same seed produces different
-   samples than the port's NumPy stream — draws are reproducible within this wrapper,
-   not bit-compatible with the port.
-5. New API the port never had: `tierms`, `theo1`, `theoh`, `dadev`, `dhdev`,
-   `ncornered_hat`, `groslambert`, `drift_fit`, `powerlaw_fit` / `powerlaw_sigma` /
-   `powerlaw_psd`, `cross_adev` / `cross_psd_y` / `cross_psd_x`, `read_data`,
-   `deviation(name, ...)` and `estimators()`, `find_outliers` (returns 0-based
-   indices), `remove_outliers`, `noise_id_nnls` (returns a dict), `StreamingStability`
-   (`push` / `extend` / `snapshot`), `start_time` (a UTC `datetime`; records carry
-   `start` in seconds since 2000-01-01), plus `tau_values` grids for the new kernels.
-6. `theo1` reports τ = 0.75·m·τ₀ (the Julia/SP1065 convention), not τ = m·τ₀.
-7. Names follow SigmaTau.jl 0.6: `psd_y` / `psd_x` / `ssb_phase_noise` (with
-   `taper=`) for the port's `Sy` / `Sx` / `L` (`window=`); `ncornered_hat` for
-   `nch`; `save(path, x)` / `load(path)` for `save_result` / `save_suite` /
-   `load_result` / `load_suite`; `m=` for `taus=`; and
-   `identify_noise(..., remove_drift=)` for `detrend=`.
-8. `confidence_intervals(devs, edfs, confidence)` takes no `noises` or `n`:
-   the interval is χ² for every positive EDF, with no Gaussian stand-in
-   below 1.
-
-## Testing
-
-From the repo root, with the package installed into the active venv:
+With `"dev": true` juliapkg installs the path itself, as `Pkg.develop`
+does, so the Python package runs the Julia source of the checkout as it
+stands.
 
 ```bash
-python -m pytest python/tests
+pip install -e "python/[dev]"
+pytest python/tests -q
 ```
+
+`sigmatau.__version__` equals the version of SigmaTau.jl, and a test
+checks it.
+
+## Releases
+
+A wheel cannot name a path. `python/tools/pin_juliapkg.py` replaces the
+entry above with the release of SigmaTau.jl of the same version in the
+General registry, `"version": "=X.Y.Z"`, and stops when that version is
+not registered.
+
+`.github/workflows/PythonPublish.yml` runs on a tag `python-vX.Y.Z`. It
+checks that the tag, `__version__` and `Project.toml` agree, runs the pin
+script, builds the source distribution and the wheel, installs the wheel
+on a clean runner, runs the tests against it and publishes through PyPI
+trusted publishing. Push the tag only after that version of SigmaTau.jl is
+in the General registry. The header of the workflow lists the one-time
+setup on PyPI and on GitHub.
