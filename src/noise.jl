@@ -145,6 +145,7 @@ in 58 to 86 %.
 """
 function identify_noise(x::Vector{Float64}, m_values::Vector{Int}; dmin::Int=0, dmax::Int=2,
                         remove_drift::Bool=true, b1_length::Symbol=:averaged, b1::Bool=true)
+    _check_m(:identify_noise, m_values)
     b1_length in (:record, :averaged) ||
         throw(ArgumentError("b1_length must be :record or :averaged, got :$b1_length"))
     alphas, ok = _noise_alphas(_preprocess(x), m_values, dmin, dmax, remove_drift, b1_length, b1)
