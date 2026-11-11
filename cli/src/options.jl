@@ -66,7 +66,7 @@ const OPTS = [
     Opt("--value-col", "N", String[], false, "1-based value column (default 2)", ALL),
     Opt("--reference-col", "N", String[], false, "subtract this column from the value column (clocks measured against one reference)", ALL),
     Opt("--header", "N", String[], false, "header lines to skip; '#' lines and a Stable32 header are skipped anyway", ALL),
-    Opt("--delim", "CHAR", String[], false, "field delimiter (default: from the extension; '\\t' for tab)", ALL),
+    Opt("--delim", "CHAR", String[], false, "field delimiter (default: a comma where the first data line has one, a tab in a table or .tsv file, else blanks; '\\t' for tab)", ALL),
     Opt("--scaling", "X", String[], false, "multiply the values by X (1e-9 for nanoseconds)", ALL),
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
@@ -506,6 +506,10 @@ function parse_args!(o::Options, args::Vector{String})
             throw(usage_error("--time-constant and --interval must be positive"))
         o.integral && isnan(o.time_constant) && throw(usage_error("--integral goes with --time-constant"))
     end
+    if o.command == "timescale"
+        0 < o.wmax <= 1 || throw(usage_error("--wmax must be above 0 and at most 1"))
+        isempty(o.steps) || o.algorithm == "at2" || throw(usage_error("--steps needs --algorithm at2"))
+    end
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))
@@ -568,9 +572,6 @@ end
 function print_command_help(io::IO, cmd::String)
     if cmd == "completion"
         print(io, "Usage: sigmatau completion SHELL\n\nShells: ", join(SHELLS, ", "), "\n")
-        return
-    elseif !(cmd in COMMANDS)
-        print(io, "sigmatau: no help for \"", cmd, "\"; commands: ", join(COMMANDS, ", "), "\n")
         return
     end
     for (c, arg, h) in COMMAND_HELP
