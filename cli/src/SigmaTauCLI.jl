@@ -140,14 +140,14 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     end
 
     buf = IOBuffer()
-    if cmd == "model"
+    t_start = time_ns()
+    if cmd == "model" || cmd == "phasenoise"
         try
-            run_model(buf, o)
+            cmd == "model" ? run_model(buf, o) : run_phasenoise(buf, o, t_start)
         catch e
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
         end
     else
-        t_start = time_ns()
         data = try
             load_record(o)
         catch e

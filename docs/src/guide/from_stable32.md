@@ -62,7 +62,7 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 | Run | an estimator, or [`stability`](@ref) for several |
 | Dynamic Stability | [`dadev`](@ref), [`dhdev`](@ref) |
 | Power | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref) |
-| Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref) |
+| Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref); [`spectrum_sigma`](@ref) for a measured spectrum |
 | Noise | [`noise_gen`](@ref) |
 | 3-Cornered Hat | [`ncornered_hat`](@ref), for three clocks or more, and [`groslambert`](@ref) |
 | Plot | the plot recipes ([Plotting and tables](plotting.md)) |

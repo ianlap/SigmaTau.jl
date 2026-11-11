@@ -37,3 +37,21 @@ def test_integrated_jitter_matches_julia(small_phase):
     pts = st.integrated_jitter([1e3, 1e4, 1e5], [-100.0, -110.0, -120.0], f_carrier=10e6)
     assert pts["phase"] == pytest.approx(np.sqrt(2e-7 * np.log(100)))
     assert j["time"] == pytest.approx(j["phase"] / (2 * np.pi * 1e7))
+
+
+def test_spectrum_sigma_closed_forms():
+    # White FM, S_y = h₀: σ²_y(τ) = h₀/(2τ), and the modified variance is half of it.
+    f, h0, tau = [1e-4, 1e4], 2e-24, [1.0, 10.0]
+    L = 10 * np.log10(h0 * 10e6**2 / np.square(f) / 2)
+    a = st.spectrum_sigma(f, L, tau, f_carrier=10e6)
+    m = st.spectrum_sigma(f, [h0, h0], tau, quantity="Sy", deviation="mdev")
+    assert a["dev"] == pytest.approx(np.sqrt(h0 / (2 * np.array(tau))), rel=1e-3)
+    assert m["dev"] == pytest.approx(a["dev"] / np.sqrt(2), rel=1e-3)
+    assert a["band"] == (1e-4, 1e4)
+    sphi = st.spectrum_sigma(f, 2 * 10 ** (L / 10), tau, quantity="Sphi", f_carrier=10e6)
+    assert sphi["dev"] == pytest.approx(a["dev"])
+    assert np.all(a["below"] < 1e-3) and np.all(a["above"] < 1e-3)
+    pm = st.spectrum_sigma([1.0, 1e3], [1e-26, 1e-20], [1.0], quantity="Sy")  # white PM
+    assert np.isinf(pm["above"][0])
+    with pytest.raises(ValueError):
+        st.spectrum_sigma(f, L, tau)  # ℒ(f) needs the carrier

@@ -28,7 +28,7 @@ adev(p)
 | Time interval error | [`mtie`](@ref), [`tierms`](@ref), [`mask_check`](@ref) |
 | Dynamic and live stability | [`dadev`](@ref), [`dhdev`](@ref), [`StreamingStability`](@ref), [`LiveStability`](@ref) |
 | Several clocks | [`ncornered_hat`](@ref), [`groslambert`](@ref), [`cross_adev`](@ref) |
-| Spectra | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref), [`integrated_jitter`](@ref), [`cross_psd_y`](@ref) |
+| Spectra | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref), [`integrated_jitter`](@ref), [`spectrum_sigma`](@ref), [`cross_psd_y`](@ref) |
 | Noise | [`identify_noise`](@ref), [`powerlaw_fit`](@ref), [`noise_gen`](@ref) |
 | Preparing a record | [`read_data`](@ref), [`fillgaps`](@ref), [`remove_outliers`](@ref), [`detrend`](@ref), [`drift_fit`](@ref) |
 | Clock model and Kalman filter | [`noise_fit`](@ref), [`clock_model`](@ref), [`kalman_filter`](@ref), [`holdover`](@ref) |

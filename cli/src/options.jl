@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model", "phasenoise", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift)"),
@@ -13,6 +13,7 @@ const COMMAND_HELP = [
     ("steer",      "FILE", "steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts"),
     ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
     ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "the σ(τ) that a clock noise model predicts (MDEV, ADEV and MHDEV), without a simulation"),
+    ("phasenoise", "TABLE --carrier HZ", "the σ(τ) that a table of the phase noise ℒ(f), or of another spectrum, gives over its band"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
@@ -34,6 +35,8 @@ const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
+const QUANTITIES = ["L", "Sphi", "Sx", "Sy"]
+const PHASENOISE_DEVS = [:adev, :mdev, :tdev, :hdev, :mhdev]
 
 struct Opt
     long::String
@@ -46,27 +49,28 @@ end
 
 const ANY = COMMANDS
 const BATCH = filter(!=("live"), COMMANDS)    # one result per call, to stdout or --out
-const READS = filter(!=("model"), COMMANDS)   # the commands that read a record
+const CLOCK = filter(!=("phasenoise"), COMMANDS)   # a record or a clock model, not a spectrum table
+const READS = filter(!=("model"), CLOCK)      # the commands that read a record
 const ALL = filter(!=("live"), READS)         # … from a FILE or --synth
 const TABULAR = filter(!=("report"), ALL)     # CSV or JSON out (report writes HTML; model is always JSON)
 const OPTS = [
     # The record
-    Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE; for model, the length of the record whose averaging times it takes", BATCH),
+    Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE; for model, the length of the record whose averaging times it takes", filter(!=("live"), CLOCK)),
     Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", READS),
     Opt("--clocks", "K", String[], false, "with --synth: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2; the analysis reads clock --clock, timescale uses all K (default 4)", ALL),
-    Opt("--noise-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", BATCH),
+    Opt("--noise-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", filter(!=("live"), CLOCK)),
     Opt("--clock", "I", String[], false, "with --synth --clocks: the simulated clock to read, 1 to K (default 1)", ALL),
     Opt("--phase", "", String[], false, "the values are phase in seconds (default)", READS),
     Opt("--freq", "", String[], false, "the values are fractional frequency", READS),
     Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns), bipm_utc (BIPM UTC-UTC(k)), rinex_clk (RINEX clock file; pick the clock with --column)", ALL),
     Opt("--column", "NAME", String[], false, "clock column of a table file, or the clock of a RINEX clock file (G08, ALGO00CAN), by name (default: the column named phase / PPS / time error, else frequency)", ALL),
     Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean, or for live the first reading, to 4 significant figures)", READS),
-    Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column; 1 for --synth, model and live)", ANY),
+    Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column; 1 for --synth, model and live)", CLOCK),
     Opt("--time-col", "N", String[], false, "1-based time column, 0 = none (default 1)", ALL),
-    Opt("--value-col", "N", String[], false, "1-based value column (default 2)", ALL),
+    Opt("--value-col", "N", String[], false, "1-based value column (default 2)", [ALL; "phasenoise"]),
     Opt("--reference-col", "N", String[], false, "subtract this column from the value column (clocks measured against one reference)", ALL),
-    Opt("--header", "N", String[], false, "header lines to skip; '#' lines and a Stable32 header are skipped anyway", ALL),
-    Opt("--delim", "CHAR", String[], false, "field delimiter (default: from the extension; '\\t' for tab)", ALL),
+    Opt("--header", "N", String[], false, "header lines to skip; '#' lines and a Stable32 header are skipped anyway", [ALL; "phasenoise"]),
+    Opt("--delim", "CHAR", String[], false, "field delimiter (default: from the extension; '\\t' for tab)", [ALL; "phasenoise"]),
     Opt("--scaling", "X", String[], false, "multiply the values by X (1e-9 for nanoseconds)", ALL),
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
@@ -75,7 +79,7 @@ const OPTS = [
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyze only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
-    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live"]),
+    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live", "phasenoise"]),
     Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "report", "live"]),
     Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "steer", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
@@ -102,7 +106,7 @@ const OPTS = [
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record); for steer, the stretch the clock model is fitted to, with results from its end on", ["holdover", "steer"]),
     Opt("--grow", "K", String[], false, "in place of --train: a stretch K times each holdover time (2, or 3 with --fit-drift, is the test behind TDEV and HTDEV)", ["holdover"]),
-    Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch)", ["holdover"]),
+    Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch); for phasenoise, the averaging times (default: 1, 2 and 5 in each decade from 1/f_h to 0.1/f₁, for a band from f₁ to f_h)", ["holdover", "phasenoise"]),
     Opt("--fit-drift", "", String[], false, "fit a parabola to the stretch, so the frequency drift is learned and carried on (default: a line); for steer, a drift state in the clock model, steered out", ["holdover", "steer"]),
     Opt("--no-anchor", "", String[], false, "start from the fit's value at the end of the stretch, not from the last reading", ["holdover"]),
     Opt("--kalman", "", String[], false, "predict with a Kalman filter in place of the least-squares fit; its clock model is fitted to the first training stretch alone, and `claimed` is the error the filter itself expects", ["holdover"]),
@@ -112,6 +116,9 @@ const OPTS = [
     Opt("--cost", "P:F:U", String[], false, "in place of --time-constant: the gains that minimize P·phase² + F·frequency² + U·steer² (LQG), e.g. 1e-3:1e-3:1e12", ["steer"]),
     Opt("--interval", "SECONDS", String[], false, "seconds between steers, a whole multiple of τ₀ (default τ₀)", ["steer"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
+    Opt("--carrier", "HZ", String[], false, "carrier frequency ν₀ in Hz, which ℒ(f) and S_φ(f) need", ["phasenoise"]),
+    Opt("--quantity", "Q", QUANTITIES, false, "what the table holds: L (default, ℒ(f) in dBc/Hz), Sphi (S_φ(f) in rad²/Hz), Sx (S_x(f) in s²/Hz) or Sy (S_y(f) in 1/Hz)", ["phasenoise"]),
+    Opt("--band", "A:B", String[], false, "integrate from A to B hertz only, inside the table (default: the whole table)", ["phasenoise"]),
     # Live
     Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal", ["live"]),
     Opt("--query", "CMD", String[], false, "SCPI query sent before every reading, e.g. READ? (default: READ? for tcp://, none otherwise)", ["live"]),
@@ -120,7 +127,7 @@ const OPTS = [
     Opt("--fast", "", String[], false, "run the simulator flat out instead of one reading per τ₀", ["live"]),
     # Output
     Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
-    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; for model, json alone", [TABULAR; "model"]),
+    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; for model, json alone", [TABULAR; "model"; "phasenoise"]),
     Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", BATCH),
     Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY),
     Opt("--help", "", String[], false, "show this command's options", ANY),
@@ -203,6 +210,9 @@ mutable struct Options
     integral::Bool            # steer: an integral gain
     cost::Vector{Float64}     # steer: --cost weights on phase, frequency and steer; empty = not given
     interval::Float64         # steer: seconds between steers; NaN = τ₀
+    carrier::Float64          # phasenoise: carrier frequency in Hz; NaN = not given
+    quantity::String          # phasenoise: what the table holds
+    band::Vector{Float64}     # phasenoise: --band limits in Hz; empty = the whole table
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
@@ -212,7 +222,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
-                    NaN, false, Float64[], NaN)
+                    NaN, false, Float64[], NaN, NaN, "L", Float64[])
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -271,6 +281,15 @@ function parse_component!(o::Options, s::String)
     b = isempty(parts[3]) ? NaN : parse_float(String(parts[3]), "--component")
     push!(o.components, (α, a, b))
     o.fit = true
+end
+
+# "A:B" in hertz, both given.
+function parse_band(s::String)
+    parts = split(s, ':')
+    length(parts) == 2 || throw(usage_error("--band expects A:B in hertz, got \"" * s * "\""))
+    v = Float64[parse_float(String(p), "--band") for p in parts]
+    0 < v[1] < v[2] || throw(usage_error("--band expects two rising frequencies above 0 Hz"))
+    return v
 end
 
 # "A:B" in seconds; an empty side is open.
@@ -392,6 +411,9 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--time-constant";  o.time_constant = parse_float(v, name)
     elseif name == "--cost";           o.cost = parse_cost(v)
     elseif name == "--interval";       o.interval = parse_float(v, name)
+    elseif name == "--carrier";        o.carrier = parse_float(v, name)
+    elseif name == "--quantity";       o.quantity = check_choice(v, name, QUANTITIES)
+    elseif name == "--band";           o.band = parse_band(v)
     elseif name == "--value-cols";     o.value_cols = parse_cols(v)
     elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
@@ -477,6 +499,11 @@ function parse_args!(o::Options, args::Vector{String})
     elseif o.command == "model"
         isempty(o.input) && o.synth > 0 && !isempty(o.models) ||
             throw(usage_error("model: give --synth N and a clock with --noise-model R:Q1:Q2:Q3, and no FILE"))
+    elseif o.command == "phasenoise"
+        isempty(o.input) && throw(usage_error("phasenoise: give the TABLE of the spectrum (see `sigmatau help phasenoise`)"))
+        o.quantity in ("L", "Sphi") && isnan(o.carrier) && throw(usage_error("phasenoise: ℒ(f) and S_φ(f) need the carrier frequency, --carrier HZ"))
+        isnan(o.carrier) || o.carrier > 0 || throw(usage_error("--carrier must be positive"))
+        all(in(PHASENOISE_DEVS), o.devs) || throw(usage_error("phasenoise converts to " * join(String[String(d) for d in PHASENOISE_DEVS], ", ")))
     elseif isempty(o.input) && o.synth <= 0
         throw(usage_error(o.command * ": give a FILE or --synth N (see `sigmatau help " * o.command * "`)"))
     end
@@ -561,6 +588,7 @@ function print_help(io::IO)
     print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
     print(io, "  sigmatau holdover gpsdo.dat --train 86400 --tau 3600,14400,86400 --limit 1e-6\n")
     print(io, "  sigmatau steer maser.dat --time-constant 86400 --format json\n")
+    print(io, "  sigmatau phasenoise ocxo.csv --carrier 10e6 --devs adev,mdev\n")
     print(io, "  sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1\n")
     print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
 end
@@ -583,6 +611,13 @@ function print_command_help(io::IO, cmd::String)
     elseif cmd == "model"
         print(io, "The averaging times are the octave multiples of τ₀ that a record of N samples reaches.\n",
               "The output is JSON.\n\nOptions:\n")
+    elseif cmd == "phasenoise"
+        print(io, "TABLE is a whitespace, comma or tab separated table: the Fourier frequency in Hz, then the\n",
+              "spectrum. Between its points the spectrum is a straight line on a log-log plot. Each result is\n",
+              "the deviation of the noise inside the band of the table. `below` and `above` are what the\n",
+              "spectrum would add if it went on below and above the band on the slope of its lowest and\n",
+              "highest decade, as fractions of the variance found: blank, or null in JSON, where that has no\n",
+              "limit, as above the band for ADEV and HDEV of white or flicker PM.\n\nOptions:\n")
     else
         print(io, "FILE is a whitespace, comma or tab separated table (time, value by default).\n\nOptions:\n")
     end
@@ -601,5 +636,7 @@ function print_command_help(io::IO, cmd::String)
         print(io, "\nDeviations: adev, mdev, hdev, mhdev\n")
     elseif cmd == "analyze" || cmd == "report"
         print(io, "\nDeviations: ", join(estimator_names(), ", "), "\n")
+    elseif cmd == "phasenoise"
+        print(io, "\nDeviations: ", join(String[String(d) for d in PHASENOISE_DEVS], ", "), "\n")
     end
 end

@@ -150,12 +150,18 @@ sigmatau steer maser.dat --time-constant 86400         # the record steered to i
 sigmatau cross a.dat --with b.dat                      # one device, two channels
 sigmatau timescale clocks.dat --value-cols 2,3,4       # a time scale from three clocks
 sigmatau report clock.dat --out clock.html             # an HTML report
+sigmatau phasenoise ocxo.txt --carrier 10e6            # σ(τ) from a table of ℒ(f)
 ```
 
 `report` takes the options of `analyze` and writes one HTML file with the
 record, the settings, the plots, a table for each deviation and the command
 line that made it. The file refers to nothing outside itself and prints to
 PDF from a browser.
+
+`phasenoise` reads a table of offset frequency and ``ℒ(f)`` in place of a
+record, and integrates it to the deviations over the band of the table
+([Power-law noise](../explanation/noise.md#A-measured-spectrum)). Each
+line of its answer tells how much the noise outside the table could add.
 
 ## Live measurement
 

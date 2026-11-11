@@ -858,6 +858,40 @@ mktempdir() do dir
         @test isempty(run_cli("analyze", pf, "--devs", "adev", "--out", op, "--quiet").err)
     end
 
+    @testset "phasenoise: σ(τ) from a table of ℒ(f)" begin
+        f, L, tau = [1.0, 10, 100, 1e3, 1e4, 1e5], [-100.0, -130, -150, -160, -165, -165], [0.01, 1.0]
+        write(joinpath(dir, "pn.csv"), "offset,L\n" * join(string.(f, ",", L), "\n") * "\n")
+        pn = ["phasenoise", joinpath(dir, "pn.csv"), "--header", "1", "--carrier", "10e6"]
+        lead(v) = join(string.(v), ",")[1:12]
+        r = run_cli(pn..., "--devs", "adev,tdev", "--tau", "0.01,1", "--format", "json")
+        @test r.code == 0
+        a, m = spectrum_sigma(f, L, tau; f_carrier=10e6), spectrum_sigma(f, L, tau; f_carrier=10e6, deviation=:mdev)
+        @test occursin("\"spectrum\":{\"quantity\":\"L\",\"carrier\":1.0e7,\"n\":6,\"band\":[1.0,100000.0]}", r.out)
+        @test occursin("\"deviation\":\"adev\",\"tau\":[0.01,1.0],\"dev\":[" * lead(a.dev), r.out)
+        @test occursin("\"above\":[null,null]}", r.out)                      # white PM: ADEV rises with f_h
+        @test occursin("\"deviation\":\"tdev\",\"tau\":[0.01,1.0],\"dev\":[" * lead(m.dev .* tau ./ sqrt(3)), r.out)
+        @test occursin("\"above\":[" * lead(m.above), r.out)
+        # The default deviations at 1, 2 and 5 per decade, from 1/f_h to 0.1/f₁.
+        rows = split(run_cli(pn...).out, '\n'; keepempty=false)
+        @test rows[1] == "source,deviation,tau,dev,below,above"
+        @test length(rows) == 1 + 4 * 13
+        @test endswith(rows[2], ",adev,1.0e-5," * string(spectrum_sigma(f, L, [1e-5]; f_carrier=10e6).dev[1]) * "," *
+                                string(spectrum_sigma(f, L, [1e-5]; f_carrier=10e6).below[1]) * ",")
+        # S_φ(f) in another column, a narrower band.
+        write(joinpath(dir, "sphi.dat"), join(string.(f, " ", L, " ", 2 .* exp10.(L ./ 10)), "\n") * "\n")
+        r = run_cli("phasenoise", joinpath(dir, "sphi.dat"), "--quantity", "Sphi", "--value-col", "3", "--carrier", "10e6",
+                    "--band", "10:1e4", "--devs", "mhdev", "--tau", "0.01,1")
+        @test occursin(",mhdev,1.0," * string(spectrum_sigma(f, L, tau; f_carrier=10e6, deviation=:mhdev, band=(10, 1e4)).dev[2])[1:12], r.out)
+        @test run_cli(pn[1:4]...).code == 1                                   # ℒ(f) needs the carrier
+        @test run_cli("phasenoise", "--carrier", "10e6").code == 1
+        @test run_cli(pn..., "--devs", "totdev").code == 1
+        @test run_cli(pn..., "--band", "0.1:10").code == 3                    # outside the table
+        @test occursin("--header N", run_cli(pn[[1, 2, 5, 6]]...).err)        # the line of names
+        @test run_cli(pn[[1, 2, 5, 6]]...).code == 2
+        @test run_cli(pn..., "--band", "1:5").code == 3                        # less than a decade: no default τ
+        @test occursin("does not apply", run_cli(pn..., "--tau0", "1").err)
+    end
+
     exe = get(ENV, "SIGMATAU_EXE", "")
     if !isempty(exe)
         @testset "compiled binary matches" begin
@@ -893,6 +927,9 @@ mktempdir() do dir
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["model", "--synth", "64", "--noise-model", "1e-22:1e-24:1e-30:0"],
+                         ["phasenoise", joinpath(dir, "pn.csv"), "--header", "1", "--carrier", "10e6", "--devs", "adev,tdev,hdev,mhdev"],
+                         ["phasenoise", joinpath(dir, "sphi.dat"), "--quantity", "Sphi", "--value-col", "3", "--carrier", "10e6", "--format", "json"],
+                         ["phasenoise", joinpath(dir, "pn.csv"), "--carrier", "10e6", "--format", "json"],
                          ["completion", "bash"],
                          ["help"],
                          ["version"])

@@ -79,7 +79,7 @@ two programs that need no Julia: the explorer as a desktop app, and the
 | Time interval error | `mtie`, `tierms`, `mask_check` |
 | Dynamic and live stability | `dadev`, `dhdev`, `StreamingStability`, `LiveStability` |
 | Several clocks | `ncornered_hat`, `groslambert`, `cross_adev` |
-| Spectra | `psd_y`, `psd_x`, `ssb_phase_noise`, `integrated_jitter`, `cross_psd_y` |
+| Spectra | `psd_y`, `psd_x`, `ssb_phase_noise`, `integrated_jitter`, `spectrum_sigma`, `cross_psd_y` |
 | Noise | `identify_noise`, `powerlaw_fit`, `noise_gen` |
 | Preparing a record | `read_data`, `fillgaps`, `remove_outliers`, `detrend`, `drift_fit` |
 | Clock model and Kalman filter | `noise_fit`, `clock_model`, `kalman_filter`, `holdover` |
