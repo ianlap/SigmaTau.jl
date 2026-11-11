@@ -29,6 +29,7 @@ const BIASES = ["exact", "published", "stable32", "none"]
 const NOISES = ["auto", "fit", "WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
+const STEPS = ["best", "real"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
@@ -96,7 +97,7 @@ const OPTS = [
     Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
-    Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
+    Opt("--steps", "MODE", STEPS, false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
     Opt("--flicker", "", String[], false, "greenhall and jones_tryon only: keep each clock's flicker FM and flicker PM as Markov states where the fit finds them, instead of folding flicker PM into the reading noise", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record); for steer, the stretch the clock model is fitted to, with results from its end on", ["holdover", "steer"]),
@@ -395,7 +396,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
     elseif name == "--pivot";          o.pivot = parse_int(v, name)
-    elseif name == "--steps";          o.steps = check_choice(v, name, ["best", "real"])
+    elseif name == "--steps";          o.steps = check_choice(v, name, STEPS)
     elseif name == "--series";         o.series = parse_int(v, name)
     elseif name == "--query";          o.query = v
     elseif name == "--every";          o.every = parse_int(v, name)
