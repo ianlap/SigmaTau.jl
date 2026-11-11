@@ -468,8 +468,9 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 Each column is read with the options of the record. With `--synth` the
 clocks are simulated: four of them, or those that `--clocks` or
 `--noise-model` describe. `greenhall`, `jones_tryon` and `stein` need three
-clocks or more, and fit a model to each with [`clock_models`](@ref). The
-record needs 16 samples or more.
+clocks or more, and fit a model to each with [`clock_models`](@ref), which
+leaves out the samples a missing reading touches. The record needs 16
+samples or more.
 
 The CSV output has a row for each clock:
 

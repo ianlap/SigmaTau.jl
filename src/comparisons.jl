@@ -175,6 +175,13 @@ record the levels are poorly separated, so compare each model with its
 curve. A clock whose curve leaves the fit too few positive points throws an
 error.
 
+The comparisons may have missing readings (`NaN`): the covariance leaves
+out the terms that read one. The curves are computed at the octaves of the
+interval between the readings of each clock, so clocks read at every tenth
+sample are fitted from the multiples of ten. With three clocks, a clock
+enters every curve, and the samples at which one of them is unread count
+for none.
+
 # Arguments
 
 - `cc`: the comparisons, of three or more clocks.
@@ -203,5 +210,17 @@ function clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2], flicker::Bool=
         pair[i, j] = cc[i, j]
     end
     flicker && (alphas = union(alphas, [1, -1]))
-    return ClockModel[clock_model(powerlaw_fit(r; alphas); flicker) for r in groslambert(pair)]
+    # The octaves of each clock's interval between readings: a clock read at
+    # every tenth sample has terms at the multiples of ten alone.
+    N = size(cc.x, 1)
+    steps = unique([_start(view(cc.x, :, i:i))[2] for i in 1:k if any(isfinite, view(cc.x, :, i))])
+    ms = sort!(unique!(reduce(vcat, [c .* _default_m_values(cld(N, c), :adev) for c in steps if N > 3c]; init=Int[])))
+    curves = groslambert(pair, ms)
+    for (name, r) in zip(cc.names, curves)
+        n = count(>(0), r.dev)
+        n >= length(alphas) || throw(ArgumentError(
+            "clock_models: $name has $n usable τ points for $(length(alphas)) components: " *
+            "too few samples where it is read with two other clocks, or they do not resolve it"))
+    end
+    return ClockModel[clock_model(powerlaw_fit(r; alphas); flicker) for r in curves]
 end
