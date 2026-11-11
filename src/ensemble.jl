@@ -233,7 +233,8 @@ ncornered_hat(cc::ClockComparisons, taus::TauMode=Octave; deviation::Symbol=:ade
 
 """
     groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values=Octave;
-                confidence=DEFAULT_CONFIDENCE, interval=:chi2) → Vector{StabilityResult}
+                confidence=DEFAULT_CONFIDENCE, interval=:chi2, weighted=false)
+        → Vector{StabilityResult}
     groslambert(x_ab, x_bc, x_ca, m_values=Octave; kwargs...) → Vector{StabilityResult}
     groslambert(cc::ClockComparisons, m_values=Octave; reference=true,
                 kwargs...) → Vector{StabilityResult}
@@ -265,6 +266,24 @@ averages out of the covariance
 [Vernotte et al. (2016), Eqs. (13) and (15)](@cite vernotte-2016-gcov)).
 Like the hat, the estimate can be negative for a clock much more stable
 than the others; `dev` is `NaN` there.
+
+With `weighted = true` and four clocks or more, the mean over the pairs
+``(j, k)`` is weighted: each pair counts by
+``1/(\\hat σ_{ij}^2\\,\\hat σ_{ik}^2)``, the inverse of the product of the
+Allan variances of its two records, which the variance of its term follows
+([Vernotte and Lantz (2019), Appendix B](@cite vernotte-2019-tch-gcov-uncertainty)).
+A quiet clock is then read against the other quiet clocks, and the noisy
+ones no longer set the uncertainty of its estimate. The paper gives the
+variance of a term; weighting the pairs by it is the package's own, and the
+result is no longer the hat. In simulation (three clocks beside three with
+``10^5`` times their white FM, 20 000 samples, 60 records) the estimate of
+the best clock had a mean of 1.00 times the truth and a spread of 4 % at
+``τ_0``, against a spread of 180 times the truth unweighted. The weights come
+from the same record, at the next shorter ``τ`` of the grid, and at the
+longest ``τ``, where each record has a few terms, the weighted estimate
+reads low: for five equal clocks of 4096 samples, 0.97 of the truth at a
+sixteenth of the record, 0.94 at an eighth and 0.90 at a quarter, where the
+unweighted estimate has no bias.
 
 A phase record may have missing samples (`NaN`). A term that reads one is
 left out, of the products as of the Allan variance of each record
@@ -299,6 +318,8 @@ resolved clock stayed within 2 % of that without gaps up to ``80τ_0``.
 - `confidence=0.683`: confidence level of the interval.
 - `interval=:chi2`: the interval reported, `:chi2` or, for three clocks,
   `:klts`.
+- `weighted=false`: weigh the pairs of the other clocks by the inverse of
+  the product of their records' Allan variances.
 
 # Returns
 
@@ -354,7 +375,7 @@ a, b, c = groslambert(ab, bc, ca; interval=:klts, confidence=0.95)
 ```
 """
 function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::Vector{Int};
-                     confidence::Real=DEFAULT_CONFIDENCE, interval::Symbol=:chi2)
+                     confidence::Real=DEFAULT_CONFIDENCE, interval::Symbol=:chi2, weighted::Bool=false)
     n_clocks = size(pairwise, 1)
     size(pairwise, 2) == n_clocks ||
         throw(ArgumentError("groslambert: pairwise matrix must be square"))
@@ -395,19 +416,29 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
     for i in 1:n_clocks
         others = [j for j in 1:n_clocks if j != i]
         couples = [(j, k) for j in others for k in others if j < k]
-        covar, terms = zeros(K), zeros(Int, K)
+        covar, terms, a = zeros(K), zeros(Int, K), ones(length(couples), K)
         for (q, m) in enumerate(m_values)
+            # Weight of each couple: the inverse of the product of its records'
+            # Allan variances, which its term's variance follows; 1 for the best.
+            # They are those of the next shorter τ of `m_values`, which has more
+            # terms and shares fewer of them with the products; the shortest
+            # serves itself.
+            if weighted
+                b = argmax(p -> m_values[p] < m ? m_values[p] : -(p != q), 1:K)
+                w = [1 / (s2[i, j][b] * s2[i, k][b]) for (j, k) in couples]
+                a[:, q] = [isfinite(v) ? v : 0.0 for v in w ./ maximum(filter(isfinite, w); init=0.0)]
+            end
             p = zeros(N - 2m)
-            n = 0
-            for (j, k) in couples, (t, v) in enumerate(_second_diff_products(x[i, j], x[i, k], m)[1])
-                isnan(v) || (p[t] += v; n += 1)     # NaN: a sample of the term is missing
+            n = 0.0
+            for (c, (j, k)) in enumerate(couples), (t, v) in enumerate(_second_diff_products(x[i, j], x[i, k], m)[1])
+                isnan(v) || (p[t] += a[c, q] * v; n += a[c, q]; terms[q] += 1)     # NaN: a sample of the term is missing
             end
             covar[q] = sum(p) / (n * 2 * (m * τ₀)^2)
-            terms[q] = n ÷ length(couples)
+            terms[q] ÷= length(couples)
         end
         # Each record's EDF, for the terms the products kept.
         νi = [j == i ? Float64[] : ν[i, j] .* (terms ./ own[i, j]) for j in 1:n_clocks]
-        edf = [_gl_edf(i, q, couples, covar[q], s2, νi) for q in 1:K]
+        edf = [_gl_edf(i, q, couples, a[:, q], covar[q], s2, νi) for q in 1:K]
         dev = [v > 0 ? sqrt(v) : NaN for v in covar]
         ci = klts === nothing ? _sep_chi2_ci(dev, edf, c) : klts[i]
         results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[], ci, edf,
@@ -417,20 +448,20 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
 end
 
 # Equivalent EDF of clock i's Groslambert covariance at τ index q, the mean
-# over `couples` of Ĝ_jk = ⟨z_ij z_ik⟩. For Gaussian records
+# over `couples`, with weights `a`, of Ĝ_jk = ⟨z_ij z_ik⟩. For Gaussian records
 # Cov(z_ij z_ik, z_il z_in) = E[z_ij z_il] E[z_ik z_in] + E[z_ij z_in] E[z_ik z_il],
 # where E[z_ij z_il] is record (i, j)'s Allan variance for l = j and clock i's
 # own for l ≠ j (Vernotte and Lantz (2019), Appendix B). Each term is divided
 # by the geometric mean of the EDF of the records involved.
-function _gl_edf(i, q, couples, v, s2, ν)
+function _gl_edf(i, q, couples, a, v, s2, ν)
     v > 0 || return NaN
     e(j, l) = j == l ? s2[i, j][q] : v
     total = 0.0
-    for (j, k) in couples, (l, n) in couples
-        c = e(j, l) * e(k, n) + e(j, n) * e(k, l)
-        total += c / sqrt(sqrt(ν[j][q] * ν[k][q] * ν[l][q] * ν[n][q]))
+    for (c, (j, k)) in enumerate(couples), (d, (l, n)) in enumerate(couples)
+        cov = e(j, l) * e(k, n) + e(j, n) * e(k, l)
+        total += a[c] * a[d] * cov / sqrt(sqrt(ν[j][q] * ν[k][q] * ν[l][q] * ν[n][q]))
     end
-    return 2 * v^2 * length(couples)^2 / total
+    return 2 * v^2 * sum(a)^2 / total
 end
 
 # χ² interval of a separated variance on its equivalent EDF. Below 1 EDF the χ²

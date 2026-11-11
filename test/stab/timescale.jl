@@ -374,5 +374,11 @@ using Statistics
     end
 
     @test_throws ArgumentError timescale(cc; algorithm=:at3)
+    # Keywords that do not apply, or are out of range, are refused.
+    @test_throws "steps needs algorithm :at2" timescale(cc; algorithm=:greenhall, models=ms, steps=:best)
+    @test_throws "takes no models" timescale(cc; algorithm=:ewfa, models=ms)
+    @test_throws "tau_min must be positive" timescale(cc; tau_min=-5.0)
+    @test_throws "memory must be ≥ 0" timescale(cc; memory=-1.0)
+    @test_throws "step_threshold must be positive" timescale(cc; algorithm=:at2, steps=:best, step_threshold=0.0)
     @test_throws ArgumentError timescale(cc; wmax=0.2)
 end

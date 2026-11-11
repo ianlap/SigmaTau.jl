@@ -766,6 +766,10 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
     kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
     r, models = run_timescale(cc, o, kalman)
+    # A fitted model without white FM or flicker FM takes nearly all of the weight.
+    bare = String[cc.names[i] for i in eachindex(models) if models[i].q1 == 0 && models[i].flicker_fm == 0]
+    isempty(bare) || (o.note = "the fit finds no white FM in " * join(bare, ", ") *
+                               ": the record does not resolve it, and the scale follows it; --algorithm at1 takes no model")
     late = max(1, N ÷ 2):N
     wmean = [sum(r.weights[late, i]) / length(late) for i in 1:k]
     rms = Float64[]
@@ -800,6 +804,14 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
         print(io, '}')
     end
     json_key(io, "clocks"); json_array(io, cc.names)
+    if kalman      # the model fitted to each clock
+        json_key(io, "models"); print(io, '[')
+        for (i, m) in enumerate(models)
+            i > 1 && print(io, ',')
+            json_clock_model(io, m)
+        end
+        print(io, ']')
+    end
     json_key(io, "weight"); json_array(io, r.weights[end, :])
     json_key(io, "weight_mean"); json_array(io, wmean)
     json_key(io, "error_rms"); json_array(io, rms)

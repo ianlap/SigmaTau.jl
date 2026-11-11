@@ -126,6 +126,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.selectOption("#side [data-ctl=flicker]", "on");
     await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
     assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
+    assert.match(await page.locator("#page [data-ref=table]").innerText(), /White FM/);   // the fitted models
     await plotted("#page [data-ref=adev]");
   });
 

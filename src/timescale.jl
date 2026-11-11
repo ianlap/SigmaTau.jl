@@ -644,6 +644,16 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     algorithm in (:ewfa, :at1, :at2, :greenhall, :jones_tryon, :stein) ||
         throw(ArgumentError("timescale: algorithm must be :ewfa, :at1, :at2, :greenhall, :jones_tryon or :stein, got :$algorithm"))
     bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
+    mode = steps === true ? :best : steps === false ? :none : steps
+    mode in (:none, :best, :real) ||
+        throw(ArgumentError("timescale: steps must be false, :best or :real, got :$steps"))
+    mode !== :none && algorithm !== :at2 && throw(ArgumentError("timescale: steps needs algorithm :at2"))
+    kalman = algorithm in (:stein, :greenhall, :jones_tryon)
+    kalman || models === nothing ||
+        throw(ArgumentError("timescale: :$algorithm takes no models; they are for :greenhall, :jones_tryon and :stein"))
+    tau_min === nothing || all(>(0), tau_min) || throw(ArgumentError("timescale: tau_min must be positive, got $tau_min"))
+    memory >= 0 || throw(ArgumentError("timescale: memory must be ≥ 0, got $memory"))
+    step_threshold > 0 || throw(ArgumentError("timescale: step_threshold must be positive, got $step_threshold"))
     N, k = size(cc.x)
     N >= 3 || throw(ArgumentError("timescale: needs three or more samples"))
     n₁ = findfirst(n -> any(isfinite, view(cc.x, n, :)), 1:N)
@@ -655,7 +665,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
         return TimescaleResult(algorithm, cc, collect((0:N-1) .* cc.tau0), lead(r.x, NaN), lead(r.y, NaN),
                                lead(r.weights, algorithm === :jones_tryon ? NaN : 0.0), lead(r.error, NaN), lead(r.xhat, NaN))
     end
-    if algorithm in (:stein, :greenhall, :jones_tryon)
+    if kalman
         models === nothing && throw(ArgumentError("timescale: :$algorithm needs models, one ClockModel per clock"))
         1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
         count(_noiseless, models) <= 1 || throw(ArgumentError(
@@ -663,10 +673,6 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
         algorithm === :stein && return _stein(cc, models, Int(pivot), Float64(wmax))
         return _reduced_kalman(cc, models, Int(pivot), algorithm)
     end
-    mode = steps === true ? :best : steps === false ? :none : steps
-    mode in (:none, :best, :real) ||
-        throw(ArgumentError("timescale: steps must be false, :best or :real, got :$steps"))
-    mode !== :none && algorithm !== :at2 && throw(ArgumentError("timescale: steps needs algorithm :at2"))
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
     at2 = algorithm === :at2
     at1 = algorithm === :at1 || at2

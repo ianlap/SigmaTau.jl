@@ -141,6 +141,7 @@ def groslambert(
     m: TauMode | Sequence[int] = Octave,
     confidence: float = DEFAULT_CONFIDENCE,
     interval: str = "chi2",
+    weighted: bool = False,
 ) -> list[StabilityResult]:
     """Allan deviation of each of N ≥ 3 clocks from the difference records between
     them, by the Groslambert covariance: the cross Allan variance of two records
@@ -171,8 +172,12 @@ def groslambert(
     narrow for a clock that is no longer resolved under the others.
     ``interval="klts"``, for three clocks, gives the interval of Lantz et al.
     (2019), which is given also where the estimate is negative.
+
+    With ``weighted=True`` and four clocks or more, each pair of the other
+    clocks counts by the inverse of the product of its two records' Allan
+    variances, so that a quiet clock is read against the other quiet clocks.
     """
-    kwargs = {"confidence": float(confidence), "interval": jl.Symbol(interval)}
+    kwargs = {"confidence": float(confidence), "interval": jl.Symbol(interval), "weighted": bool(weighted)}
     if len(records) == 3:
         separated = jl.groslambert(
             to_jl_data(records[0]),

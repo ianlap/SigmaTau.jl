@@ -100,9 +100,14 @@ for each clock:
 | **Weight** | The weight at the end of the record |
 | **Mean** | The mean weight over the second half of the record |
 | **RMS error** | The rms prediction error over the second half, in seconds |
+| **White FM** | For a Kalman scale, the white FM ``q_1`` of the model fitted to the clock |
 
 The Jones–Tryon scale has no weights: the plot of the weights is not shown,
 and the two weight columns are empty.
+
+Where the fit leaves a clock without white FM, the record does not resolve
+that clock. A Kalman scale then gives it nearly all of the weight and
+follows it, and the note under the table names it. AT1 takes no model.
 
 With **Flicker states** on, the note below the table gives the number of
 states in the model of each clock, as `2 FM + 1 PM`, or says that no clock

@@ -277,6 +277,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
   .check-card { width: 340px; }
   .record-chip { display: none; }
   .cmp .tbl-row { padding-inline: 12px; grid-template-columns: minmax(0, 1.2fr) repeat(var(--ncols, 2), minmax(0, 1fr)); }
+  .ens-table .fitted .tbl-row { padding-inline: 12px; }
 }
 .run-btn kbd { background: none; border: 0; color: rgba(255, 255, 255, 0.72); font-size: 11px; padding: 0; }
 .tau-select { display: flex; align-items: center; gap: 8px; }
@@ -433,6 +434,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .ens-table { align-self: flex-start; }
 .ens-table:empty { visibility: hidden; }
 .ens-table .tbl-row { grid-template-columns: minmax(0, 1.4fr) 56px 56px 1fr; }
+.ens-table .fitted .tbl-row { grid-template-columns: minmax(0, 1fr) 46px 46px 70px 50px; }
 .ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
 .ens-table .hat-tbl .tbl-row { grid-template-columns: minmax(0, 1.3fr) 1fr 1fr; }
 .ens-view { align-self: flex-start; }

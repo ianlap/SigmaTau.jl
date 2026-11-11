@@ -46,6 +46,12 @@ using Statistics
     @test [m.q1 for m in clock_models(ClockComparisons(x, 1.0))] ≈ [m.q1 for m in ms] rtol=0.5
     x = copy(cc.x); x[1:19990, 3] .= NaN
     @test_throws "clock 1 has 1 usable τ points" clock_models(ClockComparisons(x, 1.0))
+    # Quiet clocks beside clocks 300 times noisier: the fit weighs the couples
+    # by their noise, so the quiet ones are read against each other (within
+    # 0.19 over 60 seeds; with equal weights, 0 to 2500 times the truth).
+    mix = [ClockModel(; tau0=1.0, q1=q, q2=1e-6q) for q in (1e-27, 4e-27, 2e-27, 1e-22, 2e-22, 4e-22)]
+    cm, _ = simulate_ensemble(mix, 20000; reference=0, rng=Xoshiro(2))
+    @test all(isapprox(f.q1, m.q1; rtol=0.3) for (f, m) in zip(clock_models(cm), mix))
     # Flicker PM on a reading is fitted as PM and does not pass for white FM.
     x = copy(cc.x)
     x[:, 3] .+= noise_gen(PhaseData, 20000, 1.0; h=Dict(1 => 2e-21), rng=MersenneTwister(8)).x
