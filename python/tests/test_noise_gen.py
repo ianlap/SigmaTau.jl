@@ -44,5 +44,5 @@ def test_noise_id_nnls_finds_the_mixture():
     assert r["contributions"].shape == (r["tau"].size, r["alphas"].size)
     np.testing.assert_allclose(r["fit"], r["contributions"].sum(axis=1))
     # White FM first, then random-walk FM or steeper: the fit may take a neighbouring slope at the
-# longest tau, where the estimate has few independent terms (holds on 40 of 40 seeds).
-assert r["dominant"][0] == "WHFM" and r["dominant"][-1] in ("RWFM", "FWFM", "RRFM")
+    # longest tau, where the estimate has few independent terms (holds on 40 of 40 seeds).
+    assert r["dominant"][0] == "WHFM" and r["dominant"][-1] in ("RWFM", "FWFM", "RRFM")
