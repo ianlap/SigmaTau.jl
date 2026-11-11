@@ -290,9 +290,27 @@ which is good to 10 %. For an ordinary step that ratio is 0.67.
 At the sample of a return the scale is carried by the other clocks, and
 its step is theirs: larger than usual when the best clock is the one that
 returns, and no larger for a longer gap. `:jones_tryon` steps with the
-length of the gap, and by more for a better clock. It stepped by 117 times
-its RMS step when the first reading of the noisiest clock came 1000
-samples late, where the other scales took an ordinary step.
+length of the gap, and by more for a better clock.
+
+A clock whose first reading comes after the start is measured against the
+scale. In `:ewfa`, `:at1` and `:at2` its starting frequency is its slope
+over its first tenth of the record less the slope of the scale over the
+same samples. In `:greenhall` and `:jones_tryon` it begins as the clock of
+most weight read with it plus a line through its first 16 readings against
+that clock, with a wide covariance. The reference of the readings cancels
+in both, and the scale takes an ordinary step at the join. The sources
+give no procedure
+([Greenhall (2003), §5](@cite greenhall-2003-jones-tryon) names the
+insertion of a new clock as a practical difficulty of a Kalman scale), and
+these are the package's own. In simulation, with three clocks whose white
+FM variances were as 1 : 4 : 16 and one of them first read at sample 1001
+of 8192, the rate of the `:ewfa`, `:greenhall` and `:jones_tryon` scales
+changed at the join by what the noise of the clocks gives. That of `:at1`
+and `:at2` changed by 1.3 times as much when the best clock was the late
+one: the error of its frequency, measured over 819 samples, times its
+weight of 0.75. `:stein` starts a difference from 16 readings and passes
+the later corrections of its filter to the pivot, and its rate changed by
+9 times as much when the best clock was the late one.
 
 `:stein` measures every clock against its pivot. While the pivot is unread
 no difference is measured, every clock runs on its prediction, and the

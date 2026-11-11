@@ -157,6 +157,17 @@ using Statistics
         @test mean(timescale(lj).weights[20002:22000, 1]) ≈ wopt[1] rtol=0.1
         e = timescale_phase(timescale(lj; algorithm=:ewfa)).x
         @test abs((e[end] - e[20001]) / 29999 - (e[20000] - e[1]) / 19999) < 2e-13
+        # Its start is taken against the scale, so a reference that changes
+        # its rate before the join leaves the scale as it is. τ_min is given:
+        # its estimate takes some of the reference's noise.
+        ρ = 1e-11 .* max.(0, (1:50000) .- 10000)
+        for kw in ((; algorithm=:ewfa), (; algorithm=:at1, tau_min=1000.0), (; algorithm=:greenhall, models=ms), (; algorithm=:jones_tryon, models=ms))
+            @test timescale(ClockComparisons(x .- ρ, 1.0); kw...).x[:, 2] ≈ timescale(lj; kw...).x[:, 2] rtol=1e-4
+        end
+        # First read while no other clock is: the scale has no reading at
+        # those samples, and the clock joins when the others are back.
+        al = copy(x); al[20001:20010, 2:4] .= NaN
+        @test findall(isnan, timescale_phase(timescale(ClockComparisons(al, 1.0))).x) == 20001:20010
     end
 
     @testset "offsets, gaps near the start and short records (AT1)" begin

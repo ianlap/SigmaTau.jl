@@ -69,12 +69,12 @@ _markov_vars(m::ClockModel) = vcat(fill(_fm_var(m), length(_fm_taus(m))), fill(_
 # The start for model `m`: the polynomial start for phase, frequency and
 # drift; the Markov states at zero with their stationary variance. The
 # readings the phase starts from carry the Markov phase states.
-function _model_start(z::Vector{Float64}, m::ClockModel)
+function _model_start(z::Vector{Float64}, m::ClockModel; widen::Float64=1.0)
     np, n = _npoly(m), _nstates(m)
     xp, Pp = _kalman_start(z, m.tau0, np)
     x, P = zeros(n), zeros(n, n)
     x[1:np] = xp
-    P[1:np, 1:np] = Pp
+    P[1:np, 1:np] = widen .* Pp
     for (j, v) in enumerate(_markov_vars(m))
         P[np+j, np+j] = v
     end
