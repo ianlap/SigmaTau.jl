@@ -620,6 +620,11 @@ Clock models, the Kalman filter and timescales.
   the time since the last sample with a reading (Weiss & Weissert 1991,
   §2.8), so a sparse record gives the scale of its readings alone; records
   read at every sample are unchanged.
+- In `timescale` with `:ewfa`, `:at1` or `:at2`, a clock that joins late
+  starts from its own first readings (Weiss & Weissert 1991, §2.7). It took
+  the largest starting variance of the other clocks and a starting frequency
+  of zero, so a good clock that joined late had almost no weight for the
+  rest of the record and one with a rate offset moved the scale's rate.
 - `read_phase` and `read_frequency` take the unit of a time column from its
   name in the line that `header` skips, as `read_data` does, so a column
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
