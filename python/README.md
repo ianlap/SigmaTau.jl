@@ -43,7 +43,7 @@ threads use among themselves for crashes. Under pytest that is
 ```python
 import sigmatau as st
 
-p = st.noise_gen(st.PhaseData, 8192, 1.0, sigma1={0: 1e-12, -2: 3e-14}, rng=5)
+p = st.noise_gen(st.PhaseData, 8192, 1.0, sigma1={0: 1e-12, -2: 3e-14}, rng=3)
 
 r = st.adev(p)                     # octave spacing, with intervals
 r.tau, r.dev, r.ci_lower, r.ci_upper, r.noise_type
