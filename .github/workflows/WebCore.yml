@@ -76,10 +76,10 @@ jobs:
         env:
           SIGMATAU_EXE: ${{ github.workspace }}/cli/build/bin/sigmatau
         run: |
-          # zsh and fish are for the completion tests (they skip a shell that is missing); runner network faults must not fail the job
+          # the completion tests need zsh and fish; an unreachable mirror must not fail the update, and the install is retried
           sudo apt-get -o Acquire::Retries=3 update -qq || true
           until sudo apt-get -o Acquire::Retries=3 install -y -qq zsh fish; do
-            [ $((++n)) -lt 3 ] || { echo "::warning::zsh and fish not installed; the completion tests skip them"; break; }
+            [ $((++n)) -lt 3 ] || exit 1
             sleep 5
           done
           julia --project=cli cli/test/runtests.jl
