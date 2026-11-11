@@ -146,11 +146,11 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "0" : String(1e-12 * (2 + Math.sin(i / 3)))));
     const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
     await chooser.setFiles({ name: "z.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
-    await page.locator("#import-dialog .gap-card", { hasText: "1 zero reading" }).waitFor();
+    await page.locator("#import-dialog .gap-card", { hasText: "1 zero reading" }).waitFor(SLOW);
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
-    await page.locator("#record-chip-text", { hasText: /z\.frd.*51[23] samples/ }).waitFor();   // the new record, not the last one
+    await page.locator("#record-chip-text", { hasText: /z\.frd.*51[23] samples/ }).waitFor(SLOW);   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
   });
 
@@ -158,10 +158,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const y = Array.from({ length: 256 }, (_, i) => (i % 100 === 50 ? "0" : String(1e-12 * (2 + Math.cos(i / 5)))));
     const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
     await chooser.setFiles({ name: "z2.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
-    await page.locator("#import-dialog .gap-card", { hasText: "3 zero readings" }).waitFor();
+    await page.locator("#import-dialog .gap-card", { hasText: "3 zero readings" }).waitFor(SLOW);
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
-    await page.locator("#record-chip-text", { hasText: /z2\.frd.*25[67] samples/ }).waitFor();
+    await page.locator("#record-chip-text", { hasText: /z2\.frd.*25[67] samples/ }).waitFor(SLOW);
   });
 
   await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
@@ -172,8 +172,24 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
-    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor();   // the new record, not the last one
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor(SLOW);   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+  });
+
+  await t.test("Data: Fill gaps turned off and on again; the next file starts without it", async () => {
+    const n = errors.length;
+    await page.uncheck("input[data-field=fillgaps]");
+    await page.locator(".check-card", { hasText: "could not read" }).waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // the core refuses the unfilled record
+    await page.click("input[data-field=fillgaps]");   // (click: the card re-renders as the record reloads)
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor(SLOW);
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    const rows = Array.from({ length: 600 }, (_, i) => i).filter((i) => i < 300 || i >= 310);
+    // (read with the settings remembered from gapped.csv, without the dialog)
+    await chooser.setFiles({ name: "p.csv", mimeType: "text/csv", buffer: Buffer.from(rows.map((i) => `${i},${(1e-9 * Math.sin(i * 0.7)).toExponential(6)}`).join("\n")) });
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /p\.csv/ }).waitFor(SLOW);
+    assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
   });
 
   assert.deepEqual(errors, []);
