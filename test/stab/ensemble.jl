@@ -147,6 +147,23 @@ end
     g4 = groslambert(Q, [1, 4])
     @test all(isapprox(g4[i].dev[1], adev(PhaseData(x[i], 1.0), [1]; ci=false).dev[1]; rtol=0.1) for i in 1:4)
     @test g4[1].deviation_type === :adev && length(g4[1].ci) == 2 && g4[1].confidence == DEFAULT_CONFIDENCE
+    # Missing samples: a term that reads one is left out. One missing reading
+    # of clock 1 costs each of its records three terms, so its own couples
+    # lose three each and two of the three couples of another clock; records
+    # that begin late give what the records cut to their readings give.
+    y = copy(x[1]); y[700] = NaN
+    for j in 2:4
+        Q[1, j] = PhaseData(y .- x[j], 1.0)
+    end
+    gap = groslambert(Q, [1, 4])
+    @test [r.neff[1] for r in gap] == 2046 .- [3, 2, 2, 2]
+    @test all(isapprox(gap[i].dev, g4[i].dev; rtol=0.01) for i in 1:4)
+    late(i, j) = PhaseData([fill(NaN, 100); d(i, j).x[101:end]], 1.0)
+    cut(i, j) = PhaseData(d(i, j).x[101:end], 1.0)
+    gl = groslambert(late(1, 2), late(2, 3), late(3, 1), [1, 2, 4])
+    gc = groslambert(cut(1, 2), cut(2, 3), cut(3, 1), [1, 2, 4])
+    @test all(gl[i].dev ≈ gc[i].dev && gl[i].edf ≈ gc[i].edf && gl[i].neff == gc[i].neff for i in 1:3)
+    @test_throws ArgumentError groslambert(late(1, 2), late(2, 3), late(3, 1), [1]; interval=:klts)
     P2 = Matrix{PhaseData}(undef, 2, 2); P2[1, 2] = d(1, 2)
     @test_throws ArgumentError groslambert(P2, [1])
     @test_throws ArgumentError groslambert(d(1, 2), d(2, 3), PhaseData(x[3][1:100], 1.0), [1])

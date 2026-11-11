@@ -35,6 +35,17 @@ using Statistics
     @test length(fit) == 3 && all(m -> m.tau0 == 1.0, fit)
     @test [m.q1 for m in fit] ≈ [m.q1 for m in ms] rtol=0.3
     @test timescale(cc; algorithm=:greenhall, models=fit) isa TimescaleResult
+    # Missing readings: the terms they touch are left out of the covariance.
+    # A clock unread for a tenth of the record and one that joins late (within
+    # 0.13 over 20 seeds); every clock read at every tenth sample, fitted on
+    # the octaves of ten (within 0.44); with three clocks, ten readings of one
+    # leave no clock enough terms.
+    x = copy(cc.x); x[5001:7000, 2] .= NaN; x[1:3000, 3] .= NaN
+    @test [m.q1 for m in clock_models(ClockComparisons(x, 1.0))] ≈ [m.q1 for m in ms] rtol=0.3
+    x = copy(cc.x); x[[t % 10 != 1 for t in 1:20000], :] .= NaN
+    @test [m.q1 for m in clock_models(ClockComparisons(x, 1.0))] ≈ [m.q1 for m in ms] rtol=0.5
+    x = copy(cc.x); x[1:19990, 3] .= NaN
+    @test_throws "clock 1 has 1 usable τ points" clock_models(ClockComparisons(x, 1.0))
     # Flicker PM on a reading is fitted as PM and does not pass for white FM.
     x = copy(cc.x)
     x[:, 3] .+= noise_gen(PhaseData, 20000, 1.0; h=Dict(1 => 2e-21), rng=MersenneTwister(8)).x
