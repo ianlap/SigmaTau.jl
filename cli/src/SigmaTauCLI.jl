@@ -99,7 +99,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
 
     o = Options()
     o.command = cmd
-    cmd == "live" && (o.format = "json")    # live writes JSON lines only
+    (cmd == "live" || cmd == "model") && (o.format = "json")    # they write JSON only
     cmd == "holdover" && (o.confidence = 0.95)
     for a in args
         a == "--format=json" && (o.format = "json")   # so a usage error can still answer in JSON
@@ -127,29 +127,25 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         end
     end
 
+    buf = IOBuffer()
     if cmd == "model"
-        buf = IOBuffer()
         try
-            o.format = "json"
             run_model(buf, o)
         catch e
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
         end
-        write(out, take!(buf))
-        return EXIT_OK
-    end
-
-    t_start = time_ns()
-    data = try
-        load_record(o)
-    catch e
-        return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))
-    end
-    buf = IOBuffer()
-    try
-        run_command(buf, o, data, t_start, args)
-    catch e
-        return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
+    else
+        t_start = time_ns()
+        data = try
+            load_record(o)
+        catch e
+            return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))
+        end
+        try
+            run_command(buf, o, data, t_start, args)
+        catch e
+            return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
+        end
     end
     bytes = take!(buf)
     try

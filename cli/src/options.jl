@@ -4,7 +4,7 @@
 const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
-    ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
+    ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift)"),
     ("spectrum",   "FILE", "Welch power spectral densities S_y(f) and S_x(f)"),
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
@@ -12,7 +12,7 @@ const COMMAND_HELP = [
     ("holdover",   "FILE", "holdover test: the time error after a training stretch against holdover time, and the time to reach a limit"),
     ("steer",      "FILE", "steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts"),
     ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
-    ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "σ(τ) a clock noise model predicts (MDEV and ADEV), no simulation"),
+    ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "the σ(τ) that a clock noise model predicts (MDEV, ADEV and MHDEV), without a simulation"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
     ("completion", "SHELL", "print a shell completion script (bash, zsh, fish, powershell)"),
@@ -43,22 +43,24 @@ struct Opt
     cmds::Vector{String}     # commands that accept it
 end
 
-const ALL = filter(!=("live"), COMMANDS)   # the commands that read a FILE
 const ANY = COMMANDS
-const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model"]   # CSV or JSON out (report writes HTML; model is always JSON)
+const BATCH = filter(!=("live"), COMMANDS)    # one result per call, to stdout or --out
+const READS = filter(!=("model"), COMMANDS)   # the commands that read a record
+const ALL = filter(!=("live"), READS)         # … from a FILE or --synth
+const TABULAR = filter(!=("report"), ALL)     # CSV or JSON out (report writes HTML; model is always JSON)
 const OPTS = [
     # The record
-    Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
-    Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", ANY),
+    Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE; for model, the length of the record whose averaging times it takes", BATCH),
+    Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", READS),
     Opt("--clocks", "K", String[], false, "with --synth: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2; the analysis reads clock --clock, timescale uses all K (default 4)", ALL),
-    Opt("--noise-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", ALL),
+    Opt("--noise-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", BATCH),
     Opt("--clock", "I", String[], false, "with --synth --clocks: the simulated clock to read, 1 to K (default 1)", ALL),
-    Opt("--phase", "", String[], false, "FILE holds phase in seconds (default)", ANY),
-    Opt("--freq", "", String[], false, "FILE holds fractional frequency", ANY),
+    Opt("--phase", "", String[], false, "the values are phase in seconds (default)", READS),
+    Opt("--freq", "", String[], false, "the values are fractional frequency", READS),
     Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns), bipm_utc (BIPM UTC-UTC(k)), rinex_clk (RINEX clock file; pick the clock with --column)", ALL),
     Opt("--column", "NAME", String[], false, "clock column of a table file, or the clock of a RINEX clock file (G08, ALGO00CAN), by name (default: the column named phase / PPS / time error, else frequency)", ALL),
-    Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean to 4 significant figures)", ANY),
-    Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column)", ANY),
+    Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean, or for live the first reading, to 4 significant figures)", READS),
+    Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column; 1 for --synth, model and live)", ANY),
     Opt("--time-col", "N", String[], false, "1-based time column, 0 = none (default 1)", ALL),
     Opt("--value-col", "N", String[], false, "1-based value column (default 2)", ALL),
     Opt("--reference-col", "N", String[], false, "subtract this column from the value column (clocks measured against one reference)", ALL),
@@ -70,7 +72,7 @@ const OPTS = [
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps and NaN readings", ALL),
     Opt("--keep-zeros", "", String[], false, "read the zeros of a Stable32 .phd/.frd file as readings, not gaps (quantized data)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
-    Opt("--range", "A:B", String[], false, "analyse only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
+    Opt("--range", "A:B", String[], false, "analyze only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
     Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live"]),
     Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "report", "live"]),
@@ -110,15 +112,15 @@ const OPTS = [
     Opt("--interval", "SECONDS", String[], false, "seconds between steers, a whole multiple of τ₀ (default τ₀)", ["steer"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
-    Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal (default: the first reading to 4 significant figures)", ["live"]),
+    Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal", ["live"]),
     Opt("--query", "CMD", String[], false, "SCPI query sent before every reading, e.g. READ? (default: READ? for tcp://, none otherwise)", ["live"]),
     Opt("--every", "N", String[], false, "write a line every N readings (default 1)", ["live"]),
     Opt("--count", "N", String[], false, "stop after N readings (default: when the source ends)", ["live"]),
     Opt("--fast", "", String[], false, "run the simulator flat out instead of one reading per τ₀", ["live"]),
     # Output
     Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
-    Opt("--format", "FMT", FORMATS, false, "csv (default) or json", TABULAR),
-    Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", ALL),
+    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; model writes JSON only", [TABULAR; "model"]),
+    Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", BATCH),
     Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY),
     Opt("--help", "", String[], false, "show this command's options", ANY),
 ]
@@ -206,7 +208,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
-                    false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
+                    false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
                     NaN, false, Float64[], NaN)
@@ -468,6 +470,9 @@ function parse_args!(o::Options, args::Vector{String})
         o.hz && o.freq && throw(usage_error("give only one of --freq and --hz"))
         o.every >= 1 || throw(usage_error("--every must be 1 or more"))
         o.count >= 0 || throw(usage_error("--count must be 0 or more"))
+    elseif o.command == "model"
+        isempty(o.input) && o.synth > 0 && !isempty(o.models) ||
+            throw(usage_error("model: give --synth N and a clock with --noise-model R:Q1:Q2:Q3, and no FILE"))
     elseif isempty(o.input) && o.synth <= 0
         throw(usage_error(o.command * ": give a FILE or --synth N (see `sigmatau help " * o.command * "`)"))
     end
@@ -533,7 +538,11 @@ function print_help(io::IO)
     print(io, "sigmatau ", SIGMATAU_VERSION, ": frequency stability analysis with SigmaTau.jl\n\n")
     print(io, "Usage: sigmatau COMMAND [FILE] [options]\n\nCommands:\n")
     for (c, arg, h) in COMMAND_HELP
-        print(io, "  "); padded(io, c * (isempty(arg) ? "" : " " * arg), 22); print(io, h, "\n")
+        sig = isempty(arg) ? c : c * " " * arg
+        print(io, "  ")
+        # A signature that leaves no gap before the description takes a line of its own.
+        length(sig) <= 20 ? padded(io, sig, 22) : (print(io, sig, "\n  "); padded(io, "", 22))
+        print(io, h, "\n")
     end
     print(io, "\nRun `sigmatau help COMMAND` for a command's options.\n")
     print(io, "Output is CSV by default; --format json gives the versioned JSON schema.\n")
@@ -567,6 +576,9 @@ function print_command_help(io::IO, cmd::String)
         print(io, "SOURCE is sim (a simulated clock), tcp://HOST:PORT (an LXI instrument's SCPI socket,\n",
               "usually port 5025) or a serial device path set up with stty. Each reading is the first\n",
               "number on a line: phase in seconds by default. Every line of output is one JSON object.\n\nOptions:\n")
+    elseif cmd == "model"
+        print(io, "The averaging times are the octave multiples of τ₀ that a record of N samples reaches.\n",
+              "The output is JSON.\n\nOptions:\n")
     else
         print(io, "FILE is a whitespace, comma or tab separated table (time, value by default).\n\nOptions:\n")
     end

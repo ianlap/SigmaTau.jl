@@ -178,7 +178,7 @@ function cmd_dynamic(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     ms = tau_values(tau_mode(o.grid), w, hd ? :hdev : :adev)
     isempty(ms) && throw(CLIError(EXIT_ANALYSIS, "the window is too short for any τ"))
     r = hd ? dhdev(data, ms; window=w, step=st) : dadev(data, ms; window=w, step=st)
-    # Window centres in the whole record's time, not the range's.
+    # Window centers in the whole record's time, not the range's.
     r.t .+= range_offset(o, Float64(data.tau0))
     if o.format != "json"
         print(io, "t,tau,dev\n")
@@ -421,7 +421,6 @@ end
 
 # σ(τ) the --noise-model clocks predict (MDEV, ADEV, MHDEV) at the τ of an N = --synth record.
 function run_model(io::IO, o::Options)
-    isempty(o.models) && throw(usage_error("model: give a clock with --noise-model R:Q1:Q2:Q3"))
     tau0 = isnan(o.tau0) ? 1.0 : o.tau0
     ms = tau_values(tau_mode(o.grid), o.synth, :mdev)
     tau = tau0 .* ms
