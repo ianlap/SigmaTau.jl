@@ -353,12 +353,14 @@ end
 
 # The clock model of a Kalman predictor: the power-law fit to the first
 # training stretch alone, so no trial is predicted with noise levels learned
-# from the readings it is compared with.
+# from the readings it is compared with. Flicker the fit finds is kept, as
+# Markov states out to the record's span: without it the filter of a flicker
+# FM clock claims a tenth of the error it makes.
 function holdover_model(data::PhaseData, train::Float64, drift::Bool)
     τ₀ = Float64(data.tau0)
     b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
     pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
-    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift)
+    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, flicker=true, tau_max=length(data.x) * τ₀)
 end
 
 function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
@@ -413,6 +415,8 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         json_key(io, "q1"); json_number(io, model.q1)
         json_key(io, "q2"); json_number(io, model.q2)
         json_key(io, "q3"); json_number(io, model.q3)
+        json_key(io, "flicker_fm"); json_number(io, model.flicker_fm)
+        json_key(io, "flicker_pm"); json_number(io, model.flicker_pm)
         print(io, '}')
     end
     print(io, '}')

@@ -404,13 +404,17 @@ mktempdir() do dir
         @test parse.(Float64, split(match(r"\"reference\":\[([^\]]*)\]", r.out)[1], ',')) ≈ sqrt(6) .* tdev(p, [1, 16, 256]; ci=false).dev
         @test run_cli("holdover", hf, "--grow", "2", "--train", "512").code == 1
         @test run_cli("holdover", hf, "--grow", "2", "--fit-drift").code == 1
-        # A Kalman filter as the predictor, its model learned on the first stretch alone.
-        m = clock_model(powerlaw_fit(PhaseData(p.x[1:512], 1.0)))
-        k = holdover(p, m; train=512, tau=[16, 64, 256])
+        # A Kalman filter as the predictor, its model learned on the first stretch alone, flicker kept.
+        kmodel(x) = clock_model(powerlaw_fit(PhaseData(x[1:512], 1.0)); flicker=true, tau_max=length(x))
+        k = holdover(p, kmodel(p.x); train=512, tau=[16, 64, 256])
         rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--tau", "16,64,256", "--kalman").out)
         @test parse.(Float64, getindex.(rows, 4)) ≈ k.rms && parse.(Float64, getindex.(rows, 11)) ≈ k.claimed
         r = run_cli("holdover", hf, "--train", "512", "--kalman", "--format", "json")
         @test r.code == 0 && occursin("\"claimed\":[", r.out) && occursin("\"model\":{\"R\":", r.out)
+        ff = noise_gen(PhaseData, 4096, 1.0; h=Dict(-1 => 3e-25), rng=Random.Xoshiro(7))
+        r = run_cli("holdover", write_table(joinpath(dir, "flicker.csv"), ff.x), "--train", "512", "--tau", "1,16", "--kalman", "--format", "json")
+        @test parse.(Float64, split(match(r"\"claimed\":\[([^\]]*)\]", r.out)[1], ',')) ≈ holdover(ff, kmodel(ff.x); train=512, tau=[1, 16]).claimed
+        @test parse(Float64, match(r"\"flicker_fm\":([^,}]*)", r.out)[1]) > 1e-26
         @test run_cli("holdover", hf, "--kalman", "--no-anchor").code == 1
         @test run_cli("holdover", hf, "--kalman", "--grow", "2").code == 1
         @test run_cli("holdover", hf, "--train", "0.5").code == 3
@@ -776,6 +780,7 @@ mktempdir() do dir
                          ["holdover", pf, "--train", "64", "--limit", "1e-9", "--fit", "--format", "json"],
                          ["holdover", pf, "--grow", "3", "--fit-drift", "--fit", "--format", "json"],
                          ["holdover", pf, "--train", "512", "--kalman", "--format", "json"],
+                         ["holdover", joinpath(dir, "flicker.csv"), "--kalman", "--format", "json"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],
