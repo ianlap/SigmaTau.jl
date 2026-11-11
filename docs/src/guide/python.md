@@ -74,6 +74,10 @@ follow from the languages:
 | an `ArgumentError` | a `ValueError` |
 | a `MethodError`, as for a float where an integer counts samples | a `TypeError` |
 
+A float is refused even when it is a whole number, so a grid of averaging
+factors built with NumPy is converted first:
+`st.adev(p, np.unique(np.round(np.logspace(0, 3, 30)).astype(int)))`.
+
 Arrays come back as NumPy arrays and results as Python objects with the
 fields of the Julia types.
 
