@@ -935,26 +935,31 @@ the factor 0.75, which the white-FM bias of 1 in its Table 2 requires.
   deviations at ``mτ_0``.
 
 # Keywords
-- `correct_bias=true`: apply the ThêoBR correction of
-  [Howe (2006), Eq. (6)](@cite howe-2006-theoh). The Thêo1 variance is
+- `correct_bias=true`: apply the ThêoBR correction. The Thêo1 variance is
   multiplied by the mean ratio of the Allan variance at ``m = 9 + 3i`` to
   Thêo1 at ``m = 12 + 4i``, two factors with the same averaging time, over
-  ``i = 0, …, n`` with ``n = \\lfloor N/30 - 3 \\rfloor``. The ratio is
-  measured on the record, so no noise type is identified. One ratio removes
-  the bias where it changes little with ``m``, as on FM noise of one type.
-  On white and flicker PM the bias changes with ``m`` throughout
+  ``i = 0, …, n`` with ``n = \\lfloor N/6 - 3 \\rfloor``
+  ([SP1065 §5.2.16, Eq. (33)](@cite riley-2008-sp1065);
+  [IEEE Std 1139-2022, Eq. (A.37)](@cite ieee1139-2022-definitions)). The
+  ratio is measured on the record, so no noise type is identified. One ratio
+  removes the bias where it changes little with ``m``, as on FM noise of one
+  type. On white and flicker PM the bias changes with ``m`` throughout
   ([Howe (2006), Table 3](@cite howe-2006-theoh)), and the corrected
-  variance was 0.64 to 1.6 times the Allan variance in simulation. Where
-  the noise type changes within the record, the ratio is that of the short
-  averaging times at which it is measured, and the corrected variance at
-  long ``τ`` fell to a quarter of the Allan variance in simulation. It
-  needs ``N ≥ 19``. `:published` is the same, and `false` returns Thêo1
-  uncorrected.
+  variance was 1.04 to 1.25 times the Allan variance at 0.2 to 0.7 of the
+  record length in simulation (``N = 2048``). It needs ``N ≥ 19``. `false`
+  returns Thêo1 uncorrected.
+- `correct_bias=:published`: the same correction with
+  ``n = \\lfloor N/30 - 3 \\rfloor``, as
+  [Howe (2006), Eq. (6)](@cite howe-2006-theoh) prints it, which stops at a
+  tenth of the record. Where the noise type changes within the record
+  beyond that point, the ratio is that of the short averaging times at which
+  it is measured: with PM giving way to FM the corrected variance at long
+  ``τ`` was 0.18 to 0.77 times the Allan variance in simulation.
 - `correct_bias=:stable32`: the correction of a Stable32 Thêo1 or ThêoH
   run with automatic noise identification. The
   [Stable32 User Manual](@cite hamilton-2008-stable32-manual) gives it as
-  the same ratio with ``n = \\lfloor N/6 - 3 \\rfloor``, computed from at
-  most 3000 phase samples (its setting `MaxTheoBRPts`), and names
+  the default ratio, computed from at most 3000 phase samples (its setting
+  `MaxTheoBRPts`), and names
   [Taylor and Howe (2010)](@cite taylor-2010-fast-theobr) as the method.
   For a longer record this package takes every ``b``-th sample,
   ``b = \\lceil N/3000 \\rceil``, and adds ``0.00055\\,(b - 1)`` to the
@@ -978,20 +983,29 @@ the factor 0.75, which the white-FM bias of 1 in its Table 2 requires.
   without the correction.
 
 !!! note "Length of the ThêoBR average"
-    Howe (2006),
+    SP1065 Eq. (33), the Stable32 manual and IEEE Std 1139-2022 Eq. (A.37)
+    print ``n = \\lfloor N/6 - 3 \\rfloor``, which runs the Allan variance
+    terms out to half the record. Howe (2006),
     [Howe and Tasset (2004), Eq. (4)](@cite howe-2004-theo1),
     [McGee and Howe (2007)](@cite mcgee-2007-theoh) and
     [Taylor and Howe (2010), Eq. (1)](@cite taylor-2010-fast-theobr) all give
-    ``n = \\lfloor 0.1N/3 - 3 \\rfloor``, which keeps the Allan variance
-    terms within the first tenth of the record. SP1065 Eq. (33), the
-    Stable32 manual and IEEE Std 1139-2022 Eq. (A.37) print
-    ``\\lfloor N/6 - 3 \\rfloor``. This package follows the papers, and
-    takes the longer average only under `correct_bias=:stable32`.
+    ``n = \\lfloor 0.1N/3 - 3 \\rfloor``, which keeps them within the first
+    tenth. This package takes the longer average, and the shorter one under
+    `correct_bias=:published`. In simulation (``N = 2048``) the two fail in
+    different places. Where white or flicker PM gave way to FM within the
+    record, the shorter average read 0.18 to 0.77 of the Allan variance at
+    long ``τ`` and the longer 0.56 to 1.12. On a record of one FM noise type
+    the last terms of the longer average hold one or two Allan variance
+    samples each: its ratio scattered 2.5 times more (white FM, 5 to 95 %:
+    0.58 to 1.41 against 0.83 to 1.16) and averaged 7 to 9 % low, at every
+    record length tried, so ThêoBR at short ``τ`` is less certain than ADEV
+    there.
 
 The double sum costs ``O(Nm)`` per averaging factor. On long records the
-default ThêoBR ratio computes Thêo1 at 48 of its ``n + 1`` factors and
-interpolates the rest, which stays within 0.5 % of the full average. The
-`:stable32` ratio computes every factor.
+ThêoBR ratio computes Thêo1 at 48 of its ``n + 1`` factors and interpolates
+the rest, which stays within 0.7 % of the full average; the longer average
+still makes the default call about 2.5 times slower than `:published` on
+very long records. The `:stable32` ratio computes every factor.
 """
 function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bias::Union{Bool,Symbol}=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
     x = _gapfree(:theo1, data, m_values)
@@ -1004,7 +1018,7 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
     mode = _bias_mode(correct_bias, :stable32)
     devs = mode == :none ? raw_devs :
            mode == :stable32 ? raw_devs .* sqrt(_stable32_theobr_ratio(x, data.tau0)) :
-                               raw_devs .* sqrt(_theobr_ratio(x, data.tau0))
+                               raw_devs .* sqrt(_theobr_ratio(x, data.tau0; howe=mode == :published))
 
     if !ci
         return _result(data, confidence, :theo1, taus, devs, Symbol[], _CIBound[], Float64[], neff)
