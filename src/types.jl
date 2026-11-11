@@ -2,7 +2,8 @@
 """
     AbstractTimingData
 
-Supertype of timing data records (`PhaseData`, `FrequencyData`).
+Supertype of the data records [`PhaseData`](@ref) and
+[`FrequencyData`](@ref).
 """
 abstract type AbstractTimingData end
 
@@ -10,36 +11,46 @@ abstract type AbstractTimingData end
 """
     PhaseData(x, tau0=1.0; source="user", start=NaN)
 
-Phase residuals `x(t)` in seconds, sampled at uniform interval `tau0` (default
-`1.0` s). This is the record every estimator takes: wrap a vector once and the
-sample interval travels with the data. `x` can be any real vector (a view, a
-range, integers); it is copied to a `Vector` of floats. `NaN` marks a missing
-sample (see [`fillgaps`](@ref)). `length(data)` is the number of samples.
+Phase samples ``x(t)`` in seconds at the uniform sample interval `tau0`: the
+time deviation of a clock from its reference
+([IEEE Std 1139-2022, 3.1](@cite ieee1139-2022-definitions)). Every
+estimator takes this record, so the sample interval travels with the data.
 
-```julia
-p = PhaseData(x, 1.0)          # x in seconds, τ₀ = 1 s
-adev(p)
+`x` can be any real vector, such as a view, a range or integers, and is
+copied to a `Vector` of floats. `NaN` marks a missing sample (see
+[`fillgaps`](@ref)). A record holds at least two samples, and
+`length(data)` returns their number.
+
+[`read_phase`](@ref) builds a record from a file, and `PhaseData(f)`
+converts a [`FrequencyData`](@ref) record to phase.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> PhaseData([0.0, 1.5e-9, 2.9e-9, 4.6e-9], 10.0)
+PhaseData{Float64}(4 samples, τ₀=10 s)
 ```
 
-[`read_phase`](@ref) builds one from a file, and `PhaseData(f)` converts a
-[`FrequencyData`](@ref) record to phase.
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct PhaseData{T<:AbstractFloat} <: AbstractTimingData
-    "Phase samples in seconds."
+    "Phase samples, in seconds."
     x::Vector{T}
-    "Base sample interval τ₀ in seconds."
+    "Sample interval τ₀, in seconds."
     tau0::Float64
-    """Provenance: `"user"` for directly constructed records, the originating
-    file path for records returned by [`read_phase`](@ref). Preserved by
-    [`detrend`](@ref), [`fillgaps`](@ref), and [`remove_outliers`](@ref), and
-    recorded in the header written by [`save`](@ref)."""
+    """Origin of the record: `"user"` when constructed directly, the file
+    path when read by [`read_phase`](@ref). [`detrend`](@ref),
+    [`fillgaps`](@ref) and [`remove_outliers`](@ref) keep it, and
+    [`save`](@ref) writes it to the file header."""
     source::String
-    """UTC time of the first sample, in seconds since 2000-01-01T00:00Z;
-    `NaN` when unknown. Set by the readers from ISO 8601 or MJD timestamps
-    and by a `# start:` header, and read as a `DateTime` with
-    [`start_time`](@ref)."""
+    """UTC time of the first sample, in seconds since 2000-01-01T00:00Z, or
+    `NaN` when unknown. The readers set it from ISO 8601 or MJD timestamps
+    and from a `# start:` header line; [`start_time`](@ref) returns it as a
+    `DateTime`."""
     start::Float64
     function PhaseData(x::Vector{T}, tau0::Real = 1.0;
                        source::AbstractString = "user", start::Real = NaN) where {T<:AbstractFloat}
@@ -59,35 +70,47 @@ PhaseData(x::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractString = 
 """
     FrequencyData(y, tau0=1.0; source="user", start=NaN)
 
-Fractional-frequency samples `y(t)` (dimensionless) at uniform interval `tau0`
-(default `1.0` s). Every estimator accepts it and integrates it to phase,
-`x = τ₀ · [0; cumsum(y)]`, before the analysis. Like [`PhaseData`](@ref) it
-takes any real vector and supports `length`.
+Fractional-frequency samples ``y(t) = (ν(t) - ν_0)/ν_0``, dimensionless, at
+the uniform sample interval `tau0`
+([IEEE Std 1139-2022, 3.1](@cite ieee1139-2022-definitions)). Each sample
+is taken as the average over its interval, with no dead time. Every
+estimator accepts the record and integrates it to phase before the
+analysis.
 
-```julia
-f = FrequencyData(y, 10.0)     # one reading every 10 s
-mdev(f)
+Like [`PhaseData`](@ref), the record takes any real vector, marks a missing
+sample with `NaN`, holds at least two samples and supports `length`.
+
+[`read_frequency`](@ref) builds a record from a file, and `FrequencyData(p)`
+converts a [`PhaseData`](@ref) record to frequency. The two conversions are
+described below.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> FrequencyData([1.2e-11, -0.4e-11, 0.7e-11], 10.0)
+FrequencyData{Float64}(3 samples, τ₀=10 s)
 ```
 
-[`read_frequency`](@ref) builds one from a file, and `FrequencyData(p)`
-converts a [`PhaseData`](@ref) record to frequency (below).
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct FrequencyData{T<:AbstractFloat} <: AbstractTimingData
-    "Fractional-frequency samples (dimensionless)."
+    "Fractional-frequency samples, dimensionless."
     y::Vector{T}
-    "Base sample interval τ₀ in seconds."
+    "Sample interval τ₀, in seconds."
     tau0::Float64
-    """Provenance: `"user"` for directly constructed records, the originating
-    file path for records returned by [`read_frequency`](@ref). Preserved by
-    [`detrend`](@ref), [`fillgaps`](@ref), and [`remove_outliers`](@ref), and
-    recorded in the header written by [`save`](@ref)."""
+    """Origin of the record: `"user"` when constructed directly, the file
+    path when read by [`read_frequency`](@ref). [`detrend`](@ref),
+    [`fillgaps`](@ref) and [`remove_outliers`](@ref) keep it, and
+    [`save`](@ref) writes it to the file header."""
     source::String
-    """UTC time of the first sample, in seconds since 2000-01-01T00:00Z;
-    `NaN` when unknown. Set by the readers from ISO 8601 or MJD timestamps
-    and by a `# start:` header, and read as a `DateTime` with
-    [`start_time`](@ref)."""
+    """UTC time of the first sample, in seconds since 2000-01-01T00:00Z, or
+    `NaN` when unknown. The readers set it from ISO 8601 or MJD timestamps
+    and from a `# start:` header line; [`start_time`](@ref) returns it as a
+    `DateTime`."""
     start::Float64
     function FrequencyData(y::Vector{T}, tau0::Real = 1.0;
                            source::AbstractString = "user", start::Real = NaN) where {T<:AbstractFloat}
@@ -102,7 +125,8 @@ FrequencyData(y::AbstractVector{<:Real}, tau0::Real = 1.0; source::AbstractStrin
     FrequencyData(Vector{float(eltype(y))}(y), tau0; source=source, start=start)
 
 """
-    length(data::PhaseData) / length(data::FrequencyData) → Int
+    length(data::PhaseData) → Int
+    length(data::FrequencyData) → Int
 
 Number of samples in the record.
 """
@@ -114,12 +138,13 @@ _nphase(p::PhaseData) = length(p.x)
 _nphase(f::FrequencyData) = length(f.y) + 1
 
 """
-    start_time(data::PhaseData) / start_time(data::FrequencyData) → DateTime or nothing
+    start_time(data) → Union{DateTime, Nothing}
 
-UTC time of the record's first sample (to the millisecond), or `nothing`
-when the record does not know it. The readers take it from ISO 8601 or MJD
-timestamps and from the `# start:` line [`save`](@ref) writes; sample `i` is
-at `start_time(data) + (i − 1)·τ₀`.
+UTC time of the first sample of a [`PhaseData`](@ref) or
+[`FrequencyData`](@ref) record, to the millisecond, or `nothing` when the
+record does not carry it. The readers take it from ISO 8601 or MJD
+timestamps and from the `# start:` line that [`save`](@ref) writes. Sample
+`i` is at `start_time(data) + (i − 1)·τ₀`.
 """
 start_time(d::AbstractTimingData) =
     isnan(d.start) ? nothing : Dates.DateTime(2000) + Dates.Millisecond(round(Int64, d.start * 1000))
@@ -147,9 +172,9 @@ function _iso_text(sec::Float64)
     return t * "." * rstrip(_pad(ns, 9), '0') * "Z"
 end
 
-# Compact one-line displays for the data records: sample count, τ₀, and the
-# provenance only when it is not the "user" default. Full-vector dumps would
-# swamp the REPL for realistic record lengths.
+# One-line displays of the data records: sample count, τ₀, and the origin
+# when it is not the "user" default. Printing every sample would swamp the
+# REPL at realistic record lengths.
 function Base.show(io::IO, p::PhaseData)
     print(io, "PhaseData{", eltype(p.x), "}(", length(p.x), " samples, τ₀=",
               _show4g(p.tau0), " s")
@@ -170,74 +195,78 @@ end
 """
     StabilityResult
 
-Unified return type for every stability calculation.
+Result of every stability estimator: one deviation per averaging time, with
+the noise type, the equivalent degrees of freedom and the confidence
+interval when the estimator was called with `ci=true`.
 
-The `noise_type`, `ci`, and `edf` vectors are empty when the calculation was
-invoked with `ci=false` (and always for `mtie`/`tierms`); `neff` is always
-populated.
-Per-τ confidence bounds read as `r.ci[i].lo` / `r.ci[i].hi`; the
-[`ci_lower`](@ref) / [`ci_upper`](@ref) accessors return them as plain
-vectors.
+`ci` and `edf` are empty for a call with `ci=false`, and always for `mtie`
+and `tierms`. `noise_type` is empty too, unless a bias correction needed
+the noise type. `neff` is always filled. The interval at point `i` runs
+from `r.ci[i].lo` to `r.ci[i].hi`; [`ci_lower`](@ref) and
+[`ci_upper`](@ref) return the limits as vectors. Displaying a result prints
+it as a table.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct StabilityResult
-    "Which deviation produced this result (e.g. `:adev`, `:mdev`)."
+    "Estimator that produced the result, such as `:adev`."
     deviation_type::Symbol
-    "Analysis intervals τ in seconds."
+    "Averaging times τ, in seconds."
     tau::Vector{Float64}
-    "Stability deviation σ_y(τ) per interval."
+    "Deviation at each τ: dimensionless for the σ_y estimators, in seconds for `tdev`, `htdev`, `ttotdev`, `mtie` and `tierms`."
     dev::Vector{Float64}
-    "Noise-type symbol identified at each τ (empty unless `ci=true`)."
+    "Noise type at each τ, identified or stated: `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`, `:FWFM` or `:RRFM`."
     noise_type::Vector{Symbol}
-    "Confidence interval `(lo, hi)` per τ (empty unless `ci=true`)."
+    "Confidence interval `(lo, hi)` at each τ."
     ci::Vector{@NamedTuple{lo::Float64, hi::Float64}}
-    "Equivalent degrees of freedom (empty unless `ci=true`)."
+    "Equivalent degrees of freedom at each τ."
     edf::Vector{Float64}
-    "Number of analysis windows averaged at each τ (0 where the kernel returns NaN)."
+    "Number of terms averaged at each τ; 0 where the deviation is `NaN`."
     neff::Vector{Int}
-    "Sample interval τ₀ of the record, in seconds (`NaN` if unknown)."
+    "Sample interval τ₀ of the record, in seconds; `NaN` if unknown."
     tau0::Float64
-    "Number of samples in the record (0 if unknown)."
+    "Number of phase samples in the record; 0 if unknown."
     n::Int
-    "Confidence level of `ci` (`NaN` when no intervals were computed)."
+    "Confidence level of `ci`; `NaN` when there is no interval."
     confidence::Float64
 end
 
-# Without the record metadata (v0.4 files, hand-made results).
+# Without the record metadata (files written by v0.4, results made by hand).
 StabilityResult(deviation_type::Symbol, tau, dev, noise_type, ci, edf, neff) =
     StabilityResult(deviation_type, tau, dev, noise_type, ci, edf, neff, NaN, 0, NaN)
 
 # Element type of `StabilityResult.ci`.
 const _CIBound = @NamedTuple{lo::Float64, hi::Float64}
 
-# Zip separate lower/upper bound vectors (as returned by
-# `confidence_intervals`) into the tuple form stored in `ci`.
+# Lower and upper limits, as `confidence_intervals` returns them, in the form
+# stored in `ci`.
 _zip_ci(lower::Vector{Float64}, upper::Vector{Float64}) =
     _CIBound[(lo = lo, hi = hi) for (lo, hi) in zip(lower, upper)]
 
-# Multiply each CI bound by a per-τ factor (tdev/htdev/ttotdev rescaling).
+# Each limit times a factor per τ, for the time deviations.
 _scale_ci(ci::Vector{_CIBound}, factor::Vector{Float64}) =
     _CIBound[(lo = c.lo * f, hi = c.hi * f) for (c, f) in zip(ci, factor)]
 
 """
     ci_lower(r::StabilityResult) → Vector{Float64}
 
-Lower confidence bounds of `r` as a plain vector (`getfield.(r.ci, :lo)`).
-Empty when the result carries no CIs.
+Lower confidence limits of `r`, one per averaging time; empty when the
+result carries no interval.
 """
 ci_lower(r::StabilityResult) = getfield.(r.ci, :lo)
 
 """
     ci_upper(r::StabilityResult) → Vector{Float64}
 
-Upper confidence bounds of `r` as a plain vector (`getfield.(r.ci, :hi)`).
-Empty when the result carries no CIs.
+Upper confidence limits of `r`, one per averaging time; empty when the
+result carries no interval.
 """
 ci_upper(r::StabilityResult) = getfield.(r.ci, :hi)
 
-# Display rounding for the show methods below: 4 significant digits via %.4g.
-# The stored vectors keep full precision; this is presentation only.
+# The show methods print 4 significant digits (%.4g). The stored vectors keep
+# full precision.
 _show4g(x::Real) = @sprintf("%.4g", x)
 
 function Base.show(io::IO, r::StabilityResult)
@@ -251,9 +280,9 @@ function Base.show(io::IO, r::StabilityResult)
     end
 end
 
-# Full REPL display: the one-line summary followed by an aligned per-τ table.
-# CI columns appear only when the result carries them. Results longer than
-# 12 rows truncate to 11 plus an ellipsis line.
+# REPL display: the one-line summary, then a table with one row per τ. The
+# interval columns appear when the result carries them. A result longer than
+# 12 rows shows 11 and an ellipsis line.
 function Base.show(io::IO, ::MIME"text/plain", r::StabilityResult)
     show(io, r)
     n = length(r.tau)
@@ -288,29 +317,30 @@ end
 """
     StabilitySuite
 
-Ordered collection of [`StabilityResult`](@ref)s computed from one timing record
-in a single [`stability`](@ref) call, plus the session metadata needed to
-reproduce and serialize the analysis.
+The results of one [`stability`](@ref) call: a [`StabilityResult`](@ref)
+per estimator, in the order requested, with the record and grid settings
+that produced them.
 
-Index by deviation symbol to recover a result (`suite[:adev]`) or by position
-(`suite[1]`). The suite is iterable in request order and supports `keys`,
-`haskey`, `length`, and `pairs`, so a CLI or GUI can render it as an ordered
-table.
+`suite[:adev]` returns a result by estimator name and `suite[1]` by
+position. The suite iterates in order and supports `keys`, `haskey`,
+`length` and `pairs`. [`save`](@ref) writes it to one file.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct StabilitySuite
-    "Per-deviation results, in the order they were requested."
+    "One result per estimator, in the order requested."
     results::Vector{StabilityResult}
-    "Input record kind: `:phase` or `:frequency`."
+    "Kind of the input record: `:phase` or `:frequency`."
     data_kind::Symbol
-    "Base sample interval τ₀ in seconds."
+    "Sample interval τ₀, in seconds."
     tau0::Float64
-    "Number of input samples N."
+    "Number of phase samples in the record."
     n::Int
-    "Confidence level used for the CI bounds (`NaN` when `ci=false`)."
+    "Confidence level of the intervals; `NaN` for `ci=false`."
     confidence::Float64
-    "Tau-grid selector, recorded as a Symbol (e.g. `:Octave`, or `:explicit`)."
+    "Grid the suite was run on: the `TauMode` name, such as `:Octave`, or `:explicit`."
     tau_mode::Symbol
 end
 
@@ -351,29 +381,28 @@ end
 """
     SpectralResult
 
-Unified return type for every spectral-density estimate ([`psd_y`](@ref),
-[`psd_x`](@ref), [`ssb_phase_noise`](@ref)).
+Result of the spectral-density estimates [`psd_y`](@ref), [`psd_x`](@ref)
+and [`ssb_phase_noise`](@ref): the one-sided frequency grid, the estimated
+density and the Welch settings that produced it.
 
-Mirrors [`StabilityResult`](@ref): a flat, non-parametric record carrying the
-one-sided frequency grid, the estimated spectrum, and the Welch parameters that
-produced it, so a saved or plotted result is self-describing.
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct SpectralResult
-    "Which estimate produced this result: `:Sy` (S_y(f)), `:Sx` (S_x(f)) or `:L` (ℒ(f))."
+    "Quantity estimated: `:Sy` for ``S_y(f)``, `:Sx` for ``S_x(f)`` or `:L` for ``ℒ(f)``."
     spectral_type::Symbol
-    "One-sided frequency grid `f` in Hz."
+    "Fourier frequencies ``f``, in Hz."
     freq::Vector{Float64}
-    "Spectral density at each `f`; interpret per `units`."
+    "Spectral density at each ``f``, in the unit named by `units`."
     psd::Vector{Float64}
-    "Units of `psd`: `:per_Hz` (S_y, 1/Hz), `:s2_per_Hz` (S_x, s²/Hz), or `:dBc_per_Hz` (ℒ(f))."
+    "Unit of `psd`: `:per_Hz` (``S_y``, 1/Hz), `:s2_per_Hz` (``S_x``, s²/Hz) or `:dBc_per_Hz` (``ℒ``)."
     units::Symbol
-    "Welch segment length (samples)."
+    "Welch segment length, in samples."
     nperseg::Int
-    "Welch segment overlap (samples)."
+    "Overlap of successive segments, in samples."
     noverlap::Int
-    "Taper applied to each segment: `:hann`, `:hamming`, or `:rectangular`."
+    "Taper applied to each segment: `:hann`, `:hamming` or `:rectangular`."
     taper::Symbol
 end
 
@@ -388,34 +417,34 @@ end
 """
     DynamicStabilityResult
 
-Return type of the dynamic (time-resolved) deviations [`dadev`](@ref) and
-[`dhdev`](@ref): a 2-D stability map σ_y(t, τ) computed by sliding an
-analysis window of `window` phase samples across the record and evaluating
-the deviation inside each window.
+Result of the dynamic deviations [`dadev`](@ref) and [`dhdev`](@ref): a map
+``σ_y(t, τ)`` of the deviation computed inside a window of `window` phase
+samples that slides along the record.
 
-Rows of `dev` are analysis windows (centered at the times in `t`), columns
-are averaging intervals (the entries of `tau`); `dev[i, j]` is the deviation
-of window `i` at `tau[j]`. Entries are `NaN` wherever the window is too
-short to support the averaging factor.
+Row `i` of `dev` is the window centered at `t[i]`, and column `j` the
+averaging time `tau[j]`. An entry is `NaN` where the window is too short
+for the averaging factor.
 
-Unlike [`StabilityResult`](@ref), no noise-ID / EDF / confidence-interval
-machinery is carried: the literature does not provide an EDF model for the
-time-resolved map, so fabricating per-cell χ² bounds would be unfounded.
+The result carries no noise type, EDF or interval.
+[Galleani (2011)](@cite galleani-2011-davar-confidence) derives confidence
+surfaces for the dynamic Allan variance; they are not implemented here.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
 struct DynamicStabilityResult
-    "Which dynamic deviation produced this result (`:dadev` or `:dhdev`)."
+    "Estimator that produced the result: `:dadev` or `:dhdev`."
     deviation_type::Symbol
-    "Window-center times in seconds, one per analysis window (row of `dev`)."
+    "Center time of each window, in seconds from the first sample; one per row of `dev`."
     t::Vector{Float64}
-    "Analysis intervals τ in seconds, one per column of `dev`."
+    "Averaging times τ, in seconds; one per column of `dev`."
     tau::Vector{Float64}
-    "Deviation map, `length(t) × length(tau)`; `NaN` where the window cannot support the averaging factor."
+    "Deviation map, `length(t)` by `length(tau)`."
     dev::Matrix{Float64}
-    "Analysis-window length N_w in samples."
+    "Window length, in samples."
     window::Int
-    "Base sample interval τ₀ in seconds."
+    "Sample interval τ₀, in seconds."
     tau0::Float64
 end
 

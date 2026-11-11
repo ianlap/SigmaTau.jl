@@ -1,13 +1,14 @@
-# Gap-tolerant estimation for records with NaN samples.
+# Gap-tolerant estimation for records with NaN samples: a term that involves
+# a missing sample is left out of the sum (SP1065 §10.4).
 #
 # A missing phase sample is a missing reading on an otherwise intact time
 # scale, so a phase-record term counts when every sample it reads was
 # measured: ADEV, HDEV and TIE rms need their 3, 4 or 2 points, MDEV and
 # MHDEV need the whole span they average over, and MTIE takes the
-# peak-to-peak of the measured samples in each window. A missing frequency
-# sample loses the phase step across it, so a frequency-record term counts
-# only when no missing sample falls inside its span. This is the rule of
-# allantools' `gradev`, extended to the other estimators.
+# peak-to-peak of the measured samples in each window. For ADEV this is the
+# rule of allantools' `gradev`. A missing frequency sample loses the phase
+# step across it, so a frequency-record term counts only when no missing
+# sample falls inside its span.
 #
 # Noise identification runs on the record with its gaps bridged, and the EDF
 # for each τ uses the record length that would give the number of terms
@@ -21,8 +22,12 @@ struct _GapRecord
     tau0::Float64
 end
 
-_has_gaps(data::PhaseData) = any(isnan, data.x)
-_has_gaps(data::FrequencyData) = any(isnan, data.y)
+# Full vectorised passes: on a gap-free record, the usual case, `any`/`all`
+# scan the whole record anyway, one element at a time and about 5× slower.
+_anynan(v) = mapreduce(isnan, |, v; init=false)
+_allfinite(v) = mapreduce(isfinite, &, v; init=true)
+_has_gaps(data::PhaseData) = _anynan(data.x)
+_has_gaps(data::FrequencyData) = _anynan(data.y)
 
 function _missing_prefix(v::AbstractVector{<:Real})
     bad = Vector{Int}(undef, length(v) + 1)
@@ -48,8 +53,8 @@ end
 
 # A gap-free phase record for noise identification from `v` (phase, or
 # frequency when `freq`): the measured span with interior gaps bridged by
-# straight lines. Noise ID only needs the record's character, and this cannot
-# fail on any gap layout.
+# straight lines. Noise identification needs only the character of the
+# record, and this cannot fail on any gap layout.
 function _gap_noise_record(v::Vector{Float64}, freq::Bool)
     ok = findall(isfinite, v)
     isempty(ok) && return Float64[]
@@ -215,8 +220,12 @@ function _gap_equivalent_n(est::Symbol, m::Int, n::Int)
 end
 
 """
-Gap-tolerant result for `est` (adev, mdev, tdev, hdev, mhdev, htdev, tierms
-or mtie); see the note at the top of this file.
+    _gap_result(est, g, m_values; ci, remove_drift, overlapping, noise,
+                confidence) → StabilityResult
+
+Result of `est` (`:adev`, `:mdev`, `:tdev`, `:hdev`, `:mhdev`, `:htdev`,
+`:tierms` or `:mtie`) on a record with gaps, by the rule at the top of this
+file.
 """
 function _gap_result(est::Symbol, g::_GapRecord, m_values::Vector{Int};
                      ci::Bool=true, remove_drift::Bool=true, overlapping::Bool=true,

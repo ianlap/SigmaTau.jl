@@ -1,21 +1,21 @@
-# `save` / `load`: one writer and one reader for timing data, results and
-# suites. Timing records go out as commented two-column text that
-# `read_phase` / `read_frequency` round-trip with no keywords; results and
-# suites go out as tab-separated tables (io/results.jl).
+# `save` and `load`: one writer and one reader for records, results and
+# suites. A record is written as commented two-column text, which
+# `read_phase` and `read_frequency` read back without keywords; results and
+# suites are written as tab-separated tables (io/results.jl).
 
 """
-    save(path::AbstractString, data::PhaseData)      → path
-    save(path::AbstractString, data::FrequencyData)  → path
-    save(path::AbstractString, r::StabilityResult)   → path
-    save(path::AbstractString, s::StabilitySuite; source_file="") → path
+    save(path, data::PhaseData) → path
+    save(path, data::FrequencyData) → path
+    save(path, r::StabilityResult) → path
+    save(path, s::StabilitySuite; source_file="") → path
 
-Write a SigmaTau object to a plain text file at `path`. Returns `path` so the
-call can be chained.
+Write a record, a result or a suite to a text file and return `path`.
+[`load`](@ref) reads the file back.
 
-For `PhaseData` / `FrequencyData` the file is two delimited columns, sample
-time `(i-1)·τ₀` in seconds and the sample value, preceded by a comment
-header recording the provenance (and, when the record knows it, the UTC
-time of its first sample as `# start: 2026-11-08T21:41:03Z`):
+# Records
+
+A `PhaseData` or `FrequencyData` record is written as two columns, the
+sample time ``(i-1)τ_0`` in seconds and the sample, after a comment header:
 
 ```
 # SigmaTau phase data
@@ -26,42 +26,51 @@ time of its first sample as `# start: 2026-11-08T21:41:03Z`):
 …
 ```
 
-`source` is `"user"` for records constructed directly from a vector and the
-originating file path for records that came from [`read_phase`](@ref) /
-[`read_frequency`](@ref). The delimiter follows the extension convention of
-the readers: `,` for `.csv`, tab otherwise. [`read_phase`](@ref) /
-[`read_frequency`](@ref) skip the comment header automatically and pick up
-`# tau0:` when no `tau0` keyword is given (and `# start:`), so `read_phase(save(path, pd))`
-reproduces `pd` exactly, and any external tool can consume the file as a
-plain two-column table. Typical use: generate noise with [`noise_gen`](@ref)
-and hand it to software outside SigmaTau.
+The columns are separated by a comma when `path` ends in `.csv`, and by a
+tab otherwise. `source` is `"user"` for a record made from a vector, and
+the path of the file for a record that was read. A record that knows the
+UTC time of its first sample writes it as well, as
+`# start: 2026-11-08T21:41:03Z`.
 
-For a `StabilityResult` the file is self-describing text: comment lines give
-the format version, the deviation type, τ₀, the sample count, the confidence
-level and whether intervals were computed, then a header and one tab-separated
-row per τ (`tau dev noise_type ci_lower ci_upper edf neff`; the interval
-columns hold `""` / `NaN` when there are none). A `StabilitySuite` file has a
-metadata header (package version, timestamp, the optional `source_file`, data
-kind, τ₀, N, confidence, τ grid, deviations) and one such table per result.
-[`load`](@ref) reads any of these files back.
+[`read_phase`](@ref) and [`read_frequency`](@ref) skip the header, take
+``τ_0`` and the start time from it, and return the record as it was saved.
+Any other program can read the file as a two-column table.
 
-!!! note
-    FileIO.jl also exports a `save` function. If both packages are loaded,
-    qualify the call as `SigmaTau.save(path, data)`.
+# Results
+
+A `StabilityResult` is written as a tab-separated table with one row for
+each ``τ`` and the columns `tau`, `dev`, `noise_type`, `ci_lower`,
+`ci_upper`, `edf` and `neff`. Comment lines before it give the format
+version, the estimator, ``τ_0``, the number of samples, the confidence
+level and whether the result has intervals. Without intervals, the
+interval and EDF columns hold `NaN`.
+
+A `StabilitySuite` is written as one such table for each result, after a
+header with the package version, the time of writing, `source_file`, the
+kind of data, ``τ_0``, the number of samples, the confidence level, the
+``τ`` grid and the estimators.
+
+!!! note "FileIO.jl"
+    FileIO.jl exports `save` and `load` as well. With both packages loaded,
+    write `SigmaTau.save(path, data)` and `SigmaTau.load(path)`.
 
 # Examples
 
-```julia
-pd = noise_gen(PhaseData, 4096, 1.0; sigma1=Dict(0 => 1e-12))
-save("white_pm.txt", pd)
-pd2 = read_phase("white_pm.txt")     # tau0 and values round-trip
+```jldoctest
+julia> using SigmaTau
 
-r = adev(pd)
-save("white_pm_adev.tsv", r)
-load("white_pm_adev.tsv").dev == r.dev   # true
+julia> x = PhaseData([0.0, 1.5e-9, 1.0e-9, 2.5e-9], 10.0);
+
+julia> y = read_phase(save(joinpath(mktempdir(), "x.txt"), x));
+
+julia> y.x == x.x && y.tau0 == x.tau0
+true
+
+julia> r = adev(x, [1]; ci=false);
+
+julia> load(save(joinpath(mktempdir(), "r.tsv"), r)).dev == r.dev
+true
 ```
-
-See also [`load`](@ref), [`read_phase`](@ref), [`read_frequency`](@ref).
 """
 save(path::AbstractString, data::PhaseData) =
     _save_data(path, data.x, data.tau0, data.source, data.start, "phase")
@@ -72,20 +81,16 @@ save(path::AbstractString, s::StabilitySuite; source_file::AbstractString="") =
     _save_suite(path, s; source_file=source_file)
 
 """
-    load(path::AbstractString) → StabilityResult | StabilitySuite | PhaseData | FrequencyData
+    load(path) → StabilityResult, StabilitySuite, PhaseData or FrequencyData
 
-Read a file written by [`save`](@ref). The first line says what it holds: a
-suite file gives a `StabilitySuite`, a result file a `StabilityResult`, and a
-SigmaTau phase or frequency file a `PhaseData` / `FrequencyData` (through
-[`read_phase`](@ref) / [`read_frequency`](@ref)). For other data files call
-the readers directly.
+Read a file written by [`save`](@ref). Its first line says what the file
+holds: a result, a suite, or a phase or frequency record. Other data files
+are read with [`read_phase`](@ref), [`read_frequency`](@ref) or
+[`read_data`](@ref).
 
-Result files from v0.4 load with `tau0 = NaN`, `n = 0`, `confidence = NaN`
-and `neff` filled with zeros.
-
-!!! note
-    FileIO.jl also exports `load`; qualify the call as `SigmaTau.load(path)`
-    if both packages are loaded.
+A result file written by version 0.4 carries no ``τ_0``, number of samples,
+confidence level or `neff`. It loads with `tau0 = NaN`, `n = 0`,
+`confidence = NaN` and `neff` zero.
 """
 function load(path::AbstractString)
     first = open(readline, path)
