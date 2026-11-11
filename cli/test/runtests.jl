@@ -748,6 +748,9 @@ mktempdir() do dir
         @test run_cli("model", pf).code == 1                                                      # and reads no file
         one = ["model", "--synth", "64", "--noise-model", "0:1e-24:0:0"]
         @test occursin("does not apply", run_cli(one..., "--fillgaps").err)
+        # JSON only: csv is refused, and the error names the source as a result does.
+        @test occursin("\"source\":\"model\",\"error\":\"model writes JSON only\",\"exit_code\":1", run_cli(one..., "--format", "csv", "--fillgaps").out)
+        @test occursin("\"source\":\"model\",\"error\"", run_cli("model", pf).out)
         mp = joinpath(dir, "model.json")
         @test isempty(run_cli(one..., "--out", mp, "--quiet").out)
         @test read(mp, String) == run_cli(one...).out
