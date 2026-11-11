@@ -565,7 +565,7 @@ function _totvar_pm_edf(alpha::Int, m::Int, N::Int)
 end
 
 # TOTHVAR on PM: N/g interior terms, thinned as the 3m-sample windows come to
-# overlap (levelling at s = τ/T = s0) and again as the last windows run out.
+# overlap (leveling at s = τ/T = s0) and again as the last windows run out.
 function _htot_pm_edf(alpha::Int, m::Int, N::Int)
     g, c, s0, a, b = alpha == 2 ? (2.45, 2.0, 0.125, 1.0, 0.03) : (_flpm_avar_g(m), 2.5, 0.16, 0.6, 0.04)
     s = m / (N - 1)

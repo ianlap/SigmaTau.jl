@@ -30,7 +30,13 @@ for f in (_ESTIMATOR_NAMES..., :dadev, :dhdev)
     # Frequency data is integrated to phase. The estimators that skip gaps
     # take a gapped frequency record as it is, because a missing frequency
     # sample loses the phase step across it (gaps.jl).
-    if f in (:adev, :mdev, :tdev, :hdev, :mhdev, :htdev, :mtie, :tierms)
+    if f === :adev
+        # ADEV alone corrects for dead time between the samples (deadtime.jl).
+        @eval adev(data::FrequencyData, m_values::Vector{Int}; dead_time::Real=0, kwargs...) =
+            dead_time != 0 ? _dead_time_adev(data, m_values, Float64(dead_time); kwargs...) :
+            _has_gaps(data) ? _gap_result(:adev, _gap_record(data), m_values; kwargs...) :
+                              adev(_freq_to_phase(data), m_values; kwargs...)
+    elseif f in (:mdev, :tdev, :hdev, :mhdev, :htdev, :mtie, :tierms)
         @eval $f(data::FrequencyData, m_values::Vector{Int}; kwargs...) = _has_gaps(data) ?
             _gap_result($(QuoteNode(f)), _gap_record(data), m_values; kwargs...) :
             $f(_freq_to_phase(data), m_values; kwargs...)
@@ -94,7 +100,8 @@ estimators() = collect(_ESTIMATORS)
 
 """
     deviation(name::Symbol, data, m=Octave; ci=true, confidence=DEFAULT_CONFIDENCE,
-              correct_bias=true, remove_drift=true, noise=:auto) → StabilityResult
+              correct_bias=true, remove_drift=true, noise=:auto,
+              dead_time=0) → StabilityResult
 
 Run the estimator called `name`, any name from [`estimators`](@ref), on a
 `PhaseData` or `FrequencyData` record. `deviation(:adev, data, m)` is
@@ -104,7 +111,8 @@ menu or a command-line option.
 `m` is a [`TauMode`](@ref) grid or an integer vector of averaging factors.
 The keywords are those of [`adev`](@ref). `correct_bias` reaches only the
 estimators that take it (the total estimators and `theo1`) and
-`remove_drift` only the Hadamard family. `mtie` and `tierms` accept `ci`
+`remove_drift` only the Hadamard family, and a `dead_time` other than zero
+is an error for any estimator but `:adev`. `mtie` and `tierms` accept `ci`
 and `confidence` and report no interval. The non-overlapped forms are
 reached through [`adev`](@ref) and [`hdev`](@ref) directly.
 
@@ -142,10 +150,12 @@ _unknown_error(name::Symbol) = ArgumentError(
 function _deviation(name::Symbol, data::AbstractTimingData, ms::Vector{Int};
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
                     correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true,
-                    noise::_NoiseChoice = :auto)
+                    noise::_NoiseChoice = :auto, dead_time::Real = 0)
     c = Float64(confidence)
     b = correct_bias
-    name === :adev     && return adev(data, ms; ci=ci, confidence=c, noise=noise)
+    name === :adev     && return adev(data, ms; ci=ci, confidence=c, noise=noise, dead_time=Float64(dead_time))
+    dead_time == 0 || throw(ArgumentError(
+        "dead_time applies to adev alone: the bias functions are those of the two-sample variance"))
     name === :mdev     && return mdev(data, ms; ci=ci, confidence=c, noise=noise)
     name === :tdev     && return tdev(data, ms; ci=ci, confidence=c, noise=noise)
     name === :hdev     && return hdev(data, ms; ci=ci, confidence=c, remove_drift=remove_drift, noise=noise)

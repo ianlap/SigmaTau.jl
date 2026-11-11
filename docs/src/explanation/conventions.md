@@ -32,7 +32,9 @@ A frequency sample is the average of ``y(t)`` over its interval, with no dead
 time between samples, so ``N`` phase samples and ``N - 1`` frequency samples
 describe the same record. Every estimator works on phase and integrates a
 frequency record first, from ``x_1 = 0``. A missing sample is `NaN`
-([Timestamps and gaps](@ref)).
+([Timestamps and gaps](@ref)). Frequency averages with dead time between
+them are the one exception, and [`adev`](@ref) alone takes them
+([Dead time](@ref)).
 
 `FrequencyData(p)` and `PhaseData(f)` convert a record to the other kind.
 The estimators do not need it.

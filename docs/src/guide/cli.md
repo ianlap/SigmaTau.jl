@@ -132,13 +132,17 @@ sigmatau analyze clock.dat --confidence 0.95           # 95 % intervals
 sigmatau analyze clock.dat --noise WHFM                # the noise type, stated
 sigmatau analyze clock.dat --bias stable32             # Stable32's bias convention
 sigmatau analyze clock.dat --no-ci                     # deviations alone
+sigmatau analyze counter.csv --freq --tau0 100 --dead-time 3500 \
+         --devs adev --noise FLFM                      # 100 s readings, one an hour
 ```
 
 `--noise` and `--bias` are the keywords `noise` and `correct_bias` of the
 estimators, with `exact` for `true` and `none` for `false`
 ([Confidence intervals](../explanation/confidence.md),
 [Bias correction](../explanation/bias.md)). The intervals are at 68.3 %
-unless `--confidence` says otherwise.
+unless `--confidence` says otherwise. `--dead-time` is the `dead_time` of
+[`adev`](@ref), for frequency readings with time unmeasured between them
+([Dead time](@ref)).
 
 ## Other analyses
 

@@ -21,8 +21,8 @@ time total and Hadamard total deviations, Thêo1, ThêoBR and ThêoH, MTIE
 and TIE rms. Each run identifies the noise type and reports χ² confidence
 limits. The program also plots and edits data, removes drift and outliers,
 computes spectra and dynamic stability, and separates three clocks with
-the three-cornered hat. It has functions this package lacks: dead-time
-corrections, frequency jump detection and filtering.
+the three-cornered hat. It has functions this package lacks: frequency
+jump detection and filtering.
 
 The cross-check suite compares this package with Stable32's result files
 on its own test record, the 1000-point test suite of

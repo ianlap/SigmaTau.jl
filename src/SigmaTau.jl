@@ -52,6 +52,7 @@ include("steering.jl")
 include("comparisons.jl")
 include("timescale.jl")
 include("deviations.jl")
+include("deadtime.jl")
 include("registry.jl")
 include("samplestats.jl")
 include("suite.jl")
@@ -82,6 +83,7 @@ export tau_values
 # `SigmaTau._adev_core` etc.; the leading underscore marks them unsupported.
 
 export identify_noise, noise_id_nnls, calculate_edf, confidence_intervals, bias_correction
+export bias_b1, bias_b2, bias_b3
 
 export adev, mdev, tdev
 export hdev, mhdev, htdev

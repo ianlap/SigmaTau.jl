@@ -139,7 +139,8 @@ triangle and an Ω counter with a parabola. The two-sample deviation of
 their readings is a modified Allan deviation and a parabolic deviation,
 whatever the function that computed it is called. Phase samples avoid the
 question. The standard also prefers them where there is dead time between
-the readings, which this package does not correct for.
+the readings. For readings that have it, `adev(f; dead_time, noise)`
+corrects the Allan deviation of a stated noise type ([Dead time](@ref)).
 
 ## What each estimator needs
 

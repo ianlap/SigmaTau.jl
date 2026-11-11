@@ -173,6 +173,7 @@ sigmatau_json("analyze missing.dat --format json") # hide
 | `--confidence P` | confidence level of the intervals. By default 0.683 |
 | `--no-ci` | no intervals or EDF, and no noise types but those that the bias factors of `totdev`, `mtotdev`, `ttotdev`, `htotdev` and `mhtotdev` rest on |
 | `--noise TYPE` | noise type behind the intervals and the bias factors: `auto` (the default, identified at each averaging time), `fit` (the dominant term at each averaging time of the model that [`powerlaw_fit`](@ref) fits to the record), or one of `WHPM`, `FLPM`, `WHFM`, `FLFM`, `RWFM`, `FWFM`, `RRFM` for every averaging time |
+| `--dead-time S` | for frequency readings with `S` seconds unmeasured between them: the Allan deviation divided by the bias functions, the `dead_time` keyword of [`adev`](@ref) ([Dead time](@ref)). It needs `--devs adev`, a `--noise` from `WHPM` to `RWFM`, and `--tau0`, the averaging time of one reading; the time column of such a file holds the period between readings. The JSON echoes it as `dead_time` |
 | `--bias MODE` | bias correction of the total deviations and Thêo1: `exact` (the default), `published`, `stable32` or `none`, for `correct_bias = true`, `:published`, `:stable32` and `false` ([Bias correction](../explanation/bias.md)). `--no-bias-correction` is `--bias none` |
 
 The deviations are `adev`, `mdev`, `hdev`, `mhdev`, `pdev`, `totdev`,
@@ -500,9 +501,11 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 | `--pivot K` | with `greenhall`, `jones_tryon` or `stein`, the clock at which the scale is read. By default 1 |
 | `--flicker` | with `greenhall` or `jones_tryon`, fit flicker FM as well, and keep the flicker FM and the flicker PM of each clock as [Markov states](../explanation/clock_model.md#Flicker-states) of its model. By default flicker FM is not fitted and flicker PM counts as noise of the readings |
 
-Each column is read with the options of the record. With `--synth` the
-clocks are simulated: four of them, or those that `--clocks` or
-`--noise-model` describe. `greenhall`, `jones_tryon` and `stein` need three
+Each column is read with the options of the record, and a clock takes
+part in the scale where it was read: the samples that `--fillgaps` puts in
+are left out again, so the option serves only to read a frequency file
+that has missing samples. With `--synth` the clocks are simulated: four of
+them, or those that `--clocks` or `--noise-model` describe. `greenhall`, `jones_tryon` and `stein` need three
 clocks or more, and fit a model to each with [`clock_models`](@ref), which
 leaves out the samples a missing reading touches. The record needs 16
 samples or more.

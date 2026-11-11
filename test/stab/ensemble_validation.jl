@@ -55,7 +55,7 @@ using LinearAlgebra
             Pyy = Matrix(P[k+1:2k, k+1:2k])
         end
         @test dy < 1e-6      # the reduction leaves the frequency estimates alone
-        @test dw < 1e-6      # and its weights minimise the variance of the scale step
+        @test dw < 1e-6      # and its weights minimize the variance of the scale step
     end
 
     @testset "EWFA does not step when a clock drops out" begin

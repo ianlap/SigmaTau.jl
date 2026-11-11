@@ -6,6 +6,8 @@ bitwise from its pieces. The record duration is (N-1)*tau0, as in Julia.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -72,3 +74,29 @@ def test_bias_correction_unknown_var_type_is_identity():
 def test_bias_correction_published_leaves_pm_alone():
     assert st.bias_correction(["WHPM"], "htot", [16], 512)[0] > 1.3
     assert st.bias_correction(["WHPM"], "htot", [16], 512, published=True)[0] == 1.0
+
+
+def test_bias_functions_match_the_published_tables():
+    # NIST TN 1318: B1 at r = 2, B2, and B3(2, M, r, mu) at r = 2.
+    assert round(st.bias_b1(8, 2, 0.2), 3) == 1.629
+    assert st.bias_b1(math.inf, 2, 0.5) == math.inf
+    assert round(st.bias_b2(64, 0.2), 3) == 6.834
+    assert st.bias_b2(36, "RWFM") == pytest.approx(53.5)
+    assert round(st.bias_b3(2, 4, 2, "FLFM"), 4) == 0.7052
+    assert st.bias_b3(2, 8, 36, "WHPM") == 8.0
+    with pytest.raises(ValueError):
+        st.bias_b2(2, 2.5)
+
+
+def test_adev_dead_time_divides_by_b2_b3():
+    y = st.noise_gen(FrequencyData, 4096, 16.0, sigma1={"RWFM": 1e-12}, rng=3)
+    raw = st.adev(y, MS, noise="RWFM")
+    res = st.adev(y, MS, dead_time=48.0, noise="RWFM")
+    bias = [st.bias_b2(4, 1) * st.bias_b3(2, m, 4, 1) for m in MS]
+    np.testing.assert_allclose(res.dev, raw.dev / np.sqrt(bias), rtol=1e-12)
+    by_name = st.deviation("adev", y, MS, dead_time=48.0, noise="RWFM")
+    np.testing.assert_array_equal(by_name.dev, res.dev)
+    with pytest.raises(ValueError):
+        st.adev(y, MS, dead_time=48.0)  # the noise type has to be stated
+    with pytest.raises(ValueError):
+        st.deviation("mdev", y, MS, dead_time=48.0, noise="RWFM")

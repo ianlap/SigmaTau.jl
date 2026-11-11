@@ -15,6 +15,7 @@ tries them on.
 | [`calculate_edf`](@ref) | Gives the equivalent degrees of freedom ([Confidence intervals](../explanation/confidence.md#Equivalent-degrees-of-freedom)) |
 | [`bias_correction`](@ref) | Gives the bias factor of a total estimator ([Bias correction](../explanation/bias.md)) |
 | [`confidence_intervals`](@ref) | Gives the confidence limits ([Confidence intervals](../explanation/confidence.md)) |
+| [`bias_b1`](@ref), [`bias_b2`](@ref), [`bias_b3`](@ref) | Give Barnes's bias functions for samples with dead time ([Dead time](../explanation/dead_time.md)) |
 
 ## Noise
 
@@ -31,4 +32,12 @@ DEFAULT_CONFIDENCE
 calculate_edf
 bias_correction
 confidence_intervals
+```
+
+## Bias functions for dead time
+
+```@docs
+bias_b1
+bias_b2
+bias_b3
 ```

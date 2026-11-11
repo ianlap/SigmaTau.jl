@@ -30,8 +30,11 @@ export const state = {
   compareTau: null,        // τ of the "Compare at τ" table
   // Spectrum page (display settings, applied without a run)
   spec: { carrier: 10e6, carrierText: "10e6", phase: "L", avg: "log", guides: true },
-  // Ensemble page: time scale settings and the last result ({ key, ts })
-  ens: { algorithm: "at1", wmax: 1, pivot: 1, steps: "", flicker: false, result: null, error: null },
+  // Ensemble page: the view ("scale" | "hat"), the time scale settings, those of the hat (deviation,
+  // method, whether the file's reference counts as a clock, whether three columns hold the pairs)
+  // and the last result ({ key, ts } or { key, hat })
+  ens: { view: "scale", algorithm: "at1", wmax: 1, pivot: 1, steps: "", flicker: false,
+         hat: { dev: "adev", method: "hat", reference: true, pairs: false }, result: null, error: null },
   // Dynamic page: estimator, window = record / frac, map or 3D waterfall
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
   // Holdover page: training stretch = record / frac, line or parabola (drift), start from the last
