@@ -97,7 +97,7 @@ from .io import (
 from .masks import TELECOM_MASKS, MaskCheck, mask_check, telecom_mask
 from .noise import identify_noise, noise_gen, noise_id_nnls
 from .powerlaw import powerlaw_fit, powerlaw_psd, powerlaw_sigma
-from .spectral import integrated_jitter, psd_x, psd_y, ssb_phase_noise
+from .spectral import integrated_jitter, psd_x, psd_y, spectrum_sigma, ssb_phase_noise
 from .streaming import StreamingStability
 from .suite import DEFAULT_DEVIATIONS, groslambert, ncornered_hat, stability
 from .types import (
@@ -228,6 +228,7 @@ __all__ = [
     "psd_x",
     "ssb_phase_noise",
     "integrated_jitter",
+    "spectrum_sigma",
     # file IO
     "read_data",
     "start_time",

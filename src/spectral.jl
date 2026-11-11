@@ -392,9 +392,10 @@ integrated in closed form
 - `band=nothing`: the limits `(f₁, f₂)`, in Hz, inside the range of the
   spectrum. The whole spectrum is integrated by default.
 - `quantity=:L`: what `S` holds: `:L`, ``ℒ(f)`` in dBc/Hz, with
-  ``S_φ = 2ℒ``; `:Sx`, ``S_x(f)`` in s²/Hz; or `:Sy`, ``S_y(f)`` in 1/Hz,
-  converted with ``(2πf)^2``. A [`psd_y`](@ref) result is converted with
-  the response of the first difference instead (see [`psd_x`](@ref)).
+  ``S_φ = 2ℒ``; `:Sphi`, ``S_φ(f)`` in rad²/Hz; `:Sx`, ``S_x(f)`` in s²/Hz;
+  or `:Sy`, ``S_y(f)`` in 1/Hz, converted with ``(2πf)^2``. A
+  [`psd_y`](@ref) result is converted with the response of the first
+  difference instead (see [`psd_x`](@ref)).
 
 Points at ``f = 0`` and points without a positive spectrum are left out.
 
@@ -435,17 +436,12 @@ function _jitter(f::Vector{Float64}, S::Vector{Float64}, quantity::Symbol,
         "integrated_jitter: $(length(f)) frequencies but $(length(S)) values"))
     f_carrier > 0 || throw(ArgumentError("integrated_jitter: f_carrier must be > 0 Hz (got $f_carrier)"))
     ω₀² = (2π * f_carrier)^2
-    Sφ = quantity === :L  ? 2 .* exp10.(S ./ 10) :
-         quantity === :Sx ? ω₀² .* S :
-         quantity === :Sy ? ω₀² .* S ./ _powerlaw_to_sy(:Sx, f, ones(length(f)), nothing, τ₀) :
-         throw(ArgumentError("integrated_jitter: quantity must be :L, :Sx or :Sy, got :$quantity"))
-    keep = findall(k -> f[k] > 0 && isfinite(Sφ[k]) && Sφ[k] > 0, eachindex(f))
-    fk, Sk = f[keep], Sφ[keep]
-    length(fk) >= 2 && issorted(fk; lt=<=) ||
-        throw(ArgumentError("integrated_jitter: need at least 2 increasing frequencies with a positive spectrum"))
-    lo, hi = band === nothing ? (fk[1], fk[end]) : Float64.(band)
-    fk[1] <= lo < hi <= fk[end] || throw(ArgumentError(
-        "integrated_jitter: band ($lo, $hi) Hz must lie inside the spectrum, $(fk[1]) to $(fk[end]) Hz"))
+    Sφ = quantity === :L    ? 2 .* exp10.(S ./ 10) :
+         quantity === :Sphi ? S :
+         quantity === :Sx   ? ω₀² .* S :
+         quantity === :Sy   ? ω₀² .* S ./ _powerlaw_to_sy(:Sx, f, ones(length(f)), nothing, τ₀) :
+         throw(ArgumentError("integrated_jitter: quantity must be :L, :Sphi, :Sx or :Sy, got :$quantity"))
+    fk, Sk, lo, hi = _spectrum_points("integrated_jitter", f, Sφ, band)
     φ² = 0.0; ν² = 0.0
     for k in 1:length(fk)-1
         a, b = max(fk[k], lo), min(fk[k+1], hi)
@@ -457,7 +453,215 @@ function _jitter(f::Vector{Float64}, S::Vector{Float64}, quantity::Symbol,
     return (phase = √φ², time = √φ² / (2π * f_carrier), residual_fm = √ν²)
 end
 
+# The points of a spectrum that can be integrated, those at f > 0 with a
+# positive value, and the band (f₁, f₂) inside them: all of them by default.
+function _spectrum_points(name::String, f::Vector{Float64}, S::Vector{Float64}, band)
+    keep = findall(k -> f[k] > 0 && isfinite(S[k]) && S[k] > 0, eachindex(f))
+    fk, Sk = f[keep], S[keep]
+    length(fk) >= 2 && issorted(fk; lt=<=) ||
+        throw(ArgumentError("$name: need at least 2 increasing frequencies with a positive spectrum"))
+    lo, hi = band === nothing ? (fk[1], fk[end]) : Float64.(band)
+    fk[1] <= lo < hi <= fk[end] || throw(ArgumentError(
+        "$name: band ($lo, $hi) Hz must lie inside the spectrum, $(fk[1]) to $(fk[end]) Hz"))
+    return fk, Sk, lo, hi
+end
+
 # ∫ S₁ (f/f₁)^x df from a·f₁ to b·f₁, with c = S₁·f₁ (SP1065 §5.2.19,
 # Eqs. (41) and (43)).
 _powerlaw_segment(c::Float64, x::Float64, a::Float64, b::Float64) =
     abs(x + 1) < 1e-9 ? c * log(b / a) : c * (b^(x + 1) - a^(x + 1)) / (x + 1)
+
+"""
+    spectrum_sigma(f, S, tau; quantity=:L, f_carrier=nothing, deviation=:adev,
+                   band=nothing) → NamedTuple
+
+Deviation ``σ(τ)`` of a signal whose spectrum is given as points, such as
+the ``ℒ(f)`` table of a phase-noise analyzer or a data sheet: ``S_y(f)``
+integrated through the transfer function of the estimator, over the band
+``f_1`` to ``f_h`` that the points cover
+([SP1065 §7, Eqs. (63) to (65)](@cite riley-2008-sp1065)),
+
+```math
+σ^2(τ) = \\int_{f_1}^{f_h} S_y(f)\\,\\lvert H_τ(f) \\rvert^2\\,df .
+```
+
+| `deviation` | ``\\lvert H_τ(f) \\rvert^2``, with ``u = πfτ`` |
+|:------------|:-------------------------------------------|
+| `:adev`     | ``2\\sin^4 u/u^2``                           |
+| `:mdev`     | ``2\\sin^6 u/u^4``                           |
+| `:hdev`     | ``(8/3)\\sin^6 u/u^2``                       |
+| `:mhdev`    | ``(8/3)\\sin^8 u/u^4``                       |
+
+Between neighboring points the spectrum is taken as a power law, a straight
+line on a log-log plot, as in [`integrated_jitter`](@ref). The modified
+deviations are those of a phase averaged over ``τ`` without steps, the
+limit of [SP1065 Eq. (66)](@cite riley-2008-sp1065) for a sample interval
+small against ``τ``. On a power law they have the limits of
+[Sullivan et al. (1990)](@cite sullivan-1990-tn1337), §A.6, Table 2.
+
+Nothing is assumed outside the band. The result is the deviation of the
+noise inside it, with two measures of what the rest could add.
+
+# Arguments
+
+- `f`, `S`: the spectrum points. `f` is the Fourier frequency in Hz and
+  increases. Points at ``f = 0`` and points without a positive spectrum
+  are left out.
+- `tau`: averaging times ``τ`` in seconds.
+
+# Keywords
+
+- `quantity=:L`: what `S` holds: `:L`, ``ℒ(f)`` in dBc/Hz; `:Sphi`,
+  ``S_φ(f)`` in rad²/Hz; `:Sx`, ``S_x(f)`` in s²/Hz; or `:Sy`, ``S_y(f)``
+  in 1/Hz.
+- `f_carrier`: the carrier frequency ``ν_0`` in Hz, needed for ``ℒ(f)``
+  and ``S_φ(f)``.
+- `deviation=:adev`: `:adev`, `:mdev`, `:hdev` or `:mhdev`.
+- `band=nothing`: the limits `(f₁, f_h)`, in Hz, inside the range of the
+  points. The whole table is integrated by default.
+
+# Returns
+
+A `NamedTuple` with the fields
+
+- `dev`: ``σ(τ)`` of the noise inside the band, at each `tau`.
+- `below`: the variance that the spectrum below ``f_1`` would add if it
+  kept, down to ``f = 0``, the slope of its lowest decade, as a fraction
+  of `dev^2`.
+- `above`: the same for the spectrum above ``f_h``, continued without
+  limit on the slope of its highest decade.
+- `band`: the limits ``(f_1, f_h)`` of the integral, in Hz.
+
+`below` and `above` are `Inf` where the continued integral does not
+converge.
+
+!!! note "The bandwidth of the measurement"
+    Where ``S_y(f)`` rises as ``f`` or ``f^2`` at the top of the band,
+    which is flicker PM or white PM, a flat ``ℒ(f)``, the Allan and
+    Hadamard deviations grow with ``f_h`` without limit: for white PM
+    ``σ_y^2(τ) = 3 f_h h_2/(4π^2τ^2)``. `above` is then `Inf`, and `dev`
+    stands for a measurement whose bandwidth is the ``f_h`` of the band
+    and for no other. The modified deviations converge on both.
+
+!!! note "Long and short averaging times"
+    An estimator weighs the spectrum most near ``f = 1/(2τ)``, so `below`
+    rises with ``τ``: where it is no longer small, the table does not
+    reach low enough for that ``τ``.
+
+    At the first multiples of its sample interval ``τ_0``, the modified
+    deviations of a record lie above this limit. For power-law noise in a
+    record with ``f_h = 1/(2τ_0)``, the variance is up to 3 times the
+    limit at ``τ_0``, at most 2.4 % above it at ``8τ_0`` and 0.7 % at
+    ``16τ_0``, and equal to it at every ``τ`` on white PM. For those
+    averaging times, fit a model with [`powerlaw_fit`](@ref) and evaluate
+    it with [`powerlaw_sigma`](@ref).
+
+The opposite conversion has no unique answer: even the Allan variance at
+every ``τ`` does not determine the spectrum in general
+([Greenhall (1998)](@cite greenhall-1998-spectral-ambiguity)). It is made
+through a model: [`powerlaw_fit`](@ref) gives the ``h_α`` of a measured
+deviation, and [`powerlaw_psd`](@ref) their spectrum.
+
+# Examples
+
+White FM with ``σ_y(1\\,\\mathrm{s}) = 10^{-11}`` on a 10 MHz carrier has
+``ℒ(1\\,\\mathrm{Hz}) = -80`` dBc/Hz, falling by 20 dB per decade
+([SP1065 §7.2](@cite riley-2008-sp1065)). From a table that starts at
+0.01 Hz, the deviation at 100 s is not to be had: the noise below the table
+would add 5.9 times the variance found inside it.
+
+```jldoctest
+julia> using SigmaTau
+
+julia> r = spectrum_sigma([0.01, 1e5], [-40.0, -180.0], [0.01, 1.0, 100.0];
+                          f_carrier=10e6);
+
+julia> print(round.(r.dev; sigdigits=4))
+[9.999e-11, 1.0e-11, 3.799e-13]
+
+julia> print(round.(r.below; sigdigits=2))
+[1.3e-11, 1.3e-5, 5.9]
+```
+"""
+function spectrum_sigma(f::AbstractVector{<:Real}, S::AbstractVector{<:Real},
+                        tau::AbstractVector{<:Real}; quantity::Symbol=:L, f_carrier=nothing,
+                        deviation::Symbol=:adev, band=nothing)
+    deviation in POWERLAW_DEVIATIONS || throw(ArgumentError(
+        "spectrum_sigma: deviation must be one of $(join(POWERLAW_DEVIATIONS, ", ")), got :$deviation"))
+    length(f) == length(S) || throw(DimensionMismatch(
+        "spectrum_sigma: $(length(f)) frequencies but $(length(S)) values"))
+    all(τ -> isfinite(τ) && τ > 0, tau) ||
+        throw(ArgumentError("spectrum_sigma: every τ must be positive"))
+    fv = Float64.(f)
+    fk, Sk, lo, hi = _spectrum_points("spectrum_sigma", fv,
+                                      _powerlaw_to_sy(quantity, fv, Float64.(S), f_carrier, NaN), band)
+    c, p, q = _powerlaw_response(deviation)
+    n = length(fk) - 1
+    x = [log(Sk[k+1] / Sk[k]) / log(fk[k+1] / fk[k]) for k in 1:n]
+    # The segments that hold the two edges of the band.
+    k₁, kₙ = clamp(searchsortedlast(fk, lo), 1, n), clamp(searchsortedfirst(fk, hi) - 1, 1, n)
+    S₁, x₁ = _edge_powerlaw(fk, Sk, lo, k₁, lo, min(10lo, hi))
+    Sₕ, xₕ = _edge_powerlaw(fk, Sk, hi, kₙ, max(hi / 10, lo), hi)
+    dev, below, above = zeros(length(tau)), zeros(length(tau)), zeros(length(tau))
+    for (i, τ) in enumerate(tau)
+        w = π * Float64(τ)
+        v = 0.0
+        for k in k₁:kₙ
+            v += Sk[k] * _lobe_integral(x[k], p, q, w * fk[k], w * max(fk[k], lo), w * min(fk[k+1], hi))
+        end
+        dev[i] = sqrt(c * v / w)
+        below[i] = S₁ * _lobe_integral(x₁, p, q, w * lo, 0.0, w * lo) / v
+        above[i] = Sₕ * _lobe_integral(xₕ, p, q, w * hi, w * hi, Inf) / v
+    end
+    return (dev = dev, below = below, above = above, band = (lo, hi))
+end
+
+# Level and slope of the spectrum at the band edge `fe`: the least-squares
+# line on the log-log plot through the points from `a` to `b` hertz, the
+# decade of the band at that edge, or through the two ends of segment `k`
+# when that decade holds fewer than two. One noisy point of a measured spectrum then does not set
+# the slope.
+function _edge_powerlaw(fk::Vector{Float64}, Sk::Vector{Float64}, fe::Float64, k::Int,
+                        a::Float64, b::Float64)
+    idx = findall(i -> a <= fk[i] <= b, eachindex(fk))
+    length(idx) >= 2 || (idx = [k, k + 1])
+    lf, lS = log.(fk[idx] ./ fe), log.(Sk[idx])
+    f̄, S̄ = sum(lf) / length(idx), sum(lS) / length(idx)
+    x = sum((lf .- f̄) .* (lS .- S̄)) / sum(abs2, lf .- f̄)
+    return exp(S̄ - x * f̄), x
+end
+
+# ∫ (u/u₀)^x sin^p(u)/u^q du from a to b, 0 ≤ a < b ≤ ∞: the response
+# c·sin^p(u)/u^q of an estimator, u = πfτ, over a stretch of the spectrum
+# that follows the power law f^x. `Inf` where it does not converge.
+# Below the first zero of the sine the steps double; from there each lobe is
+# integrated on its own. Past `_PL_LOBES` lobes the whole lobes take the
+# mean of sin^p, which moves them by about 1/_PL_LOBES².
+function _lobe_integral(x::Float64, p::Int, q::Int, u₀::Float64, a::Float64, b::Float64)
+    g(u) = (u / u₀)^x * sin(u)^p / u^q
+    total = 0.0
+    if a == 0
+        x + p - q > -1 || return Inf
+        a = min(b, 1e-4)                        # sin u = u below it
+        total = (a / u₀)^x * a^(p - q + 1) / (x + p - q + 1)
+    end
+    isfinite(b) || x - q < -1 || return Inf
+    while a < min(b, π)
+        h = min(2a, π, b)
+        total += _gl(g, a, h)
+        a = h
+    end
+    cap = _PL_LOBES * π
+    k = floor(Int, min(a, cap) / π)
+    while a < min(b, cap)
+        k += 1
+        h = min(k * π, b)
+        h > a && (total += _gl(g, a, h); a = h)
+    end
+    a < b || return total
+    z₁ = min(ceil(a / π) * π, b)                # the whole lobes run from z₁ to z₂
+    z₂ = isfinite(b) ? max(floor(b / π) * π, z₁) : Inf
+    mean = p == 4 ? 3 / 8 : p == 6 ? 5 / 16 : 35 / 128
+    total += _gl(g, a, z₁) + mean * _powerlaw_segment(u₀^(1 - q), x - q, z₁ / u₀, z₂ / u₀)
+    return isfinite(b) ? total + _gl(g, z₂, b) : total
+end

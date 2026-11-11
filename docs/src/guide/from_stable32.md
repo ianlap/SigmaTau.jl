@@ -65,7 +65,7 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 | Power | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref) |
 | Histogram | [`sample_histogram`](@ref) |
 | Autocorrelation | [`acf`](@ref). The lag scatter plot is not here |
-| Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref) |
+| Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref); [`spectrum_sigma`](@ref) for a measured spectrum |
 | Noise | [`noise_gen`](@ref) |
 | 3-Cornered Hat | [`ncornered_hat`](@ref), for three clocks or more, and [`groslambert`](@ref); [`sigmatau hat`](../reference/cli.md#hat) from a file |
 | Plot | the plot recipes ([Plotting and tables](plotting.md)) |

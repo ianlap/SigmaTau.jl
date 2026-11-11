@@ -17,6 +17,20 @@ ssb_phase_noise
 integrated_jitter
 ```
 
+## Deviation of a measured spectrum
+
+[`spectrum_sigma`](@ref) converts a table of ``ℒ(f)``, ``S_φ(f)``,
+``S_x(f)`` or ``S_y(f)`` to the Allan, modified Allan, Hadamard or
+modified Hadamard deviation, by integrating over the band of the table.
+[Power-law noise](../explanation/noise.md#A-measured-spectrum) works an
+example and tells what the bandwidth of the measurement changes. The way
+back, from a deviation to a spectrum, exists only through the
+[power-law model](#Power-law-model) of the next section.
+
+```@docs
+spectrum_sigma
+```
+
 ## Power-law model
 
 The model ``S_y(f) = \sum_α h_α f^α`` links the spectra and the
@@ -45,7 +59,9 @@ powerlaw_sigma(f, [0.001, 0.01, 0.1]; tau0 = 1e-3)
 
 The table says nothing of the noise below 1 Hz, which sets the deviation
 at averaging times of a second and more, so the model is evaluated only
-where the table supports it.
+where the table supports it. [`spectrum_sigma`](@ref) integrates the
+table itself, without a model, and reports what the noise outside it
+could add.
 
 ```@docs
 powerlaw_fit

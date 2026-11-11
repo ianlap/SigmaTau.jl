@@ -32,6 +32,9 @@ using Random
         @test L ≈ 10 .* log10.(0.5 .* (2π * 10e6)^2 .* Sy ./ (2π .* f) .^ 2)
         fit = powerlaw_fit(f, L; quantity=:L, f_carrier=10e6, alphas=[2, 0, -2])
         @test fit.h ≈ [1e-22, 1e-24, 1e-30] rtol=1e-8
+        Sφ = powerlaw_psd(h, f; quantity=:Sphi, f_carrier=10e6)
+        @test Sφ ≈ 2 .* exp10.(L ./ 10)
+        @test powerlaw_fit(f, Sφ; quantity=:Sphi, f_carrier=10e6, alphas=[2, 0, -2]).h ≈ fit.h
     end
 
     @testset "fits recover noise_gen's h_α" begin
@@ -64,5 +67,6 @@ using Random
         @test_throws ArgumentError powerlaw_sigma(Dict(0 => 1e-24), [1.5]; tau0=1.0)
         @test_throws ArgumentError powerlaw_sigma(Dict(0 => 1e-24), [1.0])
         @test_throws ArgumentError powerlaw_psd(Dict(0 => 1e-24), [1.0]; quantity=:L)
+        @test_throws ArgumentError powerlaw_psd(Dict(0 => 1e-24), [1.0]; quantity=:Sphi)
     end
 end

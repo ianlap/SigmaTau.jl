@@ -144,5 +144,85 @@ end
         @test isapprox(integrated_jitter(psd_x(p); f_carrier=1e6, band=(400.0, 450.0)).time, √0.1 * 1e-9; rtol=0.05)
         @test_throws ArgumentError integrated_jitter(f, [-100.0, -110.0, -120.0]; f_carrier=10e6, band=(10.0, 1e4))
         @test_throws ArgumentError integrated_jitter(reverse(f), [-100.0, -110.0, -120.0]; f_carrier=10e6)
+        @test integrated_jitter(f, [2e-10, 2e-11, 2e-12]; quantity=:Sphi, f_carrier=10e6) == j
+    end
+
+    @testset "spectrum_sigma against the closed forms" begin
+        # A two-point table is one power law, S_y = f^α, and the band with its
+        # two continuations covers every frequency: σ² = K·τ^(−α−1).
+        f = [1e-3, 2e3]
+        function K(dev, α; τ=1.0)
+            r = spectrum_sigma(f, f .^ α, [τ]; quantity=:Sy, deviation=dev)
+            return r.dev[1]^2 * (1 + r.below[1] + r.above[1]) * τ^(α + 1)
+        end
+        l2, l3 = log(2), log(3)
+        # ADEV: SP1065 Eq. (67); IEEE Std 1139-1999 Table B.2
+        @test K(:adev, 0)   ≈ 1 / 2                          rtol=1e-10
+        @test K(:adev, -1)  ≈ 2l2                            rtol=1e-10
+        @test K(:adev, -2)  ≈ 2π^2 / 3                       rtol=1e-10
+        @test K(:adev, -2; τ=37.0) ≈ 2π^2 / 3                rtol=1e-10    # past the resolved lobes
+        # MDEV: the large-n limits of NIST TN 1337 §A.6, Table 2
+        @test K(:mdev, 2)   ≈ 3 / (8π^2)                     rtol=1e-10
+        @test K(:mdev, 1)   ≈ (24l2 - 9l3) / (8π^2)          rtol=1e-10
+        @test K(:mdev, 0)   ≈ 1 / 4                          rtol=1e-10
+        @test K(:mdev, -1)  ≈ (27l3 - 32l2) / 8              rtol=1e-10
+        @test K(:mdev, -2)  ≈ 11π^2 / 20                     rtol=1e-10
+        # HDEV and MHDEV: the same integrals of their transfer functions
+        @test K(:hdev, 0)   ≈ 1 / 2                          rtol=1e-10
+        @test K(:hdev, -1)  ≈ (8l2 - 3l3) / 2                rtol=1e-10
+        @test K(:hdev, -2)  ≈ π^2 / 3                        rtol=1e-10
+        @test K(:hdev, -3)  ≈ π^2 * (27l3 - 32l2) / 6        rtol=1e-10
+        @test K(:hdev, -4)  ≈ 11π^4 / 15                     rtol=1e-10
+        @test K(:mhdev, 2)  ≈ 5 / (12π^2)                    rtol=1e-10
+        @test K(:mhdev, 1)  ≈ (6l2 - 3l3) / π^2              rtol=1e-10
+        @test K(:mhdev, 0)  ≈ 2 / 9                          rtol=1e-10
+        @test K(:mhdev, -1) ≈ (27l3 - 40l2) / 3              rtol=1e-10
+        @test K(:mhdev, -2) ≈ 2π^2 / 9                       rtol=1e-10
+        @test K(:mhdev, -3) ≈ π^2 * (832l2 - 486l3) / 45     rtol=1e-10
+        @test K(:mhdev, -4) ≈ 604π^4 / 945                   rtol=1e-10
+
+        # PM noise under ADEV depends on the bandwidth f_h = 2 kHz, and its
+        # continuation above the band does not converge. The 1.038 of the
+        # standard's flicker PM term is 3γ − ln 2.
+        wh = spectrum_sigma(f, f .^ 2, [1.0]; quantity=:Sy)
+        fl = spectrum_sigma(f, f, [1.0]; quantity=:Sy)
+        @test wh.dev[1]^2 ≈ 3 * 2e3 / (4π^2)                                        rtol=1e-10
+        @test fl.dev[1]^2 ≈ (3MathConstants.γ - l2 + 3log(2π * 2e3)) / (4π^2)       rtol=1e-8
+        @test wh.above == [Inf] && fl.above == [Inf]
+        # Flicker-walk FM: the Allan variance does not converge, the Hadamard does.
+        @test spectrum_sigma(f, f .^ -3, [1.0]; quantity=:Sy).below == [Inf]
+        @test isfinite(spectrum_sigma(f, f .^ -3, [1.0]; quantity=:Sy, deviation=:hdev).below[1])
+    end
+
+    @testset "spectrum_sigma: quantities and band" begin
+        # ℒ(f) of a 10 MHz carrier with white PM, white FM and flicker FM
+        ν₀, τ = 10e6, [1e-3, 1e-2, 0.1]
+        f = exp10.(0:0.25:4)
+        Sy = powerlaw_psd(Dict(2 => 1e-28, 0 => 1e-24, -1 => 1e-22), f)
+        Sx = Sy ./ (2π .* f) .^ 2
+        Sφ = (2π * ν₀)^2 .* Sx
+        r = spectrum_sigma(f, 10 .* log10.(Sφ ./ 2), τ; f_carrier=ν₀)
+        @test r.dev ≈ spectrum_sigma(f, Sφ, τ; quantity=:Sphi, f_carrier=ν₀).dev
+        @test r.dev ≈ spectrum_sigma(f, Sx, τ; quantity=:Sx).dev
+        @test r.dev ≈ spectrum_sigma(f, Sy, τ; quantity=:Sy).dev
+        # The table follows the model to 4 % between its points, and ADEV at
+        # 10 ms is the model's with f_h = 10 kHz.
+        @test r.dev[2]^2 ≈ 3e4 * 1e-28 / (4π^2 * 1e-4) + 1e-24 / 2e-2 + 2log(2) * 1e-22 rtol=0.02
+        # Two bands that share an edge add in variance.
+        v(band) = spectrum_sigma(f, Sy, τ; quantity=:Sy, deviation=:mdev, band=band).dev .^ 2
+        @test v((1.0, 300.0)) .+ v((300.0, 1e4)) ≈ v(nothing)
+        @test r.band == (1.0, 1e4)
+        @test spectrum_sigma(f, Sy, τ; quantity=:Sy, band=(1, 300)).band == (1.0, 300.0)
+        # The continuation below the band follows the least-squares line of
+        # the lowest decade, here 1/f under the scatter, not the first two points.
+        g = exp2.(0:10)
+        clean = spectrum_sigma(g, 1 ./ g, [0.1]; quantity=:Sy)
+        noisy = spectrum_sigma(g, [2; 0.5; 0.5; 2; ones(7)] ./ g, [0.1]; quantity=:Sy)
+        @test noisy.below .* noisy.dev .^ 2 ≈ clean.below .* clean.dev .^ 2
+        @test_throws ArgumentError spectrum_sigma(f, Sy, τ; quantity=:Sy, deviation=:totdev)
+        @test_throws ArgumentError spectrum_sigma(f, Sy, τ; quantity=:Sy, band=(0.1, 10.0))
+        @test_throws ArgumentError spectrum_sigma(f, Sy, [0.0]; quantity=:Sy)
+        @test_throws ArgumentError spectrum_sigma(f, Sy, τ)              # ℒ(f) without a carrier
+        @test_throws DimensionMismatch spectrum_sigma(f, Sy[2:end], τ; quantity=:Sy)
     end
 end
