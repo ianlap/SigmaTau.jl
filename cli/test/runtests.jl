@@ -384,6 +384,17 @@ mktempdir() do dir
         @test getindex.(rows, 1) == ["column 2", "column 3", "column 4"]
         w = parse.(Float64, getindex.(rows, 3))
         @test sum(w) ≈ 1 && w[3] < w[1] / 2
+        # A reading that --fillgaps puts in is no reading: the clock that
+        # joins at sample 1001 has no part in the scale before it.
+        lf = joinpath(dir, "late.csv")
+        open(lf, "w") do io
+            for k in 1:4096
+                println(io, k - 1, ",", join(k > 1000 ? cc.x[k, :] : [cc.x[k, 1:2]; NaN], ","))
+            end
+        end
+        late = ("timescale", lf, "--value-cols", "2,3,4", "--algorithm", "greenhall")
+        r = run_cli(late...)
+        @test r.code == 0 && run_cli(late..., "--fillgaps").out == r.out
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "ewfa", "--format=json", "--series", "8")
         @test r.code == 0
         @test occursin("\"algorithm\":\"ewfa\"", r.out) && occursin("\"weight\":[0.3333333333333333,", r.out)

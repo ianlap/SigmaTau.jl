@@ -22,7 +22,9 @@ function synth_record(o::Options)
     return PhaseData(cumsum(y) .* tau0, tau0; source="synthetic")
 end
 
-function load_record(o::Options)
+# With `unfilled`, the samples that --fillgaps put in are taken out again
+# (NaN) once the record is read: timescale forms no scale from them.
+function load_record(o::Options; unfilled::Bool=false)
     ranged = !(isnan(o.range_start) && isnan(o.range_end))
     # With --range the detrend is fitted to the range alone, after the cut.
     mode = o.detrend
@@ -32,7 +34,7 @@ function load_record(o::Options)
     finally
         o.detrend = mode
     end
-    keep = o.remove_drift == "none" ? trues(0) : measured_mask(o, length(data.x))
+    keep = o.remove_drift == "none" && !unfilled ? trues(0) : measured_mask(o, length(data.x))
     if ranged
         idx = range_indices(o, data)
         start = isnan(data.start) ? NaN : data.start + (first(idx) - 1) * data.tau0
@@ -43,6 +45,7 @@ function load_record(o::Options)
     # i.e. one bad frequency sample, which is gapped, filled and integrated back.
     o.remove_outliers && (data = remove_outliers(data))
     o.remove_drift == "none" || (data = remove_drift!(o, data, keep))
+    unfilled && !all(keep) && (data = PhaseData(ifelse.(keep, data.x, NaN), data.tau0; source=data.source, start=data.start))
     return data
 end
 
