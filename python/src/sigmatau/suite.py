@@ -177,7 +177,11 @@ def groslambert(
     clocks counts by the inverse of the product of its two records' Allan
     variances, so that a quiet clock is read against the other quiet clocks.
     """
-    kwargs = {"confidence": float(confidence), "interval": jl.Symbol(interval), "weighted": bool(weighted)}
+    kwargs = {
+        "confidence": float(confidence),
+        "interval": jl.Symbol(interval),
+        "weighted": bool(weighted),
+    }
     if len(records) == 3:
         separated = jl.groslambert(
             to_jl_data(records[0]),
