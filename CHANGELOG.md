@@ -421,6 +421,13 @@ Clock models, the Kalman filter and timescales.
 - Documentation: a background page, "The Hadamard time deviation", on where
   the 10/3 of `htdev` comes from, and √6·TDEV and √20·HTDEV as the errors of
   predicting the next τ-average with a line and with a parabola.
+- Explorer: the help is the manual. **?** opens a menu with a search through
+  the manual and the sections on the page in view, F1 opens the help of that
+  page, and the help page shows the manual by topic, written from
+  `docs/src/explorer/` by `docs/explorer_help.jl`; the documentation build
+  checks that the two agree. Links to the documentation open in the browser,
+  from the desktop app too. The top bar fits the window again with nine
+  tabs.
 - `bench/README.md` re-timed on a Fedora workstation, with a Thêo1 timing on
   the public allantools Cs 5071A record.
 - The Stable32 reader (`.phd`, `.frd`) reads a value of zero as a gap, as
