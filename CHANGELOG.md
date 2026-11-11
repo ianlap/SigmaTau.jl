@@ -504,6 +504,10 @@ Clock models, the Kalman filter and timescales.
   in place of the `powerlaw_fit` error.
 - `sigmatau analyze --mask` works with CSV output: each check of MTIE or
   TDEV is one line on standard error, silenced by `--quiet`.
+- `noise_gen` draws the components of a mixture in order of α, not in the
+  order of the Dict, which differs between Julia versions: a seeded record
+  now agrees across versions to rounding error, and a seeded mixture differs
+  from earlier releases.
 
 ### Removed
 
@@ -782,6 +786,23 @@ Clock models, the Kalman filter and timescales.
 - `timescale` refuses `--wmax` outside 0 to 1 and `--steps` with any
   algorithm but `at2` as usage errors (exit 1); `sigmatau help nosuch` is a
   usage error; `--delim` help states its default.
+- `holdover(data, model)` leaves out a trial whose starting reading is
+  missing, as the least-squares test does.
+- `powerlaw_sigma` and `holdover(model)` accept a model with a drift state
+  and no random-run FM.
+- `read_data(file; column = n)` reads column `n` of a plain column file; it
+  was ignored.
+- `confidence` outside 0 to 1 is an error.
+- Clearer errors: `ttotdev` on a gapped record, `calculate_edf` and
+  `bias_correction` with vectors of different lengths, `load` of a file
+  `save` did not write, `tune_q(points = 1)`, `simulate_clock(m, 0)`.
+- `ttotdev` with `ci = false` returns the noise types its bias correction
+  used, as `mtotdev` does.
+- Explorer: on the Data page in a narrow window a long file name wraps
+  inside its card, and the plot's title and hint fold before the range
+  control goes to a second line; they had pushed it out of the card and
+  squeezed the hint to 41 px. An error in the status bar ends when the
+  inputs change or a field is edited; it stayed until the next run.
 
 ### Security
 
