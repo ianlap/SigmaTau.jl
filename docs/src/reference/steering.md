@@ -5,9 +5,10 @@ each computed from an estimate of how far off the clock is. Tight steering
 holds the phase close and carries the noise of the reference and of the
 readings into the clock; loose steering leaves the clock its own short-term
 stability and lets it wander. [`steering_gains`](@ref) sets the gains from
-the time constant the loop should have, [`steering_poles`](@ref) shows what
-any gains do, and [`steer`](@ref) replays a measured record through the
-loop, or predicts the steady state of the loop from a clock model.
+the time constant the loop should have and [`lqg_gains`](@ref) from a cost,
+[`steering_poles`](@ref) shows what any gains do, and [`steer`](@ref)
+replays a measured record through the loop, or predicts the steady state of
+the loop from a clock model.
 
 ```julia
 m = clock_model(powerlaw_fit(p; alphas=[2, 0, -2]))   # p: clock against reference
@@ -64,11 +65,36 @@ SteeringGains(1e-5, 0.05, 0, 60.0)      # or gains from elsewhere
 ```
 
 A loop of two gains is stable for ``g_P > 0``, ``g_D > 0`` and
-``τ g_P + 2 g_D < 4``. Gains chosen any other way, such as those that
-minimize a cost in the variances of phase, frequency and steers (the
-linear quadratic Gaussian approach of [koppang-1999-lqg-masers](@cite),
-which [matsakis-2019-steering](@cite) sets beside pole placement), go straight
-into [`SteeringGains`](@ref).
+``τ g_P + 2 g_D < 4``. Gains found any other way go straight into
+[`SteeringGains`](@ref).
+
+### Gains from a cost
+
+Pole placement fixes how the loop answers a disturbance and leaves the
+variances to follow. The linear quadratic Gaussian (LQG) design
+[koppang-1999-lqg-masers, farina-2010-steering-control](@cite) does the
+reverse: [`lqg_gains`](@ref) returns the gains that minimize the sum of
+
+```math
+W_p\,p^2 + W_f\,f^2 + W_u\,u^2
+```
+
+over the steers, and the response is what it turns out to be; read it with
+[`steering_poles`](@ref).
+
+```julia
+g = lqg_gains(3600.0; phase=1e-3, frequency=1e-3, steer=1e12)   # a gentle loop, steered hourly
+steering_poles(g).time_constants
+steer(m, g)                              # what it does to the clock
+```
+
+Only the ratios ``W_p τ^2/W_u`` and ``W_f/W_u`` matter, and the gains do not
+depend on the noise of the clock or of the readings
+[matsakis-2019-steering](@cite): the weights say what is tolerated, and
+[`steer`](@ref) on the clock model then gives the variances that result. A
+heavier steer weight is a slower loop. [`lqg_gains`](@ref) reproduces the
+three designs printed in [koppang-1999-lqg-masers](@cite), §IV, each gain
+within 3 parts in 10⁴ of the printed figure.
 
 ### The integral gain
 
@@ -167,6 +193,7 @@ gain.
 ```@docs
 SteeringGains
 steering_gains
+lqg_gains
 steering_poles
 steer
 SteeringResult

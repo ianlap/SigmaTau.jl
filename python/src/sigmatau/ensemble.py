@@ -536,6 +536,21 @@ def steering_gains(
 
 
 @_map_errors
+def lqg_gains(
+    interval: float, *, phase: float, frequency: float = 0.0, steer: float
+) -> SteeringGains:
+    """Gains that minimize the sum over the steers of ``phase``·p² +
+    ``frequency``·f² + ``steer``·u², the linear quadratic Gaussian design
+    (Koppang & Leland 1999). Only the ratios of the weights matter; a heavier
+    ``steer`` weight is a slower loop."""
+    return _gains_from_jl(
+        jl.lqg_gains(
+            float(interval), phase=float(phase), frequency=float(frequency), steer=float(steer)
+        )
+    )
+
+
+@_map_errors
 def steering_poles(g: SteeringGains) -> dict:
     """Where the gains put the poles of the closed loop: ``poles`` (complex), the
     ``time_constants`` (s) of their decay, the ``frequencies`` (Hz) they ring at,
