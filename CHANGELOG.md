@@ -615,6 +615,11 @@ Clock models, the Kalman filter and timescales.
   step detector's windows do not reach behind the sample a clock joined at.
   `:jones_tryon` still steps at a return, and `:stein` needs its pivot read
   throughout; both are documented.
+- `read_phase` and `read_frequency` take the unit of a time column from its
+  name in the line that `header` skips, as `read_data` does, so a column
+  named MJD is read in days at any step; `sigmatau timescale --value-cols`
+  reads a table with named columns without `--header`, and its read errors
+  name the CLI flags.
 
 ### Security
 
