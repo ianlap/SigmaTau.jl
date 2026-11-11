@@ -95,7 +95,7 @@ using SigmaTau
         using Random
         known = (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM)
 
-        # Lag-1 estimates outside the labelled range clamp to the nearest end.
+        # Lag-1 estimates outside the labeled range clamp to the nearest end.
         # White PM scatters above α = 2.5 on some realizations, and
         # random-run FM (α = -4) lands below the Allan family's floor of -2;
         # both used to come back :unknown.

@@ -22,7 +22,7 @@ struct _GapRecord
     tau0::Float64
 end
 
-# Full vectorised passes: on a gap-free record, the usual case, `any`/`all`
+# Full vectorized passes: on a gap-free record, the usual case, `any`/`all`
 # scan the whole record anyway, one element at a time and about 5× slower.
 _anynan(v) = mapreduce(isnan, |, v; init=false)
 _allfinite(v) = mapreduce(isfinite, &, v; init=true)

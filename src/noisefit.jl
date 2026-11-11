@@ -50,7 +50,7 @@ measured σ² less every other component, with the slope fixed and each point
 weighted by its confidence interval, 1/log(hi/lo)². Without intervals the
 points weigh the same. After each change every level is refitted against
 the others until they settle, so the model does not depend on the order the
-components were added in, and a component is not inflated by a neighbour
+components were added in, and a component is not inflated by a neighbor
 that was added after it.
 
 # Examples
