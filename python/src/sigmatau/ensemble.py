@@ -914,8 +914,10 @@ class TimescaleResult:
     the filter for the Kalman scales, where ``x`` is read at the pivot, and
     ``x`` itself for the others.
 
-    The weights of a sample sum to 1. ``"jones_tryon"`` defines none, and its
-    weights are ``nan``. :func:`timescale_phase` gives the scale itself.
+    The weights of a sample sum to 1, or are zero where no clock of the scale
+    is read. ``"jones_tryon"`` defines none, and its weights are ``nan``.
+    Before a clock's first reading its ``x``, ``y`` and ``xhat`` are ``nan``.
+    :func:`timescale_phase` gives the scale itself.
     """
 
     algorithm: str
