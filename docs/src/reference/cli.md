@@ -66,7 +66,8 @@ layouts are read as [`read_data`](@ref) reads them. A table whose first
 line names its columns is read by name, and a unit in the name of the
 column is applied, so `phase_ns` needs no `--scaling`. With `--time-col`,
 `--value-col` or `--header` given, such a table is read by position
-instead, and `--header 1` skips its line of names.
+instead, and `--header 1` skips its line of names. The name of the time
+column still sets its unit, so a column named `MJD` is in days either way.
 
 The program holds every record as phase. It integrates a frequency file of
 ``N`` samples to ``N + 1`` phase samples, and reports that number. A
@@ -448,7 +449,7 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 
 | Option | Meaning |
 |:---|:---|
-| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4` |
+| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4`. In a table with named columns each is read by its number as `--column` reads one by its name, with the unit in its name |
 | `--algorithm ALG` | `at1` (the default), `at2`, `ewfa`, `greenhall`, `jones_tryon` or `stein`, the algorithms of [`timescale`](@ref) |
 | `--wmax W` | largest weight that one clock may take, from 0 to 1. By default 1, which sets no limit |
 | `--steps MODE` | with `at2`, detect frequency steps of the clocks: `best` or `real` |

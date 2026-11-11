@@ -197,6 +197,15 @@ fmt(f) = joinpath(FMT, f)
         @test r.tau0 ≈ 3.0 && r.x ≈ (0:3:27) .* 1e-9
         write(tbl, "MJD,UTC-UTC(k) (ns)\n60000,1\n60005,2\n60010,4\n")
         @test read_data(tbl).x ≈ [1e-9, 2e-9, 4e-9]
+        # read_phase takes the time column by its name in the skipped line,
+        # as read_data does: MJD at any step, or the unit of time it gives.
+        p = read_phase(tbl; header=1)
+        @test p.tau0 == read_data(tbl).tau0 == 432000.0 && start_time(p) == DateTime(2023, 2, 25)
+        write(tbl, "time (ms),phase\n0,1\n250,2\n500,3\n")
+        @test read_phase(tbl; header=1).tau0 == read_data(tbl).tau0 == 0.25
+        # Without a name, whole numbers at such steps stay seconds.
+        write(dat, "60000 1\n60005 2\n60010 4\n")
+        @test read_phase(dat).tau0 == 5.0 && start_time(read_phase(dat)) === nothing
         @test isempty(SigmaTau._time_grid([0.0, 1.0, 0.5])[1])        # not a time axis
         @test isempty(SigmaTau._time_grid([0.0, 1.0, 2.5, 3.5])[1])   # fits no grid
         # A counter log with ISO timestamps.
