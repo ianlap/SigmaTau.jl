@@ -42,7 +42,7 @@ detect_format(table), q.tau0, start_time(q), q.x[1:2]</code></pre><pre class="do
   :outliers      =&gt; Int64[]
   :drift_per_day =&gt; 1.50474e-11</code></pre><p><a href="../../guide/preparing/">Gaps, outliers and drift</a> goes through the preparation of a record. <code>read_phase</code> and <code>read_frequency</code> can also remove a trend and fill the gaps as they read, with the keywords <code>detrend</code> and <code>fillgaps</code>.</p><h2 id="Saving-a-record"><a class="docs-heading-anchor" href="#Saving-a-record">Saving a record</a><a id="Saving-a-record-1"></a><a class="docs-heading-anchor-permalink" href="#Saving-a-record" title="Permalink"></a></h2><p><a href="../../reference/data/#SigmaTau.save"><code>save</code></a> writes a record as text, under comment lines that hold the file it came from, its sample interval and its start time:</p><pre><code class="language-julia hljs">saved = save(joinpath(dir, &quot;pps.txt&quot;), q)
 foreach(println, readlines(saved)[1:6])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"># SigmaTau phase data
-# source: /tmp/jl_M4u3Wb/gpsdo.csv
+# source: /tmp/jl_oTpwHW/gpsdo.csv
 # tau0: 1.0
 # start: 2026-03-01T12:00:00Z
 0.0	-8.63e-10

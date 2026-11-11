@@ -40,6 +40,7 @@ sigmatau analyze clock.dat --bias stable32             # Stable32&#39;s bias con
 sigmatau analyze clock.dat --no-ci                     # deviations alone</code></pre><p><code>--noise</code> and <code>--bias</code> are the keywords <code>noise</code> and <code>correct_bias</code> of the estimators, with <code>exact</code> for <code>true</code> and <code>none</code> for <code>false</code> (<a href="../../explanation/confidence/">Confidence intervals</a>, <a href="../../explanation/bias/">Bias correction</a>). The intervals are at 68.3 % unless <code>--confidence</code> says otherwise.</p><h2 id="Other-analyses"><a class="docs-heading-anchor" href="#Other-analyses">Other analyses</a><a id="Other-analyses-1"></a><a class="docs-heading-anchor-permalink" href="#Other-analyses" title="Permalink"></a></h2><pre><code class="language-bash hljs">sigmatau spectrum clock.dat --nperseg 4096             # S_y(f) and S_x(f)
 sigmatau dynamic clock.dat --dev dhdev --window 4096   # deviation in a sliding window
 sigmatau drift ocxo.dat --freq --model log             # a model of frequency drift
+sigmatau drift clock.dat --method bisection            # a linear drift by the three-point fit
 sigmatau holdover gpsdo.dat --train 86400 --limit 1e-6 # time error without a reference
 sigmatau steer maser.dat --time-constant 86400         # the record steered to its reference
 sigmatau cross a.dat --with b.dat                      # one device, two channels
