@@ -1,4 +1,5 @@
-"""Equivalent degrees of freedom, confidence intervals and bias factors.
+"""Equivalent degrees of freedom, confidence intervals, bias factors and the
+bias functions for samples with dead time.
 
 The estimators use these for the interval they report. The functions take the
 pieces of a ``StabilityResult`` (deviations, noise types, averaging factors and
@@ -112,4 +113,65 @@ def bias_correction(
     )
 
 
-__all__ = ["calculate_edf", "confidence_intervals", "bias_correction"]
+def _mu(mu: float | str):
+    """``mu`` for Julia: the exponent as a float, or a noise type as a Symbol."""
+    return jl.Symbol(mu) if isinstance(mu, str) else float(mu)
+
+
+def _count(n: float) -> int | float:
+    """A sample count for Julia: an int, or ``inf`` kept as a float."""
+    return float(n) if n == float("inf") else int(n)
+
+
+@_map_errors
+def bias_b1(n: float, r: float, mu: float | str) -> float:
+    """Barnes's bias function B1(N, r, μ): the expected ``n``-sample variance of
+    frequency averages over their expected two-sample variance (NBS TN 375,
+    Eq. (8); NIST TN 1318, Eq. (11)).
+
+    The averages are over τ and start every T = ``r``·τ, so that ``r`` > 1 is
+    dead time, on noise whose Allan variance goes as τ^μ. ``n`` is an integer
+    ≥ 2, or ``math.inf`` for the limit of a long record (infinite for μ ≥ 0).
+    ``mu`` is the exponent, from −2 to 2, or a noise type: ``"WHPM"`` and
+    ``"FLPM"`` (μ = −2), ``"WHFM"`` (−1), ``"FLFM"`` (0) or ``"RWFM"`` (1).
+    At μ = −2 the function is that of white PM.
+    """
+    return float(jl.bias_b1(_count(n), float(r), _mu(mu)))
+
+
+@_map_errors
+def bias_b2(r: float, mu: float | str) -> float:
+    """Barnes's bias function B2(r, μ): the expected two-sample variance of
+    frequency averages with dead time over the Allan variance at the same
+    averaging time (NBS TN 375, Eq. (10); NIST TN 1318, Eq. (12)).
+
+    ``r`` ≥ 0 is the ratio T/τ of the measurement period to the averaging
+    time, and ``mu`` the exponent or noise type, as in :func:`bias_b1`.
+    """
+    return float(jl.bias_b2(float(r), _mu(mu)))
+
+
+@_map_errors
+def bias_b3(n: int, m: int, r: float, mu: float | str) -> float:
+    """Barnes and Allan's bias function B3(N, M, r, μ): the expected ``n``-sample
+    variance of averages of ``m`` measurements, with the dead time spread among
+    them, over that of single measurements ``m`` times as long with the dead
+    time at the end (NIST TN 1318, Eqs. (7) and (13)).
+
+    B2(r, μ)·B3(2, M, r, μ) is the ratio of the two-sample variance of
+    M-averages of dead-time data to the Allan variance at τ = M·τ₀, which
+    :func:`adev` divides by under ``dead_time``. The reference gives the
+    expression for ``n`` = 2; for more samples the function evaluates the
+    definition by the same steps. ``r`` and ``mu`` are as in :func:`bias_b1`.
+    """
+    return float(jl.bias_b3(int(n), int(m), float(r), _mu(mu)))
+
+
+__all__ = [
+    "calculate_edf",
+    "confidence_intervals",
+    "bias_correction",
+    "bias_b1",
+    "bias_b2",
+    "bias_b3",
+]

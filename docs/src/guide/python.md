@@ -86,6 +86,7 @@ st.deviation("mhtotdev", p)                 # any estimator by name
 st.psd_y(p)                                 # spectrum of fractional frequency
 st.drift_fit(p).rate                        # frequency drift, per day
 st.mask_check(st.mtie(p), "G8262_opt1").passed
+st.bias_b2(36, "FLFM")                      # dead-time bias function B2(r, μ)
 
 fit = st.powerlaw_fit(p)                    # power-law model of the noise
 model = st.clock_model(fit)                 # clock model with those levels
