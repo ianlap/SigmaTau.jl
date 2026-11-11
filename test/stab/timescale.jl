@@ -24,6 +24,7 @@ using Statistics
     @test adev1(at) < sqrt(q[1])                            # better than the best clock
     @test all(sum(at.weights; dims=2) .≈ 1)
     @test timescale_phase(at).x ≈ at.x[:, 3] .- cc.x[:, 3]   # the same through any clock
+    @test at.xhat === at.x                                  # no filter state apart from the scale's own phases
     ex = timescale(cc; bias=:exact)                         # exact for independent errors
     @test wlate(ex) ≈ wopt rtol=0.02
     # The paper's constants: m from τ_min (eq. 10), per clock.
@@ -182,15 +183,24 @@ using Statistics
         @test maximum(abs, jt.y .- rk.y) < 1e-3 * std(rk.y[late, 1])   # frequency estimates agree (Theorem 1)
         @test timescale_phase(timescale(cc; algorithm=:jones_tryon, models=ms, pivot=3)).x ≈ timescale_phase(jt).x atol=1e-12
         @test adev1(rk) < adev1(jt) < 1.6 * adev1(rk)             # the reduction quiets the scale at short τ
-        # The implicit mean of the true phases: the readout at R = 0, quieter than it with white PM.
-        cq, tq = simulate_ensemble(ms, 5000; reference=0, rng=MersenneTwister(9))
-        rq = timescale(cq; algorithm=:greenhall, models=ms)
-        dsum = PhaseData(timescale_phase(rq).x .+ implicit_mean(rq, tq).x, 1.0)    # equal up to sign and a frequency offset
-        @test adev(dsum, [1, 10, 100]; ci=false).dev[1] < 1e-3 * adev(timescale_phase(rq), [1]; ci=false).dev[1]
-        cn, tn = simulate_ensemble(mix, 5000; reference=0, rng=MersenneTwister(9))
-        rn = timescale(cn; algorithm=:greenhall, models=mix)
-        @test adev(implicit_mean(rn, tn), [1]; ci=false).dev[1] < 0.8 * adev(timescale_phase(rn), [1]; ci=false).dev[1]
-        @test_throws ArgumentError implicit_mean(timescale(cc), tq)
+        # Greenhall 2006 §7: clocks 1 and 2 read without noise, clock 3 with noise of
+        # variance 10. The implicit mean is Σ aᵢ(xᵢ − x̂ᵢ) (3.13). The corrected clocks
+        # stay about it with the variances printed in §9.1, and its ADEV is the theory
+        # of §9.2 (the paper's Fig. 3), evaluated here at τ = 1 and 8.
+        g7 = [ClockModel(; tau0=1.0, R, q1, q2) for (R, q1, q2) in ((0.0, 4.0, 0.37), (0.0, 25.0, 0.031), (10.0, 4.0, 0.37))]
+        c7, t7 = simulate_ensemble(g7, 20000; reference=0, rng=MersenneTwister(9))
+        r7 = timescale(c7; algorithm=:greenhall, models=g7)
+        iem = implicit_mean(r7, t7)
+        @test vec(mean(abs2, t7[:, 1, :] .- r7.xhat .- iem.x; dims=1)) ≈ [1.101, 1.101, 2.31] rtol=0.08
+        @test adev(iem, [1, 8]; ci=false).dev ≈ [1.405, 0.844] rtol=0.05
+        @test r7.xhat[:, 1] ≈ r7.x[:, 1]                       # the pivot is read at its own estimate
+        # Without reading noise the corrected clocks agree: the readout is the mean, reversed.
+        g0 = [ClockModel(; tau0=1.0, q1=m.q1, q2=m.q2) for m in g7]
+        c0, t0 = simulate_ensemble(g0, 5000; reference=0, rng=MersenneTwister(9))
+        r0 = timescale(c0; algorithm=:greenhall, models=g0)
+        @test implicit_mean(r0, t0).x ≈ -timescale_phase(r0).x
+        @test r0.xhat ≈ r0.x
+        @test_throws ArgumentError implicit_mean(timescale(cc), t0)
         a1 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix)).x
         a2 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix, pivot=2)).x
         @test 1e-13 < std(a1 .- a2) < 3e-12                    # about the readings' noise, √R = 1e-12 s
@@ -200,6 +210,7 @@ using Statistics
         # Stein 2003 eqs 4.1–7.3: weights ∝ 1/variance of the matching noise (Levine 2012 §XVI).
         st = timescale(cc; algorithm=:stein, models=ms)
         @test st.algorithm === :stein
+        @test st.xhat[2:end, :] ≈ st.x[2:end, :]              # noiseless readings: the estimate is the readout, past the start
         @test vec(mean(st.weights[late, :]; dims=1)) ≈ wopt rtol=1e-12
         @test adev1(st) ≈ sqrt(sum(wopt .^ 2 .* q)) rtol=0.05
         # The same optimum as Greenhall's reduced Kalman scale, to a few percent at every τ.
