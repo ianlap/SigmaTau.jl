@@ -40,8 +40,9 @@ juliac --output-exe sigmatau --bundle cli/build --trim=safe --experimental cli
 cli/build/bin/sigmatau version
 ```
 
-Without a build, `julia --project=cli -m SigmaTauCLI analyze clock.dat`
-runs the same commands, at the cost of Julia's start-up on each call.
+Without a build, the same Julia runs the commands as
+`julia --project=cli -m SigmaTauCLI analyze clock.dat`, at the cost of its
+start-up on each call.
 
 ## A first analysis
 
@@ -205,8 +206,9 @@ sigmatau analyze clock.dat --format json |
 The exit code is 0 on success, 1 for a mistake in the command line, 2 for
 a file that cannot be read, 3 for a record that the analysis cannot use and
 4 for output that cannot be written. An error prints one line on standard
-error, and with `--format json` also an object with `error` and `exit_code`
-on standard output, so that a program reading the output always gets JSON.
+error, and with `--format json` a command that fails also writes an object
+with `error` and `exit_code` on standard output. A word that is no command,
+or a `--format` that is neither of the two, gets the line alone.
 
 ## Shell completion
 

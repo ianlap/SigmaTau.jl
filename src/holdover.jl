@@ -208,8 +208,9 @@ the reading it would be compared with or, when anchored, its last reading.
 - `grow`: the stretch as a multiple of each holdover time, in place of
   `train`; 2 or more, and 3 or more with `drift`.
 - `tau`: holdover times in seconds, rising whole multiples of τ₀. By
-  default the octave multiples of τ₀ up to `train`, and with `grow` those
-  that leave half the record as trials.
+  default the octave multiples of τ₀ up to `train`, or to half of what the
+  record has left after the stretch where that is less, and with `grow`
+  those that leave half the record as trials.
 - `drift`: fit a parabola, which learns a frequency drift. Under a line, a
   drift ``D`` leaves a mean error that grows as ``\\tfrac{1}{2} D τ (τ + T)``
   for a stretch of ``T`` seconds.

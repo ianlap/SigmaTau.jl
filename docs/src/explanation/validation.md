@@ -218,7 +218,7 @@ within 0.1 % of it.
 `correct_bias = :published` is lower by a factor 2.4. The Allan deviation
 is ``3.14 × 10^{-3}`` at 1024 s and ``4.61 × 10^{-3}`` at 2048 s. The
 default values continue it, and those of `:published` do not: its 68.3 %
-interval at 1536 s, ``[1.35, 2.59] × 10^{-3}``, lies below both.
+interval at 1536 s, ``[1.32, 2.83] × 10^{-3}``, lies below both.
 
 The cause is the range over which the ratio is averaged. `:published`
 follows [Howe (2006), Eq. (6)](@cite howe-2006-theoh) and averages it up
