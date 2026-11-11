@@ -74,7 +74,7 @@ using RecipesBase
                       get(sd.plotattributes, :seriestype, nothing) === :path3d]
 
         big = PhaseData(cumsum(randn(2048)) .* 1e-9, 1.0)
-        res = dadev(big, [1, 2, 4]; window=128, step=512)   # 4 windows ⇒ labelled
+        res = dadev(big, [1, 2, 4]; window=128, step=512)   # 4 windows ⇒ labeled
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), res)   # default rendering
         cs = curves(rd)
         @test length(cs) == length(res.t) == 4        # one line per window
@@ -85,7 +85,7 @@ using RecipesBase
         @test all(cs[i].args[1] ≈ log10.(res.tau) && all(cs[i].args[2] .== res.t[i]) &&
                   cs[i].args[3] ≈ log10.(res.dev[i, :]) for i in eachindex(cs))
         @test [pa[:label] for pa in attrs] == ["t = $(round(t; sigdigits=4)) s" for t in res.t]
-        # Decade ticks are integers labelled 1e<k> (TeX-safe in the docs build).
+        # Decade ticks are integers labeled 1e<k> (TeX-safe in the docs build).
         @test all(all(t -> t == round(t), pa[k][1]) && all(startswith.(pa[k][2], "1e"))
                   for pa in attrs, k in (:xticks, :zticks))
 

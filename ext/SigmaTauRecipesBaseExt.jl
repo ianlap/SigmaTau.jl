@@ -100,7 +100,7 @@ end
 # Dynamic deviation (DADEV / DHDEV) in the SP1065 presentation: one σ(τ)
 # curve per window time, stacked along the time axis as 3-D lines. Plots'
 # 3-D axes do not support log scales, so log10(τ) and log10(σ) are the
-# plotted coordinates and the decade ticks are labelled in plain-text
+# plotted coordinates and the decade ticks are labeled in plain-text
 # `1e<k>` form. Non-positive and NaN cells (windows that cannot support the
 # averaging factor) map to NaN and terminate the curve.
 @recipe function f(res::DynamicStabilityResult)
