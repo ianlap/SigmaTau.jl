@@ -70,6 +70,21 @@ def test_flicker_states_match_julia(jl):
         st.timescale(cc, algorithm="stein", models=fitted)
 
 
+def test_clock_model_of_a_fit_matches_julia(jl):
+    # The flicker states stop at the longest τ of the fit, not at the 10⁶ τ₀ of a bare model.
+    p = st.noise_gen(st.PhaseData, 4096, 1.0, h={0: 1e-24, -1: 1.6e-26}, rng=1)
+    fit = st.powerlaw_fit(p)
+    m = st.clock_model(fit)
+    direct = jl.clock_model(jl.powerlaw_fit(_convert.to_jl_data(p)))
+    assert m.fm_band == tuple(direct.fm_band) and 1 < m.fm_band[1] <= fit.x.max()
+    np.testing.assert_array_equal(st.process_noise(m, 1.0), np.array(jl.process_noise(direct, 1.0)))
+    # A fit of spectrum points has no sample interval of its own.
+    points = st.powerlaw_fit([1e-3, 1e-2, 1e-1], [3e-24, 2.1e-24, 2.01e-24], alphas=(0, -1))
+    assert st.clock_model(points, tau0=1.0).q1 == pytest.approx(1e-24)
+    with pytest.raises(ValueError):
+        st.clock_model(points)
+
+
 def test_noise_fit_builds_and_undoes():
     r = st.adev(st.noise_gen(st.PhaseData, 4096, 1.0, h={0: 1e-24}, rng=3))
     f = st.noise_fit(r).add_component("WHFM", slice(0, 6))

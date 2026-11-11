@@ -20,6 +20,7 @@ from ._convert import (
     data_from_jl,
     np_f64,
     powerlaw_to_jl,
+    powerlawfit_to_jl,
     result_to_jl,
     to_jl_data,
     to_jl_f64,
@@ -152,7 +153,8 @@ def clock_model(
     ``"stein"`` time scale needs such a model.
 
     ``fit`` is a ``PowerLawFit``, a ``NoiseFit`` or an ``{α: h_α}`` mapping (with
-    ``tau0``).
+    ``tau0``). ``tau_max`` defaults to the longest τ of a ``PowerLawFit`` of a
+    deviation, and to 10⁶ τ₀ otherwise.
     """
     kw: dict[str, Any] = {"flicker": bool(flicker)}
     if drift is not None:
@@ -161,11 +163,14 @@ def clock_model(
         kw["tau_max"] = float(tau_max)
     if isinstance(fit, NoiseFit):
         return _model_from_jl(jl.clock_model(fit._jl, **kw))
+    if tau0 is not None:
+        kw["tau0"] = float(tau0)
+    if isinstance(fit, PowerLawFit) and np.isfinite(fit.tau0):
+        # As Julia's own type, so that `tau_max` defaults to the longest τ of the fit.
+        return _model_from_jl(jl.clock_model(powerlawfit_to_jl(fit), **kw))
     if tau0 is None:
-        if not isinstance(fit, PowerLawFit):
-            raise ValueError("clock_model: pass `tau0`, the sample interval in seconds")
-        tau0 = fit.tau0
-    return _model_from_jl(jl.clock_model(powerlaw_to_jl(fit), tau0=float(tau0), **kw))
+        raise ValueError("clock_model: pass `tau0`, the sample interval in seconds")
+    return _model_from_jl(jl.clock_model(powerlaw_to_jl(fit), **kw))
 
 
 @_map_errors
