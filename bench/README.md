@@ -1,68 +1,90 @@
 # Benchmarks
 
-Three scripts time the same deviation kernels, on the same samples and the
-same τ grid, in SigmaTau, in [allantools](https://github.com/aewallin/allantools)
-and in [AllanDeviations.jl](https://github.com/JulienKluge/AllanDeviations.jl).
+Three scripts time the same estimators, on the same samples and the same
+averaging factors, in SigmaTau.jl, in
+[allantools](https://github.com/aewallin/allantools) and in
+[AllanDeviations.jl](https://github.com/JulienKluge/AllanDeviations.jl).
+
+## Running them
 
 ```bash
-# synthetic record (default)
-julia --project=. -t auto bench/bench_sigmatau.jl 25000      # writes results/input_25000.txt, sigmatau_25000.json
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
+julia --project=. -t auto bench/bench_sigmatau.jl 25000
 pip install allantools
-python bench/bench_allantools.py 25000                       # writes allantools_25000.json, prints the tables
+python bench/bench_allantools.py 25000
+```
 
-# a phase record from a file (last column = phase, sampled at --tau0 seconds)
-julia --project=. -t auto bench/bench_sigmatau.jl --input path/to/phase.txt --tau0 1 --tag measured
-python bench/bench_allantools.py --input path/to/phase.txt --tau0 1 --tag measured
+`bench_sigmatau.jl` draws a record of 25 000 phase samples, times
+SigmaTau.jl on it, and writes the record to `bench/results/input_25000.txt`
+and the timings to `bench/results/sigmatau_25000.json`.
+`bench_allantools.py` times allantools on that record, writes
+`bench/results/allantools_25000.json` and prints the tables of this page as
+Markdown. The two JSON files in the repository hold the timings of the
+tables below, and a run replaces them.
 
-# AllanDeviations.jl on the record SigmaTau wrote (run before bench_allantools.py,
-# which then adds its column; it has no mtotdev or htotdev)
+```bash
+# AllanDeviations.jl, run between the two, adds its columns to the first table
 julia --project=tools/validation/allandeviations -e 'using Pkg; Pkg.instantiate()'
 julia --project=tools/validation/allandeviations bench/bench_allandeviations.jl 25000
-julia --project=tools/validation/allandeviations bench/bench_allandeviations.jl --tag measured
 
-# reprint the tables from saved JSON without timing
+# a phase record of your own: the last column of each line, sampled at --tau0 seconds
+julia --project=. -t auto bench/bench_sigmatau.jl --input phase.txt --tau0 1 --tag mine
+python bench/bench_allantools.py --input phase.txt --tau0 1 --tag mine
+
+# the tables again, from the saved timings
 python bench/bench_allantools.py 25000 --report-only
 ```
 
+A first argument other than `25000` sets the length of the record, and all
+three scripts take it. `bench_sigmatau.jl` takes the largest averaging
+factor as a second argument, 512 by default, and the other two read the
+factors from its file.
+
 ## Method
 
-Both libraries get the same phase samples, τ₀ = 1 s and the octave grid
-`m = 1, 2, 4, …, 512`, with one call per kernel over the whole grid.
-SigmaTau is called with `ci=false` and raw (uncorrected) totals, so both sides
-compute the same statistic. Every kernel is compiled (Julia) or imported
-(Python) and called once before timing. SigmaTau runs with `-t auto`.
-allantools is single-threaded numpy, since it has no parallel path.
+Every library gets the same phase samples at τ₀ = 1 s and the averaging
+factors 1, 2, 4, …, 512, and computes all ten in one call. `adev` and
+`hdev` are the overlapping estimators, `oadev` and `ohdev` in allantools.
 
-- **Synthetic record**: N = 25 000 white-PM phase samples from one fixed seed
-  (`Xoshiro(20260601)`); this is the same record on every run. Each SigmaTau
-  kernel is timed as the minimum of 20 calls (3 for mtotdev and htotdev).
-  Each allantools kernel is timed as the minimum of 5 calls (a single call for
-  mtotdev and htotdev, which take about two minutes each). The whole pair of
-  scripts was run three times. The table reports the run with the smallest
-  summed SigmaTau time, as one whole run with no kernels mixed across runs.
-- **Measured record**: a 406 763-sample phase record at τ₀ = 1 s (not in the
-  repository), timed with `--input`, one timed call per kernel in each library.
-- **End-to-end default call**: the same synthetic run also times SigmaTau's
-  default call once per kernel (`ci=true`, bias-corrected totals: noise
-  identification, EDF and χ² intervals included), after one compiling call.
-  allantools has no counterpart, so its column is the same kernel time as in
-  Table 1.
+- **Record.** `randn(Xoshiro(20260601), N) .* 1e-9`: white PM, the same
+  samples on every run.
+- **Kernels.** SigmaTau.jl is called with `ci=false`, and the total
+  deviations also with `correct_bias=false`. Each library then computes the
+  deviations and nothing else: no noise identification, no bias correction
+  and no confidence interval.
+- **Default call.** `bench_sigmatau.jl` also times each estimator as it is
+  called without keywords. That call identifies the noise at every
+  averaging factor, corrects the bias of the total deviations, and computes
+  the EDF and the confidence intervals. allantools has no call that does
+  this work: the error it returns is the deviation divided by the square
+  root of the number of terms. Its time is the same in both tables.
+- **Threads.** SigmaTau.jl is started with every thread of the machine
+  (`-t auto`), which `totdev`, `mtotdev` and `htotdev` use. Its other four
+  kernels run on one thread, as allantools and AllanDeviations.jl do
+  throughout.
+- **Repeats.** A SigmaTau.jl kernel is called once, so that compilation is
+  not counted, and then timed as the fastest of 20 calls, or of 3 for
+  `mtotdev` and `htotdev`. The default call is timed once, after one call
+  that compiles it. An allantools kernel is timed as the fastest of 5
+  calls, and `mtotdev` and `htotdev`, which take minutes, once. An
+  AllanDeviations.jl kernel is timed as the fastest of 20 calls, after one
+  that compiles it. On a record given with `--input` every kernel is timed
+  once.
+- **Printing.** Times have three significant figures. A speed-up is the
+  ratio of the two times as printed: a whole number from 10 up, and one
+  decimal below.
 
-Times are printed to three significant figures. Each speed-up is the ratio of
-the two times printed on its row, given as a whole number from 10× up and to
-one decimal below 10×. `bench_allantools.py` produces the tables below
-verbatim. The JSON files in `results/` are the raw timings behind Tables 1 to 3.
+## Results
 
-## Recorded results
+Tables 1 and 2 are one run on a workstation with an AMD Ryzen 5 9600X
+(6 cores, 12 threads) under Fedora, otherwise idle: SigmaTau.jl 0.5.0 at
+commit `9c6acb7`, Julia 1.12.6 with 12 threads, Python 3.14.4, numpy 2.4.4
+and allantools 2024.06. The record has 25 000 samples. The two scripts were
+run three times, and the tables are those of the run with the smallest sum
+of SigmaTau.jl times. They have no columns for AllanDeviations.jl, whose
+script was added after the run.
 
-Tables 1 to 3 come from a 6-core / 12-thread AMD Ryzen 5 9600X workstation
-(Fedora, Linux 6.19), SigmaTau 0.5.0, Julia 1.12.6 with `-t auto` = 12
-threads, Python 3.14.4, numpy 2.4.4 and allantools 2024.06. The machine
-was otherwise idle. They were timed on `main` at 9c6acb7, which includes PR #57
-(the detrending pass before the MDEV/MHDEV prefix sums).
-
-**Table 1.** Synthetic record, N = 25 000, one fixed-seed record. Each time is
-the minimum of repeated calls, from the best of three runs (see Method).
+**Table 1.** Kernels.
 
 | Kernel | SigmaTau (12 threads) | allantools | Speed-up |
 |---|---:|---:|---:|
@@ -74,21 +96,8 @@ the minimum of repeated calls, from the best of three runs (see Method).
 | mtotdev | 26.3 ms | 108 s | 4,106× |
 | htotdev | 27.2 ms | 115 s | 4,228× |
 
-**Table 2.** Measured phase record, N = 406 763, one timed call per kernel.
-
-| Kernel | SigmaTau (12 threads) | allantools | Speed-up |
-|---|---:|---:|---:|
-| adev | 277 µs | 8.51 ms | 31× |
-| mdev | 909 µs | 21.2 ms | 23× |
-| hdev | 357 µs | 14.3 ms | 40× |
-| tdev | 599 µs | 20.1 ms | 34× |
-| totdev | 177 µs | 11.4 ms | 64× |
-| mtotdev | 461 ms | 1,810 s | 3,926× |
-| htotdev | 461 ms | 1,926 s | 4,178× |
-
-**Table 3.** End-to-end default call, synthetic record, N = 25 000, same run
-as Table 1. One timed call per kernel. The speed-up divides the allantools
-time by the SigmaTau default-call time.
+**Table 2.** The default call of SigmaTau.jl, against the allantools times
+of Table 1.
 
 | Kernel | SigmaTau kernel-only | SigmaTau default call | allantools | Speed-up (allantools ÷ default call) |
 |---|---:|---:|---:|---:|
@@ -100,36 +109,33 @@ time by the SigmaTau default-call time.
 | mtotdev | 26.3 ms | 26.8 ms | 108 s | 4,030× |
 | htotdev | 27.2 ms | 29.3 ms | 115 s | 3,925× |
 
-The default call adds per-τ noise identification, EDF and χ² intervals (and
-the bias correction for the totals), which the kernel-only ratios in Tables 1
-and 2 leave out. For the five fast kernels that work costs about 50 to 90 µs
-per call at this N. It dominates the default-call time of the five fast kernels and cuts their ratio
-to 2 to 10×. For mtotdev and htotdev the kernel dominates and the
-end-to-end ratio stays in the thousands. allantools returns only a simple
-σ/√n error estimate, with no noise identification or χ² intervals, so Table 3
-compares SigmaTau doing more work against allantools doing less.
+For the first five estimators the noise identification and the intervals
+take 50 to 90 µs, which is more than the kernel takes, and the ratio falls
+to between 2 and 10. For `mtotdev` and `htotdev` the kernel is nearly the
+whole call, and the ratio stays near 4000.
 
-### Earlier re-run: 4-core cloud container
+## Reading the tables
 
-This is an independent run of the earlier version of these scripts on a
-4-core cloud container. It used Julia 1.12.7 with 4 threads, Python 3.13 and
-allantools 2024.06, with N = 25 000 and the minimum of repeats as in Table 1.
-The CPU model and numpy version were not recorded and no JSON was kept. The
-speed-ups were recomputed from the printed times under the rule above.
+**They are for version 0.5.0.** The tables are not timed again at each
+release. Noise identification does more work since that version, and the
+default call of the first five estimators takes about twice as long: about
+0.4 ms on `main` at `7674356`, against about 0.2 ms for version 0.5.0, each
+the fastest of 50 calls on one 4-core machine with Julia 1.11. With the
+allantools times unchanged, the first five ratios of Table 2 would be about
+half of those printed.
 
-| Kernel  | SigmaTau (4 threads) | allantools | Speed-up |
-|---------|---------------------:|-----------:|---------:|
-| adev    | 44 µs    | 480 µs     | 11×      |
-| mdev    | 102 µs   | 1.58 ms    | 15×      |
-| hdev    | 63 µs    | 709 µs     | 11×      |
-| tdev    | 183 µs   | 1.60 ms    | 8.7×     |
-| totdev  | 28 µs    | 2.05 ms    | 73×      |
-| mtotdev | 102 ms   | 167 s      | 1,637×   |
-| htotdev | 96 ms    | 179 s      | 1,865×   |
+**The ratios are those of one machine.** `totdev`, `mtotdev` and `htotdev`
+use every thread in SigmaTau.jl and one in allantools, so their ratios
+change with the number of cores. All the ratios change with the processor
+and with the version of Julia.
 
-The modified-total gap is algorithmic as well as compiled-versus-interpreted.
-allantools evaluates each subsegment's reflection in Python-level loops.
-SigmaTau streams the extension through a per-thread buffer and splits the
-subsegment sum across threads. Absolute times depend on the machine, while
-the ratios are the portable result. Stable32 is validated for numerical
-agreement but is not timed here.
+**The modified totals.** Both libraries do work in proportion to N·m at
+each averaging factor of `mtotdev` and `htotdev`. allantools runs the loop
+over the subsequences, and the loop over the terms of each, in Python.
+SigmaTau.jl compiles both loops, computes half of the terms of a
+subsequence and takes the other half from the mirror symmetry of its
+extension, and divides the subsequences among the threads.
+
+Stable32 is compared for its results, in the
+[validation](https://ianlap.github.io/SigmaTau.jl/dev/explanation/validation/)
+of the package, and is not timed.

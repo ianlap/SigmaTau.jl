@@ -62,7 +62,7 @@ noise_record(a) = PhaseData(_floats(joinpath(FIX, "noise", alpha_file(a))), 1.0)
 phasedat()      = PhaseData(_floats(joinpath(S32, "PHASE.DAT")), 1.0)
 stable32gen()   = PhaseData(_floats(joinpath(FIX, "stable32gen.DAT"); header_end=true), 1.0)
 
-"NBS 1000-point frequency set (SP1065 §12.3): Lehmer LCG, seed 1234567890."
+"Frequency data of the 1000-point test suite (SP1065 §12.4, Eq. (73)): Lehmer LCG, seed 1234567890."
 function nbs14_frequency()
     n = Vector{Int}(undef, 1000)
     n[1] = 1234567890
@@ -377,7 +377,7 @@ function stable32_flickerpm_rows()
     return rows
 end
 
-# ── NBS 1000-point published values (SP1065 §12.3; allantools nbs14 test) ──
+# ── 1000-point test suite, published values (SP1065 §12.4, Table 31; allantools nbs14 test) ──
 
 # (estimator, call, m values, values, note). m = τ/τ0 on the frequency record.
 const NBS14_TABLE = [
@@ -386,20 +386,20 @@ const NBS14_TABLE = [
     ("tdev",    (d, m) -> tdev(d, m; ci=false),   [1, 10, 100], [1.687202e-01, 3.563623e-01, 1.253382e+00], ""),
     ("ohdev",   (d, m) -> hdev(d, m; ci=false),   [1, 10, 100], [2.943883e-01, 9.581083e-02, 3.237638e-02], ""),
     ("totdev",  (d, m) -> totdev(d, m; correct_bias=false), [1, 10, 100], [2.922319e-01, 9.134743e-02, 3.406530e-02],
-        "published values are raw; the set is white FM by construction (B = 1)"),
+        "published values are uncorrected; the record is white FM by construction (B = 1)"),
     ("htotdev", (d, m) -> htotdev(d, m; correct_bias=false).dev ./ [mm == 1 ? 1.0 : sqrt(0.995) for mm in m],
         [1, 10, 100], [2.943883e-01, 9.614787e-02, 3.058103e-02],
-        "published values carry the white-FM TotHvar bias (B = 0.995) above m = 1; the set is white FM by construction"),
+        "published values carry the white FM factor (B = 0.995) above m = 1; the record is white FM by construction"),
     ("mtotdev", (d, m) -> mtotdev(d, m; correct_bias=false), [1, 10, 100], [2.0664e-01, 5.5529e-02, 1.9547e-02],
-        "Stable32 1.60 raw run (SP1065 Table 31's 2.418528e-01 is the Stable32 1.53 algorithm)"),
+        "Stable32 1.60, uncorrected (SP1065 Table 31 lists the values divided by √0.73)"),
     ("ttotdev", (d, m) -> ttotdev(d, m; correct_bias=false), [1, 10, 100], [1.1930e-01, 3.2060e-01, 1.1285e+00],
-        "Stable32 1.60 raw run"),
+        "Stable32 1.60, uncorrected"),
     ("theo1",   (d, m) -> theo1(d, m; ci=false, correct_bias=false), [10, 100, 1000], [1.0757e-01, 3.1789e-02, 5.0524e-03],
-        "Stable32 raw Thêo1 at AF = m (τ = 0.75 m)"),
+        "Stable32, uncorrected Thêo1 at AF = m (τ = 0.75 m)"),
     ("pdev",    (d, m) -> pdev(d, m; ci=false),   [1, 2, 4, 8, 16, 32, 64, 128, 256],
         [2.9223187810675200e-01, 2.1445233564252639e-01, 1.5618112158618463e-01, 1.1709745745448434e-01,
          6.9029585189839343e-02, 4.9749707730398392e-02, 3.8947417330713739e-02, 3.0862392741372108e-02,
-         1.2447414341332683e-02], "SigmaTheta Pdev"),
+         1.2447414341332683e-02], "SigmaTheta 3.0 PDev, from the allantools test"),
 ]
 
 function nbs14_rows()
@@ -410,7 +410,7 @@ function nbs14_rows()
         got = res isa StabilityResult ? res.dev : res
         tol = est == "pdev" ? 1e-11 : (length(note) > 0 && occursin("1.60", note)) || est == "theo1" ? 1e-4 : 2e-6
         for (m, v, g) in zip(ms, vals, got)
-            push!(rows, Row("NBS 1000-point", "NBS14", est, m, v, g, tol, note))
+            push!(rows, Row("1000-point test suite", "NBS14", est, m, v, g, tol, note))
         end
     end
     return rows

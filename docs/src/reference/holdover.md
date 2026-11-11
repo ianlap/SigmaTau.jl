@@ -123,7 +123,7 @@ was too short to learn the slow noise.
 ## Holdover and the time deviation
 
 The time variance is the mean square of an error of the same kind. With x̄
-the phase averaged over τ, the definitions of Mod σ_y(τ) and σ_x(τ)
+the phase averaged over τ, the definitions of Mod σ\_y(τ) and σ\_x(τ)
 [ieee1139-1999-definitions](@cite) (eqs A.22 and A.23) give
 
 ```math

@@ -15,10 +15,10 @@ per sample. Without drift, d and ξ₃ are dropped.
 ## From the h_α
 
 Each drive gives one power law in the one-sided spectrum
-S_y(f) = Σ h_α f^α. White FM is ξ₁ itself, so h₀ = 2q₁. Random-walk FM is
-ξ₂ integrated once, S_y = 2q₂/(2πf)², so h₋₂ = q₂/2π². Random-run FM is ξ₃
+S\_y(f) = Σ h\_α f^α. White FM is ξ₁ itself, so h₀ = 2q₁. Random-walk FM is
+ξ₂ integrated once, S\_y = 2q₂/(2πf)², so h₋₂ = q₂/2π². Random-run FM is ξ₃
 integrated twice, so h₋₄ = q₃/8π⁴. White PM sampled every τ₀ has
-S_x = 2τ₀R up to f_h = 1/2τ₀, so h₂ = 8π²τ₀R. [`clock_model`](@ref) inverts
+S\_x = 2τ₀R up to f\_h = 1/2τ₀, so h₂ = 8π²τ₀R. [`clock_model`](@ref) inverts
 these:
 
 | noise | α | model |

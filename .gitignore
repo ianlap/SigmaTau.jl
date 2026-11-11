@@ -12,8 +12,8 @@ docs/src/explanation/crosscheck.md
 # Tool run outputs
 tools/artifacts/
 
-# Benchmark outputs (the timing JSONs are tracked as provenance; the input
-# sample files are not, as the measured record is not public)
+# Benchmark outputs: the timing JSONs are tracked, and the sample files that
+# the scripts write beside them are not
 bench/results/*
 !bench/results/
 !bench/results/*.json
