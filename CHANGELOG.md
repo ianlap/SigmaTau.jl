@@ -132,6 +132,12 @@ Clock models, the Kalman filter and timescales.
   from every sample past the training stretch; `HoldoverResult.claimed` is
   the filter's own standard deviation for that error, to set beside the
   measured RMS (Python too).
+- `sigmatau holdover --kalman` and a "Predicted by" choice on the explorer's
+  Holdover page: the holdover test with a Kalman filter as the predictor, on
+  a clock model fitted to the first training stretch alone, with the error
+  the filter itself claims (`claimed`) beside the one measured. The CSV
+  gains a trailing `claimed` column, empty without `--kalman`, so its header
+  changes for existing readers.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
