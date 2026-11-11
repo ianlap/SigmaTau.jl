@@ -72,6 +72,7 @@ makedocs(
             "Noise identification" => "explanation/noise_identification.md",
             "Confidence intervals" => "explanation/confidence.md",
             "Bias correction" => "explanation/bias.md",
+            "Dead time" => "explanation/dead_time.md",
             "Total estimators on PM noise" => "explanation/total_pm.md",
             "MHTOTDEV bias and EDF" => "explanation/mhtotdev.md",
             "The Hadamard time deviation" => "explanation/htdev.md",

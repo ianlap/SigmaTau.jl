@@ -90,12 +90,19 @@ def adev(
     overlapping: bool = True,
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
+    dead_time: float = 0.0,
 ) -> StabilityResult:
     """Overlapping Allan deviation σ_y(τ) (IEEE Std 1139-2022, Eq. (A.23); SP1065 §5.2.4).
 
     ``overlapping=False`` gives the non-overlapped estimator of SP1065 §5.2.2
     (Stable32's Normal Allan deviation, allantools' ``adev``), which needs a
     record without gaps.
+
+    ``dead_time`` is for a ``FrequencyData`` record whose samples each average
+    over ``tau0`` and start every ``tau0 + dead_time`` seconds. The deviation
+    is then divided by √(B2·B3) of :func:`bias_b2` and :func:`bias_b3`, which
+    gives σ_y(m·τ₀) (SP1065 §5.15). ``noise`` has to state the noise type, and
+    the record must have no gaps. No other estimator takes it.
     """
     return _run(
         jl.adev,
@@ -105,6 +112,7 @@ def adev(
         overlapping=overlapping,
         noise=_noise(noise),
         confidence=float(confidence),
+        dead_time=float(dead_time),
     )
 
 
@@ -444,13 +452,15 @@ def deviation(
     correct_bias: bool | str = True,
     remove_drift: bool = True,
     noise: str | Sequence[str] | PowerLawFit = "auto",
+    dead_time: float = 0.0,
 ) -> StabilityResult:
     """Run the estimator called ``name``, any name from :func:`estimators`.
 
     ``correct_bias`` reaches the total estimators and ``theo1``, and
     ``remove_drift`` the Hadamard family. Each is ignored elsewhere, so one
-    call serves every estimator. The non-overlapped forms are reached through
-    :func:`adev` and :func:`hdev`.
+    call serves every estimator. A ``dead_time`` other than zero is an error
+    for any estimator but ``"adev"``. The non-overlapped forms are reached
+    through :func:`adev` and :func:`hdev`.
     """
     return result_from_jl(
         jl.deviation(
@@ -462,6 +472,7 @@ def deviation(
             correct_bias=_bias(correct_bias),
             remove_drift=bool(remove_drift),
             noise=_noise(noise),
+            dead_time=float(dead_time),
         )
     )
 

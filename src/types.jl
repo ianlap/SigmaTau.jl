@@ -75,7 +75,8 @@ the uniform sample interval `tau0`
 ([IEEE Std 1139-2022, 3.1](@cite ieee1139-2022-definitions)). Each sample
 is taken as the average over its interval, with no dead time. Every
 estimator accepts the record and integrates it to phase before the
-analysis.
+analysis. For averages with dead time between them, give [`adev`](@ref) the
+averaging time as `tau0` and the gap as `dead_time`.
 
 Like [`PhaseData`](@ref), the record takes any real vector, marks a missing
 sample with `NaN`, holds at least two samples and supports `length`.

@@ -89,7 +89,7 @@ end
 
 """
     adev(data, m_values; ci=true, overlapping=true, noise=:auto,
-         confidence=DEFAULT_CONFIDENCE) → StabilityResult
+         confidence=DEFAULT_CONFIDENCE, dead_time=0) → StabilityResult
 
 Overlapping Allan deviation ``σ_y(τ)`` (ADEV), the standard time-domain
 measure of frequency stability.
@@ -137,6 +137,16 @@ and fewer degrees of freedom.
   clock: the test reads each ``τ`` on its own, and a slow periodic or
   wandering term can mislead it where few averaged points remain.
 - `confidence=DEFAULT_CONFIDENCE`: confidence level of the interval.
+- `dead_time=0`: for a [`FrequencyData`](@ref) record whose samples each
+  average over `tau0` and start every `tau0 + dead_time` seconds, the time
+  not measured between one sample and the next. The deviation of the
+  ``m``-sample averages is then divided by
+  ``\\sqrt{B_2(r, μ)\\,B_3(2, m, r, μ)}``, with ``r`` the ratio of
+  `tau0 + dead_time` to `tau0`, which gives ``σ_y(mτ_0)``
+  ([SP1065 §5.15](@cite riley-2008-sp1065); [`bias_b2`](@ref),
+  [`bias_b3`](@ref)). The factor depends on the noise type, which `noise`
+  has to state, and the record must have no gaps. `adev` alone takes this
+  keyword (see [Dead time](@ref)).
 
 Missing samples (`NaN`) are skipped: a term counts when every sample it
 reads was measured, and the EDF follows the number of terms summed (see
@@ -160,7 +170,8 @@ julia> round.(r.dev; sigdigits=4)
  0.0
 ```
 """
-function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, overlapping::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE)
+function adev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, overlapping::Bool=true, noise::_NoiseChoice=:auto, confidence::Float64=DEFAULT_CONFIDENCE, dead_time::Real=0)
+    dead_time == 0 || throw(ArgumentError("adev: dead_time applies to frequency data; phase samples have no dead time"))
     _has_gaps(data) && return _gap_result(:adev, _gap_record(data), m_values; ci=ci, overlapping=overlapping, noise=noise, confidence=confidence)
     _check_m(:adev, m_values)
     x = _f64(data.x)
