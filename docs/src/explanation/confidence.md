@@ -85,7 +85,7 @@ deviation 6. Thêo1 has 19 at 768 s and 8 at 1536 s.
 | `mtotdev`, `ttotdev` | ``(T/τ)/(b_0 + b_1 τ/T)`` from ``τ = 16τ_0``, the EDF of `mdev` below | [Howe and Peppler (2001), Table 2](@cite howe-2001-total-estimators) |
 | `htotdev` | the same form on the FM noises; a model of this package on PM noise | [Howe et al. (2005), Table I](@cite howe-2005-tothvar); [Total estimators on PM noise](@ref) |
 | `mhtotdev` | a model of this package | [MHTOTDEV bias and EDF](@ref) |
-| `theo1`, `theoh` | empirical formulas; `theoh` takes the EDF of `adev` below its crossover | [SP1065 §5.2.15, Table 3](@cite riley-2008-sp1065) |
+| `theo1`, `theoh` | empirical formulas, not taken below 1 and, with the bias removed, reduced on FM noise for the scatter of the bias ratio (a model of this package, below); `theoh` takes the EDF of `adev` below its crossover | [SP1065 §5.2.15, Table 3](@cite riley-2008-sp1065) |
 | `pdev` | approximation for white PM to random-walk FM | [Vernotte et al. (2021)](@cite vernotte-2021-pvar-noninteger) |
 | `mtie`, `tierms` | none: no interval | |
 
@@ -118,7 +118,7 @@ variance of all the records.
 | `mtotdev` | 66 to 78 % | 65 to 78 % |
 | `htotdev` | 65 to 82 % | 58 to 78 % |
 | `mhtotdev` | 65 to 77 % | 65 to 77 % |
-| `theo1` on FM noise | 15 to 55 % up to ``τ = T/10``, 53 to 83 % from ``T/5`` | 15 to 50 % up to ``τ = T/10``, 51 to 65 % from ``T/5`` |
+| `theo1` on FM noise | 66 to 86 % | 63 to 84 % |
 
 The first row is for records of 8192 points at 4 to 128 averaged points,
 1000 records per noise type. The others are for 1024 points, from
@@ -142,21 +142,49 @@ the interval of the Allan and Hadamard deviations is several times wider
 than it need be ([Noise identification](noise_identification.md) has the
 label accuracy behind this).
 
-The interval of [`theo1`](@ref) is that of Thêo1 before its bias is
-removed. The bias ratio of ThêoBR is an estimate too, with a scatter of 26
-to 32 % in variance on FM noise at every record length tried, from 256 to
-16 384 points, and the EDF does not include it. The interval is therefore
-too narrow, most of all at short averaging times, where the EDF is large.
-With the automatic label on FM noise it held the true value in 15 to 30 %
-of the records at ``9τ_0`` and ``12τ_0``, in 34 to 50 % at ``48τ_0`` and
-``96τ_0``, and in 51 to 65 % from a fifth of the record, where
-[`theoh`](@ref) uses ThêoBR. With `correct_bias = :published`, whose ratio
-scatters less, the shares were 45 to 56 %, 53 to 60 % and 57 to 80 %. On
-random-walk FM the EDF formula falls below 1 beyond ``0.42\,T`` and
-below zero beyond ``0.63\,T``: the upper limit of the interval grows
-without bound, and where the EDF is negative `theo1` gives no interval. On
-PM noise, and on a record whose noise type changes with averaging time,
-ThêoBR is biased, which no interval repairs ([Bias correction](bias.md)).
+The interval of [`theo1`](@ref) carries the scatter of its bias ratio.
+[Howe (2006), §6](@cite howe-2006-theoh) and
+[SP1065 §5.4.4](@cite riley-2008-sp1065) give ThêoBR the EDF of Thêo1,
+which takes the ratio as exact. The ratio is an estimate too, with a
+scatter of 26 to 32 % in variance on FM noise at every record length tried,
+from 256 to 16 384 points, and one draw multiplies every averaging time.
+With the EDF of Thêo1 and the automatic label the interval held the true
+value in 15 to 30 % of the FM records at ``9τ_0`` and ``12τ_0``, in 34 to
+50 % at ``48τ_0`` and ``96τ_0``, and in 51 to 65 % from a fifth of the
+record, where [`theoh`](@ref) uses ThêoBR.
+
+SigmaTau therefore gives ThêoBR an EDF of its own on white, flicker and
+random-walk FM. It takes the ratio ``R`` and Thêo1 as jointly lognormal:
+with ``c`` the relative scatter of ``R``, ``ν`` the EDF of Thêo1 and ``ρ``
+the correlation of the two on the log scale,
+
+```math
+s_R^2 = \ln(1 + c^2), \qquad s_T^2 = \ln(1 + 2/ν), \qquad
+\mathrm{EDF} = \frac{2}{\exp(s_R^2 + s_T^2 + 2ρ\,s_R s_T) - 1} .
+```
+
+``c`` and ``ρ`` are measured in simulation for each of the three noise
+types and each ratio (`tools/theobr_edf.jl`): ``c`` is 0.30, 0.28 and 0.26
+by default and 0.105, 0.088 and 0.074 with `correct_bias = :published`,
+somewhat more below 256 points, and ``ρ`` rises from zero at short
+averaging times to 0.77 to 0.89 near half the record. At short averaging
+times the EDF is then near ``2/c^2``, 22 to 30, whatever Thêo1 has, and
+from a fifth of the record it is 0.4 to 0.8 of that of Thêo1. The model is
+this package's own. It sits up to about 20 % below the EDF measured on
+simulated white and flicker FM, and down to half of it on random-walk FM
+beyond ``0.3\,T``, so it errs toward a wide interval. The share for `theo1` in
+the table is with this EDF; with `correct_bias = :published` it was 63 to
+82 % with the automatic label, and at the two ThêoBR points of an octave
+[`theoh`](@ref) run 68 to 85 %. The deviations are those of the published
+ThêoBR.
+
+On random-walk FM the published EDF formula of Thêo1 falls below 1 beyond
+``0.42\,T`` and below zero beyond ``0.63\,T``. No quadratic statistic has
+an EDF below 1, and [Howe (2006), Eq. (8)](@cite howe-2006-theoh) takes
+the EDF as at least 1, so the value used is never smaller. On PM noise,
+and at short averaging times on a record whose noise type changes further
+out, ThêoBR is biased, which no interval repairs
+([Bias correction](bias.md)).
 
 ## What the interval leaves out
 

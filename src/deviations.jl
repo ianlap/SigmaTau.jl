@@ -978,9 +978,30 @@ the factor 0.75, which the white-FM bias of 1 in its Table 2 requires.
   [SP1065 Table 2](@cite riley-2008-sp1065). It is 1 for white FM, so
   `correct_bias=false` matches a Stable32 run made for white FM. This
   package has no option for the tabulated bias of the other noise types.
-- `ci`, `noise`, `confidence`: as in [`adev`](@ref). The EDF is that of the
-  empirical formulas of [SP1065 Table 3](@cite riley-2008-sp1065), with or
-  without the correction.
+- `ci`, `noise`, `confidence`: as in [`adev`](@ref). Uncorrected Thêo1
+  takes the EDF of the empirical formulas of
+  [SP1065 Table 3](@cite riley-2008-sp1065). With the correction, the EDF on
+  white, flicker and random-walk FM also carries the scatter of the ratio
+  (see the note below).
+
+!!! note "Interval of the corrected estimate"
+    [Howe (2006), §6](@cite howe-2006-theoh) and
+    [SP1065 §5.4.4](@cite riley-2008-sp1065) give ThêoBR the EDF of Thêo1,
+    which takes the ratio as exact. The ratio is estimated from the same
+    record. On FM noise of one type it scattered by 26 to 30 % in simulation
+    (7 to 11 % under `correct_bias=:published`), at every record length from
+    128 to 8192 samples, and one draw multiplies every ``τ``. With the
+    published EDF the 68.3 % interval then held the true value in 15 to 31 %
+    of records at ``τ ≤ 12τ_0`` and in 51 to 62 % beyond a fifth of the
+    record (``N = 1024``). This package therefore models the ratio and Thêo1
+    as jointly lognormal, with the scatter of the ratio and its correlation
+    with Thêo1 measured in simulation; the same intervals then held the true
+    value in 63 to 86 % of records, the higher figures at long ``τ``, where
+    a χ² interval is wider than the distribution of Thêo1
+    ([Howe (2006), §6](@cite howe-2006-theoh)). The model is this package's
+    own. It does not cover white and flicker PM, where the error is the bias
+    that one ratio leaves and the interval can miss the true value at most
+    ``τ``.
 
 !!! note "Length of the ThêoBR average"
     SP1065 Eq. (33), the Stable32 manual and IEEE Std 1139-2022 Eq. (A.37)
@@ -1026,7 +1047,8 @@ function theo1(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_bi
 
     noises = noise === :auto ? identify_noise(x, m_values, dmin=0, dmax=2) :
                                _stated_noises(noise, :adev, taus, data.tau0)
-    edfs = calculate_edf(:theo1, devs, noises, m_values, taus, N, T)
+    edfs = mode == :none ? calculate_edf(:theo1, devs, noises, m_values, taus, N, T) :
+                           _theobr_edfs(noises, m_values, N; howe=mode == :published)
     lower, upper = confidence_intervals(devs, edfs, confidence)
 
     return _result(data, confidence, :theo1, taus, devs, noises, _zip_ci(lower, upper), edfs, neff)
@@ -1052,9 +1074,10 @@ time ``mτ_0`` and is computed according to its place in the record of length
   differ from ``mτ_0`` by one rounding step.
 
 The crossover at 20 % of the record is that of SP1065. Howe (2006) places it
-at 10 %. The interval uses the EDF of ADEV below the crossover and of Thêo1
-above it. The bias removal is always applied, with the default ratio of
-`theo1`, and needs ``N ≥ 19``. For uncorrected Thêo1, or for the ratio of
+at 10 %. The interval uses the EDF of ADEV below the crossover and of
+ThêoBR above it, which on FM noise is smaller than that of Thêo1 (see
+[`theo1`](@ref)). The bias removal is always applied, with the default ratio
+of `theo1`, and needs ``N ≥ 19``. For uncorrected Thêo1, or for the ratio of
 a Stable32 ThêoH run, call `theo1` with `correct_bias=false` or
 `correct_bias=:stable32`.
 
@@ -1096,7 +1119,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, noise::_No
         return _result(data, confidence, :theoh, taus, devs, Symbol[], _CIBound[], Float64[], neff)
     end
 
-    # Per-segment noise ID and EDF: ADEV EDF below the crossover, Thêo1
+    # Per-segment noise ID and EDF: ADEV EDF below the crossover, ThêoBR
     # EDF above, merged back into request order.
     noises = noise === :auto ? fill(:WHFM, n_pts) : _stated_noises(noise, :adev, taus, tau0)
     edfs = fill(NaN, n_pts)
@@ -1107,8 +1130,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, noise::_No
     end
     if !isempty(theo_idx)
         noise === :auto && (noises[theo_idx] = identify_noise(x, theo_ms, dmin=0, dmax=2))
-        edfs[theo_idx] = calculate_edf(:theo1, theo_devs, noises[theo_idx], theo_ms,
-                                       taus[theo_idx], N, T)
+        edfs[theo_idx] = _theobr_edfs(noises[theo_idx], theo_ms, N)
     end
     lower, upper = confidence_intervals(devs, edfs, confidence)
 

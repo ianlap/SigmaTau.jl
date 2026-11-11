@@ -9,7 +9,7 @@
 
 using Random
 using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
-                _theo1_edf, _neff_counts, _f64
+                _theo1_edf, _theobr_edf, _neff_counts, _f64
 
 @testset "Theo1 / ThêoBR / ThêoH" begin
 
@@ -199,6 +199,37 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         @test _theo1_edf(0, 64, 1024) ≈ expected
         # Theo1's selling point: more EDF than ADEV at the same effective τ.
         @test _theo1_edf(0, 64, 1024) > 0
+    end
+
+    @testset "EDF of the corrected estimate" begin
+        # The model by hand for white FM at m = 256, N = 1024 (τ = 0.1875 T):
+        # c = 0.30, ρ between its values at 0.15 T and 0.2 T.
+        ν = _theo1_edf(0, 256, 1024)
+        sR = log1p(0.30^2 * (1 + (55 / 1024)^1.5)); sT = log1p(2 / ν)
+        ρ = 0.15 + (0.27 - 0.15) * (0.1875 - 0.15) / 0.05
+        @test _theobr_edf(0, 256, 1024) ≈ 2 / expm1(sR + sT + 2ρ * sqrt(sR * sT))
+        # At short τ the ratio sets the EDF, near 2/c², whatever Thêo1 has.
+        @test 19 < _theobr_edf(0, 12, 4096) < 2 / 0.30^2 < _theobr_edf(0, 12, 4096; howe=true) < _theo1_edf(0, 12, 4096)
+        # PM keeps the EDF of Thêo1.
+        @test _theobr_edf(2, 64, 1024) == _theo1_edf(2, 64, 1024)
+        # SP1065's random-walk FM formula is negative at this τ; the EDF stays at 1.
+        @test _theo1_edf(-2, 900, 1024) == 1.0
+
+        # Each bias mode takes the EDF of its own ratio, and ThêoH that of ThêoBR.
+        N = 256; ms = [12, 128]
+        p = noise_gen(PhaseData, N, 1.0; h = Dict(0 => 1.0), rng = Xoshiro(11))
+        edf(mode) = theo1(p, ms; noise = :WHFM, correct_bias = mode).edf
+        @test edf(true) == edf(:stable32) == _theobr_edf.(0, ms, N) ==
+              calculate_edf(:theobr, [1.0, 1.0], [:WHFM, :WHFM], ms, 0.75 .* ms, N, N - 1.0)
+        @test edf(:published) == _theobr_edf.(0, ms, N; howe = true)
+        @test edf(false) == _theo1_edf.(0, ms, N)
+        @test theoh(p, [96]; noise = :WHFM).edf == [_theobr_edf(0, 128, N)]
+
+        # Measured on 2000 white FM records as 2·mean²/var of the corrected
+        # variance. The model is on the low side: 21 other seed sets gave 1.01
+        # to 1.28 times it, where Thêo1's own EDF is 5.8 and 2.6 times it.
+        V = reduce(vcat, (theo1(noise_gen(PhaseData, N, 1.0; h = Dict(0 => 1.0), rng = Xoshiro(s)), ms; ci = false).dev' .^ 2 for s in 1:2000))
+        @test all(0.9 .< 2 .* vec(mean(V, dims = 1)) .^ 2 ./ vec(var(V, dims = 1)) ./ edf(true) .< 1.4)
     end
 
     @testset "dispatch chains and suite integration" begin
