@@ -32,6 +32,7 @@ function run_command(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt
     c == "holdover" && return cmd_holdover(io, o, data, t_start)
     c == "steer"    && return cmd_steer(io, o, data, t_start)
     c == "timescale" && return cmd_timescale(io, o, data, t_start)
+    c == "hat"      && return cmd_hat(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
 
@@ -588,7 +589,7 @@ end
 
 # Each --value-cols column read like FILE, with the same options.
 function read_ensemble(o::Options)
-    isempty(o.value_cols) && throw(usage_error("timescale needs --value-cols with two or more columns, or --synth"))
+    isempty(o.value_cols) && throw(usage_error(o.command * " needs --value-cols with two or more columns, or --synth"))
     col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
     records = PhaseData{Float64}[]
     try
@@ -690,5 +691,105 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
         print(io, "]}")
     end
     print(io, '}')
+    return elapsed(io, t_start)
+end
+
+# ── hat ───────────────────────────────────────────────────────────────────
+
+const CSV_HAT = "clock,deviation,tau,dev,ci_lower,ci_upper,edf,neff"
+
+# The difference record of every pair of clocks, in one triangle of a matrix,
+# with the clocks' names. Clocks read against one reference: the pairs'
+# differences, and the reference as one more clock unless --no-reference says
+# otherwise; simulated clocks have a perfect reference, which is no clock.
+# With --pairs the three columns are A−B, B−C and C−A as measured.
+function hat_records(o::Options)
+    cc = o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
+    k = size(cc.x, 2)
+    if o.pairs
+        o.synth > 0 && throw(usage_error("--pairs goes with a FILE"))
+        k == 3 && o.reference || throw(usage_error("--pairs takes three columns, A−B, B−C and C−A, and no --no-reference"))
+        records = Matrix{PhaseData{Float64}}(undef, 3, 3)
+        records[1, 2] = cc[1]; records[2, 3] = cc[2]; records[3, 1] = cc[3]
+        return records, ["A", "B", "C"]
+    end
+    reference = o.reference && o.synth <= 0
+    k + reference >= 3 || throw(usage_error(o.synth > 0 ? "hat needs three or more simulated clocks (--clocks): their reference is perfect and counts as none" :
+                                                           "--no-reference needs three or more clocks"))
+    records = SigmaTau._hat_records(cc, reference, "hat")
+    return records, size(records, 1) > k ? [cc.names; "reference"] : cc.names
+end
+
+hat_record(records::Matrix{PhaseData{Float64}}, i::Int, j::Int) =
+    isassigned(records, i, j) ? records[i, j] : records[j, i]
+
+function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
+    covariance = o.method != "hat"
+    for d in o.devs
+        String(d) in HAT_DEVS || throw(usage_error("hat separates " * join(HAT_DEVS, ", ") * "; got " * String(d)))
+        covariance && d !== :adev && throw(usage_error("--method " * o.method * " gives ADEV; leave --devs out"))
+    end
+    records, names = hat_records(o)
+    k = length(names)
+    o.method == "klts" && k != 3 && throw(usage_error("--method klts is for three clocks; these are " * string(k)))
+    N, τ₀ = length(records[1, 2].x), records[1, 2].tau0
+    N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a hat needs at least 16 samples"))
+    o.method == "klts" && any(any(isnan, hat_record(records, i, j).x) for i in 1:k for j in i+1:k) &&
+        throw(CLIError(EXIT_ANALYSIS, "the KLTS interval needs records without gaps; fill them with --fillgaps"))
+    mode = tau_mode(o.grid)
+    pairs = Vector{StabilityResult}[]      # per deviation: every pair as measured, i < j
+    clocks = Vector{StabilityResult}[]     # per deviation: every clock, separated
+    for d in o.devs
+        ms = isempty(o.m) ? tau_values(mode, N, d) : o.m
+        measured = Matrix{StabilityResult}(undef, k, k)
+        for i in 1:k, j in i+1:k
+            measured[i, j] = run_deviation(d, hat_record(records, i, j), ms, o, false, :auto)
+        end
+        push!(pairs, StabilityResult[measured[i, j] for i in 1:k for j in i+1:k])
+        push!(clocks, !covariance ? ncornered_hat(measured) :
+                      groslambert(records, ms; confidence=o.confidence, interval=o.method == "klts" ? :klts : :chi2))
+    end
+    if o.format != "json"
+        print(io, CSV_HAT); print(io, '\n')
+        for rs in clocks, (c, r) in enumerate(rs), i in eachindex(r.tau)
+            csv_field(io, names[c]); print(io, ','); print(io, String(r.deviation_type)); print(io, ',')
+            csv_number(io, r.tau[i]); print(io, ','); csv_number(io, r.dev[i]); print(io, ',')
+            csv_number(io, r.ci[i].lo); print(io, ','); csv_number(io, r.ci[i].hi); print(io, ',')
+            csv_number(io, r.edf[i]); print(io, ','); print(io, r.neff[i]); print(io, '\n')
+        end
+        return nothing
+    end
+    json_head(io, o, o.synth > 0 ? "synthetic" : o.input)
+    json_key(io, "hat"); print(io, '{')
+    json_key(io, "method", true); json_string(io, covariance ? "groslambert" : "hat")
+    json_key(io, "interval"); json_string(io, o.method == "klts" ? "klts" : "chi2")
+    json_key(io, "layout"); json_string(io, o.pairs ? "pairs" : "reference")
+    json_key(io, "tau0"); json_number(io, τ₀)
+    json_key(io, "n"); print(io, N)
+    json_key(io, "confidence"); json_number(io, o.confidence)
+    json_key(io, "clocks"); json_array(io, names)
+    json_key(io, "pairs"); print(io, '[')
+    for i in 1:k, j in i+1:k
+        (i, j) == (1, 2) || print(io, ',')
+        json_array(io, [i, j])
+    end
+    print(io, ']')
+    json_key(io, "results"); print(io, '[')
+    for q in eachindex(o.devs)
+        q > 1 && print(io, ',')
+        e = registry_entry(o.devs[q])
+        print(io, '{')
+        json_key(io, "deviation", true); json_string(io, String(e.name))
+        for (key, rs) in (("clocks", clocks[q]), ("pairs", pairs[q]))
+            json_key(io, key); print(io, '[')
+            for (c, r) in enumerate(rs)
+                c > 1 && print(io, ',')
+                json_result(io, r, e.label, String(e.axis))
+            end
+            print(io, ']')
+        end
+        print(io, '}')
+    end
+    print(io, "]}")
     return elapsed(io, t_start)
 end
