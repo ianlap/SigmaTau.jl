@@ -237,6 +237,7 @@ def dynamic_from_jl(r: Any) -> DynamicStabilityResult:
 def driftfit_from_jl(f: Any) -> DriftFit:
     return DriftFit(
         model=str(f.model),
+        method=str(f.method),
         coef=np_f64(f.coef),
         stderr=np_f64(f.stderr),
         rate=float(f.rate),
@@ -245,6 +246,22 @@ def driftfit_from_jl(f: Any) -> DriftFit:
         y=np_f64(f.y),
         fit=np_f64(f.fit),
         rms=float(f.rms),
+    )
+
+
+def driftfit_to_jl(f: DriftFit) -> Any:
+    """Python ``DriftFit`` → Julia (for ``detrend``)."""
+    return jl.DriftFit(
+        jl.Symbol(f.model),
+        jl.Symbol(f.method),
+        to_jl_f64(f.coef),
+        to_jl_f64(f.stderr),
+        float(f.rate),
+        float(f.rate_stderr),
+        to_jl_f64(f.t),
+        to_jl_f64(f.y),
+        to_jl_f64(f.fit),
+        float(f.rms),
     )
 
 
