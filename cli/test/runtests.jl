@@ -390,6 +390,24 @@ mktempdir() do dir
         r = run_cli("holdover", hf, "--train", "512", "--fit-drift", "--no-anchor", "--limit", "1", "--fit", "--format", "json")
         @test r.code == 0 && occursin("\"drift\":true,\"anchor\":false,\"confidence\":0.95", r.out)
         @test occursin("\"limit\":1.0,\"time_to_limit\":null,\"predicted\":{\"alphas\":[2,1,0,-1,-2]", r.out)
+        # A stretch twice each holdover time, beside √6 TDEV at the same τ.
+        g = holdover(p; grow=2, tau=[1, 16, 256])
+        rows = csv_rows(run_cli("holdover", hf, "--grow", "2", "--tau", "1,16,256").out)
+        @test parse.(Float64, getindex.(rows, 2)) == 2 .* g.tau && parse.(Float64, getindex.(rows, 4)) ≈ g.rms
+        r = run_cli("holdover", hf, "--grow", "2", "--tau", "1,16,256", "--fit", "--format", "json")
+        @test occursin("\"train\":null,\"grow\":2,", r.out) && occursin("\"predicted\":{\"alphas\"", r.out)
+        @test parse.(Float64, split(match(r"\"reference\":\[([^\]]*)\]", r.out)[1], ',')) ≈ sqrt(6) .* tdev(p, [1, 16, 256]; ci=false).dev
+        @test run_cli("holdover", hf, "--grow", "2", "--train", "512").code == 1
+        @test run_cli("holdover", hf, "--grow", "2", "--fit-drift").code == 1
+        # A Kalman filter as the predictor, its model learned on the first stretch alone.
+        m = clock_model(powerlaw_fit(PhaseData(p.x[1:512], 1.0)))
+        k = holdover(p, m; train=512, tau=[16, 64, 256])
+        rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--tau", "16,64,256", "--kalman").out)
+        @test parse.(Float64, getindex.(rows, 4)) ≈ k.rms && parse.(Float64, getindex.(rows, 11)) ≈ k.claimed
+        r = run_cli("holdover", hf, "--train", "512", "--kalman", "--format", "json")
+        @test r.code == 0 && occursin("\"claimed\":[", r.out) && occursin("\"model\":{\"R\":", r.out)
+        @test run_cli("holdover", hf, "--kalman", "--no-anchor").code == 1
+        @test run_cli("holdover", hf, "--kalman", "--grow", "2").code == 1
         @test run_cli("holdover", hf, "--train", "0.5").code == 3
         @test run_cli("holdover", hf, "--limit", "-1").code == 1
         @test run_cli("holdover", hf, "--fit").code == 1                           # CSV has no room for it
@@ -746,6 +764,8 @@ mktempdir() do dir
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],
                          ["holdover", pf, "--train", "64", "--limit", "1e-9", "--fit", "--format", "json"],
+                         ["holdover", pf, "--grow", "3", "--fit-drift", "--fit", "--format", "json"],
+                         ["holdover", pf, "--train", "512", "--kalman", "--format", "json"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],

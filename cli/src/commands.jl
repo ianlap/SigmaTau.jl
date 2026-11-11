@@ -312,15 +312,16 @@ end
 
 # ── holdover ──────────────────────────────────────────────────────────────
 
-const CSV_HOLDOVER = "source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit"
+const CSV_HOLDOVER = "source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit,claimed"
 
 # The error the power-law model fitted to the record predicts for the same
 # test, and each noise type's share of its variance.
 function json_holdover_fit(io::IO, data::PhaseData, h::HoldoverResult)
     p = try
         pf = powerlaw_fit(data)
-        holdover(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=Float64(data.tau0), train=h.train, tau=h.tau,
-                 drift=h.drift, anchor=h.anchor, limit=isnan(h.limit) ? nothing : h.limit, confidence=h.confidence)
+        hα, τ₀, limit = Dict{Int,Float64}(zip(pf.alphas, pf.h)), Float64(data.tau0), isnan(h.limit) ? nothing : h.limit
+        h.grow > 0 ? holdover(hα; tau0=τ₀, grow=h.grow, tau=h.tau, drift=h.drift, anchor=h.anchor, limit, confidence=h.confidence) :
+                     holdover(hα; tau0=τ₀, train=h.train, tau=h.tau, drift=h.drift, anchor=h.anchor, limit, confidence=h.confidence)
     catch err
         err isa ArgumentError || rethrow()
         print(io, '{'); json_key(io, "error", true); json_string(io, error_message(err)); print(io, '}')
@@ -342,22 +343,45 @@ function json_holdover_fit(io::IO, data::PhaseData, h::HoldoverResult)
     return nothing
 end
 
+# The error of the same extrapolation made from τ-averages of the phase, two
+# for a line and three for a parabola: √6 TDEV and √20 HTDEV by definition.
+# NaN past the τ the record gives them.
+function holdover_reference(data::PhaseData, h::HoldoverResult)
+    ms = Int[round(Int, t / data.tau0) for t in h.tau]
+    return h.drift ? sqrt(20.0) .* htdev(data, ms; ci=false).dev : sqrt(6.0) .* tdev(data, ms; ci=false).dev
+end
+
+# The clock model of a Kalman predictor: the power-law fit to the first
+# training stretch alone, so no trial is predicted with noise levels learned
+# from the readings it is compared with.
+function holdover_model(data::PhaseData, train::Float64, drift::Bool)
+    τ₀ = Float64(data.tau0)
+    b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
+    pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
+    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift)
+end
+
 function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 16, "a holdover test")
     τ₀ = Float64(data.tau0)
     train = isnan(o.train) ? (length(data.x) ÷ 4) * τ₀ : o.train
     limit = isnan(o.limit) ? nothing : o.limit
-    h = holdover(data; train, tau=isempty(o.taus) ? nothing : o.taus, drift=o.fit_drift, anchor=o.anchor,
-                 limit, confidence=o.confidence)
+    tau = isempty(o.taus) ? nothing : o.taus
+    model = o.kalman ? holdover_model(data, train, o.fit_drift) : nothing
+    # One call per predictor and kind of stretch: the trimmed build resolves each on its own.
+    h = model !== nothing ? holdover(data, model; train, tau, limit, confidence=o.confidence) :
+        o.grow > 0 ? holdover(data; grow=o.grow, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence) :
+                     holdover(data; train, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence)
     src = source_name(o, data)
     if o.format != "json"
         print(io, CSV_HOLDOVER); print(io, '\n')
         for i in eachindex(h.tau)
-            csv_field(io, src); print(io, ','); csv_number(io, h.train); print(io, ',')
+            csv_field(io, src); print(io, ','); csv_number(io, h.grow > 0 ? h.grow * h.tau[i] : h.train); print(io, ',')
             csv_number(io, h.tau[i]); print(io, ','); csv_number(io, h.rms[i]); print(io, ',')
             csv_number(io, h.quantile[i]); print(io, ','); csv_number(io, h.worst[i]); print(io, ',')
             csv_number(io, h.mean[i]); print(io, ','); print(io, h.n[i]); print(io, ',')
-            csv_number(io, h.limit); print(io, ','); csv_number(io, h.time_to_limit); print(io, '\n')
+            csv_number(io, h.limit); print(io, ','); csv_number(io, h.time_to_limit); print(io, ',')
+            model === nothing || csv_number(io, h.claimed[i]); print(io, '\n')
         end
         return nothing
     end
@@ -368,6 +392,7 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_preprocessing(io, o); print(io, '}')
     json_key(io, "holdover"); print(io, '{')
     json_key(io, "train", true); json_number(io, h.train)
+    json_key(io, "grow"); print(io, h.grow)
     json_key(io, "drift"); json_bool(io, h.drift)
     json_key(io, "anchor"); json_bool(io, h.anchor)
     json_key(io, "confidence"); json_number(io, h.confidence)
@@ -377,9 +402,19 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "worst"); json_array(io, h.worst)
     json_key(io, "mean"); json_array(io, h.mean)
     json_key(io, "n"); json_array(io, h.n)
+    json_key(io, "reference"); json_array(io, holdover_reference(data, h))
     json_key(io, "limit"); json_number(io, h.limit)
     json_key(io, "time_to_limit"); json_number(io, h.time_to_limit)
     o.fit && (json_key(io, "predicted"); json_holdover_fit(io, data, h))
+    if model !== nothing
+        json_key(io, "claimed"); json_array(io, h.claimed)
+        json_key(io, "model"); print(io, '{')
+        json_key(io, "R", true); json_number(io, model.R)
+        json_key(io, "q1"); json_number(io, model.q1)
+        json_key(io, "q2"); json_number(io, model.q2)
+        json_key(io, "q3"); json_number(io, model.q3)
+        print(io, '}')
+    end
     print(io, '}')
     return elapsed(io, t_start)
 end

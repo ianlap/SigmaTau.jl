@@ -1,6 +1,6 @@
 # holdover.jl — the measured holdover test against the closed-form error
-# variances on a simulated clock, an exact parabola with gaps, and the time
-# to a limit.
+# variances on a simulated clock, an exact parabola with gaps, the time to a
+# limit, and the stretch that grows with τ against TDEV and HTDEV.
 
 using Test
 using SigmaTau
@@ -57,6 +57,25 @@ using Random
         @test_throws ArgumentError holdover(unit; train=Tm)
     end
 
+    @testset "Kalman filter as the predictor" begin
+        k = holdover(p, m; train=2000, tau=τ)
+        @test k.rms ≈ k.claimed rtol=0.05                  # the filter's claim holds on its own model
+        @test all(k.rms .< h.rms)
+        @test k.rms ≈ holdover(p; train=180, tau=τ).rms rtol=0.1    # the line at its best stretch, √(42q1/13q2)
+        @test k.claimed .^ 2 ≈ holdover_error(kalman_filter(p, m), τ) .^ 2 .+ m.R rtol=1e-6
+        @test k.n == 100_000 - 2000 + 1 .- Int.(τ) && !k.anchor
+        low = holdover(p, ClockModel(; tau0=1.0, q1=m.q1 / 100, q2=m.q2 / 100); train=2000, tau=τ)
+        @test all(low.rms .> 5 .* low.claimed)             # a model with too little noise claims too little
+        g = copy(p.x); g[[5000, 5001, 70_000]] .= NaN
+        @test holdover(PhaseData(g, 1.0), m; train=2000, tau=τ).n == k.n .- [3, 3, 3]
+        @test holdover(p, m).train == 25_000 && isempty(h.claimed)
+        # Flicker FM and PM as Markov states: the claim holds there too.
+        fm = ClockModel(; tau0=1.0, R=1e-24, q1=1e-24, flicker_fm=1e-24, flicker_pm=1e-22)
+        f = holdover(simulate_clock(fm, 100_000; rng=MersenneTwister(1))[1], fm; train=2000, tau=τ)
+        @test f.rms ≈ f.claimed rtol=0.05
+        @test_throws ArgumentError holdover(p, m; train=2000, tau=[1e6])
+    end
+
     @testset "drift and gaps" begin
         D, n = 1e-15, 100
         x = 1e-6 .+ 3e-10 .* (0:999) .+ D / 2 .* (0:999) .^ 2
@@ -75,6 +94,25 @@ using Random
         d = holdover(p)
         @test d.train == 25_000 && d.tau == 2.0 .^ (0:14) && d.anchor && !d.drift
         @test occursin("trained on 2.5e+04 s", sprint(show, MIME"text/plain"(), d))
+    end
+
+    @testset "a stretch that grows with tau" begin
+        t = [1.0, 64.0, 1024.0]
+        g = holdover(p; grow=2, tau=t)
+        @test g.rms[2:3] ≈ holdover(m; grow=2, tau=t[2:3]).sigma rtol=0.1
+        # At τ₀ the error is the second difference TVAR is defined on; with a
+        # parabola and three times τ, the third difference of HTVAR.
+        @test g.rms[1] ≈ sqrt(6) * tdev(p, [1]; ci=false).dev[1]
+        @test holdover(p; grow=3, tau=t, drift=true).rms[1] ≈ sqrt(20) * htdev(p, [1]; ci=false).dev[1]
+        # Above τ₀, a constant over √6 TDEV: √(8/5) on white FM, √(452/231) on random-walk FM.
+        σ(α) = holdover(Dict(α => 1.0); tau0=1.0, grow=2, tau=[4096.0]).sigma[1]
+        @test σ(0) ≈ sqrt(8 / 5 * 4096 / 2) rtol=1e-3
+        @test σ(-2) ≈ sqrt(452 / 231 * 11π^2 * 4096.0^3 / 10) rtol=1e-3
+        d = holdover(p; grow=2)
+        @test isnan(d.train) && d.grow == 2 && d.tau == 2.0 .^ (0:14) && occursin("trained on 2 τ", sprint(show, d))
+        @test_throws ArgumentError holdover(p; grow=2, train=T)
+        @test_throws ArgumentError holdover(p; grow=2, drift=true)
+        @test_throws ArgumentError holdover(m; grow=2)
     end
 
     @test_throws ArgumentError holdover(p; train=0.5)

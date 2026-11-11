@@ -58,26 +58,28 @@ _grid_kernel(f::Symbol, kwargs) =
 """
     estimators() → Vector{NamedTuple}
 
-The estimators [`deviation`](@ref) and [`stability`](@ref) know, one entry
-per estimator with fields
+The estimators that [`deviation`](@ref) and [`stability`](@ref) run, one
+entry each, with the fields
 
-- `name::Symbol`: the function name, e.g. `:adev`;
-- `label::String`: the display name, e.g. `"ADEV"`;
-- `family::Symbol`: `:allan`, `:total`, `:theo` or `:time`;
-- `axis::Symbol`: `:sigma_y` (fractional frequency) or `:sigma_x` (seconds);
-- `correct_bias::Bool`: whether the `correct_bias` keyword applies;
+- `name::Symbol`: the function name, such as `:adev`.
+- `label::String`: the display name, such as `"ADEV"`.
+- `family::Symbol`: `:allan`, `:total`, `:theo` or `:time`.
+- `axis::Symbol`: `:sigma_y` (fractional frequency) or `:sigma_x` (seconds).
+- `correct_bias::Bool`: whether the `correct_bias` keyword applies.
 - `description::String`: one line for menus and help.
 
-The dynamic deviations `dadev` / `dhdev` return maps, not σ(τ) curves, and
-are not listed.
+The dynamic deviations [`dadev`](@ref) and [`dhdev`](@ref) return maps over
+time and τ, not σ(τ) curves, and are not listed.
 
 # Examples
 
 ```jldoctest
 julia> using SigmaTau
 
-julia> e = estimators(); e[1]
-(name = :adev, label = "ADEV", family = :allan, axis = :sigma_y, correct_bias = false, description = "Overlapping Allan deviation, the standard")
+julia> e = estimators();
+
+julia> e[1].name, e[1].label, e[1].family, e[1].axis
+(:adev, "ADEV", :allan, :sigma_y)
 
 julia> [x.name for x in e if x.axis === :sigma_x]
 5-element Vector{Symbol}:
@@ -94,17 +96,20 @@ estimators() = collect(_ESTIMATORS)
     deviation(name::Symbol, data, m=Octave; ci=true, confidence=DEFAULT_CONFIDENCE,
               correct_bias=true, remove_drift=true, noise=:auto) → StabilityResult
 
-Run the estimator called `name` (any `name` from [`estimators`](@ref)) on a
-`PhaseData` or `FrequencyData` record. `m` is a [`TauMode`](@ref), resolved
-against the estimator's own m-max, or any integer vector of averaging factors.
-`correct_bias` is passed only to the estimators that take it (the total family
-and `theo1`) and `remove_drift` only to the Hadamard family; `mtie` and `tierms`
-accept `ci` and `confidence` but report no intervals. `noise` states the
-noise type in place of identifying it, as in [`adev`](@ref).
+Run the estimator called `name`, any name from [`estimators`](@ref), on a
+`PhaseData` or `FrequencyData` record. `deviation(:adev, data, m)` is
+`adev(data, m)`; use it when the estimator is chosen at run time, from a
+menu or a command-line option.
 
-`deviation(:adev, pd, m)` is `adev(pd, m)`; use it when the estimator is
-chosen at run time (a menu, a command-line flag, a loop). It is written as
-plain branches, so it compiles under `juliac --trim`.
+`m` is a [`TauMode`](@ref) grid or an integer vector of averaging factors.
+The keywords are those of [`adev`](@ref). `correct_bias` reaches only the
+estimators that take it (the total estimators and `theo1`) and
+`remove_drift` only the Hadamard family. `mtie` and `tierms` accept `ci`
+and `confidence` and report no interval. The non-overlapped forms are
+reached through [`adev`](@ref) and [`hdev`](@ref) directly.
+
+The function is written as plain branches, so it compiles under
+`juliac --trim`.
 
 # Examples
 
@@ -163,10 +168,10 @@ end
 """
     tau_mode(s::AbstractString) → TauMode
 
-Parse a τ-grid name, as typed on a command line or chosen in a menu, into a
-[`TauMode`](@ref). Case and the separator are ignored, so `"half-octave"`,
-`"half_octave"`, `"halfoctave"` and `"HalfOctave"` all give `HalfOctave`;
-`"all"` and `"alltaus"` give `AllTaus`.
+The [`TauMode`](@ref) named by `s`, as typed on a command line or chosen in
+a menu. Case and separators are ignored: `"half-octave"`, `"half_octave"`,
+`"halfoctave"` and `"HalfOctave"` all give `HalfOctave`, and `"all"` or
+`"alltaus"` gives `AllTaus`. Any other name throws an `ArgumentError`.
 
 # Examples
 
@@ -193,16 +198,16 @@ end
     summarize(data::PhaseData) → NamedTuple
     summarize(data::FrequencyData) → NamedTuple
 
-A quick check of a record before analysis, as the explorer's Data page shows
-it:
+A quick look at a record before analysis, as the explorer's Data page
+shows it:
 
-- `n`: number of samples;
-- `tau0`: sample interval in seconds;
-- `span`: `n · tau0`, the record length in seconds;
-- `gaps`: number of `NaN` samples;
-- `outliers`: indices from [`find_outliers`](@ref) at `nsigma = 5`;
+- `n`: number of samples.
+- `tau0`: sample interval, in seconds.
+- `span`: `n·tau0`, in seconds.
+- `gaps`: number of `NaN` samples.
+- `outliers`: the indices [`find_outliers`](@ref) returns at `nsigma = 5`.
 - `drift_per_day`: least-squares slope of the fractional frequency against
-  time, per day (`NaN` with fewer than three finite frequency samples).
+  time, per day; `NaN` with fewer than three finite frequency samples.
 
 # Examples
 

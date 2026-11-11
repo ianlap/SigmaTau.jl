@@ -207,15 +207,18 @@ export function dynamic(clock, signal) {
   ]), signal);
 }
 
-// The holdover test of one clock (training stretch = record / frac), with
-// the error its fitted noise model predicts.
-const holdoverRequest = (clock) => request(clock, "holdover", [
+// The holdover test of one clock (training stretch = record / frac, or with
+// frac 0 as many holdover times as the fit has terms: the test behind TDEV
+// and HTDEV; a Kalman filter trains on a share only), with the error its
+// fitted noise model predicts or the filter claims.
+const holdoverRequest = (clock, frac = state.hold.frac || (state.hold.kalman ? 4 : 0)) => request(clock, "holdover", [
   ...rangeArgs(clock),
-  "--train", Math.max(4, Math.floor(samples(clock) / state.hold.frac)) * clock.record.tau0,
+  ...(frac ? ["--train", Math.max(4, Math.floor(samples(clock) / frac)) * clock.record.tau0]
+    : ["--grow", state.hold.drift ? 3 : 2]),
   ...(state.hold.drift ? ["--fit-drift"] : []),
-  ...(state.hold.anchor ? [] : ["--no-anchor"]),
+  ...(state.hold.kalman ? ["--kalman"] : [...(state.hold.anchor ? [] : ["--no-anchor"]), "--fit"]),
   ...(state.hold.limit ? ["--limit", state.hold.limit] : []),
-  "--confidence", state.hold.confidence, "--fit",
+  "--confidence", state.hold.confidence,
 ]);
 
 // Settings that decide a clock's holdover test; a change means recompute.

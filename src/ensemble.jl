@@ -1,6 +1,6 @@
-# Ensembles of three or more clocks measured against one another: the
-# N-cornered hat and the Groslambert covariance, each separating the pairwise
-# measurements into one deviation per clock, with confidence intervals.
+# Three or more clocks measured against one another: the N-cornered hat and
+# the Groslambert covariance separate the pairwise measurements into one
+# deviation per clock, with a confidence interval.
 
 # Measured pair (i, j) from a possibly part-filled matrix; the transposed
 # entry stands in for it (s²(x_i − x_j) = s²(x_j − x_i)).
@@ -14,50 +14,61 @@ end
     ncornered_hat(pairwise::AbstractMatrix{StabilityResult}) → Vector{StabilityResult}
     ncornered_hat(r_ab, r_bc, r_ca) → Vector{StabilityResult}
 
-N-cornered-hat noise separation (the classic Gray–Allan three-cornered
-hat at `N = 3`; see NIST SP1065 §10.7 [riley-2008-sp1065](@cite)).
-Given the pairwise deviations between every pair of `N ≥ 3` clocks,
-estimates each clock's *individual* deviation under the assumption that
-the clock noises are statistically independent, so the measured pairwise
-variances satisfy `s²ᵢⱼ(τ) = σ²ᵢ(τ) + σ²ⱼ(τ)`.
+Deviation of each of ``N ≥ 3`` clocks from the deviations measured between
+every pair of them: the three-cornered hat of
+[Gray and Allan (1974)](@cite gray-1974-three-cornered-hat), and its
+extension to ``N`` clocks.
 
-With `Rᵢ = Σ_{j≠i} s²ᵢⱼ` (clock `i`'s row sum) and `S = Σ_{j<k} s²ⱼₖ`
-(the sum over all pairs), the separation is
+For independent clocks the variance measured between clocks ``i`` and
+``j`` is ``s_{ij}^2(τ) = σ_i^2(τ) + σ_j^2(τ)``, and the variance of clock
+``i`` follows from the ``N(N-1)/2`` measured ones as
 
 ```math
-\\hat\\sigma^2_i(\\tau) = \\frac{1}{N-2}\\left( R_i - \\frac{S}{N-1} \\right)
+\\hat σ_i^2(τ) = \\frac{1}{N-2} \\left( \\sum_{j \\ne i} s_{ij}^2
+    - \\frac{1}{N-1} \\sum_{j<k} s_{jk}^2 \\right)
 ```
 
-At `N = 3` this is the classic three-cornered hat,
-`σ̂²_A = ½(s²_AB + s²_AC − s²_BC)`.
+([SP1065 §10.14, Eqs. (71) and (72)](@cite riley-2008-sp1065)). For three
+clocks this is
+``\\hat σ_a^2 = \\tfrac{1}{2}(s_{ab}^2 + s_{ac}^2 - s_{bc}^2)``.
 
-`pairwise[i, j]` (for `i < j`; the transposed entry is also accepted, so
-fill either triangle, or both) is the deviation computed on the
-difference record between clocks `i` and `j`. All entries must share the
-same `deviation_type` and the same τ grid; otherwise an `ArgumentError`
-is thrown. The 3-argument convenience form takes the three pairwise
-results in the cyclic order A−B, B−C, C−A and returns `[A, B, C]`
-(the orientation of each difference record does not matter).
+The estimate can be negative for a clock much more stable than the others,
+for clocks that are correlated, and where few terms are averaged, most
+often at long ``τ``; `dev` is `NaN` there. Noise of the instrument that
+measured a pair counts as noise of its two clocks.
+[`groslambert`](@ref) keeps it out, given the difference records.
 
-Returned conventions (one `StabilityResult` per clock, in clock order):
+# Arguments
 
-- `deviation_type` is kept from the inputs.
-- Non-positive variance estimates (common when one clock dominates or
-  the independence assumption fails) are reported as `NaN` in `dev`
-  rather than clamped to zero.
-- When every input carries `edf` (computed with `ci=true`), `edf` and `ci`
-  are filled at the inputs' confidence level. Each pairwise variance is
-  χ² with its own `edf`; two pairs that share clock `c` covary by
-  `2σ_c⁴/√(ν₁ν₂)`. Propagating these through the separation gives the
-  variance of each `σ̂²ᵢ`, reported as the equivalent `edf = 2σ̂⁴ᵢ / Var(σ̂²ᵢ)`
-  (the covariance model of [vernotte-2019-tch-gcov-uncertainty](@cite)).
-  The intervals widen sharply for a clock much quieter than the others, and
-  below 1 EDF, where the χ² model degenerates, none is given (`NaN` bounds).
-- `noise_type` is empty; `neff` is the elementwise minimum over the inputs.
+- `pairwise`: an ``N × N`` matrix whose entry `[i, j]` is the result of an
+  estimator on the difference record of clocks ``i`` and ``j``. One entry
+  per pair is enough, in either triangle. All entries must come from one
+  estimator on one ``τ`` grid. The estimator must be one whose variance
+  adds for independent clocks, such as [`adev`](@ref), [`mdev`](@ref) or
+  [`hdev`](@ref).
+- `r_ab`, `r_bc`, `r_ca`: for three clocks, the results for A−B, B−C and
+  C−A. The sign of each difference does not matter. The clocks are
+  returned in the order A, B, C.
 
-See also [`groslambert`](@ref), which needs the difference records rather
-than their deviations, never goes negative on average, and tolerates noise
-common to two measurement channels.
+# Returns
+
+One [`StabilityResult`](@ref) per clock, of the estimator of the inputs.
+
+- `edf` and `ci` are filled when every input has an EDF, at the confidence
+  level of the inputs. The variance of ``\\hat σ_i^2`` follows from that of
+  each pairwise variance, ``2s_{ij}^4/ν_{ij}``, and from the covariance
+  ``2σ_c^4/\\sqrt{ν_1 ν_2}`` of two pairs that share clock ``c``
+  ([Vernotte and Lantz (2019), Appendix B](@cite vernotte-2019-tch-gcov-uncertainty),
+  with the EDF ``ν`` of each record in place of their number of independent
+  measurements). `edf` is the equivalent
+  ``2\\hat σ_i^4/\\mathrm{Var}(\\hat σ_i^2)``, and `ci` its ``χ^2`` interval.
+  For three clocks with a common EDF this is the loss of degrees of freedom
+  of [SP1065, Eq. (70)](@cite riley-2008-sp1065). The interval is too
+  narrow for a clock that is no longer resolved under the others (see
+  [`groslambert`](@ref)), and none is given below 1 EDF: the limits are
+  `NaN` there.
+- `noise_type` is empty, and `neff` is the smallest of the inputs' at each
+  ``τ``.
 
 # Examples
 
@@ -121,7 +132,11 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
     return results
 end
 
-# Equivalent edf of clock i's separated variance at τ index k.
+# Equivalent EDF of clock i's variance at τ index k, 2σ̂⁴/Var(σ̂²). Var(σ̂²)
+# sums w(p) w(q) Cov(s²_p, s²_q) over the pairs, with Var(s²_p) = 2s⁴_p/ν_p
+# and, for two pairs that share clock c, Cov = 2σ_c⁴/√(ν_p ν_q) (Vernotte and
+# Lantz (2019), Appendix B, with the EDF in place of the number of
+# independent measurements).
 function _nch_edf(i, k, pairs, nbrs, s2, ν, var, w)
     v = var[i, k]
     v > 0 || return NaN
@@ -150,52 +165,99 @@ end
 """
     groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values=Octave;
                 confidence=DEFAULT_CONFIDENCE, interval=:chi2) → Vector{StabilityResult}
-    groslambert(x_ab, x_bc, x_ca, m_values=Octave; confidence, interval) → Vector{StabilityResult}
+    groslambert(x_ab, x_bc, x_ca, m_values=Octave; kwargs...) → Vector{StabilityResult}
 
-Groslambert covariance (Vernotte et al., *IEEE Trans. UFFC* 63, 2016): each
-clock's Allan deviation from the cross Allan variance of two difference
-records that share it. For clock `i` and two others `j`, `k`, the second
-differences of `x_i − x_j` and `x_i − x_k` have only clock `i` in common, so
+Allan deviation of each of ``N ≥ 3`` clocks from the difference records
+between them, by the Groslambert covariance: the cross Allan variance of
+two records that share the clock
+([Vernotte et al. (2016), Eq. (7)](@cite vernotte-2016-gcov), after the
+two-sample cross-variance of
+[Groslambert et al. (1981), Eqs. (12) to (16)](@cite groslambert-1981-crosscorrelations)).
 
-    σ²_i(τ) = ⟨Δ²(x_i − x_j) · Δ²(x_i − x_k)⟩ / (2τ²),
+The second differences of ``x_i - x_j`` and ``x_i - x_k`` have only clock
+``i`` in common, so for independent clocks
 
-averaged over every pair `(j, k)` of the other clocks. Unlike the
-[`ncornered_hat`](@ref) it does not subtract variances, so its estimates
-scatter about the true value rather than turning negative for a clock much
-quieter than the rest, and noise shared by two measurement channels enters
-only the clock both channels see.
+```math
+\\hat σ_i^2(τ) = \\frac{1}{2τ^2} \\left\\langle Δ^2(x_i - x_j)\\; Δ^2(x_i - x_k) \\right\\rangle ,
+\\qquad Δ^2 x_n = x_{n+2m} - 2x_{n+m} + x_n ,
+```
 
-`pairwise[i, j]` is the difference record `x_i − x_j` (`PhaseData` or
-`FrequencyData`, same τ₀ and length throughout); the transposed entry,
-negated, stands in where one is missing. The 3-argument form takes the
-records A−B, B−C, C−A and returns `[A, B, C]`.
+averaged over the record and, with more than three clocks, over every pair
+``(j, k)`` of the others.
 
-Each result is an `:adev` `StabilityResult` with an EDF from the covariance
-model of [vernotte-2019-tch-gcov-uncertainty](@cite): each record's Allan
-variance carries its EDF for the identified noise type
-[greenhall-2003-edf-stability](@cite) (as in [`adev`](@ref)), the products of
-Gaussian second differences give the variance of every covariance estimate in
-closed form, and `edf = 2σ̂⁴/Var(σ̂²)` sets a χ² interval `ci` (none below
-1 EDF, where the χ² model degenerates). A non-positive covariance gives a
-`NaN` estimate.
+On records that close, ``(x_i - x_j) + (x_j - x_k) + (x_k - x_i) = 0``, the
+estimate equals that of [`ncornered_hat`](@ref) on the Allan variances of
+the records. The two differ when each record carries noise of its own,
+such as that of the counter that measured it: that noise biases the hat and
+averages out of the covariance
+([Groslambert et al. (1981), Eqs. (9) and (17) to (19)](@cite groslambert-1981-crosscorrelations);
+[Vernotte et al. (2016), Eqs. (13) and (15)](@cite vernotte-2016-gcov)).
+Like the hat, the estimate can be negative for a clock much more stable
+than the others; `dev` is `NaN` there.
 
-The χ² interval holds for a clock that dominates its two records. For a
-clock quieter than the others it is too narrow once the clock is no longer
-resolved, with its lower bound above the truth: in a Monte Carlo with one
-clock at a third of the others' level, its 95 % interval covered that
-clock's true value 94 % of the time at 10 τ₀ and 60 % at 100 τ₀.
+# Arguments
 
-With three clocks, `interval = :klts` gives the KLTS interval of
-[lantz-2019-klts](@cite) instead: the quantiles of the posterior of the three
-clock variances given the sample covariance of the three records, under a
-log-uniform prior from 10⁻⁵ times the smallest to 10³ times the largest
-estimate, with the measurement noise read from the closure of the records
-and the geometric mean of their EDF. It is given also where the estimate is
-negative, and a lower bound of 0 means the data do not exclude zero (the
-bound would otherwise follow the prior's lower limit). In the same Monte
-Carlo it covered 92 % at 10 τ₀, 86 % at 20 τ₀, where the clock is barely
-resolved and the upper bound follows the prior, and 99–100 % from 50 τ₀ on.
-Each τ costs about 0.1 s.
+- `pairwise`: an ``N × N`` matrix whose entry `[i, j]` is the record
+  ``x_i - x_j``. One entry per pair is enough, in either triangle. The
+  records are all `PhaseData` or all `FrequencyData`, with one sample
+  interval and length and no missing samples.
+- `x_ab`, `x_bc`, `x_ca`: for three clocks, the records A−B, B−C and C−A.
+  The clocks are returned in the order A, B, C.
+- `m_values`: averaging factors, or a [`TauMode`](@ref) grid.
+
+# Keywords
+
+- `confidence=0.683`: confidence level of the interval.
+- `interval=:chi2`: the interval reported, `:chi2` or, for three clocks,
+  `:klts`.
+
+# Returns
+
+One [`StabilityResult`](@ref) of type `:adev` per clock, without noise
+types. `edf` is the equivalent
+``2\\hat σ_i^4/\\mathrm{Var}(\\hat σ_i^2)``. The variance of the estimate is
+that of a mean of products of Gaussian second differences
+([Vernotte and Lantz (2019), Appendix B](@cite vernotte-2019-tch-gcov-uncertainty)).
+Each record's Allan variance enters it, and the geometric mean of the
+records' EDF for their identified noise types stands for the number of
+independent measurements, a choice of this package.
+
+# Confidence intervals
+
+With `interval=:chi2` the interval is the ``χ^2`` interval on `edf`; none
+is given below 1 EDF. It holds for a clock that dominates its records. For
+a clock more stable than the others it becomes too narrow once the clock
+is no longer resolved, and its lower bound then lies above the true value.
+
+With `interval=:klts`, for three clocks, the interval is that of
+[Lantz et al. (2019)](@cite lantz-2019-klts): quantiles of the posterior
+distribution of the three clock variances, given the sample covariance of
+the three records. The prior is uniform in the logarithm of each variance,
+from ``10^{-5}`` times the smallest estimate to ``10^3`` times the largest.
+The noise of the measuring instruments is estimated from the closure of
+the records (their Eq. (9)), and the number of degrees of freedom is the
+geometric mean of the records' EDF. A lower bound that would depend on the
+lower limit of the prior is reported as 0: the record does not exclude
+zero. The interval is given also where the estimate is negative. It is
+computed on a grid in place of the random draws of the paper, in about
+0.1 s for each ``τ``, and agrees within 2 % with the KLTS bounds of
+[SigmaTheta](@cite vernotte-2025-sigmatheta) on the same inputs.
+
+In simulation (4096 samples; a white FM clock beside two clocks two and
+three times noisier, with instrument noise in each record; 400 records),
+the 95 % ``χ^2`` interval covered the true value of the most stable clock
+in 94 % of the records at ``10τ_0``. At ``100τ_0`` four records in ten
+gave a negative estimate, and the interval covered the true value in 60 %
+of the others. The KLTS interval covered it in 92 % of all records at
+``10τ_0``, in 86 % at ``20τ_0``, where the clock is barely resolved and
+the prior draws the upper bound down, and in 99 % or more from ``50τ_0``.
+
+# Examples
+
+```julia
+ab, bc, ca = read_phase("ab.txt"), read_phase("bc.txt"), read_phase("ca.txt")
+a, b, c = groslambert(ab, bc, ca; interval=:klts, confidence=0.95)
+```
 """
 function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::Vector{Int};
                      confidence::Real=DEFAULT_CONFIDENCE, interval::Symbol=:chi2)
@@ -258,8 +320,8 @@ end
 # over `couples` of Ĝ_jk = ⟨z_ij z_ik⟩. For Gaussian records
 # Cov(z_ij z_ik, z_il z_in) = E[z_ij z_il] E[z_ik z_in] + E[z_ij z_in] E[z_ik z_il],
 # where E[z_ij z_il] is record (i, j)'s Allan variance for l = j and clock i's
-# own for l ≠ j; each term is divided by the geometric mean of the EDF of the
-# records involved (Vernotte & Lantz 2019, appendix B).
+# own for l ≠ j (Vernotte and Lantz (2019), Appendix B). Each term is divided
+# by the geometric mean of the EDF of the records involved.
 function _gl_edf(i, q, couples, v, s2, ν)
     v > 0 || return NaN
     e(j, l) = j == l ? s2[i, j][q] : v
@@ -282,10 +344,10 @@ function _sep_chi2_ci(dev, edf, confidence)
     return _zip_ci(lo, hi)
 end
 
-# KLTS intervals [lantz-2019-klts](@cite) for clocks 1, 2, 3 at each τ, from the
+# KLTS intervals (Lantz et al. (2019)) for clocks 1, 2, 3 at each τ, from the
 # sample covariance of the records 1−2, 2−3, 3−1, the measurement noise read
-# from their closure (σ²_N = σ²_closure / 3, eq 9) and the geometric mean of
-# the three records' EDF. A lower bound that depends on the prior is 0.
+# from their closure (σ²_N = σ²_closure / 3, Eq. (9)) and the geometric mean
+# of the three records' EDF. A lower bound that depends on the prior is 0.
 function _gl_klts(x, s2, ν, m_values, τ₀, confidence)
     rec = (x[1, 2], x[2, 3], x[3, 1])
     cls = rec[1] .+ rec[2] .+ rec[3]
