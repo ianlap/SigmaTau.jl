@@ -31,7 +31,7 @@ using Statistics
     @test SigmaTau._filter_constant(1.0, 1.0) ≈ (sqrt(5 / 3) - 1) / 2
     @test SigmaTau._filter_constant(100.0, 1.0) > SigmaTau._filter_constant(10.0, 1.0)
     @test adev1(timescale(cc; tau_min=[50, 200, 200, 200])) ≈ adev1(at) rtol=0.05
-    # A short record where the Groslambert-style start is poor for the best clock.
+    # A short record with random-walk FM: the weights fall with the noise.
     rw = [ClockModel(; tau0=1.0, q1=1e-24 * 4.0^k, q2=1e-30 * 4.0^k) for k in 0:3]
     short, _ = simulate_ensemble(rw, 4096; reference=0, rng=Xoshiro(42))
     @test all(<(0), diff(vec(mean(timescale(short).weights[2048:end, :]; dims=1))))
@@ -78,9 +78,12 @@ using Statistics
         off = timescale(stepped; algorithm=:at2)
         on = timescale(stepped; algorithm=:at2, steps=true)
         # Caught at once, the clock kept out of the scale for τ_min and the scale
-        # rerun from the step: much steadier at long τ than letting the filter adapt.
+        # rerun from the step: much steadier at long τ than letting the filter
+        # adapt (0.06 to 0.14 of it over 20 seeds). τ_min is given there: its
+        # default comes from the record, which holds the step.
         @test all(iszero, on.weights[4001:4020, 2]) && off.weights[4005, 2] > 0.1
-        @test adev(timescale_phase(on), [1000]; ci=false).dev[1] < 0.6 * adev(timescale_phase(off), [1000]; ci=false).dev[1]
+        a1000(; kw...) = adev(timescale_phase(timescale(stepped; algorithm=:at2, tau_min=1024.0, kw...)), [1000]; ci=false).dev[1]
+        @test a1000(; steps=true) < 0.2 * a1000()
         @test timescale(stepped; algorithm=:at2, steps=false).x == off.x
         # Out of the scale the clock is still estimated (Weiss & Weissert 1991, §4),
         # so its frequency holds the step 20 samples on (0.96 ± 0.08 of it over 200 seeds).
@@ -171,6 +174,20 @@ using Statistics
         # those samples, and the clock joins when the others are back.
         al = copy(x); al[20001:20010, 2:4] .= NaN
         @test findall(isnan, timescale_phase(timescale(ClockComparisons(al, 1.0))).x) == 20001:20010
+    end
+
+    @testset "the start tells quiet clocks from noisy ones" begin
+        # A fifth clock 10⁴ times and a reference 10² times as noisy as the
+        # best clock. The starting variances are an N-cornered hat over the
+        # clocks and the reference (weights within 0.16 of the optimum over
+        # 20 seeds), and the scale starts at the weighted mean rate of its
+        # clocks (below 1.8×10⁻¹⁴ over the record, over 20 seeds).
+        ρ = cumsum(1e-11 .* randn(MersenneTwister(2), 50000))
+        z = cumsum(1e-10 .* randn(MersenneTwister(3), 50000))
+        r = timescale(ClockComparisons(hcat(cc.x, z) .- ρ, 1.0))
+        @test r.weights[2, 1:4] ≈ wopt rtol=0.25
+        e = r.x[:, 1] .- cc.x[:, 1]                         # true time less the scale
+        @test abs(e[end] - e[1]) / 49999 < 3e-14
     end
 
     @testset "offsets, gaps near the start and short records (AT1)" begin
