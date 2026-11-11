@@ -662,6 +662,12 @@ Clock models, the Kalman filter and timescales.
   `--nominal` and `--tau0` state their defaults for `live`, `model` and
   `--synth`. A test checks that the command-line reference names every
   command and option.
+- Shell completion: every command completes its options and every option
+  with fixed values completes them, in bash, zsh, fish and PowerShell. The
+  scripts are generated from the option table and tested in each shell.
+  Before, `cross`, `steer`, `timescale` and `model` completed no options,
+  and no shell completed the values of `--input-format`, `--bias`,
+  `--noise`, `--mask`, `--algorithm` or `--steps`.
 
 ### Security
 
