@@ -332,8 +332,9 @@ left out, where it reaches 8 % at 1000 s and 20 % at 10 000 s.
 
 A fit without the term spreads the flicker over white and random-walk FM.
 Its predictions are up to 51 % worse, and at long times it claims 4 to 7
-times the error it makes. Retuning the two levels by maximum likelihood brings the long predictions
-little closer: they stay 2 to 55 % worse than those of the states. Its claim
+times the error it makes. Retuning the two levels by maximum likelihood does not bring the long
+predictions closer: they are as far from the states as those of the fit it
+starts from, 2 to 55 % worse. Its claim
 is right one sample ahead, where [`tune_q`](@ref) sets the size of the
 levels, and too large beyond: 2 to 8 times the error it makes at 1000 and
 10 000 s. Leaving a fitted flicker out
