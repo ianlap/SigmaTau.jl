@@ -348,6 +348,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
 
   await t.test("Live: the readings analyzed are the file that Save readings writes", async () => {
     await page.click("a[data-page=live]");
+    const n = errors.length;
     await page.click("[data-ctl=go]");
     await plotted("#page [data-ref=sigma]");
     await page.waitForTimeout(3000);   // readings enough to analyze (16)
@@ -363,6 +364,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
       return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
     }, base + "js/state.js");
     assert.equal(analyzed, saved);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // (a few seconds of readings are too short for some estimators)
   });
 
   assert.deepEqual(errors, []);
