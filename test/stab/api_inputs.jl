@@ -39,6 +39,8 @@ using Test, Random, SigmaTau
                htotdev, mhtotdev, mtie, tierms, pdev, theo1, theoh, dadev, dhdev,
                identify_noise)
         @test all(f -> rejects(f, pd, [0, 1]) && rejects(f, fd, [-1]), fns)
+        @test_throws ArgumentError calculate_edf(:adev, [1.0], [:WHFM], [0], [1.0], 100, 99.0)
+        @test_throws ArgumentError bias_correction([:WHFM], :totvar, [-1], 100)
         gapped = PhaseData([x[1:99]; NaN; x[101:end]], 1.0)
         @test all(f -> rejects(f, gapped, ms), (totdev, mtotdev, ttotdev, htotdev, mhtotdev,
                                                 pdev, theo1, theoh, dadev, dhdev))
