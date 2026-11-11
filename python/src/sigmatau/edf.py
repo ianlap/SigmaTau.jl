@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ._convert import np_f64, to_jl_f64, to_jl_ints, to_jl_syms
+from ._convert import as_int, np_f64, to_jl_f64, to_jl_ints, to_jl_syms
 from ._julia import _map_errors, jl
 
 
@@ -49,9 +49,9 @@ def calculate_edf(
             jl.Symbol(str(method)),
             to_jl_f64(devs),
             to_jl_syms(noises),
-            to_jl_ints(m_values),
+            to_jl_ints(m_values, "an averaging factor"),
             to_jl_f64(taus),
-            int(n),
+            as_int(n, "n"),
             float(t),
         )
     )
@@ -105,8 +105,8 @@ def bias_correction(
         jl.bias_correction(
             to_jl_syms(noises),
             jl.Symbol(str(var_type)),
-            to_jl_ints(m_values),
-            int(n),
+            to_jl_ints(m_values, "an averaging factor"),
+            as_int(n, "n"),
             published=bool(published),
         )
     )
