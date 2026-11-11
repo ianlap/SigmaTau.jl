@@ -170,7 +170,7 @@ sigmatau_json("analyze missing.dat --format json") # hide
 | `--m LIST` | the averaging factors themselves, `1,2,5,10`, in place of a grid |
 | `--tau-min S`, `--tau-max S` | leave out the averaging times below or above `S` seconds |
 | `--confidence P` | confidence level of the intervals. By default 0.683 |
-| `--no-ci` | no intervals or EDF, and no noise types but those that the bias factors of `totdev`, `mtotdev`, `htotdev` and `mhtotdev` rest on |
+| `--no-ci` | no intervals or EDF, and no noise types but those that the bias factors of `totdev`, `mtotdev`, `ttotdev`, `htotdev` and `mhtotdev` rest on |
 | `--noise TYPE` | noise type behind the intervals and the bias factors: `auto` (the default, identified at each averaging time), `fit` (the dominant term at each averaging time of the model that [`powerlaw_fit`](@ref) fits to the record), or one of `WHPM`, `FLPM`, `WHFM`, `FLFM`, `RWFM`, `FWFM`, `RRFM` for every averaging time |
 | `--bias MODE` | bias correction of the total deviations and Thêo1: `exact` (the default), `published`, `stable32` or `none`, for `correct_bias = true`, `:published`, `:stable32` and `false` ([Bias correction](../explanation/bias.md)). `--no-bias-correction` is `--bias none` |
 

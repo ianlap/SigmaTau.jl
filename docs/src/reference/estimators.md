@@ -15,7 +15,7 @@ docstring of [`adev`](@ref) describes the common ones in full:
 
 | Keyword | Taken by | Effect |
 |:--------|:---------|:-------|
-| `ci=true` | all | Identify the noise type at each ``τ`` and report the equivalent degrees of freedom and the confidence interval. `false` returns the deviation and the number of terms, and from `totdev`, `mtotdev`, `htotdev` and `mhtotdev` the noise type that their bias factor rests on |
+| `ci=true` | all | Identify the noise type at each ``τ`` and report the equivalent degrees of freedom and the confidence interval. `false` returns the deviation and the number of terms, and from `totdev`, `mtotdev`, `ttotdev`, `htotdev` and `mhtotdev` the noise type that their bias factor rests on |
 | `confidence=0.683` | all | The level of the interval |
 | `noise=:auto` | all but `mtie` and `tierms` | The noise type behind the interval and the bias factor: identified at each ``τ``, or stated |
 | `correct_bias=true` | the total estimators and `theo1` | The bias factors divided out: those of this package, `:published`, `:stable32`, or none with `false` |
