@@ -299,7 +299,7 @@ power law each stands for, from ``τ_0`` to `tau_max`.
 The figures of this section are from simulation, on records of 65 536
 samples at 1 s from [`noise_gen`](@ref).
 
-**Flicker FM.** Two clocks, 16 records each, models fitted to the whole
+**Flicker FM.** Two clocks, 256 records each, models fitted to the whole
 record with [`powerlaw_fit`](@ref), and the Kalman predictor of
 [`holdover`](@ref) started after 8192 s. The four models are
 `clock_model(fit)` of a fit with `alphas = [2, 0, -2]`, the same model
@@ -311,43 +311,52 @@ The first table gives the median RMS error of the prediction at 10, 100,
 
 | Model | Maser | Quartz |
 |:---|:---|:---|
-| fit without a flicker FM term | 1.02, 1.10, 1.36, 1.55 | 1.06, 1.26, 1.40, 1.24 |
-| the same, retuned | 1.05, 1.06, 1.09, 1.29 | 1.19, 1.07, 1.17, 1.13 |
-| default fit, flicker FM left out | 1.14, 1.28, 1.21, 1.17 | 1.24, 1.27, 1.38, 1.22 |
-| default fit, flicker FM kept | 1.00, 1.00, 1.00, 1.03 | 1.00, 1.00, 1.00, 1.00 |
+| fit without a flicker FM term | 1.01, 1.10, 1.36, 1.51 | 1.06, 1.26, 1.43, 1.27 |
+| the same, retuned | 1.05, 1.06, 1.09, 1.24 | 1.19, 1.07, 1.16, 1.14 |
+| default fit, flicker FM left out | 1.10, 1.15, 1.09, 1.22 | 1.25, 1.27, 1.40, 1.25 |
+| default fit, flicker FM kept | 1.00, 1.00, 1.00, 1.04 | 1.00, 1.00, 1.00, 1.00 |
 
 The second gives the median RMS error over the error that the filter
 itself claimed.
 
 | Model | Maser | Quartz |
 |:---|:---|:---|
-| fit without a flicker FM term | 1.09, 1.06, 0.59, 0.24 | 1.09, 0.72, 0.32, 0.15 |
-| the same, retuned | 1.2, 1.9, 2.0, 1.1 | 1.8, 2.8, 1.9, 0.91 |
-| default fit, flicker FM left out | 1.4, 2.7, 5.4, 8.2 | 8.7, 6.9, 3.1, 1.5 |
-| default fit, flicker FM kept | 1.04, 1.02, 1.02, 1.03 | 0.99, 1.01, 1.01, 0.97 |
+| fit without a flicker FM term | 1.08, 1.06, 0.58, 0.24 | 1.09, 0.71, 0.31, 0.14 |
+| the same, retuned | 1.2, 1.8, 1.9, 1.1 | 1.8, 2.8, 1.9, 1.0 |
+| default fit, flicker FM left out | 1.4, 2.4, 3.8, 2.7 | 9.1, 7.5, 3.4, 1.6 |
+| default fit, flicker FM kept | 1.04, 1.02, 1.02, 1.04 | 0.99, 1.00, 1.01, 0.99 |
+
+The standard error of a median is 0.03 or less in the first table and
+2.5 % or less in the second, except for the maser with its flicker FM
+left out, where it reaches 8 % at 1000 s and 20 % at 10 000 s.
 
 A fit without the term spreads the flicker over white and random-walk FM.
-Its predictions are up to 55 % worse, and at long times it claims 4 to 7
+Its predictions are up to 51 % worse, and at long times it claims 4 to 7
 times the error it makes. Retuning the two levels for prediction brings
-the long predictions closer, within 5 to 29 % of the states. Its claim is
+the long predictions closer, within 5 to 24 % of the states. Its claim is
 right one sample ahead, where [`tune_q`](@ref) sets the size of the
 levels, and 1.2 to 2.8 times too small from 10 to 1000 s. On both clocks
 the best pair of levels lay on the edge of the default grid in most
 records, which `tune_q` reports. Leaving a fitted flicker out
 removes that noise from the model, and the filter claims several times
 less than the error it makes. In that row the long-time figures depend on
-how much random-walk FM each fit found, and ran from 1 to 26 between
-records of the maser at 10 000 s. With the states the predictions are
-those of the true levels and the claim is right.
+how much random-walk FM each fit found: at 10 000 s on the maser the ratio
+was between 1.4 and 30 in four records out of five. In 3 of the 256
+quartz records the fit put all of the FM noise into its flicker term, the
+model without it had no clock noise left, and its filter claimed
+thousands of times less than the error it made. With the states the
+predictions are within 4 % of those of the true levels, and the claim
+within 5 % of the error.
 
 The ladder is an approximation, and a long record resolves it.
 [`innovation_check`](@ref) failed every model of the tables on every
-record, the true levels with states included: with states the lag-1
-autocorrelation was 0.016 on the maser and −0.017 on the quartz, against a
-bound of ±0.0077. With states from ``τ_0`` to the record length in place
-of the default band, the test passed on 14 of the 16 maser records and the
-predictions moved by less than 0.3 %. On the quartz, whose band already
-starts near ``τ_0``, nothing changed.
+record but one, the true levels with states included: with states the
+lag-1 autocorrelation was 0.017 on the maser and −0.017 on the quartz,
+against a bound of ±0.0077. With states from ``τ_0`` to the record length
+in place of the default band, the test passed on 225 of the 256 maser
+records, and the predictions moved by 0.3 % in the median at 10 000 s and
+by less below it. On the quartz, whose band already starts near ``τ_0``,
+nothing changed.
 
 **Flicker PM.** In the four cases of
 [Flicker PM in the readings](@ref), the innovations of the model with
