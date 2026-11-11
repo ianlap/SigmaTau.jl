@@ -301,7 +301,10 @@ AT1 keywords:
   window's start: the scale is rerun from there with that clock's weight
   zero until τ_min later and its frequency variance raised, and it comes back
   with ``ε_i²`` multiplied by `step_inflate` (default 4, σ_α doubled), the
-  paper's "increased by a fixed amount". Departures: eq 20 as printed mixes
+  paper's "increased by a fixed amount". While it is out the clock is still
+  read against the scale, and its frequency and ``ε_i²`` go on being estimated
+  (the bias ``K_i`` is zero, as its weight is), so that it comes back with its
+  new frequency. Departures: eq 20 as printed mixes
   units (τ_min/L is a time), so the deviation is the variance of the
   difference, in fractional frequency squared,
   ``P_{−L} + (σ_{α,i}² + σ_{αx}²)/s + (σ_{β,i}²τ + σ_{βx}²τ)(s+1)(2s+1)/(6s)``
@@ -319,9 +322,18 @@ AT1 keywords:
   3×10⁴ clock-samples on the noisier clocks of a step-free ensemble (53 in 24
   runs of four clocks and 16384 samples, none at 5 or 6); a false step
   excludes the clock for its τ_min and raises its ε², which shifts the
-  weights for good. At 5, a frequency step of 5×10⁻¹¹ (several times the
-  white-FM noise per interval) is caught after about 6 samples and 2×10⁻¹¹
-  after about 50; one of 10⁻¹¹ is not. Pass `step_threshold=4` for the paper's value.
+  weights for good. At 5, in simulation (20 records, the step on a clock of
+  white FM 1.4×10⁻¹¹ per interval among four of 1.0 to 2.8×10⁻¹¹), a frequency
+  step of 5×10⁻¹¹ is caught after 3 to 11 samples, one of 2×10⁻¹¹ after 24 to
+  82 in 18 of the records, and one of 10⁻¹¹ in 6 of them, after 63 or more.
+  A step of up to about ten times the white FM per interval is learned while
+  the clock is out (five clocks of 10⁻¹² per interval, τ_min of 40 intervals,
+  medians of 20 records: 0.98 and 0.97 of steps of 3×10⁻¹² and 10⁻¹¹ at the
+  return). A larger one raises ``ε_i²`` at its first sample, so the filter
+  follows it slowly (0.45 of 3×10⁻¹¹ and 0.05 of 10⁻¹⁰ at the return): the
+  clock comes back with a weight near zero, is taken out once more, and holds
+  0.98 of the step at its second return. Pass `step_threshold=4` for the
+  paper's value.
 - `wmax` (default 1, no cap): the largest weight any clock may have.
 - `outlier` (default `Inf`, off): a clock whose prediction error passes
   `outlier` ε_i is left out of that sample and of its variance; if that
@@ -434,13 +446,16 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
             elseif isfinite(r[n, i])
                 X[n, i] = r[n, i] + u
                 E[n, i] = X[n, i] - x̂[i]
-                if at1 && use[i]
-                    ε̂² = bias === :paper ? (abs(E[n, i]) + 2εx² / sqrt(2π * ε²[i]))^2 :
+                # A clock kept out after a step is still estimated, so that it
+                # comes back with its new frequency; its bias K = wδ is zero.
+                # One the outlier test left out keeps its variance and frequency.
+                est = use[i] || n <= blocked[i]
+                if at1 && est
+                    ε̂² = bias === :paper ? (abs(E[n, i]) + (use[i] ? 2εx² / sqrt(2π * ε²[i]) : 0.0))^2 :
                          E[n, i]^2 / (1 - min(wu[i], 0.9))
                     ε²[i] = (ε̂² + Nτ * ε²[i]) / (1 + Nτ)
                 end
-                # a clock the outlier test left out keeps its frequency
-                if use[i]
+                if est
                     ŷ = (X[n, i] - X[n-1, i]) / τ
                     if at2          # Kalman update of y (eqs 13-15), σα² = ε²/τ²
                         σα² = ε²[i] / τ^2
