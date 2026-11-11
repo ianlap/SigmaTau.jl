@@ -294,8 +294,8 @@ export async function steer(clock, signal) {
   return doc.steer;
 }
 
-// A timescale from several clocks; the core's JSON as is.
-export async function timescale(body, signal) {
+// A timescale from several clocks, or their separation by a hat; the core's JSON as is.
+export async function ensemble(body, signal) {
   const doc = await post(body, signal);
   if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
   return doc;

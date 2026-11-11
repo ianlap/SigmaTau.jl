@@ -1,10 +1,12 @@
 # Ensemble
 
-The Ensemble page forms a time scale from a group of clocks that were
-measured against one reference: a weighted combination of the clocks that
-is meant to be more stable than any one of them. It shows the stability of
-the scale, the stability of each clock against it and the weight of each
-clock.
+The Ensemble page works on a group of clocks that were measured against
+one reference, in two views. **Time scale** forms a time scale from them: a
+weighted combination of the clocks that is meant to be more stable than any
+one of them. It shows the stability of the scale, the stability of each
+clock against it and the weight of each clock. **N-cornered hat** separates
+the stability of each clock from the comparisons, without a scale
+([The N-cornered hat](ensemble.md#The-N-cornered-hat)).
 
 [![The Ensemble page](../assets/explorer/ensemble.png)](../assets/explorer/ensemble.png)
 
@@ -20,9 +22,11 @@ The page takes its clocks from the first of these that it finds:
 
 A note in the side panel says which clocks are in use. A clock chosen as
 the **Reference** in the list of clocks is left out of the scale, and so is
-a clock removed with ×. A hidden clock stays in.
+a clock removed with ×. A hidden clock stays in. The hat keeps the clock
+chosen as the **Reference**: it works on the difference of every pair of
+clocks, which that choice does not change.
 
-The scale is formed from the columns as the
+Both views take the columns as the
 [import dialog](data.md#The-import-dialog) reads them. The drift removal,
 the gap filling, the outlier removal and the analysis range of the Data
 page do not apply here.
@@ -36,6 +40,8 @@ few of them stops the fit; AT1, AT2 and EWFA form a scale from it.
 Frequency columns with missing samples cannot be read.
 
 ## Settings
+
+These are the settings of the **Time scale** view.
 
 | Setting | Algorithms | Effect |
 |:--------|:-----------|:-------|
@@ -106,3 +112,51 @@ follows it, and the note under the table names it. AT1 takes no model.
 With **Flicker states** on, the note below the table gives the number of
 states in the model of each clock, as `2 FM + 1 PM`, or says that no clock
 has flicker that needs them.
+
+## The N-cornered hat
+
+A comparison of two clocks holds the noise of both. With three or more
+clocks compared in pairs, the noise of each can be separated: the variance
+of a pair is the sum of the variances of its two clocks, if the clocks are
+independent, and the pairs give enough such sums to solve for every clock
+([Gray and Allan (1974)](@cite gray-1974-three-cornered-hat);
+[SP1065 §10.14](@cite riley-2008-sp1065)). [`ncornered_hat`](@ref) gives
+the equations and the intervals.
+
+[![The N-cornered hat on the Ensemble page](../assets/explorer/ensemble-hat.png)](../assets/explorer/ensemble-hat.png)
+
+The clocks of a file are read against its reference, and the page forms
+the difference of every pair, in which the reference cancels. The
+reference is then one clock more, so a file with two clocks is enough.
+Simulated clocks have an ideal reference, which counts as no clock: three
+or more are needed.
+
+| Setting | Effect |
+|:--------|:-------|
+| **Method** | **Hat**, **Groslambert covariance** or **Groslambert, KLTS interval**, described below |
+| **Deviation** | The deviation that the hat separates: ADEV, MDEV, HDEV, MHDEV, PDEV, TDEV or HTDEV. The two covariance methods are defined for ADEV |
+| **Columns hold** | Offered for a file with three columns. **Clocks**: each column is a clock read against the reference. **Pairs**: the columns are the differences A−B, B−C and C−A of three clocks, each measured on its own |
+| **The reference counts as a clock** | Offered for a file with three or more clocks. Without the tick the reference is left out, and the hat has the clocks of the file alone |
+
+| Method | Result |
+|:-------|:-------|
+| **Hat** | The deviation of every pair, solved for each clock ([`ncornered_hat`](@ref)) |
+| **Groslambert covariance** | The average product of the second differences of two records that share a clock ([`groslambert`](@ref); [Vernotte et al. (2016)](@cite vernotte-2016-gcov)). Noise that one record of a pair has alone, such as that of its counter, stays out of the result. For three clocks read against one reference it equals the hat on ADEV, and it differs for **Pairs** |
+| **Groslambert, KLTS interval** | The covariance with the interval of [Lantz et al. (2019)](@cite lantz-2019-klts) in place of the ``χ^2`` interval. It is offered for three clocks, and needs a file without missing samples |
+
+The grid of averaging times and the confidence level are those of the
+[side panel](panel.md#Options) on the Stability page. Where phase columns
+have missing samples, the hat and the covariance leave out the terms that
+touch them.
+
+The plot gives the deviation of each clock as a solid line with its
+confidence interval, over the deviation of each pair as measured, in thin
+dotted lines. The table gives each clock's deviation at the shortest
+averaging time and at how many averaging times it is **Resolved**.
+
+The hat subtracts one measured variance from the sum of others, and the
+result can be negative: for a clock much more stable than the rest, for
+clocks whose noise is correlated, and where the samples are few, most
+often at long ``τ``. A negative variance has no deviation. The clock is not
+resolved at that averaging time and has no point there. With the KLTS
+interval a ▽ marks the upper limit that the records set on such a clock.
