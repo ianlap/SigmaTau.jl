@@ -67,7 +67,7 @@ It is the weighted mean of the corrected clocks, each clock's true phase
 clock `i`'s phase against true time). The mean carries no clock's reading
 noise, so its stability is the scale's own. The readout
 [`timescale_phase`](@ref) at a pivot clock adds that clock's reading noise;
-with every `R = 0` and every clock read, the corrected clocks agree and the
+with every `R = 0` the corrected clocks of the clocks read agree and the
 readout is the mean with its sign reversed (`timescale_phase` is
 reference − scale). Only for `:greenhall`, whose weights define the mean.
 """
@@ -227,9 +227,12 @@ the record, less the mean slope.
   part of the covariance is reduced about the implicit ensemble mean, a
   weighted mean of the corrected clocks; this keeps the frequency
   estimates and minimizes each step of the scale, so the scale is quiet at
-  short τ as well as long. The weights are those of that mean. The scale's
-  frequency against the reference settles at a constant set by the start,
-  which comes from a line through each clock's first samples
+  short τ as well as long. The weights are those of that mean. A clock
+  without a reading has no weight in it and runs on its prediction
+  ([Greenhall (2006), §10](@cite greenhall-2006-measurement-noise)), so the
+  scale does not step when the clock returns. The scale's frequency against
+  the reference settles at a constant set by the start, which comes from a
+  line through each clock's first samples
   [greenhall-2007-measurement-noise-corrections](@cite). With every `R = 0`
   this is the reduced Kalman timescale of the 2003 paper; with `R > 0` it is
   IEMx (2006), the same filter. Readings with noise leave the corrected clocks
@@ -239,11 +242,10 @@ the record, less the mean slope.
   mean. It carries that clock's own reading noise as white PM, so it is not
   quieter than a weighted readout (three equal clocks: √3 noisier at short
   τ), and pivots differ by that noise; at `R = 0` every pivot gives the same
-  scale. While the pivot has no reading the first clock read stands in; a
-  pivot that starts late steps the scale at its first reading. Models with
-  flicker FM states bring them into the filter: at `R = 0` that is the
-  algorithm of [davis-greenhall-stacey-2005-flicker](@cite) (its eqs 3.1–3.6
-  and 4.1), and with `R > 0` the 2006 paper's reduction covers the same
+  scale. Models with flicker FM states bring them into the filter: at
+  `R = 0` that is the algorithm of
+  [davis-greenhall-stacey-2005-flicker](@cite) (its eqs 3.1–3.6 and 4.1),
+  and with `R > 0` the 2006 paper's reduction covers the same
   state (its §2: states that reach the readings only through the phases).
   The frequency reported for a clock then includes them. Flicker PM states
   are measurement noise with memory: they enter the readings, not the phases
@@ -627,11 +629,17 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
             # weighted mean of the prediction errors: a row of I − KH.
             λ = vec(mean(I - K[1:k, :] * H[:, 1:k]; dims=1))
         end
-        # Reduce the phase covariance about the implicit ensemble mean. Among
-        # clocks with noiseless readings the split of weight is free; the gain's
-        # is reported (all the clocks, when every reading is noiseless).
-        aᵣ = _iem_weights(P[1:k, 1:k], [i in use && r[i] == 0 for i in 1:k], length(use) >= 2 ? λ : a)
-        a = aᵣ !== nothing ? aᵣ : length(use) >= 2 ? λ : a
+        # Reduce the phase covariance about the implicit ensemble mean of the
+        # clocks read: a clock without a reading has no weight (Greenhall 2006
+        # §10). Among clocks with noiseless readings the split of weight is
+        # free; the gain's is reported (all the clocks, when every reading is
+        # noiseless).
+        if !isempty(use)
+            split = length(use) >= 2 ? λ[use] : [1.0]
+            aᵣ = _iem_weights(P[use, use], Bool[r[i] == 0 for i in use], split)
+            a = zeros(k)
+            a[use] = aᵣ !== nothing ? aᵣ : split ./ sum(split)
+        end
         if algorithm === :greenhall
             S[1:k, 1:k] = I - ones(k) * a'
             P = S * P * S'

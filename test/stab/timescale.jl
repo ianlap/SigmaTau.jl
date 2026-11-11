@@ -200,6 +200,14 @@ using Statistics
         r0 = timescale(c0; algorithm=:greenhall, models=g0)
         @test implicit_mean(r0, t0).x ≈ -timescale_phase(r0).x
         @test r0.xhat ≈ r0.x
+        # A clock without a reading has no weight (§10): the readout stays the mean
+        # through the gap, and the scale does not step when the clock returns.
+        xg = copy(c0.x); xg[1001:3000, 3] .= NaN
+        rg = timescale(ClockComparisons(xg, 1.0); algorithm=:greenhall, models=g0)
+        eg = timescale_phase(rg).x
+        @test all(iszero, rg.weights[1001:3000, 3])
+        @test implicit_mean(rg, t0).x ≈ -eg
+        @test abs(eg[3001] - eg[3000]) < 12 * sqrt(mean(abs2, diff(eg[1:1000])))
         @test_throws ArgumentError implicit_mean(timescale(cc), t0)
         a1 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix)).x
         a2 = timescale_phase(timescale(cm; algorithm=:greenhall, models=mix, pivot=2)).x
