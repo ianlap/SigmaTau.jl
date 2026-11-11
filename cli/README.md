@@ -25,7 +25,10 @@ cli/
 
 ## Build
 
-With Julia 1.12 or later:
+With Julia 1.13 or later. On Julia 1.12 the build stops: a program that
+1.12 trims cannot start a task, so the threaded loops of the total
+deviations and Thêo1 would fail in it. With juliaup, `juliaup add 1.13`
+and `julia +1.13` in the first two lines leave the default version as it is.
 
 ```bash
 julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'      # installs ~/.julia/bin/juliac
