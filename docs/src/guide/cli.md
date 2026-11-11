@@ -150,6 +150,7 @@ sigmatau holdover gpsdo.dat --train 86400 --limit 1e-6 # time error without a re
 sigmatau steer maser.dat --time-constant 86400         # the record steered to its reference
 sigmatau cross a.dat --with b.dat                      # one device, two channels
 sigmatau timescale clocks.dat --value-cols 2,3,4       # a time scale from three clocks
+sigmatau hat clocks.dat --value-cols 2,3               # each clock by the three-cornered hat
 sigmatau report clock.dat --out clock.html             # an HTML report
 sigmatau phasenoise ocxo.txt --carrier 10e6            # σ(τ) from a table of ℒ(f)
 ```

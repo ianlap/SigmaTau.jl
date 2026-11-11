@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model", "phasenoise", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "hat", "model", "phasenoise", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift)"),
@@ -12,6 +12,7 @@ const COMMAND_HELP = [
     ("holdover",   "FILE", "holdover test: the time error after a training stretch against holdover time, and the time to reach a limit"),
     ("steer",      "FILE", "steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts"),
     ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
+    ("hat",        "FILE --value-cols LIST", "the stability of each of three or more clocks measured against one another: N-cornered hat or Groslambert covariance"),
     ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "the σ(τ) that a clock noise model predicts (MDEV, ADEV and MHDEV), without a simulation"),
     ("phasenoise", "TABLE --carrier HZ", "the σ(τ) that a table of the phase noise ℒ(f), or of another spectrum, gives over its band"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
@@ -35,6 +36,7 @@ const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const DRIFT_METHODS = [String(m) for m in SigmaTau.DRIFT_METHODS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
+const HAT_DEVS = [String(d) for d in SigmaTau._HAT_DEVIATIONS]
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 const QUANTITIES = ["L", "Sphi", "Sx", "Sy"]
 const PHASENOISE_DEVS = [:adev, :mdev, :tdev, :hdev, :mhdev]
@@ -80,12 +82,12 @@ const OPTS = [
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyze only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
-    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live", "phasenoise"]),
-    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "report", "live"]),
-    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "steer", "report", "live"]),
+    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev; for hat, adev); see below", ["analyze", "hat", "report", "live", "phasenoise"]),
+    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "hat", "report", "live"]),
+    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "steer", "hat", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
     Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
-    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "report", "holdover"]),
+    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "hat", "report", "holdover"]),
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
     Opt("--no-bias-correction", "", String[], false, "the same as --bias none", ["analyze", "report"]),
@@ -99,7 +101,11 @@ const OPTS = [
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
-    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
+    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale", "hat"]),
+    Opt("--pairs", "", String[], false, "the three --value-cols are the differences A−B, B−C and C−A, each measured on its own, not clocks read against one reference", ["hat"]),
+    Opt("--no-reference", "", String[], false, "leave the reference out: the hat of the clocks' differences from one another alone (three or more clocks)", ["hat"]),
+    Opt("--covariance", "", String[], false, "the Groslambert covariance of the difference records in place of the hat: ADEV, with the noise of each --pairs record's instrument kept out", ["hat"]),
+    Opt("--klts", "", String[], false, "--covariance with the interval of Lantz et al. (2019), for three clocks, given also where a clock is not resolved", ["hat"]),
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", STEPS, false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
@@ -213,6 +219,10 @@ mutable struct Options
     integral::Bool            # steer: an integral gain
     cost::Vector{Float64}     # steer: --cost weights on phase, frequency and steer; empty = not given
     interval::Float64         # steer: seconds between steers; NaN = τ₀
+    pairs::Bool               # hat: the columns are the pairwise differences
+    reference::Bool           # hat: the reference counts as a clock
+    covariance::Bool          # hat: the Groslambert covariance in place of the hat
+    klts::Bool                # hat: the covariance with the KLTS interval
     carrier::Float64          # phasenoise: carrier frequency in Hz; NaN = not given
     quantity::String          # phasenoise: what the table holds
     band::Vector{Float64}     # phasenoise: --band limits in Hz; empty = the whole table
@@ -225,7 +235,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
-                    NaN, false, Float64[], NaN, NaN, "L", Float64[])
+                    NaN, false, Float64[], NaN, false, true, false, false, NaN, "L", Float64[])
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -456,6 +466,10 @@ function set_flag!(o::Options, name::String)
     elseif name == "--kalman";             o.kalman = true
     elseif name == "--integral";           o.integral = true
     elseif name == "--flicker";            o.flicker = true
+    elseif name == "--pairs";              o.pairs = true
+    elseif name == "--no-reference";       o.reference = false
+    elseif name == "--covariance";         o.covariance = true
+    elseif name == "--klts";               o.klts = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end
@@ -597,6 +611,7 @@ function print_help(io::IO)
     print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
     print(io, "  sigmatau holdover gpsdo.dat --train 86400 --tau 3600,14400,86400 --limit 1e-6\n")
     print(io, "  sigmatau steer maser.dat --time-constant 86400 --format json\n")
+    print(io, "  sigmatau hat clocks.dat --value-cols 2,3 --devs adev,hdev\n")
     print(io, "  sigmatau phasenoise ocxo.csv --carrier 10e6 --devs adev,mdev\n")
     print(io, "  sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1\n")
     print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
@@ -642,6 +657,8 @@ function print_command_help(io::IO, cmd::String)
         print(io, "\nDeviations: adev, mdev, hdev, mhdev\n")
     elseif cmd == "analyze" || cmd == "report"
         print(io, "\nDeviations: ", join(estimator_names(), ", "), "\n")
+    elseif cmd == "hat"
+        print(io, "\nDeviations: ", join(HAT_DEVS, ", "), "\n")
     elseif cmd == "phasenoise"
         print(io, "\nDeviations: ", join(String[String(d) for d in PHASENOISE_DEVS], ", "), "\n")
     end

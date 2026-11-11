@@ -67,5 +67,7 @@ roundtrips(a, b) =
         @test load(rpath).x == pd.x
         save(rpath, FrequencyData(diff(pd.x), 2.0))
         @test load(rpath) isa FrequencyData && load(rpath).tau0 == 2.0
+        write(rpath, "1.0\t2.0\n")
+        @test_throws "not written by save" load(rpath)
     end
 end

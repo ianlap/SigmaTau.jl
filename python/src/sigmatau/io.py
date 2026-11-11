@@ -146,7 +146,8 @@ def read_data(
     of the file, else that of its timestamps. ``column`` is the clock to read:
     in a table, the number of its column, counted from 1, or its name; in a
     RINEX clock file, its position in order of first appearance or its name,
-    such as ``"G08"``. ``nominal`` is the nominal frequency in hertz for
+    such as ``"G08"``; in a plain column file, the number of the column of
+    samples, counted from 1 (2 by default), and a name is an error. ``nominal`` is the nominal frequency in hertz for
     readings in hertz, by default the mean reading rounded to four significant
     figures. ``kind``, ``"phase"`` or ``"frequency"``, sets the type of the
     record whatever the file suggests. ``scaling`` multiplies the samples

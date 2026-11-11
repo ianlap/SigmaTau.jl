@@ -381,7 +381,7 @@ _powerlaw_tau0(m::ClockModel) = m.tau0
 
 function _powerlaw_h(m::ClockModel)
     h = Dict(2 => 8π^2 * m.tau0 * m.R, 0 => 2m.q1, -2 => m.q2 / (2π^2))
-    m.drift && (h[-4] = m.q3 / (8π^4))
+    m.q3 > 0 && (h[-4] = m.q3 / (8π^4))
     m.flicker_fm > 0 && (h[-1] = m.flicker_fm)
     m.flicker_pm > 0 && (h[1] = m.flicker_pm)
     return h

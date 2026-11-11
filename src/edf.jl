@@ -56,6 +56,8 @@ they report.
 """
 function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64)
     _check_m(:calculate_edf, m_values)
+    length(devs) == length(noises) == length(m_values) == length(taus) || throw(ArgumentError(
+        "calculate_edf: devs, noises, m_values and taus must have one entry each, got $(length(devs)), $(length(noises)), $(length(m_values)) and $(length(taus))"))
     edfs = Vector{Float64}(undef, length(devs))
 
     for k in 1:length(devs)
@@ -656,6 +658,8 @@ statistic, computed in this package (see
 """
 function bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int; published::Bool=false)
     _check_m(:bias_correction, m_values)
+    length(noises) == length(m_values) || throw(ArgumentError(
+        "bias_correction: noises and m_values must have one entry each, got $(length(noises)) and $(length(m_values))"))
     return [_total_bias(var_type, _alpha_from_noise(noises[k]), m_values[k], N, published) for k in eachindex(noises)]
 end
 
@@ -669,12 +673,13 @@ freedom ``ν`` ([SP1065 §5.3.2](@cite riley-2008-sp1065)):
 σ\\sqrt{\\frac{ν}{χ^2_{(1+p)/2}(ν)}} \\quad\\text{and}\\quad σ\\sqrt{\\frac{ν}{χ^2_{(1-p)/2}(ν)}} ,
 ```
 
-where ``p`` is `confidence` and ``χ^2_q(ν)`` is the ``q`` quantile of the χ²
+where ``p`` is `confidence`, between 0 and 1, and ``χ^2_q(ν)`` is the ``q`` quantile of the χ²
 distribution with ``ν`` degrees of freedom. Every ``ν > 0`` has an
 interval, however wide. A limit is `NaN` where the deviation is not finite
 or ``ν`` is not positive.
 """
 function confidence_intervals(devs::Vector{Float64}, edfs::Vector{Float64}, confidence::Float64)
+    0 < confidence < 1 || throw(ArgumentError("confidence must be between 0 and 1, got $confidence"))
     a = (1 - confidence) / 2
     lower = fill(NaN, length(devs))
     upper = fill(NaN, length(devs))
