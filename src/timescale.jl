@@ -214,26 +214,39 @@ function _initial_variance(cc::ClockComparisons, stop::Int, c::Int)
     return Float64[isfinite(s) && s > 0 ? s : maximum(ok) for s in v]
 end
 
-# Starting frequencies against the scale: each clock's least-squares slope
-# over the `stop` samples that begin at its first reading (the first
-# max(16, N/10) unless given), less the mean slope of the clocks read at the
-# first sample, so clocks with frequency offsets start tracking them (the
-# mean of the offsets is the scale's own). Zero for a clock with one reading there.
+# Least-squares slope of clock i's readings over the `stop` samples from
+# sample `a`; NaN with fewer than two readings there.
+function _slope(cc::ClockComparisons, i::Int, a::Int, stop::Int)
+    rows = a:min(size(cc.x, 1), a + stop - 1)
+    ok = isfinite.(cc.x[rows, i])
+    count(ok) >= 2 || return NaN
+    t = (rows[ok] .- 1) .* cc.tau0
+    return sum((t .- sum(t) / length(t)) .* cc.x[rows[ok], i]) / sum(abs2, t .- sum(t) / length(t))
+end
+
+# Starting frequencies against the scale of the clocks read at the first
+# sample: each one's slope over the first `stop` samples (max(16, N/10) unless
+# given) less their mean, so clocks with frequency offsets start tracking them
+# (the mean of the offsets is the scale's own). Zero for a clock without a slope.
 function _initial_frequency(cc::ClockComparisons, stop::Int=min(size(cc.x, 1), max(16, size(cc.x, 1) ÷ 10)))
-    N, k = size(cc.x)
-    slope, fit = zeros(k), falses(k)
-    for i in 1:k
-        a = findfirst(isfinite, view(cc.x, :, i))
-        a === nothing && continue
-        rows = a:min(N, a + stop - 1)
-        ok = isfinite.(cc.x[rows, i])
-        count(ok) >= 2 || continue
-        t = (rows[ok] .- 1) .* cc.tau0
-        slope[i] = sum((t .- sum(t) / length(t)) .* cc.x[rows[ok], i]) / sum(abs2, t .- sum(t) / length(t))
-        fit[i] = true
+    s = Float64[isfinite(cc.x[1, i]) ? _slope(cc, i, 1, stop) : NaN for i in axes(cc.x, 2)]
+    fit = isfinite.(s)
+    return Float64[fit[i] ? s[i] - sum(s[fit]) / count(fit) : 0.0 for i in eachindex(s)]
+end
+
+# Starting frequency against the scale of clock i, which joins at sample n
+# for the first time: its slope over the `stop` samples from n less the
+# scale's against the reference
+# there, which is the weighted mean, over the clocks in the average, of each
+# one's slope less its frequency against the scale. The reference cancels.
+function _joining_frequency(cc::ClockComparisons, i::Int, n::Int, stop::Int, w::Vector{Float64}, y::Vector{Float64})
+    s, sw = 0.0, 0.0
+    for j in eachindex(w)
+        sⱼ = w[j] > 0 && j != i ? _slope(cc, j, n, stop) : NaN
+        isfinite(sⱼ) && ((s, sw) = (s + w[j] * (sⱼ - y[j]), sw + w[j]))
     end
-    seen = isfinite.(cc.x[1, :])
-    return fit .* (slope .- sum(slope[seen]) / max(1, count(seen)))
+    sᵢ = _slope(cc, i, n, stop)
+    return isfinite(sᵢ) && sw > 0 ? sᵢ - s / sw : 0.0
 end
 
 # Steady-state frequency variance P of the AT2 filter (eq 16 for any τ): with
@@ -300,9 +313,13 @@ each of its readings and never has a weight.
 
 The scale starts at the mean of the first readings. Each clock starts from
 its own first readings, as many samples as a tenth of the record's
-readings. Its frequency starts at the slope of a line through them, less
-the mean slope of the clocks read at the first sample, so a clock that
-joins late does not change the rate of the scale.
+readings. The frequency of a clock read at the first sample starts at the
+slope of a line through them, less the mean slope of those clocks. A clock
+that joins later starts at its slope less that of the scale over the same
+samples, which is the weighted mean of the other clocks' slopes less their
+frequencies against the scale, so the reference of the readings cancels.
+The rate of the scale then changes by the error of that frequency times
+the weight of the clock.
 
 `:ewfa` gives every clock the same weight and takes ``y_i`` as the clock's
 last frequency step, ``[x_i(t) - x_i(t - τ)]/τ``
@@ -428,14 +445,25 @@ which is then taken over the clocks read, the procedure of
 runs on its prediction, and the scale does not step when its readings
 return.
 
+A clock first read after the start begins as the clock of most weight read
+with it, plus a line through its first 16 readings against that clock. The
+covariance of the line is widened, so that the readings to come set the
+phase and frequency of the clock. The scale does not step there, and the
+reference of the readings takes no part in the start. The sources give no
+procedure, and this one is the package's own:
+[Greenhall (2003), §5](@cite greenhall-2003-jones-tryon) names the
+insertion of a new clock without a phase or frequency step as a practical
+difficulty of a Kalman scale.
+
 Noise on the readings leaves the corrected clocks ``x_i - \\hat{x}_i``
 unequal and their mean out of reach of a measurement (§4 of the 2006
 paper). The scale is therefore read at clock `pivot`, as the reading of
 that clock less its estimated phase, and it carries the white PM of that
 reading. With every `R = 0` all pivots give the same scale.
 
-The filter starts each clock from a line through its first 16 readings, or
-a parabola for a model with drift. An error in the starting frequencies
+The filter starts each clock read at the first sample from a line through
+its first 16 readings, or a parabola for a model with drift. An error in
+those starting frequencies
 stays in the scale as a constant frequency offset
 ([Greenhall (2007), §2](@cite greenhall-2007-measurement-noise-corrections)).
 Models with flicker FM bring their Markov states into the filter, which at
@@ -460,8 +488,9 @@ are taken against where the paper's errors are independent (Eq. (2.6)),
 and the paper's detection and correction of clock errors
 (Eqs. (4.6)–(4.13)) is left out. A missing reading leaves its difference
 out of the measurement, as in §2 of the paper, which gives no rule for the
-scale. When the readings of a clock return after a gap, or begin late, the
-scale takes a share of the clock's prediction error and steps.
+scale. When the readings of a clock return after a gap, the scale takes a
+share of the clock's prediction error and steps. A clock first read after
+the start begins as in `:greenhall`.
 
 `:stein` is the scale of [Stein (2003)](@cite stein-2003-demystified), the
 KAS-2 algorithm that
@@ -647,7 +676,10 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
         x̂ = X[n-1, :] .+ y .* τ
         read = isfinite.(r[n, :])
         use = read .& seen .& (n .> blocked)
-        any(use) || (use = read .& (n .> blocked))      # every clock read is back from a gap
+        # Every clock read is back from a gap. One that has never been read
+        # with the scale has no place in it yet (its x̂ is NaN).
+        had = read .& isfinite.(x̂)
+        any(use) || (use = had .& (n .> blocked))
         if at1 && isfinite(outlier) && n > 2 && any(use)
             # The median prediction error places the scale for the test, so
             # that one clock's jump cannot carry it.
@@ -657,7 +689,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
         end
         if !any(use)
             X[n, :], Y[n, :] = x̂, y
-            any(read) && ((seen, prev) = (read, n))
+            any(had) && ((seen, prev) = (had, n))
             n += 1
             continue
         end
@@ -670,6 +702,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
             if read[i] && !seen[i] && !use[i]
                 X[n, i] = r[n, i] + u
                 joined[i] = n
+                isfinite(x̂[i]) || (y[i] = _joining_frequency(cc, i, n, stop, wu, Y[n-1, :]))
             elseif read[i]
                 X[n, i] = r[n, i] + u
                 E[n, i] = X[n, i] - x̂[i]
@@ -802,11 +835,19 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
     Q = zeros(ns * k, ns * k)
     X̂ = zeros(ns * k)
     P = zeros(ns * k, ns * k)
-    G = zeros(k, ns * k)                      # each clock's reading in state terms
+    G, F = zeros(k, ns * k), zeros(k, ns * k)     # each clock's reading and frequency in state terms
+    # The clocks read at the first sample with a reading start from a line
+    # through their first readings; a later one starts at its first reading.
+    n₁ = findfirst(n -> any(isfinite, view(cc.x, n, :)), 1:N)
+    started = n₁ === nothing ? trues(k) : isfinite.(cc.x[n₁, :])
     for (i, m) in enumerate(models)
         φ, q, g = state_transition(m, τ), process_noise(m, τ), _reading_row(m)
         n = size(φ, 1)
-        x0, P0 = _model_start(cc.x[:, i], m)
+        x0, P0 = started[i] ? _model_start(cc.x[:, i], m) : (zeros(n), zeros(n, n))
+        F[i, idx(i, 2)] = 1.0
+        for s in _npoly(m) .+ (1:length(_fm_taus(m)))
+            F[i, idx(i, s)] = 1.0
+        end
         for a in 1:n
             X̂[idx(i, a)] = x0[a]
             G[i, idx(i, a)] = g[a]
@@ -826,8 +867,33 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
             X̂ = Φ * X̂
             P = Φ * P * Φ' + Q
         end
+        # A clock's first reading after the start: it is the clock of most
+        # weight read with it, plus a line through its first readings against
+        # that clock, so that its start is in the scale's terms and the
+        # reference of the readings has no part in it. The line's covariance
+        # is widened 10⁵ times: those readings are still to come, and they,
+        # not the line, set the clock's phase and frequency.
+        for i in 1:k
+            (started[i] || !isfinite(cc.x[n, i])) && continue
+            d = cc.x[n:N, i:i] .- cc.x[n:N, :]
+            others = [j for j in 1:k if started[j] && isfinite(d[1, j]) && count(isfinite, view(d, :, j)) > _npoly(models[i])]
+            isempty(others) && continue
+            j = others[argmax(a[others])]
+            x0, P0 = _model_start(d[:, j], models[i]; widen=1e5)
+            own = [idx(i, s) for s in eachindex(x0)]
+            T = Matrix{Float64}(I, ns * k, ns * k)
+            T[own, :] .= 0
+            T[own[1], :] = G[j, :]
+            T[own[2], :] = F[j, :]
+            _npoly(models[i]) == 3 && _npoly(models[j]) == 3 && (T[own[3], idx(j, 3)] = 1.0)
+            X̂ = T * X̂
+            X̂[own] += x0
+            P = T * P * T'
+            P[own, own] += P0
+            started[i] = true
+        end
+        use = [i for i in 1:k if started[i] && isfinite(cc.x[n, i])]
         x̂⁻ = G * X̂
-        use = findall(isfinite, cc.x[n, :])
         if length(use) >= 2
             # Each clock against the first one read: z = xⱼ − xₚ + vⱼ − vₚ.
             p, rest = use[1], use[2:end]
@@ -865,18 +931,13 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         # Clock i − scale: the reading less the pivot's offset, the pivot's
         # reading less its estimated phase.
         p = pivot in use ? pivot : (isempty(use) ? 0 : use[1])
-        u = p == 0 ? 0.0 : X̂[p] - cc.x[n, p]
+        u = p == 0 ? NaN : X̂[p] - cc.x[n, p]     # no clock of the scale is read
         for i in 1:k
             X[n, i] = isfinite(cc.x[n, i]) ? cc.x[n, i] + u : X̂[i]
             Xh[n, i] = X̂[i]
         end
         n > 1 && (E[n, use] = X[n, use] .- x̂⁻[use])
-        for (i, m) in enumerate(models)       # frequency: its own state plus the Markov frequency states
-            Y[n, i] = X̂[k+i]
-            for s in _npoly(m) .+ (1:length(_fm_taus(m)))
-                Y[n, i] += X̂[idx(i, s)]
-            end
-        end
+        Y[n, :] = F * X̂                       # frequency: its own state plus the Markov frequency states
         W[n, :] .= algorithm === :jones_tryon ? NaN : a
     end
     return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E, Xh)
