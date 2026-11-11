@@ -138,6 +138,13 @@ Clock models, the Kalman filter and timescales.
   the filter itself claims (`claimed`) beside the one measured. The CSV
   gains a trailing `claimed` column, empty without `--kalman`, so its header
   changes for existing readers.
+- Clock steering: `steering_gains` sets the gains of a steering loop by pole
+  placement, from a time constant or from poles, with or without an integral
+  gain (Matsakis 2019, 2020); `steering_poles` gives the poles, time
+  constants and stability of any gains; `steer(data, model, gains)` replays
+  a phase record through the loop on one Kalman filter pass, and
+  `steer(model, gains)` predicts the steady-state RMS of phase, frequency
+  and steers and the Allan deviation of the steered clock. Also in Python.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
