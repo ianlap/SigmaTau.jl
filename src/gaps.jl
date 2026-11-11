@@ -22,8 +22,12 @@ struct _GapRecord
     tau0::Float64
 end
 
-_has_gaps(data::PhaseData) = any(isnan, data.x)
-_has_gaps(data::FrequencyData) = any(isnan, data.y)
+# Full vectorised passes: on a gap-free record, the usual case, `any`/`all`
+# scan the whole record anyway, one element at a time and about 5× slower.
+_anynan(v) = mapreduce(isnan, |, v; init=false)
+_allfinite(v) = mapreduce(isfinite, &, v; init=true)
+_has_gaps(data::PhaseData) = _anynan(data.x)
+_has_gaps(data::FrequencyData) = _anynan(data.y)
 
 function _missing_prefix(v::AbstractVector{<:Real})
     bad = Vector{Int}(undef, length(v) + 1)
