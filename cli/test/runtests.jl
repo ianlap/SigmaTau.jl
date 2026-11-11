@@ -434,6 +434,49 @@ mktempdir() do dir
         @test r.code == 2 && occursin("column 7 exceeds 4 columns", r.err)
     end
 
+    @testset "hat" begin
+        # Clocks A and B in columns 2 and 3, read against clock C; columns 4
+        # to 6 hold the same three clocks as the pairs A−B, B−C and C−A.
+        x = [s .* noise_gen(PhaseData, 1024, 1.0; h=Dict(0 => 1e-24), rng=Random.Xoshiro(k)).x for (k, s) in enumerate((1, 2, 3))]
+        hf = joinpath(dir, "hat.csv")
+        open(hf, "w") do io
+            for k in 1:1024
+                println(io, k - 1, ",", join((x[1][k] - x[3][k], x[2][k] - x[3][k], x[1][k] - x[2][k], x[2][k] - x[3][k], x[3][k] - x[1][k]), ","))
+            end
+        end
+        dev(rows) = parse.(Float64, getindex.(rows, 4))
+        rows = csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--devs", "mdev", "--m", "1,4,16").out)
+        @test getindex.(rows, 1) == repeat(["column 2", "column 3", "reference"]; inner=3)
+        lib = ncornered_hat(ClockComparisons(hcat(x[1] .- x[3], x[2] .- x[3]), 1.0), [1, 4, 16]; deviation=:mdev)
+        @test dev(rows) ≈ reduce(vcat, r.dev for r in lib) && parse(Float64, rows[1][7]) ≈ lib[1].edf[1]
+        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--devs", "mdev", "--m", "1,4,16").out)) ≈ dev(rows)
+        # The Groslambert covariance of records that close is the hat on ADEV.
+        adev_rows = csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16").out)
+        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16", "--method", "groslambert").out)) ≈ dev(adev_rows)
+        r = run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--method", "klts", "--confidence", "0.95", "--m", "1,4", "--format=json")
+        @test r.code == 0 && occursin("\"method\":\"groslambert\",\"interval\":\"klts\",\"layout\":\"pairs\"", r.out)
+        @test occursin("\"clocks\":[\"A\",\"B\",\"C\"],\"pairs\":[[1,2],[1,3],[2,3]]", r.out)
+        # Pairs that do not close: B−C far noisier than the other two leaves
+        # nothing for clock A, whose deviation is then blank, null in JSON.
+        nf = joinpath(dir, "negative.csv")
+        open(nf, "w") do io
+            for k in 1:1024
+                println(io, k - 1, ",", join((x[1][k], 9x[3][k], x[2][k]), ","))
+            end
+        end
+        rows = csv_rows(run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4").out)
+        @test all(isempty, getindex.(rows[1:2], 4)) && all(!isempty, getindex.(rows[3:6], 4))
+        @test occursin("\"points\":[{\"tau\":1.0,\"dev\":null,", run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4", "--format=json").out)
+        # Simulated clocks have a perfect reference, which is no clock.
+        @test unique(getindex.(csv_rows(run_cli("hat", "--synth", "512", "--m", "1").out), 1)) == ["clock 1", "clock 2", "clock 3", "clock 4"]
+        @test run_cli("hat", "--synth", "512", "--clocks", "2").code == 1
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--no-reference").code == 1     # two clocks
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--pairs").code == 1            # two of three pairs
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--devs", "totdev").code == 1
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--method", "groslambert", "--devs", "mdev").code == 1
+        @test run_cli("hat", "--synth", "512", "--method", "klts").code == 1            # four clocks
+    end
+
     @testset "drift" begin
         # Frequency with an injected aging of 2e-15 per second.
         y = 1e-11 .* sinpi.((1:400) ./ 13) .+ 2e-15 .* (0:399) .* 60
@@ -881,6 +924,8 @@ mktempdir() do dir
                          ["check", pf, "--format", "json"],
                          ["spectrum", pf],
                          ["cross", pf, "--with", pf, "--format", "json"],
+                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "2,3", "--devs", "adev,mhdev", "--format", "json"],
+                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "4,5,6", "--pairs", "--method", "klts", "--m", "1,8"],
                          ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],

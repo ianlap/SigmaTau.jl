@@ -13,6 +13,8 @@ end
 """
     ncornered_hat(pairwise::AbstractMatrix{StabilityResult}) → Vector{StabilityResult}
     ncornered_hat(r_ab, r_bc, r_ca) → Vector{StabilityResult}
+    ncornered_hat(cc::ClockComparisons, m_values=Octave; deviation=:adev, reference=true,
+                  confidence=DEFAULT_CONFIDENCE) → Vector{StabilityResult}
 
 Deviation of each of ``N ≥ 3`` clocks from the deviations measured between
 every pair of them: the three-cornered hat of
@@ -49,6 +51,25 @@ measured a pair counts as noise of its two clocks.
 - `r_ab`, `r_bc`, `r_ca`: for three clocks, the results for A−B, B−C and
   C−A. The sign of each difference does not matter. The clocks are
   returned in the order A, B, C.
+- `cc`: clocks read against one reference at the same instants. The
+  estimator is run on the difference record of every pair, in which the
+  reference cancels, and the reference is one more clock, whose record
+  against clock ``i`` is the reading of clock ``i``. Two clocks and
+  their reference make a three-cornered hat. The clocks are returned in
+  the order of `cc`, with the reference last. Where `cc` has a column of
+  zeros, that clock is the reference and no clock is added.
+- `m_values`: with `cc`, averaging factors or a [`TauMode`](@ref) grid.
+
+# Keywords
+
+These go with `cc`.
+
+- `deviation=:adev`: the estimator, one of `:adev`, `:mdev`, `:hdev`,
+  `:mhdev`, `:pdev`, `:tdev` and `:htdev`.
+- `reference=true`: whether the reference counts as a clock. With `false`
+  the hat is that of the clocks' differences alone, three or more, and a
+  noisy reference stays out of it.
+- `confidence=0.683`: confidence level of the intervals.
 
 # Returns
 
@@ -83,6 +104,17 @@ julia> clocks = ncornered_hat(r(x1, x2), r(x2, x3), r(x3, x1));
 
 julia> length(clocks), length(clocks[1].ci)
 (3, 3)
+```
+
+Two clocks read against a third, the reference, which comes last:
+
+```jldoctest
+julia> using SigmaTau
+
+julia> cc = ClockComparisons(randn(256, 2), 1.0);
+
+julia> length(ncornered_hat(cc, [1, 2, 4]; deviation = :mdev))
+3
 ```
 """
 function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
@@ -162,10 +194,49 @@ function ncornered_hat(r_ab::StabilityResult, r_bc::StabilityResult, r_ca::Stabi
     return ncornered_hat(pairwise)
 end
 
+# Estimators a hat can separate: quadratic in the record with no factor that
+# depends on its noise type, so the variance of a difference of independent
+# clocks is the sum of theirs.
+const _HAT_DEVIATIONS = (:adev, :mdev, :hdev, :mhdev, :pdev, :tdev, :htdev)
+
+# The difference records clock i − clock j of `cc`, i < j, in the upper
+# triangle. With `reference`, the reference of the readings is one more clock,
+# the last, whose record against clock i is the reading of clock i; a clock
+# with a column of zeros is the reference itself.
+function _hat_records(cc::ClockComparisons, reference::Bool, name::String)
+    k = size(cc.x, 2)
+    n = k + (reference && !any(iszero, eachcol(cc.x)))
+    n >= 3 || throw(ArgumentError(
+        "$name: need at least 3 clocks, got $k without the reference"))
+    records = Matrix{PhaseData{Float64}}(undef, n, n)
+    for i in 1:n, j in (i + 1):n
+        records[i, j] = j > k ? cc[i] : cc[i, j]
+    end
+    return records
+end
+
+function ncornered_hat(cc::ClockComparisons, m_values::Vector{Int}; deviation::Symbol=:adev,
+                       reference::Bool=true, confidence::Real=DEFAULT_CONFIDENCE)
+    deviation in _HAT_DEVIATIONS || throw(ArgumentError(
+        "ncornered_hat: deviation must be one of $(join(_HAT_DEVIATIONS, ", ")), got :$deviation"))
+    records = _hat_records(cc, reference, "ncornered_hat")
+    pairwise = Matrix{StabilityResult}(undef, size(records))
+    c = Float64(confidence)
+    for i in axes(records, 1), j in (i + 1):size(records, 2)
+        pairwise[i, j] = SigmaTau.deviation(deviation, records[i, j], m_values; confidence=c)
+    end
+    return ncornered_hat(pairwise)
+end
+
+ncornered_hat(cc::ClockComparisons, taus::TauMode=Octave; deviation::Symbol=:adev, kw...) =
+    ncornered_hat(cc, tau_values(taus, size(cc.x, 1), deviation); deviation, kw...)
+
 """
     groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values=Octave;
                 confidence=DEFAULT_CONFIDENCE, interval=:chi2) → Vector{StabilityResult}
     groslambert(x_ab, x_bc, x_ca, m_values=Octave; kwargs...) → Vector{StabilityResult}
+    groslambert(cc::ClockComparisons, m_values=Octave; reference=true,
+                kwargs...) → Vector{StabilityResult}
 
 Allan deviation of each of ``N ≥ 3`` clocks from the difference records
 between them, by the Groslambert covariance: the cross Allan variance of
@@ -203,9 +274,15 @@ than the others; `dev` is `NaN` there.
   interval and length and no missing samples.
 - `x_ab`, `x_bc`, `x_ca`: for three clocks, the records A−B, B−C and C−A.
   The clocks are returned in the order A, B, C.
+- `cc`: clocks read against one reference, as for [`ncornered_hat`](@ref):
+  the records are the differences of every pair, and the reference is one
+  more clock, returned last. These records close, so the estimate is that
+  of the hat on [`adev`](@ref).
 - `m_values`: averaging factors, or a [`TauMode`](@ref) grid.
 
 # Keywords
+
+- `reference=true`: with `cc`, whether the reference counts as a clock.
 
 - `confidence=0.683`: confidence level of the interval.
 - `interval=:chi2`: the interval reported, `:chi2` or, for three clocks,
@@ -397,3 +474,6 @@ function groslambert(x_ab::AbstractTimingData, x_bc::AbstractTimingData,
     pairwise[3, 1] = x_ca
     return groslambert(pairwise, args...; kw...)
 end
+
+groslambert(cc::ClockComparisons, args...; reference::Bool=true, kw...) =
+    groslambert(_hat_records(cc, reference, "groslambert"), args...; kw...)

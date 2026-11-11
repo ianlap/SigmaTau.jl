@@ -31,6 +31,7 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | `steer FILE` | the Allan deviation of the record steered to its reference in replay, beside that of the record and of the steady state that the clock model predicts |
 | `cross FILE --with FILE2` | the cross Allan deviation and cross-spectrum of two channels |
 | `timescale FILE --value-cols LIST` | a time scale from several clocks read against one reference |
+| `hat FILE --value-cols LIST` | the deviation of each of three or more clocks that are measured against one another |
 | `model --synth N --noise-model R:Q1:Q2:Q3` | the deviations that a clock model predicts |
 | `report FILE` | the analysis of `analyze` as one HTML file |
 | `live SOURCE` | deviations kept up to date while readings arrive |
@@ -129,7 +130,7 @@ sigmatau_json("analyze --synth 1024 --devs adev,tdev --m 1,8 --series 2 --format
 ```
 
 `record` describes the record after its preparation. Every command that
-reads a record gives it, except `timescale`:
+reads a record gives it, except `timescale` and `hat`:
 
 | Member | Meaning |
 |:---|:---|
@@ -488,6 +489,60 @@ sigmatau_json("timescale --synth 1024 --series 2 --format json"; only = "timesca
 scale and, for each clock, its weights at the times kept. With `--flicker`
 the object has a member `flicker`, whose arrays `fm` and `pm` give the
 number of Markov states in the model of each clock.
+
+## `hat`
+
+| Option | Meaning |
+|:---|:---|
+| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference, as for `timescale` |
+| `--pairs` | the three columns hold the differences A−B, B−C and C−A, each as it was measured, in place of clocks read against one reference |
+| `--no-reference` | leave the reference out, for three clocks or more |
+| `--method METHOD` | `hat` (the default), `groslambert` or `klts` |
+| `--devs LIST` | deviations, of `adev`, `mdev`, `hdev`, `mhdev`, `pdev`, `tdev` and `htdev`. By default `adev` |
+| `--grid GRID`, `--m LIST` | averaging factors, as for `analyze` |
+| `--confidence P` | confidence level of the intervals. By default 0.683 |
+
+A measurement of two clocks gives the noise of both. `hat` separates the
+clocks, three or more, from the deviations of every pair of them
+([Three clocks and the three-cornered hat](../tutorials/03_three_cornered_hat.md)).
+Each column is read with the options of the record. The reference cancels
+in the difference of two columns, and it counts as one clock more, named
+`reference`: two columns make a three-cornered hat. Where a column holds
+zeros only, that clock is the reference and none is added. With
+`--no-reference` the hat is that of the differences between the clocks
+alone, and a noisy reference stays out of it. With `--synth` the clocks are
+simulated as for `timescale`, three or more; their reference is perfect and
+counts as no clock.
+
+| Method | Estimate |
+|:---|:---|
+| `hat` | [`ncornered_hat`](@ref) on the deviations of every pair, for each deviation of `--devs` |
+| `groslambert` | [`groslambert`](@ref): the Allan deviation from the covariance of the difference records. The noise that each record of `--pairs` has on its own, such as that of its counter, stays out of it. On clocks read against one reference it equals `hat` on `adev` |
+| `klts` | `groslambert` with the interval of [Lantz et al. (2019)](@cite lantz-2019-klts), for three clocks. It is given also where the estimate is negative, and its lower limit is 0 where the records do not exclude a clock without noise |
+
+The estimate of a clock's variance can be negative: for a clock much more
+stable than the others, for clocks that are correlated, and where few terms
+are averaged. The clock is then not resolved at that averaging time, and its
+`dev` is empty in CSV and `null` in JSON. The intervals of `hat` and
+`groslambert` are too narrow for a clock that is close to that
+([`groslambert`](@ref)). The records need 16 samples or more, and
+`groslambert` and `klts` take none with gaps. The CSV output has a row for
+each clock, deviation and averaging time:
+
+```text
+clock,deviation,tau,dev,ci_lower,ci_upper,edf,neff
+```
+
+```@example cliref
+sigmatau_json("hat --synth 1024 --clocks 3 --m 1,8 --format json"; only = "hat") # hide
+```
+
+`layout` is `"reference"` or, with `--pairs`, `"pairs"`. `clocks` names the
+clocks, and `pairs` lists every pair of them by position in `clocks`. Each
+entry of `results` belongs to one deviation: its `clocks` hold the
+separated result of each clock and its `pairs` the result measured for each
+pair, in the order of the lists above and in the form of a result of
+`analyze`.
 
 ## `model`
 
