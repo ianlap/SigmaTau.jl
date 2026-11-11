@@ -1,5 +1,5 @@
 // The side panel: clocks (when there are several), estimators, options and
-// the Run button. One clock: colour = estimator. Several: colour = clock and
+// the Run button. One clock: color = estimator. Several: color = clock and
 // line style = estimator.
 import { state, update, markStale, multi, isReference, referenceColFor } from "./state.js";
 import { byId, GRIDS, CONFIDENCES, BIASES, NOISES, gridName } from "./estimators.js";
@@ -73,7 +73,7 @@ function options() {
 }
 
 // `pageControls`: settings HTML of the current page, shown instead of the
-// estimators and options (one clock on Spectrum or Dynamic).
+// estimators and options (one clock on Spectrum, Dynamic, Holdover or Steering).
 export function renderPanel(pageControls = null) {
   const side = document.getElementById("side");
   const several = multi();
@@ -91,7 +91,7 @@ export function renderPanel(pageControls = null) {
   side.innerHTML = `
     <div class="side-scroll">
       ${several ? `
-      <section><div class="side-head"><h2>Clocks</h2><span class="note">colour = clock</span></div></section>
+      <section><div class="side-head"><h2>Clocks</h2><span class="note">color = clock</span></div></section>
       <div class="rows">${clockRows()}</div>
       ${referenceSelect()}
       <button class="btn-dashed" type="button" data-act="add-clock">+ Add clock</button>

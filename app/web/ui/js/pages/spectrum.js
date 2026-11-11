@@ -151,14 +151,14 @@ export function refresh() {
   root.querySelector("[data-ref=bottom-title]").innerHTML = isL ? `Phase noise ℒ(f) at ${carrierLabel(state.spec.carrier)}` : "Phase S<sub>x</sub>(f)";
   root.querySelector("[data-ref=bottom-units]").textContent = isL ? "dBc/Hz" : "s²/Hz";
 
-  // The core analyses a record with gaps without its spectrum.
-  const analysed = visibleClocks().filter((c) => c.result?.spectrum);
-  const clocks = analysed.filter((c) => !c.result.spectrum.error);
-  const gapped = analysed.filter((c) => c.result.spectrum.error).map((c) => h(c.name));
-  const why = "The stability estimators skip gaps, but a spectrum needs every sample: turn on <i>Fill gaps</i> on the Data page, or select a range without gaps.";
+  // The core analyzes a record with gaps without its spectrum.
+  const analyzed = visibleClocks().filter((c) => c.result?.spectrum);
+  const clocks = analyzed.filter((c) => !c.result.spectrum.error);
+  const gapped = analyzed.filter((c) => c.result.spectrum.error).map((c) => h(c.name));
+  const why = "A spectrum needs every sample: turn on <i>Fill gaps by reflection</i> on the Data page, or select a range without gaps.";
   root.querySelector("[data-ref=note]").innerHTML = clocks.length && gapped.length ? `No spectrum for ${gapped.join(", ")}, which ${gapped.length > 1 ? "have" : "has"} gaps. ${why}` : "";
   if (!state.clocks.some((c) => c.record)) return showEmpty(`<h2>No record yet</h2><p>Load or synthesize a record on the Data page.</p><button class="btn" data-act="load">Go to Data</button>`);
-  if (!analysed.length) return showEmpty(`<h2>Not analysed yet</h2><p>Run the analysis to compute the spectra.</p><button class="btn btn-primary" data-act="run">Run analysis</button>`);
+  if (!analyzed.length) return showEmpty(`<h2>Not analyzed yet</h2><p>Run the analysis to compute the spectra.</p><button class="btn btn-primary" data-act="run">Run analysis</button>`);
   if (!clocks.length) return showEmpty(`<h2>No spectrum: the record has gaps</h2><p>${why}</p><button class="btn" data-act="load">Go to Data</button>`);
   showEmpty("");
   if (!Plotly) return;
@@ -188,5 +188,5 @@ export function refresh() {
 }
 
 export function hint() {
-  return multi() ? "Colour = clock · both plots share the frequency axis" : "Both plots share the frequency axis · drag either to zoom both";
+  return multi() ? "Color = clock · both plots share the frequency axis" : "Both plots share the frequency axis · drag either to zoom both";
 }

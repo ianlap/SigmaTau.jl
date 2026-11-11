@@ -99,8 +99,8 @@ def hung_up(sock):
 
 def run_core(argv, env, sock=None, timeout=TIMEOUT_S):
     """Run the core and return (returncode, stdout, stderr). If the page hangs
-    up first (it cancelled the run), stop the core and return None, so a
-    cancelled analysis does not keep the processor busy. Raises
+    up first (it canceled the run), stop the core and return None, so a
+    canceled analysis does not keep the processor busy. Raises
     subprocess.TimeoutExpired after `timeout` seconds."""
     proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     done = {}
@@ -282,7 +282,7 @@ class Handler(SimpleHTTPRequestHandler):
             except subprocess.TimeoutExpired:
                 return self.send_json(504, {"error": "analysis timed out"})
         if result is None:
-            return          # the page cancelled the run and hung up; nobody is listening
+            return          # the page canceled the run and hung up; nobody is listening
         code, stdout, stderr = result
         out = stdout.strip()
         if out.startswith(b"{"):

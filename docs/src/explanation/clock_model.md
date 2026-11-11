@@ -65,19 +65,20 @@ round.([powerlaw_sigma(m, τ) closed]; sigdigits = 4)
 
 The flicker noises, ``α`` = 1, −1 and −3, have spectra that no finite set
 of such states produces. [`clock_model`](@ref) treats them in one of two
-ways. By default flicker FM and flicker-walk FM are left out of the model
-and flicker PM is counted as noise of the readings
-([Flicker PM in the readings](@ref)). With `flicker = true`, flicker FM
-and flicker PM are kept as Markov states ([Flicker states](@ref)).
-Flicker-walk FM is left out either way.
+ways. By default flicker FM and flicker PM are kept as Markov states
+([Flicker states](@ref)). With `flicker = false`, flicker FM is left out
+of the model and flicker PM is counted as white noise of the readings
+([Flicker PM in the readings](@ref)), which leaves the two or three
+states above. Flicker-walk FM is left out either way.
 
-!!! warning "The default leaves the flicker FM of a fit out"
-    [`powerlaw_fit`](@ref) fits flicker FM by default and
-    `clock_model(fit)` then leaves it out, so the model has less noise than
-    the fit found. On a clock with a flicker floor its filter claims
-    several times less error than it makes
-    ([What the states buy](@ref)). For prediction, holdover and steering,
-    build the model with `clock_model(fit; flicker = true)`.
+!!! warning "`flicker = false` leaves the flicker FM of a fit out"
+    [`powerlaw_fit`](@ref) fits flicker FM by default, and
+    `clock_model(fit; flicker = false)` leaves it out, so the model has
+    less noise than the fit found. On a clock with a flicker floor its
+    filter claims several times less error than it makes
+    ([What the states buy](@ref)). The `:stein` time scale of
+    [`timescale`](@ref) is the one place that needs a model without the
+    states.
 
 ## Over one step
 
@@ -137,10 +138,10 @@ variance it expected with 3.2 ps and 20 times with 32 ps, and its phase
 estimate had 2.8 and 3.3 times the Allan deviation of the clock at
 ``τ_0``.
 
-By default [`clock_model`](@ref) therefore folds the flicker PM into
-``R``. A filter averages the PM that is faster than its own response and
-follows the rest as if it were the clock, so ``R`` stands for the part it
-averages, as the measurement variance of
+With `flicker = false`, [`clock_model`](@ref) therefore folds the flicker
+PM into ``R``. A filter averages the PM that is faster than its own
+response and follows the rest as if it were the clock, so ``R`` stands for
+the part it averages, as the measurement variance of
 [Van Dierendonck et al. (1984), Eqs. (68)–(69)](@cite van-dierendonck-1984-allan-kalman)
 is the phase noise that a tracking loop does not follow. With
 ``σ_{\mathrm{PM}}^2(τ)`` the Allan variance of the white and flicker PM
@@ -157,7 +158,7 @@ frequency. The paper gives the principle. The formula is this package's.
 
 ```@example clockmodel
 h = Dict(2 => 8π^2 * 1e-24, 1 => 2e-22, 0 => 2e-24, -2 => 1e-30 / 2π^2)
-clock_model(h; tau0 = 1.0)          # white PM alone would give R = 1e-24
+clock_model(h; tau0 = 1.0, flicker = false)    # white PM alone: R = 1e-24
 ```
 
 No white ``R`` makes a filter right about flicker PM. Its slow part is
@@ -165,8 +166,8 @@ still followed as phase of the clock, and the innovations stay correlated:
 across the four cases of the same simulation the normalized innovations of
 the folded model had 0.57 to 0.69 of the variance it expected and a lag-1
 autocorrelation of 0.28 to 0.63, so [`innovation_check`](@ref) fails the
-folded model on such a clock. The Markov states below give the flicker PM
-a model of its own.
+folded model on such a clock. The Markov states below, the default, give
+the flicker PM a model of its own.
 
 The fit has to hold the flicker PM term for either treatment to work.
 Fitted with white PM, white FM and random-walk FM alone, the flicker PM
@@ -268,7 +269,7 @@ a filter without measurement noise. Markov states in the readings are this
 package's own.
 
 ```@example clockmodel
-clock_model(h; tau0 = 1.0, flicker = true)
+clock_model(h; tau0 = 1.0)
 ```
 
 ### Where the states sit
@@ -302,8 +303,9 @@ samples at 1 s from [`noise_gen`](@ref).
 record with [`powerlaw_fit`](@ref), and the Kalman predictor of
 [`holdover`](@ref) started after 8192 s. The four models are
 `clock_model(fit)` of a fit with `alphas = [2, 0, -2]`, the same model
-retuned on the record by [`tune_q`](@ref), `clock_model(fit)` of the
-default fit, and `clock_model(fit; flicker = true)` of the default fit.
+retuned on the record by [`tune_q`](@ref),
+`clock_model(fit; flicker = false)` of the default fit, and
+`clock_model(fit)` of the default fit.
 The first table gives the median RMS error of the prediction at 10, 100,
 1000 and 10 000 s over that of the true levels with states.
 

@@ -10,16 +10,16 @@ const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" s
 // Fitted to the phase and removed before every analysis. On phase a line is a
 // frequency offset and a parabola adds a linear frequency drift.
 const DRIFTS = [
-  ["none", "None", "Analyse the record as measured"],
+  ["none", "None", "Analyze the record as measured"],
   ["linear", "Linear", "Remove a frequency offset (a straight line in phase)"],
-  ["quadratic", "Quadratic", "Remove a frequency offset and a linear frequency drift (a parabola in phase), as SP1065 asks before the total estimators"],
+  ["quadratic", "Quadratic", "Remove a frequency offset and a linear frequency drift (a parabola in phase)"],
 ];
 
 // Frequency drift models fitted on the "Frequency drift" view.
 const MODELS = [
   ["linear", "Linear", "y = a + b·t"],
   ["quadratic", "Quadratic", "y = a + b·t + c·t²"],
-  ["log", "Log", "y = a·ln(1 + b·t) + c, the MIL-PRF-55310 aging model"],
+  ["log", "Log", "y = a·ln(1 + b·t) + c, the stabilization of an oscillator"],
   ["diffusion", "Diffusion", "y = a + b·√(t + c)"],
 ];
 
@@ -78,7 +78,7 @@ function synthCard(c) {
   const s = isSynth ? c.source : { n: 16384, seed: 42, tau0: 1 };
   return `<div class="card synth-card">
     <div><b>Synthetic record</b><div class="muted small">White plus random-walk frequency noise, made in the core. Same seed, same record.
-      With several clocks, each is noisier than the last by a factor of two, all against one perfect reference; the Ensemble page forms its timescale from them.</div></div>
+      With several clocks, each is noisier than the last by a factor of two, all against one perfect reference; the Ensemble page forms its time scale from them.</div></div>
     <div class="synth-grid">
       <label><span>Clocks</span><input type="number" data-synth="clocks" min="1" max="${MAX_SIM_CLOCKS}" step="1" value="${s.clocks ?? 1}"></label>
       <label><span>Samples</span><input type="number" data-synth="n" min="64" max="10000000" step="1" value="${s.n}"></label>
@@ -93,7 +93,9 @@ function synthCard(c) {
 // NaN samples from the core, which puts a reading missing from the time
 // column in its slot as one.
 function gapRow(k) {
-  const tip = `${thousands(k.gaps)} missing sample${k.gaps === 1 ? "" : "s"}, skipped by the gap-tolerant estimators${k.gaps ? " (turn on Fill gaps to fill them)" : ""}`;
+  const tip = k.gaps
+    ? `${thousands(k.gaps)} missing sample${k.gaps === 1 ? "" : "s"}. ADEV, MDEV, HDEV, MHDEV, TDEV, HTDEV, MTIE and TIE rms leave them out; the other estimators, the spectra and the dynamic maps need Fill gaps by reflection`
+    : "No missing samples";
   return `<div class="kv" title="${tip}"><span>Gaps</span><span class="mono ${k.gaps ? "warnv" : ""}">${thousands(k.gaps)}</span></div>`;
 }
 
@@ -113,7 +115,7 @@ function checkCard(c) {
     ${k.start ? `<div class="kv" title="UTC time of the first sample, from the file's timestamps"><span>Start</span><span class="mono">${k.start.replace("T", " ")}</span></div>` : ""}
     ${gapRow(k)}
     <div class="kv"><span>Points past 5σ</span>${out}</div>
-    <div class="kv" title="Least-squares linear frequency drift of the record as analysed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
+    <div class="kv" title="Least-squares linear frequency drift of the record as analyzed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
     <div class="rule"></div>
     ${driftBlock(c, k)}
     ${fillBox(c)}
@@ -142,7 +144,7 @@ export function refresh() {
   const mode = state.dataMode;
   root.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   root.querySelector("[data-ref=caption]").innerHTML = mode === "file"
-    ? "Phase or frequency records: text columns, Stable32, TimeLab .tim, counter logs"
+    ? "Phase or frequency records: text columns, Stable32, TimeLab, counter logs, BIPM UTC − UTC(k) and RINEX clock files"
     : "A test record with known noise, for trying estimators";
   const focus = document.activeElement?.dataset?.field === "name";
   if (!focus) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
@@ -235,8 +237,8 @@ function drawDrift(c) {
 function rangeBar(c) {
   if (!c?.record) return "";
   const r = c.range;
-  return `${r ? `<span class="small">Analysing <span class="mono">${duration(r[0])} – ${duration(r[1])}</span> · <button class="link-btn" data-act="clear-range">whole record</button></span>` : ""}
-    <span class="seg seg-sm" role="group" aria-label="Drag on the plot to">${[["zoom", "Zoom", "Drag to zoom"], ["range", "Select range", "Drag across the plot to analyse only that part of the record"]].map(([v, l, tip]) =>
+  return `${r ? `<span class="small">Analyzing <span class="mono">${duration(r[0])} – ${duration(r[1])}</span> · <button class="link-btn" data-act="clear-range">whole record</button></span>` : ""}
+    <span class="seg seg-sm" role="group" aria-label="Drag on the plot to">${[["zoom", "Zoom", "Drag to zoom"], ["range", "Select range", "Drag across the plot to analyze only that part of the record"]].map(([v, l, tip]) =>
       `<button type="button" data-drag="${v}" class="${state.dataDrag === v ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</span>`;
 }
 
@@ -335,6 +337,6 @@ function onChange(e) {
 
 export function hint() {
   return state.dataDrag === "range"
-    ? "Drag across the plot to choose the part of the record to analyse"
+    ? "Drag across the plot to choose the part of the record to analyze"
     : "Drop a file anywhere in the window · drag on the plot to zoom · double-click to reset";
 }

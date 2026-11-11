@@ -240,7 +240,7 @@ function json_powerlaw(io::IO, o::Options, data::PhaseData, results::Vector{Stab
     json_key(io, "tau", true); json_array(io, taus)
     json_key(io, "adev"); json_array(io, powerlaw_sigma(h, taus; deviation=:adev, tau0=τ₀))
     print(io, '}')
-    m = clock_model(h; tau0=τ₀)
+    m = clock_model(h; tau0=τ₀, flicker=false)        # the white levels: flicker PM folded into R
     json_key(io, "clock_model"); print(io, '{')
     json_key(io, "R", true); json_number(io, m.R)
     json_key(io, "q1"); json_number(io, m.q1)

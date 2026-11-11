@@ -20,6 +20,7 @@ from ._convert import (
     data_from_jl,
     np_f64,
     powerlaw_to_jl,
+    powerlawfit_to_jl,
     result_to_jl,
     to_jl_data,
     to_jl_f64,
@@ -138,34 +139,38 @@ def clock_model(
     *,
     tau0: float | None = None,
     drift: bool | None = None,
-    flicker: bool = False,
+    flicker: bool = True,
     tau_max: float | None = None,
 ) -> ClockModel:
     """The ``ClockModel`` with the white FM, random-walk FM and random-run FM
-    levels of a power-law model, and its PM as the reading noise ``R``: white PM,
-    with flicker PM folded in as the white PM of the same Allan variance where PM
-    hands over to FM, and flicker FM left out.
+    levels of a power-law model, and its white PM as the reading noise ``R``.
 
-    With ``flicker=True`` flicker FM and flicker PM are kept as Markov states
+    Flicker FM and flicker PM are kept as Markov states
     (``ClockModel.flicker_fm``, ``flicker_pm``) across the τ, up to ``tau_max``,
-    where each holds a quarter of the model's Allan variance, and ``R`` is the
-    white PM alone.
+    where each holds a quarter of the model's Allan variance. With
+    ``flicker=False`` flicker FM is left out, and flicker PM is folded into ``R``
+    as the white PM of the same Allan variance where PM hands over to FM; the
+    ``"stein"`` time scale needs such a model.
 
     ``fit`` is a ``PowerLawFit``, a ``NoiseFit`` or an ``{α: h_α}`` mapping (with
-    ``tau0``).
+    ``tau0``). ``tau_max`` defaults to the longest τ of a ``PowerLawFit`` of a
+    deviation, and to 10⁶ τ₀ otherwise.
     """
-    kw: dict[str, Any] = {} if drift is None else {"drift": bool(drift)}
-    if flicker:
-        kw["flicker"] = True
+    kw: dict[str, Any] = {"flicker": bool(flicker)}
+    if drift is not None:
+        kw["drift"] = bool(drift)
     if tau_max is not None:
         kw["tau_max"] = float(tau_max)
     if isinstance(fit, NoiseFit):
         return _model_from_jl(jl.clock_model(fit._jl, **kw))
+    if tau0 is not None:
+        kw["tau0"] = float(tau0)
+    if isinstance(fit, PowerLawFit) and np.isfinite(fit.tau0):
+        # As Julia's own type, so that `tau_max` defaults to the longest τ of the fit.
+        return _model_from_jl(jl.clock_model(powerlawfit_to_jl(fit), **kw))
     if tau0 is None:
-        if not isinstance(fit, PowerLawFit):
-            raise ValueError("clock_model: pass `tau0`, the sample interval in seconds")
-        tau0 = fit.tau0
-    return _model_from_jl(jl.clock_model(powerlaw_to_jl(fit), tau0=float(tau0), **kw))
+        raise ValueError("clock_model: pass `tau0`, the sample interval in seconds")
+    return _model_from_jl(jl.clock_model(powerlaw_to_jl(fit), **kw))
 
 
 @_map_errors

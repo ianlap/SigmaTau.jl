@@ -34,8 +34,8 @@
   --good:         #2c7a4b;
   --error:        #b3261e;
 
-  /* Data series (Okabe-Ito). One clock: colour = estimator. Several
-     clocks: colour = clock, line style = estimator. */
+  /* Data series (Okabe-Ito). One clock: color = estimator. Several
+     clocks: color = clock, line style = estimator. */
   --s1: #0072b2;
   --s2: #e69f00;
   --s3: #009e73;
@@ -45,8 +45,8 @@
   --s7: #3d3d3d;
   --s8: #a88f00;
   --outlier: #e69f00;
-  --on-series: #fff;         /* text on a series-coloured fill */
-  --ci-alpha: 0.14;          /* CI band = series colour at this opacity */
+  --on-series: #fff;         /* text on a series-colored fill */
+  --ci-alpha: 0.14;          /* CI band = series color at this opacity */
 
   /* Noise-type strip on the Stability plot, ordered by α (white PM … random-run FM) */
   --noise-wpm:  #dde4ee;

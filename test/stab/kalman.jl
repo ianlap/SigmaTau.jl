@@ -71,7 +71,7 @@ using Statistics
         # predicts better than the white-only fit and owns up to its error.
         h = Dict(2 => 8π^2 * 1e-26, 0 => 2e-24, -1 => 1.6e-26, -2 => 1.7e-31)
         pf = noise_gen(PhaseData, 65536, 1.0; h=h, rng=MersenneTwister(2001))
-        mf = clock_model(h; tau0=1.0, flicker=true)
+        mf = clock_model(h; tau0=1.0)
         kf = kalman_filter(pf, mf)
         kw = kalman_filter(pf, clock_model(powerlaw_fit(adev(pf); alphas=[2, 0, -2])))
         @test size(kf.x, 2) == 7
@@ -97,8 +97,8 @@ using Statistics
         # overstates it, and the next reading is predicted better.
         h = Dict(1 => 2.2e-22, 0 => 2e-24, -2 => 1.7e-31)
         pp = noise_gen(PhaseData, 65536, 1.0; h=h, rng=MersenneTwister(5))
-        mp = clock_model(h; tau0=1.0, flicker=true)
-        kp, k0 = kalman_filter(pp, mp), kalman_filter(pp, clock_model(h; tau0=1.0))
+        mp = clock_model(h; tau0=1.0)
+        kp, k0 = kalman_filter(pp, mp), kalman_filter(pp, clock_model(h; tau0=1.0, flicker=false))
         @test (size(kp.x, 2), size(k0.x, 2)) == (6, 2)
         @test innovation_check(kp).nis ≈ 1 rtol=0.05
         @test innovation_check(k0).nis < 0.7

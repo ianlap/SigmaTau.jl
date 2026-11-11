@@ -19,16 +19,16 @@ export function openPicker() {
 
   dlg.innerHTML = `
     <div class="picker-head">
-      <div class="side-head"><h2>Add estimators</h2><span class="note">Hover a name for what it measures</span></div>
+      <div class="side-head"><h2>Add estimators</h2><span class="note">The choice applies when the dialog closes</span></div>
       <input type="text" id="picker-q" placeholder="Search, e.g. total, time, theo" autocomplete="off">
     </div>
     <div class="picker-body" id="picker-body">${body()}</div>
     <div class="picker-foot"><span class="muted small" id="picker-count"></span><button class="btn btn-primary" type="button" id="picker-done">Done</button></div>`;
 
   const count = () => {
-    const slow = chosen.has("theo1") || chosen.has("theoh");
+    const slow = ESTIMATORS.filter((e) => e.slow && chosen.has(e.id)).map((e) => e.label);
     dlg.querySelector("#picker-count").textContent =
-      `${chosen.size} selected${slow ? " · Thêo estimators take a few seconds on long records" : ""}`;
+      `${chosen.size} selected${slow.length ? ` · ${new Intl.ListFormat("en-GB").format(slow)} take${slow.length > 1 ? "" : "s"} seconds on a long record` : ""}`;
   };
   count();
 
