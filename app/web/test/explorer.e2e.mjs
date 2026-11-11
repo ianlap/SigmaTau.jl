@@ -86,6 +86,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const grown = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--grow", "2", "--format", "json"])).holdover;
     assert.deepEqual(at0, [grown.rms[0], grown.reference[0]]);
     assert.ok(Math.abs(at0[0] / at0[1] - 1) < 1e-9);
+    // A Kalman filter as the predictor: its claim equals the command line's.
+    await page.click('[data-ctl=kalman][data-v="1"]');
+    const claimed = (await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "Claimed by the filter")?.y, null, SLOW)).jsonValue();
+    assert.deepEqual(await claimed, JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover.claimed);
   });
 
   await t.test("Ensemble: a Kalman scale with flicker states", async () => {

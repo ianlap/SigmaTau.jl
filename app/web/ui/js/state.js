@@ -36,7 +36,7 @@ export const state = {
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
   // Holdover page: training stretch = record / frac, line or parabola (drift), start from the last
   // reading (anchor), the time error limit in seconds (null = none) and the share of trials within it
-  hold: { frac: 4, drift: false, anchor: true, limit: null, limitText: "", confidence: 0.95 },
+  hold: { frac: 4, kalman: false, drift: false, anchor: true, limit: null, limitText: "", confidence: 0.95 },
   // Live page: where the readings come from and what they are
   live: { source: "sim", address: "192.168.1.20:5025", device: "/dev/ttyUSB0", query: "READ?", deviceQuery: "", reading: "hz",
           nominal: "", tau0: 0.1, devs: ["adev", "mdev"] },

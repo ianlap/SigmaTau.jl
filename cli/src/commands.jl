@@ -312,7 +312,7 @@ end
 
 # ── holdover ──────────────────────────────────────────────────────────────
 
-const CSV_HOLDOVER = "source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit"
+const CSV_HOLDOVER = "source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit,claimed"
 
 # The error the power-law model fitted to the record predicts for the same
 # test, and each noise type's share of its variance.
@@ -351,14 +351,26 @@ function holdover_reference(data::PhaseData, h::HoldoverResult)
     return h.drift ? sqrt(20.0) .* htdev(data, ms; ci=false).dev : sqrt(6.0) .* tdev(data, ms; ci=false).dev
 end
 
+# The clock model of a Kalman predictor: the power-law fit to the first
+# training stretch alone, so no trial is predicted with noise levels learned
+# from the readings it is compared with.
+function holdover_model(data::PhaseData, train::Float64, drift::Bool)
+    τ₀ = Float64(data.tau0)
+    b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
+    pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
+    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift)
+end
+
 function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 16, "a holdover test")
     τ₀ = Float64(data.tau0)
     train = isnan(o.train) ? (length(data.x) ÷ 4) * τ₀ : o.train
     limit = isnan(o.limit) ? nothing : o.limit
     tau = isempty(o.taus) ? nothing : o.taus
-    # One call per kind of stretch: the trimmed build resolves each on its own.
-    h = o.grow > 0 ? holdover(data; grow=o.grow, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence) :
+    model = o.kalman ? holdover_model(data, train, o.fit_drift) : nothing
+    # One call per predictor and kind of stretch: the trimmed build resolves each on its own.
+    h = model !== nothing ? holdover(data, model; train, tau, limit, confidence=o.confidence) :
+        o.grow > 0 ? holdover(data; grow=o.grow, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence) :
                      holdover(data; train, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence)
     src = source_name(o, data)
     if o.format != "json"
@@ -368,7 +380,8 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
             csv_number(io, h.tau[i]); print(io, ','); csv_number(io, h.rms[i]); print(io, ',')
             csv_number(io, h.quantile[i]); print(io, ','); csv_number(io, h.worst[i]); print(io, ',')
             csv_number(io, h.mean[i]); print(io, ','); print(io, h.n[i]); print(io, ',')
-            csv_number(io, h.limit); print(io, ','); csv_number(io, h.time_to_limit); print(io, '\n')
+            csv_number(io, h.limit); print(io, ','); csv_number(io, h.time_to_limit); print(io, ',')
+            model === nothing || csv_number(io, h.claimed[i]); print(io, '\n')
         end
         return nothing
     end
@@ -393,6 +406,15 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "limit"); json_number(io, h.limit)
     json_key(io, "time_to_limit"); json_number(io, h.time_to_limit)
     o.fit && (json_key(io, "predicted"); json_holdover_fit(io, data, h))
+    if model !== nothing
+        json_key(io, "claimed"); json_array(io, h.claimed)
+        json_key(io, "model"); print(io, '{')
+        json_key(io, "R", true); json_number(io, model.R)
+        json_key(io, "q1"); json_number(io, model.q1)
+        json_key(io, "q2"); json_number(io, model.q2)
+        json_key(io, "q3"); json_number(io, model.q3)
+        print(io, '}')
+    end
     print(io, '}')
     return elapsed(io, t_start)
 end

@@ -75,7 +75,7 @@ function _lsq(X::Matrix{Float64}, y::Vector{Float64}, ok::BitVector)
         beta .+= step
         w1, w2, w3 = step[1], step[2], p == 3 ? step[3] : 0.0
         c1, c2, c3 = sc[1], sc[2], p == 3 ? sc[3] : 1.0
-        # Every row, so the loop vectorises.
+        # Every row, so the loop vectorizes.
         if p == 3
             @inbounds @simd for i in eachindex(r)
                 r[i] -= X[i, 1] * w1 / c1 + X[i, 2] * w2 / c2 + X[i, 3] * w3 / c3
@@ -93,9 +93,9 @@ function _lsq(X::Matrix{Float64}, y::Vector{Float64}, ok::BitVector)
     return beta ./ sc, rss
 end
 
-# Least-squares polynomial of `degree` 1 or 2 in the centred sample index
+# Least-squares polynomial of `degree` 1 or 2 in the centered sample index
 # t = (i − 1) − (N − 1)/2 over the rows where `ok`, as [c0, c1, c2] (c2 = 0
-# for a line). Centring makes c1 the slope at the record's middle.
+# for a line). Centering makes c1 the slope at the middle of the record.
 function _index_polyfit(x::Vector{Float64}, ok::BitVector, degree::Int)
     N = length(x)
     X = Matrix{Float64}(undef, N, degree + 1)
@@ -110,11 +110,11 @@ end
 
 # ── Detrending ───────────────────────────────────────────────────────────
 
-# In-place detrend of a real vector over its finite samples; NaN samples stay
+# In-place detrend of a real vector over its finite samples. NaN samples stay
 # NaN and do not enter the fit. `:none`, `:mean`, `:endpoint` (the line
 # through the first and last finite samples), `:linear` and `:quadratic`
 # (least squares in the sample index; on phase data the quadratic term is a
-# frequency drift, the removal SP1065 prescribes before the total estimators).
+# linear frequency drift).
 function _detrend_core!(x::Vector{Float64}, mode::Symbol)
     mode === :none && return x
     mode in _DETREND_MODES ||
@@ -150,26 +150,41 @@ end
 _remove_quadratic(x::Vector{Float64}) = _detrend_core!(copy(x), :quadratic)
 
 """
-    detrend(pd::PhaseData; method::Symbol=:linear) → PhaseData
-    detrend(fd::FrequencyData; method::Symbol=:linear) → FrequencyData
+    detrend(data; method=:linear) → PhaseData or FrequencyData
 
-Return a new `PhaseData` / `FrequencyData` with a detrended sample vector.
-The original is left untouched.
+Copy of a record with a trend removed from its samples.
 
-`method` is one of `:linear` (least-squares straight line, default),
-`:quadratic` (least-squares parabola; on phase data this removes a frequency
-drift, the preprocessing SP1065 prescribes before the total estimators),
-`:endpoint` (line through first and last samples), `:mean` (zero-mean), or
-`:none` (returns a copy unchanged). On phase data `:linear` removes a
-frequency offset, not a drift. Gaps (`NaN`) stay where they are and do not
-enter the fit.
+| `method`     | Removes                                | On phase data            | On frequency data        |
+|:-------------|:---------------------------------------|:-------------------------|:-------------------------|
+| `:mean`      | the mean                               | a time offset            | a frequency offset       |
+| `:endpoint`  | the line through the first and last samples | a frequency offset  | a linear frequency drift |
+| `:linear`    | a least-squares line                   | a frequency offset       | a linear frequency drift |
+| `:quadratic` | a least-squares parabola               | a linear frequency drift | a drift that changes linearly |
+| `:none`      | nothing                                |                          |                          |
+
+The least-squares line through phase data is the optimum estimate of a
+frequency offset under white PM noise, and the least-squares parabola that
+of a frequency drift. The least-squares line through frequency data is the
+optimum estimate of a drift under white FM noise
+([SP1065 §5.18, §5.21 and §5.22](@cite riley-2008-sp1065)). A fit is judged
+by whether its residuals are random. [`drift_fit`](@ref) reports the drift
+and fits the log and diffusion models as well.
+
+Missing samples (`NaN`) stay in place and do not enter the fit, and
+`:endpoint` takes the first and last samples that are present.
 
 # Examples
 
-```julia
-pd = PhaseData(cumsum(randn(1024)) .+ 1e-3 .* (0:1023), 1.0)
-pd_clean = detrend(pd)                    # :linear default
-pd_zero  = detrend(pd; method=:mean)
+```jldoctest
+julia> using SigmaTau
+
+julia> x = PhaseData([2.0 + 3k + 0.5k^2 for k in 0:9], 1.0);
+
+julia> maximum(abs, detrend(x; method=:quadratic).x) < 1e-12
+true
+
+julia> print(detrend(x; method=:endpoint).x[[1, end]])
+[0.0, 0.0]
 ```
 """
 detrend(pd::PhaseData; method::Symbol=:linear) =
