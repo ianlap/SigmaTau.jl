@@ -1,44 +1,61 @@
-# sigmatau command line
+# The `sigmatau` command line
 
-`SigmaTauCLI` is the `sigmatau` program: one binary with the subcommands
-`analyze`, `check`, `spectrum`, `dynamic`, `cross`, `drift`, `holdover`, `report`, `live`,
-`completion` and `version`. The explorer (`app/web`, `app/desktop`) runs it with `--format json`. Usage, the
-CSV columns, the JSON schema and the exit codes are in
-[docs/src/guide/cli.md](../docs/src/guide/cli.md).
+`SigmaTauCLI` is the source of `sigmatau`, the package as one compiled
+program. `sigmatau help` lists its commands. The
+[guide](https://ianlap.github.io/SigmaTau.jl/dev/guide/cli/) covers the
+common tasks, and the
+[reference](https://ianlap.github.io/SigmaTau.jl/dev/reference/cli/) lists
+every command and option, the columns of the CSV output, the JSON schema
+and the exit codes. The explorer (`app/web`, `app/desktop`) runs this
+program for every analysis it shows.
 
-```
+```text
 cli/
-  Project.toml        SigmaTau from this repository, FFTW from the trim-safe fork
+  Project.toml        SigmaTau from this repository, FFTW from a fork
   src/SigmaTauCLI.jl  entry point, errors, exit codes
-  src/options.jl      the option table (parser, help and completions read it)
-  src/record.jl       reading or synthesising the record
-  src/commands.jl     analyze, check, spectrum, dynamic, cross, drift, holdover
-  src/report.jl       report: the self-contained HTML page
-  src/live.jl         live: instrument or simulator readings to running σ(τ)
-  src/output.jl       JSON and CSV writers
-  src/completion.jl   bash, zsh, fish and PowerShell scripts
-  test/runtests.jl    tests (in process, and against a build with SIGMATAU_EXE)
+  src/options.jl      the table of options, read by the parser, the help and completion
+  src/record.jl       reads or simulates the record
+  src/commands.jl     the analysis commands
+  src/report.jl       the HTML report
+  src/live.jl         readings from an instrument or the simulator
+  src/output.jl       the JSON and CSV writers
+  src/completion.jl   the bash, zsh, fish and PowerShell scripts
+  test/runtests.jl    the tests
 ```
 
 ## Build
 
+With Julia 1.12 or later:
+
 ```bash
+julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'      # installs ~/.julia/bin/juliac
 julia --project=cli -e 'using Pkg; Pkg.instantiate()'
 juliac --output-exe sigmatau --bundle cli/build --trim=safe --experimental cli
+cli/build/bin/sigmatau version
 ```
 
-The build takes a few minutes and must pass `--trim=safe` with no errors.
-It depends on the FFTW.jl fork `ianlap/FFTW.jl` (branch `juliac-trim`) with
-the `eager_library = true` preference, both set in `Project.toml`: stock
-FFTW.jl dispatches dynamically when it frees plans and loads its library
-lazily, which trimming rejects or which crashes at the first FFT.
+The build takes a few minutes. The folder `cli/build` holds the program
+and the Julia runtime libraries it loads, about 150 MB in all.
 
-The code follows a few rules so it stays trim-safe: options live in one
-concrete struct, estimators are picked through the library's registry (an
-if-chain), keyword arguments are concrete at every call (no
-`Union{Nothing,…}` keywords, so optional ones get their own call sites), no
-`do`-block closures over reassigned locals, no `showerror`, no JSON package,
-and all output is rendered into an `IOBuffer` before it is written.
+`Project.toml` takes FFTW.jl from the fork `ianlap/FFTW.jl`, branch
+`juliac-trim`, with the preference `eager_library = true`. The registered
+FFTW.jl dispatches dynamically when it frees a plan and loads its library
+on first use. Under trimming these fail the build or crash the program at
+its first FFT.
+
+## Code that trims
+
+The build must pass `--trim=safe` without errors. The code in `cli/src`
+keeps to these rules for it:
+
+- the options live in one concrete struct;
+- an estimator is chosen through the registry of the package, which is an
+  if-chain;
+- keyword arguments have a concrete type at every call, so an optional
+  keyword gets a call of its own in place of a `Union{Nothing,…}`;
+- no `do` block closes over a local variable that is assigned again;
+- no `showerror`, and no JSON package: `output.jl` writes the JSON;
+- output is written to an `IOBuffer` first and to the stream at the end.
 
 ## Test
 
@@ -47,11 +64,7 @@ julia --project=cli cli/test/runtests.jl
 SIGMATAU_EXE=cli/build/bin/sigmatau julia --project=cli cli/test/runtests.jl
 ```
 
-The second form also runs the compiled binary and checks that it answers
-byte for byte like the in-process call.
-
-Measured on a 4-core Linux container (Julia 1.13.3): the build takes about
-a minute once the packages are precompiled, the executable is 15 MB in a
-132 MB bundle, `version` returns in 24 ms, six deviations on 8192 points in
-29 ms, and `analyze --spectrum` with the default four estimators on 65 536
-points in 64 ms.
+The first form runs the commands inside the Julia process. The second
+also runs the compiled program and requires its output to match that of
+the same call in the process: the same text, with every number equal
+within a relative difference of 10⁻¹².

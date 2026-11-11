@@ -1,119 +1,129 @@
 # Getting started
 
-This page takes you from a vector of numbers to a plotted, saved stability
-analysis in the REPL. It assumes SigmaTau is installed (see [Home](index.md)).
+This tutorial takes a set of samples to a stability plot and a saved
+result, in the Julia REPL. It uses the package and, for the plot, `Plots`:
 
-## 1. Wrap your samples in a record
+```julia-repl
+pkg> add SigmaTau Plots
+```
 
-Every analysis starts from a record: the samples plus the sample interval
-τ₀ in seconds. Phase (time-error) samples in seconds go in a
-[`PhaseData`](@ref); fractional-frequency samples go in a
-[`FrequencyData`](@ref).
+## A record
+
+An analysis starts from a record: the samples and the interval ``τ_0``
+between them, in seconds. Phase samples, in seconds, make a
+[`PhaseData`](@ref), and fractional-frequency samples a
+[`FrequencyData`](@ref). Here the samples are simulated, 4096 values of
+white frequency noise:
 
 ```@example start
 using SigmaTau, Random
-Random.seed!(1)
 
-τ₀ = 1.0
-y  = 1e-12 .* randn(4096)          # white FM, fractional frequency
-x  = τ₀ .* cumsum(y)               # the same record as phase, in seconds
+y = 1e-12 .* randn(Xoshiro(1), 4096)   # fractional frequency
+f = FrequencyData(y, 1.0)              # sampled every second
+```
 
-p = PhaseData(x, τ₀)
-f = FrequencyData(y, τ₀)
+The estimators take a record of either kind and never a bare vector, so the
+sample interval always travels with the data.
+[Conventions](explanation/conventions.md) defines phase, frequency and the
+other quantities used here.
+
+## A deviation
+
+[`adev`](@ref) computes the overlapping Allan deviation:
+
+```@example start
+r = adev(f)
+```
+
+Each row is one averaging time ``τ = mτ_0``. With no second argument the
+averaging factors ``m`` are spaced by octaves, up to the longest the record
+supports. A named grid or the factors themselves can be given instead:
+
+```@example start
+adev(f, Decade)                 # m = 1, 10, 100, 1000
+adev(f, [1, 3, 10, 30, 100])    # these factors
 nothing # hide
 ```
 
-Wrapping is the one way in: the estimators take a record, never a bare
-vector, so the sample interval always travels with the data. Both kinds of
-record work everywhere; frequency records are integrated to phase internally.
-
-To read a file instead, use [`read_phase`](@ref) or
-[`read_frequency`](@ref). They handle two-column text files, CSV and TSV,
-Stable32 `.DAT` exports and files that [`save`](@ref) wrote, and they infer τ₀
-from the time column or the header:
-
-```julia
-p = read_phase("clock.dat")                          # time and phase columns
-p = read_phase("counter.csv"; value_col=3, scaling=1e-9)   # ns → s
-p = read_phase("phase.txt"; time_col=0, value_col=1, tau0=1.0)   # one column, no time
-```
-
-[Reading and saving data](tutorials/02_reading_your_data.md) covers the
-readers, gaps and outliers in detail.
-
-## 2. Compute a deviation
-
-Each estimator has three call forms:
+The result is a [`StabilityResult`](@ref) whose fields are vectors with one
+entry for each averaging time:
 
 ```@example start
-adev(p)                    # default: octave-spaced τ up to the estimator's limit
-adev(p, Decade)            # a named τ grid (a TauMode)
-adev(p, 1:10)              # any integer range or vector of averaging factors m
-r = adev(p, [1, 2, 4, 8, 16, 32, 64])   # τ = m·τ₀
+r.tau[1], r.dev[1], r.noise_type[1], r.ci[1]
 ```
 
-The result is a [`StabilityResult`](@ref), shown above as a table. Its
-fields are plain vectors with one entry per τ: `r.tau` (seconds), `r.dev`,
-`r.noise_type`, `r.ci` (the `(lo, hi)` bounds), `r.edf` and `r.neff`.
+`noise_type` is the noise the package identified at that averaging time,
+here white FM, and `ci` is the confidence interval that follows from it, at
+68.3 % by default. Both can be set in the call:
 
 ```@example start
-r.dev[1], r.noise_type[1], r.ci[1]
+adev(f, [1, 10, 100]; confidence = 0.95, noise = :WHFM)
 ```
 
-`r.edf` holds the equivalent degrees of freedom behind each interval and
-`r.neff` the number of terms averaged. Intervals default to 68.3 %
-(`DEFAULT_CONFIDENCE`); pass `confidence=0.95` for wider ones, or
-`ci=false` to skip the intervals when you only want the deviation (the
-total estimators still identify the noise for their bias correction unless
-you also pass `correct_bias=false`).
+[Noise identification](explanation/noise_identification.md) and
+[Confidence intervals](explanation/confidence.md) explain how the two
+columns are obtained and how far to trust them. `ci=false` leaves both out.
 
-```@example start
-adev(p; confidence=0.95).ci[1]
-```
+Every other estimator is called the same way: [`mdev`](@ref),
+[`hdev`](@ref), [`totdev`](@ref) and the rest of the
+[estimator reference](reference/estimators.md).
+[Choosing an estimator](guide/choosing.md) says which to use when.
 
-## 3. Compute several at once
+## Several deviations
 
 [`stability`](@ref) runs a set of estimators on one record and returns a
-[`StabilitySuite`](@ref), indexed by estimator name:
+[`StabilitySuite`](@ref), indexed by name:
 
 ```@example start
-suite = stability(p; devs=(:adev, :mdev, :hdev, :totdev))
-suite[:hdev].dev[1:3]
+suite = stability(f; devs = (:adev, :mdev, :hdev, :totdev))
+suite[:mdev].dev[1:3]
 ```
 
-Not sure which estimators you need? See
-[Choosing an estimator](guide/choosing.md).
+## A plot
 
-## 4. Plot
-
-Loading `Plots` turns on the plot recipes: `plot(result)` draws σ(τ) on
-log-log axes with confidence-interval bars, and `plot(suite)` overlays the
-suite.
+Loading `Plots` turns on the plot recipes. A result or a suite plots on
+logarithmic axes with its confidence intervals:
 
 ```@example start
 using Plots
 plot(suite)
 ```
 
-[Plotting and tables](guide/plotting.md) shows the other styles: bands,
-overlays of several clocks, spectra and dynamic maps.
+All four fall as ``τ^{-1/2}``, the slope of white FM
+([Power-law noise](explanation/noise.md)).
+[Plotting and tables](guide/plotting.md) has the other plots: bands,
+several clocks on one axis, spectra and dynamic stability.
 
-## 5. Save
+## Saving
 
-[`save`](@ref) writes records, results and suites as plain text that any
-tool can read; [`read_phase`](@ref) reads records back and [`load`](@ref)
-reads results and suites.
+[`save`](@ref) writes a record, a result or a suite as text that any
+program can read, and [`load`](@ref) reads it back:
 
 ```@example start
-dir = mktempdir()
-save(joinpath(dir, "adev.tsv"), r)
-load(joinpath(dir, "adev.tsv")).dev ≈ r.dev
+file = joinpath(mktempdir(), "adev.tsv")
+save(file, r)
+load(file).dev == r.dev
 ```
 
-## Where next
+## A file of your own
 
-- [A drifting clock and the Hadamard family](tutorials/01_drifting_clock_hadamard.md):
-  why drift spoils ADEV and what to use instead.
-- [Noise, EDF and confidence](explanation/noise_and_confidence.md): what the
-  noise types and intervals mean.
-- [Reference](reference/estimators.md): every estimator and its keywords.
+[`read_phase`](@ref) and [`read_frequency`](@ref) read columns of text, and
+[`read_data`](@ref) reads the files of instruments and of other programs:
+
+```julia
+p = read_phase("clock.txt")                       # time and phase columns
+p = read_phase("clock.txt"; value_col = 3, scaling = 1e-9)   # nanoseconds
+p = read_data("clock.tim")                        # a TimeLab file
+```
+
+[Reading and saving data](tutorials/02_reading_your_data.md) goes through
+the readers, and [Gaps, outliers and drift](guide/preparing.md) through the
+checks a measured record needs before its deviations mean anything.
+
+## Next
+
+- [A drifting clock and the Hadamard family](tutorials/01_drifting_clock_hadamard.md)
+  shows what drift does to the Allan deviation and what to use instead.
+- [Choosing an estimator](guide/choosing.md) maps the question asked of a
+  record onto an estimator.
+- [The explorer](explorer/index.md) does the same analysis without code.

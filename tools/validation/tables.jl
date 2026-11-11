@@ -1,16 +1,17 @@
-# tables.jl — rewrites the per-τ tables of docs/src/explanation/validation.md
-# from the stable32gen fixture and its Stable32 and allantools references.
+# tables.jl — rewrites the tables at each averaging time on
+# docs/src/explanation/validation.md from the 8192-point record and the
+# Stable32 and allantools tables stored with it.
 #
 #   julia --project=. tools/validation/tables.jl
 #
-# Each table sits under a `### <name>` heading named as in the Stable32 file;
-# the text around the tables is left alone.
+# Each table sits under a `### <name>` heading, named as in the Stable32
+# file. The text around the tables is left as it is.
 using SigmaTau, Printf
 
 const FIX  = joinpath(@__DIR__, "..", "..", "test", "fixtures", "validation")
 const PAGE = joinpath(@__DIR__, "..", "..", "docs", "src", "explanation", "validation.md")
 
-# name => (estimator, keywords of the reference convention, has a bias correction)
+# name => (estimator, keywords, has a bias correction)
 const TABLES = [
     "Overlapping Allan"    => (adev,    (;),                    false),
     "Modified Allan"       => (mdev,    (;),                    false),
@@ -41,15 +42,14 @@ function table(p, name, (est, kw, biased))
     ms  = sort!(collect(keys(s32)))
     r   = est(p, ms; kw...)
     raw = biased ? est(p, ms; kw..., correct_bias=false) : r
-    # Stable32 reports MTOTDEV raw, so its bounds are compared with the raw ones.
+    # Stable32 prints MTOTDEV uncorrected, so its limits go with the uncorrected call.
     shown = est === mtotdev ? raw : r
     io = IOBuffer()
     if biased
-        println(io, "| τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI",
-                    est === mtotdev ? " (raw)" : "", " |")
+        println(io, "| τ (s) | Stable32 | allantools | Uncorrected | Default | Stable32 interval | SigmaTau interval |")
         println(io, "|---:|:---|:---|:---|:---|:---|:---|")
     else
-        println(io, "| τ (s) | Stable32 | allantools | SigmaTau | Stable32 CI | SigmaTau CI |")
+        println(io, "| τ (s) | Stable32 | allantools | SigmaTau | Stable32 interval | SigmaTau interval |")
         println(io, "|---:|:---|:---|:---|:---|:---|")
     end
     for (k, m) in enumerate(ms)
@@ -63,7 +63,7 @@ function table(p, name, (est, kw, biased))
 end
 
 function main()
-    p = read_phase(joinpath(FIX, "stable32gen.DAT"); time_col=0, value_col=1, tau0=1.0, header=10)
+    p = read_phase(joinpath(FIX, "stable32gen.DAT"))
     page = read(PAGE, String)
     for (name, spec) in TABLES
         block = Regex("(^### \\Q$name\\E\\n(?:(?!\\|).*\\n)*?)(?:\\|.*\\n)+", "m")

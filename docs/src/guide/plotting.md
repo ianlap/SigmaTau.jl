@@ -1,162 +1,143 @@
 # Plotting and tables
 
-SigmaTau ships its plot recipes as a package extension that loads the moment
-`Plots` (or anything else that loads `RecipesBase`) is in the session; the
-package itself has no plotting dependency. Each section below is a recipe you
-can paste into the REPL.
-
-```julia
-using Plots, SigmaTau
-```
-
-## A single result
-
-`plot(result)` draws σ(τ) on log-log axes with circle markers at each
-computed τ, integer-decade ticks, and asymmetric error bars spanning the χ²
-confidence interval `[r.ci[i].lo, r.ci[i].hi]`:
+The package draws nothing itself. Its plot recipes load when `Plots` does,
+or any other package built on `RecipesBase`, and a result prints as a
+table and converts to one.
 
 ```@example plotting
-using Plots, SigmaTau, Random
-Random.seed!(42)
+using SigmaTau, Plots, Random
 
-# WHFM at σ_y(1 s) = 1e-12 plus RWFM at 3e-14, 8192 samples at τ₀ = 1 s
-p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14))
+# white FM of 1e-12 at 1 s and random-walk FM, 8192 samples at 1 s
+p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14),
+              rng = Xoshiro(5))
 r = adev(p)
+nothing # hide
+```
 
+## A deviation
+
+`plot(r)` draws a [`StabilityResult`](@ref) on logarithmic axes, with a bar
+for the confidence interval at each averaging time:
+
+```@example plotting
 plot(r)
 ```
 
-Every default yields to a standard `Plots` attribute passed at the call site:
+The attributes of `Plots` apply as usual, and `ci_band = true` draws the
+interval as a band:
 
 ```@example plotting
-plot(r; lw = 1.5, marker = :diamond, ms = 4,
-     title = "Overlapping Allan deviation", legend = :bottomleft)
+plot(r; ci_band = true, fillalpha = 0.25, lw = 1.5, title = "Clock A",
+     legend = :bottomleft)
 ```
 
-## Confidence-interval styles
+The interval is the one the call computed: `adev(p; confidence = 0.95)`
+widens it and `adev(p; ci = false)` leaves it out. The limits are also
+vectors, `ci_lower(r)` and `ci_upper(r)`. [`mtie`](@ref) and
+[`tierms`](@ref) have no interval and plot as plain curves.
 
-| Call                        | CI rendering                        |
-|:---|:---|
-| `plot(r)`                   | error bars (default)                |
-| `plot(r; ci_band = true)`   | filled band                         |
-| `plot(adev(p; ci = false))` | none, since the `ci` vector is empty |
+## Several curves
+
+A [`StabilitySuite`](@ref) plots its deviations on one pair of axes:
 
 ```@example plotting
-plot(r; ci_band = true, fillalpha = 0.3)
+plot(stability(p); legend = :bottomleft)
 ```
 
-Pass `confidence = 0.95` to the deviation call to widen the bounds. The
-bounds are also available as plain vectors through `ci_lower(r)` and
-`ci_upper(r)` for custom styling. `mtie` and `tierms` have no interval model
-and plot as bare curves.
-
-## Overlaying deviations and clocks
-
-`plot(suite)` overlays every result of a [`StabilitySuite`](@ref) on one set
-of axes. The default suite is all σ_y quantities, so the shared ordinate is
-consistent; time deviations (`tdev`, `htdev`, `ttotdev`) are σ_x quantities
-in seconds and belong on their own axes.
+So does a vector of results, which is the way to compare clocks. `label`
+takes one name for each:
 
 ```@example plotting
-suite = stability(p)          # adev, mdev, hdev, mhdev
-plot(suite; legend = :bottomleft)
+q = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 3e-12), rng = Xoshiro(6))
+plot([adev(p), adev(q)]; label = ["clock A" "clock B"], legend = :bottomleft)
 ```
 
-To compare clocks rather than deviations, overlay with explicit labels:
+`plot!(adev(q))` adds a curve to a figure that exists. The time deviations
+([`tdev`](@ref), [`htdev`](@ref), [`ttotdev`](@ref)) are in seconds, so
+give them axes of their own.
+
+## A reference line
+
+The slope of a curve names the noise
+([Power-law noise](../explanation/noise.md) has the table). A line of a
+given slope is an ordinary series, anchored here at the first point:
 
 ```@example plotting
-p2 = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 3e-12))
-
-plot(adev(p); label = "clock A", legend = :bottomleft)
-plot!(adev(p2); label = "clock B")
-```
-
-## Slope guides
-
-On log-log axes the slope of σ_y(τ) identifies the dominant noise type
-[riley-2008-sp1065](@cite):
-
-| Noise type     | α  | ADEV slope | MDEV slope |
-|:---|---:|:-----------|:-----------|
-| WHPM           |  2 | τ⁻¹        | τ⁻³ᐟ²      |
-| FLPM           |  1 | ≈ τ⁻¹      | τ⁻¹        |
-| WHFM           |  0 | τ⁻¹ᐟ²      | τ⁻¹ᐟ²      |
-| FLFM           | −1 | τ⁰         | τ⁰         |
-| RWFM           | −2 | τ⁺¹ᐟ²      | τ⁺¹ᐟ²      |
-
-A reference slope is an ordinary series anchored at a point on the curve:
-
-```@example plotting
-guide = r.dev[1] .* (r.tau ./ r.tau[1]) .^ (-1/2)
+line = r.dev[1] .* (r.tau ./ r.tau[1]) .^ (-1/2)
 
 plot(r; legend = :bottomleft)
-plot!(r.tau, guide; ls = :dash, color = :gray, label = "τ^(-1/2), WHFM")
+plot!(r.tau, line; ls = :dash, color = :gray, label = "τ^(-1/2), white FM")
 ```
 
-## Spectral densities
+## Spectra
 
-`psd_y`, `psd_x` and `ssb_phase_noise` return a [`SpectralResult`](@ref). `S_y(f)` and `S_x(f)`
-render on log-log axes; `ℒ(f)` is in dBc/Hz and gets a log frequency axis
-with a linear ordinate. The DC bin is dropped.
+[`psd_y`](@ref), [`psd_x`](@ref) and [`ssb_phase_noise`](@ref) return a
+[`SpectralResult`](@ref), which plots against a logarithmic frequency axis:
 
 ```@example plotting
 plot(psd_y(p))
 ```
 
-## Dynamic deviations
+``ℒ(f)`` from `ssb_phase_noise(p; f_carrier = 10e6)` is in dBc/Hz and gets
+a linear vertical axis.
 
-[`dadev`](@ref) and [`dhdev`](@ref) return σ(t, τ) over sliding windows.
-`plot(d)` draws the presentation used in SP1065: one σ(τ) curve per window
-time, stacked along the time axis as 3-D lines. The fixture here steps the
-white-FM level up tenfold halfway through, an event a static deviation
-averages over:
+## Dynamic stability
+
+[`dadev`](@ref) and [`dhdev`](@ref) return the deviation in a window that
+slides along the record. The plot is the one of
+[SP1065 §5.2.20](@cite riley-2008-sp1065): a curve for each window, set
+out along a time axis. The record here is white FM whose level rises tenfold
+halfway through, which a deviation of the whole record would average over:
 
 ```@example plotting
-Random.seed!(7) # hide
-y_step = [randn(4096) .* 1e-11; randn(4096) .* 1e-10]
-d = dadev(FrequencyData(y_step, 1.0), Octave; window = 2048, step = 1024)
+rng = Xoshiro(7)
+y = [1e-11 .* randn(rng, 4096); 1e-10 .* randn(rng, 4096)]
+d = dadev(FrequencyData(y, 1.0); window = 1024, step = 512)
 
-plot(d; camera = (60, 25), legend = :topleft)
+plot(d; camera = (40, 30), xlabel = "τ (s)", ylabel = "t (s)", size = (700, 480))
 ```
 
-`camera = (azimuth, elevation)` rotates the view. Maps with more than eight
-windows are drawn without a legend; the raw matrix is `d.dev` (windows × τ)
-with window centres in `d.t`.
+`camera` turns the view, and the short axis labels keep clear of the tick
+labels. The result holds the map itself, `d.dev`, with a row for each
+window center in `d.t` and a column for each averaging time in `d.tau`,
+for any other picture of it:
+
+```@example plotting
+heatmap(d.t, d.tau, log10.(d.dev'); yscale = :log10, xlabel = "time (s)",
+        ylabel = "τ (s)", title = "log10 of the Allan deviation")
+```
 
 ## Tables
 
-A result prints as an aligned table in the REPL, one row per τ:
+A result prints as a table, one row for each averaging time:
 
 ```@example plotting
 adev(p, [1, 10, 100, 1000])
 ```
 
-With `Tables.jl` loaded, a result or suite is a row table, so it drops into
-`DataFrame`, `CSV.write`, or `PrettyTables` for Markdown and LaTeX output:
+A result or a suite is also a table in the sense of `Tables.jl`, with the
+columns `deviation_type`, `tau`, `dev`, `noise_type`, `ci_lower`,
+`ci_upper`, `edf` and `neff`. Any package that reads such tables takes one
+directly:
 
 ```julia
-using Tables, DataFrames, PrettyTables
+using DataFrames, CSV
 
-df = DataFrame(adev(p))      # columns tau, dev, noise_type, ci_lower, ci_upper, edf, neff
-pretty_table(df)             # text; PrettyTables also has Markdown, HTML and LaTeX backends
-
-DataFrame(stability(p))      # one row per τ per deviation, with a deviation_type column
+df = DataFrame(r)
+CSV.write("adev.csv", stability(p))        # one row for each deviation and τ
 ```
 
-`save(path, r)` and `save(path, suite)` write the same columns as a
-tab-separated text file that spreadsheets open directly.
+[`save`](@ref) needs none of these packages. It writes a result or a suite
+as tab-separated text, with the settings of the call in comment lines, and
+[`load`](@ref) reads the file back.
 
-## Publication export
+## Saving a figure
 
-`size` (pixels) and `dpi` are standard `Plots` attributes; `savefig` picks the
-format from the extension. PDF and SVG are vector formats and ignore `dpi`:
+`savefig` takes the format from the extension. `size` is in pixels and
+`dpi` sets the resolution of a PNG, while PDF and SVG are vector formats:
 
 ```julia
-fig = plot(r; ci_band = true, size = (800, 500), dpi = 300, lw = 1.5,
-           legend = :bottomleft)
+fig = plot(r; ci_band = true, size = (800, 500), dpi = 300)
 savefig(fig, "adev.png")
 savefig(fig, "adev.pdf")
 ```
-
-For LaTeX documents, `Plots.pgfplotsx()` (which needs a TeX engine) renders
-figures whose fonts match the surrounding text.
