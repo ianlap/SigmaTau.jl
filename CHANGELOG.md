@@ -138,6 +138,10 @@ Clock models, the Kalman filter and timescales.
   the filter itself claims (`claimed`) beside the one measured. The CSV
   gains a trailing `claimed` column, empty without `--kalman`, so its header
   changes for existing readers.
+- `sigmatau holdover --kalman --format json` gives `fit_tau_max`, the
+  longest averaging time of the fit behind the predictor's clock model, and
+  the explorer dots the claimed curve past it, where the claim extrapolates
+  the model.
 - Clock steering: `steering_gains` sets the gains of a steering loop by pole
   placement, from a time constant or from poles, with or without an integral
   gain (Matsakis 2019, 2020); `steering_poles` gives the poles, time
@@ -421,6 +425,14 @@ Clock models, the Kalman filter and timescales.
 - Documentation: a background page, "The Hadamard time deviation", on where
   the 10/3 of `htdev` comes from, and √6·TDEV and √20·HTDEV as the errors of
   predicting the next τ-average with a line and with a parabola.
+- Documentation: the clock model, Kalman filter, clock ensembles, holdover
+  and steering pages and Tutorial 4 are rewritten, and the docstrings of the
+  clock-model, Kalman, time-scale, comparison and holdover functions follow
+  the layout of the rest, each citation with its equation or section. Every
+  figure given in simulation was measured again. Corrected: what
+  `:jones_tryon` loses against `:greenhall`, that it carries a drift state,
+  what leaving flicker FM out of a clock model costs, and where a parabola
+  predicts better than a line.
 - Explorer: the help is the manual. **?** opens a menu with a search through
   the manual and the sections on the page in view, F1 opens the help of that
   page, and the help page shows the manual by topic, written from
@@ -632,11 +644,37 @@ Clock models, the Kalman filter and timescales.
   the largest starting variance of the other clocks and a starting frequency
   of zero, so a good clock that joined late had almost no weight for the
   rest of the record and one with a rate offset moved the scale's rate.
+- A clock whose first reading comes after the start of the record is started
+  against the scale, so the scale no longer depends on the reference the
+  readings were taken against: `:ewfa`, `:at1` and `:at2` take its frequency
+  against the scale over its own first stretch, and `:greenhall` and
+  `:jones_tryon` start it from a clock already in the scale, without a step.
+  A clock first read while no other clock is read no longer turns the
+  `:ewfa`, `:at1` and `:at2` scales to NaN.
 - `read_phase` and `read_frequency` take the unit of a time column from its
   name in the line that `header` skips, as `read_data` does, so a column
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
   reads a table with named columns without `--header`, and its read errors
   name the CLI flags.
+- `tune_q` returned a model whose claimed error was arbitrary, because its
+  prediction-error criterion does not see a common factor on `R`, `q1` and
+  `q2`. The tuned levels are now scaled by the mean squared normalized
+  innovation (Tryon and Jones 1983, Eq. 5.1), and the result carries `scale`
+  and `edge` (best pair on the edge of the grid).
+- `sigmatau model` writes to `--out`, which it accepted and ignored, and
+  refuses a FILE and the options of the record, which it never used; its
+  errors are answered in JSON. `sigmatau help` sets the long command
+  signatures apart from their descriptions, `help model` names the three
+  deviations it writes, the help of `live` no longer speaks of a FILE, and
+  `--nominal` and `--tau0` state their defaults for `live`, `model` and
+  `--synth`. A test checks that the command-line reference names every
+  command and option.
+- Shell completion: every command completes its options and every option
+  with fixed values completes them, in bash, zsh, fish and PowerShell. The
+  scripts are generated from the option table and tested in each shell.
+  Before, `cross`, `steer`, `timescale` and `model` completed no options,
+  and no shell completed the values of `--input-format`, `--bias`,
+  `--noise`, `--mask`, `--algorithm` or `--steps`.
 
 ### Security
 

@@ -4,7 +4,8 @@
 #
 # With SIGMATAU_EXE set to a compiled binary (cli/build/bin/sigmatau), the
 # last testset also runs it and checks that it answers exactly like the
-# in-process call.
+# in-process call. The completion scripts run in each of bash, zsh, fish and
+# pwsh that is installed; CI has all four.
 
 using Test
 using SigmaTau
@@ -36,6 +37,39 @@ end
 
 csv_rows(s) = [split(l, ',') for l in split(strip(s), '\n')[2:end]]
 
+# Each shell loads its completion script and prints, one line per command
+# line (current word last), the words it offers. zsh completes only at a
+# terminal, so its completion builtins are stubbed.
+quoted(w) = join(repr.(w), ' ')
+const SHELL_DRIVERS = Dict(
+    "bash" => (`bash`, (s, q) -> "source $s\n" * join(("COMP_WORDS=($(quoted(w))); COMP_CWORD=$(length(w) - 1); COMPREPLY=(); _sigmatau; echo \"\${COMPREPLY[*]}\"" for w in q), "\n")),
+    "zsh" => (`zsh`, (s, q) -> """
+        _arguments() { if (( CURRENT == 2 )); then state=cmd; else state=args; shift words; (( CURRENT-- )); fi }
+        _values() { [[ \$1 == -s ]] && shift 2; shift; print -rn -- "\$* " }
+        compadd() { print -rn -- "\${(P)2} " }
+        _files() { print -rn -- "FILES " }
+        words=(sigmatau ''); CURRENT=2; source $s >/dev/null
+        """ * join(("words=($(quoted(w))); CURRENT=$(length(w)); PREFIX=$(repr(w[end])); _sigmatau; print" for w in q), "\n")),
+    "fish" => (`fish`, (s, q) -> "source $s\n" * join(("echo (complete -C $(repr(join(w, ' '))) | string replace -r '\\t.*' '')" for w in q), "\n")),
+    "powershell" => (`pwsh -NoProfile`, (s, q) -> ". $s\n" * join(("\$q = '$(join(w, ' '))'; (TabExpansion2 -inputScript \$q -cursorColumn \$q.Length).CompletionMatches.CompletionText -join ' '" for w in q), "\n")),
+)
+
+function shell_completions(sh, queries)
+    exe, driver = SHELL_DRIVERS[sh]
+    mktempdir() do dir
+        ext = sh == "powershell" ? ".ps1" : ""
+        script, drv = joinpath(dir, "sigmatau" * ext), joinpath(dir, "driver" * ext)
+        write(script, run_cli("completion", sh).out)
+        write(drv, driver(script, queries))
+        # A `sigmatau` on the PATH for PowerShell to find, run in a folder with no files to offer.
+        stub = joinpath(mkdir(joinpath(dir, "bin")), "sigmatau")
+        write(stub, "#!/bin/sh\n"); chmod(stub, 0o755)
+        cmd = addenv(`$exe $drv`, "PATH" => dirname(stub) * ":" * ENV["PATH"])
+        out = cd(() -> read(cmd, String), mkdir(joinpath(dir, "empty")))
+        return [Set(split(l)) for l in split(chomp(out), '\n')]
+    end
+end
+
 @testset "sigmatau CLI" begin
 
 @testset "version and help" begin
@@ -61,6 +95,21 @@ csv_rows(s) = [split(l, ',') for l in split(strip(s), '\n')[2:end]]
     @test occursin("--devs", run_cli("analyze", "--help").out)
     @test !occursin("--devs", run_cli("spectrum", "--help").out)
     @test occursin("--window", run_cli("dynamic", "--help").out)
+    # A signature is set apart from its description, and σ keeps its case.
+    @test all(d -> occursin("  " * d * "\n", run_cli("help").out), last.(SigmaTauCLI.COMMAND_HELP))
+    @test occursin("\nThe σ(τ)", run_cli("help", "model").out)
+    @test !occursin("FILE", run_cli("help", "live").out)
+end
+
+@testset "the reference names every command and option" begin
+    page = read(joinpath(@__DIR__, "..", "..", "docs", "src", "reference", "cli.md"), String)
+    for (c, arg, _) in SigmaTauCLI.COMMAND_HELP
+        @test occursin("| `" * (isempty(arg) ? c : c * " " * arg) * "` |", page)
+    end
+    options = Set(op.long for op in SigmaTauCLI.OPTS)
+    named = Set(m.match for m in eachmatch(r"--[a-z][a-z0-9-]*", page))
+    @test setdiff(options, named) == Set{String}()      # every option is on the page
+    @test setdiff(named, options) == Set{String}()      # and the page names no other
 end
 
 @testset "unknown command or option" begin
@@ -77,24 +126,24 @@ end
 end
 
 @testset "completion" begin
-    for sh in ("bash", "zsh", "fish", "powershell")
-        r = run_cli("completion", sh)
-        @test r.code == 0
-        s = r.out
-        @test !occursin("@@", s)
-        optpat = sh == "fish" ? "-l " : "--"
-        for c in ("analyze", "check", "spectrum", "dynamic")
-            @test occursin(c, s)
-        end
-        @test occursin(optpat * "devs", s)
-        @test occursin(optpat * "out", s)
-        @test occursin("mhtotdev", s) && occursin("dhdev", s)
-        @test occursin("half-octave", s) && occursin("json", s)
+    # Every command offers its options, and every option with fixed values offers them.
+    queries = [["sigmatau", ""], ["sigmatau", "completion", ""]]
+    want = [Set(SigmaTauCLI.subcommands()), Set(SigmaTauCLI.SHELLS)]
+    for c in SigmaTauCLI.COMMANDS
+        push!(queries, ["sigmatau", c, "--"]); push!(want, Set(SigmaTauCLI.cmd_options(c)))
     end
-    @test occursin("-o default", run_cli("completion", "bash").out)
-    @test occursin("_files", run_cli("completion", "zsh").out)
-    @test occursin("-r -F", run_cli("completion", "fish").out)
-    @test occursin("Register-ArgumentCompleter", run_cli("completion", "powershell").out)
+    for op in SigmaTauCLI.valued_options()
+        push!(queries, ["sigmatau", op.cmds[1], op.long, ""]); push!(want, Set(SigmaTauCLI.completion_values(op)))
+    end
+    shells = filter(sh -> Sys.which(SHELL_DRIVERS[sh][1].exec[1]) !== nothing, SigmaTauCLI.SHELLS)
+    haskey(ENV, "GITHUB_ACTIONS") && @test length(shells) == length(SigmaTauCLI.SHELLS)
+    for sh in shells
+        @test shell_completions(sh, queries) == want
+    end
+    # A comma list completes its last item.
+    for sh in intersect(shells, ["bash", "fish"])
+        @test shell_completions(sh, [["sigmatau", "analyze", "--devs", "adev,mht"]]) == [Set(["adev,mhtotdev"])]
+    end
     r = run_cli("completion", "tcsh")
     @test r.code == 1
     @test occursin("tcsh", r.err)
@@ -268,7 +317,7 @@ mktempdir() do dir
         @test o.code == 0 && occursin("\"quantity\":\"phase\"", o.out)
         @test run_cli("check", fx("gpsdo.csv"), "--column", "OSC offset (ppb)", "--phase").code == 2
         @test run_cli("analyze", tim, "--input-format", "counter", "--tau0", "1").code == 2
-        # A BIPM UTC - UTC(k) file is recognised by its header: phase, five days apart, two rows missing.
+        # A BIPM UTC - UTC(k) file is recognized by its header: phase, five days apart, two rows missing.
         b = run_cli("check", fx("bipm_utc_lab.txt"), "--format", "json")
         @test b.code == 0 && occursin("\"quantity\":\"phase\"", b.out) && occursin("\"tau0\":432000.0", b.out)
         @test occursin("\"gaps\":2", b.out)
@@ -629,7 +678,7 @@ mktempdir() do dir
         rows = csv_rows(run_cli("analyze", pf, "--range", "10:200", "--detrend", "linear", "--devs", "adev", "--no-ci").out)
         ref = adev(detrend(PhaseData(X[11:201], 1.0); method=:linear), tau_values(Octave, 191, :adev); ci=false)
         @test parse.(Float64, getindex.(rows, 5)) ≈ ref.dev rtol=1e-12
-        # Dynamic window centres stay in the whole record's time.
+        # Dynamic window centers stay in the whole record's time.
         whole = run_cli("dynamic", pf, "--window", "64", "--format", "json").out
         part = run_cli("dynamic", pf, "--window", "64", "--range", "64:", "--format", "json").out
         t(s) = parse(Float64, match(r"\"t\":\[([^,\]]+)", s)[1])
@@ -696,6 +745,12 @@ mktempdir() do dir
         @test occursin("\"mdev\":[" * join(string.(powerlaw_sigma(ms[1], tau; deviation=:mdev)), ",")[1:12], r.out)
         @test occursin("\"mdev\":null,\"adev\":null,\"mhdev\":[", r.out)                       # random-run FM: Hadamard only
         @test run_cli("model", "--synth", "64").code == 1                                         # needs a model
+        @test run_cli("model", pf).code == 1                                                      # and reads no file
+        one = ["model", "--synth", "64", "--noise-model", "0:1e-24:0:0"]
+        @test occursin("does not apply", run_cli(one..., "--fillgaps").err)
+        mp = joinpath(dir, "model.json")
+        @test isempty(run_cli(one..., "--out", mp, "--quiet").out)
+        @test read(mp, String) == run_cli(one...).out
         @test run_cli("check", "--synth", "64", "--noise-model", "1:2:3").code == 1
         @test run_cli("check", "--synth", "64", "--noise-model", "-1:0:0:0").code == 1
         @test run_cli("check", "--synth", "64", "--clocks", "3", "--noise-model", "0:1e-24:0:0").code == 1
@@ -831,7 +886,9 @@ mktempdir() do dir
                          ["steer", joinpath(dir, "steer.csv"), "--cost", "1:0:1e4", "--fit-drift"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
+                         ["model", "--synth", "64", "--noise-model", "1e-22:1e-24:1e-30:0"],
                          ["completion", "bash"],
+                         ["help"],
                          ["version"])
                 o = IOBuffer()
                 p = run(pipeline(ignorestatus(`$exe $args`); stdout=o, stderr=devnull))
