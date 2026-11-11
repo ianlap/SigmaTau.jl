@@ -120,7 +120,9 @@ time (√20 HTDEV with `--fit-drift`), `null` past the τ the record gives it.
 its clock model is the power-law fit to the first training stretch alone,
 so no trial is predicted with noise levels learned from the readings it is
 compared with, and `claimed` is the error the filter itself expects
-(`--fit-drift` then gives the model a drift state).
+(`--fit-drift` then gives the model a drift state). Flicker FM and flicker
+PM that the fit finds stay in the model, as Markov states out to the
+record's span.
 
 `cross`: `--with FILE2`, the second channel, read with the same options as
 `FILE`; `--grid` or `--m` for the τ values and `--nperseg N` for the
@@ -232,7 +234,7 @@ numbers are `null`.
   "time_to_limit"}` from [`HoldoverPrediction`](@ref), with one `budget`
   array (variance in s², over `tau`) per noise type. With `--kalman`,
   `claimed` holds the filter's own standard deviation over `tau` and `model`
-  the `{"R", "q1", "q2", "q3"}` it ran on.
+  the `{"R", "q1", "q2", "q3", "flicker_fm", "flicker_pm"}` it ran on.
 - `sigmatau cross` adds `"with"` (the second file), `"cross_adev": {"tau",
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`

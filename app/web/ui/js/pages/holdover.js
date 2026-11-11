@@ -150,8 +150,12 @@ function renderSide(box, clocks) {
     <div class="tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>RMS (s)</span><span>${pct(hd.confidence)}</span><span>worst</span><span>trials</span></div>
     ${hd.tau.map((t, i) => `<div class="tbl-row tbl-body"><span>${num(t, 5)}</span><span>${sci(hd.rms[i], 3)}</span><span>${sci(hd.quantile[i], 3)}</span><span>${sci(hd.worst[i], 3)}</span><span>${thousands(hd.n[i])}</span></div>`).join("")}</div>
     ${p?.error ? `<p class="muted small hold-note">No predicted curve: ${h(p.error)}</p>` : ""}
-    ${hd.claimed ? `<p class="muted small hold-note" title="Above 1, the clock did worse than the filter's model said it would">RMS over the filter's own claim: ${(hd.rms[0] / hd.claimed[0]).toFixed(2)} at ${duration(hd.tau[0])}, ${(hd.rms[last] / hd.claimed[last]).toFixed(2)} at ${duration(hd.tau[last])}. Model fitted to the first ${duration(hd.train)}: R = ${sci(hd.model.R, 3)}, q₁ = ${sci(hd.model.q1, 3)}, q₂ = ${sci(hd.model.q2, 3)}.</p>` : ""}`;
+    ${hd.claimed ? `<p class="muted small hold-note" title="Above 1, the clock did worse than the filter's model said it would">RMS over the filter's own claim: ${(hd.rms[0] / hd.claimed[0]).toFixed(2)} at ${duration(hd.tau[0])}, ${(hd.rms[last] / hd.claimed[last]).toFixed(2)} at ${duration(hd.tau[last])}. Model fitted to the first ${duration(hd.train)}: ${modelText(hd.model)}.</p>` : ""}`;
 }
+
+// The filter's model: flicker levels only where the fit found them.
+const modelText = (m) => [["R", m.R], ["q₁", m.q1], ["q₂", m.q2], ["h₋₁", m.flicker_fm], ["h₁", m.flicker_pm]]
+  .filter(([, v], i) => i < 3 || v > 0).map(([k, v]) => `${k} = ${sci(v, 3)}`).join(", ");
 
 export function refresh() {
   if (!root) return;
