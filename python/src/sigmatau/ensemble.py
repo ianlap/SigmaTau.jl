@@ -600,6 +600,7 @@ def steer(
     gains: SteeringGains | None = None,
     *,
     tau: Sequence[float] | None = None,
+    readings: bool = False,
 ) -> SteeringResult | SteeringPrediction:
     """Steer a clock to its reference with the Kalman filter for ``model`` and
     the gains of ``steering_gains``.
@@ -607,12 +608,15 @@ def steer(
     ``steer(data, model, gains)`` replays the phase record of the free-running
     clock against the reference through the loop. ``steer(model, gains)``
     predicts the steady state of the loop from the model alone, for a steer at
-    every sample; ``tau`` sets the averaging times of its Allan deviation."""
+    every sample; ``tau`` sets the averaging times of its Allan deviation. The
+    prediction is for the clock itself; with ``readings`` its ``phase`` and
+    ``adev`` are those of the readings, with their noise, as a steered record
+    shows them."""
     if isinstance(data, ClockModel):
         if gains is not None or not isinstance(model, SteeringGains):
             raise TypeError("steer: pass (data, model, gains) or (model, gains)")
         kw = {} if tau is None else {"tau": to_jl_f64(tau)}
-        r = jl.steer(data._jl(), model._jl(), **kw)
+        r = jl.steer(data._jl(), model._jl(), readings=bool(readings), **kw)
         return SteeringPrediction(
             model,
             float(r.phase),
@@ -621,7 +625,7 @@ def steer(
             np_f64(r.tau),
             np_f64(r.adev),
         )
-    if gains is None or tau is not None:
+    if gains is None or tau is not None or readings:
         raise TypeError("steer: pass (data, model, gains) or (model, gains, tau=...)")
     r = jl.steer(to_jl_data(data), model._jl(), gains._jl())
     return SteeringResult(

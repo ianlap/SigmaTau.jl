@@ -175,6 +175,28 @@ The prediction is for the clock itself, without the noise of the readings,
 and for a steer at every sample. For a longer interval, replay a record
 from [`simulate_clock`](@ref).
 
+A replayed record is of readings, ``z_k = h^\mathsf{T} x_k + v_k``, and
+`readings=true` gives `phase` and `adev` for those, to set beside it. The
+noise ``v`` of a reading, of variance ``R``, is not in the clock at that
+instant, so the variance of the reading is that of ``h^\mathsf{T} x`` plus
+``R``. It is in the clock afterwards, through the steers: ``j`` steps on,
+the joint state of estimate and error has the covariance ``M^j b_v R`` with
+it, where ``M`` is the transition of that state and ``b_v`` what one reading
+adds to it. With ``C_j`` the covariance of ``h^\mathsf{T} x`` at lag
+``j``, ``c`` the row that picks ``h^\mathsf{T} x`` out of the joint state,
+and ``ρ_j = c^\mathsf{T} M^j b_v R``,
+
+```math
+σ_y^2(jτ) = \frac{3C_0 - 4C_j + C_{2j} + 3R - 4ρ_j + ρ_{2j}}{(jτ)^2} .
+```
+
+On 40 simulated records each of five clocks and loops (white PM with white
+and random-walk FM under two gains, three gains and gains from a cost,
+white PM far above the clock, and flicker PM and FM states), the median
+Allan deviation of the steered record at 1 to 256 samples stayed within
+1 % of this; without the terms of the readings the prediction at one
+sample was low by a factor of 3 to 17.
+
 ## Flicker and drift states
 
 The published loops act on a phase and a frequency state. Two extensions

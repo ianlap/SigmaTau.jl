@@ -171,6 +171,8 @@ def test_steering_matches_julia(clock, jl):
         float(v) for v in (jl.steer(m._jl(), g._jl()).phase, jl.steer(m._jl(), g._jl()).steers)
     )
     assert q.tau.tolist() == [1.0, 16.0] and q.adev.shape == (2,)
+    z = st.steer(m, g, readings=True)  # the readings carry their own noise
+    assert z.phase == float(jl.steer(m._jl(), g._jl(), readings=True).phase) > q.phase
     with pytest.raises(ValueError):
         st.steer(m, st.steering_gains(30.0, 10.0))
     with pytest.raises(TypeError):

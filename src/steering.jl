@@ -446,7 +446,7 @@ function _steady_filter(m::ClockModel)
 end
 
 """
-    steer(model::ClockModel, g::SteeringGains; tau) → SteeringPrediction
+    steer(model::ClockModel, g::SteeringGains; tau, readings=false) → SteeringPrediction
 
 The steady state a steering loop settles to on a clock with the noise of
 `model`: the RMS of the steered clock's time and frequency error and of the
@@ -459,7 +459,8 @@ covariances are those of the free-running clock, and its estimate obeys
 [Matsakis (2019), §2 and Appendix B](@cite matsakis-2019-steering) and, with
 an integral gain, [Matsakis (2020), §II](@cite matsakis-2020-pid). The
 figures are for the clock itself, without the noise of the readings that a
-measured record carries.
+measured record carries; `readings=true` gives the time error and the
+Allan deviation of the readings, to set beside a replayed record.
 
 The loop steers at every sample here, `g.interval == model.tau0`; for a
 longer interval replay a simulated record. A drift state is taken as
@@ -473,6 +474,9 @@ steered out. Random-run FM (`q3 > 0`) has no steady state.
 - `tau`: averaging times (s) of the Allan deviation, whole multiples of
   `model.tau0`; by default the octaves up to 32 times the longest time
   constant of the loop.
+- `readings`: `phase` and `adev` are those of the readings of the steered
+  clock, with their noise (white PM, and flicker PM where the model holds
+  it), as in the `steered` record of `steer(data, model, g)`.
 
 # Examples
 
@@ -484,7 +488,7 @@ s.phase                # RMS time error against the reference, s
 s.adev                 # at s.tau
 ```
 """
-function steer(m::ClockModel, g::SteeringGains; tau::Union{AbstractVector{<:Real},Nothing}=nothing)
+function steer(m::ClockModel, g::SteeringGains; tau::Union{AbstractVector{<:Real},Nothing}=nothing, readings::Bool=false)
     τ = m.tau0
     isapprox(g.interval, τ; rtol=1e-9) || throw(ArgumentError(
         "steer: the steady state is worked out for a steer at every sample; the gains' interval is $(g.interval) s and tau0 is $τ s"))
@@ -520,7 +524,16 @@ function steer(m::ClockModel, g::SteeringGains; tau::Union{AbstractVector{<:Real
     N[1:n, 1:n], N[n+1, n+1] = Q, R
     Σ = _lyapunov(M, B * N * B')
     cp, cy, cu = zeros(o + 2n), zeros(o + 2n), zeros(o + 2n)
-    cp[o+1] = cp[o+n+1] = 1.0
+    # The phase of the clock, or its reading z = hᵀx + v. The noise v of a
+    # reading is not in the clock then, ⟨xₖ vₖ⟩ = 0, and the steers have put
+    # it there j steps on: ⟨ζₖ₊ⱼ vₖ⟩ = Mʲ bv.
+    if readings
+        cp[xs], cp[es] = h, h
+    else
+        cp[o+1] = cp[o+n+1] = 1.0
+    end
+    Rz = readings ? R : 0.0
+    bv = B[:, n+1] .* Rz
     cy[xs], cy[es] = y, y
     cu[xs] = -gx
     o == 1 && (cu[1] = -g.integral)
@@ -531,7 +544,7 @@ function steer(m::ClockModel, g::SteeringGains; tau::Union{AbstractVector{<:Real
     σy = map(ms) do j
         r₁ = (M^j)' * cp
         r₂ = (M^j)' * r₁
-        sqrt(max(3dot(cp, Σ, cp) - 4dot(r₁, Σ, cp) + dot(r₂, Σ, cp), 0.0)) / (j * τ)
+        sqrt(max(3dot(cp, Σ, cp) - 4dot(r₁, Σ, cp) + dot(r₂, Σ, cp) + 3Rz - 4dot(r₁, bv) + dot(r₂, bv), 0.0)) / (j * τ)
     end
-    return SteeringPrediction(g, sqrt(dot(cp, Σ, cp)), sqrt(dot(cy, Σ, cy)), sqrt(dot(cu, Σ, cu)), ms .* τ, σy)
+    return SteeringPrediction(g, sqrt(dot(cp, Σ, cp) + Rz), sqrt(dot(cy, Σ, cy)), sqrt(dot(cu, Σ, cu)), ms .* τ, σy)
 end

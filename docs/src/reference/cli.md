@@ -397,8 +397,10 @@ sigmatau("steer clock.dat --time-constant 64 --m 1,16,256") # hide
 
 `free` and `steered` are the Allan deviations of the record and of the
 steered record. `predicted` is that of the steady state that
-`steer(model, gains)` gives for the clock model, and it is empty when the
-steers come less often than every sample or the model has random-run FM.
+`steer(model, gains; readings=true)` gives for the clock model: the
+readings of the settled loop, with their noise, as the record has it. It
+is empty when the steers come less often than every sample or the model
+has random-run FM.
 
 ```@example cliref
 sigmatau_json("steer clock.dat --time-constant 64 --m 1,16,256 --format json"; only = "steer") # hide
@@ -411,8 +413,9 @@ and `frequencies`, in Hz, are those of the poles of the loop, from
 state, and `model` holds its coefficients as for `holdover --kalman`.
 `phase_rms` is the RMS of the steered phase in seconds, and `steers_rms`
 that of the steers, in fractional frequency. `predicted` holds the standard
-deviations `phase`, `frequency` and `steers` and the `adev` of the
-[`SteeringPrediction`](@ref), or an `error` message where there is none.
+deviations `phase`, `frequency` and `steers` and the `adev` of that
+[`SteeringPrediction`](@ref), `phase` and `adev` being those of the
+readings, or an `error` message where there is none.
 With `--series N`, a member `series` holds the times `t`, the `steered`
 phase and the frequency `correction` in force, at up to `N` points over the
 whole record.

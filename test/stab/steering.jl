@@ -108,6 +108,11 @@ using Statistics
         @test a[1:2] ≈ q.adev[1:2] rtol=0.03
         @test a[3] ≈ q.adev[3] rtol=0.15                             # a few hundred loop times in the record
         @test q.adev[4] ≈ sqrt(3) * q.phase / 16384 rtol=1e-3        # far past the loop: uncorrelated phase
+        # The steered record is of readings, which carry their own noise.
+        z = steer(m, g; tau=[1.0, 16.0, 256.0], readings=true)
+        @test rms(s.steered.x[1000:end]) ≈ z.phase rtol=0.04
+        @test all(isapprox.(adev(PhaseData(s.steered.x[1000:end], 1.0), [1, 16, 256]; ci=false).dev, z.adev; rtol=0.05))
+        @test z.adev[1] > 10q.adev[1] && (z.frequency, z.steers) == (q.frequency, q.steers)
         # The settled filter is the one a long run reaches.
         f = SigmaTau._steady_filter(m)
         @test (I - f.K * f.h') * f.P ≈ kalman_filter(p, m).P[:, :, end] rtol=1e-6
@@ -118,6 +123,7 @@ using Statistics
         sf = steer(pf, fm, c)
         @test rms(Xf[1000:end, 1] .+ (sf.steered.x.-pf.x)[1000:end]) ≈ steer(fm, c).phase rtol=0.1
         @test rms(sf.steers[1000:end]) ≈ steer(fm, c).steers rtol=0.05
+        @test adev(PhaseData(sf.steered.x[1000:end], 1.0), [1]; ci=false).dev ≈ steer(fm, c; tau=[1.0], readings=true).adev rtol=0.02
         @test steer(m, g).tau == 2.0 .^ (0:9)
         @test_throws ArgumentError steer(m, steering_gains(30.0, 10.0))
         @test_throws ArgumentError steer(m, SteeringGains(1.01, 1.5, 0, 1.0))
