@@ -53,6 +53,7 @@ export const state = {
   dataMode: "file",        // "file" | "synth" on the Data page
   dataView: "phase",       // "phase" | "drift": the Data page's plot
   driftModel: "linear",    // frequency drift model fitted on the drift view
+  driftMethod: "frequency_fit",   // estimator of the linear model
   driftResid: false,       // drift view shows the residuals instead of the fit
   run: { state: "idle", stale: null, note: "" },  // stale: null | "record" | "inputs"
 };

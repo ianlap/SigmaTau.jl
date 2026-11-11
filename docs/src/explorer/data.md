@@ -176,12 +176,33 @@ as prepared and fits one of four models to it by least squares, as
 | **Log** | ``a \ln(1 + b\,t) + c`` |
 | **Diffusion** | ``a + b\sqrt{t + c}`` |
 
+**Estimator** chooses how the drift of the linear model is found. The
+other models are least-squares fits.
+
+| Estimator | Drift | Least variance on |
+|:----------|:------|:------------------|
+| **Line through frequency** | slope of the least-squares line through the frequency | white FM |
+| **Parabola through phase** | twice the curvature of the least-squares parabola through the phase | white PM |
+| **Bisection (three-point)** | mean frequency of the second half of the record less that of the first, over half its length | |
+| **Mean second difference** | mean of the second differences of the phase | random-walk FM |
+| **Four-point** | the estimator of [Greenhall 1997](@cite greenhall-1997-drift-estimator), from four values of the summed phase | |
+
+The bisection stays close to the least variance on white, flicker and
+random-walk FM, and the four-point estimator on every power-law noise.
+The four-point estimator needs a record without gaps. [`drift_fit`](@ref)
+gives the formulas and their sources.
+
 The line above the plot gives the drift rate at the end of the record, per
 day, with its standard error and the rms of the residuals. Hovering over it
 shows the coefficients. **Residuals** plots what the model leaves.
 
-The standard error assumes white residuals. It is too small where they are
-not white, as on a record with flicker or random-walk FM.
+The standard error of a least-squares fit assumes white residuals. It is
+too small where they are not white, as on a record with flicker or
+random-walk FM. That of the mean second difference is the standard
+deviation of the mean of the differences, and assumes random-walk FM. The
+bisection and the four-point estimator show none: theirs follows from the
+deviation of the record at an averaging time too long for the record to
+measure.
 
 To fit the drift of the record as measured, set **Drift removal** to
 **None**: the view shows the frequency after the removal.

@@ -440,8 +440,15 @@ mktempdir() do dir
         ff = write_table(joinpath(dir, "aging.csv"), y; tau0=60.0)
         ref = drift_fit(FrequencyData(y, 60.0))
         rows = csv_rows(run_cli("drift", ff, "--freq").out)
-        @test rows[1][3] == "linear" && isempty(rows[1][8])
-        @test parse(Float64, rows[1][10]) ≈ ref.rate rtol=1e-9
+        @test rows[1][3:4] == ["linear", "frequency_fit"] && isempty(rows[1][9])
+        @test parse(Float64, rows[1][11]) ≈ ref.rate rtol=1e-9
+        # The bisection has no standard error: an empty CSV field, null in JSON.
+        rows = csv_rows(run_cli("drift", ff, "--freq", "--method", "bisection").out)
+        @test parse(Float64, rows[1][11]) ≈ drift_fit(FrequencyData(y, 60.0); method=:bisection).rate rtol=1e-6
+        @test rows[1][4] == "bisection" && isempty(rows[1][12])
+        r = run_cli("drift", ff, "--freq", "--method", "four_point", "--format", "json")
+        @test r.code == 0 && occursin("\"method\":\"four_point\"", r.out) && occursin("\"drift_per_day_err\":null", r.out)
+        @test run_cli("drift", ff, "--method", "bisection", "--model", "log").code == 1
         r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
         @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
         @test run_cli("drift", ff, "--model", "cubic").code == 1

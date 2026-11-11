@@ -272,16 +272,18 @@ sigmatau_json("dynamic --synth 1024 --format json"; only = "dynamic") # hide
 | Option | Meaning |
 |:---|:---|
 | `--model MODEL` | `linear` (the default), `quadratic`, `log` or `diffusion` |
+| `--method METHOD` | the estimator of the linear model: `frequency_fit` (the default), `phase_fit`, `bisection`, `second_difference` or `four_point` |
 
-The fit is that of [`drift_fit`](@ref), which defines the models and their
-coefficients. The CSV output is one row:
+The fit is that of [`drift_fit`](@ref), which defines the models, their
+coefficients and the methods. The CSV output is one row:
 
 ```text
-source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n
+source,quantity,model,method,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n
 ```
 
 `a`, `b` and `c` are the coefficients, with `c` empty for the linear model,
-and `n` is the number of frequency samples fitted.
+and `n` is the number of frequency samples fitted. A standard error that
+the method does not give is an empty field, and `null` in JSON.
 
 ```@example cliref
 sigmatau_json("drift --synth 1024 --series 2 --format json"; only = "drift") # hide
