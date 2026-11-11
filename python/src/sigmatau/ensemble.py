@@ -345,7 +345,7 @@ def _kalman_from_jl(r: Any) -> KalmanResult:
 def kalman_filter(
     data: PhaseData, m: ClockModel, *, x0: Sequence[float] | None = None, P0: Any = None
 ) -> KalmanResult:
-    """Kalman filter of clock model ``m`` over a phase record.
+    """Kalman filter of clock model ``m`` over the phase record ``data``.
 
     A ``nan`` sample is a gap: the state is predicted across it without an
     update. The covariance is updated in the Joseph form. The ``tau0`` of the
@@ -368,18 +368,20 @@ def kalman_filter(
 
 @_map_errors
 def kalman_smooth(kf: KalmanResult) -> KalmanResult:
-    """Rauch–Tung–Striebel smoother over a filtered run: every estimate then uses
-    the whole record. The innovations of the result are those of the filter."""
+    """Rauch–Tung–Striebel smoother over the filtered run ``kf``: every estimate
+    then uses the whole record. The innovations of the result are those of the
+    filter."""
     return _kalman_from_jl(jl.kalman_smooth(kf._jl))
 
 
 @_map_errors
 def holdover_error(kf: KalmanResult, tau: Sequence[float]) -> np.ndarray:
     """Standard deviation, in seconds, of the time error of the clock after running
-    free for each τ in ``tau`` (seconds) from the last sample, as the model
-    gives it: the error of the last estimate carried forward and the noise that
-    the clock gathers on the way. The noise of a reading is not in it.
-    :func:`holdover` measures the same error on the record."""
+    free for each τ in ``tau`` (seconds) from the last sample of the filtered
+    run ``kf``, as the model gives it: the error of the last estimate carried
+    forward and the noise that the clock gathers on the way. The noise of a
+    reading is not in it. :func:`holdover` measures the same error on the
+    record."""
     return np_f64(jl.holdover_error(kf._jl, to_jl_f64(tau)))
 
 
@@ -451,7 +453,8 @@ def holdover(
     limit: float | None = None,
     confidence: float = 0.95,
 ) -> HoldoverResult | HoldoverPrediction:
-    """The time error of a clock that runs on without its reference.
+    """The time error of a clock that runs on without its reference. ``data`` is
+    a phase record or, in the last form below, a noise model.
 
     ``holdover(record, ...)`` measures it on the record, at every start the
     record allows. A line is fitted to ``train`` seconds of phase, or a
@@ -548,7 +551,8 @@ def holdover(
 
 @_map_errors
 def innovation_check(kf: KalmanResult, *, confidence: float = 0.95) -> dict:
-    """Test of the model against the record, from the innovations of the filter.
+    """Test of the model against the record, from the innovations of the filtered
+    run ``kf``.
 
     Under the model the normalized innovations are independent, with zero mean
     and unit variance. Returns a dict with ``nis``, the mean of their squares,
@@ -598,7 +602,8 @@ def tune_q(
     points: int = 9,
     burnin: int | None = None,
 ) -> dict:
-    """Retune the white FM and random-walk FM levels of ``m`` for prediction.
+    """Retune the white FM and random-walk FM levels of ``m`` for prediction on the
+    phase record ``data``.
 
     The filter is run for every pair of levels on a logarithmic grid of
     ``points`` values that spans ``decades`` decades either side of ``m.q1``
@@ -682,7 +687,8 @@ def _gains_from_jl(g: Any) -> SteeringGains:
 def steering_gains(
     T: float | Sequence[complex], interval: float, *, integral: bool = False
 ) -> SteeringGains:
-    """Gains of a steering loop by pole placement.
+    """Gains of a steering loop by pole placement, for steers ``interval``
+    seconds apart.
 
     A time constant ``T``, in seconds, gives a critically damped loop: its
     poles sit together at exp(−interval/T), and a disturbance dies away as
@@ -707,10 +713,11 @@ def lqg_gains(
     design of Koppang and Leland (1999), with p and f the phase and frequency
     of the clock against its reference and u the steer.
 
-    The gains do not depend on the noise of the clock or of the readings, and
-    only the ratios of the weights matter. A small ``steer`` weight takes out
-    the whole estimated error in one steer, and a large one gives a slow loop.
-    The design has no integral gain.
+    ``interval`` is the time between steers, in seconds. The gains do not
+    depend on the noise of the clock or of the readings, and only the ratios
+    of the weights matter. A small ``steer`` weight takes out the whole
+    estimated error in one steer, and a large one gives a slow loop. The
+    design has no integral gain.
     """
     return _gains_from_jl(
         jl.lqg_gains(
@@ -721,10 +728,10 @@ def lqg_gains(
 
 @_map_errors
 def steering_poles(g: SteeringGains) -> dict:
-    """Where the gains put the poles of the closed loop (Matsakis 2019; Matsakis
-    2020). Returns a dict with ``poles``, complex; ``time_constants``, for each
-    pole the T (s) of its decay exp(−t/T), negative for a pole that grows;
-    ``frequencies``, the frequency (Hz) that each pole rings at; and
+    """Where the gains ``g`` put the poles of the closed loop (Matsakis 2019;
+    Matsakis 2020). Returns a dict with ``poles``, complex; ``time_constants``,
+    for each pole the T (s) of its decay exp(−t/T), negative for a pole that
+    grows; ``frequencies``, the frequency (Hz) that each pole rings at; and
     ``stable``, whether every pole is inside the unit circle."""
     p = jl.steering_poles(g._jl())
     return {
@@ -862,8 +869,9 @@ class ClockComparisons:
     def from_records(
         cls, records: Sequence[PhaseData], *, names: Sequence[str] = (), reference: str = ""
     ) -> ClockComparisons:
-        """Comparisons from one phase record per clock, each read against the same
-        reference at the same instants: the records share one length and one τ₀."""
+        """Comparisons from ``records``, one phase record per clock, each read against
+        the same reference at the same instants: the records share one length and
+        one τ₀. ``names`` and ``reference`` are those of the class."""
         records = list(records)
         if not records:
             raise ValueError("ClockComparisons: no records")
@@ -922,8 +930,8 @@ def simulate_ensemble(
 def clock_models(
     cc: ClockComparisons, *, alphas: Sequence[int] | None = None, flicker: bool = False
 ) -> list[ClockModel]:
-    """One ``ClockModel`` per clock, fitted from the comparisons alone, for the
-    Kalman time scales of :func:`timescale`. This takes three or more clocks.
+    """One ``ClockModel`` per clock, fitted from the comparisons ``cc`` alone, for
+    the Kalman time scales of :func:`timescale`. This takes three or more clocks.
 
     The Allan deviation of each clock is separated from the others' by the
     Groslambert covariance of the clock differences (``groslambert``), in
@@ -1068,8 +1076,8 @@ def timescale(
 
 
 def timescale_phase(r: TimescaleResult) -> PhaseData:
-    """The reference of the comparisons against the scale, as a phase record for
-    the usual stability analysis; ``nan`` where no clock was read.
+    """The reference of the comparisons against the scale of the result ``r``, as a
+    phase record for the usual stability analysis; ``nan`` where no clock was read.
 
     Its deviations are those of the scale as far as the reference is the more
     stable of the two. Against the ideal reference of ``simulate_ensemble``

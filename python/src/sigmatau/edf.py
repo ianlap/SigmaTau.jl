@@ -64,8 +64,8 @@ def confidence_intervals(
     edfs: Sequence[float],
     confidence: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """χ² confidence limits of each deviation from its equivalent degrees of
-    freedom (SP1065 §5.3.2).
+    """χ² confidence limits of each deviation in ``devs`` from its equivalent
+    degrees of freedom in ``edfs`` (SP1065 §5.3.2).
 
     ``confidence`` is the probability that the interval covers, such as 0.683.
     Returns the pair ``(lower, upper)``; a limit is ``nan`` where the deviation

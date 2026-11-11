@@ -61,8 +61,8 @@ def stability(
     remove_drift: bool = True,
     noise: str | Sequence[str] | PowerLawFit = "auto",
 ) -> StabilitySuite:
-    """Several deviations of one record in a single call, as a ``StabilitySuite``
-    indexed by name.
+    """Several deviations of the record ``data`` in a single call, as a
+    ``StabilitySuite`` indexed by name.
 
     ``devs`` names the estimators to run, from :func:`estimators`. The default
     is ``DEFAULT_DEVIATIONS``, ``("adev", "mdev", "hdev", "mhdev")``. ``m`` is a
@@ -98,7 +98,7 @@ def ncornered_hat(
     pair of them: the three-cornered hat of Gray and Allan (1974) and its
     extension to N clocks (SP1065 §10.14).
 
-    Two call forms:
+    Two call forms for ``*results``:
 
     - ``ncornered_hat(r_ab, r_bc, r_ca)``: for three clocks, the results for
       A−B, B−C and C−A. The clocks are returned in the order A, B, C.
@@ -148,8 +148,8 @@ def groslambert(
     that share the clock (Vernotte, Calosso and Rubiola 2016, after Groslambert
     et al. 1981).
 
-    Two call forms, on ``PhaseData`` or ``FrequencyData`` records with one
-    sample interval and length and no gaps:
+    Two call forms for ``*records``, which are ``PhaseData`` or
+    ``FrequencyData`` records with one sample interval and length and no gaps:
 
     - ``groslambert(x_ab, x_bc, x_ca)``: for three clocks, the records A−B, B−C
       and C−A. The clocks are returned in the order A, B, C.

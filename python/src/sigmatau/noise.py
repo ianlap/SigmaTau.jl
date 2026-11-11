@@ -97,9 +97,9 @@ def noise_id_nnls(
     alphas: Sequence[int] | None = None,
     weights: str | Sequence[float] = "edf",
 ) -> dict:
-    """Amount of each power-law noise type in a record, from one nonnegative
-    least-squares fit of the measured variance to σ²(τ) ≈ Σᵢ aᵢ·(τ/τ₀)^μ(αᵢ) over
-    the whole range of τ.
+    """Amount of each power-law noise type in the record ``data``, from one
+    nonnegative least-squares fit of the measured variance to
+    σ²(τ) ≈ Σᵢ aᵢ·(τ/τ₀)^μ(αᵢ) over the whole range of τ.
 
     Where :func:`identify_noise` names the dominant type at each τ, this fit
     gives an amplitude for every type in the basis. The basis is the
