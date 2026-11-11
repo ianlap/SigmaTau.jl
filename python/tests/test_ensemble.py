@@ -175,6 +175,10 @@ def test_steering_matches_julia(clock, jl):
         st.steer(m, st.steering_gains(30.0, 10.0))
     with pytest.raises(TypeError):
         st.steer(data, m)
+    # Koppang & Leland (1999), §IV, first design, as printed.
+    k = st.lqg_gains(3600.0, phase=1e-3, frequency=1e-3, steer=1e5)
+    np.testing.assert_allclose([k.phase / 6.503e-5, k.frequency / 0.5771], [1, 1], rtol=5e-4)
+    assert k.integral == 0
 
 
 def test_timescale_matches_julia(jl):

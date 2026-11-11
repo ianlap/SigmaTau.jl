@@ -1,4 +1,5 @@
-# steering.jl — pole placement against the formulas of Matsakis (2019, 2020), the
+# steering.jl — pole placement against the formulas of Matsakis (2019, 2020),
+# cost-minimizing gains against those printed by Koppang & Leland (1999), the
 # replayed loop against the closed-loop recursion, and the predicted steady
 # state against a simulated clock.
 
@@ -43,6 +44,28 @@ using Statistics
         @test_throws ArgumentError steering_gains([0.9, 0.8 + 0.1im], 1.0)
         @test_throws ArgumentError steering_gains([0.9], 1.0)
         @test_throws ArgumentError steering_gains(-1.0, 1.0)
+    end
+
+    @testset "quadratic cost" begin
+        k(τ; kw...) = (l = lqg_gains(τ; kw...); (l.phase, l.frequency))
+        near(a, b; rtol) = all(isapprox.(a, b; rtol))
+        # The three designs of Koppang & Leland (1999), §IV, a steer each hour, as printed.
+        @test near(k(3600.0; phase=1e-3, frequency=1e-3, steer=1e5), (6.503e-5, 0.5771); rtol=5e-4)
+        @test near(k(3600.0; phase=1e-3, frequency=1e-3, steer=1e12), (3.138e-8, 0.01498); rtol=5e-4)
+        @test near(k(3600.0; phase=1e-4, frequency=1e9, steer=1e12), (9.8376e-9, 0.03221); rtol=5e-4)
+        # Free steers take the whole error out at once; costly ones tend to the
+        # gains of the continuous double integrator, √ρ and √(2√ρ + ρ_f).
+        @test near(k(60.0; phase=1.0, steer=1e-30), (1 / 60, 1.0); rtol=1e-9)
+        @test near(k(1.0; phase=1e-16, steer=1.0), (1e-8, sqrt(2e-8)); rtol=1e-3)
+        @test near(k(1.0; phase=1e-16, frequency=1e-6, steer=1.0), (1e-8, sqrt(2e-8 + 1e-6)); rtol=1e-3)
+        l = lqg_gains(3600.0; phase=1e-3, steer=1e12)
+        @test l.integral == 0 && l.interval == 3600 && steering_poles(l).stable
+        # The cost that the predicted steady state gives is least at these gains.
+        w = (phase=1.0, frequency=1e3, steer=1e6)
+        J(g) = (q = steer(m, g); w.phase * q.phase^2 + w.frequency * q.frequency^2 + w.steer * q.steers^2)
+        l = lqg_gains(1.0; w...)
+        @test all(J(SteeringGains(a * l.phase, b * l.frequency, 0, 1.0)) > J(l) for (a, b) in ((1.05, 1), (0.95, 1), (1, 1.05), (1, 0.95)))
+        @test_throws ArgumentError lqg_gains(1.0; phase=0.0, steer=1.0)
     end
 
     p, X = simulate_clock(m, 100_000; rng=MersenneTwister(5))

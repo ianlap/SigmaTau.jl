@@ -124,6 +124,70 @@ function _gains_from(w::Vector{ComplexF64}, interval::Real)
 end
 
 """
+    lqg_gains(interval; phase, frequency=0, steer) → SteeringGains
+
+Gains of the steering loop that minimizes a quadratic cost: the linear
+quadratic Gaussian (LQG) design of
+[Koppang & Leland (1999), §III](@cite koppang-1999-lqg-masers).
+
+The cost is the sum over the steers of
+
+```math
+W_p\\,p^2 + W_f\\,f^2 + W_u\\,u^2 ,
+```
+
+with ``p`` and ``f`` the phase and frequency of the clock against its
+reference and ``u`` the steer. The gains are
+``G = (B^T K B + W_u)^{-1} B^T K Φ``, with ``K`` the solution of the Riccati
+equation
+
+```math
+K = Φ^T K Φ + W_Q - Φ^T K B\\,(B^T K B + W_u)^{-1} B^T K Φ, \\qquad
+W_Q = \\begin{pmatrix} W_p & 0 \\\\ 0 & W_f \\end{pmatrix},
+```
+
+and ``Φ`` and ``B`` those of the loop at the interval τ between steers.
+They do not depend on the noise of the clock or of the readings, and only
+the ratios ``W_p τ^2/W_u`` and ``W_f/W_u`` matter
+([Matsakis (2019), §1](@cite matsakis-2019-steering)). A small steer weight
+gives ``g_P = 1/τ`` and ``g_D = 1``, which takes out the whole estimated
+error in one steer; a large one gives a slow loop. The design has no
+integral gain: the cost is least without one
+([Matsakis (2020), §III](@cite matsakis-2020-pid)).
+
+# Arguments
+- `interval`: seconds between steers.
+
+# Keywords
+- `phase`: weight ``W_p`` on the square of the phase (s), positive.
+- `frequency`: weight ``W_f`` on the square of the frequency.
+- `steer`: weight ``W_u`` on the square of the steer, positive.
+
+# Examples
+
+The first design of [Koppang & Leland (1999), §IV](@cite koppang-1999-lqg-masers),
+for a steer each hour, which prints the gains as `6.503e-5` and `0.5771`:
+
+```jldoctest
+julia> using SigmaTau
+
+julia> lqg_gains(3600.0; phase=1e-3, frequency=1e-3, steer=1e5)
+SteeringGains(phase=6.503e-05 /s, frequency=0.5771, every 3600 s)
+```
+"""
+function lqg_gains(interval::Real; phase::Real, frequency::Real=0, steer::Real)
+    interval > 0 && phase > 0 && frequency >= 0 && steer > 0 || throw(ArgumentError(
+        "lqg_gains: interval, phase and steer must be positive and frequency not negative"))
+    # In units of the interval, with the steer weight as the unit of cost:
+    # state (p, τ f), steer τ u, Φ = [1 1; 0 1], B = (1, 1).
+    Φ, b = [1.0 1.0; 0.0 1.0], [1.0, 1.0]
+    WQ = [phase*interval^2/steer 0.0; 0.0 frequency/steer]
+    K = _riccati(Φ, b * b', WQ)
+    g = (Φ' * K * b) ./ (dot(b, K, b) + 1)
+    return SteeringGains(g[1] / interval, g[2], 0.0, interval)
+end
+
+"""
     steering_poles(g::SteeringGains) → NamedTuple
 
 Where the gains `g` put the poles of the closed loop, and what follows from
@@ -345,25 +409,10 @@ function _lyapunov(M::Matrix{Float64}, W::Matrix{Float64})
     return (Σ + Σ') ./ 2
 end
 
-# The Kalman filter of a model without drift once it has settled: the
-# covariance before a reading, the gain, and the variance of the
-# innovations. The Riccati equation is solved by doubling, each pass
-# standing for twice as many filter steps as the last, which reaches the
-# limit however slowly the filter itself would. It works in units of τ₀ and
-# of the phase σ one step adds, and a reading without noise is given a
-# millionth of the clock's.
-function _steady_filter(m::ClockModel)
-    τ = m.tau0
-    Φ, Q, h, R = state_transition(m, τ), process_noise(m, τ), _reading_row(m), _reading_var(m)
-    n = length(h)
-    σ = sqrt(R + Q[1, 1])
-    σ > 0 || throw(ArgumentError("steer: the model has no noise"))
-    d = fill(σ / τ, n)
-    d[1] = σ
-    d[n-length(_pm_taus(m))+1:n] .= σ
-    A = Matrix(((Φ .* d') ./ d)')
-    H = Q ./ (d * d')
-    G = (h .* d) * (h .* d)' ./ max(R, 1e-12 * Q[1, 1])
+# X = Aᵀ X (I + G X)⁻¹ A + H, the discrete Riccati equation, by doubling:
+# each pass stands for twice as many steps of the recursion as the last,
+# which reaches the limit however slowly the recursion itself would.
+function _riccati(A::Matrix{Float64}, G::Matrix{Float64}, H::Matrix{Float64})
     for _ in 1:128
         W = inv(I + G * H)
         H′ = H + A' * H * W * A
@@ -373,7 +422,23 @@ function _steady_filter(m::ClockModel)
         H = (H′ + H′') ./ 2
         done && break
     end
-    P = H .* (d * d')
+    return H
+end
+
+# The Kalman filter of a model without drift once it has settled: the
+# covariance before a reading, the gain, and the variance of the
+# innovations. It works in units of τ₀ and of the phase σ one step adds, and
+# a reading without noise is given a millionth of the clock's.
+function _steady_filter(m::ClockModel)
+    τ = m.tau0
+    Φ, Q, h, R = state_transition(m, τ), process_noise(m, τ), _reading_row(m), _reading_var(m)
+    n = length(h)
+    σ = sqrt(R + Q[1, 1])
+    σ > 0 || throw(ArgumentError("steer: the model has no noise"))
+    d = fill(σ / τ, n)
+    d[1] = σ
+    d[n-length(_pm_taus(m))+1:n] .= σ
+    P = _riccati(Matrix(((Φ .* d') ./ d)'), (h .* d) * (h .* d)' ./ max(R, 1e-12 * Q[1, 1]), Q ./ (d * d')) .* (d * d')
     S = dot(h, P, h) + R
     K = P * h ./ S
     m.q2 == 0 && (K[2] = 0.0)                    # a frequency that never walks is known by now
