@@ -699,6 +699,9 @@ Clock models, the Kalman filter and timescales.
   labels that said something untrue are corrected (quadratic drift removal
   and SP1065, the log drift model, the slow estimators, EWFA's largest
   weight, what a run updates); the interface spells as the manual does.
+- Python: `clock_model` of a `PowerLawFit` uses Julia's default `tau_max`,
+  the longest τ of a fit of a deviation. It had used 10⁶ τ₀, which with the
+  flicker states on left the model with Markov states far past the record.
 
 ### Security
 
