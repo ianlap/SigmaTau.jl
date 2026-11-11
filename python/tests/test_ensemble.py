@@ -158,6 +158,10 @@ def test_holdover_with_a_kalman_filter(clock, jl):
     np.testing.assert_array_equal(k.rms, np.array(direct.rms))
     np.testing.assert_array_equal(k.claimed, np.array(direct.claimed))
     assert k.train == 200.0 and st.holdover(data, train=200).claimed.size == 0
+    with pytest.raises(ValueError, match="do not apply"):
+        st.holdover(data, m, train=200, drift=True)
+    with pytest.raises(TypeError, match="PhaseData"):
+        st.holdover(data.to_frequency(), train=200)
 
 
 def test_holdover_prediction_matches_julia(clock, jl):
@@ -237,6 +241,33 @@ def test_timescale_matches_julia(jl):
     np.testing.assert_allclose(rk.weights[-1], w / w.sum(), rtol=0.02)
     with pytest.raises(ValueError):
         st.timescale(cc, algorithm="at3")
+
+
+def test_clock_indices_count_from_zero():
+    models = [st.ClockModel(1.0, q1=1e-24)] * 3
+    cc, _ = st.simulate_ensemble(models, 64, reference=2, rng=1)
+    assert cc.reference == "clock 3"
+    with pytest.raises(ValueError, match="reference must be the index of a clock, 0 to 2, got -1"):
+        st.simulate_ensemble(models, 64, reference=-1)
+    with pytest.raises(ValueError, match="pivot must be the index of a clock, 0 to 2, got 3"):
+        st.timescale(cc, algorithm="greenhall", models=models, pivot=3)
+    with pytest.raises(TypeError, match="pivot must be an integer"):
+        st.timescale(cc, algorithm="greenhall", models=models, pivot=1.9)
+
+
+def test_clock_comparisons_are_checked_as_in_julia():
+    with pytest.raises(ValueError, match="two or more clocks"):
+        st.ClockComparisons(np.zeros((5, 1)), 1.0)
+    with pytest.raises(ValueError, match="tau0 must be positive"):
+        st.ClockComparisons(np.zeros((5, 2)), 0.0)
+    with pytest.raises(ValueError, match="names must differ"):
+        st.ClockComparisons(np.zeros((5, 2)), 1.0, names=("a", "a"))
+    cc = st.ClockComparisons(np.arange(10.0).reshape(5, 2), 2.0, names=("a", "b"))
+    again = st.ClockComparisons.from_records([cc[0], cc[1]], names=cc.names, reference="c")
+    np.testing.assert_array_equal(again.x, cc.x)
+    assert (again.tau0, again.names, again.reference) == (2.0, ("a", "b"), "c")
+    with pytest.raises(ValueError, match="same length"):
+        st.ClockComparisons.from_records([cc[0], st.PhaseData(np.zeros(4), 2.0)])
 
 
 @pytest.fixture(scope="module")

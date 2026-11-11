@@ -10,6 +10,8 @@ because SigmaTau's kernels dispatch on concrete ``Vector`` types (a raw
 from __future__ import annotations
 
 import math
+import operator
+from collections.abc import Mapping
 from typing import Any
 
 import juliacall
@@ -51,14 +53,23 @@ def to_jl_f64(a: object) -> Any:
 def to_jl_char(c: str) -> Any:
     """One-character string → ``Char``. The value stays wrapped, because a ``Char``
     that a Julia call returns reaches Python as a ``str``."""
-    if len(c) != 1:
+    if not isinstance(c, str) or len(c) != 1:
         raise ValueError(f"expected one character, got {c!r}")
     return juliacall.convert(Char, c)
 
 
-def to_jl_ints(ms: object) -> Any:
+def as_int(value: object, name: str) -> int:
+    """``value`` as an ``int``. A float is refused, whole or not, as Julia and
+    NumPy refuse one where they count: ``int()`` would drop its fraction."""
+    try:
+        return operator.index(value)
+    except TypeError:
+        raise TypeError(f"{name} must be an integer, got {value!r}") from None
+
+
+def to_jl_ints(ms: object, name: str = "each value") -> Any:
     """Integer sequence → ``Vector{Int}``."""
-    return juliacall.convert(VecInt, [int(m) for m in ms])
+    return juliacall.convert(VecInt, [as_int(m, name) for m in ms])
 
 
 def to_jl_syms(ss: object) -> Any:
@@ -69,11 +80,24 @@ def to_jl_syms(ss: object) -> Any:
 _NOISE_ALPHA = {"WHPM": 2, "FLPM": 1, "WHFM": 0, "FLFM": -1, "RWFM": -2, "FWFM": -3, "RRFM": -4}
 
 
-def to_jl_dict_int_f64(d: dict) -> Any:
+def noise_alpha(key: object) -> int:
+    """The exponent α that ``key`` stands for: the integer itself, or a noise type."""
+    if not isinstance(key, str):
+        return as_int(key, "a power-law exponent α")
+    if key not in _NOISE_ALPHA:
+        raise ValueError(
+            f"unknown noise type {key!r}; use an integer α or one of {', '.join(_NOISE_ALPHA)}"
+        )
+    return _NOISE_ALPHA[key]
+
+
+def to_jl_dict_int_f64(d: Mapping) -> Any:
     """``{α: value}`` mapping → ``Dict{Int,Float64}``; keys are the integer α or a noise type."""
-    return juliacall.convert(
-        DictIntF64, {int(_NOISE_ALPHA.get(k, k)): float(v) for k, v in d.items()}
-    )
+    if not isinstance(d, Mapping):
+        raise TypeError(
+            f"expected a mapping from α or a noise type to its level, got {type(d).__name__}"
+        )
+    return juliacall.convert(DictIntF64, {noise_alpha(k): float(v) for k, v in d.items()})
 
 
 def powerlaw_to_jl(h: PowerLawFit | dict) -> Any:
@@ -105,7 +129,7 @@ def resolve_m(m: TauMode | object) -> Any:
     """
     if isinstance(m, TauMode):
         return _JL_TAUMODE[m]
-    ms = [int(k) for k in m]
+    ms = [as_int(k, "an averaging factor (a count of samples, τ/τ₀)") for k in m]
     if any(k < 1 for k in ms):
         raise ValueError(f"averaging factors must be ≥ 1, got {min(ms)}")
     return to_jl_ints(ms)

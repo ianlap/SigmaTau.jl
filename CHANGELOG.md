@@ -321,6 +321,23 @@ Clock models, the Kalman filter and timescales.
   nine more columns.
 - Explorer: Histogram and Autocorrelation views on the Data page, with the
   statistics beside the histogram.
+- `bias_b1`, `bias_b2` and `bias_b3`: Barnes's bias functions for frequency
+  averages taken with dead time between them (NBS TN 375; NIST TN 1318), for
+  an exponent μ from −2 to 2 or a noise type, `bias_b3` for any number of
+  samples. In Python, `st.bias_b1`, `st.bias_b2` and `st.bias_b3`.
+- `adev` takes `dead_time` on a `FrequencyData` record whose samples average
+  over `tau0` and start every `tau0 + dead_time`: the deviation and its
+  interval are divided by √(B2·B3) for the stated `noise` (SP1065 §5.15).
+  Also `dead_time=` on `st.adev` and `st.deviation` in Python, and
+  `sigmatau analyze --dead-time`. The "Dead time" page of the documentation
+  gives the functions, the limits of the correction and the agreement with
+  the published tables.
+- Explorer, Ensemble page: an N-cornered hat view beside the time scale. It
+  separates the stability of each clock by the hat on ADEV, MDEV, HDEV,
+  MHDEV, PDEV, TDEV or HTDEV, by the Groslambert covariance, or by the
+  covariance with the KLTS interval, from clocks read against one reference
+  or from three pairwise columns, and plots each clock with its interval
+  over the pairs as measured.
 
 ### Changed
 

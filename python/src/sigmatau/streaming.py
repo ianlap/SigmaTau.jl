@@ -35,7 +35,9 @@ class StreamingStability:
 
     @_map_errors
     def __init__(self, dev: str, tau0: float, m_values: Sequence[int]) -> None:
-        self._jl = jl.StreamingStability(jl.Symbol(str(dev)), float(tau0), to_jl_ints(m_values))
+        self._jl = jl.StreamingStability(
+            jl.Symbol(str(dev)), float(tau0), to_jl_ints(m_values, "an averaging factor")
+        )
 
     @_map_errors
     def push(self, x: float) -> StreamingStability:

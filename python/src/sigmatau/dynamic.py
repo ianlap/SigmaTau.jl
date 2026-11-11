@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ._convert import dynamic_from_jl, resolve_m, to_jl_data
+from ._convert import as_int, dynamic_from_jl, resolve_m, to_jl_data
 from ._julia import _map_errors, jl
 from .grids import Octave, TauMode
 from .types import DynamicStabilityResult, FrequencyData, PhaseData
@@ -21,9 +21,9 @@ def _run(jlfn, data, m, *, window, step) -> DynamicStabilityResult:
     """Convert the arguments, call the Julia estimator and convert its map."""
     kwargs = {}
     if window is not None:
-        kwargs["window"] = int(window)
+        kwargs["window"] = as_int(window, "window")
     if step is not None:
-        kwargs["step"] = int(step)
+        kwargs["step"] = as_int(step, "step")
     return dynamic_from_jl(jlfn(to_jl_data(data), resolve_m(m), **kwargs))
 
 
