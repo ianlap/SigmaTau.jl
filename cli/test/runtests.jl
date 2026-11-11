@@ -573,12 +573,12 @@ mktempdir() do dir
         @test r.code == 0
         lines = split(strip(r.out), '\n')
         @test lines[1] == "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day," *
-                          "statistics_of,min,max,mean,median,std,adev,noise_type"
+                          "statistics_of,min,max,mean,median,std,std_y,adev,noise_type"
         row = split(lines[2], ',')
         st = sample_statistics(PhaseData(X, 1.0))
         @test row[3] == "256" && row[9] == "phase"
-        @test parse.(Float64, row[10:15]) == [st.min, st.max, st.mean, st.median, st.std, st.adev]
-        @test row[16] == String(st.noise)
+        @test parse.(Float64, row[10:16]) == [st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev]
+        @test row[17] == String(st.noise)
         r = run_cli("check", pf, "--format", "json", "--series", "4000")
         @test r.code == 0
         @test occursin("\"command\":\"check\"", r.out)

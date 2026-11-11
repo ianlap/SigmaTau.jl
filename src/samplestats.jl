@@ -14,6 +14,9 @@ Statistics function
 - `min`, `max`, `mean`, `median`: of the samples measured, phase in seconds
   or fractional frequency.
 - `std`: their standard deviation, with ``n - 1`` in the denominator.
+- `std_y`: that of the fractional frequency, the Std Dev that Stable32
+  shows for either kind of record: of the samples for a frequency record,
+  of ``(x_{i+1} - x_i)/τ_0`` where both were measured for a phase record.
 - `adev`: the Allan deviation at ``τ_0``, from the terms whose samples were
   all measured, as [`adev`](@ref) takes them.
 - `noise`: the dominant noise type at ``τ_0``, by [`identify_noise`](@ref)
@@ -23,8 +26,9 @@ The record needs three samples measured.
 
 !!! note "Standard deviation of a phase record"
     `std` is that of the samples as given. Under any FM noise that of phase
-    grows with the length of the record, so it describes this record only;
-    `sample_statistics(FrequencyData(p)).std` is that of the frequency.
+    grows with the length of the record, so it describes this record only.
+    `std_y` is the one to read against `adev`: for white FM the two agree,
+    apart from the scatter of the estimates.
 
 # Examples
 
@@ -58,9 +62,11 @@ function _sample_statistics(v::Vector{Float64}, tau0::Float64, freq::Bool)
         isfinite(t) || continue
         s += t * t; k += 1
     end
+    y = freq ? w : filter(isfinite, diff(v) ./ tau0)
     noise_x = _gap_noise_record(v, freq)
     return (n = n, gaps = length(v) - n, min = minimum(w), max = maximum(w),
             mean = mean(w), median = _middle(w), std = std(w),
+            std_y = length(y) >= 2 ? std(y) : NaN,
             adev = k > 0 ? sqrt(s / (2k)) : NaN,
             noise = identify_noise(noise_x, [1])[1])
 end

@@ -272,11 +272,12 @@ def sample_statistics(data: PhaseData | FrequencyData) -> dict:
     :func:`identify_noise` gives, on the record with each gap bridged by a
     straight line). The record needs three samples measured.
 
-    ``std`` is that of the samples as given; for the frequency of a phase
-    record, pass ``p.to_frequency()``.
+    ``std_y`` is the standard deviation of the fractional frequency, the
+    Std Dev that Stable32 shows for either kind of record; ``std`` is that of
+    the samples as given.
     """
     s = jl.sample_statistics(to_jl_data(data))
-    out = {k: float(getattr(s, k)) for k in ("min", "max", "mean", "median", "std", "adev")}
+    out = {k: float(getattr(s, k)) for k in ("min", "max", "mean", "median", "std", "std_y", "adev")}
     return {"n": int(s.n), "gaps": int(s.gaps), **out, "noise": str(s.noise)}
 
 

@@ -166,6 +166,7 @@ def test_sample_statistics_histogram_and_acf(small_phase):
     s = st.sample_statistics(f)
     assert s["n"] == f.y.size and s["median"] == np.median(f.y) and s["noise"] in st.identify_noise(f, [1])
     np.testing.assert_allclose(s["std"], np.std(f.y, ddof=1))
+    np.testing.assert_allclose(st.sample_statistics(small_phase)["std_y"], s["std"])
     h = st.sample_histogram(f, bins=5)
     assert h["counts"].sum() == f.y.size and h["edges"].size == 6
     a = st.acf(f, m=2, lags=4)

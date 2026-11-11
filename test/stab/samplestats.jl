@@ -11,16 +11,19 @@ using Test, Random, Statistics, SigmaTau
         s = sample_statistics(fd)
         @test (s.n, s.gaps, s.min, s.max) == (4096, 0, minimum(y), maximum(y))
         @test (s.mean, s.median, s.std) == (mean(y), median(y), std(y))
+        @test s.std_y == s.std
         @test s.adev ≈ adev(fd, [1]; ci = false).dev[1]
         @test s.noise === :WHFM
         # The phase of the same record: its own samples, the same σ_y(τ₀).
         p = sample_statistics(pd)
         @test p.n == 4097 && p.max == maximum(pd.x)
         @test p.adev ≈ s.adev
+        @test p.std_y ≈ s.std
         # A gap: left out of the statistics and of every ADEV term reading it.
         x = [0.0, 1.0, 3.0, NaN, 4.0, 4.0, 6.0]
         g = sample_statistics(PhaseData(x, 2.0))
         @test (g.n, g.gaps, g.median) == (6, 1, 3.5)
+        @test g.std_y == std([1.0, 2.0, 0.0, 2.0] ./ 2)
         @test g.adev ≈ sqrt(((1 / 2)^2 + (2 / 2)^2) / 4)
         @test_throws ArgumentError sample_statistics(PhaseData([1.0, NaN, 2.0], 1.0))
     end

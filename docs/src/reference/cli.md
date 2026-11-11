@@ -234,7 +234,7 @@ recommendation. Each entry of `checks` is one result against the mask, as
 The record needs three samples or more. The CSV output is one row:
 
 ```text
-source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,adev,noise_type
+source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
 ```
 
 The columns up to `drift_per_day` are the members of `record` in the JSON

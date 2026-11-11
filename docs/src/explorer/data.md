@@ -201,13 +201,15 @@ normal, such as one with two peaks, points to a problem with the record.
 | **Points** | The samples measured, with the number missing |
 | **Min**, **Max**, **Mean**, **Median** | Of the samples measured |
 | **Std dev** | Their standard deviation, with ``n - 1`` in the denominator |
+| **Std dev (freq.)** | For phase, that of the fractional frequency: the Std Dev that Stable32 shows for either kind of record |
 | **σ<sub>y</sub>(τ<sub>0</sub>)** | The Allan deviation at the sample interval |
 | **Noise** | The noise type identified at the sample interval |
 
 The standard deviation of phase grows with the length of the record under
 any frequency noise, so it describes that record only. That of the
-frequency is the one to compare with **σ<sub>y</sub>(τ<sub>0</sub>)**: for
-white FM the two agree, apart from the scatter of the estimates.
+frequency, **Std dev (freq.)**, is the one to compare with
+**σ<sub>y</sub>(τ<sub>0</sub>)**: for white FM the two agree, apart from the
+scatter of the estimates.
 
 **Bins** sets the number of bins. Left empty it follows Scott's rule, with
 at most 1000. **Normal curve** draws, in crimson, the normal distribution

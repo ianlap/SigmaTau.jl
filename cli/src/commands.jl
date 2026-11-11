@@ -79,13 +79,13 @@ function check_samples(io::IO, o::Options, data::PhaseData, rec::Union{PhaseData
     end
     s = summarize(data)
     print(io, "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,")
-    print(io, "statistics_of,min,max,mean,median,std,adev,noise_type\n")
+    print(io, "statistics_of,min,max,mean,median,std,std_y,adev,noise_type\n")
     csv_field(io, src); print(io, ','); print(io, quantity(o)); print(io, ',')
     print(io, s.n); print(io, ','); csv_number(io, Float64(s.tau0)); print(io, ',')
     csv_number(io, Float64(s.span)); print(io, ','); print(io, s.gaps); print(io, ',')
     print(io, length(s.outliers)); print(io, ','); csv_number(io, Float64(s.drift_per_day))
     print(io, ','); print(io, what)
-    for v in (st.min, st.max, st.mean, st.median, st.std, st.adev)
+    for v in (st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev)
         print(io, ','); csv_number(io, v)
     end
     print(io, ','); print(io, String(st.noise)); print(io, '\n')

@@ -289,6 +289,7 @@ function distReadings(got, what) {
     return `<h3>Statistics</h3>${[["Points", thousands(st.n), "Samples measured"], ["Gaps", thousands(st.gaps), "Missing samples"],
       ["Min", sci(st.min, 4)], ["Max", sci(st.max, 4)], ["Mean", sci(st.mean, 4)], ["Median", sci(st.median, 4)],
       ["Std dev", sci(st.std, 4), "Standard deviation of the samples, with n − 1 in the denominator"],
+      ...(st.quantity === "phase" ? [["Std dev (freq.)", sci(st.std_y, 4), "Standard deviation of the fractional frequency, the Std Dev of Stable32"]] : []),
       ["σ<sub>y</sub>(τ<sub>0</sub>)", sci(st.adev, 4), "Allan deviation at the sample interval"],
       ["Noise", noiseLabel(st.noise_type), `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}`;
   }
