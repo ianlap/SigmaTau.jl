@@ -122,6 +122,16 @@ Clock models, the Kalman filter and timescales.
   against holdover time (RMS, a chosen share of the trials, the worst trial
   and the noise model's prediction) and how long each clock stays within a
   limit.
+- Holdover with a stretch that grows with the holdover time:
+  `holdover(…; grow=k)`, `sigmatau holdover --grow K`, a "2τ" stretch on the
+  explorer's Holdover page. At `grow = 2` (3 with drift) it equals √6·TDEV
+  (√20·HTDEV) at τ₀ and runs a constant factor above on FM noise; the page
+  and the CLI's JSON (`reference`) show that curve.
+- Holdover with a Kalman filter as the predictor:
+  `holdover(data, model::ClockModel; …)` carries the filter's estimate ahead
+  from every sample past the training stretch; `HoldoverResult.claimed` is
+  the filter's own standard deviation for that error, to set beside the
+  measured RMS (Python too).
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -354,6 +364,9 @@ Clock models, the Kalman filter and timescales.
   Flicker PM with fewer than 6 averaged points is now reported as white FM.
 - `--series N` keeps each stretch's lowest and highest sample and its first
   gap, instead of an evenly strided subset.
+- `adev` and `hdev`: the overlapping kernels vectorise again on Julia 1.12
+  and newer, about 8× faster than since `overlapping=false` was added;
+  values move by rounding at most.
 
 ### Removed
 
