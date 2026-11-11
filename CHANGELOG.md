@@ -598,6 +598,11 @@ Clock models, the Kalman filter and timescales.
 - `timescale` refuses `steps` with a Kalman scale, `models` with an
   averaging scale, and a `tau_min`, `memory` or `step_threshold` that is out
   of range.
+- `clock_model(...; flicker = false)` raises an error for a fit whose only
+  frequency noise is flicker FM, which would leave a model with a frozen
+  frequency; fit with `alphas = [2, 0, -2]` or keep the flicker.
+  `sigmatau analyze --fit` writes `clock_model: null` for such a fit and
+  keeps the rest.
 
 ### Removed
 
