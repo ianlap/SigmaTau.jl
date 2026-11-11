@@ -13,6 +13,7 @@ import numpy as np
 from ._convert import (
     data_from_jl,
     driftfit_to_jl,
+    np_f64,
     np_int,
     result_from_jl,
     result_to_jl,
@@ -264,6 +265,76 @@ def summarize(data: PhaseData | FrequencyData) -> dict:
         "gaps": int(s.gaps),
         "outliers": np_int(s.outliers) - 1,
         "drift_per_day": float(s.drift_per_day),
+    }
+
+
+@_map_errors
+def sample_statistics(data: PhaseData | FrequencyData) -> dict:
+    """Basic statistics of a record's samples, those of Stable32's Statistics
+    function.
+
+    Keys: ``n`` (samples measured), ``gaps`` (``nan`` samples), ``min``,
+    ``max``, ``mean``, ``median`` and ``std`` (with n − 1) of the samples
+    measured, phase in seconds or fractional frequency, ``adev`` (the Allan
+    deviation at τ₀) and ``noise`` (the noise type at τ₀ that
+    :func:`identify_noise` gives, on the record with each gap bridged by a
+    straight line). The record needs three samples measured.
+
+    ``std_y`` is the standard deviation of the fractional frequency, the
+    Std Dev that Stable32 shows for either kind of record; ``std`` is that of
+    the samples as given.
+    """
+    s = jl.sample_statistics(to_jl_data(data))
+    out = {k: float(getattr(s, k)) for k in ("min", "max", "mean", "median", "std", "std_y", "adev")}
+    return {"n": int(s.n), "gaps": int(s.gaps), **out, "noise": str(s.noise)}
+
+
+@_map_errors
+def sample_histogram(data: PhaseData | FrequencyData, *, bins: int | None = None) -> dict:
+    """Histogram of a record's samples, as Stable32's Histogram function plots
+    it.
+
+    The bins have equal widths and span the samples measured; ``bins=None``
+    takes their number from Scott's rule, h = 3.49·s·n^(−1/3) (Scott 1979),
+    with at most 1000. Keys: ``edges`` (the bins + 1 edges, rising),
+    ``counts`` (each bin holds its lower edge, the last also its upper one),
+    and ``n``, ``mean`` and ``std`` of the samples measured, for the normal
+    curve n·h·φ((v − mean)/std)/std over a bin of width h.
+    """
+    kw = {} if bins is None else {"bins": int(bins)}
+    h = jl.sample_histogram(to_jl_data(data), **kw)
+    return {
+        "edges": np_f64(h.edges),
+        "counts": np_int(h.counts),
+        "n": int(h.n),
+        "mean": float(h.mean),
+        "std": float(h.std),
+    }
+
+
+@_map_errors
+def acf(data: PhaseData | FrequencyData, *, m: int = 1, lags: int | None = None) -> dict:
+    """Autocorrelation of a record at averaging factor ``m``, as Stable32's
+    Autocorrelation function plots it (SP1065 §5.5.3, Eq. 47).
+
+    The series is the phase taken every m samples, or the frequency averaged
+    over m samples without overlap. ``lags`` is the largest lag, by default
+    half the series. Keys: ``lag`` and ``r`` (lags 0 to K and their
+    autocorrelation), ``m``, ``tau`` (m·τ₀) and ``n`` (points in the series),
+    ``alpha`` (the lag-1 estimate of the power-law exponent, ``nan`` with
+    fewer than 30 points) and ``noise`` (the type :func:`identify_noise`
+    gives at m). A record with ``nan`` gaps raises an error: fill them first.
+    """
+    kw = {"m": int(m)} if lags is None else {"m": int(m), "lags": int(lags)}
+    a = jl.acf(to_jl_data(data), **kw)
+    return {
+        "lag": np_int(a.lag),
+        "r": np_f64(a.r),
+        "m": int(a.m),
+        "tau": float(a.tau),
+        "n": int(a.n),
+        "alpha": float(a.alpha),
+        "noise": str(a.noise),
     }
 
 

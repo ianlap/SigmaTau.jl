@@ -1,8 +1,10 @@
 // Data page: load a file (with the import dialog) or synthesize a record,
-// the record check, and the phase plot with outliers in orange, or the
-// frequency with a fitted drift model.
+// the record check, and the phase plot with outliers in orange, the
+// frequency with a fitted drift model, or the histogram (with the statistics
+// of the samples) or the autocorrelation of phase or frequency.
 import { state, update, activeClock, multi, markStale } from "../state.js";
-import { drift as fetchDrift, driftKey, driftMethod } from "../core.js";
+import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
+import { noiseLabel, noiseTitle } from "../estimators.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
 import { thousands, duration, sci, startText, escapeHtml as h } from "../format.js";
 
@@ -32,9 +34,17 @@ const METHODS = [
   ["four_point", "Four-point", "Greenhall's estimator from four values of the summed phase: near the least variance on every noise"],
 ];
 
+// The plots of the record card.
+const VIEWS = [
+  ["phase", "Phase", "The phase record, with its outliers"],
+  ["drift", "Frequency drift", "Fit a frequency drift model"],
+  ["hist", "Histogram", "Histogram of the samples, with a normal curve and their statistics"],
+  ["acf", "Autocorrelation", "Autocorrelation of the samples, with the noise type it points to"],
+];
+
 const MAX_SIM_CLOCKS = 8;
 let root, plotEl, Plotly, ctx, relayoutBound = false;
-const inflight = new Map();   // clock id → drift key being fitted
+const inflight = new Map();   // clock id (and view) → key of the request in flight
 
 export function mount(el, c) {
   root = el; ctx = c;
@@ -48,11 +58,11 @@ export function mount(el, c) {
       <div class="data-top" data-ref="top"></div>
       <div class="card record-card">
         <div class="card-row">
-          <div class="seg seg-sm" role="group" aria-label="Plot" data-ref="view">
-            <button type="button" data-view="phase">Phase</button><button type="button" data-view="drift">Frequency drift</button></div>
+          <div class="seg seg-sm" role="group" aria-label="Plot" data-ref="view">${VIEWS.map(([v, l, tip]) =>
+            `<button type="button" data-view="${v}" title="${tip}">${l}</button>`).join("")}</div>
           <h2 data-ref="plot-title">Phase x(t)</h2><span class="muted small" data-ref="plot-hint"></span><span class="range-bar" data-ref="range"></span></div>
         <div class="drift-bar" data-ref="drift-bar" hidden></div>
-        <div class="plot-box"><div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
+        <div class="plot-row"><div class="plot" data-ref="plot"></div><div class="dist-aside" data-ref="aside" hidden></div><div class="empty" data-ref="empty" hidden></div></div>
       </div>
     </div>`;
   plotEl = root.querySelector("[data-ref=plot]");
@@ -158,19 +168,34 @@ export function refresh() {
   const focus = document.activeElement?.dataset?.field === "name";
   if (!focus) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
   else root.querySelector(".check-card").outerHTML = checkCard(c);
-  const driftView = state.dataView === "drift";
-  root.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === state.dataView));
+  const view = state.dataView;
+  root.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const removed = c?.drift && c.drift !== "none" ? `, ${c.drift} drift removed` : "";
-  const title = driftView ? `Frequency y(t)${removed}` : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
+  const of = c ? (distOf(c) === "frequency" ? "frequency y" : "phase x") : "";
+  const title = view === "drift" ? `Frequency y(t)${removed}`
+    : view === "hist" ? `Histogram of ${of}${removed}`
+    : view === "acf" ? `Autocorrelation of ${of}${removed}`
+    : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
   root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
-  root.querySelector("[data-ref=plot-hint]").textContent = driftView ? "Fit in crimson · drag to zoom" : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
-  root.querySelector("[data-ref=range]").innerHTML = driftView ? "" : rangeBar(c);
+  root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit in crimson · drag to zoom"
+    : view === "hist" ? (state.dist.normal ? "Normal curve in crimson" : "")
+    : view === "acf" ? (c?.range ? "Of the analysis range" : "")
+    : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
+  root.querySelector("[data-ref=range]").innerHTML = view === "phase" ? rangeBar(c) : "";
   const bar = root.querySelector("[data-ref=drift-bar]");
-  bar.hidden = !driftView;
-  if (driftView) {
+  const dist = view === "hist" || view === "acf";
+  bar.hidden = view !== "drift" && !(dist && c?.record);
+  if (dist && c?.record) bar.innerHTML = distBar(c, view);
+  const aside = root.querySelector("[data-ref=aside]");
+  aside.innerHTML = dist ? distAside(c, view) : "";
+  aside.hidden = !aside.innerHTML;
+  if (view === "drift") {
     ensureFit(c);
     bar.innerHTML = driftBar(c);
     drawDrift(c);
+  } else if (view === "hist" || view === "acf") {
+    ensureDist(c, view);
+    view === "hist" ? drawHist(c) : drawAcf(c);
   } else {
     drawRecord(c);
   }
@@ -247,6 +272,129 @@ function drawDrift(c) {
   Plotly.react(plotEl, traces, { ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis("Time t (s)"), yaxis, showlegend: false, uirevision: `${c.id}-drift` }, CONFIG);
 }
 
+// Ask the core for the statistics with the histogram or the autocorrelation
+// when they are missing or out of date.
+function ensureDist(c, what) {
+  if (!c?.record) return;
+  const key = distKey(c, what), slot = `${c.id}:${what}`;
+  if (c[what]?.key === key || inflight.get(slot) === key) return;
+  inflight.set(slot, key);
+  const done = (fields) => {
+    if (inflight.get(slot) !== key) return;
+    inflight.delete(slot);
+    update(() => { c[what] = { key, ...fields }; });
+  };
+  distribution(c, what).then(done, (err) => done({ error: err.message }));
+}
+
+const distReady = (c, what) => c?.record && c[what]?.key === distKey(c, what) && !c[what].error ? c[what] : null;
+
+// Beside the plot: the statistics that Stable32's Statistics function
+// shows, or the readings of the autocorrelation.
+const kv = ([k, v, tip]) => `<div class="kv"${tip ? ` title="${h(tip)}"` : ""}><span>${k}</span><span class="mono">${v}</span></div>`;
+
+function distAside(c, what) {
+  const err = c?.[what]?.key === distKey(c, what) ? c[what].error : null;
+  const got = distReady(c, what);
+  return err ? `<p class="error small">${h(err)}</p>` : got ? distReadings(got, what) : "";
+}
+
+function distReadings(got, what) {
+  if (what === "hist") {
+    const st = got.statistics;
+    return `<div aria-label="Statistics">${[["Points", thousands(st.n), "Samples measured"], ["Gaps", thousands(st.gaps), "Missing samples"],
+      ["Min", sci(st.min, 4)], ["Max", sci(st.max, 4)], ["Mean", sci(st.mean, 4)], ["Median", sci(st.median, 4)],
+      ["Std dev", sci(st.std, 4), "Standard deviation of the samples, with n − 1 in the denominator"],
+      ...(st.quantity === "phase" ? [["Std dev (freq.)", sci(st.std_y, 4), "Standard deviation of the fractional frequency, the Std Dev of Stable32"]] : []),
+      ["σ<sub>y</sub>(τ<sub>0</sub>)", sci(st.adev, 4), "Allan deviation at the sample interval"],
+      ["Noise", noiseLabel(st.noise_type), `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}</div>`;
+  }
+  const a = got.acf;
+  return `<div aria-label="Autocorrelation">${[["τ", duration(a.tau), "m·τ₀"], ["Points", thousands(a.n), "Points in the series"],
+    ["r<sub>1</sub>", a.r.length > 1 ? a.r[1].toFixed(3) : "–", "Autocorrelation at lag 1"],
+    ["α", Number.isFinite(a.alpha) ? a.alpha.toFixed(2) : "–", "Lag-1 estimate of the power-law exponent (Riley and Greenhall); it needs a record of 30·m samples"],
+    ["Noise", noiseLabel(a.noise_type), `${noiseTitle(a.noise_type)}, identified at τ`]].map(kv).join("")}</div>`;
+}
+
+function distBar(c, what) {
+  const of = distOf(c), d = state.dist;
+  const seg = `<div class="seg seg-sm" role="group" aria-label="Samples">${[["phase", "Phase"], ["frequency", "Frequency"]].map(([v, l]) =>
+    `<button type="button" data-of="${v}" class="${v === of ? "on" : ""}">${l}</button>`).join("")}</div>`;
+  const field = (k, label, tip, extra) => `<label class="opt" title="${tip}"><span>${label}</span>
+    <input type="number" class="num-sm" data-dist="${k}" min="1" step="1" ${extra} value="${d[k] ?? ""}"></label>`;
+  const controls = what === "hist"
+    ? `${field("bins", "Bins", "Number of bins; empty for Scott's rule", `max="1000" placeholder="auto"`)}
+      <label class="check"><input type="checkbox" data-dist="normal" ${d.normal ? "checked" : ""}>Normal curve</label>`
+    : `${field("m", "Averaging factor m", "τ = m·τ₀", "")}
+      ${field("lags", "Lags", "Largest lag; empty for half the series, at most 1000", `placeholder="auto"`)}`;
+  return `${seg}${controls}`;
+}
+
+function showEmpty(msg) {
+  const empty = root.querySelector("[data-ref=empty]");
+  empty.hidden = !msg;
+  if (msg) empty.innerHTML = `<p>${msg}</p>`;
+  plotEl.style.visibility = msg ? "hidden" : "visible";
+}
+
+function distEmpty(c, what) {
+  if (!c?.record) return "Open a file or drop one anywhere in the window.";
+  if (distReady(c, what)) return "";
+  return c[what]?.key === distKey(c, what) ? `No ${what === "hist" ? "histogram" : "autocorrelation"} for this record.` : "Computing…";
+}
+
+// Bars of the histogram and the normal curve of the samples' mean and
+// standard deviation. Values far from zero next to their spread are shown
+// less their mean, which the axis title gives. Phase is in a time unit.
+function drawHist(c) {
+  const msg = distEmpty(c, "hist");
+  showEmpty(msg);
+  if (msg || !Plotly) return;
+  const hg = c.hist.histogram, freq = distOf(c) === "frequency";
+  const shift = Math.abs(hg.mean) > 10 * hg.std ? hg.mean : 0;
+  const [f, u] = freq ? [1, ""] : timeUnit(Math.max(Math.abs(hg.edges[0] - shift), Math.abs(hg.edges.at(-1) - shift)) || 1);
+  const v = (x) => (x - shift) / f;
+  const centers = hg.counts.map((_, k) => v((hg.edges[k] + hg.edges[k + 1]) / 2));
+  const w = hg.edges.length > 1 ? (hg.edges[1] - hg.edges[0]) : 0;
+  const traces = [{
+    type: "bar", x: centers, y: hg.counts, width: w / f || undefined, name: "count",
+    marker: { color: multi() ? seriesColor(c.slot) : css("--s1"), line: { width: 0 } },
+    hovertemplate: `%{x:.5g}${u ? ` ${u}` : ""}<br>%{y} samples<extra></extra>`,
+  }];
+  if (state.dist.normal && hg.std > 0 && w > 0) {
+    const lo = Math.min(hg.edges[0], hg.mean - 4 * hg.std), hi = Math.max(hg.edges.at(-1), hg.mean + 4 * hg.std);
+    const xs = Array.from({ length: 241 }, (_, i) => lo + (hi - lo) * i / 240);
+    const k = hg.n * w / (hg.std * Math.sqrt(2 * Math.PI));
+    traces.push({
+      x: xs.map(v), y: xs.map((x) => k * Math.exp(-0.5 * ((x - hg.mean) / hg.std) ** 2)), mode: "lines", name: "normal",
+      line: { color: css("--accent"), width: 2 }, hovertemplate: "normal: %{y:.4g}<extra></extra>",
+    });
+  }
+  const name = freq ? "Fractional frequency y" : "Phase x";
+  const xaxis = { ...linAxis(shift ? `${name} − ${sci(shift, 4)}${freq ? "" : " s"}` : name), exponentformat: "e", ...(u ? { ticksuffix: ` ${u}` } : {}) };
+  Plotly.react(plotEl, traces, {
+    ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, bargap: 0.04, xaxis, yaxis: linAxis("Samples per bin"),
+    uirevision: `${c.id}-hist`,
+  }, CONFIG);
+}
+
+function drawAcf(c) {
+  const msg = distEmpty(c, "acf");
+  showEmpty(msg);
+  if (msg || !Plotly) return;
+  const a = c.acf.acf;
+  Plotly.react(plotEl, [{
+    x: a.lag, y: a.r, mode: a.lag.length > 200 ? "lines" : "lines+markers", name: "acf",
+    line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.4 }, marker: { size: 4 },
+    customdata: a.lag.map((k) => k * a.tau),
+    hovertemplate: "lag %{x} (%{customdata:.4g} s)<br>r = %{y:.4f}<extra></extra>",
+  }], {
+    ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 },
+    xaxis: linAxis(`Lag k (τ = ${duration(a.tau)})`), yaxis: { ...linAxis("r(k)"), rangemode: "tozero", zeroline: true, zerolinecolor: css("--line-strong") },
+    uirevision: `${c.id}-acf`,
+  }, CONFIG);
+}
+
 // The analysis range: drag across the plot in "Select range" mode. The check
 // above and this plot keep the whole record; the runs use the range.
 function rangeBar(c) {
@@ -316,6 +464,8 @@ function drawRecord(c) {
 function onClick(e) {
   const v = e.target.closest("[data-view]")?.dataset.view;
   if (v) { update((s) => { s.dataView = v; }); return; }
+  const of = e.target.closest("[data-of]")?.dataset.of;
+  if (of) { update((s) => { s.dist.of = of; }); return; }
   const md = e.target.closest("[data-model]")?.dataset.model;
   if (md) { update((s) => { s.driftModel = md; }); return; }
   const dr = e.target.closest("[data-drift]")?.dataset.drift;
@@ -344,6 +494,16 @@ function onClick(e) {
 function onChange(e) {
   if (e.target.dataset.ref === "resid") { update((s) => { s.driftResid = e.target.checked; }); return; }
   if (e.target.dataset.ref === "method") { update((s) => { s.driftMethod = e.target.value; }); return; }
+  const dk = e.target.dataset.dist;
+  if (dk === "normal") { update((s) => { s.dist.normal = e.target.checked; }); return; }
+  if (dk) {
+    // Bins and lags: empty for the default; m: 1 or more.
+    const n = Math.round(Number(e.target.value));
+    const ok = e.target.value === "" ? dk !== "m" : n >= 1 && (dk !== "bins" || n <= 1000);
+    if (!ok) { ctx.status("error", dk === "bins" ? "Bins must be between 1 and 1000." : "Enter a whole number of 1 or more."); refresh(); return; }
+    update((s) => { s.dist[dk] = e.target.value === "" ? null : n; });
+    return;
+  }
   const f = e.target.dataset.field;
   const c = activeClock();
   if (!c || !f) return;

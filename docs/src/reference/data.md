@@ -44,10 +44,10 @@ What a function does with missing samples depends on what it computes:
 |:----------|:---------------------|
 | [`adev`](@ref), [`mdev`](@ref), [`tdev`](@ref), [`hdev`](@ref), [`mhdev`](@ref), [`htdev`](@ref), [`tierms`](@ref) | Leave out every term that reads a missing sample |
 | [`mtie`](@ref) | Takes the peak-to-peak of the samples measured in each window |
-| [`totdev`](@ref), [`mtotdev`](@ref), [`ttotdev`](@ref), [`htotdev`](@ref), [`mhtotdev`](@ref), [`pdev`](@ref), [`theo1`](@ref), [`theoh`](@ref), [`dadev`](@ref), [`dhdev`](@ref), [`cross_adev`](@ref), [`groslambert`](@ref), [`cross_psd_y`](@ref), [`cross_psd_x`](@ref), and `adev` and `hdev` with `overlapping=false` | Throw an error |
+| [`totdev`](@ref), [`mtotdev`](@ref), [`ttotdev`](@ref), [`htotdev`](@ref), [`mhtotdev`](@ref), [`pdev`](@ref), [`theo1`](@ref), [`theoh`](@ref), [`dadev`](@ref), [`dhdev`](@ref), [`acf`](@ref), [`cross_adev`](@ref), [`groslambert`](@ref), [`cross_psd_y`](@ref), [`cross_psd_x`](@ref), and `adev` and `hdev` with `overlapping=false` | Throw an error |
 | [`StreamingStability`](@ref), [`LiveStability`](@ref) | Throw an error at the sample and stay as they were |
 | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref) | Return `NaN` at every frequency |
-| [`detrend`](@ref), [`drift_fit`](@ref), [`find_outliers`](@ref), [`summarize`](@ref) | Work on the samples measured |
+| [`detrend`](@ref), [`drift_fit`](@ref), [`find_outliers`](@ref), [`summarize`](@ref), [`sample_statistics`](@ref), [`sample_histogram`](@ref) | Work on the samples measured |
 | [`fillgaps`](@ref) | Returns a record without missing samples |
 | [`remove_outliers`](@ref) | Replaces the outliers and leaves the missing samples missing |
 
@@ -82,8 +82,16 @@ INPUT_FORMATS
 
 ## A first look
 
+[`summarize`](@ref) checks a record before analysis. The other three
+functions give what Stable32's Statistics, Histogram and Autocorrelation
+functions show: the statistics of the samples, their histogram, and their
+autocorrelation at an averaging factor.
+
 ```@docs
 summarize
+sample_statistics
+sample_histogram
+acf
 ```
 
 ## Saving and loading

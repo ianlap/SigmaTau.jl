@@ -4,7 +4,7 @@
 const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "hat", "model", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
-    ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift)"),
+    ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift and the statistics of its samples), with their histogram and autocorrelation on request"),
     ("spectrum",   "FILE", "Welch power spectral densities S_y(f) and S_x(f)"),
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
@@ -37,6 +37,7 @@ const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 const HAT_DEVS = [String(d) for d in SigmaTau._HAT_DEVIATIONS]
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
+const QUANTITIES = ["phase", "frequency"]
 
 struct Opt
     long::String
@@ -80,7 +81,7 @@ const OPTS = [
     # Analysis
     Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev; for hat, adev); see below", ["analyze", "hat", "report", "live"]),
     Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "hat", "report", "live"]),
-    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "steer", "hat", "report", "live"]),
+    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid. For check --acf, the one averaging factor of the autocorrelation (default 1)", ["analyze", "check", "cross", "steer", "hat", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
     Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
     Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "hat", "report", "holdover"]),
@@ -118,6 +119,11 @@ const OPTS = [
     Opt("--integral", "", String[], false, "with --time-constant: a third gain, on the running sum of the phase", ["steer"]),
     Opt("--cost", "P:F:U", String[], false, "in place of --time-constant: the gains that minimize P·phase² + F·frequency² + U·steer² (LQG), e.g. 1e-3:1e-3:1e12", ["steer"]),
     Opt("--interval", "SECONDS", String[], false, "seconds between steers, a whole multiple of τ₀ (default τ₀)", ["steer"]),
+    Opt("--quantity", "Q", QUANTITIES, false, "phase or frequency: the samples the statistics, --histogram and --acf describe (default: those of the record)", ["check"]),
+    Opt("--histogram", "", String[], false, "the histogram of the samples; with CSV, its bins in place of the summary", ["check"]),
+    Opt("--bins", "N", String[], false, "number of histogram bins (default: Scott's rule, at most 1000)", ["check"]),
+    Opt("--acf", "", String[], false, "the autocorrelation of the samples at averaging factor --m; with CSV, its lags in place of the summary", ["check"]),
+    Opt("--lags", "K", String[], false, "largest autocorrelation lag (default: half the series, at most 1000)", ["check"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     Opt("--method", "METHOD", DRIFT_METHODS, false, "estimator of the linear model: frequency_fit (default, a least-squares line through the frequency), phase_fit (a least-squares parabola through the phase), bisection (the three-point fit), second_difference (mean second difference of the phase) or four_point", ["drift"]),
     # Live
@@ -212,6 +218,11 @@ mutable struct Options
     integral::Bool            # steer: an integral gain
     cost::Vector{Float64}     # steer: --cost weights on phase, frequency and steer; empty = not given
     interval::Float64         # steer: seconds between steers; NaN = τ₀
+    quantity::String          # check: "phase" or "frequency"; "" = the record's
+    histogram::Bool           # check: --histogram
+    bins::Int                 # check: histogram bins; 0 = Scott's rule
+    acf::Bool                 # check: --acf
+    lags::Int                 # check: largest ACF lag; -1 = the default
     pairs::Bool               # hat: the columns are the pairwise differences
     reference::Bool           # hat: the reference counts as a clock
     covariance::Bool          # hat: the Groslambert covariance in place of the hat
@@ -225,7 +236,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
-                    NaN, false, Float64[], NaN, false, true, false, false)
+                    NaN, false, Float64[], NaN, "", false, 0, false, -1, false, true, false, false)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -398,6 +409,9 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--window";         o.window = parse_int(v, name)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
+    elseif name == "--quantity";       o.quantity = check_choice(v, name, QUANTITIES)
+    elseif name == "--bins";           o.bins = parse_int(v, name); o.bins >= 1 || throw(usage_error("--bins must be 1 or more"))
+    elseif name == "--lags";           o.lags = parse_int(v, name); o.lags >= 0 || throw(usage_error("--lags must be 0 or more"))
     elseif name == "--method";         o.method = check_choice(v, name, DRIFT_METHODS)
     elseif name == "--train";          o.train = parse_float(v, name)
     elseif name == "--grow";           o.grow = parse_int(v, name)
@@ -439,6 +453,8 @@ function set_flag!(o::Options, name::String)
     elseif name == "--hz";                 o.hz = true
     elseif name == "--fast";               o.fast = true
     elseif name == "--fit";                o.fit = true
+    elseif name == "--histogram";          o.histogram = true
+    elseif name == "--acf";                o.acf = true
     elseif name == "--fit-drift";          o.fit_drift = true
     elseif name == "--no-anchor";          o.anchor = false
     elseif name == "--kalman";             o.kalman = true
@@ -546,6 +562,13 @@ function parse_args!(o::Options, args::Vector{String})
     o.scaling != 0 || throw(usage_error("--scaling must not be 0"))
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
+    if o.command == "check"
+        o.bins == 0 || o.histogram || throw(usage_error("--bins goes with --histogram"))
+        (o.lags < 0 && isempty(o.m)) || o.acf || throw(usage_error("--lags and --m go with --acf"))
+        length(o.m) > 1 && throw(usage_error("check --acf takes one averaging factor --m"))
+        o.histogram && o.acf && o.format != "json" &&
+            throw(usage_error("--histogram and --acf each print a table; ask for one, or use --format json"))
+    end
     o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
     return o
 end
