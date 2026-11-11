@@ -168,16 +168,19 @@ export function refresh() {
     : view === "hist" ? `Histogram of ${of}${removed}`
     : view === "acf" ? `Autocorrelation of ${of}${removed}`
     : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
-  root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
+  const t = root.querySelector("[data-ref=plot-title]");
+  t.textContent = t.title = multi() && c ? `${title} · ${c.name}` : title;
   root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit in crimson · drag to zoom"
     : view === "hist" ? (state.dist.normal ? "Normal curve in crimson" : "")
     : view === "acf" ? (c?.range ? "Of the analysis range" : "")
     : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
   root.querySelector("[data-ref=range]").innerHTML = view === "phase" ? rangeBar(c) : "";
   const bar = root.querySelector("[data-ref=drift-bar]");
-  bar.hidden = view !== "drift";
+  const dist = view === "hist" || view === "acf";
+  bar.hidden = view !== "drift" && !(dist && c?.record);
+  if (dist && c?.record) bar.innerHTML = distBar(c, view);
   const aside = root.querySelector("[data-ref=aside]");
-  aside.innerHTML = view === "hist" || view === "acf" ? distAside(c, view) : "";
+  aside.innerHTML = dist ? distAside(c, view) : "";
   aside.hidden = !aside.innerHTML;
   if (view === "drift") {
     ensureFit(c);
@@ -278,31 +281,30 @@ const distReady = (c, what) => c?.record && c[what]?.key === distKey(c, what) &&
 const kv = ([k, v, tip]) => `<div class="kv"${tip ? ` title="${h(tip)}"` : ""}><span>${k}</span><span class="mono">${v}</span></div>`;
 
 function distAside(c, what) {
+  const err = c?.[what]?.key === distKey(c, what) ? c[what].error : null;
   const got = distReady(c, what);
-  if (!got) return distBar(c, what);
-  return distBar(c, what) + distReadings(got, what);
+  return err ? `<p class="error small">${h(err)}</p>` : got ? distReadings(got, what) : "";
 }
 
 function distReadings(got, what) {
   if (what === "hist") {
     const st = got.statistics;
-    return `<h3>Statistics</h3>${[["Points", thousands(st.n), "Samples measured"], ["Gaps", thousands(st.gaps), "Missing samples"],
+    return `<div aria-label="Statistics">${[["Points", thousands(st.n), "Samples measured"], ["Gaps", thousands(st.gaps), "Missing samples"],
       ["Min", sci(st.min, 4)], ["Max", sci(st.max, 4)], ["Mean", sci(st.mean, 4)], ["Median", sci(st.median, 4)],
       ["Std dev", sci(st.std, 4), "Standard deviation of the samples, with n − 1 in the denominator"],
       ...(st.quantity === "phase" ? [["Std dev (freq.)", sci(st.std_y, 4), "Standard deviation of the fractional frequency, the Std Dev of Stable32"]] : []),
       ["σ<sub>y</sub>(τ<sub>0</sub>)", sci(st.adev, 4), "Allan deviation at the sample interval"],
-      ["Noise", noiseLabel(st.noise_type), `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}`;
+      ["Noise", noiseLabel(st.noise_type), `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}</div>`;
   }
   const a = got.acf;
-  return `<h3>Autocorrelation</h3>${[["τ", duration(a.tau), "m·τ₀"], ["Points", thousands(a.n), "Points in the series"],
+  return `<div aria-label="Autocorrelation">${[["τ", duration(a.tau), "m·τ₀"], ["Points", thousands(a.n), "Points in the series"],
     ["r<sub>1</sub>", a.r.length > 1 ? a.r[1].toFixed(3) : "–", "Autocorrelation at lag 1"],
-    ["α", Number.isFinite(a.alpha) ? a.alpha.toFixed(2) : "–", "Lag-1 estimate of the power-law exponent (Riley and Greenhall); it needs 30 points"],
-    ["Noise", noiseLabel(a.noise_type), `${noiseTitle(a.noise_type)}, identified at τ`]].map(kv).join("")}`;
+    ["α", Number.isFinite(a.alpha) ? a.alpha.toFixed(2) : "–", "Lag-1 estimate of the power-law exponent (Riley and Greenhall); it needs a record of 30·m samples"],
+    ["Noise", noiseLabel(a.noise_type), `${noiseTitle(a.noise_type)}, identified at τ`]].map(kv).join("")}</div>`;
 }
 
 function distBar(c, what) {
   const of = distOf(c), d = state.dist;
-  const err = c?.[what]?.key === distKey(c, what) ? c[what].error : null;
   const seg = `<div class="seg seg-sm" role="group" aria-label="Samples">${[["phase", "Phase"], ["frequency", "Frequency"]].map(([v, l]) =>
     `<button type="button" data-of="${v}" class="${v === of ? "on" : ""}">${l}</button>`).join("")}</div>`;
   const field = (k, label, tip, extra) => `<label class="opt" title="${tip}"><span>${label}</span>
@@ -312,7 +314,7 @@ function distBar(c, what) {
       <label class="check"><input type="checkbox" data-dist="normal" ${d.normal ? "checked" : ""}>Normal curve</label>`
     : `${field("m", "Averaging factor m", "τ = m·τ₀", "")}
       ${field("lags", "Lags", "Largest lag; empty for half the series, at most 1000", `placeholder="auto"`)}`;
-  return `<div class="dist-controls">${seg}${controls}</div>${err ? `<p class="error small">${h(err)}</p>` : ""}`;
+  return `${seg}${controls}`;
 }
 
 function showEmpty(msg) {
@@ -375,7 +377,7 @@ function drawAcf(c) {
     hovertemplate: "lag %{x} (%{customdata:.4g} s)<br>r = %{y:.4f}<extra></extra>",
   }], {
     ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 },
-    xaxis: linAxis(`Lag k (τ = ${duration(a.tau)})`), yaxis: { ...linAxis("Autocorrelation r(k)"), rangemode: "tozero", zeroline: true, zerolinecolor: css("--line-strong") },
+    xaxis: linAxis(`Lag k (τ = ${duration(a.tau)})`), yaxis: { ...linAxis("r(k)"), rangemode: "tozero", zeroline: true, zerolinecolor: css("--line-strong") },
     uirevision: `${c.id}-acf`,
   }, CONFIG);
 }

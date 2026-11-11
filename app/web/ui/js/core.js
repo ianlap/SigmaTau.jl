@@ -221,7 +221,9 @@ const distRequest = (clock, what) => request(clock, "check", [
 export const distKey = (clock, what) => JSON.stringify(distRequest(clock, what));
 
 export async function distribution(clock, what, signal) {
-  const doc = await post(distRequest(clock, what), signal).catch(remedy);
+  // The page's own name for the one option the core can refuse here.
+  const doc = await post(distRequest(clock, what), signal)
+    .catch((err) => remedy(err.message.startsWith("--lags") ? new Error(`Lags${err.message.slice(6)}`) : err));
   if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
   return { statistics: doc.statistics, histogram: doc.histogram, acf: doc.acf };
 }

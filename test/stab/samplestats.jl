@@ -41,6 +41,8 @@ using Test, Random, Statistics, SigmaTau
         # One sample far out on a long record: at most 1000 bins.
         @test length(sample_histogram(FrequencyData([zeros(30000); 1.0], 1.0)).counts) == 1000
         @test sample_histogram(FrequencyData(fill(2.0, 5), 1.0)).counts == [5]
+        # Samples on the edges, which the division alone puts one bin low.
+        @test sample_histogram(FrequencyData((0:10) ./ 10, 1.0); bins = 10).counts == [1, 1, 1, 1, 1, 1, 1, 1, 1, 2]
         @test_throws ArgumentError sample_histogram(fd; bins = 0)
     end
 
@@ -62,8 +64,11 @@ using Test, Random, Statistics, SigmaTau
         @test w.r[2] ≈ -0.5 atol = 0.05
         @test w.alpha ≈ 2 atol = 0.2
         @test isnan(acf(fd; m = 256).alpha)                 # 16 points
+        # α as identify_noise counts: 239 phase samples hold 29 of m = 8.
+        @test isnan(acf(PhaseData(cumsum(y[1:239]), 1.0); m = 8).alpha)
         @test_throws ArgumentError acf(PhaseData([0.0, 1.0, NaN, 2.0, 3.0], 1.0))
         @test_throws ArgumentError acf(fd; m = 0)
         @test_throws ArgumentError acf(fd; lags = 4096)
+        @test_throws ArgumentError acf(fd; lags = -5)
     end
 end

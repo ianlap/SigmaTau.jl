@@ -152,8 +152,11 @@ function _sample_histogram(v::Vector{Float64}, bins::Int)
     edges = nb == 1 ? [lo, hi] : collect(range(lo, hi; length = nb + 1))
     width = (hi - lo) / nb
     @inbounds for x in w
-        k = width > 0 ? floor(Int, (x - lo) / width) + 1 : 1
-        counts[clamp(k, 1, nb)] += 1
+        k = clamp(width > 0 ? floor(Int, (x - lo) / width) + 1 : 1, 1, nb)
+        # Against the edges themselves, which round apart from the division.
+        k < nb && x >= edges[k+1] && (k += 1)
+        k > 1 && x < edges[k] && (k -= 1)
+        counts[k] += 1
     end
     return (edges = edges, counts = counts, n = n, mean = mean(w), std = std(w))
 end
@@ -182,8 +185,8 @@ many lags; a periodic component shows as an oscillation.
 # Keywords
 
 - `m=1`: averaging factor, ``τ = m τ_0``.
-- `lags`: the largest lag ``K``; by default ``N ÷ 2``, half the series, as
-  Stable32 computes them. At most ``N - 1``.
+- `lags`: the largest lag ``K``, from 0 to ``N - 1``; by default
+  ``N ÷ 2``, half the series, as Stable32 computes them.
 
 # Returns
 
@@ -196,7 +199,8 @@ A named tuple:
   number that falls between two noise types for a mix of them
   ([Riley and Greenhall (2004)](@cite riley-2004-lag1-acf)). It is read as
   [`identify_noise`](@ref) reads it: on the phase without its quadratic
-  drift, differenced until stationary. `NaN` with fewer than 30 points.
+  drift, differenced until stationary. `NaN` when the phase holds fewer
+  than ``30 m`` samples, where [`identify_noise`](@ref) stops using it.
 - `noise`: the label [`identify_noise`](@ref) gives at ``m``.
 
 A record with `NaN` gaps throws an error: fill them with
@@ -233,7 +237,7 @@ function _acf(x::Vector{Float64}, z::Vector{Float64}, m::Integer, lags::Integer,
         "acf: the record has NaN gaps; fill them with fillgaps first"))
     N = length(z)
     N >= 3 || throw(ArgumentError("acf: m = $m leaves $N points; it needs 3"))
-    K = lags < 0 ? N ÷ 2 : Int(lags)
+    K = lags == -1 ? N ÷ 2 : Int(lags)
     0 <= K <= N - 1 || throw(ArgumentError("acf: lags must lie between 0 and $(N - 1), got $lags"))
     zbar = mean(z)
     L = nextpow(2, N + K)   # padded so that no lag up to K wraps around
@@ -243,7 +247,7 @@ function _acf(x::Vector{Float64}, z::Vector{Float64}, m::Integer, lags::Integer,
     end
     c = irfft(abs2.(rfft(pad)), L)
     c[1] > 0 || throw(ArgumentError("acf: the series is constant"))
-    alpha = N >= NEFF_RELIABLE ?
+    alpha = length(x) ÷ m >= NEFF_RELIABLE ?
         _noise_id_lag1acf(_preprocess(x), Int(m), 0, 2; detrend=true)[1] : NaN
     return (lag = collect(0:K), r = c[1:K+1] ./ c[1], m = Int(m), tau = m * tau0, n = N,
             alpha = alpha, noise = identify_noise(x, [Int(m)])[1])

@@ -191,8 +191,8 @@ To fit the drift of the record as measured, set **Drift removal** to
 
 The **Histogram** view plots the histogram of the samples, as Stable32's
 Histogram function does, and lists the statistics of its Statistics
-function above it ([`sample_statistics`](@ref), [`sample_histogram`](@ref)).
-**Phase** and **Frequency** choose the samples: those of the record by
+function beside it ([`sample_statistics`](@ref), [`sample_histogram`](@ref)).
+**Phase** and **Frequency**, in the line above the plot, choose the samples: those of the record by
 default, or the record converted to the other kind. A distribution far from
 normal, such as one with two peaks, points to a problem with the record.
 
@@ -235,10 +235,11 @@ at lag 1 tells the noise types apart
 | White FM | 0 |
 | Flicker FM and the more divergent noises | Positive, nearer 1 the longer the record |
 
-A periodic component shows as an oscillation of its period. The line above
+A periodic component shows as an oscillation of its period. The list beside
 the plot gives ``r_1``, the lag-1 estimate of ``α`` that
 [`identify_noise`](@ref) rounds to a noise type, and that type. For a mix of
-two noises ``α`` falls between their values. It needs 30 points or more.
+two noises ``α`` falls between their values. It needs a record of
+``30 m`` samples or more.
 The autocorrelation needs a record without missing samples: turn on
 **Fill gaps by reflection**.
 

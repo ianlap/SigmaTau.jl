@@ -104,7 +104,8 @@ function acf_of(o::Options, rec)
         return acf(rec; m=m, lags=lags)
     catch err
         err isa ArgumentError || rethrow()
-        throw(CLIError(EXIT_ANALYSIS, replace(error_message(err), "fillgaps first" => "--fillgaps")))
+        msg = replace(replace(error_message(err), "acf: " => ""), "fillgaps first" => "--fillgaps")
+        throw(CLIError(EXIT_ANALYSIS, replace(msg, "lags must" => "--lags must")))
     end
 end
 

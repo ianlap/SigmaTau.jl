@@ -603,6 +603,8 @@ mktempdir() do dir
         @test run_cli("check", pf, "--bins", "4").code == 1                        # needs --histogram
         @test run_cli("check", pf, "--acf", "--m", "1,2").code == 1
         @test run_cli("check", pf, "--acf", "--m", "128").code == 3                # two points
+        r = run_cli("check", pf, "--acf", "--lags", "500")
+        @test r.code == 3 && occursin("--lags must lie between 0 and 255", r.err) && !occursin("acf:", r.err)
     end
 
     @testset "spectrum" begin
