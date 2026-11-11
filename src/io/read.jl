@@ -16,7 +16,9 @@ end
 # skipped, then blank and `#` lines wherever they appear (Stable32's
 # "# Header End", notes written mid-record); every row must have the same
 # number of fields. The delimiter is `delim`, else the one picked from the
-# first data line (see `_auto_delim`). Returns the columns and the field count.
+# first data line (see `_auto_delim`). Returns the columns, the field count,
+# and the names in the last skipped line that is not blank or `#`, split as
+# the data are (empty unless there is one name per column).
 function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing}, cols::Vector{Int})
     isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
     d = delim === nothing ? '\0' : delim
@@ -24,13 +26,15 @@ function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing
     ncols = -1
     lineno = 0
     fields = UnitRange{Int}[]
+    head = UInt8[]
     l = _Lines(path)
     try
         while true
             r = _nextline!(l)
             r === nothing && break
             lineno += 1
-            (lineno <= header || _blank_or_comment(l.buf, r)) && continue
+            _blank_or_comment(l.buf, r) && continue
+            lineno <= header && (head = l.buf[r]; continue)
             ncols < 0 && delim === nothing && (d = _auto_delim(path, l.buf, r))
             _fields!(fields, l.buf, r, d)
             if ncols < 0
@@ -54,7 +58,12 @@ function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing
     finally
         close(l)
     end
-    return out, max(ncols, 0)
+    names = String[]
+    if !isempty(head)
+        _fields!(fields, head, 1:length(head), d)
+        length(fields) == ncols && (names = String[_field_string(head, f) for f in fields])
+    end
+    return out, max(ncols, 0), names
 end
 
 # The field count of the first data line (0 for no data).
@@ -204,6 +213,24 @@ end
 # Seconds since 2000-01-01T00:00Z, the epoch of `start`, of an MJD.
 _mjd_seconds(mjd::Float64) = (mjd - 51544.0) * 86400.0
 
+# A time column in seconds, by the name of the column ("" for none), as both
+# readers take it: MJD days when the name holds `mjd`, or when the values look
+# like MJD (`_is_mjd`) and the name has no unit of time and neither `sec` nor
+# `elapsed`; else in the unit of time that the name gives ("time (ms)").
+# ISO 8601 timestamps (`iso`) are seconds already. Returns the start time of
+# an MJD column, else NaN.
+function _time_seconds!(t::Vector{Float64}, name::AbstractString, iso::Bool)
+    (isempty(t) || iso) && return NaN
+    scale, kind = _unit(name)
+    if occursin(r"mjd"i, name) || (kind <= 0 && !occursin(r"sec|elapsed"i, name) && _is_mjd(t))
+        start = _mjd_seconds(t[1])
+        t .*= 86400
+        return start
+    end
+    kind > 0 && scale != 1 && (t .*= scale)
+    return NaN
+end
+
 # A time column in MJD days: values from MJD 30000 to 90000 (1941 to 2105),
 # steps under 0.05 d (a sample interval under 72 min), and digits past the
 # fourth decimal, which a sub-day MJD needs (1 s is 1.16e-5 d) and seconds
@@ -290,13 +317,12 @@ function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int,
         time_col = 0; value_col = 1
     end
     have_time = time_col >= 1
-    cols, _ = _read_cols(path, skip, delim, have_time ? [time_col, value_col] : [value_col])
+    cols, _, names = _read_cols(path, skip, delim, have_time ? [time_col, value_col] : [value_col])
     v = cols[end]
     t = have_time ? cols[1] : Float64[]
-    if _is_mjd(t)
-        isnan(start) && (start = _mjd_seconds(t[1]))
-        t .*= 86400
-    end
+    # A Stable32 header holds no column names.
+    t_start = _time_seconds!(t, stable32 || isempty(names) ? "" : names[time_col], false)
+    isnan(start) && (start = t_start)
     scaling == 1 || (v .*= scaling)
     # τ₀: explicit kwarg > `# tau0:` comment header > time column.
     resolved_tau0 = if tau0 !== nothing
@@ -380,12 +406,18 @@ does not increase from line to line, or whose steps are not whole multiples
 of one step to within a quarter of it. ``τ_0`` is then the median step,
 which must be positive, unless the keyword or the header gives it.
 
-A time column is read as MJD when its values lie between 30000 and 90000,
-its median step is under 0.05 d and it has digits past the fourth decimal.
-It is converted to seconds and gives the record its [`start_time`](@ref).
-MJD values at longer steps are read as seconds, so that daily data need
-`tau0=86400`. Timestamps in seconds that meet the three conditions are
-taken for MJD: pass `tau0` for them, and disregard the start time.
+The time column takes its unit from its name, as in [`read_data`](@ref),
+when the last line that `header` skips holds one name for each column. A
+name that contains `mjd` makes it MJD, at any step, and a unit of time
+in the name, as in `time (ms)`, sets that unit. Otherwise the column is
+read as MJD when its values lie between 30000 and 90000, its median step
+is under 0.05 d, it has digits past the fourth decimal, and its name, if
+any, contains neither a unit of time, `sec` nor `elapsed`. An MJD column is
+converted to seconds and gives the record its [`start_time`](@ref).
+Unnamed MJD values at longer steps are read as seconds, so that daily data
+need a line of names or `tau0=86400`. Unnamed timestamps in seconds that
+meet the three conditions are taken for MJD: pass `tau0` for them, and
+disregard the start time.
 
 # Keywords
 
@@ -394,7 +426,7 @@ taken for MJD: pass `tau0` for them, and disregard the start time.
   `time_col == value_col`, the file is read without a time column.
 - `value_col=2`: column of the samples.
 - `header=0`: number of lines to skip after the leading `#` lines, such as
-  a line of column names.
+  a line of column names, which then name the time column.
 - `delim`: character that separates the fields. By default a tab in a
   `.tsv` file whose first line of data holds one, else a comma when that
   line holds one, else runs of blanks. A field may be enclosed in double
@@ -429,6 +461,7 @@ julia> print(p.x)
 p = read_phase("phase.csv"; scaling=1e-9)         # samples in nanoseconds
 p = read_phase("samples.txt"; tau0=0.1)           # one column, no timestamps
 p = read_phase("log.txt"; value_col=4, header=1)  # column 4, below the names
+p = read_phase("utc.csv"; header=1)               # a column named MJD, in days
 ```
 """
 function read_phase(path::AbstractString; tau0::Union{Real,Nothing}=nothing, time_col::Int=1,

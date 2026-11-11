@@ -189,12 +189,20 @@ function input_format(o::Options)
 end
 
 # TimeLab, Stable32 .phd/.frd, counter and named-column files: one clock per
-# file, read by SigmaTau's format readers, which set the record type.
+# file, read by SigmaTau's format readers, which set the record type. With
+# --value-cols (timescale) the clock of a table or RINEX clock file is the
+# column being read, by number.
 function read_instrument(o::Options, fmt::Symbol)
     o.reference_col > 0 && throw(usage_error("--reference-col applies to column files only"))
-    r = SigmaTau._read_data(o.input, fmt; tau0=o.tau0, column_name=o.column, nominal=o.nominal,
+    r = try
+        SigmaTau._read_data(o.input, fmt; tau0=o.tau0, column=isempty(o.value_cols) ? 0 : o.value_col,
+                            column_name=o.column, nominal=o.nominal,
                             kind=o.freq ? :frequency : o.phase_given ? :phase : :auto, scaling=o.scaling, delim=o.delim,
                             fillgaps=o.fillgaps, keep_zeros=o.keep_zeros)
+    catch e
+        e isa ArgumentError || rethrow()
+        throw(CLIError(EXIT_INPUT, cli_wording(error_message(e))))
+    end
     o.freq = !r.phase
     # A filled frequency sample leaves the phase sample after it unmeasured.
     o.measured = isempty(r.filled) ? falses(0) : r.phase ? .!r.filled : [true; .!r.filled]
@@ -204,3 +212,8 @@ function read_instrument(o::Options, fmt::Symbol)
     r.phase && return PhaseData(v, r.tau0; source=o.input, start=r.start)
     return PhaseData(integrated(v, r.tau0), r.tau0; source=o.input, start=r.start)
 end
+
+# read_data's errors in the words of the command line, where the keyword
+# `column` is --column (a name) or --value-cols (numbers).
+cli_wording(m::String) =
+    replace(replace(m, "pass column= one of" => "pass --column with one of"), "column=" => "column ")

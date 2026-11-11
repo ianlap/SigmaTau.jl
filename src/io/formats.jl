@@ -186,7 +186,7 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
         m === nothing || (phase = lowercase(something(m.captures[1], "phase")) == "phase")
     end
     hint == 0 || (phase = hint > 0)
-    (t, v), ncols = _read_cols(path, nskip, nothing, [1, 0])
+    (t, v), ncols, _ = _read_cols(path, nskip, nothing, [1, 0])
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
     ncols >= 2 || (t = Float64[])
     # Stable32 writes a gap as a zero; only the end points of phase data may be zero.
@@ -362,17 +362,8 @@ function _read_table(path::AbstractString, tau0::Float64, column::Int, column_na
         t = t[keep]; v = v[keep]
     end
     start = iso[] && !isempty(t) ? t[1] : NaN
-    # MJD by name, or by its range unless the name says seconds; else in the
-    # time unit the name gives ("time (ms)"), seconds without one or for
-    # ISO 8601 timestamps.
-    tscale, tkind = isempty(t) ? (1.0, 0) : _unit(names[time])
-    if !isempty(t) && (occursin(r"mjd"i, names[time]) ||
-                       (tkind <= 0 && !occursin(r"sec|elapsed"i, names[time]) && _is_mjd(t)))
-        start = _mjd_seconds(t[1])
-        t .*= 86400
-    elseif tkind > 0 && tscale != 1 && !iso[]
-        t .*= tscale
-    end
+    t_start = _time_seconds!(t, time > 0 ? names[time] : "", iso[])
+    isnan(t_start) || (start = t_start)
     scale, unit_kind = _unit(names[c])
     # A unit in the name fixes the record type, else the name's words do; an
     # override must agree with the unit.

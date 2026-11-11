@@ -364,6 +364,25 @@ mktempdir() do dir
         @test run_cli("timescale", tf).code == 1                       # no --value-cols
         @test run_cli("timescale", tf, "--value-cols", "2,2").code == 1
         @test run_cli("timescale", tf, "--value-cols", "2,9").code == 2
+        # A table with a line of names is read clock by clock, in the units
+        # and on the MJD axis its names give; --header reads the same axis.
+        nf = joinpath(dir, "named.csv")
+        open(nf, "w") do io
+            println(io, "MJD,a (ns),b (ns),c (ns)")
+            for k in 1:64
+                println(io, 60000 + 5(k - 1), ",", join(cc.x[k, :] .* 1e9, ","))
+            end
+        end
+        for extra in ((), ("--header", "1", "--scaling", "1e-9"))
+            r = run_cli("timescale", nf, "--value-cols", "2,3,4", extra..., "--format=json", "--series", "0")
+            @test r.code == 0 && occursin("\"tau0\":432000.0,\"n\":64,", r.out)
+        end
+        @test run_cli("timescale", nf, "--value-cols", "2,3", "--column", "a (ns)").code == 1
+        # Errors name the command line's flags, not read_data's keyword.
+        r = run_cli("analyze", nf)
+        @test r.code == 2 && occursin("pass --column with one of MJD, a (ns)", r.err) && !occursin("column=", r.err)
+        r = run_cli("timescale", nf, "--value-cols", "2,7")
+        @test r.code == 2 && occursin("column 7 exceeds 4 columns", r.err)
     end
 
     @testset "drift" begin
