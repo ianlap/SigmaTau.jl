@@ -298,6 +298,16 @@ Clock models, the Kalman filter and timescales.
   `drift_fit(..., method=)`, `detrend(data, fit)` and `DRIFT_METHODS`.
 - `sigmatau drift --method`; its CSV row has a `method` column after
   `model`. Explorer: an Estimator list on the Frequency drift view.
+- `sigmatau hat`: the stability of each of three or more clocks measured
+  against one another, by the N-cornered hat on ADEV, MDEV, HDEV, MHDEV,
+  PDEV, TDEV or HTDEV, or by the Groslambert covariance (`--covariance`),
+  with a χ² or the KLTS interval (`--klts`). The clocks are columns of a
+  file read against one reference, which counts as one more clock
+  (`--no-reference` leaves it out), or three columns A−B, B−C and C−A
+  (`--pairs`).
+- `ncornered_hat` and `groslambert` take a `ClockComparisons`: clocks read
+  against one reference, with the reference as one more clock unless
+  `reference=false`.
 
 ### Changed
 
