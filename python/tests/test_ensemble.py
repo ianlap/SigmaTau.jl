@@ -123,11 +123,11 @@ def test_kalman_filter_matches_julia(clock, jl):
     assert st.innovation_check(kf)["ok"]
     assert np.all(np.diff(st.holdover_error(kf, [10.0, 100.0, 1000.0])) > 0)
     assert st.prediction_error(kf, data, [1, 10]).shape == (2,)
-    t = st.tune_q(data, m, points=3)
-    assert t["cost"].shape == (3, 3) and t["model"].R == pytest.approx(t["scale"] * m.R)
-    b = st.tune_q(data, m, points=3, burnin=500)
-    direct = jl.tune_q(_convert.to_jl_data(data), m._jl(), points=3, burnin=500)
-    assert b["scale"] == float(direct.scale) != t["scale"]
+    t = st.tune_q(data, m, maxiter=40)
+    direct = jl.tune_q(_convert.to_jl_data(data), m._jl(), maxiter=40)
+    assert t["cost"] == float(direct.cost) and t["evaluations"] == int(direct.evaluations)
+    assert t["model"].R == m.R and t["model"].q1 > 0 and t["converged"] == bool(direct.converged)
+    assert st.tune_q(data, m, maxiter=40, burnin=500)["cost"] != t["cost"]
 
 
 def test_holdover_matches_julia(clock, jl):

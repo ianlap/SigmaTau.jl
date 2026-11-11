@@ -464,55 +464,47 @@ function prediction_error(kf::KalmanResult, data::PhaseData, horizons::AbstractV
 end
 
 """
-    tune_q(data::PhaseData, m::ClockModel; horizons=[10, 100, 1000], decades=2,
-           points=9, burnin=length(data.x) ÷ 10) → NamedTuple
+    tune_q(data::PhaseData, m::ClockModel; burnin=length(data.x) ÷ 10,
+           maxiter=300) → NamedTuple
 
-Retune the white FM and random-walk FM levels of `m` for prediction.
+Retune the white FM and random-walk FM levels of `m` by maximum likelihood.
 
-The filter is run for every pair of levels on a logarithmic grid of
-`points` values that spans `decades` decades either side of `m.q1` and
-`m.q2`. The pair is kept whose predictions `horizons` samples ahead have
-the smallest sum of the logarithms of their RMS errors
-([`prediction_error`](@ref)).
+The levels `q1` and `q2` are searched for the smallest
+``-2\\ln L = \\sum_t [\\ln S_t + \\nu_t^2 / S_t]``, the sum over the
+innovations ``\\nu_t`` of the filter and their variances ``S_t`` past the
+burn-in ([Tryon and Jones (1983), Eq. (5.1)](@cite tryon-1983-parameters)),
+with the other levels of `m` held fixed. Every trial is one pass of the
+filter, and a missing reading adds no term. The search is Nelder–Mead on
+the logarithms of the two levels, started from those of `m` with a step of
+one natural logarithm, so it finds the optimum from a start whose ratio
+`q1 / q2` is off by a factor of ten or more.
 
-The predictions of a Kalman filter depend on the ratios of its noise
-levels and not on their size, so that search cannot set the size. Every
-level of the model with the best pair is therefore multiplied by one
-factor, `scale`: the mean square of that filter's normalized innovations
-past the burn-in. That is the factor of largest likelihood
-([Tryon and Jones (1983), Eq. (5.1)](@cite tryon-1983-parameters)); it
-leaves the predictions as they are and makes the error the filter claims
-one sample ahead the error it makes.
-
-A noise fit gives the levels that match ``σ(τ)``; tuning gives the levels
-that predict best. The two differ when the record has noise that the model
-lacks, such as flicker FM. The error the tuned filter claims is then right
-at one sample and not beyond: in simulation it was wrong by a factor of up
-to 2.8 at longer holdover times ([What the states buy](@ref)). A model
-with flicker states, the default of [`clock_model`](@ref), carries that
-noise instead, and predicted better there.
+A noise fit gives the levels that match ``σ(τ)``; the likelihood gives the
+levels that leave the innovations white with close to unit variance, and so
+the error the filter claims one sample ahead is the error it makes. The two
+differ when the record has noise that the model lacks, such as flicker FM.
+The error the filter claims is then right at one sample and not beyond,
+and in simulation it was wrong by a factor of up to 2.8 at longer holdover
+times ([What the states buy](@ref)). A model with flicker states, the
+default of [`clock_model`](@ref), carries that noise instead, and predicted
+better there. See also [`innovation_check`](@ref).
 
 # Arguments
 
 - `data`: the phase record.
-- `m`: the model to start from, with `q1 > 0` and `q2 > 0`, which center
-  the grid.
+- `m`: the model to start from, with `q1 > 0` and `q2 > 0`.
 
 # Keywords
 
-- `horizons`: prediction horizons in samples. Those longer than the record
-  past the burn-in are dropped.
-- `decades`: half-width of the grid in decades.
-- `points`: grid points on each axis; the filter runs `points^2` times.
-- `burnin`: samples at the start left out of the error and of `scale`.
+- `burnin`: samples at the start left out of the sum.
+- `maxiter`: iterations of the search at most.
 
 # Returns
 
-A named tuple `(model, q1, q2, cost, scale, edge)`: the tuned model; the
-two grid axes; the cost on the grid, with one row for each `q1` and one
-column for each `q2`; the factor on the levels; and whether the best pair
-lies on the edge of the grid, where the minimum may be outside it and a
-larger `decades` is called for.
+A named tuple `(model, cost, converged, evaluations)`: the tuned model;
+``-2\\ln L`` at its levels; whether the search ended with the simplex and
+the cost both within tolerance (otherwise `maxiter` was reached and
+a restart from `model` may go on); and the number of filter runs.
 
 # Examples
 
@@ -522,26 +514,66 @@ h = Dict(0 => 2e-24, -1 => 1e-27, -2 => 1e-32)
 p = noise_gen(PhaseData, 20_000, 1.0; h, rng = Xoshiro(1))
 m = clock_model(powerlaw_fit(p; alphas = [2, 0, -2]))    # without flicker FM
 t = tune_q(p, m)
-t.model.q1 / m.q1, t.model.q2 / m.q2, t.edge
+t.model.q1 / m.q1, t.model.q2 / m.q2, t.converged
 ```
 """
-function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integer}=[10, 100, 1000],
-                decades::Real=2, points::Integer=9, burnin::Integer=length(data.x) ÷ 10)
-    m.q1 > 0 && m.q2 > 0 || throw(ArgumentError("tune_q: needs a model with q1 > 0 and q2 > 0 to center the grid"))
-    points >= 2 || throw(ArgumentError("tune_q: points must be at least 2, got $points"))
-    hs = filter(h -> h < length(data.x) - burnin, horizons)
-    isempty(hs) && throw(ArgumentError("tune_q: every horizon is longer than the record past the burn-in"))
-    grid(q) = q .* exp10.(range(-decades, decades; length=points))
-    q1s, q2s = grid(m.q1), grid(m.q2)
-    cost = [begin
-                mi = _with(m; q1=a, q2=b)
-                sum(log, prediction_error(kalman_filter(data, mi), data, hs; burnin))
-            end for a in q1s, b in q2s]
-    i = argmin(cost)
-    best = _with(m; q1=q1s[i[1]], q2=q2s[i[2]])
-    kf = kalman_filter(data, best)
-    keep = filter(k -> isfinite(kf.innovation[k]), burnin+1:length(data.x))
-    scale = sum(k -> kf.innovation[k]^2 / kf.innovation_var[k], keep) / length(keep)
-    return (model=_scaled(best, scale), q1=q1s, q2=q2s, cost=cost, scale=scale,
-            edge=i[1] in (1, points) || i[2] in (1, points))
+function tune_q(data::PhaseData, m::ClockModel; burnin::Integer=length(data.x) ÷ 10, maxiter::Integer=300)
+    m.q1 > 0 && m.q2 > 0 || throw(ArgumentError("tune_q: needs a model with q1 > 0 and q2 > 0 to start from"))
+    length(data.x) > burnin || throw(ArgumentError("tune_q: the burn-in leaves no readings"))
+    maxiter >= 1 || throw(ArgumentError("tune_q: maxiter must be at least 1, got $maxiter"))
+    build(θ) = _with(m; q1=exp(θ[1]), q2=exp(θ[2]))
+    function cost(θ)
+        kf = kalman_filter(data, build(θ))
+        s, n = 0.0, 0
+        for k in burnin+1:length(data.x)
+            ν, S = kf.innovation[k], kf.innovation_var[k]
+            (isfinite(ν) && S > 0) || continue
+            s += log(S) + ν^2 / S; n += 1
+        end
+        return n == 0 ? Inf : s
+    end
+    θ, c, converged, evaluations = _nelder_mead(cost, [log(m.q1), log(m.q2)]; maxiter)
+    return (model=build(θ), cost=c, converged=converged, evaluations=evaluations)
+end
+
+# Nelder–Mead with the standard coefficients (reflect 1, expand 2, contract
+# ½, shrink ½), from `x0` and a step of `step` along each axis. It stops when
+# the cost differs by less than `ftol` across the simplex and the simplex
+# is smaller than `xtol`.
+function _nelder_mead(f, x0::Vector{Float64}; step=1.0, maxiter=300, ftol=1e-3, xtol=1e-3)
+    n = length(x0)
+    P = [copy(x0) for _ in 1:n+1]
+    for i in 1:n
+        P[i+1][i] += step
+    end
+    F = f.(P)
+    evals = n + 1
+    converged = false
+    for _ in 1:maxiter
+        o = sortperm(F); P, F = P[o], F[o]
+        if F[end] - F[1] < ftol && maximum(maximum(abs, P[i] - P[1]) for i in 2:n+1) < xtol
+            converged = true
+            break
+        end
+        c = sum(P[1:n]) / n
+        xr = c + (c - P[end]); fr = f(xr); evals += 1
+        if fr < F[1]
+            xe = c + 2 * (c - P[end]); fe = f(xe); evals += 1
+            P[end], F[end] = fe < fr ? (xe, fe) : (xr, fr)
+        elseif fr < F[n]
+            P[end], F[end] = xr, fr
+        else
+            xc = fr < F[end] ? c + (xr - c) / 2 : c + (P[end] - c) / 2
+            fc = f(xc); evals += 1
+            if fc < min(fr, F[end])
+                P[end], F[end] = xc, fc
+            else
+                for i in 2:n+1
+                    P[i] = P[1] + (P[i] - P[1]) / 2; F[i] = f(P[i]); evals += 1
+                end
+            end
+        end
+    end
+    i = argmin(F)
+    return P[i], F[i], converged, evals
 end
