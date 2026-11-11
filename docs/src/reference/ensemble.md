@@ -63,6 +63,15 @@ average. When it comes back it joins as a new clock does: its phase is taken
 from the scale at that sample and it weighs in from the next, so the scale
 does not step at the return. The papers give no rule for a returning clock.
 
+The clocks need not be read at every sample of the record. The interval of
+the equations is the time since the last sample with a reading
+([Weiss & Weissert (1991), §2.8](@cite weiss-weissert-1991-at2)), so clocks
+read together at every tenth sample give the scale of those readings alone.
+They do have to be read together: a clock read less often than the others
+joins anew at each of its readings and never has a weight. For clocks on
+different schedules use `:greenhall`, whose filter takes each reading when it
+comes.
+
 `:greenhall` is Greenhall's Kalman timescale. One Kalman filter tracks every
 clock's phase and frequency from the clock models; after each update the
 phase part of its covariance is reduced about a weighted mean of the
