@@ -45,6 +45,8 @@ def test_a_float_is_refused_where_julia_counts(small_phase):
         st.acf(small_phase, lags=4.5)
     with pytest.raises(TypeError, match="value_col must be an integer, got 2.0"):
         st.read_phase("clock.csv", value_col=2.0)
+    with pytest.raises(TypeError, match="nperseg must be an integer, got 64.5"):
+        st.psd_y(small_phase, nperseg=64.5)
     assert st.adev(small_phase, np.array([1, 2]), ci=False).tau.tolist() == [1.0, 2.0]
 
 

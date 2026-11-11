@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ._convert import np_f64, spectral_from_jl, to_jl_data, to_jl_f64
+from ._convert import as_int, np_f64, spectral_from_jl, to_jl_data, to_jl_f64
 from ._julia import _map_errors, jl
 from .types import FrequencyData, PhaseData, SpectralResult
 
@@ -19,9 +19,9 @@ def _welch_kwargs(nperseg: int | None, noverlap: int | None, taper: str) -> dict
     """Welch keywords for Julia; a segment size of ``None`` is left out."""
     kwargs = {"taper": jl.Symbol(str(taper))}
     if nperseg is not None:
-        kwargs["nperseg"] = int(nperseg)
+        kwargs["nperseg"] = as_int(nperseg, "nperseg")
     if noverlap is not None:
-        kwargs["noverlap"] = int(noverlap)
+        kwargs["noverlap"] = as_int(noverlap, "noverlap")
     return kwargs
 
 
