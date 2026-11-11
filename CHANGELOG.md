@@ -651,6 +651,11 @@ Clock models, the Kalman filter and timescales.
   `:jones_tryon` start it from a clock already in the scale, without a step.
   A clock first read while no other clock is read no longer turns the
   `:ewfa`, `:at1` and `:at2` scales to NaN.
+- `timescale` with `:greenhall` or `:jones_tryon` and models with a drift
+  state no longer carries the drift of a parabola through the first 16
+  readings as a constant drift of the scale. The drift starts at zero (Jones
+  and Tryon 1983, Fig. 1), with a variance wide enough that the drifts of
+  the clocks against each other are still learned.
 - `read_phase` and `read_frequency` take the unit of a time column from its
   name in the line that `header` skips, as `read_data` does, so a column
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
