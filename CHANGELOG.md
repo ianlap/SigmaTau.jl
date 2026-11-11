@@ -231,6 +231,12 @@ Clock models, the Kalman filter and timescales.
   the package's own, held as measurement noise with memory. States sit only
   across the τ where the flicker holds a quarter of the model's Allan
   variance. Off by default; `:stein` refuses such models.
+- `sigmatau timescale --flicker` fits the Greenhall and Jones–Tryon scales'
+  clock models with flicker states and reports the number each clock carries
+  (`"flicker": {"fm", "pm"}`); the explorer's Ensemble page has the same
+  choice. Python's `ClockModel` mirrors `flicker_fm`, `fm_band`,
+  `flicker_pm` and `pm_band`, and `clock_model` and `clock_models` take
+  `flicker=True`.
 
 ### Changed
 
@@ -333,8 +339,8 @@ Clock models, the Kalman filter and timescales.
   with them (up to about 15 % in ADEV at short τ in the mixed case).
   Frequencies are unchanged.
 - `theo1` and `theoh` sum Thêo1 in cache-sized blocks across all threads; a
-  default `theo1` call on 557 000 points takes 19 s instead of 2 minutes on
-  4 threads. Values move by rounding only.
+  default `theo1` call on 557 000 points takes 48 s on 4 threads. Values
+  move by rounding only.
 - `psd_x`, `cross_psd_x` and `ssb_phase_noise` estimate S_x as the Welch S_y
   over the response of the first difference, 4 sin²(πfτ₀)/τ₀². A Welch
   estimate on the phase itself read high at the lowest bins on FM noise
@@ -373,6 +379,17 @@ Clock models, the Kalman filter and timescales.
 - `adev` and `hdev`: the overlapping kernels vectorise again on Julia 1.12
   and newer, about 8× faster than since `overlapping=false` was added;
   values move by rounding at most.
+- Every estimator's `NaN`-gap check is one vectorised pass; a call on a
+  25 000-point record saves about 9 µs.
+- Documentation: every docstring checked against the code and its cited
+  source and rewritten in one style; bibliography verified against publisher
+  records, with DOIs, and 21 sources added.
+- The Stable32 reader (`.phd`, `.frd`) reads a value of zero as a gap, as
+  Stable32 does (all zeros in frequency data; all but the first and last
+  point in phase data), and reads Stable32's older header of bare `File:` …
+  `Tau:` lines. `read_data(path; keep_zeros=true)`, CLI `--keep-zeros` and
+  the explorer's *Keep zeros as readings* box keep them as readings for
+  quantized records.
 
 ### Removed
 
@@ -395,14 +412,14 @@ Clock models, the Kalman filter and timescales.
   Table 2, from τ = 16τ₀, in place of SP1065 Table 8, which runs from 16 %
   high to 41 % low against simulation; Table 2 stays within 8 % for
   T/τ ≥ 16.
-- ThêoBR (`theo1` by default, and the Thêo segment of `theoh`) averages its
-  AVAR/Thêo1 ratio over `i = 0…⌊N/30 − 3⌋`, as Howe (2006), McGee and Howe
-  (2007) and Taylor and Howe (2010) define it. SP1065 eq. 33 prints
-  `⌊N/6 − 3⌋`, which runs AVAR out to half the record: the ratio scattered
-  by 25 to 30 % and biased the corrected variance by −9 to +11 %, against
-  8 to 11 % and −5 to +3 % now. Output moves by a few percent. Below
-  N = 90, where the papers' formula has no rung, the first rung is used
-  alone.
+- ThêoBR (`theo1` by default, and the Thêo segment of `theoh`) keeps the
+  ladder of SP1065 eq. 33, IEEE Std 1139-2022 eq. A.37 and Stable32,
+  `i = 0…⌊N/6 − 3⌋`. `correct_bias=:published` takes the ladder of Howe
+  (2006), McGee and Howe (2007) and Taylor and Howe (2010), `⌊N/30 − 3⌋`,
+  which stops at a tenth of the record: where PM gives way to FM beyond that
+  point it applies the PM ratio to FM noise and reads 0.18 to 0.77 of the
+  true variance at long τ, though on a record of one FM noise its factor
+  scatters 2.5 times less.
 - Flicker FM keeps its label at medium and long τ. On phase decimated by m
   the lag-1 estimate of flicker FM settles at α = −1.45 and of random-walk
   FM at −2.4, so rounding to the nearest integer sent pure flicker FM to
@@ -513,6 +530,16 @@ Clock models, the Kalman filter and timescales.
   τ min then τ max can be typed in one go; the run note counts the analysis
   range; PDEV's white PM slope guide is τ^−3/2; PNG and SVG export holds
   every plot of the page.
+- The explorer's local server answers 400 to a request body that is not a
+  JSON object or whose `file` is malformed, where it used to drop the
+  connection.
+- `--series N` keeps the record's first and last sample, so the phase plot
+  spans the whole record.
+- `sigmatau holdover --kalman` and the explorer's Kalman predictor keep the
+  flicker FM and flicker PM that the fit of the training stretch finds, as
+  Markov states; without them the filter of a flicker FM clock claimed a
+  tenth of its error or stopped on NaN. `holdover(data, model)` refuses a
+  model with no noise.
 
 ### Security
 

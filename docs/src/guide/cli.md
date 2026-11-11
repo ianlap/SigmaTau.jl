@@ -121,7 +121,9 @@ time (√20 HTDEV with `--fit-drift`), `null` past the τ the record gives it.
 its clock model is the power-law fit to the first training stretch alone,
 so no trial is predicted with noise levels learned from the readings it is
 compared with, and `claimed` is the error the filter itself expects
-(`--fit-drift` then gives the model a drift state).
+(`--fit-drift` then gives the model a drift state). Flicker FM and flicker
+PM that the fit finds stay in the model, as Markov states out to the
+record's span.
 
 `cross`: `--with FILE2`, the second channel, read with the same options as
 `FILE`; `--grid` or `--m` for the τ values and `--nperseg N` for the
@@ -234,7 +236,7 @@ numbers are `null`.
   "time_to_limit"}` from [`HoldoverPrediction`](@ref), with one `budget`
   array (variance in s², over `tau`) per noise type. With `--kalman`,
   `claimed` holds the filter's own standard deviation over `tau` and `model`
-  the `{"R", "q1", "q2", "q3"}` it ran on.
+  the `{"R", "q1", "q2", "q3", "flicker_fm", "flicker_pm"}` it ran on.
 - `sigmatau cross` adds `"with"` (the second file), `"cross_adev": {"tau",
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`
@@ -246,7 +248,10 @@ numbers are `null`.
   one row per clock: `clock,weight,weight_mean,error_rms`. With `--algorithm
   greenhall` or `jones_tryon`, `--flicker` fits each clock with
   [flicker states](@ref "Flicker states") and adds `"flicker": {"fm",
-  "pm"}`, the number of Markov states each clock's model carries.
+  "pm"}`, the number of Markov states each clock's model carries. The levels
+  are only as good as the fit: on a short record flicker FM and random-walk
+  FM are hard to tell apart at the longest τ, so states can appear on a
+  clock that has no flicker.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 

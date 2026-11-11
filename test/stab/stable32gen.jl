@@ -83,8 +83,12 @@ using SigmaTau
     # Thêo1 with Stable32's bias removal, past its 3000-point limit: the two
     # rows of its ThêoH run that are not ADEV.
     th = filter(r -> r[1] == "ThêoH" && parse(Float64, r[7]) > 0, csv)
-    @test theo1(pd, [parse(Int, r[2]) for r in th]; ci=false, correct_bias=:stable32).dev ≈
-          parse.(Float64, getindex.(th, 7)) rtol = 1e-4
+    ms32, s32 = [parse(Int, r[2]) for r in th], parse.(Float64, getindex.(th, 7))
+    @test theo1(pd, ms32; ci=false, correct_bias=:stable32).dev ≈ s32 rtol = 1e-4
+    # The default runs the same ladder on the full record. Howe's, which stops
+    # at T/10, reads 2.4 times lower here: the record is white PM to 250 s, FM beyond.
+    @test theo1(pd, ms32; ci=false).dev ≈ s32 rtol = 0.02
+    @test all(2.3 .< s32 ./ theo1(pd, ms32; ci=false, correct_bias=:published).dev .< 2.6)
 
     # allantools CSV columns: Type, AF, Tau, N, Sigma (raw totdev is _totdev_core)
     raw["Total"] = (m -> SigmaTau._totdev_core(x, [m], 1.0)[1], 0.0)

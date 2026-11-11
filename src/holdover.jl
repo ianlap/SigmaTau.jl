@@ -270,7 +270,10 @@ there.
 `√([Φ(τ) P Φ(τ)ᵀ + Q(τ)]₁₁ + R)`, [`holdover_error`](@ref) with the noise of
 the reading it is compared with; a model with flicker PM reads its Markov
 phase states along with the phase. It matches `rms` when the model fits the
-clock; an `rms` above it says the model's noise is too low. With the right
+clock; an `rms` above it says the model's noise is too low. A model from
+a fit should keep the flicker the fit finds,
+`clock_model(fit; flicker = true)`: without its flicker FM the filter of a
+flicker FM clock claims a tenth of the error it makes. With the right
 model the filter is the optimum predictor (Allan 1987), so no training
 stretch makes a least-squares fit hold better, though at its best stretch
 the fit comes within a few percent.
@@ -289,6 +292,8 @@ function holdover(data::PhaseData, m::ClockModel; train::Union{Real,Nothing}=not
                   tau::Union{AbstractVector{<:Real},Nothing}=nothing,
                   limit::Union{Real,Nothing}=nothing, confidence::Real=0.95)
     0 < confidence < 1 || throw(ArgumentError("holdover: confidence must be between 0 and 1, got $confidence"))
+    max(m.R, m.q1, m.q2, m.q3, m.flicker_fm, m.flicker_pm) > 0 || throw(ArgumentError(
+        "holdover: the clock model has no noise, so its filter cannot weigh a reading"))
     kf, c = kalman_filter(data, m), _reading_row(m)
     z, τ₀ = Float64.(data.x), m.tau0
     N = length(z)

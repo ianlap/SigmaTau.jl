@@ -222,6 +222,7 @@ using Statistics
         @test_throws ArgumentError timescale(cc; algorithm=:stein)
         @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, pivot=9)
         @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, wmax=0.2)
+        @test_throws "no noise" timescale(cc; algorithm=:stein, models=[ClockModel(; tau0=1.0), ClockModel(; tau0=1.0), ms[3]])
     end
 
     @testset "flicker states in the Kalman scales" begin

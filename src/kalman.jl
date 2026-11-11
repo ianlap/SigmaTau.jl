@@ -90,7 +90,8 @@ Run the Kalman filter for clock model `m` over a phase record. The state is
 phase and frequency, plus drift when `m.drift` and the Markov states of a
 model with flicker; each sample is a reading of the phase with white PM of
 variance `m.R` and, for a model with flicker PM, its Markov phase states. `NaN` samples are gaps: the filter
-predicts across them without an update.
+predicts across them without an update. A model with no noise at all is
+refused: its gain is undefined once the start is used up.
 
 The start `x0`, `P0` defaults to a least-squares polynomial through the
 first samples, with its covariance inflated tenfold, and the Markov states
@@ -116,6 +117,7 @@ function kalman_filter(data::PhaseData, m::ClockModel;
                        P0::Union{AbstractMatrix,Nothing}=nothing)
     isapprox(data.tau0, m.tau0; rtol=1e-9) || throw(ArgumentError(
         "kalman_filter: record τ₀ = $(data.tau0) s but the model's is $(m.tau0) s"))
+    _noiseless(m) && throw(ArgumentError("kalman_filter: the clock model has no noise, so the filter cannot weigh a reading"))
     z = Float64.(data.x)
     N, n = length(z), _nstates(m)
     xs, Ps0 = x0 === nothing || P0 === nothing ? _model_start(z, m) : (x0, P0)

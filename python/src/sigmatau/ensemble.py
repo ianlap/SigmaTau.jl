@@ -1,6 +1,6 @@
-"""Clock models, the Kalman filter, holdover, clock ensembles and timescales —
-mirrors ``clockmodel.jl``, ``noisefit.jl``, ``kalman.jl``, ``holdover.jl``,
-``comparisons.jl`` and ``timescale.jl``.
+"""Clock models, the Kalman filter, holdover, steering, clock ensembles and
+timescales — mirrors ``clockmodel.jl``, ``noisefit.jl``, ``kalman.jl``,
+``holdover.jl``, ``steering.jl``, ``comparisons.jl`` and ``timescale.jl``.
 
 Results that later calls build on (a filter run, a noise fit) keep their Julia
 object, so a smoother or a holdover estimate runs on exactly what the filter
@@ -32,6 +32,7 @@ from .types import PhaseData, PowerLawFit, StabilityResult
 _MatF64 = jl.seval("Matrix{Float64}")
 _VecModel = jl.seval("Vector{ClockModel}")
 _VecF64 = jl.seval("Vector{Float64}")
+_VecC64 = jl.seval("Vector{ComplexF64}")
 _band = jl.seval("b -> b === nothing ? nothing : (Float64(b[1]), Float64(b[2]))")
 _add = jl.seval(
     "(f, noise, a, b) -> SigmaTau.add_component!(f, noise, a:b)"
@@ -491,6 +492,131 @@ def simulate_clock(
     """A phase record of ``n`` samples from ``m`` and its true states."""
     d, x = jl.simulate_clock(m._jl(), int(n), **_rng(rng))
     return data_from_jl(d), _mat(x)
+
+
+# ── Steering ───────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class SteeringGains:
+    """Gains of a steering loop (Matsakis 2019). Every ``interval`` seconds the
+    frequency of the clock is changed by
+    −(``phase``·p̂ + ``frequency``·ŷ + ``integral``·Σp̂), with p̂ and ŷ the Kalman
+    estimates of its phase and frequency against the reference and Σp̂ the sum of
+    the phase estimates at the steers so far. ``phase`` and ``integral`` are in
+    1/s. Build them with ``steering_gains``."""
+
+    phase: float
+    frequency: float
+    integral: float
+    interval: float
+
+    def _jl(self) -> Any:
+        return jl.SteeringGains(
+            float(self.phase), float(self.frequency), float(self.integral), float(self.interval)
+        )
+
+
+def _gains_from_jl(g: Any) -> SteeringGains:
+    return SteeringGains(float(g.phase), float(g.frequency), float(g.integral), float(g.interval))
+
+
+@_map_errors
+def steering_gains(
+    T: float | Sequence[complex], interval: float, *, integral: bool = False
+) -> SteeringGains:
+    """Gains by pole placement. A time constant ``T`` (s) puts the poles together
+    at exp(−interval/T): a critically damped loop, with three gains when
+    ``integral``. A sequence in place of ``T`` is the poles themselves in the
+    z-plane, two or three, complex ones in conjugate pairs."""
+    if np.ndim(T) == 0:
+        return _gains_from_jl(jl.steering_gains(float(T), float(interval), integral=bool(integral)))
+    poles = juliacall.convert(_VecC64, [complex(z) for z in T])
+    return _gains_from_jl(jl.steering_gains(poles, float(interval)))
+
+
+@_map_errors
+def steering_poles(g: SteeringGains) -> dict:
+    """Where the gains put the poles of the closed loop: ``poles`` (complex), the
+    ``time_constants`` (s) of their decay, the ``frequencies`` (Hz) they ring at,
+    and ``stable``, whether all are inside the unit circle."""
+    p = jl.steering_poles(g._jl())
+    return {
+        "poles": np.array(p.poles, dtype=np.complex128),
+        "time_constants": np_f64(p.time_constants),
+        "frequencies": np_f64(p.frequencies),
+        "stable": bool(p.stable),
+    }
+
+
+@dataclass(frozen=True)
+class SteeringResult:
+    """Return type of ``steer`` on a record: ``steered`` is the record as the
+    loop would have left it, ``steers`` the frequency steer made at each sample,
+    ``correction`` their running sum, and ``phase`` / ``frequency`` the filter's
+    estimates of the steered clock."""
+
+    gains: SteeringGains
+    steered: PhaseData
+    steers: np.ndarray
+    correction: np.ndarray
+    phase: np.ndarray
+    frequency: np.ndarray
+
+
+@dataclass(frozen=True)
+class SteeringPrediction:
+    """Return type of ``steer`` on a clock model: the RMS time error ``phase``
+    (s), frequency error ``frequency`` and ``steers`` of the settled loop, and
+    the Allan deviation ``adev`` of the steered clock at ``tau`` (s)."""
+
+    gains: SteeringGains
+    phase: float
+    frequency: float
+    steers: float
+    tau: np.ndarray
+    adev: np.ndarray
+
+
+@_map_errors
+def steer(
+    data: PhaseData | ClockModel,
+    model: ClockModel | SteeringGains,
+    gains: SteeringGains | None = None,
+    *,
+    tau: Sequence[float] | None = None,
+) -> SteeringResult | SteeringPrediction:
+    """Steer a clock to its reference with the Kalman filter for ``model`` and
+    the gains of ``steering_gains``.
+
+    ``steer(data, model, gains)`` replays the phase record of the free-running
+    clock against the reference through the loop. ``steer(model, gains)``
+    predicts the steady state of the loop from the model alone, for a steer at
+    every sample; ``tau`` sets the averaging times of its Allan deviation."""
+    if isinstance(data, ClockModel):
+        if gains is not None or not isinstance(model, SteeringGains):
+            raise TypeError("steer: pass (data, model, gains) or (model, gains)")
+        kw = {} if tau is None else {"tau": to_jl_f64(tau)}
+        r = jl.steer(data._jl(), model._jl(), **kw)
+        return SteeringPrediction(
+            model,
+            float(r.phase),
+            float(r.frequency),
+            float(r.steers),
+            np_f64(r.tau),
+            np_f64(r.adev),
+        )
+    if gains is None or tau is not None:
+        raise TypeError("steer: pass (data, model, gains) or (model, gains, tau=...)")
+    r = jl.steer(to_jl_data(data), model._jl(), gains._jl())
+    return SteeringResult(
+        gains,
+        data_from_jl(r.steered),
+        np_f64(r.steers),
+        np_f64(r.correction),
+        np_f64(r.phase),
+        np_f64(r.frequency),
+    )
 
 
 # ── Ensembles and timescales ───────────────────────────────────────────
