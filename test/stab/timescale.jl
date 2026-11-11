@@ -147,6 +147,18 @@ using Statistics
         @test rejoin(; algorithm=:stein, models=ms, pivot=2) < 8
     end
 
+    @testset "a clock that joins late starts from its own readings" begin
+        # Weiss & Weissert 1991, §2.7: ε² starts from the clock's own
+        # characterization. The best clock, with a rate of 10⁻¹¹, joins at
+        # sample 20001: it has its weight at once (1.02 of the optimum, 0.99 to
+        # 1.06 over 40 seeds) and the scale keeps its rate (within 4×10⁻¹⁴).
+        x = copy(cc.x); x[:, 1] .+= (0:49999) .* 1e-11; x[1:20000, 1] .= NaN
+        lj = ClockComparisons(x, 1.0)
+        @test mean(timescale(lj).weights[20002:22000, 1]) ≈ wopt[1] rtol=0.1
+        e = timescale_phase(timescale(lj; algorithm=:ewfa)).x
+        @test abs((e[end] - e[20001]) / 29999 - (e[20000] - e[1]) / 19999) < 2e-13
+    end
+
     @testset "offsets, gaps near the start and short records (AT1)" begin
         # Frequency offsets 1000 times the clocks' noise: weights unchanged,
         # also with the outlier test on, which never rejects every clock.
