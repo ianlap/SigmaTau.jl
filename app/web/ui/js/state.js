@@ -51,9 +51,13 @@ export const state = {
   synth: { n: 16384, tau0: 1, seed: 42, dev: "mdev", preview: null, error: null,
     clocks: [0, 1].map((j) => ({ name: `Sim ${j + 1}`, R: 0, q1: 1e-24 * 4 ** j, q2: 1e-30 * 4 ** j, q3: 0 })) },
   dataMode: "file",        // "file" | "synth" on the Data page
-  dataView: "phase",       // "phase" | "drift": the Data page's plot
+  dataView: "phase",       // "phase" | "drift" | "hist" | "acf": the Data page's plot
   driftModel: "linear",    // frequency drift model fitted on the drift view
   driftResid: false,       // drift view shows the residuals instead of the fit
+  // Histogram and Autocorrelation views: of "phase" or "frequency" (null = the record's kind),
+  // the number of bins (null = Scott's rule), the normal curve, and the averaging factor m and
+  // largest lag (null = the core's default) of the autocorrelation
+  dist: { of: null, bins: null, normal: true, m: 1, lags: null },
   run: { state: "idle", stale: null, note: "" },  // stale: null | "record" | "inputs"
 };
 
@@ -87,6 +91,8 @@ export function newClock(fields = {}) {
     holdover: null,          // last holdover test, with its settings key
     steer: null,             // last steering replay, with its settings key
     driftFit: null,          // last frequency drift fit, with its settings key
+    hist: null,              // last statistics and histogram, with their settings key
+    acf: null,               // last statistics and autocorrelation, with their settings key
     components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
     error: null,
     ...fields,

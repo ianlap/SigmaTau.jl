@@ -145,9 +145,10 @@ function view(doc) {
 // For a record with gaps the core names the command line's remedy. A clock's
 // request carries the preparation of the Data page, where the remedy is a box.
 const GAP_REMEDY = /fill them with (--fillgaps|fillgaps first)$/;
-const run = (body, signal) => post(body, signal).then(view, (err) => {
+const remedy = (err) => {
   throw GAP_REMEDY.test(err.message) ? new Error(err.message.replace(GAP_REMEDY, "turn on Fill gaps by reflection on the Data page")) : err;
-});
+};
+const run = (body, signal) => post(body, signal).then(view, remedy);
 
 // Read a record and its check (samples, span, gaps, outliers, drift),
 // without running any estimator.
@@ -202,6 +203,28 @@ export const dynamicKey = (clock) =>
 // Samples of the record, or of its analysis range.
 const samples = (clock) =>
   clock.range ? Math.floor((clock.range[1] - clock.range[0]) / clock.record.tau0) + 1 : clock.record?.n ?? 0;
+
+// The samples the Histogram and Autocorrelation views describe: phase or
+// frequency, by default those of the record.
+export const distOf = (clock) => state.dist.of ?? clock.record?.kind ?? clock.kind;
+
+// The statistics of one clock's samples over its analysis range, with their
+// histogram (`hist`) or their autocorrelation at m (`acf`): the core's
+// `statistics` and `histogram` or `acf` objects.
+const distRequest = (clock, what) => request(clock, "check", [
+  ...rangeArgs(clock), "--quantity", distOf(clock),
+  ...(what === "hist" ? ["--histogram", ...(state.dist.bins ? ["--bins", state.dist.bins] : [])]
+    : ["--acf", "--m", state.dist.m, ...(state.dist.lags ? ["--lags", state.dist.lags] : [])]),
+]);
+
+// Settings that decide a clock's histogram or autocorrelation; a change means recompute.
+export const distKey = (clock, what) => JSON.stringify(distRequest(clock, what));
+
+export async function distribution(clock, what, signal) {
+  const doc = await post(distRequest(clock, what), signal).catch(remedy);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return { statistics: doc.statistics, histogram: doc.histogram, acf: doc.acf };
+}
 
 // Sliding-window deviation map for one clock (window = record / frac).
 export function dynamic(clock, signal) {
