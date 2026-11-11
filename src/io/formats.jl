@@ -1,11 +1,14 @@
-# Instrument file formats: detection, and readers for the files that are not
-# plain numeric columns (TimeLab .tim, Stable32 .phd/.frd, frequency-counter
-# logs, logs with named columns). Plain columns go through read_phase /
-# read_frequency.
+# Measurement file formats: detection, and readers for the files that are
+# not plain numeric columns (TimeLab .tim, Stable32 .phd and .frd, counter
+# logs, tables with named columns, BIPM UTC - UTC(k) files, RINEX clock
+# files). Plain columns go through read_phase and read_frequency.
 
 """
-Input formats [`read_data`](@ref) understands, as [`detect_format`](@ref)
-names them.
+    INPUT_FORMATS
+
+The file formats that [`read_data`](@ref) reads, under the names that
+[`detect_format`](@ref) returns: `:columns`, `:stable32`, `:timelab`,
+`:counter`, `:table`, `:bipm_utc` and `:rinex_clk`.
 """
 const INPUT_FORMATS = (:columns, :stable32, :timelab, :counter, :table, :bipm_utc, :rinex_clk)
 
@@ -41,9 +44,11 @@ end
 
 _isnumfield(f::AbstractString) = tryparse(Float64, f) !== nothing
 
-# Keysight / Agilent SCPI real format: "+1.00000000012345E+07".
+# The exponent format in which SCPI instruments return a reading:
+# "+1.00000000012345E+07".
 const _SCPI_REAL = r"^[+-]\d\.\d+E[+-]\d+$"
-# SCPI's "not a number" reading (9.91E+37), written for a missed gate.
+# The SCPI not-a-number value, which a counter returns for a gate without a
+# measurement.
 _scpi_nan(v::Float64) = v == 9.91e37 ? NaN : v
 
 # The header of a BIPM UTC - UTC(k) file: "MJD  [UTC-UTC(NIST)]/ns  uA/ns  uB/ns  u/ns".
@@ -61,33 +66,27 @@ end
 """
     detect_format(path; delim=nothing) → Symbol
 
-Name the layout of a data file from its extension and first lines, one of
-[`INPUT_FORMATS`](@ref):
+Name the format of a measurement file, one of [`INPUT_FORMATS`](@ref), from
+its extension and its first 200 lines. The tests are made in the order of
+the table, and the first that holds decides.
 
-- `:timelab`: a TimeLab `.tim` measurement log (also what the Microchip
-  53100A, 5120A/5125A and TimePod write through TimeLab): typed header
-  fields such as `DBL 0x… "Sample Interval" 0.1`, then a `TIC n` block of
-  phase samples in seconds.
-- `:stable32`: a Stable32 `.phd` (phase) or `.frd` (frequency) file.
-- `:counter`: frequency-counter readings in SCPI real format
-  (`+1.00000000012345E+07`, as the Keysight 53230A and 53220A log them),
-  one per line, optionally after a timestamp (seconds or ISO 8601).
-- `:table`: numeric columns under a line of column names (a CSV export,
-  most GPSDO and logging-script output).
-- `:bipm_utc`: a BIPM `UTC - UTC(k)` file from the time department's
-  `utclab` directory (`MJD  [UTC-UTC(NIST)]/ns  uA/ns …`): one row every five
-  days with the difference in nanoseconds, read as phase in seconds.
-- `:rinex_clk`: a RINEX 3 clock file (`.clk`, IGS and CODE clock products):
-  `AS` satellite and `AR` station clock biases in seconds, many clocks on one
-  epoch grid. `column` (1-based, in order of first appearance) or `column_name`
-  (`G08`, `ALGO00CAN`) picks the clock, by default the first. Old files'
-  `D` exponents (`-.123D-03`) are read too. Unzip `.gz` files first.
-- `:columns`: plain numeric columns, read by [`read_phase`](@ref) and
-  [`read_frequency`](@ref). `read_data` takes them as phase, unless the
-  readings' median size is under 1e-11, which only fractional frequency has.
+| Format       | Recognized by                                                          |
+|:-------------|:-----------------------------------------------------------------------|
+| `:timelab`   | a `TIC` block after header fields such as `DBL 0x… "Sample Interval" 0.1` |
+| `:stable32`  | the extension `.phd` or `.frd`                                         |
+| `:bipm_utc`  | a heading `MJD  [UTC-UTC(k)]/ns` in the first five lines               |
+| `:rinex_clk` | a `RINEX VERSION / TYPE` line of type `C` in the first five lines      |
+| `:counter`   | one or two fields on every line, the last a reading such as `+1.00000000012345E+07` and the first, if any, a number or an ISO 8601 timestamp |
+| `:table`     | a line of column names above rows of numbers                           |
+| `:columns`   | anything else                                                          |
 
-`delim` is the field delimiter, by default a comma or tab when the first
-data line holds one, else whitespace.
+A file with a `# Header End` line, which closes the header of a Stable32
+export, is `:columns` unless one of the first four tests holds. The counter
+and table tests read the first eight lines of data, and split them at
+`delim`: by default at commas, or at tabs, when the first of the lines
+holds one, and at runs of blanks otherwise.
+
+[`read_data`](@ref) says how each format is read.
 """
 detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing) =
     _detect_format(path, delim === nothing ? '\0' : Char(delim))
@@ -178,7 +177,7 @@ function _read_timelab(path::AbstractString, tau0::Float64)
     return _Record(v, t0, true, falses(0), NaN)
 end
 
-function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps::Bool)
+function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps::Bool, keep_zeros::Bool)
     nskip, htau, hstart = _scan_comment_header(path)
     # Record type: the header's "Type:" line, else the extension.
     phase = lowercase(splitext(path)[2]) != ".frd"
@@ -190,6 +189,10 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
     (t, v), ncols = _read_cols(path, nskip, nothing, [1, 0])
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
     ncols >= 2 || (t = Float64[])
+    # Stable32 writes a gap as a zero; only the end points of phase data may be zero.
+    keep_zeros || for i in eachindex(v)
+        v[i] == 0 && !(phase && (i == 1 || i == length(v))) && (v[i] = NaN)
+    end
     # A Stable32 time tag is an MJD (days); a large value with sub-day steps.
     start = hstart
     if length(t) >= 2 && t[1] > 30000 && _median_step(t) < 1
@@ -467,7 +470,7 @@ end
 # meaning "not given", `kind` one of :auto, :phase, :frequency.
 function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, column::Int=0,
                     column_name::String="", nominal::Float64=NaN, kind::Symbol=:auto,
-                    scaling::Float64=1.0, delim::Char='\0', fillgaps::Bool=false)
+                    scaling::Float64=1.0, delim::Char='\0', fillgaps::Bool=false, keep_zeros::Bool=false)
     isfile(path) || throw(ArgumentError("read_data: file not found: " * String(path)))
     kind in (:auto, :phase, :frequency) ||
         throw(ArgumentError("read_data: kind must be :auto, :phase or :frequency, got :" * String(kind)))
@@ -476,7 +479,7 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     r = if fmt === :timelab
         _read_timelab(path, tau0)
     elseif fmt === :stable32
-        _read_stable32(path, tau0, hint, fillgaps)
+        _read_stable32(path, tau0, hint, fillgaps, keep_zeros)
     elseif fmt === :counter
         _read_counter(path, tau0, nominal, hint, delim, fillgaps)
     elseif fmt === :table
@@ -500,67 +503,155 @@ end
 
 """
     read_data(path; format=:auto, tau0=nothing, column=nothing, nominal=nothing,
-                    kind=:auto, scaling=1.0, delim=nothing, fillgaps=false) → PhaseData or FrequencyData
+              kind=:auto, scaling=1.0, delim=nothing,
+              fillgaps=false, keep_zeros=false) → PhaseData or FrequencyData
 
-Read a measurement file in any of the [`INPUT_FORMATS`](@ref), detected with
-[`detect_format`](@ref) unless `format` names one. The record type follows
-the file: TimeLab logs and counter time-interval readings are phase,
-`.frd` files and counter frequency readings are frequency, and a named
-column is phase or frequency by the unit in its name (`(ns)`, `[ps]` are
-phase; `ppb`, `ns/s`, `Hz` frequency), else by its words (phase, time error,
-PPS; freq, osc, fractional, ratio).
+Read a measurement file in one of the [`INPUT_FORMATS`](@ref) and return
+its record, phase or frequency as the file has it. The format is found by
+[`detect_format`](@ref) unless `format` names it.
 
-- `tau0`: sample interval in seconds; by default from the file header
-  (TimeLab `Sample Interval`, Stable32 `Tau:`) or the grid step of the
-  time column (seconds, MJD days, or ISO 8601 timestamps). A time column
-  whose name gives a time unit (`time (ms)`) is read in that unit, else in
-  seconds. A column named `MJD` is read in days, and so is one whose values lie between MJD 30000
-  and 90000 with steps under 0.05 d and more than four decimals, unless its
-  name says seconds.
-- `column`: the clock column of a `:table` file, by 1-based index or by
-  name. By default the only column besides the time column, else the one
-  whose name says phase / time error / PPS, else frequency.
-- `nominal`: nominal frequency in Hz for readings in Hz (counter logs, a
-  table column named `… (Hz)`); converted to fractional frequency
-  `(f − nominal)/nominal`. By default the mean reading rounded to four
-  significant figures.
-- `kind`: `:phase` or `:frequency` overrides the record type.
-- `scaling`: multiplies the samples after any unit conversion from a
-  column name (`(ns)`, `[ps]`, `ppb` …).
-- `delim`: field delimiter; by default a comma or tab when the first data
-  line holds one, else whitespace.
-- `fillgaps`: fill the missing samples (and any `NaN` reading) with
-  [`fillgaps`](@ref).
+# Formats
 
-A time column (seconds, MJD days or ISO 8601 timestamps) places the samples
-as in [`read_phase`](@ref): a missing reading leaves a `NaN` sample in its
-slot, which the gap-tolerant estimators skip, and a record with none is read
-as written. A table row with no reading in the clock column is a missing
-reading too, so a column sampled more sparsely than the table keeps its own
-step. ISO 8601 and MJD timestamps also set the record's
-[`start_time`](@ref). Files are read line by line, keeping only the clock
-and time columns.
+- `:columns`: numeric columns, read as [`read_phase`](@ref) reads them by
+  default. The record is phase, or frequency when the median size of the
+  samples is under ``10^{-11}``. Phase samples can be that small, as the
+  residuals of a low-noise comparison are: pass `kind=:phase` for them.
+- `:stable32`: a Stable32 `.phd` (phase) or `.frd` (frequency) file. A
+  `Type:` line in its header overrides the extension. ``τ_0`` is that of
+  the `Tau:` header line, else the step of the time tags. With two columns
+  or more, the first holds the time tags and the last the samples. Time
+  tags above 30000 at steps under one day are read as MJD.
+- `:timelab`: a TimeLab `.tim` file. Its `TIC` block holds the phase
+  samples in seconds, which are multiplied by the `Scale Factor` of the
+  header, and `Sample Interval` is ``τ_0``. A file with another kind of
+  block throws an error.
+- `:counter`: readings of a counter in the format `+1.00000000012345E+07`,
+  one on each line, alone or after a timestamp in seconds or ISO 8601.
+  Readings of median size under 1 are taken as time intervals in seconds
+  and make a phase record. Larger ones are taken as frequencies in hertz
+  and make the frequency record ``(f - f_0)/f_0`` about `nominal`. A
+  reading of `9.91E+37`, the SCPI value for not a number, becomes `NaN`.
+  Without timestamps `tau0` must be given: it is the gate time.
+- `:table`: columns under a line of names, as in a CSV export, described
+  below.
+- `:bipm_utc`: a `UTC - UTC(k)` file of the BIPM, with one row every five
+  days that holds the MJD and the difference in nanoseconds. The record is
+  phase in seconds.
+- `:rinex_clk`: a RINEX clock file. The record is the clock bias, in
+  seconds, of one satellite (`AS` records) or station (`AR` records),
+  chosen by `column`. Exponents written with `D` are read. A compressed
+  file must be unpacked first.
 
-Counter readings of `9.91E+37` (SCPI's "no reading") become `NaN`.
+!!! note "Gaps in Stable32 files"
+    Stable32 marks a missing sample with a value of zero
+    ([Stable32 manual, "Gaps & Outliers"](@cite hamilton-2008-stable32-manual)).
+    This reader does the same: a zero in a `:stable32` file becomes `NaN`,
+    except the first and the last sample of phase data. `keep_zeros=true`
+    keeps every zero as a sample, as a record of quantized readings needs.
+
+# Named columns
+
+In a `:table` file the time column is the first whose name is `t`, `time`,
+`timestamp`, `date`, `datetime`, `utc`, `epoch`, `elapsed`, `sec`,
+`seconds` or `mjd`, with or without a unit in brackets after it, else the
+first column that holds ISO 8601 timestamps. Numbers in it are read as
+seconds, or in the unit that its name gives when that is one of the units
+of time listed below, as in `time (ms)`: minutes and hours are not among
+them. They are read as days when the name contains `mjd`, or when they meet
+the MJD conditions of [`read_phase`](@ref) and the name has neither `sec`,
+`elapsed` nor one of those units.
+
+The clock column is `column`. By default it is the other column of a file
+with a time column and one more, else the only column whose name holds
+`phase`, `time err`, `tie`, `pps`, `time offset`, `time diff` or `x`, else
+the only one whose name holds `freq`, `ffe`, `osc`, `fractional`, `ratio`
+or `y`. An error lists the names when none of these decides.
+
+A unit in the name of the clock column sets the type of the record and
+converts the samples. The units of time `ps`, `ns`, `us`, `µs`, `ms` and
+`s` make it phase, in seconds. The units `ppt`, `ppb` and `ppm` and the
+ratios of times from `ps/s` to `s/s` make it fractional frequency, and so
+does `Hz`, about `nominal`. Without a unit the words of the name decide:
+the record is frequency when the name holds one of the frequency words and
+none of the phase words, and phase otherwise.
+
+A row without a number in the clock column is a missing reading. With a
+time column such rows are left out before the grid is fitted, so a column
+logged at a longer interval than the table keeps its own interval.
+
+# Timestamps
+
+Where a file has timestamps, they place the samples as in
+[`read_phase`](@ref): they give ``τ_0`` when the keyword and the header do
+not, and a reading missing from the file leaves a `NaN` sample. ISO 8601
+timestamps and MJD values give the record its [`start_time`](@ref).
+
+# Keywords
+
+- `format=:auto`: one of [`INPUT_FORMATS`](@ref), or `:auto` to detect it.
+- `tau0`: sample interval in seconds. By default that of the header of the
+  file, else that of its timestamps. An error is thrown when the file has
+  neither.
+- `column`: the clock to read. In a `:table` file, the number of its
+  column, counted from 1, or its name. In a `:rinex_clk` file, its position
+  in order of first appearance, or its name, such as `"G08"`; by default
+  the first clock. Names are matched without regard to case.
+- `nominal`: nominal frequency in hertz, for readings in hertz. By default
+  the mean reading rounded to four significant figures.
+- `kind=:auto`: `:phase` or `:frequency` sets the type of the record
+  whatever the file suggests. Counter readings are then read as seconds
+  under `:phase` and as hertz under `:frequency`, and a table column whose
+  unit is of the other kind throws an error.
+- `scaling=1.0`: factor applied to the samples after any conversion of
+  units.
+- `delim`: character that separates the fields of a `:columns`, `:counter`
+  or `:table` file. By default a `:columns` file follows the rule of
+  [`read_phase`](@ref). In the other two a comma, else a tab, separates the
+  fields when the first line holds one, and runs of blanks otherwise.
+- `fillgaps=false`: `true` fills the missing samples with
+  [`fillgaps`](@ref), with the reservations stated there: the readings
+  that the timestamps show to be absent, and those that are `NaN`.
+- `keep_zeros=false`: `true` reads the zeros of a `:stable32` file as
+  samples and not as gaps.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> path = joinpath(mktempdir(), "gpsdo.csv");
+
+julia> write(path, "t,PPS offset (ns),temp\\n0,12.5,31\\n1,13.5,31\\n2,11.0,31\\n");
+
+julia> detect_format(path)
+:table
+
+julia> p = read_data(path);
+
+julia> p.x ≈ [12.5e-9, 13.5e-9, 11.0e-9]
+true
+```
 
 ```julia
-p = read_data("trace.tim")                  # TimeLab, τ₀ from the header
-y = read_data("53230A.csv"; tau0=1.0)       # counter in Hz → fractional frequency
-p = read_data("gpsdo.csv"; column="PPS offset (ns)")
+p = read_data("trace.tim")                      # TimeLab, τ₀ from its header
+y = read_data("counter.csv"; tau0=1.0)          # readings in hertz at a 1 s gate
+p = read_data("utc-nist")                       # BIPM UTC − UTC(NIST)
+p = read_data("clocks.clk"; column="G08")       # one satellite clock
 ```
 """
 function read_data(path::AbstractString; format::Symbol=:auto, tau0::Union{Real,Nothing}=nothing,
                    column::Union{Integer,AbstractString,Nothing}=nothing,
                    nominal::Union{Real,Nothing}=nothing, kind::Symbol=:auto,
                    scaling::Real=1.0, delim::Union{AbstractChar,Nothing}=nothing,
-                   fillgaps::Bool=false)
+                   fillgaps::Bool=false, keep_zeros::Bool=false)
     r = _read_data(path, format;
                    tau0=tau0 === nothing ? NaN : Float64(tau0),
                    column=column isa Integer ? Int(column) : 0,
                    column_name=column isa AbstractString ? String(column) : "",
                    nominal=nominal === nothing ? NaN : Float64(nominal),
                    kind=kind, scaling=Float64(scaling),
-                   delim=delim === nothing ? '\0' : Char(delim), fillgaps=fillgaps)
+                   delim=delim === nothing ? '\0' : Char(delim), fillgaps=fillgaps,
+                   keep_zeros=keep_zeros)
     return r.phase ? PhaseData(r.v, r.tau0; source=String(path), start=r.start) :
                      FrequencyData(r.v, r.tau0; source=String(path), start=r.start)
 end

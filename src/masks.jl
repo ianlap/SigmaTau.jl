@@ -1,7 +1,7 @@
-# ITU-T wander masks for MTIE and TDEV: the clock wander-generation limits of
-# G.811 (PRC), G.813 (SDH equipment clock) and G.8262 (synchronous Ethernet
-# equipment clock), and the G.823 network limits at 2048 kbit/s
-# synchronization interfaces.
+# ITU-T wander masks for MTIE and TDEV: the wander generation limits of
+# G.811 (primary reference clock), G.813 (SDH equipment clock) and G.8262
+# (synchronous equipment clock), and the G.823 network limits at
+# synchronization interfaces of the 2048 kbit/s hierarchy.
 
 # One piece of a mask: for lo < τ ≤ hi, limit = a + b·τ^p + c·τ in ns.
 const _MaskPiece = NTuple{6,Float64}
@@ -37,21 +37,28 @@ const _MASKS = Dict{Symbol,Tuple{String,Vector{_MaskPiece},Vector{_MaskPiece}}}(
 )
 
 """
-Names of the telecom wander masks [`telecom_mask`](@ref) and
-[`mask_check`](@ref) know, each with its MTIE and TDEV limit:
+    TELECOM_MASKS
 
-- `:G811`: primary reference clock, ITU-T G.811 [ITU-G811](@cite).
-- `:G813_opt1`, `:G813_opt2`: SDH equipment clock (SEC), ITU-T G.813
-  [ITU-G813](@cite), options 1 (2048 kbit/s networks) and 2 (1544 kbit/s).
-- `:G8262_opt1`, `:G8262_opt2`: synchronous Ethernet equipment clock
-  (EEC), ITU-T G.8262 [ITU-G8262](@cite); the same limits as G.813.
-- `:G823_PRC`, `:G823_SSU`, `:G823_SEC`, `:G823_PDH`: ITU-T G.823 network
-  limits for wander at PRC, SSU, SEC and PDH synchronization interfaces
-  [ITU-G823](@cite).
+Names of the ITU-T wander masks that [`telecom_mask`](@ref) and
+[`mask_check`](@ref) know. Each limits MTIE and TDEV.
 
-The clock masks are wander generation in the locked mode at constant
-temperature; the recommendations measure through a 10 Hz first-order
-low-pass filter, sampling at 1/30 s or faster.
+- `:G811`: wander generation of a primary reference clock
+  ([G.811, clause 6.1](@cite ITU-G811)).
+- `:G813_opt1`, `:G813_opt2`: wander generation of an SDH equipment clock
+  in locked mode at constant temperature
+  ([G.813, clause 7.1](@cite ITU-G813)). Option 1 is for networks of the
+  2048 kbit/s hierarchy, option 2 for the 1544 kbit/s hierarchy.
+- `:G8262_opt1`, `:G8262_opt2`: the same for a synchronous equipment
+  clock, with the limits of G.813
+  ([G.8262, clause 8.1](@cite ITU-G8262)).
+- `:G823_PRC`, `:G823_SSU`, `:G823_SEC`, `:G823_PDH`: network limits for
+  wander at PRC, SSU, SEC and PDH synchronization interfaces
+  ([G.823, clause 6.2](@cite ITU-G823)).
+
+The clock recommendations measure MTIE and TDEV through a 10 Hz
+first-order low-pass filter at a sample interval of 1/30 s or less, and
+TDEV over a record of at least ``12τ``. This package applies no such
+filter: the record is compared as it was measured.
 """
 const TELECOM_MASKS = (:G811, :G813_opt1, :G813_opt2, :G8262_opt1, :G8262_opt2,
                        :G823_PRC, :G823_SSU, :G823_SEC, :G823_PDH)
@@ -73,14 +80,19 @@ function _mask_limit(pieces::Vector{_MaskPiece}, τ::Float64)
 end
 
 """
-    telecom_mask(mask, stat, τ) → limit in seconds
+    telecom_mask(mask, stat, τ) → Float64 or Vector{Float64}
 
-The limit of `mask` (one of [`TELECOM_MASKS`](@ref)) for `stat` (`:mtie`
-or `:tdev`) at observation interval `τ` in seconds, or a vector of limits for
-a vector of `τ`. `NaN` outside the τ range the recommendation covers.
+Limit of `mask`, one of [`TELECOM_MASKS`](@ref), for `stat`, `:mtie` or
+`:tdev`, at the observation interval `τ` in seconds, or at each of a vector
+of them. The limit is in seconds, and `NaN` outside the range of ``τ`` the
+recommendation covers.
+
+# Examples
 
 ```jldoctest
-julia> round(telecom_mask(:G8262_opt1, :tdev, 10.0) * 1e9; digits=6)   # ns
+julia> using SigmaTau
+
+julia> round(telecom_mask(:G8262_opt1, :tdev, 10.0) * 1e9; digits=6)   # in ns
 3.2
 ```
 """
@@ -89,15 +101,23 @@ telecom_mask(mask::Symbol, stat::Symbol, τ::AbstractVector{<:Real}) =
     (p = _mask_pieces(mask, stat); Float64[_mask_limit(p, Float64(t)) for t in τ])
 
 """
-    mask_check(r::StabilityResult, mask) → (; mask, tau, limit, pass, margin)
+    mask_check(r::StabilityResult, mask) → NamedTuple
 
-Compare an [`mtie`](@ref) or [`tdev`](@ref) result with a telecom mask (one
-of [`TELECOM_MASKS`](@ref)). `limit[i]` is the mask at `r.tau[i]` (`NaN`
-where the mask does not reach). `pass` is true when every value is at or
-under its limit, and `margin` is the smallest `limit / value`: above 1
-passes, and its reciprocal is how far a failing record is over. Points
-outside the mask's τ range, or without a finite value, are not compared;
-with none left, `margin` is `NaN` and `pass` is false.
+Compare an [`mtie`](@ref) or [`tdev`](@ref) result with a telecom mask, one
+of [`TELECOM_MASKS`](@ref). The result has the fields
+
+- `mask`: the name of the mask.
+- `tau`: the observation intervals of `r`.
+- `limit`: the mask at each of them; `NaN` where the mask does not reach.
+- `pass`: `true` when every value is at or under its limit.
+- `margin`: the smallest ratio of limit to value. A margin above 1 passes,
+  and the reciprocal of a smaller one is the factor by which the record
+  exceeds the mask.
+
+Points outside the range of the mask, and points without a finite value,
+are not compared. With none left, `margin` is `NaN` and `pass` is `false`.
+
+# Examples
 
 ```julia
 r = mtie(read_phase("eec.txt"))

@@ -67,6 +67,7 @@ const OPTS = [
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps and NaN readings", ALL),
+    Opt("--keep-zeros", "", String[], false, "read the zeros of a Stable32 .phd/.frd file as readings, not gaps (quantized data)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyse only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
@@ -93,11 +94,14 @@ const OPTS = [
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
+    Opt("--flicker", "", String[], false, "greenhall and jones_tryon only: keep each clock's flicker FM and flicker PM as Markov states where the fit finds them, instead of folding flicker PM into the reading noise", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record)", ["holdover"]),
+    Opt("--grow", "K", String[], false, "in place of --train: a stretch K times each holdover time (2, or 3 with --fit-drift, is the test behind TDEV and HTDEV)", ["holdover"]),
     Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch)", ["holdover"]),
     Opt("--fit-drift", "", String[], false, "fit a parabola to the stretch, so the frequency drift is learned and carried on (default: a line)", ["holdover"]),
     Opt("--no-anchor", "", String[], false, "start from the fit's value at the end of the stretch, not from the last reading", ["holdover"]),
+    Opt("--kalman", "", String[], false, "predict with a Kalman filter in place of the least-squares fit; its clock model is fitted to the first training stretch alone, and `claimed` is the error the filter itself expects", ["holdover"]),
     Opt("--limit", "SECONDS", String[], false, "also give the holdover time at which the error reaches SECONDS (1e-6 for a microsecond)", ["holdover"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
@@ -129,6 +133,7 @@ mutable struct Options
     scaling::Float64
     detrend::String
     fillgaps::Bool
+    keep_zeros::Bool
     remove_outliers::Bool
     devs::Vector{Symbol}
     grid::String
@@ -183,15 +188,18 @@ mutable struct Options
     fit_drift::Bool           # holdover: parabola instead of a line
     anchor::Bool              # holdover: start from the last reading
     limit::Float64            # holdover: NaN = none
+    grow::Int                 # holdover: the stretch as a multiple of each holdover time; 0 = --train
+    kalman::Bool              # holdover: a Kalman filter as the predictor
+    flicker::Bool             # --flicker: flicker states in the Kalman scales' clock models
 end
 
-Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
+Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
-                    NaN, Float64[], false, true, NaN)
+                    NaN, Float64[], false, true, NaN, 0, false, false)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -356,6 +364,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
     elseif name == "--train";          o.train = parse_float(v, name)
+    elseif name == "--grow";           o.grow = parse_int(v, name)
     elseif name == "--tau";            o.taus = parse_taus(v)
     elseif name == "--limit";          o.limit = parse_float(v, name)
     elseif name == "--value-cols";     o.value_cols = parse_cols(v)
@@ -380,6 +389,7 @@ function set_flag!(o::Options, name::String)
     if name == "--phase";                  o.freq = false; o.phase_given = true
     elseif name == "--freq";               o.freq = true
     elseif name == "--fillgaps";           o.fillgaps = true
+    elseif name == "--keep-zeros";         o.keep_zeros = true
     elseif name == "--remove-outliers";    o.remove_outliers = true
     elseif name == "--no-ci";              o.ci = false
     elseif name == "--no-bias-correction"; o.bias = "none"
@@ -389,6 +399,8 @@ function set_flag!(o::Options, name::String)
     elseif name == "--fit";                o.fit = true
     elseif name == "--fit-drift";          o.fit_drift = true
     elseif name == "--no-anchor";          o.anchor = false
+    elseif name == "--kalman";             o.kalman = true
+    elseif name == "--flicker";            o.flicker = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end
@@ -452,6 +464,10 @@ function parse_args!(o::Options, args::Vector{String})
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
     (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
         throw(usage_error("--train and --limit must be positive"))
+    o.grow == 0 || isnan(o.train) && o.grow > 1 + o.fit_drift ||
+        throw(usage_error("--grow goes without --train and is 2 or more, 3 or more with --fit-drift"))
+    o.kalman && (o.fit || !o.anchor || o.grow > 0) &&
+        throw(usage_error("--kalman goes with none of --fit, --no-anchor and --grow"))
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))

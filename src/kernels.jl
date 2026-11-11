@@ -2,12 +2,14 @@
 # deviations.jl wraps these.
 
 """
-    _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping=true) → Vector{Float64}
+    _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64;
+               overlapping=true) → Vector{Float64}
 
-Allan deviation at each averaging factor `m`: overlapping, or with
-`overlapping=false` the original non-overlapped estimator, whose second
-differences start every `m` samples (SP1065 §5.2.2). Allocation-free SIMD
-inner loop.
+Allan deviation at each averaging factor `m`: overlapping (SP1065 §5.2.4,
+Eq. (11)) or, with `overlapping=false`, the non-overlapped estimator, whose
+second differences start every `m` samples (SP1065 §5.2.2, Eq. (7)). `NaN`
+where fewer than two terms fit. The inner loop does not allocate, and at a
+stride of one sample it runs over a unit range, which `@simd` vectorizes.
 """
 function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
@@ -22,9 +24,18 @@ function _adev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; ov
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in idx
-            d2 = x[i+2m] - 2x[i+m] + x[i]
-            sum_sq += d2^2
+        # Stride 1 keeps a unit range: Julia ≥ 1.12 does not vectorize @simd
+        # over a StepRange.
+        if overlapping || m == 1
+            @inbounds @simd for i in 1:(N - 2m)
+                d2 = x[i+2m] - 2x[i+m] + x[i]
+                sum_sq += d2^2
+            end
+        else
+            @inbounds @simd for i in idx
+                d2 = x[i+2m] - 2x[i+m] + x[i]
+                sum_sq += d2^2
+            end
         end
 
         devs[k] = sqrt(sum_sq / (2.0 * n * Float64(m)^2 * tau0^2))
@@ -66,8 +77,8 @@ end
 """
     _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Modified Allan deviation at each `m`, as a third difference of prefix sums
-(O(N) per `m`).
+Modified Allan deviation at each `m` (SP1065 §5.2.5, Eq. (14)), as a third
+difference of prefix sums of the phase: O(N) per `m`.
 """
 function _mdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -97,7 +108,7 @@ end
 """
     _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Time deviation (τ/√3) · MDEV.
+Time deviation (τ/√3)·MDEV at each `m` (SP1065 §5.2.6, Eq. (15)).
 """
 function _tdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     mdevs = _mdev_core(x, m_values, tau0)
@@ -107,11 +118,13 @@ end
 
 
 """
-    _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping=true) → Vector{Float64}
+    _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64;
+               overlapping=true) → Vector{Float64}
 
-Hadamard deviation at each averaging factor `m`: overlapping, or with
-`overlapping=false` non-overlapped, third differences every `m` samples
-(SP1065 §5.2.8). Allocation-free SIMD inner loop.
+Hadamard deviation at each averaging factor `m`: overlapping (SP1065 §5.2.9,
+Eq. (20)) or, with `overlapping=false`, non-overlapped, with third
+differences every `m` samples (SP1065 §5.2.8, Eq. (18)). `NaN` where fewer
+than two terms fit. The inner loop is arranged as in `_adev_core`.
 """
 function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; overlapping::Bool=true)
     N = length(x)
@@ -126,9 +139,18 @@ function _hdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64; ov
         end
 
         sum_sq = 0.0
-        @inbounds @simd for i in idx
-            d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
-            sum_sq += d3^2
+        # Stride 1 keeps a unit range: Julia ≥ 1.12 does not vectorize @simd
+        # over a StepRange.
+        if overlapping || m == 1
+            @inbounds @simd for i in 1:(N - 3m)
+                d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
+                sum_sq += d3^2
+            end
+        else
+            @inbounds @simd for i in idx
+                d3 = x[i+3m] - 3.0 * x[i+2m] + 3.0 * x[i+m] - x[i]
+                sum_sq += d3^2
+            end
         end
 
         devs[k] = sqrt(sum_sq / (6.0 * n * Float64(m)^2 * tau0^2))
@@ -140,8 +162,8 @@ end
 """
     _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Modified Hadamard deviation at each `m`, as a fourth difference of prefix
-sums (O(N) per `m`).
+Modified Hadamard deviation at each `m` (SP1065 §5.2.10, Eq. (23)), as a
+fourth difference of prefix sums of the phase: O(N) per `m`.
 """
 function _mhdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -172,23 +194,23 @@ end
 """
     _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Total deviation at each averaging factor `m`, with the Howe 1995 / NIST SP1065
-eq. 25 endpoint mean-flip extension and no per-window detrend (the canonical
-form; matches allantools).
+Total deviation at each averaging factor `m` (Greenhall et al. (1999),
+Eq. (3); SP1065 §5.2.11, Eq. (25)): second differences at every interior
+sample of the record extended by reflection about its two end samples. No
+bias correction is applied.
 """
 function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # NIST SP1065 eqn 25 / Greenhall-Howe-Percival 1998 eq (3):
-    #   Totvar = (1 / (2(m·τ₀)²(N−2))) · Σ_{n=2}^{N-1} (x*_{n-m} − 2x*_n + x*_{n+m})²
-    # Mean-flip endpoint reflection (SP1065 eq 2):
+    # Greenhall et al. (1999), Eq. (3), and SP1065 Eq. (25):
+    #   Totvar = 1/(2(m·τ₀)²(N−2)) · Σ_{n=2}^{N−1} (x*_{n−m} − 2x*_n + x*_{n+m})²
+    # with the record reflected about each end sample (their Eq. (2)):
     #   x*_k =  x[k]                   for 1 ≤ k ≤ N
-    #   x*_k =  2·x[1] − x[2 − k]      for k ≤ 0       (left reflect)
-    #   x*_k =  2·x[N] − x[2N − k]     for k ≥ N + 1   (right reflect)
+    #   x*_k =  2·x[1] − x[2 − k]      for k ≤ 0
+    #   x*_k =  2·x[N] − x[2N − k]     for k ≥ N + 1
     #
-    # Stream the extension on the fly rather than materialising a (3N−4)-Float64
-    # buffer. The inner n-loop splits into three ranges so the central majority
-    # (which only reads x[n±m] without reflection) stays SIMD-vectorisable;
-    # the two short tail loops resolve the reflection inline. Saves a 24·N-byte
-    # allocation per call (~72 MiB at N = 3 × 10⁶).
+    # The extension is read on the fly, not stored. The loop over n splits
+    # into three ranges so that the central majority, which reads x[n±m]
+    # without reflection, stays vectorizable; the two short tail loops resolve
+    # the reflection inline. This saves a buffer of 24·N bytes per call.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
@@ -221,7 +243,7 @@ function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
             D += d2^2
         end
 
-        # Central: lo_k ≥ 1 AND hi_k ≤ N. Plain three-point stencil, vectorises.
+        # Central: lo_k ≥ 1 AND hi_k ≤ N. Plain three-point stencil, vectorizes.
         n_central_start = max(2, m + 1)
         n_central_end   = min(N - 1, N - m)
         if n_central_start <= n_central_end
@@ -251,10 +273,10 @@ function _totdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     return devs
 end
 
-# ── Shared machinery for the Greenhall total deviations ──────────────────
+# ── Shared machinery for the subsequence total deviations ────────────────
 #
 # MTOTDEV, HTOTDEV and MHTOTDEV all take, for each window of L samples, the
-# window minus a fitted ramp (`val`), extend it to [reverse(val); val;
+# window minus a fitted trend (`val`), extend it to [reverse(val); val;
 # reverse(val)], and sum the squares of an m-spaced difference of m-sample
 # box sums over that extension. A box sum is a difference of the cumulative
 # sum E of the extension, and E is piecewise a cumulative sum V of `val`
@@ -265,9 +287,9 @@ end
 #   E(q) = 3V(L) − V(3L−q)      2L ≤ q ≤ 3L
 #
 # with V(k) = W(k) − c·Q(k), W the window's own cumulative sum and Q the
-# ramp's. W comes from a compensated (double-double) prefix sum of the whole
+# trend's. W comes from a compensated (double-double) prefix sum of the whole
 # record, so each window costs one pass to build V and its reverse and one
-# vectorised pass over the box differences, where the per-sample running box
+# vectorized pass over the box differences, where the per-sample running box
 # sums this replaces carried a serial dependency through every step. The
 # extension's mirror symmetry halves the second pass.
 
@@ -426,16 +448,17 @@ function _sum_over_windows(window_sum::F, nwin::Int, Lmax::Int) where {F}
 end
 
 """
-    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int},
+                  tau0::Float64) → Vector{Float64}
 
-Modified total deviation, using Greenhall 2003's
-per-window time-reverse extension with half-mean slope removal, the canonical
-MTOTDEV form.
+Modified total deviation at each `m` (Howe and Vernotte (1999), Eq. (7);
+Howe and Peppler (2001), Eqs. (1) to (5); SP1065 §5.2.12, Eq. (27)). No bias
+correction is applied.
 """
 function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
-    # Greenhall 2003: per window of 3m phase samples, remove the half-mean
-    # frequency, extend by reflection, and average the squared second
-    # difference of m-sample means over the 6m positions of the extension.
+    # Per subsequence of 3m phase samples: remove the half-average slope,
+    # extend by even reflection, and average the squared second difference of
+    # m-sample means over the 6m positions of the extension.
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
     hi, lo = _prefix_dd(_minus_line(x))
@@ -476,11 +499,13 @@ function _mtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 """
-    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _htotdev_core(x::Vector{Float64}, m_values::Vector{Int},
+                  tau0::Float64) → Vector{Float64}
 
-Hadamard total deviation on the frequency series
-`y = diff(x) / tau0`, using Greenhall 2003's per-window time-reverse extension
-with half-mean slope removal on `y`, the canonical HTOTDEV form.
+Hadamard total deviation at each `m` (Howe et al. (2005), Eqs. (3) to (5);
+SP1065 §5.2.14, Eq. (29)): the procedure of `_mtotdev_core` applied to the
+frequency series `y = diff(x) / tau0`, and the overlapping Hadamard
+deviation at `m = 1`. No bias correction is applied.
 """
 function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -543,33 +568,31 @@ function _htotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
 end
 
 """
-    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
+    _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int},
+                   tau0::Float64) → Vector{Float64}
 
-Computes the Modified Hadamard Total Deviation (MHTOTDEV).
+Modified Hadamard total deviation at each `m`, the construction defined in
+this package (see `mhtotdev`). Per window of 4m phase samples, a
+least-squares quadratic is removed, the residual is extended by even
+reflection, and the squared third differences of m-sample means are averaged
+over the 8m + 1 positions of the extension. No bias correction is applied.
 
-MHTOTDEV is novel to SigmaTau; no canonical/published form exists. SigmaTau
-adopts the Greenhall methodology — per-window detrend + a 3× time-reverse
-extension on phase — by consistency with MTOTDEV and HTOTDEV, with one
-deliberate departure: the per-window detrend is a QUADRATIC least-squares
-fit, not the half-mean slope removal the second-difference totals use.
+The detrend has the degree that the third difference annihilates, as the
+linear detrend of the modified total variance matches its second difference.
+With a slope removal only, the quadratic that noise at α ≤ −3 carries
+survives into the extension, the kink at each seam feeds the third
+differences that span it, and the estimator diverges as MVAR does (log-log
+slope 2 in place of 3 at α = −4, level proportional to T). The quadratic
+detrend restores convergence for α > −5 and keeps the white-PM bias factor
+at 0.90, flat in m and N. It also removes a frequency offset and a linear
+frequency drift from each window exactly, so the kernel is insensitive to
+drift by itself; the record-level removal in `mhtotdev` serves noise
+identification only.
 
-The detrend degree must match the kernel's annihilation degree (the third
-difference annihilates phase polynomials of degree ≤ 2, as MTOT's second
-difference annihilates degree ≤ 1 and its linear detrend matches). With
-only a slope removal, the stochastic quadratic carried by noise at
-α ≤ −3 survives into the time-reverse extension, the seam kink feeds the
-boundary-spanning third differences, and the estimator inherits MVAR's
-divergence (measured: log-log slope 2 instead of 3 at α = −4, level ∝ T).
-The matched quadratic detrend restores convergence over the full Hadamard
-range α > −5 (slope 3.00, level N-stable) while leaving the PM statistics
-healthy (B(WHPM) = 0.90, flat in m and N) — verified by two independent
-implementations. It also removes any deterministic frequency offset and
-drift exactly within each window, so this kernel IS drift-immune on its
-own; the wrapper's record-level removal (`remove_drift=true` default)
-remains for noise-identification hygiene, not for the statistic.
-
-Point (odd) reflection is not used: with it B(WHPM) grows ∝ m (≈ 3.8) and
-the χ² EDF collapses; the even (mirror) reflection shows neither.
+Odd reflection is not used: with it the white-PM bias factor grows in
+proportion to m and the EDF collapses. Vernotte and Howe (2000) outline a
+total form of this variance with a linear trend removed from each
+subsequence and a quadratic from the whole record.
 """
 function _mhtotdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     # Per window of 4m phase samples: least-squares quadratic removal,
@@ -657,32 +680,21 @@ end
 """
     _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Maximum Time Interval Error per ITU-T G.810. For each averaging factor
-`m`, slides a window of `m+1` phase samples (spanning `τ = m·τ₀`) across
-the record and returns the largest peak-to-peak phase excursion observed
-in any window.
+Maximum time interval error at each `m` (ITU-T G.810, clause 4.5.15): the
+largest peak-to-peak phase excursion in any window of `m + 1` samples, in
+seconds.
 
-Units are seconds (a σ_x quantity, like TDEV); MTIE is itself a phase
-measure, not a relative-frequency measure, so no τ rescaling is applied.
-
-# Implementation
-
-Monotonic-deque sliding window: each m value runs in O(N) total work via
-two parallel index deques (one tracking the running window maximum, one
-the running minimum). Each phase sample enters and leaves each deque at
-most once, so overall complexity is O(N · |m_values|).
-
-The deque is materialised as a single pre-allocated `Vector{Int}` of
-length N with explicit head/tail cursors per m, avoiding any
-DataStructures.jl dependency or per-step allocation.
+Each `m` costs O(N). Two monotonic index deques track the maximum and the
+minimum of the sliding window, and each sample enters and leaves each deque
+at most once. The deques are two preallocated `Vector{Int}` of length `N`
+with head and tail cursors, so no step allocates.
 """
 function _mtie_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
     devs = Vector{Float64}(undef, length(m_values))
 
-    # Pre-allocate deque storage once; the deque holds at most `win`
-    # indices but cursors can advance up to N before wrapping considerations.
-    # Sizing to N avoids any modular indexing.
+    # Deque storage, allocated once. A deque holds at most `win` indices, but
+    # its cursors can advance up to N, and sizing to N avoids modular indexing.
     max_dq = Vector{Int}(undef, N)
     min_dq = Vector{Int}(undef, N)
 
@@ -742,19 +754,10 @@ end
 """
     _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-RMS Time Interval Error per NIST SP1065 §5.2.18 eq. 37. For each
-averaging factor `m`, the root-mean-square of the phase change over all
-`N − m` spans of `τ = m·τ₀`:
-
-```math
-\\mathrm{TIE\\,rms}(m\\tau_0) = \\sqrt{\\frac{1}{N-m}
-    \\sum_{i=1}^{N-m} \\bigl(x_{i+m} - x_i\\bigr)^2}
-```
-
-Units are seconds (a σ_x quantity, like MTIE/TDEV); TIE rms is a phase
-measure, so no τ rescaling is applied. Matches allantools' `tierms`
-(its per-window max−min of the two samples `x[i]`, `x[i+m]` is exactly
-`|x[i+m] − x[i]|`). Returns NaN where `m ≥ N`.
+Rms time interval error at each `m` (SP1065 §5.2.18, Eq. (37)): the root
+mean square of the `N − m` phase changes `x[i+m] − x[i]`, in seconds. `NaN`
+where `m ≥ N`. allantools' `tierms` takes the peak-to-peak of the two
+samples `x[i]` and `x[i+m]`, which is the same `|x[i+m] − x[i]|`.
 """
 function _tierms_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -781,22 +784,15 @@ end
 """
     _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Parabolic deviation σ_PDEV(τ) per Vernotte–Lenczner–Bourgeois–Rubiola
-(IEEE T-UFFC 63(4), 2016) and Vernotte 2020. Built from a least-squares
-parabolic fit to the phase record over each window:
+Parabolic deviation at each `m`: the estimator stated in `pdev` (Vernotte
+et al. (2016), Eq. (15), summed over the `N − 2m` terms of Vernotte et al.
+(2021)).
 
-```math
-\\sigma^2_{\\text{PDEV}}(m\\tau_0) = \\frac{72}{(N-2m) \\, m^4 \\, (m\\tau_0)^2}
-   \\sum_{i=1}^{N-2m} \\left[
-       \\sum_{k=0}^{m-1} \\left(\\frac{m-1}{2} - k\\right)
-       \\bigl(x_{i+k} - x_{i+k+m}\\bigr)
-   \\right]^2
-```
-
-For `m = 1` the parabolic weight collapses to zero, so the kernel falls back
-to overlapping ADEV (the canonical PDEV(τ₀) ≡ ADEV(τ₀) identity from
-Vernotte 2015). For `m > 1` the weighted parabolic sum is evaluated by a
-rolling two-sum recurrence, reducing each averaging factor from O(Nm) to O(N).
+At `m = 1` the weights vanish and the kernel returns the overlapping Allan
+deviation, which is how the 2016 paper defines the statistic there (its
+Eq. (14)). For `m > 1` the weighted sum is updated by a two-term recurrence,
+O(N) per averaging factor in place of O(Nm), and rebuilt exactly at
+intervals to bound the accumulated rounding error.
 """
 function _pdev_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     N = length(x)
@@ -881,30 +877,19 @@ end
 """
     _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64) → Vector{Float64}
 
-Raw Thêo1 deviation per NIST SP1065 (Riley 2008) §5.2.15
-eq. 30, with the 0.75 normalization of the original Howe & Peppler 2003
-definition (used by Stable32 and allantools; SP1065's printed eq. 30
-omits the 0.75, but its own Table 2 bias value a = 1.00 for white FM
-only holds with the factor included):
+Thêo1 deviation without bias removal at each even `m`: the estimator stated
+in `theo1` (Howe and Peppler (2003), Eq. (1); IEEE Std 1139-2022,
+Eq. (A.35)), with the factor 0.75 that SP1065 Eq. (30) omits and that
+Stable32 and allantools include. An odd `m`, or one outside `2 … N − 1`,
+gives `NaN`. The value belongs to the averaging time `τ = 0.75·m·τ0`.
 
-```math
-\\mathrm{Theo1}(m, \\tau_0, N) = \\frac{1}{0.75\\,(N-m)\\,(m\\tau_0)^2}
-   \\sum_{i=1}^{N-m} \\sum_{\\delta=0}^{m/2-1} \\frac{1}{m/2-\\delta}
-   \\bigl[(x_i - x_{i-\\delta+m/2}) + (x_{i+m} - x_{i+\\delta+m/2})\\bigr]^2
-```
-
-Defined for even `m` with `2 ≤ m ≤ N − 1` (SP1065 states the statistic
-for `m ≥ 10`; smaller even factors are computed but carry little Theo1
-benefit over ADEV). Odd or out-of-range `m` yield NaN. The effective
-averaging time of a Thêo1 value is `τ = 0.75·m·τ0` (SP1065 §5.2.15).
-
-The double sum is O((N−m)·m/2) per averaging factor, that is O(N·m), unlike
-the O(N) Allan kernels; the largest factors dominate, so a full even-m
-sweep on a long record costs O(N³) overall. The sum over i runs in
-cache-sized tiles with the δ loop inside, so the samples a tile needs stay
-in cache across δ; blocks of δ run in parallel, and entries of `m_values`
-too. Each δ adds its tiles in order, so the result does not depend on the
-thread count.
+The double sum is O(N·m) per averaging factor, so a sweep over every even
+`m` of a long record is O(N³). The sum over `i` runs in tiles of
+`_THEO1_TILE` samples, with a block of `_THEO1_DBLK` values of δ inside each
+tile, so the samples that a tile reads stay in cache from one δ to the next.
+The blocks of δ run in parallel across threads, and so do the entries of
+`m_values`. Each δ adds its tiles in order, so the result does not depend on
+the number of threads.
 """
 function _theo1_core(x::Vector{Float64}, m_values::Vector{Int}, tau0::Float64)
     devs = Vector{Float64}(undef, length(m_values))
@@ -981,11 +966,11 @@ function _theo1_block!(s, A, x, half, L, d_lo, d_hi)
     return s
 end
 
-# Overlapping Allan *variance* at a single averaging factor, allowing a
-# single analysis window (L ≥ 1). Used only for the ThêoBR ratio terms,
-# where SP1065 eq. 33 reaches AVAR factors as large as m ≈ N/2, one
-# window is acceptable inside an average over many ratio terms, while
-# the public `_adev_core` keeps its stricter L ≥ 2 guard.
+# Overlapping Allan variance at a single averaging factor, allowing a single
+# term (L ≥ 1). Used only for the ThêoBR ratio, where the shortest record
+# accepted (N = 19) leaves one term at the first ladder factor, m = 9. Inside
+# a mean over ratio terms that is acceptable; `_adev_core` keeps its L ≥ 2
+# guard.
 function _avar_var_at(x::Vector{Float64}, m::Int, tau0::Float64)
     N = length(x)
     L = N - 2m
@@ -1006,35 +991,37 @@ const _THEOBR_SAMPLES = 32
 """
     _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact=false, sp1065=false) → Float64
 
-ThêoBR automatic bias-removal factor [howe-2006-theoh](@cite), eq. 6: the
-average over `i = 0…n`, `n = ⌊N/30 − 3⌋`, of the variance ratios
-`AVAR(m = 9+3i) / Theo1(m = 12+4i)`. The two factor ladders sample the same
-effective τ (`(9+3i)·τ0 = 0.75·(12+4i)·τ0`), so each term is an AVAR/Theo1
-comparison at matched averaging time, out to a tenth of the record where
-AVAR is still well determined. Multiply a Thêo1 *variance* by this factor (a
-deviation by its square root) to get the bias-removed ThêoBR estimate.
+ThêoBR bias-removal factor of Howe (2006), Eq. (6): the mean over
+`i = 0 … n`, `n = ⌊N/30 − 3⌋`, of the variance ratios
+`AVAR(m = 9 + 3i) / Thêo1(m = 12 + 4i)`. The two ladders sample the same
+averaging time, `(9 + 3i)·τ0 = 0.75·(12 + 4i)·τ0`, out to a tenth of the
+record, where AVAR is still well determined. A Thêo1 variance times this
+factor (a deviation times its square root) is the ThêoBR estimate.
 
-[mcgee-2007-theoh](@cite) and [taylor-2010-fast-theobr](@cite) give the same
-`n`. SP1065 §5.2.16 eq. 33 prints `⌊N/6 − 3⌋`, which runs AVAR out to half
-the record, where it has one degree of freedom: on simulated white, flicker
-and random-walk FM that ladder scatters the ratio by 25 to 30 % and biases
-the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to +3 % here
-(N = 1024). `sp1065=true` takes that ladder, which is the one Stable32 runs.
-The paper's formula needs `N ≥ 90` for `n ≥ 0`; shorter records, outside its
-stated range, use the first rung alone.
+Howe and Tasset (2004), McGee and Howe (2007) and Taylor and Howe (2010)
+give the same `n`. SP1065 Eq. (33), the Stable32 manual and IEEE Std
+1139-2022 Eq. (A.37) print `⌊N/6 − 3⌋`, which runs AVAR out to half the
+record, where it has one degree of freedom. On simulated white, flicker and
+random-walk FM (N = 1024) that ladder scatters the ratio by 25 to 30 % and
+biases the corrected variance by −9 to +11 %, against 8 to 11 % and −5 to
++3 % here. `sp1065=true` takes that ladder, which is the one Stable32 runs.
+The formula gives `n ≥ 0` only for `N ≥ 90`; shorter records, outside the
+range the paper states, use the first term alone.
 
-Unless `exact=true` or the ladder is short, Thêo1 is computed only at the
-first 16 factors and at 32 evenly spaced along the rest, and interpolated
-between them linearly in log m–log σ² (exact for a power law); AVAR is
+Unless `exact=true` or the ladder is short, Thêo1 is computed at the first
+16 factors and at 32 spread evenly over the rest, and interpolated between
+them linearly in log m and log σ², which is exact for a power law. AVAR is
 computed at every factor. Against the exact ratio on simulated power-law
-noises (α = +2…−2, N = 8192 and 16 384) this stays within 0.5 % (0.25 % on
-the deviation), far inside ThêoBR's own confidence interval. The
-block-averaging form of [taylor-2010-fast-theobr](@cite) was tried and
-rejected here because it moved the ratio by 10–40 % for the PM noises.
+noise (α = 2 … −2, N = 8192 and 16 384) the result stays within 0.5 %
+(0.25 % on the deviation). The block-averaging method of Taylor and Howe
+(2010) was tried and not adopted, because it moved the ratio by 10 to 40 %
+on PM noise.
 
-Ratio terms whose Thêo1 is not finite/positive are skipped and the average
-is taken over the computable terms. Returns NaN when no term is computable
-(`N < 19`).
+A term is skipped when its AVAR is not finite or its Thêo1 is not finite and
+positive, and the mean is taken over the terms that remain. With
+`sp1065=true` the last term of a record whose length is a multiple of 6 is
+one of those: its AVAR factor is `N/2`, which leaves no term. Returns `NaN`
+for `N < 19` and when no term remains.
 """
 function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1065::Bool=false)
     N = length(x)
@@ -1082,24 +1069,26 @@ function _theobr_ratio(x::Vector{Float64}, tau0::Float64; exact::Bool=false, sp1
     return cnt == 0 ? NaN : total / cnt
 end
 
-# The ThêoBR factor as Stable32 computes it: SP1065's ladder (eq. 33) on the
-# record, or on every `b`-th phase when it has more than 3000 points, plus
-# 0.00055·(b − 1). The limit (`MaxTheoBRPts`) and the ladder are in Stable32's
-# manual, and the added term is eq. 4 of Taylor and Howe (2010), Fast ThêoBR,
-# which the manual names as its method. That the phase is decimated (a block
-# mean does not fit) and that b = ⌈N/3000⌉ are inferred from Stable32's
-# output, which this reproduces to its five digits for b = 1 (1001 points)
-# and b = 3 (8192 points).
+# ThêoBR ratio as Stable32 computes it: the ladder of SP1065 Eq. (33) on the
+# record, or on every `b`-th sample of a record longer than 3000, plus
+# 0.00055·(b − 1). The limit (`MaxTheoBRPts`) and the ladder are in the
+# Stable32 manual, which names Taylor and Howe (2010) as its method, and the
+# added term is their Eq. (4). They average the samples in blocks of `b`.
+# That Stable32 takes every `b`-th sample instead, with b = ⌈N/3000⌉, is
+# inferred from its output: this agrees with it to the five digits printed
+# for b = 1 (1001 samples) and for b = 3 (8192 samples), where block means
+# give deviations 6.5 % higher.
 function _stable32_theobr_ratio(x::Vector{Float64}, tau0::Float64)
     b = cld(length(x), 3000)
     return _theobr_ratio(x[1:b:end], b * tau0; exact=true, sp1065=true) + 0.00055 * (b - 1)
 end
 
-# ThêoH segment rule (SP1065 §5.2.16 eq. 34): requested grid points are
-# τ-grid factors (target τ = m·τ0). Points at or below the crossover
-# k = 20 % of the record span T = (N−1)·τ0 come from overlapping ADEV at
-# that m; points above come from ThêoBR at the even Thêo1 factor whose
-# effective τ = 0.75·m_theo·τ0 best matches m·τ0.
+# ThêoH segment rule (SP1065 §5.2.16, Eq. (34)): requested grid points are
+# τ-grid factors (target τ = m·τ0). Points at or below the crossover, 20 % of
+# the record length T = (N−1)·τ0, come from overlapping ADEV at that m;
+# points above come from ThêoBR at the even Thêo1 factor whose effective
+# τ = 0.75·m_theo·τ0 best matches m·τ0. Howe (2006), Eq. (7), puts the
+# crossover at 10 % of T.
 _theoh_is_adev(m::Int, N::Int) = m <= 0.2 * (N - 1)
 
 # Even Thêo1 factor nearest to m/0.75 = 4m/3 (exact whenever 3 | m).

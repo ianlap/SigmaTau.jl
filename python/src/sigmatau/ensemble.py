@@ -10,7 +10,7 @@ produced.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from typing import Any
 
 import juliacall
@@ -32,6 +32,7 @@ from .types import PhaseData, PowerLawFit, StabilityResult
 _MatF64 = jl.seval("Matrix{Float64}")
 _VecModel = jl.seval("Vector{ClockModel}")
 _VecF64 = jl.seval("Vector{Float64}")
+_band = jl.seval("b -> b === nothing ? nothing : (Float64(b[1]), Float64(b[2]))")
 _add = jl.seval(
     "(f, noise, a, b) -> SigmaTau.add_component!(f, noise, a:b)"
 )  # a range would come back as a Python range
@@ -56,11 +57,15 @@ def _mat(a: Any) -> np.ndarray:
 @dataclass(frozen=True)
 class ClockModel:
     """Discrete clock model: phase, frequency and (with ``drift``) drift driven by
-    white noise (Zucca & Tavella 2005).
+    white noise (Zucca & Tavella 2005), with flicker noise as Markov states.
 
     ``R`` is the variance of a reading's noise, taken as white (s²), ``q1`` the white FM
     (s), ``q2`` the random-walk FM (1/s) and ``q3`` the random-run FM (1/s³)
-    diffusion coefficient.
+    diffusion coefficient. ``flicker_fm`` (h₋₁) and ``flicker_pm`` (h₁) are carried
+    by Markov states across ``fm_band`` and ``pm_band``, the first and last τ (s)
+    each spans, ``(0, 0)`` for none. Left out, a band covers the τ up to
+    ``tau_max`` (default 10⁶ τ₀) where the flicker holds a quarter of the model's
+    Allan variance.
     """
 
     tau0: float
@@ -69,10 +74,32 @@ class ClockModel:
     q2: float = 0.0
     q3: float = 0.0
     drift: bool | None = None
+    flicker_fm: float = 0.0
+    flicker_pm: float = 0.0
+    fm_band: tuple[float, float] | None = None
+    pm_band: tuple[float, float] | None = None
+    tau_max: InitVar[float | None] = None
 
-    def __post_init__(self):
+    @_map_errors
+    def __post_init__(self, tau_max: float | None):
         if self.drift is None:
             object.__setattr__(self, "drift", self.q3 > 0)
+        kw = {} if tau_max is None else {"tau_max": float(tau_max)}
+        m = jl.ClockModel(
+            tau0=float(self.tau0),
+            R=float(self.R),
+            q1=float(self.q1),
+            q2=float(self.q2),
+            q3=float(self.q3),
+            drift=bool(self.drift),
+            flicker_fm=float(self.flicker_fm),
+            flicker_pm=float(self.flicker_pm),
+            fm_band=_band(self.fm_band),
+            pm_band=_band(self.pm_band),
+            **kw,
+        )
+        object.__setattr__(self, "fm_band", tuple(m.fm_band))
+        object.__setattr__(self, "pm_band", tuple(m.pm_band))
 
     def _jl(self) -> Any:
         return jl.ClockModel(
@@ -82,12 +109,25 @@ class ClockModel:
             float(self.q2),
             float(self.q3),
             bool(self.drift),
+            float(self.flicker_fm),
+            _band(self.fm_band),
+            float(self.flicker_pm),
+            _band(self.pm_band),
         )
 
 
 def _model_from_jl(m: Any) -> ClockModel:
     return ClockModel(
-        float(m.tau0), float(m.R), float(m.q1), float(m.q2), float(m.q3), bool(m.drift)
+        float(m.tau0),
+        float(m.R),
+        float(m.q1),
+        float(m.q2),
+        float(m.q3),
+        bool(m.drift),
+        flicker_fm=float(m.flicker_fm),
+        flicker_pm=float(m.flicker_pm),
+        fm_band=tuple(m.fm_band),
+        pm_band=tuple(m.pm_band),
     )
 
 
@@ -97,17 +137,27 @@ def clock_model(
     *,
     tau0: float | None = None,
     drift: bool | None = None,
+    flicker: bool = False,
+    tau_max: float | None = None,
 ) -> ClockModel:
     """The ``ClockModel`` with the white FM, random-walk FM and random-run FM
     levels of a power-law model, and its PM as the reading noise ``R``: white PM,
     with flicker PM folded in as the white PM of the same Allan variance where PM
-    hands over to FM. Flicker FM and flicker walk have no finite-state form and
-    are left out.
+    hands over to FM, and flicker FM left out.
+
+    With ``flicker=True`` flicker FM and flicker PM are kept as Markov states
+    (``ClockModel.flicker_fm``, ``flicker_pm``) across the τ, up to ``tau_max``,
+    where each holds a quarter of the model's Allan variance, and ``R`` is the
+    white PM alone.
 
     ``fit`` is a ``PowerLawFit``, a ``NoiseFit`` or an ``{α: h_α}`` mapping (with
     ``tau0``).
     """
-    kw = {} if drift is None else {"drift": bool(drift)}
+    kw: dict[str, Any] = {} if drift is None else {"drift": bool(drift)}
+    if flicker:
+        kw["flicker"] = True
+    if tau_max is not None:
+        kw["tau_max"] = float(tau_max)
     if isinstance(fit, NoiseFit):
         return _model_from_jl(jl.clock_model(fit._jl, **kw))
     if tau0 is None:
@@ -252,8 +302,12 @@ def holdover_error(kf: KalmanResult, tau: Sequence[float]) -> np.ndarray:
 class HoldoverResult:
     """Return type of ``holdover``: the statistics of the time error at each
     holdover time ``tau`` (s), over every start the record allows. ``quantile``
-    is the |error| that ``confidence`` of the trials stay within; ``limit`` and
-    ``time_to_limit`` are ``nan`` when no limit was asked for."""
+    is the |error| that ``confidence`` of the trials stay within; ``claimed`` is
+    the standard deviation a Kalman filter gives the error itself (empty for a
+    least-squares fit); ``limit`` and ``time_to_limit`` are ``nan`` when no limit
+    was asked for. With a stretch
+    that grows with ``tau``, ``grow`` is its multiple and ``train`` is ``nan``;
+    otherwise ``grow`` is 0."""
 
     tau: np.ndarray
     rms: np.ndarray
@@ -261,7 +315,9 @@ class HoldoverResult:
     worst: np.ndarray
     mean: np.ndarray
     n: np.ndarray
+    claimed: np.ndarray
     train: float
+    grow: int
     drift: bool
     anchor: bool
     confidence: float
@@ -282,6 +338,7 @@ class HoldoverPrediction:
     alphas: np.ndarray
     budget: np.ndarray
     train: float
+    grow: int
     drift: bool
     anchor: bool
     confidence: float
@@ -292,8 +349,10 @@ class HoldoverPrediction:
 @_map_errors
 def holdover(
     data: PhaseData | PowerLawFit | ClockModel | Mapping[int | str, float],
+    model: ClockModel | None = None,
     *,
     train: float | None = None,
+    grow: int | None = None,
     tau: Sequence[float] | None = None,
     tau0: float | None = None,
     drift: bool = False,
@@ -308,20 +367,33 @@ def holdover(
     On a ``PhaseData`` record the error is measured from every start the record
     allows. On a noise model (a ``PowerLawFit``, a ``ClockModel`` or an
     ``{α: h_α}`` mapping, which needs ``tau0``) it is predicted, with each noise
-    type's share in ``budget``; ``train`` is then required."""
-    kw: dict[str, Any] = {
-        "drift": bool(drift),
-        "anchor": bool(anchor),
-        "confidence": float(confidence),
-    }
+    type's share in ``budget``; ``train`` is then required.
+
+    ``grow=k`` in place of ``train`` makes the stretch k times each holdover
+    time. At 2 (3 with ``drift``) the test is the sibling of ``tdev``
+    (``htdev``): √6 TDEV (√20 HTDEV) is the error of the same extrapolation
+    made from τ-averages of the phase, which this test equals at τ₀ and
+    exceeds by a constant 1.26 to 1.42 on FM noise.
+
+    With a record and a ``ClockModel``, the Kalman filter for that model is the
+    predictor: it runs once over the record, and from every sample past
+    ``train`` seconds its estimate is carried ``tau`` ahead with no readings.
+    ``claimed`` is then the filter's own standard deviation for the error;
+    ``drift``, ``anchor`` and ``grow`` do not apply."""
+    kw: dict[str, Any] = {"confidence": float(confidence)}
+    if model is None:
+        kw |= {"drift": bool(drift), "anchor": bool(anchor)}
     if train is not None:
         kw["train"] = float(train)
+    if grow is not None:
+        kw["grow"] = int(grow)
     if tau is not None:
         kw["tau"] = to_jl_f64(tau)
     if limit is not None:
         kw["limit"] = float(limit)
     if isinstance(data, PhaseData):
-        r = jl.holdover(to_jl_data(data), **kw)
+        args = (to_jl_data(data),) if model is None else (to_jl_data(data), model._jl())
+        r = jl.holdover(*args, **kw)
         return HoldoverResult(
             np_f64(r.tau),
             np_f64(r.rms),
@@ -329,15 +401,17 @@ def holdover(
             np_f64(r.worst),
             np_f64(r.mean),
             np.array(r.n, dtype=np.int64),
+            np_f64(r.claimed),
             float(r.train),
+            int(r.grow),
             bool(r.drift),
             bool(r.anchor),
             float(r.confidence),
             float(r.limit),
             float(r.time_to_limit),
         )
-    if train is None:
-        raise ValueError("holdover: a noise model needs `train`, the training stretch in seconds")
+    if train is None and grow is None:
+        raise ValueError("holdover: a noise model needs `train`, the stretch in seconds, or `grow`")
     if tau0 is None:
         tau0 = getattr(data, "tau0", None)
     if tau0 is not None:
@@ -350,6 +424,7 @@ def holdover(
         np.array(r.alphas, dtype=np.int64),
         _mat(r.budget),
         float(r.train),
+        int(r.grow),
         bool(r.drift),
         bool(r.anchor),
         float(r.confidence),
@@ -479,13 +554,18 @@ def simulate_ensemble(
 
 
 @_map_errors
-def clock_models(cc: ClockComparisons, *, alphas: Sequence[int] | None = None) -> list[ClockModel]:
+def clock_models(
+    cc: ClockComparisons, *, alphas: Sequence[int] | None = None, flicker: bool = False
+) -> list[ClockModel]:
     """One ``ClockModel`` per clock, fitted from the comparisons alone (three or
     more clocks): each clock's Allan deviation from the Groslambert covariance,
     then a power-law fit with the components ``alphas`` (by default Julia's:
     white and flicker PM, white FM and random-walk FM), the flicker PM folded
-    into ``R``."""
-    kw = {} if alphas is None else {"alphas": to_jl_ints(alphas)}
+    into ``R``. With ``flicker=True`` flicker FM joins the fit and both flickers
+    are kept as Markov states where they matter."""
+    kw: dict[str, Any] = {} if alphas is None else {"alphas": to_jl_ints(alphas)}
+    if flicker:
+        kw["flicker"] = True
     return [_model_from_jl(m) for m in jl.clock_models(cc._jl(), **kw)]
 
 
