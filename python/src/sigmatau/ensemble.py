@@ -1,10 +1,8 @@
-"""Clock models, the Kalman filter, holdover, steering, clock ensembles and
-timescales — mirrors ``clockmodel.jl``, ``noisefit.jl``, ``kalman.jl``,
-``holdover.jl``, ``steering.jl``, ``comparisons.jl`` and ``timescale.jl``.
+"""Clock models, the Kalman filter, holdover, steering and time scales.
 
-Results that later calls build on (a filter run, a noise fit) keep their Julia
-object, so a smoother or a holdover estimate runs on exactly what the filter
-produced.
+A result that a later call builds on, such as a filter run or a noise fit,
+keeps its Julia object, so that a smoother or a holdover estimate runs on what
+the filter produced.
 """
 
 from __future__ import annotations
@@ -58,16 +56,27 @@ def _mat(a: Any) -> np.ndarray:
 
 @dataclass(frozen=True)
 class ClockModel:
-    """Discrete clock model: phase, frequency and (with ``drift``) drift driven by
-    white noise (Zucca & Tavella 2015), with flicker noise as Markov states.
+    """State-space model of a clock read every ``tau0`` seconds: phase, frequency
+    and, with ``drift``, frequency drift driven by white noises, with optional
+    Markov states for flicker noise.
 
-    ``R`` is the variance of a reading's noise, taken as white (s²), ``q1`` the white FM
-    (s), ``q2`` the random-walk FM (1/s) and ``q3`` the random-run FM (1/s³)
-    diffusion coefficient. ``flicker_fm`` (h₋₁) and ``flicker_pm`` (h₁) are carried
-    by Markov states across ``fm_band`` and ``pm_band``, the first and last τ (s)
-    each spans, ``(0, 0)`` for none. Left out, a band covers the τ up to
-    ``tau_max`` (default 10⁶ τ₀) where the flicker holds a quarter of the model's
-    Allan variance.
+    The phase, frequency and drift follow the three-state model of Zucca and
+    Tavella (2015), without its deterministic terms. ``R`` is the white PM
+    variance of a reading (s²), and ``q1``, ``q2`` and ``q3`` are the white FM
+    (s), random-walk FM (1/s) and random-run FM (1/s³) levels, the squares of
+    that paper's diffusion coefficients. They stand for the coefficients of
+    S_y(f) = Σ h_α f^α as h₂ = 8π²τ₀R, h₀ = 2q₁, h₋₂ = q₂/(2π²) and
+    h₋₄ = q₃/(8π⁴). ``drift`` says whether the state carries a frequency
+    drift, by default whether ``q3`` is positive.
+
+    ``flicker_fm`` (h₋₁) and ``flicker_pm`` (h₁, in s²) are carried by Markov
+    states: the flicker FM model of Davis, Greenhall and Stacey (2005), with
+    time constants a decade apart, and the same construction on the readings
+    for flicker PM, which is this package's choice. ``fm_band`` and
+    ``pm_band`` are the first and last τ, in seconds, that the states span,
+    ``(0, 0)`` for no states. Left out, each is the range of τ between τ₀ and
+    ``tau_max``, 10⁶ τ₀ by default, at which that flicker holds at least a
+    quarter of the Allan variance of the model.
     """
 
     tau0: float
@@ -141,26 +150,40 @@ def clock_model(
     drift: bool | None = None,
     flicker: bool = True,
     tau_max: float | None = None,
+    fm_band: tuple[float, float] | None = None,
+    pm_band: tuple[float, float] | None = None,
 ) -> ClockModel:
-    """The ``ClockModel`` with the white FM, random-walk FM and random-run FM
-    levels of a power-law model, and its white PM as the reading noise ``R``.
+    """The ``ClockModel`` of a power-law noise model.
 
-    Flicker FM and flicker PM are kept as Markov states
-    (``ClockModel.flicker_fm``, ``flicker_pm``) across the τ, up to ``tau_max``,
-    where each holds a quarter of the model's Allan variance. With
-    ``flicker=False`` flicker FM is left out, and flicker PM is folded into ``R``
-    as the white PM of the same Allan variance where PM hands over to FM; the
-    ``"stein"`` time scale needs such a model.
+    White FM, random-walk FM and random-run FM become ``q1``, ``q2`` and
+    ``q3``, and white PM becomes ``R``, by the relations given under
+    ``ClockModel``. Flicker FM and flicker PM are kept as its Markov states,
+    across the τ where each holds a quarter of the Allan variance of the
+    model.
 
-    ``fit`` is a ``PowerLawFit``, a ``NoiseFit`` or an ``{α: h_α}`` mapping (with
-    ``tau0``). ``tau_max`` defaults to the longest τ of a ``PowerLawFit`` of a
-    deviation, and to 10⁶ τ₀ otherwise.
+    With ``flicker=False`` flicker FM is left out and flicker PM is folded into
+    ``R``: the white PM that has the Allan variance of the white and flicker PM
+    together at the last τ where that exceeds the FM terms. The model then has
+    two states, or three with drift, as the ``"stein"`` time scale needs, and
+    it has less noise than the fit. Flicker-walk FM (α = −3) is left out with
+    either setting.
+
+    ``fit`` is a ``PowerLawFit`` that has a sample interval, a ``NoiseFit``, or
+    a mapping of h_α keyed by α or by noise type, which needs ``tau0``.
+    ``drift`` says whether the model has a drift state, by default whether h₋₄
+    is positive. ``tau_max``, ``fm_band`` and ``pm_band`` are those of
+    ``ClockModel``; ``tau_max`` defaults to the longest τ of a ``PowerLawFit``
+    of a deviation, and to 10⁶ τ₀ otherwise.
     """
     kw: dict[str, Any] = {"flicker": bool(flicker)}
     if drift is not None:
         kw["drift"] = bool(drift)
     if tau_max is not None:
         kw["tau_max"] = float(tau_max)
+    if fm_band is not None:
+        kw["fm_band"] = _band(fm_band)
+    if pm_band is not None:
+        kw["pm_band"] = _band(pm_band)
     if isinstance(fit, NoiseFit):
         return _model_from_jl(jl.clock_model(fit._jl, **kw))
     if tau0 is not None:
@@ -175,13 +198,16 @@ def clock_model(
 
 @_map_errors
 def state_transition(m: ClockModel, delta: float) -> np.ndarray:
-    """The matrix Φ(δ) that carries the state over a step of ``delta`` seconds."""
+    """The matrix Φ(δ) that carries the state of ``m`` over a step of ``delta``
+    seconds. The Markov states follow the phase, frequency and drift, the
+    frequency states first."""
     return _mat(jl.state_transition(m._jl(), float(delta)))
 
 
 @_map_errors
 def process_noise(m: ClockModel, delta: float) -> np.ndarray:
-    """Covariance Q(δ) of the noise the clock picks up over a step of ``delta`` seconds."""
+    """Covariance Q(δ) of the noise that the state of ``m`` gathers over a step of
+    ``delta`` seconds (Greenhall 2003, Eq. (5); Zucca and Tavella 2015, Eq. (3))."""
     return _mat(jl.process_noise(m._jl(), float(delta)))
 
 
@@ -189,9 +215,13 @@ def process_noise(m: ClockModel, delta: float) -> np.ndarray:
 
 
 class NoiseFit:
-    """An interactive power-law fit to a σ(τ) result, built one noise type at a
-    time; see ``noise_fit``. ``components`` lists ``(alpha, h, tau_from, tau_to)``
-    in the order added.
+    """A power-law model built one component at a time on a measured σ(τ), by
+    :func:`noise_fit`, ``add_component`` and ``undo``. ``powerlaw_sigma``,
+    ``powerlaw_psd``, ``clock_model`` and ``holdover`` accept it as a model.
+
+    ``components`` lists ``(alpha, h, tau_from, tau_to)`` in the order added:
+    the exponent, the level h_α and the first and last τ, in seconds, that the
+    component was fitted on.
     """
 
     def __init__(self, jl_fit: Any):
@@ -208,9 +238,13 @@ class NoiseFit:
 
     @_map_errors
     def add_component(self, noise: int | str, tau_index: slice | Sequence[int]) -> NoiseFit:
-        """Fit one noise type (α or a name such as ``"WHFM"``) on a 0-based range of
-        τ indices (``slice(0, 6)`` or ``[0, 5]``, both ends included for a list),
-        against what the earlier components leave."""
+        """Add the power law ``noise``, an α or a name such as ``"WHFM"``, fitted at
+        the τ indices ``tau_index``, and refit the levels already there.
+
+        ``tau_index`` counts from 0: a slice such as ``slice(0, 6)``, or a
+        sequence whose first and last entries are the first and last index,
+        both included. Points where the residual is not positive are skipped.
+        """
         if isinstance(tau_index, slice):
             n = len(self._jl.result.tau)
             lo, hi, _ = tau_index.indices(n)
@@ -223,12 +257,13 @@ class NoiseFit:
 
     @_map_errors
     def undo(self) -> NoiseFit:
-        """Remove the last component."""
+        """Remove the component added last and refit the rest."""
         jl.seval("SigmaTau.undo!")(self._jl)
         return self
 
     def residual(self) -> np.ndarray:
-        """The σ² the model leaves at each τ."""
+        """The measured σ²(τ) less the variance of every component so far. It can go
+        negative where the model overshoots."""
         return np_f64(jl.noise_residual(self._jl))
 
     def __repr__(self) -> str:
@@ -237,9 +272,27 @@ class NoiseFit:
 
 @_map_errors
 def noise_fit(r: StabilityResult) -> NoiseFit:
-    """Start an interactive power-law fit on an ADEV, MDEV, HDEV or MHDEV result
-    (or a total form); add components with ``add_component``."""
+    """Start an interactive power-law fit on ``r``, an ADEV, MDEV, HDEV or MHDEV
+    result or one of their total forms, which are fitted with the response of
+    the parent. Add components with ``add_component`` and take the last one
+    back with ``undo``.
+
+    The level of a component is fitted over its own range of τ against what
+    the other components leave. After each change every level is refitted
+    until they settle, so the model does not depend on the order in which the
+    components were added.
+    """
     return NoiseFit(jl.noise_fit(result_to_jl(r)))
+
+
+def _noise_model_to_jl(h: Any) -> Any:
+    """A noise model for Julia: a ``ClockModel`` or a ``NoiseFit`` as Julia's own
+    type, a ``PowerLawFit`` or a mapping as a ``Dict`` of h_α."""
+    if isinstance(h, ClockModel):
+        return h._jl()
+    if isinstance(h, NoiseFit):
+        return h._jl
+    return powerlaw_to_jl(h)
 
 
 # ── Kalman filter ──────────────────────────────────────────────────────
@@ -247,11 +300,16 @@ def noise_fit(r: StabilityResult) -> NoiseFit:
 
 @dataclass(frozen=True)
 class KalmanResult:
-    """Return type of ``kalman_filter`` / ``kalman_smooth``.
+    """Result of :func:`kalman_filter` or :func:`kalman_smooth`: the state estimate
+    at every sample, its covariance and the innovations.
 
-    ``x`` holds one row per sample (phase, frequency, and drift with a drift
-    state), ``P`` the covariances with shape (states, states, samples), and
-    ``innovation`` / ``innovation_var`` the innovations (``nan`` at gaps).
+    ``x`` holds one row per sample: phase (s), frequency, drift (1/s) for a
+    model with a drift state, then the Markov frequency states, which add to
+    the frequency, and the Markov phase states, which add to the readings.
+    ``P`` holds the covariances, ``P[:, :, k]`` at sample k. ``innovation`` is
+    each reading less its prediction (s) and ``innovation_var`` its variance
+    (s²), both ``nan`` at gaps. ``t`` is in seconds from the first sample, and
+    ``smoothed`` says whether ``x`` and ``P`` are smoothed.
     """
 
     model: ClockModel
@@ -281,9 +339,19 @@ def _kalman_from_jl(r: Any) -> KalmanResult:
 def kalman_filter(
     data: PhaseData, m: ClockModel, *, x0: Sequence[float] | None = None, P0: Any = None
 ) -> KalmanResult:
-    """Run the Kalman filter for clock model ``m`` over a phase record; ``nan``
-    samples are gaps the filter predicts across. The start defaults to a
-    least-squares polynomial through the first samples."""
+    """Kalman filter of clock model ``m`` over a phase record.
+
+    A ``nan`` sample is a gap: the state is predicted across it without an
+    update. The covariance is updated in the Joseph form. The ``tau0`` of the
+    record must be that of the model, and a model with no noise at all is
+    refused.
+
+    ``x0`` and ``P0`` are the state and its covariance at the first sample,
+    before its reading is used. By default the filter starts from a
+    least-squares line through the first 16 readings, a parabola for a model
+    with drift, with the covariance of that fit multiplied by ten, and with
+    the Markov states at zero with their stationary variances.
+    """
     kw = {}
     if x0 is not None:
         kw["x0"] = to_jl_f64(x0)
@@ -294,26 +362,35 @@ def kalman_filter(
 
 @_map_errors
 def kalman_smooth(kf: KalmanResult) -> KalmanResult:
-    """Rauch–Tung–Striebel smoother over a filtered run."""
+    """Rauch–Tung–Striebel smoother over a filtered run: every estimate then uses
+    the whole record. The innovations of the result are those of the filter."""
     return _kalman_from_jl(jl.kalman_smooth(kf._jl))
 
 
 @_map_errors
 def holdover_error(kf: KalmanResult, tau: Sequence[float]) -> np.ndarray:
-    """1σ time error (s) after free-running for each τ from the last sample."""
+    """Standard deviation, in seconds, of the time error of the clock after running
+    free for each τ in ``tau`` (seconds) from the last sample, as the model
+    gives it: the error of the last estimate carried forward and the noise that
+    the clock gathers on the way. The noise of a reading is not in it.
+    :func:`holdover` measures the same error on the record."""
     return np_f64(jl.holdover_error(kf._jl, to_jl_f64(tau)))
 
 
 @dataclass(frozen=True)
 class HoldoverResult:
-    """Return type of ``holdover``: the statistics of the time error at each
-    holdover time ``tau`` (s), over every start the record allows. ``quantile``
-    is the |error| that ``confidence`` of the trials stay within; ``claimed`` is
-    the standard deviation a Kalman filter gives the error itself (empty for a
-    least-squares fit); ``limit`` and ``time_to_limit`` are ``nan`` when no limit
-    was asked for. With a stretch
-    that grows with ``tau``, ``grow`` is its multiple and ``train`` is ``nan``;
-    otherwise ``grow`` is 0."""
+    """Result of :func:`holdover` on a record: the statistics of the time error at
+    each holdover time ``tau`` (s), over every start the record allows.
+
+    ``rms``, ``worst`` and ``mean`` are the RMS, the largest magnitude and the
+    mean of the error (s), ``quantile`` the magnitude that ``confidence`` of
+    the trials stay within, and ``n`` the number of trials. ``claimed`` is the
+    standard deviation that a Kalman filter itself gives the error, empty for
+    a least-squares fit. ``train`` is the length of the training stretch in
+    seconds, ``nan`` when it grows with ``tau``; ``grow`` is then its multiple
+    of each holdover time, and 0 otherwise. ``limit`` and ``time_to_limit``
+    are ``nan`` when no limit was asked for.
+    """
 
     tau: np.ndarray
     rms: np.ndarray
@@ -333,10 +410,12 @@ class HoldoverResult:
 
 @dataclass(frozen=True)
 class HoldoverPrediction:
-    """Return type of ``holdover`` on a noise model: the standard deviation of
-    the time error at each holdover time ``tau`` (s), its ``quantile`` at
-    ``confidence``, and ``budget``, the variance each noise type in ``alphas``
-    adds (one row per ``tau``, one column per α)."""
+    """Result of :func:`holdover` on a noise model: the standard deviation ``sigma``
+    of the time error at each holdover time ``tau`` (s), its ``quantile`` at
+    ``confidence``, and ``budget``, the variance (s²) that each noise type in
+    ``alphas`` adds, with one row per ``tau`` and one column per α. The rows
+    of ``budget`` sum to ``sigma**2``. The other fields are those of
+    ``HoldoverResult``."""
 
     tau: np.ndarray
     sigma: np.ndarray
@@ -354,7 +433,7 @@ class HoldoverPrediction:
 
 @_map_errors
 def holdover(
-    data: PhaseData | PowerLawFit | ClockModel | Mapping[int | str, float],
+    data: PhaseData | PowerLawFit | NoiseFit | ClockModel | Mapping[int | str, float],
     model: ClockModel | None = None,
     *,
     train: float | None = None,
@@ -366,26 +445,44 @@ def holdover(
     limit: float | None = None,
     confidence: float = 0.95,
 ) -> HoldoverResult | HoldoverPrediction:
-    """Holdover: learn the frequency (and drift) on ``train`` seconds, free-run
-    from the last reading for each ``tau``, and compare with the clock
-    (Delporte et al. 2000).
+    """The time error of a clock that runs on without its reference.
 
-    On a ``PhaseData`` record the error is measured from every start the record
-    allows. On a noise model (a ``PowerLawFit``, a ``ClockModel`` or an
-    ``{α: h_α}`` mapping, which needs ``tau0``) it is predicted, with each noise
-    type's share in ``budget``; ``train`` is then required.
+    ``holdover(record, ...)`` measures it on the record, at every start the
+    record allows. A line is fitted to ``train`` seconds of phase, or a
+    parabola with ``drift=True``. From the last reading of the stretch the
+    clock is left to run on the fitted frequency and drift for each ``tau``,
+    and the error is what the record then shows. The stretch moves on by one
+    sample, as in the test of Delporte et al. (2000). With ``anchor=False``
+    the value of the fit takes the place of the last reading, which is the
+    extrapolated fit of that paper. ``nan`` samples are gaps.
 
     ``grow=k`` in place of ``train`` makes the stretch k times each holdover
-    time. At 2 (3 with ``drift``) the test is the sibling of ``tdev``
-    (``htdev``): √6 TDEV (√20 HTDEV) is the error of the same extrapolation
-    made from τ-averages of the phase, which this test equals at τ₀ and
-    exceeds by a constant 1.26 to 1.42 on FM noise.
+    time. At 2, or 3 with ``drift``, the test is the counterpart of the time
+    deviations: √6 ``tdev`` is the RMS error of extrapolating the next
+    τ-average of the phase from the two before it, and √20 ``htdev`` that of
+    the next from the three before it. The test equals them at τ₀, and on FM
+    noise it reads 1.22 to 1.42 times as much at long τ.
 
-    With a record and a ``ClockModel``, the Kalman filter for that model is the
-    predictor: it runs once over the record, and from every sample past
-    ``train`` seconds its estimate is carried ``tau`` ahead with no readings.
-    ``claimed`` is then the filter's own standard deviation for the error;
-    ``drift``, ``anchor`` and ``grow`` do not apply."""
+    ``holdover(record, model)`` is the same test with the Kalman filter for a
+    ``ClockModel`` as the predictor. The filter runs once over the record, and
+    at every sample past the first ``train`` seconds its estimate is carried
+    ``tau`` ahead without further readings. ``claimed`` is the standard
+    deviation that the filter itself gives the error, and ``rms`` agrees with
+    it when the model fits the clock. ``drift``, ``anchor`` and ``grow`` do
+    not apply.
+
+    ``holdover(model, train=...)`` predicts the test from a noise model: a
+    ``PowerLawFit``, a ``NoiseFit``, a ``ClockModel``, or a mapping of h_α keyed
+    by α or by noise type, which needs ``tau0``. ``budget`` holds the share of
+    each noise type. ``train`` has no default here, and ``grow`` needs
+    ``tau``.
+
+    ``train`` is a whole multiple of τ₀, by default a quarter of the record.
+    ``tau`` holds the holdover times in seconds, rising whole multiples of τ₀,
+    by default octave multiples of τ₀. ``limit`` is a time error in seconds:
+    ``time_to_limit`` is then the holdover time at which the quantile at
+    ``confidence`` reaches it.
+    """
     kw: dict[str, Any] = {"confidence": float(confidence)}
     if model is None:
         kw |= {"drift": bool(drift), "anchor": bool(anchor)}
@@ -422,7 +519,7 @@ def holdover(
         tau0 = getattr(data, "tau0", None)
     if tau0 is not None:
         kw["tau0"] = float(tau0)
-    r = jl.holdover(data._jl() if isinstance(data, ClockModel) else powerlaw_to_jl(data), **kw)
+    r = jl.holdover(_noise_model_to_jl(data), **kw)
     return HoldoverPrediction(
         np_f64(r.tau),
         np_f64(r.sigma),
@@ -441,8 +538,17 @@ def holdover(
 
 @_map_errors
 def innovation_check(kf: KalmanResult, *, confidence: float = 0.95) -> dict:
-    """Whether the model fits: the NIS mean against its χ² interval and the lag-1
-    autocorrelation of the normalized innovations, with ``ok`` when both pass."""
+    """Test of the model against the record, from the innovations of the filter.
+
+    Under the model the normalized innovations are independent, with zero mean
+    and unit variance. Returns a dict with ``nis``, the mean of their squares,
+    and ``nis_bounds``, its χ² interval at ``confidence``; ``acf``, their
+    lag-1 autocorrelation, and ``acf_bound``, the bound on its magnitude; and
+    ``ok``, whether both are inside. A mean above the interval says that the
+    noise of the model is too low. Both intervals narrow as 1/√n, so on a long
+    record the test fails a model that departs a little from the noise and
+    still predicts well.
+    """
     c = jl.innovation_check(kf._jl, confidence=float(confidence))
     return {
         "nis": float(c.nis),
@@ -457,7 +563,11 @@ def innovation_check(kf: KalmanResult, *, confidence: float = 0.95) -> dict:
 def prediction_error(
     kf: KalmanResult, data: PhaseData, horizons: Sequence[int], *, burnin: int = 0
 ) -> np.ndarray:
-    """RMS error (s) of the filter's phase extrapolation each horizon (samples) ahead."""
+    """RMS error, in seconds, of the predictions of the readings ``horizons`` samples
+    ahead. From the estimate at each sample past ``burnin`` the state is carried
+    forward, and the reading it predicts is compared with the reading there, so
+    the error holds the noise of that reading as well as the clock's. ``kf`` is
+    the run of the filter over ``data``, not a smoothed one."""
     return np_f64(
         jl.prediction_error(kf._jl, to_jl_data(data), to_jl_ints(horizons), burnin=int(burnin))
     )
@@ -471,18 +581,34 @@ def tune_q(
     horizons: Sequence[int] = (10, 100, 1000),
     decades: float = 2,
     points: int = 9,
+    burnin: int | None = None,
 ) -> dict:
-    """Retune the white and random-walk FM levels on a log grid for the smallest
-    phase prediction error; returns ``model``, the grid axes ``q1``, ``q2``, the
-    ``cost`` surface, the factor ``scale`` on every level of the model (the mean
-    square of its normalized innovations) and ``edge``, whether the best pair
-    lies on the edge of the grid."""
+    """Retune the white FM and random-walk FM levels of ``m`` for prediction.
+
+    The filter is run for every pair of levels on a logarithmic grid of
+    ``points`` values that spans ``decades`` decades either side of ``m.q1``
+    and ``m.q2``, and the pair is kept whose predictions ``horizons`` samples
+    ahead have the smallest sum of the logarithms of their RMS errors. Every
+    level of that model is then multiplied by one factor, the mean square of
+    the normalized innovations of its filter past the burn-in, which is the
+    factor of largest likelihood (Tryon and Jones 1983, Eq. (5.1)).
+    ``burnin`` is the number of samples at the start left out of the error
+    and of the factor, a tenth of the record by default.
+
+    Returns a dict with ``model``, the tuned model; ``q1`` and ``q2``, the two
+    grid axes; ``cost``, with one row for each ``q1`` and one column for each
+    ``q2``; ``scale``, the factor on the levels; and ``edge``, whether the
+    best pair lies on the edge of the grid, where a larger ``decades`` is
+    called for.
+    """
+    kw = {} if burnin is None else {"burnin": int(burnin)}
     r = jl.tune_q(
         to_jl_data(data),
         m._jl(),
         horizons=to_jl_ints(horizons),
         decades=float(decades),
         points=int(points),
+        **kw,
     )
     return {
         "model": _model_from_jl(r.model),
@@ -498,7 +624,9 @@ def tune_q(
 def simulate_clock(
     m: ClockModel, n: int, *, rng: int | None = None
 ) -> tuple[PhaseData, np.ndarray]:
-    """A phase record of ``n`` samples from ``m`` and its true states."""
+    """A phase record of ``n`` samples drawn from clock model ``m``, with the true
+    states behind it: one row per sample and the columns of ``KalmanResult.x``.
+    ``rng`` is an integer seed for a reproducible record."""
     d, x = jl.simulate_clock(m._jl(), int(n), **_rng(rng))
     return data_from_jl(d), _mat(x)
 
@@ -508,12 +636,17 @@ def simulate_clock(
 
 @dataclass(frozen=True)
 class SteeringGains:
-    """Gains of a steering loop (Matsakis 2019). Every ``interval`` seconds the
-    frequency of the clock is changed by
-    −(``phase``·p̂ + ``frequency``·ŷ + ``integral``·Σp̂), with p̂ and ŷ the Kalman
-    estimates of its phase and frequency against the reference and Σp̂ the sum of
-    the phase estimates at the steers so far. ``phase`` and ``integral`` are in
-    1/s. Build them with ``steering_gains``."""
+    """Gains of a steering loop. Every ``interval`` seconds the frequency of the
+    clock is changed by −(``phase``·p̂ + ``frequency``·ŷ + ``integral``·Σp̂), with
+    p̂ and ŷ the Kalman estimates of its phase and frequency against the
+    reference and Σp̂ the sum of the phase estimates at the steers so far, this
+    one included.
+
+    ``phase`` and ``frequency`` are the gains g₁ and g₂ of Matsakis (2019), and
+    ``integral`` is the integral gain of Matsakis (2020). ``phase`` and
+    ``integral`` are in 1/s. Build the gains with :func:`steering_gains` or
+    :func:`lqg_gains`.
+    """
 
     phase: float
     frequency: float
@@ -534,10 +667,16 @@ def _gains_from_jl(g: Any) -> SteeringGains:
 def steering_gains(
     T: float | Sequence[complex], interval: float, *, integral: bool = False
 ) -> SteeringGains:
-    """Gains by pole placement. A time constant ``T`` (s) puts the poles together
-    at exp(−interval/T): a critically damped loop, with three gains when
-    ``integral``. A sequence in place of ``T`` is the poles themselves in the
-    z-plane, two or three, complex ones in conjugate pairs."""
+    """Gains of a steering loop by pole placement.
+
+    A time constant ``T``, in seconds, gives a critically damped loop: its
+    poles sit together at exp(−interval/T), and a disturbance dies away as
+    exp(−t/T) without ringing. The gains are those of Matsakis (2019,
+    Eqs. (3.10)–(3.11)) and, with ``integral=True`` and three poles, of
+    Matsakis (2020, Eqs. (3.15)–(3.17)). A sequence in place of ``T`` holds
+    the poles themselves in the z-plane: two for phase and frequency gains,
+    three with an integral gain, complex ones in conjugate pairs.
+    """
     if np.ndim(T) == 0:
         return _gains_from_jl(jl.steering_gains(float(T), float(interval), integral=bool(integral)))
     poles = juliacall.convert(_VecC64, [complex(z) for z in T])
@@ -548,10 +687,16 @@ def steering_gains(
 def lqg_gains(
     interval: float, *, phase: float, frequency: float = 0.0, steer: float
 ) -> SteeringGains:
-    """Gains that minimize the sum over the steers of ``phase``·p² +
-    ``frequency``·f² + ``steer``·u², the linear quadratic Gaussian design
-    (Koppang & Leland 1999). Only the ratios of the weights matter; a heavier
-    ``steer`` weight is a slower loop."""
+    """Gains of the steering loop that minimizes the sum over the steers of
+    ``phase``·p² + ``frequency``·f² + ``steer``·u²: the linear quadratic Gaussian
+    design of Koppang and Leland (1999), with p and f the phase and frequency
+    of the clock against its reference and u the steer.
+
+    The gains do not depend on the noise of the clock or of the readings, and
+    only the ratios of the weights matter. A small ``steer`` weight takes out
+    the whole estimated error in one steer, and a large one gives a slow loop.
+    The design has no integral gain.
+    """
     return _gains_from_jl(
         jl.lqg_gains(
             float(interval), phase=float(phase), frequency=float(frequency), steer=float(steer)
@@ -561,9 +706,11 @@ def lqg_gains(
 
 @_map_errors
 def steering_poles(g: SteeringGains) -> dict:
-    """Where the gains put the poles of the closed loop: ``poles`` (complex), the
-    ``time_constants`` (s) of their decay, the ``frequencies`` (Hz) they ring at,
-    and ``stable``, whether all are inside the unit circle."""
+    """Where the gains put the poles of the closed loop (Matsakis 2019; Matsakis
+    2020). Returns a dict with ``poles``, complex; ``time_constants``, for each
+    pole the T (s) of its decay exp(−t/T), negative for a pole that grows;
+    ``frequencies``, the frequency (Hz) that each pole rings at; and
+    ``stable``, whether every pole is inside the unit circle."""
     p = jl.steering_poles(g._jl())
     return {
         "poles": np.array(p.poles, dtype=np.complex128),
@@ -575,10 +722,11 @@ def steering_poles(g: SteeringGains) -> dict:
 
 @dataclass(frozen=True)
 class SteeringResult:
-    """Return type of ``steer`` on a record: ``steered`` is the record as the
-    loop would have left it, ``steers`` the frequency steer made at each sample,
-    ``correction`` their running sum, and ``phase`` / ``frequency`` the filter's
-    estimates of the steered clock."""
+    """Result of :func:`steer` on a record. ``steered`` is the record as the loop
+    would have left it: each reading plus the phase that the steers had added
+    by then. ``steers`` is the frequency steer made at each sample, zero
+    between steers, and ``correction`` their sum so far. ``phase`` and
+    ``frequency`` are the filter's estimates of the steered clock."""
 
     gains: SteeringGains
     steered: PhaseData
@@ -590,9 +738,10 @@ class SteeringResult:
 
 @dataclass(frozen=True)
 class SteeringPrediction:
-    """Return type of ``steer`` on a clock model: the RMS time error ``phase``
-    (s), frequency error ``frequency`` and ``steers`` of the settled loop, and
-    the Allan deviation ``adev`` of the steered clock at ``tau`` (s)."""
+    """Result of :func:`steer` on a clock model, the steady state of the loop: the
+    RMS time error ``phase`` (s) of the steered clock against its reference,
+    its RMS frequency error ``frequency``, the RMS frequency steer ``steers``,
+    and the Allan deviation ``adev`` of the steered clock at ``tau`` (s)."""
 
     gains: SteeringGains
     phase: float
@@ -611,16 +760,23 @@ def steer(
     tau: Sequence[float] | None = None,
     readings: bool = False,
 ) -> SteeringResult | SteeringPrediction:
-    """Steer a clock to its reference with the Kalman filter for ``model`` and
-    the gains of ``steering_gains``.
+    """Steer a clock to its reference with the Kalman filter for ``model`` and the
+    gains of :func:`steering_gains` or :func:`lqg_gains`.
 
-    ``steer(data, model, gains)`` replays the phase record of the free-running
-    clock against the reference through the loop. ``steer(model, gains)``
-    predicts the steady state of the loop from the model alone, for a steer at
-    every sample; ``tau`` sets the averaging times of its Allan deviation. The
-    prediction is for the clock itself; with ``readings`` its ``phase`` and
-    ``adev`` are those of the readings, with their noise, as a steered record
-    shows them."""
+    ``steer(data, model, gains)`` replays a record through the loop. ``data``
+    is the phase of the free-running clock against the reference. The filter
+    follows the clock, and every ``gains.interval`` seconds, a whole multiple
+    of the sample interval, the frequency of the clock is changed as
+    ``SteeringGains`` states (Koppang and Leland 1999; Matsakis 2019).
+
+    ``steer(model, gains)`` gives the steady state that the loop settles to on
+    a clock with the noise of ``model``, for a steer at every sample
+    (Matsakis 2019; Matsakis 2020). ``tau`` sets the averaging times of its
+    Allan deviation. The figures are for the clock itself; with
+    ``readings=True`` its ``phase`` and ``adev`` are those of the readings,
+    with their noise, as a steered record shows them. Random-run FM has no
+    steady state.
+    """
     if isinstance(data, ClockModel):
         if gains is not None or not isinstance(model, SteeringGains):
             raise TypeError("steer: pass (data, model, gains) or (model, gains)")
@@ -652,8 +808,18 @@ def steer(
 
 @dataclass(frozen=True)
 class ClockComparisons:
-    """Several clocks read against one reference: column ``i`` of ``x`` is clock i
-    minus the reference (s), ``nan`` where a reading is missing."""
+    """Phase readings of several clocks against one reference, taken at the same
+    instants: the input of :func:`timescale`.
+
+    Column ``i`` of ``x`` is clock i minus the reference, in seconds, with one
+    row per sample and ``nan`` where a reading is missing. The reference may
+    be one of the clocks, whose column is then zero, or an outside one.
+    ``names`` holds one name per clock, ``"clock 1"``, ``"clock 2"``, … by
+    default, and ``reference`` says what the clocks were read against.
+    ``cc[i]`` is the record of clock i as ``PhaseData``, and ``cc[i, j]`` the
+    difference clock i − clock j, in which the reference cancels; both count
+    from 0.
+    """
 
     x: np.ndarray
     tau0: float
@@ -678,7 +844,7 @@ class ClockComparisons:
         )
 
     def __getitem__(self, ij: int | tuple[int, int]) -> PhaseData:
-        """``cc[i]`` one clock against the reference, ``cc[i, j]`` clock i − clock j (0-based)."""
+        """``cc[i]``, one clock against the reference, or ``cc[i, j]``, clock i − clock j."""
         if isinstance(ij, tuple):
             i, j = ij
             return PhaseData(
@@ -697,9 +863,16 @@ def _comparisons_from_jl(c: Any) -> ClockComparisons:
 def simulate_ensemble(
     models: Sequence[ClockModel], n: int, *, reference: int | None = 0, rng: int | None = None
 ) -> tuple[ClockComparisons, np.ndarray]:
-    """Clocks drawn from ``models`` and read against member ``reference`` (0-based)
-    or, with ``reference=None``, a perfect outside reference; returns
-    the comparisons and the true states ``truth[k, state, clock]``."""
+    """``n`` samples of an ensemble in which clock i follows ``models[i]``, with the
+    true states behind the readings.
+
+    Each clock is read against clock ``reference``, counted from 0, whose own
+    column is zero, or with ``reference=None`` against a perfect outside
+    reference. Returns the comparisons and the true states ``truth[k, s, i]``
+    of clock i at sample k against true time: phase (s = 0), frequency (1)
+    and, for a model with drift, drift (2). ``rng`` is an integer seed for a
+    reproducible ensemble.
+    """
     ms = juliacall.convert(_VecModel, [m._jl() for m in models])
     cc, truth = jl.simulate_ensemble(
         ms, int(n), reference=0 if reference is None else int(reference) + 1, **_rng(rng)
@@ -711,12 +884,18 @@ def simulate_ensemble(
 def clock_models(
     cc: ClockComparisons, *, alphas: Sequence[int] | None = None, flicker: bool = False
 ) -> list[ClockModel]:
-    """One ``ClockModel`` per clock, fitted from the comparisons alone (three or
-    more clocks): each clock's Allan deviation from the Groslambert covariance,
-    then a power-law fit with the components ``alphas`` (by default Julia's:
-    white and flicker PM, white FM and random-walk FM), the flicker PM folded
-    into ``R``. With ``flicker=True`` flicker FM joins the fit and both flickers
-    are kept as Markov states where they matter."""
+    """One ``ClockModel`` per clock, fitted from the comparisons alone, for the
+    Kalman time scales of :func:`timescale`. This takes three or more clocks.
+
+    The Allan deviation of each clock is separated from the others' by the
+    Groslambert covariance of the clock differences (``groslambert``), in
+    which the reference cancels. ``powerlaw_fit`` fits the components
+    ``alphas`` to that curve, and :func:`clock_model` turns the fit into a
+    model. The default components are white PM, flicker PM, white FM and
+    random-walk FM, and the flicker PM is folded into ``R``. With
+    ``flicker=True``, flicker FM joins the fit and each model keeps its
+    flicker FM and flicker PM as Markov states.
+    """
     kw: dict[str, Any] = {} if alphas is None else {"alphas": to_jl_ints(alphas)}
     if flicker:
         kw["flicker"] = True
@@ -725,11 +904,19 @@ def clock_models(
 
 @dataclass(frozen=True)
 class TimescaleResult:
-    """Return type of ``timescale``: each clock minus the scale (``x``), its
-    estimated frequency (``y``), its weight (rows sum to 1), its prediction
-    error (``nan`` without a reading) and its phase as the algorithm estimated
-    it (``xhat``: the filter's phase state for the Kalman scales, where ``x`` is
-    read at the pivot; equal to ``x`` for the others), one column per clock."""
+    """Result of :func:`timescale`, with one row per sample and one column per
+    clock.
+
+    ``x`` is each clock minus the scale (s), ``y`` its frequency against the
+    scale as the algorithm estimated it, ``weights`` its weight and ``error``
+    its prediction error (s), ``nan`` where it had no reading. ``xhat`` is its
+    phase against the scale as the algorithm estimated it: the phase state of
+    the filter for the Kalman scales, where ``x`` is read at the pivot, and
+    ``x`` itself for the others.
+
+    The weights of a sample sum to 1. ``"jones_tryon"`` defines none, and its
+    weights are ``nan``. :func:`timescale_phase` gives the scale itself.
+    """
 
     algorithm: str
     comparisons: ClockComparisons
@@ -758,27 +945,67 @@ def timescale(
     models: Sequence[ClockModel] | None = None,
     pivot: int = 0,
     steps: bool | str = False,
+    step_threshold: float = 5.0,
+    lmax: int | None = None,
+    step_inflate: float = 4.0,
 ) -> TimescaleResult:
-    """Form a timescale from the clocks in ``cc``: ``"ewfa"`` weighs every clock the
-    same (Kettering 2023, section 3.1),
-    ``"at1"`` follows Weiss & Weissert 1991, ``"at2"`` adds their Kalman
-    frequency update, and ``"greenhall"`` runs
-    Greenhall's Kalman timescale (reduced Kalman at ``R = 0``, IEMx above) on
-    one ``ClockModel`` per clock in ``models``, read at clock ``pivot``
-    (0-based, default 0); ``"jones_tryon"`` is the same filter without the
-    covariance reduction, and ``"stein"`` is Stein's Kalman timescale (Stein 2003;
-    KAS-2 with ``wmax``) on the same models.
+    """A time scale from the clocks of ``cc``: the phase and frequency of each
+    clock against the scale, and its weight, at every sample.
 
-    AT1 and AT2 options: ``tau_min`` (each clock's τ_min in seconds, a number or one per
-    clock; default estimated from the record), ``memory`` (the variance time
-    constant in seconds, default 20 days, at most a quarter of the record),
-    ``bias`` (``"paper"`` or ``"exact"``), ``wmax`` (largest weight) and
-    ``outlier`` (reject a clock whose error passes that many ε; default off).
-    ``steps`` (AT2 only) detects clock frequency steps: ``"best"`` (or ``True``)
-    recomputes the scale from the step, ``"real"`` keeps the values already
-    issued and corrects forward.
+    ``algorithm`` is one of
+
+    - ``"ewfa"``: equal-weights frequency averaging (Kettering 2023, §3.1);
+    - ``"at1"``: the NIST AT1 scale as Weiss and Weissert (1991) give it, with
+      weights from the prediction errors of the clocks;
+    - ``"at2"``: AT1 with the frequency of each clock from a Kalman filter,
+      from the same paper;
+    - ``"greenhall"``: one Kalman filter over all the clocks with the
+      covariance reduction of Greenhall (2003), and with noise on the readings
+      the IEMx algorithm of Greenhall (2006);
+    - ``"jones_tryon"``: the same filter without the reduction (Jones and
+      Tryon 1983), for which no weights are reported;
+    - ``"stein"``: the scale of Stein (2003), which Levine (2012) describes as
+      KAS-2, with a Kalman filter for the difference of each clock from the
+      pivot.
+
+    The first three learn what they need from the comparisons. The last three
+    take one ``ClockModel`` per clock in ``models``, which :func:`clock_models`
+    fits from ``cc``, and are read at clock ``pivot``, counted from 0.
+
+    For ``"at1"`` and ``"at2"``, ``tau_min`` is the averaging time in seconds
+    at which the Allan deviation of a clock is smallest, one number or one per
+    clock, estimated from the record by default. ``memory`` is the time
+    constant in seconds of the average behind the weights, 20 days by default
+    and a quarter of the record where that is shorter. ``bias`` is ``"paper"``
+    or ``"exact"``, the correction for a clock being part of the scale that it
+    is compared with. ``outlier`` leaves a clock out of a sample when its
+    prediction error is more than that many times its ε from the median error
+    of the clocks read, and is off by default. ``wmax`` is the largest weight
+    that a clock may take in ``"at1"``, ``"at2"`` and ``"stein"``.
+
+    ``steps``, for ``"at2"``, looks for steps in the frequency of each clock,
+    after Weiss and Weissert (1991, §4): ``"best"``, or ``True``, forms the
+    scale again from the step on, and ``"real"`` keeps the values already
+    issued and corrects those that follow. ``step_threshold`` is the number of
+    standard deviations that a frequency difference must pass to count as a
+    step. ``lmax`` is one more than the longest window of the test, in
+    intervals, by default τ_min over the interval for each clock and at least
+    4. ``step_inflate`` is the factor on the error variance of a clock when it
+    returns after a step.
+
+    The documentation of the Julia function gives the equations of each scale,
+    what each does with a clock that drops out and returns, and where each
+    departs from its source.
     """
-    kw = {"algorithm": jl.Symbol(str(algorithm)), "bias": jl.Symbol(str(bias)), "wmax": float(wmax)}
+    kw = {
+        "algorithm": jl.Symbol(str(algorithm)),
+        "bias": jl.Symbol(str(bias)),
+        "wmax": float(wmax),
+        "step_threshold": float(step_threshold),
+        "step_inflate": float(step_inflate),
+    }
+    if lmax is not None:
+        kw["lmax"] = int(lmax)
     if models is not None:
         kw["pivot"] = int(pivot) + 1
         kw["models"] = juliacall.convert(_VecModel, [m._jl() for m in models])
@@ -801,8 +1028,14 @@ def timescale(
 
 
 def timescale_phase(r: TimescaleResult) -> PhaseData:
-    """The scale against the comparisons' reference, ready for ``adev`` and the
-    other estimators; ``nan`` where no clock was read."""
+    """The reference of the comparisons against the scale, as a phase record for
+    the usual stability analysis; ``nan`` where no clock was read.
+
+    Its deviations are those of the scale as far as the reference is the more
+    stable of the two. Against the ideal reference of ``simulate_ensemble``
+    with ``reference=None`` it is the error of the scale, with the sign
+    reversed.
+    """
     c = r.comparisons.x
     ok = np.isfinite(c)
     first = ok.argmax(axis=1)
@@ -812,13 +1045,21 @@ def timescale_phase(r: TimescaleResult) -> PhaseData:
 
 
 def implicit_mean(r: TimescaleResult, truth: np.ndarray) -> PhaseData:
-    """The implicit ensemble mean of a ``"greenhall"`` scale against true time, in
-    simulation: the weighted mean ``Σ aᵢ (xᵢ − x̂ᵢ)`` of the corrected clocks, each
-    clock's true phase (``truth`` as from ``simulate_ensemble``) less the filter's
-    estimate ``r.xhat`` (Greenhall 2006, Eqs. (3.8) and (3.13)). Its stability is
-    the scale's own, free of any clock's reading noise."""
+    """The implicit ensemble mean of a ``"greenhall"`` scale against true time, for
+    a simulated ensemble whose true phases are known.
+
+    It is the weighted mean Σ aᵢ·(xᵢ − x̂ᵢ) of the corrected clocks: the true
+    phase of each clock, from the ``truth`` of :func:`simulate_ensemble`, less
+    the filter's estimate of it, ``r.xhat``, with the weights of the scale
+    (Greenhall 2006, Eqs. (3.8) and (3.13)). The mean carries the reading
+    noise of no clock, so its stability is that of the scale itself. A
+    measurement cannot give it: :func:`timescale_phase` reads the scale at one
+    clock and adds the noise of that clock's reading.
+    """
     if r.algorithm != "greenhall":
-        raise ValueError(f"implicit_mean: the implicit mean belongs to greenhall, not {r.algorithm}")
+        raise ValueError(
+            f"implicit_mean: the implicit mean belongs to greenhall, not {r.algorithm}"
+        )
     truth = np.asarray(truth, dtype=np.float64)
     if truth.ndim != 3 or (truth.shape[0], truth.shape[2]) != r.weights.shape:
         raise ValueError(
@@ -843,6 +1084,13 @@ __all__ = [
     "HoldoverResult",
     "HoldoverPrediction",
     "holdover",
+    "SteeringGains",
+    "steering_gains",
+    "lqg_gains",
+    "steering_poles",
+    "SteeringResult",
+    "SteeringPrediction",
+    "steer",
     "innovation_check",
     "prediction_error",
     "tune_q",

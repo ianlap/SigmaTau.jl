@@ -48,6 +48,7 @@ def test_flicker_states_match_julia(jl):
     )
     np.testing.assert_array_equal(st.process_noise(m, 1.0), np.array(jl.process_noise(direct, 1.0)))
     assert st.clock_model(h, tau0=1.0, flicker=False).flicker_fm == 0  # left out on request
+    assert st.clock_model(h, tau0=1.0, pm_band=(2.0, 50.0)).pm_band == (2.0, 50.0)  # as given
     assert st.ClockModel(1.0, flicker_fm=1e-26, tau_max=1e3).fm_band == (1.0, 1000.0)
     with pytest.raises(ValueError):
         st.ClockModel(1.0, fm_band=(10.0, 100.0))  # a band without its flicker
@@ -78,6 +79,13 @@ def test_clock_model_of_a_fit_matches_julia(jl):
     direct = jl.clock_model(jl.powerlaw_fit(_convert.to_jl_data(p)))
     assert m.fm_band == tuple(direct.fm_band) and 1 < m.fm_band[1] <= fit.x.max()
     np.testing.assert_array_equal(st.process_noise(m, 1.0), np.array(jl.process_noise(direct, 1.0)))
+    # A band that is given replaces the one drawn from the fit.
+    b = st.clock_model(fit, fm_band=(10.0, 100.0))
+    direct = jl.seval("d -> clock_model(powerlaw_fit(d); fm_band=(10.0, 100.0))")(
+        _convert.to_jl_data(p)
+    )
+    assert b.fm_band == tuple(direct.fm_band) == (10.0, 100.0)
+    np.testing.assert_array_equal(st.process_noise(b, 1.0), np.array(jl.process_noise(direct, 1.0)))
     # A fit of spectrum points has no sample interval of its own.
     points = st.powerlaw_fit([1e-3, 1e-2, 1e-1], [3e-24, 2.1e-24, 2.01e-24], alphas=(0, -1))
     assert st.clock_model(points, tau0=1.0).q1 == pytest.approx(1e-24)
@@ -85,12 +93,17 @@ def test_clock_model_of_a_fit_matches_julia(jl):
         st.clock_model(points)
 
 
-def test_noise_fit_builds_and_undoes():
+def test_noise_fit_builds_and_undoes(jl):
     r = st.adev(st.noise_gen(st.PhaseData, 4096, 1.0, h={0: 1e-24}, rng=3))
     f = st.noise_fit(r).add_component("WHFM", slice(0, 6))
     ((alpha, h, lo, hi),) = f.components
     assert (alpha, lo, hi) == (0, r.tau[0], r.tau[5]) and h == pytest.approx(1e-24, rel=0.2)
     assert st.clock_model(f).q1 == pytest.approx(h / 2)
+    # The fit is a noise model for the holdover prediction, as in Julia.
+    np.testing.assert_array_equal(
+        st.holdover(f, train=256, tau=[16, 64]).sigma,
+        np.array(jl.holdover(f._jl, train=256, tau=_convert.to_jl_f64([16, 64])).sigma),
+    )
     assert f.residual().shape == r.tau.shape
     assert f.undo().components == []
     with pytest.raises(ValueError):
@@ -112,6 +125,9 @@ def test_kalman_filter_matches_julia(clock, jl):
     assert st.prediction_error(kf, data, [1, 10]).shape == (2,)
     t = st.tune_q(data, m, points=3)
     assert t["cost"].shape == (3, 3) and t["model"].R == pytest.approx(t["scale"] * m.R)
+    b = st.tune_q(data, m, points=3, burnin=500)
+    direct = jl.tune_q(_convert.to_jl_data(data), m._jl(), points=3, burnin=500)
+    assert b["scale"] == float(direct.scale) != t["scale"]
 
 
 def test_holdover_matches_julia(clock, jl):
@@ -221,6 +237,25 @@ def test_timescale_matches_julia(jl):
     np.testing.assert_allclose(rk.weights[-1], w / w.sum(), rtol=0.02)
     with pytest.raises(ValueError):
         st.timescale(cc, algorithm="at3")
+
+
+@pytest.fixture(scope="module")
+def stepped():
+    """Three clocks, the second with a frequency step of 3e-12 from sample 2000."""
+    models = [st.ClockModel(1.0, q1=q, q2=1e-6 * q) for q in (1e-24, 4e-24, 1.6e-23)]
+    cc, _ = st.simulate_ensemble(models, 4000, reference=None, rng=1)
+    x = cc.x.copy()
+    x[2000:, 1] += 3e-12 * np.arange(2000)
+    return st.ClockComparisons(x, 1.0)
+
+
+@pytest.mark.parametrize("kw", [{"step_threshold": 50.0}, {"lmax": 6}, {"step_inflate": 16.0}])
+def test_at2_step_keywords_match_julia(stepped, kw, jl):
+    at2 = jl.seval("(c; kw...) -> timescale(c; algorithm=:at2, steps=:best, kw...)")
+    r = st.timescale(stepped, algorithm="at2", steps="best", **kw)
+    np.testing.assert_array_equal(r.weights, np.array(at2(stepped._jl(), **kw).weights))
+    default = st.timescale(stepped, algorithm="at2", steps="best")
+    assert not np.array_equal(r.weights, default.weights)
 
 
 def test_clock_models_and_implicit_mean_match_julia(jl):

@@ -38,6 +38,33 @@ def test_read_data_instrument_files():
     assert isinstance(gps, st.FrequencyData) and gps.tau0 == 1.0
 
 
+def test_delim_reaches_julia(tmp_path, jl):
+    cols = tmp_path / "columns.txt"
+    cols.write_text("0;1.0e-9\n1;2.5e-9\n2;2.0e-9\n3;4.0e-9\n")
+    x = np.array(jl.seval("p -> read_phase(p; delim=';').x")(str(cols)))
+    assert x.tolist() == [1.0e-9, 2.5e-9, 2.0e-9, 4.0e-9]
+    np.testing.assert_array_equal(st.read_phase(str(cols), delim=";").x, x)
+    np.testing.assert_array_equal(st.read_frequency(str(cols), delim=";").y, x)
+    table = tmp_path / "table.txt"
+    table.write_text("time (s);phase (ns)\n0;1.0\n1;2.5\n2;2.0\n3;4.0\n")
+    assert st.detect_format(str(table)) == "columns"
+    assert st.detect_format(str(table), delim=";") == "table"
+    np.testing.assert_array_equal(
+        st.read_data(str(table), delim=";").x,
+        np.array(jl.seval("p -> read_data(p; delim=';').x")(str(table))),
+    )
+    with pytest.raises(ValueError):
+        st.read_phase(str(cols), delim=";;")
+
+
+def test_keep_zeros_reads_the_zeros_of_a_stable32_file(tmp_path):
+    phd = tmp_path / "zeros.phd"
+    phd.write_text("1.0e-9\n0.0\n3.0e-9\n0.0\n5.0e-9\n")
+    gaps = np.isnan(st.read_data(str(phd), tau0=1.0).x)
+    assert np.flatnonzero(gaps).tolist() == [1, 3]  # a zero is a missing sample
+    assert st.read_data(str(phd), tau0=1.0, keep_zeros=True).x.tolist() == [1e-9, 0, 3e-9, 0, 5e-9]
+
+
 def test_detrend_changes_values_preserves_n_and_source(small_phase):
     det = st.detrend(small_phase, method="linear")
     assert not np.array_equal(det.x, small_phase.x)

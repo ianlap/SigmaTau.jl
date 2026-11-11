@@ -1,9 +1,9 @@
-"""File IO, detrending, gap filling, outliers, and result round-trip — mirrors ``io/``.
+"""Reading and writing files, and cleaning records.
 
-Readers ingest raw phase/frequency tables into ``PhaseData``/``FrequencyData``
-(carrying the file path in ``source``); ``detrend``/``fillgaps``/``remove_outliers``
-return cleaned records; ``save``/``load`` round-trip results, suites and records
-through SigmaTau's self-describing text format.
+The readers return a ``PhaseData`` or ``FrequencyData`` record that carries the
+path of its file as ``source``. ``detrend``, ``fillgaps`` and
+``remove_outliers`` return a cleaned copy of a record, and ``save`` and
+``load`` write and read records, results and suites as text.
 """
 
 from __future__ import annotations
@@ -17,14 +17,15 @@ from ._convert import (
     result_to_jl,
     suite_from_jl,
     suite_to_jl,
+    to_jl_char,
     to_jl_data,
 )
-from ._julia import _char, _map_errors, jl
+from ._julia import _map_errors, jl
 from .types import FrequencyData, PhaseData, StabilityResult, StabilitySuite
 
 
 def _read_kwargs(tau0, time_col, value_col, header, delim, scaling, detrend, fillgaps) -> dict:
-    """Reader keyword arguments for Julia: ``None`` ``tau0``/``delim`` are omitted."""
+    """Reader keywords for Julia; a ``tau0`` or ``delim`` of ``None`` is left out."""
     kwargs = {
         "time_col": int(time_col),
         "value_col": int(value_col),
@@ -36,7 +37,7 @@ def _read_kwargs(tau0, time_col, value_col, header, delim, scaling, detrend, fil
     if tau0 is not None:
         kwargs["tau0"] = float(tau0)
     if delim is not None:
-        kwargs["delim"] = _char(str(delim))
+        kwargs["delim"] = to_jl_char(delim)
     return kwargs
 
 
@@ -53,14 +54,26 @@ def read_phase(
     detrend: str = "none",
     fillgaps: bool = False,
 ) -> PhaseData:
-    """Read a phase-data file into a :class:`PhaseData` (carrying ``path`` in ``source``).
+    """Read a text file of numeric columns as a ``PhaseData`` record: one sample on
+    each line, in seconds, in column ``value_col``, with its time in column
+    ``time_col``. A file with a single column is read as the samples alone.
 
-    ``tau0`` is auto-resolved from a ``# tau0:`` comment header or the time column
-    (median Δt) when omitted, and required when ``time_col=0`` with neither
-    fallback. ``time_col``/``value_col`` are 1-based; ``delim`` is auto-detected
-    (``,`` for .csv, tab for .tsv, whitespace otherwise). ``scaling`` multiplies
-    the samples; ``detrend`` ∈ {none, mean, endpoint, linear, quadratic};
-    ``fillgaps`` equispaces on the min spacing and Howe-imputes NaNs.
+    Lines that begin with ``#`` at the head of the file are skipped, and the
+    ``# tau0:`` and ``# start:`` lines that :func:`save` writes are read. The
+    sample interval is ``tau0``, else that of the header, else the step of the
+    time column; an error is raised when the file gives none. The time column
+    also places the samples: its steps are fitted to an even grid, and a
+    reading that is missing from the file leaves a ``nan`` sample in its place.
+
+    ``time_col`` and ``value_col`` count from 1, and ``time_col=0`` reads a
+    file without a time column. ``header`` is the number of lines to skip
+    after the leading ``#`` lines, such as a line of column names. ``delim``
+    is the character that separates the fields: by default a tab in a ``.tsv``
+    file whose first line of data holds one, else a comma when that line holds
+    one, else runs of blanks. ``scaling`` multiplies the samples, ``1e-9`` for
+    a file in nanoseconds. ``detrend`` names a trend to remove, one of the
+    methods of :func:`detrend`. ``fillgaps=True`` fills the missing samples
+    with :func:`fillgaps`.
     """
     return data_from_jl(
         jl.read_phase(
@@ -83,11 +96,9 @@ def read_frequency(
     detrend: str = "none",
     fillgaps: bool = False,
 ) -> FrequencyData:
-    """Read a fractional-frequency file into a :class:`FrequencyData`.
-
-    Same keyword arguments and comment-header handling as :func:`read_phase`;
-    only the return type differs. The record carries ``path`` in ``source``.
-    """
+    """Read a text file of numeric columns as a ``FrequencyData`` record of
+    fractional-frequency samples. The header, the time column and the keywords
+    are those of :func:`read_phase`."""
     return data_from_jl(
         jl.read_frequency(
             str(path),
@@ -106,22 +117,54 @@ def read_data(
     nominal: float | None = None,
     kind: str = "auto",
     scaling: float = 1.0,
+    delim: str | None = None,
     fillgaps: bool = False,
+    keep_zeros: bool = False,
 ) -> PhaseData | FrequencyData:
-    """Read a measurement file in any supported layout (TimeLab ``.tim``, Stable32
-    ``.phd``/``.frd``, counter readings, named columns, plain columns).
+    """Read a measurement file and return its record, phase or frequency as the
+    file has it.
 
-    ``format`` is detected by :func:`detect_format` unless given. The record type
-    follows the file; ``kind`` ("phase" / "frequency") overrides it. ``column``
-    picks the clock column of a named-column file, ``nominal`` the nominal
-    frequency (Hz) for readings in Hz. See the Julia ``read_data`` docstring.
+    ``format`` is one of the formats below, or ``"auto"`` to find it with
+    :func:`detect_format`:
+
+    - ``"columns"``: numeric columns, read as :func:`read_phase` reads them by
+      default. The record is phase, or frequency when the median size of the
+      samples is under 10⁻¹¹.
+    - ``"stable32"``: a Stable32 ``.phd`` or ``.frd`` file. A zero is a missing
+      sample, as in Stable32, except the first and the last sample of phase
+      data.
+    - ``"timelab"``: a TimeLab ``.tim`` file with a ``TIC`` block.
+    - ``"counter"``: readings of a counter, one on each line, alone or after a
+      timestamp. Readings of median size under 1 are taken as time intervals
+      in seconds, and larger ones as frequencies in hertz about ``nominal``.
+    - ``"table"``: columns under a line of names, as in a CSV export.
+    - ``"bipm_utc"``: a UTC − UTC(k) file of the BIPM.
+    - ``"rinex_clk"``: a RINEX clock file, of which ``column`` chooses the clock.
+
+    ``tau0`` is the sample interval in seconds, by default that of the header
+    of the file, else that of its timestamps. ``column`` is the clock to read:
+    in a table, the number of its column, counted from 1, or its name; in a
+    RINEX clock file, its position in order of first appearance or its name,
+    such as ``"G08"``. ``nominal`` is the nominal frequency in hertz for
+    readings in hertz, by default the mean reading rounded to four significant
+    figures. ``kind``, ``"phase"`` or ``"frequency"``, sets the type of the
+    record whatever the file suggests. ``scaling`` multiplies the samples
+    after any conversion of units. ``delim`` is the character that separates
+    the fields of a columns, counter or table file. ``fillgaps=True`` fills
+    the missing samples with :func:`fillgaps`, and ``keep_zeros=True`` reads
+    the zeros of a Stable32 file as samples.
+
+    The documentation of the Julia function says how each format is read.
     """
     kwargs = {
         "format": jl.Symbol(str(format)),
         "kind": jl.Symbol(str(kind)),
         "scaling": float(scaling),
         "fillgaps": bool(fillgaps),
+        "keep_zeros": bool(keep_zeros),
     }
+    if delim is not None:
+        kwargs["delim"] = to_jl_char(delim)
     if tau0 is not None:
         kwargs["tau0"] = float(tau0)
     if column is not None:
@@ -132,51 +175,78 @@ def read_data(
 
 
 @_map_errors
-def detect_format(path: str) -> str:
-    """Name a data file's layout: timelab, stable32, counter, table or columns."""
-    return str(jl.detect_format(str(path)))
+def detect_format(path: str, *, delim: str | None = None) -> str:
+    """Name the format of a measurement file from its extension and its first 200
+    lines: ``"timelab"``, ``"stable32"``, ``"bipm_utc"``, ``"rinex_clk"``,
+    ``"counter"``, ``"table"`` or ``"columns"``.
+
+    The tests are made in that order, and the first that holds decides.
+    ``delim`` is the character at which the counter and table tests split a
+    line: by default a comma, or a tab, when the first line of data holds one,
+    and runs of blanks otherwise.
+    """
+    kwargs = {} if delim is None else {"delim": to_jl_char(delim)}
+    return str(jl.detect_format(str(path), **kwargs))
 
 
 @_map_errors
 def detrend(
     data: PhaseData | FrequencyData, *, method: str = "linear"
 ) -> PhaseData | FrequencyData:
-    """Return a new record with a detrended sample vector (the original is untouched).
+    """Copy of a record with a trend removed from its samples.
 
-    ``method`` ∈ {``linear`` (default), ``endpoint``, ``mean``, ``quadratic``, ``none``}.
+    ``method`` is ``"mean"``, ``"endpoint"`` (the line through the first and
+    last samples), ``"linear"`` (a least-squares line), ``"quadratic"`` (a
+    least-squares parabola) or ``"none"``. In phase data a line is a frequency
+    offset and a parabola a linear frequency drift; in frequency data a line
+    is a linear frequency drift (SP1065 §5.18, §5.21 and §5.22). Missing
+    samples stay in place and do not enter the fit.
     """
     return data_from_jl(jl.detrend(to_jl_data(data), method=jl.Symbol(str(method))))
 
 
 @_map_errors
 def fillgaps(data: PhaseData | FrequencyData, *, form: str = "auto") -> PhaseData | FrequencyData:
-    """Fill ``NaN`` samples by the reflection method of Howe and Schlossberger (2022).
+    """Copy of a record with its missing samples (``nan``) filled by the reflection
+    method of Howe and Schlossberger (2022).
 
-    ``form`` is the series that is filled: ``"phase"``, ``"frequency"``, or ``"auto"``
-    to take it from the record's noise. Returns a new record with the same ``tau0``;
-    the measured samples are returned as they came.
+    ``form`` is the series that is filled: ``"phase"``, ``"frequency"``, or
+    ``"auto"`` to choose it from the noise of the record. The measured samples
+    are returned as they came. The paper prescribes neither the series nor the
+    length of its filter, and this package sets both from the record.
+
+    Fill only for a function that needs a complete record, such as the
+    spectra, the total, Thêo, parabolic and dynamic deviations and the cross
+    estimators: the Allan and Hadamard deviations leave out the terms that a
+    missing sample enters. A filled record is not the record, and the
+    documentation of the Julia function states what a fill does not recover.
     """
     return data_from_jl(jl.fillgaps(to_jl_data(data), form=jl.Symbol(str(form))))
 
 
 @_map_errors
 def find_outliers(data: PhaseData | FrequencyData, *, n_sigma: float = 5.0) -> np.ndarray:
-    """Indices of outlying samples via the Stable32-style scaled-MAD test.
+    """Indices of the outlying samples of a record, counted from 0, by the median
+    absolute deviation test of SP1065 §10.11 and of Stable32's Check function.
 
-    Returns a **0-based** integer array of sample indices (Julia's 1-based
-    indices minus one). For ``PhaseData`` the test runs on first differences, so a
-    single phase glitch flags the two samples the step spans.
+    A frequency sample is an outlier when it lies more than ``n_sigma`` times
+    MAD/0.6745 from the median. For a ``PhaseData`` record the test is made on
+    the first differences, so a single displaced phase sample x_j marks
+    samples j and j + 1. Missing samples are never marked, and the test is
+    applied once.
     """
     return np_int(jl.find_outliers(to_jl_data(data), nsigma=float(n_sigma))) - 1
 
 
 @_map_errors
 def summarize(data: PhaseData | FrequencyData) -> dict:
-    """A quick check of a record before analysis, as the explorer's Data page shows it.
+    """A quick look at a record before analysis, as the explorer's Data page shows
+    it.
 
-    Keys: ``n`` samples, ``tau0`` and ``span`` in seconds, ``gaps`` (``nan``
-    samples), ``outliers`` (0-based indices at 5σ, as :func:`find_outliers`) and
-    ``drift_per_day`` (least-squares slope of the frequency, per day).
+    Keys: ``n`` (number of samples), ``tau0`` and ``span`` (n·τ₀), in seconds,
+    ``gaps`` (number of ``nan`` samples), ``outliers`` (the indices that
+    :func:`find_outliers` returns at ``n_sigma=5``) and ``drift_per_day``
+    (least-squares slope of the fractional frequency against time, per day).
     """
     s = jl.summarize(to_jl_data(data))
     return {
@@ -193,11 +263,17 @@ def summarize(data: PhaseData | FrequencyData) -> dict:
 def remove_outliers(
     data: PhaseData | FrequencyData, *, n_sigma: float = 5.0
 ) -> PhaseData | FrequencyData:
-    """Return a new record with scaled-MAD outliers gapped and Howe-imputed.
+    """Copy of a record with the outliers that :func:`find_outliers` finds at
+    ``n_sigma`` replaced by filled values.
 
-    The Stable32 deglitching idiom: flag samples more than ``n_sigma`` scaled MADs
-    from the median, gap them, and fill. The input is returned as-is when nothing
-    is flagged. Samples already missing stay missing.
+    An isolated outlier takes the mean of its two neighbors, and a run of them
+    is filled by reflection, as in :func:`fillgaps`. A ``PhaseData`` record is
+    cleaned as frequency, which takes a phase jump out. Samples that were
+    missing stay missing, and a record without outliers is returned as it is.
+
+    SP1065 §10.11 and Stable32 replace an outlier by a gap, which the
+    estimators then skip. For that, set the samples that :func:`find_outliers`
+    marks in a frequency record to ``nan``.
     """
     return data_from_jl(jl.remove_outliers(to_jl_data(data), nsigma=float(n_sigma)))
 
@@ -209,14 +285,17 @@ def save(
     *,
     source_file: str = "",
 ) -> str:
-    """Write a result, a whole suite, or a data record to a text file.
+    """Write a record, a result or a suite to a text file and return ``path``.
+    :func:`load` reads the file back.
 
-    Results and suites go to a tab-delimited file with a metadata header; a
-    ``PhaseData``/``FrequencyData`` record goes to a SigmaTau data file that
-    :func:`load` reads back.
-
-    ``source_file`` is recorded in a suite's header (ignored for a single
-    result). Returns ``path``. Read it back with :func:`load`.
+    A ``PhaseData`` or ``FrequencyData`` record is written as two columns, the
+    sample time and the sample, after a comment header with its ``tau0`` and
+    start time. The columns are separated by a comma when ``path`` ends in
+    ``.csv`` and by a tab otherwise, and :func:`read_phase` and
+    :func:`read_frequency` read the file as well. A ``StabilityResult`` is
+    written as a tab-separated table with one row for each τ, and a
+    ``StabilitySuite`` as one such table for each result, with ``source_file``
+    in its header.
     """
     if isinstance(x, StabilitySuite):
         jl.save(str(path), suite_to_jl(x), source_file=str(source_file))
@@ -234,7 +313,8 @@ def save(
 
 @_map_errors
 def load(path: str) -> StabilityResult | StabilitySuite | PhaseData | FrequencyData:
-    """Read a file written by :func:`save`; the file's header says which type comes back."""
+    """Read a file written by :func:`save`. Its first line says what the file holds:
+    a result, a suite, or a phase or frequency record."""
     r = jl.load(str(path))
     if jl.isa(r, jl.StabilitySuite):
         return suite_from_jl(r)

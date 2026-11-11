@@ -22,3 +22,12 @@ def test_snapshot_matches_batch(small_phase, dev):
 def test_rejects_total_family():
     with pytest.raises(ValueError):
         st.StreamingStability("totdev", 1.0, [1])
+
+
+def test_refuses_a_sample_that_is_not_finite(small_phase):
+    acc = st.StreamingStability("adev", 1.0, [1, 2]).extend(small_phase.x[:10])
+    with pytest.raises(ValueError, match="finite"):
+        acc.push(np.nan)
+    with pytest.raises(ValueError, match="finite"):
+        acc.extend([0.0, np.inf, 1.0])
+    assert len(acc) == 11  # the samples before the refused one stay

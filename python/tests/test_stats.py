@@ -1,15 +1,16 @@
-"""Noise identification, EDF, confidence intervals, and bias correction.
+"""Noise identification, EDF, confidence intervals and bias correction.
 
-The EDF/CI helpers must reproduce a full adev(ci=True) result *bitwise* when fed
-the raw pieces — the record duration is (N-1)*tau0, matching the Julia package.
+The EDF and interval functions must reproduce a full adev(ci=True) result
+bitwise from its pieces. The record duration is (N-1)*tau0, as in Julia.
 """
 
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 import sigmatau as st
-from sigmatau import FrequencyData, PhaseData
+from sigmatau import FrequencyData, PhaseData, _convert
 
 MS = [1, 2, 4]
 
@@ -28,6 +29,23 @@ def test_identify_noise_accepts_records():
     y = np.diff(rec.x) / rec.tau0
     from_freq = st.identify_noise(FrequencyData(y, rec.tau0), MS)
     assert from_freq[0] == "WHFM"
+
+
+def test_identify_noise_keywords_match_julia(jl):
+    rec = st.noise_gen(PhaseData, 4096, 1.0, h={0: 1e-24, -1: 1.6e-26, -2: 1e-30}, rng=1)
+    ms = [1, 8, 64, 256, 1024]
+    direct = jl.seval("(d, m; kw...) -> string.(identify_noise(d, m; kw...))")
+    jd, jm = _convert.to_jl_data(rec), _convert.to_jl_ints(ms)
+    default = list(st.identify_noise(rec, ms))
+    no_b1 = list(st.identify_noise(rec, ms, b1=False))
+    whole = list(st.identify_noise(rec, ms, b1_length="record"))
+    assert no_b1 == list(direct(jd, jm, b1=False)) != default
+    assert whole == list(direct(jd, jm, b1_length=jl.Symbol("record"))) != default
+    assert list(st.identify_noise(rec, st.Octave)) == list(direct(jd, jl.Octave))
+    with pytest.raises(ValueError):
+        st.identify_noise(rec, [0])
+    with pytest.raises(TypeError):
+        st.identify_noise(rec.x, st.Octave)  # bare samples carry no grid
 
 
 def test_calculate_edf_and_ci_reproduce_adev(small_phase):

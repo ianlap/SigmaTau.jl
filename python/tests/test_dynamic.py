@@ -47,6 +47,13 @@ def test_dadev_parity_with_julia(small_phase, jl):
     np.testing.assert_array_equal(result.tau, direct.tau)
 
 
+def test_default_window_is_julias(small_phase, jl):
+    result = st.dhdev(small_phase, [1, 2, 4])
+    direct = jl.dhdev(_convert.to_jl_data(small_phase), _convert.to_jl_ints([1, 2, 4]))
+    assert result.window == int(direct.window) == 64  # the largest power of two up to N ÷ 8
+    np.testing.assert_array_equal(result.dev, np.array(direct.dev))
+
+
 def test_dhdev_shape(small_phase):
     result = st.dhdev(small_phase, [1, 2, 4], window=WINDOW)
     assert result.dev.shape == (result.t.size, 3)

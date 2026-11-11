@@ -1,8 +1,9 @@
-"""Spectral densities ``psd_y`` / ``psd_x`` / ``ssb_phase_noise`` — mirrors ``spectral.jl``.
+"""Spectral densities.
 
-One-sided Welch estimates at sample rate ``fs = 1/τ₀``, returned as a
-``SpectralResult``. ``PhaseData`` and ``FrequencyData`` are accepted by every
-estimator (converted internally by Julia as needed).
+One-sided Welch estimates at the sample rate 1/τ₀, returned as a
+``SpectralResult``. Each estimator takes a ``PhaseData`` or ``FrequencyData``
+record. A missing sample makes the whole spectrum ``nan``: fill gaps first
+with ``fillgaps``.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from .types import FrequencyData, PhaseData, SpectralResult
 
 
 def _welch_kwargs(nperseg: int | None, noverlap: int | None, taper: str) -> dict:
-    """Welch keyword arguments for Julia: ``None`` segment sizes are omitted."""
+    """Welch keywords for Julia; a segment size of ``None`` is left out."""
     kwargs = {"taper": jl.Symbol(str(taper))}
     if nperseg is not None:
         kwargs["nperseg"] = int(nperseg)
@@ -32,7 +33,24 @@ def psd_y(
     noverlap: int | None = None,
     taper: str = "hann",
 ) -> SpectralResult:
-    """One-sided PSD of fractional frequency S_y(f) [1/Hz] (Welch, fs=1/τ₀)."""
+    """One-sided power spectral density of the fractional frequency, S_y(f) in 1/Hz
+    (IEEE Std 1139-2022, Eq. (A.8)), estimated by Welch's method (Welch 1967).
+
+    A phase record is differenced to frequency first. ``nperseg`` is the
+    segment length in samples, by default the largest power of two up to a
+    quarter of the record and at least 16. ``noverlap`` is the number of
+    samples that successive segments share, half a segment by default.
+    ``taper`` is ``"hann"``, ``"hamming"`` or ``"rectangular"``.
+
+    The mean removed from each segment is the one weighted by the taper, so
+    the estimate is zero at f = 0. ``scipy.signal.welch`` with
+    ``detrend="constant"`` removes the plain mean; with the Hann and Hamming
+    tapers the two estimates differ at f = 0 and in the first bin and are
+    equal from the second bin on. The first bin shares the main lobe of the
+    taper with the mean that was removed and should not be read. A linear
+    frequency drift is not removed and raises the lowest bins: take it out
+    first with ``detrend``.
+    """
     return spectral_from_jl(jl.psd_y(to_jl_data(data), **_welch_kwargs(nperseg, noverlap, taper)))
 
 
@@ -44,8 +62,14 @@ def psd_x(
     noverlap: int | None = None,
     taper: str = "hann",
 ) -> SpectralResult:
-    """One-sided PSD of the phase residual S_x(f) [s²/Hz]: the Welch S_y(f) over the
-    first-difference response 4 sin²(πfτ₀)/τ₀². NaN at f = 0."""
+    """One-sided power spectral density of the time fluctuations, S_x(f) in s²/Hz
+    (IEEE Std 1139-2022, Eq. (A.14)): the estimate of :func:`psd_y` divided by
+    the response of the first difference, 4·sin²(πfτ₀)/τ₀².
+
+    The value at f = 0 is ``nan``. The keywords are those of :func:`psd_y`,
+    except that the default ``nperseg`` is the largest power of two up to a
+    quarter of the number of phase samples, and at least 16.
+    """
     return spectral_from_jl(jl.psd_x(to_jl_data(data), **_welch_kwargs(nperseg, noverlap, taper)))
 
 
@@ -58,7 +82,16 @@ def ssb_phase_noise(
     noverlap: int | None = None,
     taper: str = "hann",
 ) -> SpectralResult:
-    """Single-sideband phase noise ℒ(f) [dBc/Hz] at carrier ``f_carrier`` (IEEE 1139)."""
+    """Phase noise ℒ(f) in dBc/Hz of a signal at the carrier frequency
+    ``f_carrier``, in Hz, from its phase or frequency record.
+
+    The time spectrum of :func:`psd_x` gives the phase spectrum
+    S_φ(f) = (2πν₀)²·S_x(f), and the phase noise is half of it,
+    ℒ(f) = S_φ(f)/2, reported as 10·log₁₀ ℒ(f) (IEEE Std 1139-2022,
+    Eqs. (A.13) and (A.15)). The result runs from the first bin to the Nyquist
+    frequency: the bin at f = 0 is dropped. The other keywords are those of
+    :func:`psd_x`.
+    """
     kwargs = _welch_kwargs(nperseg, noverlap, taper)
     kwargs["f_carrier"] = float(f_carrier)
     return spectral_from_jl(jl.ssb_phase_noise(to_jl_data(data), **kwargs))
@@ -73,12 +106,21 @@ def integrated_jitter(
     quantity: str = "L",
     band: tuple[float, float] | None = None,
 ) -> dict:
-    """Integrated phase jitter and residual FM over ``band`` (Hz), NIST SP1065 §5.2.19.
+    """Phase jitter, time jitter and residual FM of a signal at the carrier
+    frequency ``f_carrier``, in Hz: its phase spectrum integrated over ``band``,
+    a pair of offset frequencies in Hz, or over the whole spectrum.
 
-    Takes a ``ssb_phase_noise`` / ``psd_x`` / ``psd_y`` result, or spectrum points
-    ``(f, S)`` such as a phase-noise analyzer's ℒ(f) in dBc/Hz (``quantity="L"``,
-    or ``"Sx"``, ``"Sy"``). Returns ``phase`` (rms rad), ``time`` (rms s) and
-    ``residual_fm`` (rms Hz), integrating the spectrum as straight lines on log-log axes.
+    ``spectrum`` is a result of :func:`ssb_phase_noise`, :func:`psd_x` or
+    :func:`psd_y`, or the frequencies of spectrum points whose values are in
+    ``S``, such as the ℒ(f) table of a phase-noise analyzer. ``quantity`` says
+    what ``S`` holds: ``"L"`` (ℒ(f) in dBc/Hz), ``"Sx"`` (S_x(f) in s²/Hz) or
+    ``"Sy"`` (S_y(f) in 1/Hz).
+
+    Returns a dict with ``phase`` (radians rms; IEEE Std 1139-2022,
+    Eq. (A.17)), ``time`` (seconds rms) and ``residual_fm`` (hertz rms).
+    Between neighboring points the spectrum is taken as a power law, a
+    straight line on a log-log plot, and each segment is integrated in closed
+    form (SP1065 §5.2.19).
     """
     kwargs = {"f_carrier": float(f_carrier)}
     if band is not None:

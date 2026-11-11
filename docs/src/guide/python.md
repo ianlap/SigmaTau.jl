@@ -22,10 +22,10 @@ Later imports take a few seconds.
 
 Import `sigmatau` before `juliacall`. On import it asks juliacall to let
 Julia handle signals, so that Ctrl-C interrupts a long calculation, and to
-start Julia with all threads, for the total estimators. It cannot do either
-once `juliacall` is loaded, and warns. Leave Python's `faulthandler` off:
-it takes the signals that Julia's threads use among themselves for
-crashes.
+start Julia with all threads, for the total and Thêo estimators. It cannot
+do either once `juliacall` is loaded, and warns. Leave Python's
+`faulthandler` off: it takes the signals that Julia's threads use among
+themselves for crashes.
 
 ## A first analysis
 

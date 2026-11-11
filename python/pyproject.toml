@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sigmatau"
 dynamic = ["version"]
-description = "Clock-stability analysis (Allan/Hadamard deviations and friends) — Python bindings for SigmaTau.jl via juliacall."
+description = "Analysis of clock and oscillator stability (Allan, Hadamard, total and Thêo deviations with confidence intervals): the Python package of SigmaTau.jl."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

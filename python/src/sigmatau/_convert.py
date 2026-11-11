@@ -16,6 +16,7 @@ import juliacall
 import numpy as np
 
 from ._julia import (
+    Char,
     DictIntF64,
     VecF64,
     VecInt,
@@ -45,6 +46,14 @@ from .types import (
 def to_jl_f64(a: object) -> Any:
     """Sample/float vector → ``Vector{Float64}`` (copy)."""
     return juliacall.convert(VecF64, np.ascontiguousarray(a, dtype=np.float64))
+
+
+def to_jl_char(c: str) -> Any:
+    """One-character string → ``Char``. The value stays wrapped, because a ``Char``
+    that a Julia call returns reaches Python as a ``str``."""
+    if len(c) != 1:
+        raise ValueError(f"expected one character, got {c!r}")
+    return juliacall.convert(Char, c)
 
 
 def to_jl_ints(ms: object) -> Any:
@@ -88,11 +97,11 @@ def powerlawfit_to_jl(f: PowerLawFit) -> Any:
 
 
 def resolve_m(m: TauMode | object) -> Any:
-    """The ``m`` argument as Julia sees it: a TauMode enum instance or ``Vector{Int}``.
+    """The ``m`` argument as Julia takes it: a ``TauMode`` instance or a ``Vector{Int}``.
 
-    TauMode passes through as the enum so Julia's own dispatch resolves the
-    grid (dadev/dhdev clamp it to the analysis window, not the record).
-    Averaging factors are validated here — the kernels assume m ≥ 1.
+    A ``TauMode`` passes through as Julia's own, so that Julia builds the grid:
+    ``dadev`` and ``dhdev`` build it for the window and not for the record.
+    Averaging factors are checked here, because the kernels assume m ≥ 1.
     """
     if isinstance(m, TauMode):
         return _JL_TAUMODE[m]
