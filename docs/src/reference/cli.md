@@ -33,6 +33,7 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | `timescale FILE --value-cols LIST` | a time scale from several clocks read against one reference |
 | `hat FILE --value-cols LIST` | the deviation of each of three or more clocks that are measured against one another |
 | `model --synth N --noise-model R:Q1:Q2:Q3` | the deviations that a clock model predicts |
+| `phasenoise TABLE --carrier HZ` | the deviations that a table of the phase noise ``ℒ(f)``, or of another spectrum, gives over its band |
 | `report FILE` | the analysis of `analyze` as one HTML file |
 | `live SOURCE` | deviations kept up to date while readings arrive |
 | `completion SHELL` | a completion script for `bash`, `zsh`, `fish` or `powershell` |
@@ -41,8 +42,8 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 
 ## The record
 
-Every command but `live` and `model` reads a record, and takes the options
-of this section.
+Every command but `live`, `model` and `phasenoise` reads a record, and
+takes the options of this section.
 
 ### Reading
 
@@ -605,6 +606,43 @@ sigmatau_json("model --synth 64 --noise-model 1e-22:1e-24:1e-30:0"; only = "mode
 
 With random-run FM in the model (`Q3` above zero), `mdev` and `adev` are
 `null`: only the Hadamard deviations converge on that noise.
+
+## `phasenoise`
+
+`phasenoise` reads no record. Its file is a table of a spectrum, the
+Fourier frequency in Hz in the first column and the spectrum in the
+second, and its result is the deviation that [`spectrum_sigma`](@ref)
+integrates from the table. `--header`, `--delim` and `--value-col` read
+the table as they read a record, and `--format`, `--out` and `--quiet`
+are those of the other commands.
+
+| Option | Meaning |
+|:---|:---|
+| `--carrier HZ` | carrier frequency in Hz, needed for ``ℒ(f)`` and ``S_φ(f)`` |
+| `--density S` | the spectral density that the table holds: `L` (the default), ``ℒ(f)`` in dBc/Hz; `Sphi`, ``S_φ(f)`` in rad²/Hz; `Sx`, ``S_x(f)`` in s²/Hz; or `Sy`, ``S_y(f)`` in 1/Hz |
+| `--devs LIST` | `adev`, `mdev`, `tdev`, `hdev` and `mhdev`. By default all but `tdev` |
+| `--tau LIST` | averaging times in seconds. By default 1, 2 and 5 in each decade from ``1/f_h`` to ``0.1/f_1``, for a table from ``f_1`` to ``f_h`` |
+| `--band A:B` | integrate from `A` to `B` hertz only, inside the table |
+
+```@example cliref
+sigmatau("phasenoise ocxo.txt --carrier 10e6 --devs adev,mdev --tau 0.001,0.01,0.1") # hide
+```
+
+`dev` is the deviation of the noise inside the band. `below` and `above`
+are the variance that the spectrum would add if it went on below and
+above the band, on the slope of its lowest and of its highest decade, as
+fractions of the variance found. A field is empty, and `null` in JSON,
+where that variance has no limit: this table ends flat, which is white
+PM, and the Allan deviation of white PM rises with the bandwidth of the
+measurement. Its values hold for the bandwidth of the table, 100 kHz,
+and `--band` sets a lower one. `tdev` is the modified Allan deviation
+times ``τ/\sqrt{3}``.
+
+With `--format json` the object has a member `spectrum`, with the
+`quantity`, the `carrier`, the number `n` of points read and the `band`
+of the integral, and an array `results` with one object for each
+deviation, which holds `deviation` and the arrays `tau`, `dev`, `below`
+and `above`.
 
 ## `report`
 

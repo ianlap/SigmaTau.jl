@@ -134,4 +134,7 @@ With several clocks, the settings but the last move to a bar above the
 plot, and each clock has one color: its RMS as a solid line and the chosen
 share of its trials as a dashed one. The worst trial, the prediction and
 the reference curve are not drawn. The card lists, for each clock, the
-time within the limit and the RMS at its longest holdover time.
+time within the limit and the RMS at its longest holdover time. A clock
+whose test cannot be computed, for instance because its training stretch holds
+no readings, is named with the reason on a line above the plot and is left out
+of the card.
