@@ -70,6 +70,7 @@ makedocs(
             "Spectrum" => "explorer/spectrum.md",
             "Dynamic" => "explorer/dynamic.md",
             "Holdover" => "explorer/holdover.md",
+            "Steering" => "explorer/steering.md",
             "Ensemble" => "explorer/ensemble.md",
             "Live" => "explorer/live.md",
             "Exports, sessions and reports" => "explorer/export.md",

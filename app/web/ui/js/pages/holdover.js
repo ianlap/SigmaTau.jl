@@ -9,7 +9,7 @@
 import { state, update, visibleClocks, multi } from "../state.js";
 import { holdover as fetchHoldover, holdoverKey } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, css } from "../plot.js";
-import { sci, num, thousands, duration, escapeHtml as h } from "../format.js";
+import { sci, num, thousands, duration, modelText, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
@@ -152,10 +152,6 @@ function renderSide(box, clocks) {
     ${p?.error ? `<p class="muted small hold-note">No predicted curve: ${h(p.error)}</p>` : ""}
     ${hd.claimed ? `<p class="muted small hold-note" title="Above 1, the clock did worse than the filter's model said it would">RMS over the filter's own claim: ${(hd.rms[0] / hd.claimed[0]).toFixed(2)} at ${duration(hd.tau[0])}, ${(hd.rms[last] / hd.claimed[last]).toFixed(2)} at ${duration(hd.tau[last])}. Model fitted to the first ${duration(hd.train)}: ${modelText(hd.model)}.</p>` : ""}`;
 }
-
-// The filter's model: flicker levels only where the fit found them.
-const modelText = (m) => [["R", m.R], ["q₁", m.q1], ["q₂", m.q2], ["h₋₁", m.flicker_fm], ["h₁", m.flicker_pm]]
-  .filter(([, v], i) => i < 3 || v > 0).map(([k, v]) => `${k} = ${sci(v, 3)}`).join(", ");
 
 export function refresh() {
   if (!root) return;

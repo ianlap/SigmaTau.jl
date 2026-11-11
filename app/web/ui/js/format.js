@@ -26,3 +26,7 @@ export function duration(s) {
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
+
+// A Kalman filter's clock model: flicker levels only where the fit found them.
+export const modelText = (m) => [["R", m.R], ["q₁", m.q1], ["q₂", m.q2], ["h₋₁", m.flicker_fm], ["h₁", m.flicker_pm]]
+  .filter(([, v], i) => i < 3 || v > 0).map(([k, v]) => `${k} = ${sci(v, 3)}`).join(", ");
