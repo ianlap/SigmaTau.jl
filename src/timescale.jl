@@ -200,32 +200,40 @@ function _estimate_tau_min(cc::ClockComparisons, c::Int)
 end
 
 # Starting prediction-error variances ε_i²(τ) = τ² σ_y,i²(τ) (eq. 7) at the
-# spacing τ = cτ₀, from the samples up to `stop`; a clock with no usable
-# estimate takes the largest of the others.
+# spacing τ = cτ₀, each clock's from the `stop` samples that begin at its
+# first reading; a clock with no usable estimate takes the largest of the others.
 function _initial_variance(cc::ClockComparisons, stop::Int, c::Int)
-    k = size(cc.x, 2)
-    v = _time_variances(view(cc.x, 1:stop, :), c)
+    N, k = size(cc.x)
+    v = fill(NaN, k)
+    for i in 1:k
+        a = findfirst(isfinite, view(cc.x, :, i))
+        a === nothing || (v[i] = _time_variances(view(cc.x, a:min(N, a + stop - 1), :), c)[i])
+    end
     ok = filter(s -> isfinite(s) && s > 0, v)
     isempty(ok) && return ones(k)
     return Float64[isfinite(s) && s > 0 ? s : maximum(ok) for s in v]
 end
 
 # Starting frequencies against the scale: each clock's least-squares slope
-# over the samples up to `stop` (the first max(16, N/10) unless given) less
-# the mean slope, so clocks with frequency offsets start tracking them (the
-# mean of the offsets is the scale's own).
+# over the `stop` samples that begin at its first reading (the first
+# max(16, N/10) unless given), less the mean slope of the clocks read at the
+# first sample, so clocks with frequency offsets start tracking them (the
+# mean of the offsets is the scale's own). Zero for a clock with one reading there.
 function _initial_frequency(cc::ClockComparisons, stop::Int=min(size(cc.x, 1), max(16, size(cc.x, 1) ÷ 10)))
-    k = size(cc.x, 2)
-    rows = 1:stop
-    slope = zeros(k)
+    N, k = size(cc.x)
+    slope, fit = zeros(k), falses(k)
     for i in 1:k
+        a = findfirst(isfinite, view(cc.x, :, i))
+        a === nothing && continue
+        rows = a:min(N, a + stop - 1)
         ok = isfinite.(cc.x[rows, i])
         count(ok) >= 2 || continue
         t = (rows[ok] .- 1) .* cc.tau0
         slope[i] = sum((t .- sum(t) / length(t)) .* cc.x[rows[ok], i]) / sum(abs2, t .- sum(t) / length(t))
+        fit[i] = true
     end
     seen = isfinite.(cc.x[1, :])
-    return seen .* (slope .- sum(slope[seen]) / max(1, count(seen)))
+    return fit .* (slope .- sum(slope[seen]) / max(1, count(seen)))
 end
 
 # Steady-state frequency variance P of the AT2 filter (eq 16 for any τ): with
@@ -290,9 +298,11 @@ and the constants below are taken at that spacing. The clocks have to be
 read at the same samples; one read less often than the others joins anew at
 each of its readings and never has a weight.
 
-The scale starts at the mean of the first readings. Each frequency starts
-at the slope of a line through the first tenth of the readings, less the
-mean of those slopes.
+The scale starts at the mean of the first readings. Each clock starts from
+its own first readings, as many samples as a tenth of the record's
+readings. Its frequency starts at the slope of a line through them, less
+the mean slope of the clocks read at the first sample, so a clock that
+joins late does not change the rate of the scale.
 
 `:ewfa` gives every clock the same weight and takes ``y_i`` as the clock's
 last frequency step, ``[x_i(t) - x_i(t - τ)]/τ``
@@ -318,9 +328,10 @@ the square of
 ```
 
 ``K_i`` makes up for the clock being part of the scale it is compared
-with. ``ε_i^2`` starts at ``τ^2 σ_{y,i}^2(τ)``, estimated from the first
-tenth of the readings. The frequency is an exponential average of the
-frequency steps,
+with. ``ε_i^2`` starts at ``τ^2 σ_{y,i}^2(τ)`` (§2.7 of the paper),
+estimated from those first readings of the clock, so a clock that joins
+late has its weight at once. The frequency is an exponential average of
+the frequency steps,
 
 ```math
 y_i(t + τ) = \\frac{1}{m_i + 1} \\Bigl[\\frac{x_i(t + τ) - x_i(t)}{τ} + m_i\\,y_i(t)\\Bigr],
@@ -919,7 +930,7 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     end
     r = Float64[m.R for m in models]
     p = pivot
-    isfinite(cc.x[1, p]) || throw(ArgumentError("timescale: the pivot clock $p has no first reading"))
+    isfinite(cc.x[1, p]) || throw(ArgumentError("timescale: the pivot clock $p has no reading at the first sample"))
     X, Y, W, E, Xh = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k), zeros(N, k)
     # Pivot against the scale: the start scale is the plain mean of the first readings.
     ok = isfinite.(cc.x[1, :])
