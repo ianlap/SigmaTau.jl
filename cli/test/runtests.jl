@@ -430,6 +430,7 @@ mktempdir() do dir
         @test parse.(Float64, getindex.(rows, 4)) ≈ k.rms && parse.(Float64, getindex.(rows, 11)) ≈ k.claimed
         r = run_cli("holdover", hf, "--train", "512", "--kalman", "--format", "json")
         @test r.code == 0 && occursin("\"claimed\":[", r.out) && occursin("\"model\":{\"R\":", r.out)
+        @test parse(Float64, match(r"\"fit_tau_max\":([^,}]*)", r.out)[1]) == maximum(powerlaw_fit(PhaseData(p.x[1:512], 1.0)).x)
         ff = noise_gen(PhaseData, 4096, 1.0; h=Dict(-1 => 3e-25), rng=Random.Xoshiro(7))
         r = run_cli("holdover", write_table(joinpath(dir, "flicker.csv"), ff.x), "--train", "512", "--tau", "1,16", "--kalman", "--format", "json")
         @test parse.(Float64, split(match(r"\"claimed\":\[([^\]]*)\]", r.out)[1], ',')) ≈ holdover(ff, kmodel(ff.x); train=512, tau=[1, 16]).claimed

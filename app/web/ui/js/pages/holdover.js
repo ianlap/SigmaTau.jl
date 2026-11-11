@@ -150,7 +150,7 @@ function renderSide(box, clocks) {
     <div class="tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>RMS (s)</span><span>${pct(hd.confidence)}</span><span>worst</span><span>trials</span></div>
     ${hd.tau.map((t, i) => `<div class="tbl-row tbl-body"><span>${num(t, 5)}</span><span>${sci(hd.rms[i], 3)}</span><span>${sci(hd.quantile[i], 3)}</span><span>${sci(hd.worst[i], 3)}</span><span>${thousands(hd.n[i])}</span></div>`).join("")}</div>
     ${p?.error ? `<p class="muted small hold-note">No predicted curve: ${h(p.error)}</p>` : ""}
-    ${hd.claimed ? `<p class="muted small hold-note" title="Above 1, the clock did worse than the filter's model said it would">RMS over the filter's own claim: ${(hd.rms[0] / hd.claimed[0]).toFixed(2)} at ${duration(hd.tau[0])}, ${(hd.rms[last] / hd.claimed[last]).toFixed(2)} at ${duration(hd.tau[last])}. Model fitted to the first ${duration(hd.train)}: ${modelText(hd.model)}.</p>` : ""}`;
+    ${hd.claimed ? `<p class="muted small hold-note" title="Above 1, the clock did worse than the filter's model said it would">RMS over the filter's own claim: ${(hd.rms[0] / hd.claimed[0]).toFixed(2)} at ${duration(hd.tau[0])}, ${(hd.rms[last] / hd.claimed[last]).toFixed(2)} at ${duration(hd.tau[last])}. Model fitted to the first ${duration(hd.train)}, at τ up to ${duration(hd.fit_tau_max)}; past that the claim extrapolates it (dotted): ${modelText(hd.model)}.</p>` : ""}`;
 }
 
 export function refresh() {
@@ -196,10 +196,18 @@ export function refresh() {
         x: hd.tau, y: p.sigma, name: "Predicted RMS (noise model)", ...grey,
         hovertemplate: "Predicted from the noise model (h<sub>α</sub> fitted to MHDEV)<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>",
       });
-      if (hd.claimed) traces.push({
-        x: hd.tau, y: hd.claimed, name: "Claimed by the filter", ...grey,
-        hovertemplate: "The filter's own standard deviation<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>",
-      });
+      if (hd.claimed) {
+        // Past the longest τ of the fit of the stretch the model is extrapolated: dotted from there.
+        const cut = hd.tau.findLastIndex((t) => t <= hd.fit_tau_max) + 1;
+        traces.push({
+          x: hd.tau.slice(0, cut), y: hd.claimed.slice(0, cut), name: "Claimed by the filter", ...grey,
+          hovertemplate: "The filter's own standard deviation<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>",
+        });
+        if (cut < hd.tau.length) traces.push({
+          x: hd.tau.slice(Math.max(cut - 1, 0)), y: hd.claimed.slice(Math.max(cut - 1, 0)), name: "Claimed, past the fit", mode: "lines", line: { ...grey.line, dash: "dot" },
+          hovertemplate: `The filter's own standard deviation, past the ${duration(hd.fit_tau_max)} its model was fitted to<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>`,
+        });
+      }
       traces.push({
         x: hd.tau, y: hd.reference, name: reference(hd.drift), mode: "lines", line: { color: css("--s4"), width: 1.5 },
         hovertemplate: `${reference(hd.drift)}: the same prediction from τ-averages<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>`,

@@ -182,6 +182,14 @@ ratios within 5 %.
     model. A ratio well above 1 at long ``τ`` says that the stretch was
     too short to show the slow noise.
 
+    The fit of the stretch has points up to between an eighth and a
+    quarter of it, 256 s here, and a claim past that extrapolates the
+    model. On the same records the claim of the fitted model over that of
+    the true model was 0.96 to 1.75 at 256 s and 0.96 to 6.0 at 2048 s on
+    white FM, and 0.62 to 1.30 and 0.20 to 1.63 on the second clock.
+    `sigmatau holdover --kalman` gives that averaging time as
+    `fit_tau_max`, and the explorer dots the claimed curve past it.
+
 ## Holdover and the time deviation
 
 The time variance is the mean square of an error of the same kind. With

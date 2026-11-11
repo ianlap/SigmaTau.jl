@@ -88,8 +88,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(Math.abs(at0[0] / at0[1] - 1) < 1e-9);
     // A Kalman filter as the predictor: its claim equals the command line's.
     await page.click('[data-ctl=kalman][data-v="1"]');
-    const claimed = (await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "Claimed by the filter")?.y, null, SLOW)).jsonValue();
-    assert.deepEqual(await claimed, JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover.claimed);
+    // The curve is dotted past the longest τ of the fit its model comes from.
+    const claimed = await (await page.waitForFunction(() => {
+      const d = document.querySelector("#page [data-ref=plot]").data, fit = d.find((t) => t.name === "Claimed by the filter")?.y;
+      return fit && [fit, d.find((t) => t.name === "Claimed, past the fit").y.slice(1)];
+    }, null, SLOW)).jsonValue();
+    const kalman = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover;
+    assert.deepEqual(claimed.flat(), kalman.claimed);
+    assert.equal(claimed[0].length, kalman.tau.filter((t) => t <= kalman.fit_tau_max).length);
   });
 
   await t.test("Steering: the plotted σ equal the command line's", async () => {

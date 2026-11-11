@@ -104,8 +104,11 @@ record has left after the stretch. **Frequency and drift** gives the model
 a drift state.
 
 The gray curve is then **Claimed by the filter**: the standard deviation
-that the filter itself gives the error. The card gives the ratio of the
-RMS to it at the shortest and the longest holdover time, and the model:
+that the filter itself gives the error. It is dotted past the longest
+averaging time of the fit that the model comes from, between an eighth
+and a quarter of the stretch: from there the claim extrapolates the
+model. The card gives the ratio of the RMS to it at the shortest and the
+longest holdover time, and the model:
 the noise of the readings `R`, white FM `q₁` and random-walk FM `q₂`, and
 the flicker FM `h₋₁` and the flicker PM `h₁` where the fit finds them.
 
