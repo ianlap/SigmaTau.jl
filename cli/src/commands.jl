@@ -524,6 +524,79 @@ function run_model(io::IO, o::Options)
     return nothing
 end
 
+# ── phasenoise ────────────────────────────────────────────────────────────
+
+const CSV_PHASENOISE = "source,deviation,tau,dev,below,above"
+
+# The frequency column and the --value-col column of the spectrum table.
+function read_spectrum(o::Options)
+    isfile(o.input) || throw(CLIError(EXIT_INPUT, "no such file: " * o.input))
+    cols = try
+        o.delim == '\0' ? SigmaTau._read_cols(o.input, o.header, nothing, [1, o.value_col])[1] :
+                          SigmaTau._read_cols(o.input, o.header, o.delim, [1, o.value_col])[1]
+    catch e
+        e isa ArgumentError || rethrow()
+        throw(CLIError(EXIT_INPUT, error_message(e) * "; skip the lines of a heading with --header N"))
+    end
+    return cols[1], cols[2]
+end
+
+# 1, 2 and 5 in each decade from 1/f_h to 0.1/f₁: from the shortest τ the
+# band resolves to where the noise below it starts to count.
+function phasenoise_taus(f1::Float64, fh::Float64)
+    taus = Float64[]
+    for k in floor(Int, log10(1 / fh)):ceil(Int, log10(0.1 / f1)), m in (1.0, 2.0, 5.0)
+        t = m * exp10(k)
+        1 / fh <= t * (1 + 1e-9) && t <= 0.1 / f1 * (1 + 1e-9) && push!(taus, t)
+    end
+    return taus
+end
+
+# σ(τ) from a table of ℒ(f), or of S_φ, S_x or S_y: no record is read.
+function run_phasenoise(io::IO, o::Options, t_start::UInt64)
+    f, S = read_spectrum(o)
+    q = Symbol(o.density)
+    ν₀ = isnan(o.carrier) ? 1.0 : o.carrier    # S_x and S_y take no carrier
+    band = isempty(o.band) ? spectrum_sigma(f, S, Float64[]; quantity=q, f_carrier=ν₀).band : (o.band[1], o.band[2])
+    taus = isempty(o.taus) ? phasenoise_taus(band[1], band[2]) : o.taus
+    isempty(taus) && throw(CLIError(EXIT_ANALYSIS, "the band spans less than a decade; give the averaging times with --tau"))
+    devs, below, above = Vector{Float64}[], Vector{Float64}[], Vector{Float64}[]
+    for d in o.devs
+        r = spectrum_sigma(f, S, taus; quantity=q, f_carrier=ν₀, deviation=d === :tdev ? :mdev : d, band=band)
+        push!(devs, d === :tdev ? r.dev .* taus ./ sqrt(3.0) : r.dev)
+        push!(below, r.below); push!(above, r.above)
+    end
+    if o.format != "json"
+        print(io, CSV_PHASENOISE); print(io, '\n')
+        for (j, d) in enumerate(o.devs), i in eachindex(taus)
+            csv_field(io, o.input); print(io, ','); print(io, String(d)); print(io, ',')
+            csv_number(io, taus[i]); print(io, ','); csv_number(io, devs[j][i]); print(io, ',')
+            csv_number(io, below[j][i]); print(io, ','); csv_number(io, above[j][i]); print(io, '\n')
+        end
+        return nothing
+    end
+    json_head(io, o, o.input)
+    json_key(io, "spectrum"); print(io, '{')
+    json_key(io, "quantity", true); json_string(io, o.density)
+    json_key(io, "carrier"); json_number(io, o.carrier)
+    json_key(io, "n"); print(io, length(f))
+    json_key(io, "band"); json_array(io, Float64[band[1], band[2]])
+    print(io, '}')
+    json_key(io, "results"); print(io, '[')
+    for (j, d) in enumerate(o.devs)
+        j > 1 && print(io, ',')
+        print(io, '{')
+        json_key(io, "deviation", true); json_string(io, String(d))
+        json_key(io, "tau"); json_array(io, taus)
+        json_key(io, "dev"); json_array(io, devs[j])
+        json_key(io, "below"); json_array(io, below[j])
+        json_key(io, "above"); json_array(io, above[j])
+        print(io, '}')
+    end
+    print(io, ']')
+    return elapsed(io, t_start)
+end
+
 # ── steer ─────────────────────────────────────────────────────────────────
 
 const CSV_STEER = "source,tau,free,steered,predicted"

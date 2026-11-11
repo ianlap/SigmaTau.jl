@@ -20,7 +20,7 @@ struct PowerLawFit
     alphas::Vector{Int}
     "Coefficients ``h_α ≥ 0``, one per ``α``."
     h::Vector{Float64}
-    "What was fitted: a deviation (`:adev`, `:mdev`, `:hdev`, `:mhdev`) or a spectrum (`:Sy`, `:Sx`, `:L`)."
+    "What was fitted: a deviation (`:adev`, `:mdev`, `:hdev`, `:mhdev`) or a spectrum (`:Sy`, `:Sx`, `:Sphi`, `:L`)."
     source::Symbol
     "Sample interval of the record, in seconds; `NaN` for a spectrum given as points."
     tau0::Float64
@@ -75,6 +75,13 @@ end
 # replaced by its mean, which moves the integral by about 1/_PL_LOBES².
 const _PL_LOBES = 2048
 
+# (c, p, q) of an estimator's response c·sin^p(πfτ)/(πfτ)^q to S_y(f); with
+# the phase in steps of τ₀ the modified pair has m²sin²(πfτ₀) for two of
+# the powers of πfτ.
+_powerlaw_response(dev::Symbol) =
+    dev === :adev ? (2.0, 4, 2) : dev === :hdev ? (8 / 3, 6, 2) :
+    dev === :mdev ? (2.0, 6, 4) : (8 / 3, 8, 4)
+
 # Variance σ²(τ = m·τ₀) that the unit component S_y(f) = (sin(πfτ₀)/(πτ₀))^α
 # on [0, 1/(2τ₀)] gives in each estimator. That is the spectrum of a record
 # sampled at τ₀ (and of `noise_gen`), which is f^α well below the Nyquist
@@ -82,8 +89,7 @@ const _PL_LOBES = 2048
 #   AVAR 2 sin⁴(mθ)/(m² s²)    HVAR  (8/3) sin⁶(mθ)/(m² s²)
 #   MVAR 2 sin⁶(mθ)/(m⁴ s⁴)    MHVAR (8/3) sin⁸(mθ)/(m⁴ s⁴)
 function _powerlaw_var(dev::Symbol, α::Int, m::Int, τ₀::Float64)
-    c, p, q = dev === :adev ? (2.0, 4, 2) : dev === :hdev ? (8 / 3, 6, 2) :
-              dev === :mdev ? (2.0, 6, 4) : (8 / 3, 8, 4)
+    c, p, q = _powerlaw_response(dev)
     k = c / (Float64(m)^q * (π * τ₀)^(α + 1))   # (π τ₀)⁻¹ from df = dθ/(πτ₀)
     env(θ) = (s = sin(θ); s^(α - q))
     full(θ) = sin(m * θ)^p * env(θ)
@@ -163,9 +169,10 @@ point has the same fractional weight, and a point at ``f = 0`` is left out.
 - `alphas=2:-1:-2`: the exponents fitted. The Allan pair takes ``α`` from 2
   to −2. The Hadamard pair takes it to −4 and is insensitive to linear
   frequency drift.
-- `quantity=:Sy`: what `S` holds: `:Sy` (1/Hz), `:Sx` (s²/Hz) or `:L`
-  (dBc/Hz).
-- `f_carrier`: the carrier frequency in Hz, needed for ``ℒ(f)``.
+- `quantity=:Sy`: what `S` holds: `:Sy` (1/Hz), `:Sx` (s²/Hz), `:Sphi`
+  (rad²/Hz) or `:L` (dBc/Hz).
+- `f_carrier`: the carrier frequency in Hz, needed for ``S_φ(f)`` and
+  ``ℒ(f)``.
 
 !!! note "Reading the result"
     A coefficient cannot be negative, so a component the record does not
@@ -248,16 +255,18 @@ powerlaw_fit(f::AbstractVector{<:Real}, S::AbstractVector{<:Real};
              quantity::Symbol=:Sy, alphas=2:-1:-2, f_carrier=nothing) =
     _powerlaw_fit_psd(Float64.(f), Float64.(S), quantity, alphas, f_carrier, NaN)
 
-# S_y from S_x or ℒ. A sampled phase record is differenced, not
+# S_y from S_x, S_φ or ℒ. A sampled phase record is differenced, not
 # differentiated, to frequency: |2 sin(πfτ₀)/τ₀|² instead of (2πf)².
 function _powerlaw_to_sy(quantity::Symbol, f::Vector{Float64}, S::Vector{Float64},
                          f_carrier, τ₀::Float64)
     quantity === :Sy && return S
     d2 = isnan(τ₀) ? (2π .* f) .^ 2 : (2 .* sin.(π .* f .* τ₀) ./ τ₀) .^ 2
     quantity === :Sx && return d2 .* S
-    quantity === :L || throw(ArgumentError("powerlaw: quantity must be :Sy, :Sx or :L, got :$quantity"))
-    f_carrier === nothing && throw(ArgumentError("powerlaw: ℒ(f) needs `f_carrier`"))
-    return d2 .* 2 .* exp10.(S ./ 10) ./ (2π * f_carrier)^2
+    quantity === :Sphi || quantity === :L ||
+        throw(ArgumentError("powerlaw: quantity must be :Sy, :Sx, :Sphi or :L, got :$quantity"))
+    f_carrier === nothing && throw(ArgumentError("powerlaw: S_φ(f) and ℒ(f) need `f_carrier`"))
+    Sφ = quantity === :L ? 2 .* exp10.(S ./ 10) : S
+    return d2 .* Sφ ./ (2π * f_carrier)^2
 end
 
 function _powerlaw_fit_psd(f::Vector{Float64}, S::Vector{Float64}, quantity::Symbol,
@@ -365,8 +374,9 @@ type. `quantity` selects the spectrum
 
 - `:Sy`: ``S_y(f) = \\sum_α h_α f^α``, in 1/Hz.
 - `:Sx`: ``S_x(f) = S_y(f)/(2πf)^2``, in s²/Hz.
-- `:L`: ``ℒ(f) = \\tfrac{1}{2}(2πν_0)^2 S_x(f)``, in dBc/Hz, at the carrier
+- `:Sphi`: ``S_φ(f) = (2πν_0)^2 S_x(f)``, in rad²/Hz, at the carrier
   frequency ``ν_0`` given as `f_carrier`, in Hz.
+- `:L`: ``ℒ(f) = \\tfrac{1}{2} S_φ(f)``, in dBc/Hz.
 
 # Examples
 
@@ -388,7 +398,9 @@ function powerlaw_psd(h, f::AbstractVector{<:Real}; quantity::Symbol=:Sy, f_carr
     quantity === :Sy && return Sy
     Sx = Sy ./ (2π .* f) .^ 2
     quantity === :Sx && return Sx
-    quantity === :L || throw(ArgumentError("powerlaw_psd: quantity must be :Sy, :Sx or :L, got :$quantity"))
-    f_carrier === nothing && throw(ArgumentError("powerlaw_psd: ℒ(f) needs `f_carrier`"))
-    return 10 .* log10.(0.5 .* (2π * f_carrier)^2 .* Sx)
+    quantity === :Sphi || quantity === :L ||
+        throw(ArgumentError("powerlaw_psd: quantity must be :Sy, :Sx, :Sphi or :L, got :$quantity"))
+    f_carrier === nothing && throw(ArgumentError("powerlaw_psd: S_φ(f) and ℒ(f) need `f_carrier`"))
+    Sφ = (2π * f_carrier)^2 .* Sx
+    return quantity === :Sphi ? Sφ : 10 .* log10.(0.5 .* Sφ)
 end

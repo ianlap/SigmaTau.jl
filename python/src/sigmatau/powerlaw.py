@@ -144,8 +144,9 @@ def powerlaw_psd(
     ``h`` is a ``PowerLawFit``, a ``NoiseFit``, a ``ClockModel``, or a mapping
     of h_α keyed by α or by noise type. ``quantity`` selects the spectrum
     (IEEE Std 1139-2022, Eqs. (A.13), (A.15) and (A.16)): ``"Sy"``, S_y(f) in
-    1/Hz; ``"Sx"``, S_y(f)/(2πf)² in s²/Hz; or ``"L"``, ℒ(f) in dBc/Hz at the
-    carrier frequency ``f_carrier``, in Hz.
+    1/Hz; ``"Sx"``, S_y(f)/(2πf)² in s²/Hz; ``"Sphi"``, S_φ(f) in rad²/Hz; or
+    ``"L"``, ℒ(f) in dBc/Hz. The last two need the carrier frequency
+    ``f_carrier``, in Hz.
     """
     kwargs = {"quantity": jl.Symbol(str(quantity))}
     if f_carrier is not None:

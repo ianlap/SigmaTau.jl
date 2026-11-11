@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ._convert import spectral_from_jl, to_jl_data, to_jl_f64
+from ._convert import np_f64, spectral_from_jl, to_jl_data, to_jl_f64
 from ._julia import _map_errors, jl
 from .types import FrequencyData, PhaseData, SpectralResult
 
@@ -113,8 +113,8 @@ def integrated_jitter(
     ``spectrum`` is a result of :func:`ssb_phase_noise`, :func:`psd_x` or
     :func:`psd_y`, or the frequencies of spectrum points whose values are in
     ``S``, such as the ℒ(f) table of a phase-noise analyzer. ``quantity`` says
-    what ``S`` holds: ``"L"`` (ℒ(f) in dBc/Hz), ``"Sx"`` (S_x(f) in s²/Hz) or
-    ``"Sy"`` (S_y(f) in 1/Hz).
+    what ``S`` holds: ``"L"`` (ℒ(f) in dBc/Hz), ``"Sphi"`` (S_φ(f) in rad²/Hz),
+    ``"Sx"`` (S_x(f) in s²/Hz) or ``"Sy"`` (S_y(f) in 1/Hz).
 
     Returns a dict with ``phase`` (radians rms; IEEE Std 1139-2022,
     Eq. (A.17)), ``time`` (seconds rms) and ``residual_fm`` (hertz rms).
@@ -142,4 +142,56 @@ def integrated_jitter(
     return {"phase": float(j.phase), "time": float(j.time), "residual_fm": float(j.residual_fm)}
 
 
-__all__ = ["psd_y", "psd_x", "ssb_phase_noise", "integrated_jitter"]
+@_map_errors
+def spectrum_sigma(
+    f: Sequence[float],
+    S: Sequence[float],
+    tau: Sequence[float],
+    *,
+    quantity: str = "L",
+    f_carrier: float | None = None,
+    deviation: str = "adev",
+    band: tuple[float, float] | None = None,
+) -> dict:
+    """Deviation σ(τ) of the noise whose spectrum is given at the points
+    ``(f, S)``, such as the ℒ(f) table of a phase-noise analyzer: S_y(f)
+    integrated over the band of the table through the transfer function of
+    the deviation (SP1065 §7, Eqs. (63) to (66)).
+
+    ``f`` holds the Fourier frequencies in Hz, rising, and ``tau`` the
+    averaging times in seconds. ``quantity`` says what ``S`` holds: ``"L"``
+    (ℒ(f) in dBc/Hz), ``"Sphi"`` (S_φ(f) in rad²/Hz), ``"Sx"`` (S_x(f) in
+    s²/Hz) or ``"Sy"`` (S_y(f) in 1/Hz); the first two need the carrier
+    frequency ``f_carrier``, in Hz. ``deviation`` is ``"adev"``, ``"mdev"``,
+    ``"hdev"`` or ``"mhdev"``, the modified ones in the limit of a sample
+    interval far below τ. ``band`` is a pair of frequencies inside the table,
+    by default all of it. Between neighboring points the spectrum is a power
+    law, a straight line on a log-log plot.
+
+    Returns a dict. ``dev`` is the deviation of the noise inside the band at
+    each ``tau``. ``below`` and ``above`` are the variance that the spectrum
+    would add if it went on below and above the band, on the slope of its
+    lowest and of its highest decade, as fractions of ``dev**2``: ``inf``
+    where that integral does not converge, as ``above`` does for the Allan
+    and Hadamard deviations of white and flicker PM, which rise with the
+    bandwidth of the measurement. ``band`` holds the limits of the integral.
+
+    The conversion goes one way: a deviation does not determine the spectrum
+    (Greenhall 1998). From σ(τ) to a spectrum, fit a power-law model with
+    :func:`powerlaw_fit` and evaluate it with :func:`powerlaw_psd`.
+    """
+    kwargs = {"quantity": jl.Symbol(str(quantity)), "deviation": jl.Symbol(str(deviation))}
+    if f_carrier is not None:
+        kwargs["f_carrier"] = float(f_carrier)
+    if band is not None:
+        kwargs["band"] = to_jl_f64(band)
+    r = jl.spectrum_sigma(to_jl_f64(f), to_jl_f64(S), to_jl_f64(tau), **kwargs)
+    return {
+        "dev": np_f64(r.dev),
+        "below": np_f64(r.below),
+        "above": np_f64(r.above),
+        "band": tuple(float(v) for v in r.band),
+    }
+
+
+__all__ = ["psd_y", "psd_x", "ssb_phase_noise", "integrated_jitter", "spectrum_sigma"]
