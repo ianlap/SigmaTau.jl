@@ -1,5 +1,6 @@
 // Estimator catalog. `family` is the short name shown in the panel rows,
-// `note` the one-line description in the Add estimators dialog.
+// `note` the one-line description in the Add estimators dialog, `slow` marks
+// those that take seconds on a record of 10⁵ samples.
 // id, label, group and axis must match `estimators()` (checked in test/stab/registry.jl).
 export const GROUPS = [
   { id: "allan", title: "Allan family", sub: "σ<sub>y</sub>" },
@@ -11,18 +12,18 @@ export const GROUPS = [
 export const ESTIMATORS = [
   { id: "adev",     label: "ADEV",     group: "allan", axis: "sigma_y", family: "Allan",                    note: "Allan, the standard" },
   { id: "mdev",     label: "MDEV",     group: "allan", axis: "sigma_y", family: "Modified Allan",           note: "separates white and flicker PM" },
-  { id: "hdev",     label: "HDEV",     group: "allan", axis: "sigma_y", family: "Hadamard",                 note: "ignores linear drift" },
+  { id: "hdev",     label: "HDEV",     group: "allan", axis: "sigma_y", family: "Hadamard",                 note: "ignores linear frequency drift" },
   { id: "mhdev",    label: "MHDEV",    group: "allan", axis: "sigma_y", family: "Modified Hadamard",        note: "modified Hadamard" },
-  { id: "pdev",     label: "PDEV",     group: "allan", axis: "sigma_y", family: "Parabolic",                note: "parabolic, for averaging counters" },
+  { id: "pdev",     label: "PDEV",     group: "allan", axis: "sigma_y", family: "Parabolic",                note: "parabolic, for Ω counters" },
   { id: "totdev",   label: "TOTDEV",   group: "total", axis: "sigma_y", family: "Total Allan",              note: "total Allan" },
-  { id: "mtotdev",  label: "MTOTDEV",  group: "total", axis: "sigma_y", family: "Total modified Allan",     note: "total modified Allan" },
-  { id: "htotdev",  label: "HTOTDEV",  group: "total", axis: "sigma_y", family: "Total Hadamard",           note: "total Hadamard" },
-  { id: "mhtotdev", label: "MHTOTDEV", group: "total", axis: "sigma_y", family: "Total modified Hadamard",  note: "total modified Hadamard" },
-  { id: "theo1",    label: "THEO1",    group: "theo",  axis: "sigma_y", family: "Thêo1",                    note: "Thêo1, bias-corrected" },
-  { id: "theoh",    label: "THEOH",    group: "theo",  axis: "sigma_y", family: "ThêoH",                    note: "Thêo1 joined to ADEV" },
+  { id: "mtotdev",  label: "MTOTDEV",  group: "total", axis: "sigma_y", family: "Total modified Allan",     note: "total modified Allan", slow: true },
+  { id: "htotdev",  label: "HTOTDEV",  group: "total", axis: "sigma_y", family: "Total Hadamard",           note: "total Hadamard", slow: true },
+  { id: "mhtotdev", label: "MHTOTDEV", group: "total", axis: "sigma_y", family: "Total modified Hadamard",  note: "total modified Hadamard", slow: true },
+  { id: "theo1",    label: "THEO1",    group: "theo",  axis: "sigma_y", family: "Thêo1",                    note: "Thêo1, bias-corrected", slow: true },
+  { id: "theoh",    label: "THEOH",    group: "theo",  axis: "sigma_y", family: "ThêoH",                    note: "Thêo1 joined to ADEV", slow: true },
   { id: "tdev",     label: "TDEV",     group: "time",  axis: "sigma_x", family: "Time deviation",           note: "time deviation" },
   { id: "htdev",    label: "HTDEV",    group: "time",  axis: "sigma_x", family: "Hadamard time",            note: "Hadamard time deviation" },
-  { id: "ttotdev",  label: "TTOTDEV",  group: "time",  axis: "sigma_x", family: "Total time",               note: "total time deviation" },
+  { id: "ttotdev",  label: "TTOTDEV",  group: "time",  axis: "sigma_x", family: "Total time",               note: "total time deviation", slow: true },
   { id: "mtie",     label: "MTIE",     group: "time",  axis: "sigma_x", family: "Max time interval error",  note: "max time interval error" },
   { id: "tierms",   label: "TIE rms",  group: "time",  axis: "sigma_x", family: "RMS time interval error",  note: "rms time interval error" },
 ];

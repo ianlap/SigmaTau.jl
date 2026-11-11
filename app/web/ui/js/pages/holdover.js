@@ -4,7 +4,7 @@
 // compares with the record, from every start the record allows. One clock:
 // RMS, quantile and worst case against holdover time, the curve its noise
 // model predicts or the filter claims, √6·TDEV (√20·HTDEV with drift) for reference, and the time
-// to a limit. Several clocks: one colour per clock. Computed when this page
+// to a limit. Several clocks: one color per clock. Computed when this page
 // needs it; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
 import { holdover as fetchHoldover, holdoverKey } from "../core.js";
@@ -191,20 +191,20 @@ export function refresh() {
     line(`${level} of trials`, hd.quantile, col(2), "dash");
     if (!several) {
       line("Worst trial", hd.worst, col(3), "dot");
-      const p = hd.predicted, grey = { mode: "lines", line: { color: css("--muted"), width: 1.5, dash: "dashdot" } };
+      const p = hd.predicted, gray = { mode: "lines", line: { color: css("--muted"), width: 1.5, dash: "dashdot" } };
       if (p && !p.error) traces.push({
-        x: hd.tau, y: p.sigma, name: "Predicted RMS (noise model)", ...grey,
+        x: hd.tau, y: p.sigma, name: "Predicted RMS (noise model)", ...gray,
         hovertemplate: "Predicted from the noise model (h<sub>α</sub> fitted to MHDEV)<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>",
       });
       if (hd.claimed) {
         // Past the longest τ of the fit of the stretch the model is extrapolated: dotted from there.
         const cut = hd.tau.findLastIndex((t) => t <= hd.fit_tau_max) + 1;
         traces.push({
-          x: hd.tau.slice(0, cut), y: hd.claimed.slice(0, cut), name: "Claimed by the filter", ...grey,
+          x: hd.tau.slice(0, cut), y: hd.claimed.slice(0, cut), name: "Claimed by the filter", ...gray,
           hovertemplate: "The filter's own standard deviation<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>",
         });
         if (cut < hd.tau.length) traces.push({
-          x: hd.tau.slice(Math.max(cut - 1, 0)), y: hd.claimed.slice(Math.max(cut - 1, 0)), name: "Claimed, past the fit", mode: "lines", line: { ...grey.line, dash: "dot" },
+          x: hd.tau.slice(Math.max(cut - 1, 0)), y: hd.claimed.slice(Math.max(cut - 1, 0)), name: "Claimed, past the fit", mode: "lines", line: { ...gray.line, dash: "dot" },
           hovertemplate: `The filter's own standard deviation, past the ${duration(hd.fit_tau_max)} its model was fitted to<br>τ = %{x:.4g} s<br>%{y:.3e} s<extra></extra>`,
         });
       }
@@ -233,5 +233,5 @@ export function refresh() {
 
 export function plotElement() { return root?.querySelector("[data-ref=plot]") ?? null; }
 export function hint() {
-  return multi() ? "Colour = clock · solid = RMS · dashed = the chosen share of trials" : `Solid = RMS · dashed = the chosen share of trials · dotted = worst trial · grey = predicted from the noise model, or claimed by the filter · thin = ${reference(state.hold.drift)}`;
+  return multi() ? "Color = clock · solid = RMS · dashed = the chosen share of trials" : `Solid = RMS · dashed = the chosen share of trials · dotted = worst trial · gray = predicted from the noise model, or claimed by the filter · thin = ${reference(state.hold.drift)}`;
 }

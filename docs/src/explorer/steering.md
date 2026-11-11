@@ -57,7 +57,7 @@ integral gain if there is one, the time constants of the loop, which come
 from its poles, and how often it steers. Where the poles are complex,
 **Rings with period** gives the period of the overshoot. Below come the
 RMS of the steered phase and of the steers, each with the value that the
-model predicts in brackets, the model itself, and a table of the three
+model predicts in parentheses, the model itself, and a table of the three
 deviations at each averaging time.
 
 ## Reading it

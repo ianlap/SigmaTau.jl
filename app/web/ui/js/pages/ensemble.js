@@ -1,4 +1,4 @@
-// Ensemble page: a timescale (AT1, AT2, EWFA or a Kalman scale) formed from
+// Ensemble page: a time scale (AT1, AT2, EWFA or a Kalman scale) formed from
 // several clocks read against one reference. The clocks are the value columns
 // of one loaded file; without such a file the core simulates four. The scale
 // is computed when this page needs it and recomputed when the settings or the
@@ -13,7 +13,7 @@ let inflight = null;           // key of the run in progress
 let inflightCtl = null;        // stops it (the core process too) when the settings change
 const ALGS = [["at1", "AT1"], ["at2", "AT2"], ["ewfa", "EWFA"], ["greenhall", "Greenhall"], ["jones_tryon", "Jones–Tryon"], ["stein", "Stein"]];
 const KALMAN = new Set(["greenhall", "jones_tryon", "stein"]);
-const capped = (alg) => !KALMAN.has(alg) || alg === "stein";   // takes --wmax
+const CAPPED = new Set(["at1", "at2", "stein"]);                // take --wmax
 const FLICKER = new Set(["greenhall", "jones_tryon"]);          // take --flicker
 const ABOUT_FLICKER = " Flicker states: on keeps each clock's flicker FM and flicker PM in its model as Markov states, across the τ where its fit finds them; off folds flicker PM into the reading noise and leaves flicker FM out.";
 const ABOUT = {
@@ -26,6 +26,13 @@ const ABOUT = {
 };
 // The pivot as the core takes it: 1-based, back to the first clock when out of range.
 const pivotOf = (n) => (state.ens.pivot <= n ? state.ens.pivot : 1);
+// The file goes to the core as read, without the preparation of the Data page,
+// so the core's remedy for gaps (--fillgaps) has no counterpart on this page.
+const GAPS = [
+  [/^cross: the records have gaps/, "Greenhall, Jones–Tryon and Stein fit a model to each clock, which needs a file without missing samples. AT1, AT2 and EWFA form a scale from this one."],
+  [/^the frequency record is missing/, "Frequency columns with missing samples cannot be read."],
+];
+const inWords = (message) => GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.") ?? message;
 
 export const ownsPanel = true;
 
@@ -65,20 +72,20 @@ function request() {
     if (c.tau0) a.push("--tau0", c.tau0);
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
-  a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : []), ...(capped(E.algorithm) ? ["--wmax", E.wmax] : []),
+  a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : []), ...(CAPPED.has(E.algorithm) ? ["--wmax", E.wmax] : []),
     ...(E.algorithm === "at2" && E.steps ? ["--steps", E.steps] : []), ...(FLICKER.has(E.algorithm) && E.flicker ? ["--flicker"] : []), "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
 export function controls() {
   const E = state.ens, clocks = fileClocks();
-  return `<h2>Timescale</h2>
+  return `<h2>Time scale</h2>
     <label class="opt"><span>Algorithm</span><select data-ctl="alg">${ALGS.map(([id, label]) =>
       `<option value="${id}" ${E.algorithm === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     ${KALMAN.has(E.algorithm)
       ? `<label class="opt"><span>Pivot clock</span><select data-ctl="pivot">${(clocks.length ? clocks.map((c) => c.name) : [1, 2, 3, 4].map((k) => `clock ${k}`)).map((n, i) =>
         `<option value="${i + 1}" ${pivotOf(clocks.length || 4) === i + 1 ? "selected" : ""}>${h(n)}</option>`).join("")}</select></label>` : ""}
-    ${capped(E.algorithm) ? `<label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>` : ""}
+    ${CAPPED.has(E.algorithm) ? `<label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>` : ""}
     ${E.algorithm === "at2" ? `<label class="opt"><span>Frequency steps</span><select data-ctl="steps">${[["", "Off"], ["best", "Best"], ["real", "Real"]].map(([id, label]) =>
       `<option value="${id}" ${E.steps === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
     ${FLICKER.has(E.algorithm) ? `<label class="opt"><span>Flicker states</span><select data-ctl="flicker">${[["", "Off"], ["on", "On"]].map(([id, label]) =>
@@ -137,17 +144,19 @@ function ensure() {
   }).catch((err) => {
     if (err.name === "AbortError" || inflight !== key) return;
     inflight = null;
-    update((s) => { s.ens.error = { key, message: err.message }; s.ens.result = null; });
+    update((s) => { s.ens.error = { key, message: inWords(err.message) }; s.ens.result = null; });
   });
 }
 
 const weight = (w) => (w === null ? "–" : num(w, 3));
 
+// Without a scale the plots are hidden, and its table and the line that describes it go.
 function showEmpty(text) {
   const e = root.querySelector("[data-ref=empty]");
   e.innerHTML = text ? `<p>${text}</p>` : "";
   e.hidden = !text;
   for (const p of root.querySelectorAll(".plot")) p.style.visibility = text ? "hidden" : "visible";
+  if (text) for (const ref of ["table", "sub"]) root.querySelector(`[data-ref=${ref}]`).innerHTML = "";
 }
 
 export function refresh() {
@@ -156,8 +165,8 @@ export function refresh() {
   const { clocks } = request();
   const r = state.ens.result?.ts;
   const table = root.querySelector("[data-ref=table]");
-  if (state.ens.error) { table.innerHTML = ""; return showEmpty(h(state.ens.error.message)); }
-  if (!r) { table.innerHTML = ""; return showEmpty(state.core.ok ? "Forming the timescale…" : "No analysis core. Start the explorer with serve.py."); }
+  if (state.ens.error) return showEmpty(h(state.ens.error.message));
+  if (!r) return showEmpty(state.core.ok ? "Forming the time scale…" : "No analysis core. Start the explorer with serve.py.");
   showEmpty("");
   const names = r.clocks.map((n, i) => clocks[i]?.name ?? n);
   const color = (i) => seriesColor(clocks[i]?.slot ?? i);
@@ -179,8 +188,8 @@ export function refresh() {
   if (!Plotly) return;
   const scale = css("--accent");
   Plotly.react(root.querySelector("[data-ref=adev]"), [
-    { x: r.adev.tau, y: r.adev.scale, name: "Timescale", mode: "lines+markers", line: { color: scale, width: 3 }, marker: { color: scale, size: 6 },
-      hovertemplate: "<b>Timescale</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>" },
+    { x: r.adev.tau, y: r.adev.scale, name: "Time scale", mode: "lines+markers", line: { color: scale, width: 3 }, marker: { color: scale, size: 6 },
+      hovertemplate: "<b>Time scale</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>" },
     ...r.adev.clocks.map((dev, i) => ({ x: r.adev.tau, y: dev, name: names[i], mode: "lines", line: { color: color(i), width: 1.5, dash: "dot" },
       hovertemplate: `<b>${h(names[i])}</b> − scale<br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
   ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis("σ<sub>y</sub>(τ)"), showlegend: true, uirevision: "ens" }, CONFIG);

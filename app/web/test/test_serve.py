@@ -77,7 +77,7 @@ SLEEP = [sys.executable, "-c", "import time; time.sleep(60)"]
 
 
 class RunCoreTests(unittest.TestCase):
-    """The core runs in a process the server can stop: a cancelled run (the
+    """The core runs in a process the server can stop: a canceled run (the
     page hangs up) must not keep the processor busy."""
 
     def test_output_and_exit_code(self):
@@ -92,7 +92,7 @@ class RunCoreTests(unittest.TestCase):
         t.start()
         time.sleep(0.5)
         self.assertTrue(t.is_alive())          # still running while the page waits
-        page_end.close()                       # the page cancelled
+        page_end.close()                       # the page canceled
         t.join(10)
         self.assertFalse(t.is_alive())
         self.assertIsNone(got["r"])

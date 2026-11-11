@@ -3,7 +3,7 @@
 // filter and the steering loop over the whole record and reports from the
 // end of that stretch on. One clock: the Allan deviation free-running,
 // steered and as the model predicts for the settled loop, or the steered
-// phase with the frequency correction in force. Several clocks: one colour
+// phase with the frequency correction in force. Several clocks: one color
 // per clock. The gains come from a time constant (pole placement) or from a
 // cost. Computed when this page needs it; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
@@ -138,7 +138,7 @@ function renderSide(box, clocks) {
       ${rings ? kv("Rings with period", duration(1 / osc), "The poles are complex: the loop overshoots") : ""}
       ${kv("Steer", st.interval > c.record.tau0 ? `every ${duration(st.interval)}` : "every sample")}
       <div class="rule"></div>
-      ${kv("Steered phase, RMS", both(st.phase_rms, p?.phase, " s"), "From the end of the model's stretch on; in brackets, the settled loop as the model predicts it")}
+      ${kv("Steered phase, RMS", both(st.phase_rms, p?.phase, " s"), "From the end of the model's stretch on; in parentheses, the settled loop as the model predicts it")}
       ${kv("Steers, RMS", both(st.steers_rms, p?.steers, ""), "Fractional frequency per steer")}
     </div>
     <p class="muted small hold-note">Model fitted to the first ${duration(st.train)}: ${modelText(st.model)}${st.drift ? ", with a drift state" : ""}.</p>
@@ -235,6 +235,6 @@ export function refresh() {
 
 export function plotElement() { return root?.querySelector("[data-ref=plot]") ?? null; }
 export function hint() {
-  if (state.steer.view === "record") return multi() ? "Colour = clock · the steered phase over the whole record" : "Steered phase, with the frequency correction in force on the right axis";
-  return multi() ? "Colour = clock · solid = steered · dashed = free-running" : "Free-running and steered σ(τ) · grey = the settled loop as the clock model predicts it";
+  if (state.steer.view === "record") return multi() ? "Color = clock · the steered phase over the whole record" : "Steered phase, with the frequency correction in force on the right axis";
+  return multi() ? "Color = clock · solid = steered · dashed = free-running" : "Free-running and steered σ(τ) · gray = the settled loop as the clock model predicts it";
 }
