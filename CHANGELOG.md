@@ -691,6 +691,14 @@ Clock models, the Kalman filter and timescales.
   in it with "failed (CompositeException)", because a program that 1.12
   trims cannot start a task. The build now stops on 1.12, and an error
   inside a threaded loop is reported by what the loop threw.
+- Explorer: every page fits its window from 960 px (the ninth tab had
+  squeezed the top bar, and with several clocks the Dynamic maps lay over
+  each other); an error on a record with gaps names the
+  *Fill gaps by reflection* box in place of a command-line flag, and the
+  Ensemble page says which scales a file with missing samples can form;
+  labels that said something untrue are corrected (quadratic drift removal
+  and SP1065, the log drift model, the slow estimators, EWFA's largest
+  weight, what a run updates); the interface spells as the manual does.
 
 ### Security
 
