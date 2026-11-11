@@ -464,17 +464,24 @@ The filter is run for every pair of levels on a logarithmic grid of
 `points` values that spans `decades` decades either side of `m.q1` and
 `m.q2`. The pair is kept whose predictions `horizons` samples ahead have
 the smallest sum of the logarithms of their RMS errors
-([`prediction_error`](@ref)). `R`, `q3` and the flicker levels stay as
-they are.
+([`prediction_error`](@ref)).
+
+The predictions of a Kalman filter depend on the ratios of its noise
+levels and not on their size, so that search cannot set the size. Every
+level of the model with the best pair is therefore multiplied by one
+factor, `scale`: the mean square of that filter's normalized innovations
+past the burn-in. That is the factor of largest likelihood
+([Tryon and Jones (1983), Eq. (5.1)](@cite tryon-1983-parameters)); it
+leaves the predictions as they are and makes the error the filter claims
+one sample ahead the error it makes.
 
 A noise fit gives the levels that match ``σ(τ)``; tuning gives the levels
 that predict best. The two differ when the record has noise that the model
-lacks, such as flicker FM. The tuned levels are then no longer those of
-the noise, and the covariance of the tuned filter is not the error of its
-estimates: in simulation the error it claimed was wrong by a factor of 2
-to 9 ([What the states buy](@ref)). A model with flicker states,
-`clock_model(fit; flicker = true)`, carries that noise instead, and
-predicted better there.
+lacks, such as flicker FM. The error the tuned filter claims is then right
+at one sample and not beyond: in simulation it was wrong by a factor of up
+to 2.8 at longer holdover times ([What the states buy](@ref)). A model
+with flicker states, `clock_model(fit; flicker = true)`, carries that
+noise instead, and predicted better there.
 
 # Arguments
 
@@ -486,16 +493,17 @@ predicted better there.
 
 - `horizons`: prediction horizons in samples. Those longer than the record
   past the burn-in are dropped.
-- `decades`: half-width of the grid in decades. A level tuned to the edge
-  of the grid calls for a wider one.
+- `decades`: half-width of the grid in decades.
 - `points`: grid points on each axis; the filter runs `points^2` times.
-- `burnin`: samples at the start left out of the error.
+- `burnin`: samples at the start left out of the error and of `scale`.
 
 # Returns
 
-A named tuple `(model, q1, q2, cost)`: the tuned model, the two grid axes,
-and the cost on the grid, with one row for each `q1` and one column for
-each `q2`.
+A named tuple `(model, q1, q2, cost, scale, edge)`: the tuned model; the
+two grid axes; the cost on the grid, with one row for each `q1` and one
+column for each `q2`; the factor on the levels; and whether the best pair
+lies on the edge of the grid, where the minimum may be outside it and a
+larger `decades` is called for.
 
 # Examples
 
@@ -505,7 +513,7 @@ h = Dict(0 => 2e-24, -1 => 1e-27, -2 => 1e-32)
 p = noise_gen(PhaseData, 20_000, 1.0; h, rng = Xoshiro(1))
 m = clock_model(powerlaw_fit(p; alphas = [2, 0, -2]))    # without flicker FM
 t = tune_q(p, m)
-t.model.q1 / m.q1, t.model.q2 / m.q2
+t.model.q1 / m.q1, t.model.q2 / m.q2, t.edge
 ```
 """
 function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integer}=[10, 100, 1000],
@@ -520,5 +528,10 @@ function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integ
                 sum(log, prediction_error(kalman_filter(data, mi), data, hs; burnin))
             end for a in q1s, b in q2s]
     i = argmin(cost)
-    return (model=_with(m; q1=q1s[i[1]], q2=q2s[i[2]]), q1=q1s, q2=q2s, cost=cost)
+    best = _with(m; q1=q1s[i[1]], q2=q2s[i[2]])
+    kf = kalman_filter(data, best)
+    keep = filter(k -> isfinite(kf.innovation[k]), burnin+1:length(data.x))
+    scale = sum(k -> kf.innovation[k]^2 / kf.innovation_var[k], keep) / length(keep)
+    return (model=_scaled(best, scale), q1=q1s, q2=q2s, cost=cost, scale=scale,
+            edge=i[1] in (1, points) || i[2] in (1, points))
 end

@@ -54,9 +54,14 @@ using Statistics
         @test prediction_error(kalman_filter(line, m), line, [1, 10]; burnin=100) ≈ [0, 0] atol=1e-18
         start = ClockModel(; tau0=1.0, R=1e-20, q1=1e-21, q2=1e-29)
         t = tune_q(p, start; horizons=[10, 100], points=5)
-        @test t.model.q1 ≈ 1e-22 rtol=1e-9                 # on the grid, one decade down
-        @test (t.model.R, size(t.cost)) == (1e-20, (5, 5))
+        @test t.model.q1 / t.scale ≈ 1e-22 rtol=1e-9       # on the grid, one decade down
+        @test t.scale ≈ 1 rtol=0.1
+        @test size(t.cost) == (5, 5) && t.edge == any(in((1, 5)), Tuple(argmin(t.cost)))
         @test minimum(t.cost) == t.cost[argmin(t.cost)] <= t.cost[3, 3]
+        # Predictions do not see the size of the levels: from a start a
+        # hundred times too large, the scale brings the model back.
+        big = tune_q(p, ClockModel(; tau0=1.0, R=1e-18, q1=1e-19, q2=1e-27); horizons=[10, 100], points=5)
+        @test [big.model.R, big.model.q1, big.model.q2] ≈ [t.model.R, t.model.q1, t.model.q2] rtol=1e-3
         @test_throws ArgumentError tune_q(p, ClockModel(; tau0=1.0, q1=1e-22))
     end
 

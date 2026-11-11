@@ -115,11 +115,15 @@ c, d = holdover(p, t.model; tau), holdover(p, m3; tau)
 ```
 
 Tuning trades the short predictions for the long ones. The tuned levels
-are no longer those of the noise, so the covariance of the tuned filter,
-and with it [`holdover_error`](@ref), is not to be relied on. In
-simulation the predictions of tuned models were 5 to 29 % worse than
-those of models with flicker states, and the errors they claimed were
-wrong by a factor of 2 to 9 ([What the states buy](@ref)).
+are no longer those of the noise. `tune_q` sets their size so that the
+error claimed one sample ahead is the error made (`t.scale` is the factor
+it applied); farther ahead the covariance of the tuned filter, and with
+it [`holdover_error`](@ref), is not to be relied on. In simulation the
+predictions of tuned models were 5 to 29 % worse than those of models
+with flicker states, and the errors they claimed from 10 to 1000 s were
+1.2 to 2.8 times too small ([What the states buy](@ref)). `t.edge` says
+whether the best pair lies on the edge of the grid, where a larger
+`decades` is called for.
 
 ## Simulated clocks
 

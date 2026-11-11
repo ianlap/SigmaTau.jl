@@ -468,8 +468,10 @@ def tune_q(
     points: int = 9,
 ) -> dict:
     """Retune the white and random-walk FM levels on a log grid for the smallest
-    phase prediction error; returns ``model``, the grid axes ``q1``, ``q2`` and
-    the ``cost`` surface."""
+    phase prediction error; returns ``model``, the grid axes ``q1``, ``q2``, the
+    ``cost`` surface, the factor ``scale`` on every level of the model (the mean
+    square of its normalized innovations) and ``edge``, whether the best pair
+    lies on the edge of the grid."""
     r = jl.tune_q(
         to_jl_data(data),
         m._jl(),
@@ -482,6 +484,8 @@ def tune_q(
         "q1": np_f64(r.q1),
         "q2": np_f64(r.q2),
         "cost": _mat(r.cost),
+        "scale": float(r.scale),
+        "edge": bool(r.edge),
     }
 
 
