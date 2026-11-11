@@ -42,6 +42,7 @@ each call pays Julia's start-up.
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
 | `sigmatau holdover FILE` | holdover test: the time error after a training stretch against holdover time, and the time to reach a limit ([holdover](../reference/holdover.md)) |
+| `sigmatau steer FILE` | steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts ([steering](../reference/steering.md)) |
 | `sigmatau cross FILE --with FILE2` | two channels measuring one device: cross Allan deviation and cross-spectrum ([two-channel measurements](cross.md)) |
 | `sigmatau timescale FILE --value-cols LIST` | a timescale (AT1 or EWFA) from several clocks read against one reference: each clock's weight and prediction error, and with JSON the ADEV of the scale and of each clock against it |
 | `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
@@ -125,6 +126,20 @@ compared with, and `claimed` is the error the filter itself expects
 PM that the fit finds stay in the model, as Markov states out to the
 record's span.
 
+`steer`: the record is the free-running clock against its reference, and
+the command replays it through a steering loop ([`steer`](@ref)). The gains
+come from `--time-constant SECONDS`, a critically damped loop by pole
+placement ([`steering_gains`](@ref)), with `--integral` for a third gain,
+or from `--cost P:F:U`, the weights on phase, frequency and steer of a
+quadratic cost ([`lqg_gains`](@ref)). `--interval SECONDS` sets the time
+between steers (default τ₀). The clock model is the power-law fit to the
+first `--train SECONDS` alone (default: a quarter of the record), with the
+flicker it finds kept as Markov states, so the filter is not given noise
+levels learned from the readings it steers; the loop runs over the whole
+record and every result is taken from the end of that stretch on.
+`--fit-drift` gives the model a drift state, which the loop steers out.
+`--grid` or `--m` set the averaging times.
+
 `cross`: `--with FILE2`, the second channel, read with the same options as
 `FILE`; `--grid` or `--m` for the τ values and `--nperseg N` for the
 cross-spectrum. Both records must have the same length and τ₀ and no gaps.
@@ -153,7 +168,10 @@ with `c` blank for the linear model. `holdover` writes
 one row per holdover time (`train` is K times `tau` with `--grow`); `limit`
 is blank without `--limit`, `time_to_limit` is blank when the limit is not
 reached within the holdover times, and `claimed` is blank without
-`--kalman`. `cross` writes
+`--kalman`. `steer` writes `source,tau,free,steered,predicted`, the Allan
+deviation of the record, of the steered record and of the steady state the
+clock model predicts; `predicted` is blank where there is no prediction (a
+steer less often than every sample, or random-run FM in the model). `cross` writes
 `tau,covar,dev,uncertainty,dev_a,dev_b,neff`, one row per τ (see
 [`cross_adev`](@ref)).
 
@@ -237,6 +255,18 @@ numbers are `null`.
   array (variance in s², over `tau`) per noise type. With `--kalman`,
   `claimed` holds the filter's own standard deviation over `tau` and `model`
   the `{"R", "q1", "q2", "q3", "flicker_fm", "flicker_pm"}` it ran on.
+- `sigmatau steer` adds `"steer": {"train", "interval", "gains",
+  "time_constants", "frequencies", "drift", "model", "tau", "free",
+  "steered", "phase_rms", "steers_rms", "predicted"}`: the `gains` are
+  `{"phase", "frequency", "integral"}`, `time_constants` (s) and
+  `frequencies` (Hz) those of the loop's poles ([`steering_poles`](@ref)),
+  `model` the clock model as for `holdover --kalman` and `drift` whether it
+  has a drift state, `free` and `steered` the Allan deviations over `tau`,
+  and `phase_rms` and `steers_rms` the RMS of the steered readings and of
+  the steers. `predicted` holds `{"phase", "frequency", "steers", "adev"}`
+  from [`SteeringPrediction`](@ref), or an `error` saying why there is
+  none. With `--series N`, `series` holds `t`,
+  the `steered` phase and the frequency `correction` in force.
 - `sigmatau cross` adds `"with"` (the second file), `"cross_adev": {"tau",
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`

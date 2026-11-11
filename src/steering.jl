@@ -244,7 +244,7 @@ function steering_poles(g::SteeringGains)
     else
         C[1, 3], C[2, 3], C[3, 3] = J, -(2J + P), J + P + D
     end
-    w = eigvals(C)
+    w = Vector{ComplexF64}(eigvals(C; sortby=nothing))
     logz = [log1p(-2real(x) + abs2(x)) / 2 for x in w]           # log |1 − w|
     return (poles=1 .- w, time_constants=-τ ./ logz,
             frequencies=[abs(angle(1 - x)) / (2π * τ) for x in w], stable=all(<(0), logz))
@@ -402,7 +402,7 @@ function _lyapunov(M::Matrix{Float64}, W::Matrix{Float64})
     Σ, A = copy(W), copy(M)
     for _ in 1:128
         Δ = A * Σ * A'
-        Σ += Δ
+        Σ .+= Δ
         all(abs(Δ[i]) <= eps() * abs(Σ[i]) for i in eachindex(Δ)) && break
         A = A * A
     end

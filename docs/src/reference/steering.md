@@ -143,6 +143,10 @@ is held to the reference. The filter runs at every sample; the steers can
 come less often, at `g.interval`, with the gains computed for that interval
 [goedel-2019-steering-comparison](@cite).
 
+`sigmatau steer` runs the replay from the [command line](../guide/cli.md),
+with the model fitted to the first stretch of the record alone and the
+results taken from the end of that stretch on.
+
 ## Predicted steady state
 
 On a [`ClockModel`](@ref) in place of a record, `steer` returns the steady
