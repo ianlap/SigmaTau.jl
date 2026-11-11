@@ -12,6 +12,7 @@ import numpy as np
 
 from ._convert import (
     data_from_jl,
+    driftfit_to_jl,
     np_f64,
     np_int,
     result_from_jl,
@@ -22,7 +23,7 @@ from ._convert import (
     to_jl_data,
 )
 from ._julia import _map_errors, jl
-from .types import FrequencyData, PhaseData, StabilityResult, StabilitySuite
+from .types import DriftFit, FrequencyData, PhaseData, StabilityResult, StabilitySuite
 
 
 def _read_kwargs(tau0, time_col, value_col, header, delim, scaling, detrend, fillgaps) -> dict:
@@ -192,7 +193,7 @@ def detect_format(path: str, *, delim: str | None = None) -> str:
 
 @_map_errors
 def detrend(
-    data: PhaseData | FrequencyData, *, method: str = "linear"
+    data: PhaseData | FrequencyData, fit: DriftFit | None = None, *, method: str = "linear"
 ) -> PhaseData | FrequencyData:
     """Copy of a record with a trend removed from its samples.
 
@@ -202,7 +203,13 @@ def detrend(
     offset and a parabola a linear frequency drift; in frequency data a line
     is a linear frequency drift (SP1065 §5.18, §5.21 and §5.22). Missing
     samples stay in place and do not enter the fit.
+
+    With ``fit``, the result of :func:`drift_fit` on the same record, the
+    frequency model of that fit is removed instead: ``fit.fit`` from the
+    frequency samples, or its running sum times tau0 from the phase samples.
     """
+    if fit is not None:
+        return data_from_jl(jl.detrend(to_jl_data(data), driftfit_to_jl(fit)))
     return data_from_jl(jl.detrend(to_jl_data(data), method=jl.Symbol(str(method))))
 
 

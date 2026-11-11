@@ -96,7 +96,8 @@ trials begin and what the filter knows of the clock: its
 training stretch alone, so the noise levels are not learned from the
 readings that the predictions are compared with. The model keeps the
 flicker FM and the flicker PM that the fit finds, as
-[Markov states](../explanation/clock_model.md#Flicker-states).
+[Markov states](../explanation/clock_model.md#Flicker-states). The
+stretch needs 65 samples or more for the fit.
 
 The training stretch is then a share of the record, **Start from the last
 reading** does not apply, and the holdover times go up to half of what the

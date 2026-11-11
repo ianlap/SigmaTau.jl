@@ -22,6 +22,22 @@ def test_drift_fit_parity(small_freq, model, jl):
     assert f.rate == direct.rate and f.rms == direct.rms
 
 
+@pytest.mark.parametrize("method", st.DRIFT_METHODS)
+def test_drift_fit_methods(method, jl):
+    y = 1e-9 + 2e-15 * np.arange(1000.0) + 1e-14 * np.sin(np.arange(1000.0) / 9)
+    fd = FrequencyData(y, 1.0)
+    f = st.drift_fit(fd, method=method)
+    direct = jl.drift_fit(_convert.to_jl_data(fd), method=jl.Symbol(method))
+    assert f.method == method and f.rate == float(direct.rate)
+    assert f.rate == pytest.approx(2e-15 * 86400, rel=0.05)
+    # No standard error from the record for these two.
+    assert np.isnan(f.rate_stderr) == (method in ("bisection", "four_point"))
+    # detrend by the fit removes the model: the residuals of the fit remain.
+    np.testing.assert_allclose(st.detrend(fd, f).y, f.y - f.fit, rtol=0, atol=1e-25)
+    with pytest.raises(ValueError):
+        st.drift_fit(fd, model="log", method="bisection")
+
+
 def test_drift_fit_recovers_a_ramp():
     y = 1e-9 + 2e-15 * np.arange(1000.0)
     f = st.drift_fit(FrequencyData(y, 1.0))

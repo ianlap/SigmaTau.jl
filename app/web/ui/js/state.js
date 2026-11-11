@@ -53,6 +53,7 @@ export const state = {
   dataMode: "file",        // "file" | "synth" on the Data page
   dataView: "phase",       // "phase" | "drift" | "hist" | "acf": the Data page's plot
   driftModel: "linear",    // frequency drift model fitted on the drift view
+  driftMethod: "frequency_fit",   // estimator of the linear model
   driftResid: false,       // drift view shows the residuals instead of the fit
   // Histogram and Autocorrelation views: of "phase" or "frequency" (null = the record's kind),
   // the number of bins (null = Scott's rule), the normal curve, and the averaging factor m and

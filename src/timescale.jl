@@ -147,26 +147,38 @@ function _cap_weights!(w::Vector{Float64}, wmax::Float64)
 end
 
 # Time variance ½E[(x₍ₙ₊₂ₘ₎ − 2x₍ₙ₊ₘ₎ + xₙ)²] = (mτ₀ σ_y(mτ₀))² of each clock (s²),
-# from the second differences of its readings against the reference over the
-# triples that are all read. The reference's own share, the mean cross product
-# of two clocks' differences, is taken out; where that would leave nothing,
-# the raw value stands. NaN where a clock has fewer than 8 triples.
+# from the second differences of the readings, by an N-cornered hat over the
+# clocks and the reference. For two of them, half the mean square of the
+# difference of their second differences is Sᵢⱼ = vᵢ + vⱼ, in which whatever
+# they share cancels; the vᵢ are the least-squares solution weighted by
+# n/Sᵢⱼ², the inverse variance of Sᵢⱼ. A clock the solution leaves nothing
+# for takes half its smallest Sᵢⱼ. NaN where a clock has fewer than 8 triples
+# in common with every other.
 function _time_variances(r::AbstractMatrix{Float64}, m::Int)
     N, k = size(r)
     N > 2m || return fill(NaN, k)
-    D = r[1+2m:N, :] .- 2 .* r[1+m:N-m, :] .+ r[1:N-2m, :]
-    raw = Float64[]
-    for i in 1:k
-        d = filter(isfinite, view(D, :, i))
-        push!(raw, length(d) < 8 ? NaN : sum(abs2, d) / (2 * length(d)))
+    D = hcat(r[1+2m:N, :] .- 2 .* r[1+m:N-m, :] .+ r[1:N-2m, :], zeros(N - 2m))   # last: the reference
+    S, A, b = fill(Inf, k + 1, k + 1), zeros(k + 1, k + 1), zeros(k + 1)
+    for i in 1:k+1, j in i+1:k+1
+        n, s = 0, 0.0
+        for t in axes(D, 1)
+            d = D[t, i] - D[t, j]
+            isfinite(d) && (n += 1; s += d^2)
+        end
+        n >= 8 && s > 0 || continue         # s = 0: the reference is this clock
+        S[i, j] = S[j, i] = s / 2n
+        w = n / S[i, j]^2
+        A[i, i] += w; A[j, j] += w; A[i, j] += w; A[j, i] += w
+        b[i] += w * S[i, j]; b[j] += w * S[i, j]
     end
-    cross = Float64[]
-    for i in 1:k, j in i+1:k
-        ok = isfinite.(D[:, i]) .& isfinite.(D[:, j])
-        count(ok) >= 8 && push!(cross, sum(D[ok, i] .* D[ok, j]) / (2 * count(ok)))
+    use = [i for i in 1:k+1 if A[i, i] > 0]
+    v = fill(NaN, k + 1)
+    # The ridge keeps the solution where the pairs do not determine it.
+    isempty(use) || (v[use] = (A[use, use] + 1e-12 * Diagonal(A[use, use])) \ b[use])
+    for i in use
+        v[i] > 0 || (v[i] = minimum(view(S, i, :)) / 2)
     end
-    ref = isempty(cross) ? 0.0 : sum(cross) / length(cross)
-    return Float64[v - ref > 0 ? v - ref : v for v in raw]
+    return v[1:k]
 end
 
 # Weiss & Weissert 1991 eq. 10: the exponential constant that best predicts a
@@ -182,17 +194,21 @@ function _start(r::AbstractMatrix{Float64})
     return last(head), length(head) < 2 ? 1 : round(Int, _middle(Float64.(diff(head))))
 end
 
-# Each clock's own τ_min: the lag where its individual ADEV is smallest over
-# the octaves of the spacing `c` that the record supports.
+# Each clock's own τ_min: the lag where its individual ADEV is smallest among
+# the octaves of the spacing `c` up to a tenth of the record. Beyond them few
+# differences decide, and an octave counts only while the ADEV still falls
+# from one octave to the next: a clock whose minimum the record does not
+# reach keeps the longest lag, and no other clock takes one by chance.
 function _estimate_tau_min(cc::ClockComparisons, c::Int)
     N, k = size(cc.x)
-    best, tmin = fill(Inf, k), fill(c * cc.tau0, k)
+    best, tmin, falling = fill(Inf, k), fill(c * cc.tau0, k), falses(k)
     m = c
     while N - 2m >= 16c
         v = _time_variances(cc.x, m)
         for i in 1:k
             s = sqrt(v[i]) / m
-            isfinite(s) && s < best[i] && (best[i] = s; tmin[i] = m * cc.tau0)
+            falling[i] = isfinite(s) && s < best[i] && (10m <= N || falling[i])
+            falling[i] && (best[i] = s; tmin[i] = m * cc.tau0)
         end
         m *= 2
     end
@@ -225,13 +241,14 @@ function _slope(cc::ClockComparisons, i::Int, a::Int, stop::Int)
 end
 
 # Starting frequencies against the scale of the clocks read at the first
-# sample: each one's slope over the first `stop` samples (max(16, N/10) unless
-# given) less their mean, so clocks with frequency offsets start tracking them
-# (the mean of the offsets is the scale's own). Zero for a clock without a slope.
-function _initial_frequency(cc::ClockComparisons, stop::Int=min(size(cc.x, 1), max(16, size(cc.x, 1) ÷ 10)))
+# sample: each one's slope over the first `stop` samples less the mean of the
+# slopes with the weights `w`, so clocks with frequency offsets start tracking
+# them (the weighted mean of the offsets is the scale's own). Zero for a clock
+# without a slope.
+function _initial_frequency(cc::ClockComparisons, stop::Int, w::Vector{Float64})
     s = Float64[isfinite(cc.x[1, i]) ? _slope(cc, i, 1, stop) : NaN for i in axes(cc.x, 2)]
     fit = isfinite.(s)
-    return Float64[fit[i] ? s[i] - sum(s[fit]) / count(fit) : 0.0 for i in eachindex(s)]
+    return Float64[fit[i] ? s[i] - sum(w[fit] .* s[fit]) / sum(w[fit]) : 0.0 for i in eachindex(s)]
 end
 
 # Starting frequency against the scale of clock i, which joins at sample n
@@ -314,8 +331,8 @@ each of its readings and never has a weight.
 The scale starts at the mean of the first readings. Each clock starts from
 its own first readings, as many samples as a tenth of the record's
 readings. The frequency of a clock read at the first sample starts at the
-slope of a line through them, less the mean slope of those clocks. A clock
-that joins later starts at its slope less that of the scale over the same
+slope of a line through them, less the mean slope of those clocks under
+their starting weights. A clock that joins later starts at its slope less that of the scale over the same
 samples, which is the weighted mean of the other clocks' slopes less their
 frequencies against the scale, so the reference of the readings cancels.
 The rate of the scale then changes by the error of that frequency times
@@ -347,8 +364,13 @@ the square of
 ``K_i`` makes up for the clock being part of the scale it is compared
 with. ``ε_i^2`` starts at ``τ^2 σ_{y,i}^2(τ)`` (§2.7 of the paper),
 estimated from those first readings of the clock, so a clock that joins
-late has its weight at once. The frequency is an exponential average of
-the frequency steps,
+late has its weight at once. The estimate is an N-cornered hat over the
+clocks and the reference
+([Gray and Allan (1974)](@cite gray-1974-three-cornered-hat);
+[SP1065 §10.14](@cite riley-2008-sp1065)), so that the noise of the
+reference and of the other clocks stays out of it; each pair has the weight
+of the inverse variance of its sum, which is the package's own. The
+frequency is an exponential average of the frequency steps,
 
 ```math
 y_i(t + τ) = \\frac{1}{m_i + 1} \\Bigl[\\frac{x_i(t + τ) - x_i(t)}{τ} + m_i\\,y_i(t)\\Bigr],
@@ -560,7 +582,8 @@ pivot returns.
 - `tau_min`: ``τ_{\\min}`` in seconds for `:at1` and `:at2`, one number or
   one per clock. By default, the τ of the smallest Allan deviation of each
   clock among the octaves of the interval between readings, estimated from
-  the record with the share of the reference removed.
+  the record as the starting ``ε_i^2`` is. Beyond a tenth of the record an
+  octave counts only while the deviation still falls.
 - `memory`: time constant in seconds of the average behind ``ε_i^2``. The
   default is 20 days, the paper's value for cesium clocks; a quarter of the
   record is used where that is shorter.
@@ -652,7 +675,8 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     # The interval of eqs 7-15 is the time since the last sample with a reading,
     # `prev`; a clock joins at a reading that follows none of its own there.
     seen, prev = copy(ok), 1
-    y = _initial_frequency(cc, stop)
+    w = ok ./ ε²
+    y = _initial_frequency(cc, stop, at1 ? _cap_weights!(w ./ sum(w), max(Float64(wmax), 1 / count(ok))) : w)
     # AT2: the random-walk FM impulse σ_β²τ of each clock from its τ_min through
     # the steady state m(m+1) = σα²/(σ_β²τ) (eq 18), and the frequency variance P
     # at its steady state (eq 16), both from the starting σα² = ε²/τ² at τ = cτ₀.

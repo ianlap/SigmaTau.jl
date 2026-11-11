@@ -20,9 +20,10 @@ remove_outliers
 ## Frequency drift
 
 [`drift_fit`](@ref) fits a model to the fractional frequency of a record
-and reports the drift rate with its standard error. It measures the drift
-and removes nothing: [`detrend`](@ref) removes a line or a parabola fitted
-to the samples.
+and reports the drift rate with its standard error. A linear drift has five
+estimators, each suited to a noise. It measures the drift and removes
+nothing: [`detrend`](@ref) removes a line or a parabola fitted to the
+samples, or the model of a fit.
 
 ```@docs
 drift_fit

@@ -31,6 +31,7 @@ const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const STEPS = ["best", "real"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
+const DRIFT_METHODS = [String(m) for m in SigmaTau.DRIFT_METHODS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
@@ -67,7 +68,7 @@ const OPTS = [
     Opt("--value-col", "N", String[], false, "1-based value column (default 2)", ALL),
     Opt("--reference-col", "N", String[], false, "subtract this column from the value column (clocks measured against one reference)", ALL),
     Opt("--header", "N", String[], false, "header lines to skip; '#' lines and a Stable32 header are skipped anyway", ALL),
-    Opt("--delim", "CHAR", String[], false, "field delimiter (default: from the extension; '\\t' for tab)", ALL),
+    Opt("--delim", "CHAR", String[], false, "field delimiter (default: a comma where the first data line has one, a tab in a table or .tsv file, else blanks; '\\t' for tab)", ALL),
     Opt("--scaling", "X", String[], false, "multiply the values by X (1e-9 for nanoseconds)", ALL),
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
@@ -89,7 +90,7 @@ const OPTS = [
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only); with holdover, the error that model predicts and each noise type's share", ["analyze", "holdover"]),
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
-    Opt("--mask", "NAME", MASKS, false, "also check MTIE and TDEV against an ITU-T wander mask, or all of them (JSON only): G811, G813_opt1, G8262_opt1, G823_SSU ..., all", ["analyze"]),
+    Opt("--mask", "NAME", MASKS, false, "check MTIE and TDEV against an ITU-T wander mask, or all of them: G811, G8262_opt1, G8272_PRTC_A, G8272_PRTC_B, G823_SSU ..., all; JSON gains the limits and the checks, CSV a verdict on stderr", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
     Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE", ["cross"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
@@ -118,6 +119,7 @@ const OPTS = [
     Opt("--acf", "", String[], false, "the autocorrelation of the samples at averaging factor --m; with CSV, its lags in place of the summary", ["check"]),
     Opt("--lags", "K", String[], false, "largest autocorrelation lag (default: half the series, at most 1000)", ["check"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
+    Opt("--method", "METHOD", DRIFT_METHODS, false, "estimator of the linear model: frequency_fit (default, a least-squares line through the frequency), phase_fit (a least-squares parabola through the phase), bisection (the three-point fit), second_difference (mean second difference of the phase) or four_point", ["drift"]),
     # Live
     Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal", ["live"]),
     Opt("--query", "CMD", String[], false, "SCPI query sent before every reading, e.g. READ? (default: READ? for tcp://, none otherwise)", ["live"]),
@@ -126,7 +128,7 @@ const OPTS = [
     Opt("--fast", "", String[], false, "run the simulator flat out instead of one reading per τ₀", ["live"]),
     # Output
     Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
-    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; model writes JSON only", [TABULAR; "model"]),
+    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; for model, json alone", [TABULAR; "model"]),
     Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", BATCH),
     Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY),
     Opt("--help", "", String[], false, "show this command's options", ANY),
@@ -177,6 +179,7 @@ mutable struct Options
     with::String              # cross: the second channel's file
     phase_given::Bool         # --phase given (else instrument readers pick the kind)
     model::String
+    method::String            # drift: estimator of the linear model
     hz::Bool
     query::String             # "\0" = the default for the source
     every::Int
@@ -219,7 +222,7 @@ end
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
+                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear", "frequency_fit",
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
@@ -399,6 +402,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--quantity";       o.quantity = check_choice(v, name, QUANTITIES)
     elseif name == "--bins";           o.bins = parse_int(v, name); o.bins >= 1 || throw(usage_error("--bins must be 1 or more"))
     elseif name == "--lags";           o.lags = parse_int(v, name); o.lags >= 0 || throw(usage_error("--lags must be 0 or more"))
+    elseif name == "--method";         o.method = check_choice(v, name, DRIFT_METHODS)
     elseif name == "--train";          o.train = parse_float(v, name)
     elseif name == "--grow";           o.grow = parse_int(v, name)
     elseif name == "--tau";            o.taus = parse_taus(v)
@@ -415,7 +419,10 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--query";          o.query = v
     elseif name == "--every";          o.every = parse_int(v, name)
     elseif name == "--count";          o.count = parse_int(v, name)
-    elseif name == "--format";         o.format = check_choice(v, name, FORMATS)
+    elseif name == "--format"
+        # Refused here, so that a later error on the line is still answered in JSON.
+        o.command == "model" && v != "json" && throw(usage_error("model writes JSON only"))
+        o.format = check_choice(v, name, FORMATS)
     elseif name == "--out";            o.out = v
     elseif name == "--with";           o.with = v
     elseif name == "--mask";           o.mask = check_choice(v, name, MASKS)
@@ -507,6 +514,8 @@ function parse_args!(o::Options, args::Vector{String})
     o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2"))
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
+    o.method == "frequency_fit" || o.model == "linear" ||
+        throw(usage_error("--method " * o.method * " estimates a linear drift and goes with --model linear"))
     (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
         throw(usage_error("--train and --limit must be positive"))
     o.grow == 0 || isnan(o.train) && o.grow > 1 + o.fit_drift ||
@@ -518,6 +527,10 @@ function parse_args!(o::Options, args::Vector{String})
         (isnan(o.time_constant) || o.time_constant > 0) && (isnan(o.interval) || o.interval > 0) ||
             throw(usage_error("--time-constant and --interval must be positive"))
         o.integral && isnan(o.time_constant) && throw(usage_error("--integral goes with --time-constant"))
+    end
+    if o.command == "timescale"
+        0 < o.wmax <= 1 || throw(usage_error("--wmax must be above 0 and at most 1"))
+        isempty(o.steps) || o.algorithm == "at2" || throw(usage_error("--steps needs --algorithm at2"))
     end
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
@@ -543,7 +556,6 @@ function parse_args!(o::Options, args::Vector{String})
             throw(usage_error("--histogram and --acf each print a table; ask for one, or use --format json"))
     end
     o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
-    isempty(o.mask) || o.format == "json" || throw(usage_error("--mask adds to the JSON output; use --format json"))
     return o
 end
 
@@ -588,9 +600,6 @@ end
 function print_command_help(io::IO, cmd::String)
     if cmd == "completion"
         print(io, "Usage: sigmatau completion SHELL\n\nShells: ", join(SHELLS, ", "), "\n")
-        return
-    elseif !(cmd in COMMANDS)
-        print(io, "sigmatau: no help for \"", cmd, "\"; commands: ", join(COMMANDS, ", "), "\n")
         return
     end
     for (c, arg, h) in COMMAND_HELP

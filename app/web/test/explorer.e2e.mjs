@@ -2,8 +2,9 @@
 // core: load a fixture on the Data page, run the analysis and check the
 // Stability plot and the Holdover and Steering curves against the command
 // line's own JSON, then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
-// Live (simulated source) and Help, come back to Stability, and run a record
-// and a file of three clocks with gaps, with no page errors.
+// Live (simulated source) and Help, come back to Stability for a pinned run
+// and a telecom mask, and run a record and a file of three clocks with gaps,
+// with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -168,6 +169,22 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("#page [data-fit=toggle]");
   });
 
+  await t.test("Stability: a telecom mask over MTIE, with the command line's verdict", async () => {
+    await page.click("[data-act=pick]");
+    await page.check("#picker-dialog input[value=mtie]");
+    await page.click("#picker-done");
+    await page.click("[data-axis=sigma_x]");
+    await page.selectOption("[data-ref=mask]", "G8272_PRTC_A");
+    await page.click(".run-btn");
+    const card = page.locator("#page .model-box", { hasText: "PRTC-A" });
+    await card.waitFor(SLOW);
+    const mask = JSON.parse(execFileSync(CLI, ["analyze", FIXTURE, "--devs", "mtie", "--mask", "G8272_PRTC_A", "--format", "json"])).masks[0];
+    const text = await card.innerText();
+    assert.ok(text.includes(mask.source) && text.includes(mask.checks[0].pass ? "passes" : "fails"), text);
+    assert.ok(await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.some((d) => d.name === "G.8272 PRTC-A MTIE mask")));
+    await page.click("[data-axis=sigma_y]");
+  });
+
   await t.test("A record with gaps runs without its spectrum", async () => {
     const gapped = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "gapped.csv");
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
@@ -241,7 +258,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
   });
 
-  await t.test("Ensemble: a file with gaps forms an averaging scale, and a Kalman scale says why it cannot", async () => {
+  await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
     const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
     const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
@@ -249,12 +266,11 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     for (const col of [3, 4]) await page.selectOption(`#import-dialog select[data-col="${col}"]`, "value");
     await page.click("#import-dialog [data-act=load]");
     await settled();
-    const n = errors.length;
+    const scale = (alg) => page.waitForFunction((a) => new RegExp(`^${a}.* 1200 samples`).test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), alg, SLOW);
     await page.click("a[data-page=ensemble]");   // Greenhall, as the Ensemble step above left it
-    await page.locator("#page.page-ensemble [data-ref=empty]", { hasText: "needs a file without missing samples" }).waitFor(SLOW);
-    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+    await scale("Greenhall");
     await page.selectOption("#side [data-ctl=alg]", "at1");
-    await plotted("#page [data-ref=adev]");
+    await scale("AT1");
   });
 
   assert.deepEqual(errors, []);

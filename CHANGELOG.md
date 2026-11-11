@@ -266,6 +266,14 @@ Clock models, the Kalman filter and timescales.
   choice. Python's `ClockModel` mirrors `flicker_fm`, `fm_band`,
   `flicker_pm` and `pm_band`, and `clock_model` and `clock_models` take
   `flicker=True`.
+- Python: the keywords and call forms of the Julia functions that the
+  wrappers lacked. `dadev` and `dhdev` without `window`; `identify_noise`
+  with `b1`, `b1_length` and a `TauMode` grid; `read_data` with `delim` and
+  `keep_zeros`, and `detect_format` with `delim`; `powerlaw_fit` of a
+  `StabilityResult`; `powerlaw_sigma` and `powerlaw_psd` of a `ClockModel`
+  or a `NoiseFit`; `holdover` of a `NoiseFit`; `tune_q` with `burnin`;
+  `timescale` with `step_threshold`, `lmax` and `step_inflate`;
+  `clock_model` with `fm_band` and `pm_band`.
 
 ### Changed
 
@@ -454,6 +462,20 @@ Clock models, the Kalman filter and timescales.
   times less error than it made on a clock with a flicker floor.
   `flicker = false` gives the former model, which the `:stein` time scale
   needs.
+- `timescale` with `:stein` starts the difference of each clock from its
+  filter's estimate over the clock's first tenth of the record, smoothed
+  back to its first reading, and starts the scale at the weighted mean of
+  its clocks. A clock that joins late no longer shifts the rate of the scale
+  by many times what the noise of the clocks gives, the rate and drift of
+  the scale no longer depend on the pivot at the start, and models with
+  aging no longer run the scale away. Every `:stein` result changes.
+- `timescale` with `:at1` or `:at2`: the starting prediction-error variances
+  are an N-cornered hat over the clocks and the reference, the default
+  `tau_min` is taken from the octaves up to a tenth of the record and beyond
+  them only while the Allan deviation still falls, and the scale starts at
+  the mean rate of its clocks under their starting weights. Scales of clocks
+  that differ much in noise change from their first sample; `:ewfa` and the
+  Kalman scales do not change.
 
 ### Removed
 
@@ -702,6 +724,19 @@ Clock models, the Kalman filter and timescales.
 - Python: `clock_model` of a `PowerLawFit` uses Julia's default `tau_max`,
   the longest τ of a fit of a deviation. It had used 10⁶ τ₀, which with the
   flicker states on left the model with Markov states far past the record.
+- Python: `delim` of `read_phase` and `read_frequency` reaches Julia; every
+  call with it had raised `JuliaError`. `StreamingStability` raises
+  `ValueError` on a sample that is not finite. The docstrings are corrected
+  against the Julia ones, among them the sign of `timescale_phase`, what
+  `remove_outliers` does and the formats of `read_data`, and `help()` of an
+  estimator lists the keywords it shares with the others.
+- `identify_noise`, `calculate_edf` and `bias_correction` throw an
+  `ArgumentError` for an averaging factor below 1, as the estimators do;
+  before, 0 raised `DivideError` or `InexactError` and a negative factor
+  returned a label, an EDF or a bias factor.
+- `sigmatau model` refuses `--format csv`: it wrote JSON all the same, and
+  an error later on that line came as plain text. Its error object names
+  `"source":"model"`, as its result does.
 
 ### Security
 

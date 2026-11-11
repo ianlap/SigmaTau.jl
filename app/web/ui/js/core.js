@@ -188,13 +188,16 @@ export function analyzeCommand(clock) {
   return ["sigmatau", kept[0], ...(file ? [file.name] : []), ...kept.slice(1)].map(q).join(" ");
 }
 
+// The estimator applies to the linear model; the others are least-squares fits.
+export const driftMethod = () => (state.driftModel === "linear" ? state.driftMethod : "frequency_fit");
+
 // Fit a frequency drift model (linear, quadratic, log, diffusion) to one clock.
 export function drift(clock, signal) {
-  return run(request(clock, "drift", ["--model", state.driftModel, "--series", 2000]), signal);
+  return run(request(clock, "drift", ["--model", state.driftModel, "--method", driftMethod(), "--series", 2000]), signal);
 }
 
 // Settings that decide a clock's drift fit; a change means refit.
-export const driftKey = (clock) => JSON.stringify([request(clock, "drift", []), state.driftModel]);
+export const driftKey = (clock) => JSON.stringify([request(clock, "drift", []), state.driftModel, driftMethod()]);
 
 // Settings that decide a clock's dynamic map; a change means recompute.
 export const dynamicKey = (clock) =>

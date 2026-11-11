@@ -125,15 +125,20 @@ table says how each of the two compares:
 
 | Menu entry | Mask |
 |:-----------|:-----|
-| **G.811 PRC** | Wander generation of a primary reference clock |
+| **G.811 PRC**, **G.811.1 ePRC** | Wander generation of a primary reference clock, and of an enhanced one |
+| **G.812 type I**, **types II, III** | Wander generation of a node clock of type I, and of types II and III |
 | **G.813 SEC opt 1**, **opt 2** | Wander generation of an SDH equipment clock, options 1 and 2 |
-| **G.8262 EEC opt 1**, **opt 2** | Wander generation of a synchronous equipment clock, options 1 and 2 |
+| **G.8262 EEC opt 1**, **opt 2**, **G.8262.1 eEEC** | Wander generation of a synchronous equipment clock, options 1 and 2, and of an enhanced one |
+| **G.8272 PRTC-A**, **PRTC-B**, **G.8272.1 ePRTC** | Wander generation of a primary reference time clock of class A and of class B, and of an enhanced one |
 | **G.823 PRC**, **SSU**, **SEC**, **PDH interface** | Network limits for wander at the four kinds of interface |
 
-[`TELECOM_MASKS`](@ref) gives the clauses of the recommendations. The
-recommendations measure MTIE and TDEV through a 10 Hz low-pass filter. The
-explorer applies no filter and compares the record as it was measured, as
-[`mask_check`](@ref) does.
+The card, and the label that appears when the pointer is on the line,
+name the edition and the tables of the recommendation that the limits
+were read from. [`TELECOM_MASKS`](@ref) lists them. The recommendations measure MTIE and
+TDEV through a 10 Hz low-pass filter, or at one sample per second without
+a filter for the 1 PPS output of a time clock. The explorer applies no
+filter and compares the record as it was measured, as [`mask_check`](@ref)
+does.
 
 ## Pinned runs
 
