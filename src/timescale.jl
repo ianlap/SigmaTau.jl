@@ -24,6 +24,8 @@ struct TimescaleResult
     weights::Matrix{Float64}
     "Each clock's prediction error (s); `NaN` where it had no reading."
     error::Matrix{Float64}
+    "Each clock's phase against the scale as the algorithm estimated it (s): the filter's phase state for `:greenhall`, `:jones_tryon` and `:stein`, where `x` is read at the pivot; `x` itself for the others."
+    xhat::Matrix{Float64}
 end
 
 function Base.show(io::IO, ::MIME"text/plain", r::TimescaleResult)
@@ -51,21 +53,30 @@ end
 """
     implicit_mean(r::TimescaleResult, truth) → PhaseData
 
-The implicit ensemble mean of a `:greenhall` scale, in simulation: the weighted mean of
-the clocks' true phases, ``Σ aᵢ xᵢ``, with `r`'s weights and `truth` the
-states from [`simulate_ensemble`](@ref) (`truth[k, 1, i]` is clock `i`'s phase
-against true time). It is the scale's phase against true time without any
-clock's reading noise, so its stability is the scale's own. The readout
-[`timescale_phase`](@ref) at a pivot clock carries that clock's reading noise
-besides; with `R = 0` they are the same up to sign (`timescale_phase` is
-reference − scale) and the constant frequency offset the scale starts with. Only for `:greenhall`, whose weights define the mean.
+The implicit ensemble mean of a `:greenhall` scale against true time, in simulation.
+
+```math
+\\bar x_0 = \\sum_i a_i\\,(x_i - \\hat x_i)
+```
+
+It is the weighted mean of the corrected clocks, each clock's true phase
+``x_i`` less the filter's estimate ``\\hat x_i`` (`r.xhat`), with the weights
+``a_i`` of `r`
+([Greenhall (2006), Eqs. (3.8) and (3.13)](@cite greenhall-2006-measurement-noise)).
+`truth` is the states from [`simulate_ensemble`](@ref) (`truth[k, 1, i]` is
+clock `i`'s phase against true time). The mean carries no clock's reading
+noise, so its stability is the scale's own. The readout
+[`timescale_phase`](@ref) at a pivot clock adds that clock's reading noise;
+with every `R = 0` and every clock read, the corrected clocks agree and the
+readout is the mean with its sign reversed (`timescale_phase` is
+reference − scale). Only for `:greenhall`, whose weights define the mean.
 """
 function implicit_mean(r::TimescaleResult, truth::AbstractArray{<:Real,3})
     r.algorithm === :greenhall ||
         throw(ArgumentError("implicit_mean: the implicit mean belongs to :greenhall, not :$(r.algorithm)"))
     size(truth, 1) == size(r.weights, 1) && size(truth, 3) == size(r.weights, 2) ||
         throw(ArgumentError("implicit_mean: truth is $(size(truth)), the scale has $(size(r.weights, 1)) samples and $(size(r.weights, 2)) clocks"))
-    m = Float64[sum(r.weights[n, i] * truth[n, 1, i] for i in axes(r.weights, 2)) for n in axes(r.weights, 1)]
+    m = Float64[sum(r.weights[n, i] * (truth[n, 1, i] - r.xhat[n, i]) for i in axes(r.weights, 2)) for n in axes(r.weights, 1)]
     return PhaseData(m, r.comparisons.tau0; source="IEM")
 end
 
@@ -498,7 +509,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
             Xo[m, :], Yo[m, :], Wo[m, :], Eo[m, :] = X[m, :] .+ shift, Y[m, :], W[m, :], E[m, :]
         end
     end
-    return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), Xo, Yo, Wo, Eo)
+    return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), Xo, Yo, Wo, Eo, Xo)
 end
 
 # AT2 frequency-step test (Weiss & Weissert 1991, eqs 19-22), run on the clocks
@@ -587,7 +598,7 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         end
     end
     r = Float64[_reading_var(m) for m in models]
-    X, Y, W, E = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k)
+    X, Y, W, E, Xh = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k), zeros(N, k)
     S = Matrix{Float64}(I, ns * k, ns * k)
     a = λ = fill(1.0 / k, k)
     for n in 1:N
@@ -631,6 +642,7 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         u = p == 0 ? 0.0 : X̂[p] - cc.x[n, p]
         for i in 1:k
             X[n, i] = isfinite(cc.x[n, i]) ? cc.x[n, i] + u : X̂[i]
+            Xh[n, i] = X̂[i]
         end
         n > 1 && (E[n, use] = X[n, use] .- x̂⁻[use])
         for (i, m) in enumerate(models)       # frequency: its own state plus the Markov frequency states
@@ -641,7 +653,7 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         end
         W[n, :] .= algorithm === :jones_tryon ? NaN : a
     end
-    return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E)
+    return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E, Xh)
 end
 
 # Inverse-variance weights summing to 1 over the clocks `use`: weight ∝ 1/v;
@@ -693,7 +705,7 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     r = Float64[m.R for m in models]
     p = pivot
     isfinite(cc.x[1, p]) || throw(ArgumentError("timescale: the pivot clock $p has no first reading"))
-    X, Y, W, E = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k)
+    X, Y, W, E, Xh = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k), zeros(N, k)
     # Pivot against the scale: the start scale is the plain mean of the first readings.
     ok = isfinite.(cc.x[1, :])
     xs = zeros(ns)
@@ -741,11 +753,11 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
         end
         u = isfinite(cc.x[n, p]) ? xs[1] - cc.x[n, p] : 0.0
         for i in 1:k
-            xi = xs[1] + (i == p ? 0.0 : S[1, i])
-            X[n, i] = isfinite(cc.x[n, i]) && isfinite(cc.x[n, p]) ? cc.x[n, i] + u : xi
+            Xh[n, i] = xs[1] + (i == p ? 0.0 : S[1, i])
+            X[n, i] = isfinite(cc.x[n, i]) && isfinite(cc.x[n, p]) ? cc.x[n, i] + u : Xh[n, i]
             Y[n, i] = xs[2] + (i == p ? 0.0 : S[2, i])
         end
         n > 1 && (E[n, use] = X[n, use] .- pred[use])
     end
-    return TimescaleResult(:stein, cc, collect((0:N-1) .* τ), X, Y, W, E)
+    return TimescaleResult(:stein, cc, collect((0:N-1) .* τ), X, Y, W, E, Xh)
 end
