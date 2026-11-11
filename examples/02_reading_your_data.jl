@@ -1,138 +1,162 @@
 # # Reading and saving data
 #
-# Records arrive as plain text: Stable32 `.DAT` exports, counter logs, CSV
-# dumps. `read_phase` and `read_frequency` bring them in, `fillgaps`,
-# `remove_outliers` and `detrend` clean them, and `save` writes data and
-# results back out. This page is the whole IO surface.
+# A record usually arrives as a text file: columns of numbers, a table that
+# a logger wrote, or the export of an instrument or of another program.
+# This tutorial writes three small files, reads each one back as a record,
+# looks at what the reader made of it, and saves a record and its results.
+# [Data and files](../reference/data.md) is the reference for every reader
+# and format.
 
 using SigmaTau
+using Dates
 using Random
-Random.seed!(20260609)
 
-dir = mktempdir()   # everything below writes here
+dir = mktempdir()            # the files of this page go here
+clock = noise_gen(PhaseData, 2048, 1.0; sigma1 = Dict(0 => 1e-11), rng = Xoshiro(1))
+nothing #hide
 
-# ## Two-column files
+# ## Columns of numbers
 #
-# The default layout is a time column and a value column, whitespace, comma
-# (`.csv`) or tab (`.tsv`) separated. The sample interval is inferred from the
-# time column, so no keywords are needed:
+# The plainest file has a time column and a column of samples, separated by
+# blanks, by commas, or by tabs in a `.tsv` file. This one holds the time
+# and the phase of the simulated clock, both in seconds:
 
-τ₀ = 1.0
-x  = cumsum(randn(2048)) .* 1e-10      # white FM phase record
-twocol = joinpath(dir, "twocol.DAT")
-open(twocol, "w") do io
-    for k in eachindex(x)
-        println(io, (k - 1) * τ₀, "  ", x[k])
+file = joinpath(dir, "clock.txt")
+open(file, "w") do io
+    for (k, x) in enumerate(clock.x)
+        println(io, k - 1, "  ", x)
     end
 end
+foreach(println, readlines(file)[1:3])
 
-pd = read_phase(twocol)
+# [`read_phase`](@ref) needs no keywords for it. The sample interval is the
+# step of the time column:
 
-# If the values are in engineering units, `scaling` converts them
-# (`scaling = 1e-9` for nanoseconds). If the time column is not in seconds,
-# pass `tau0` explicitly; it overrides the inference.
+p = read_phase(file)
+p.tau0, length(p)
 
-# ## Stable32 `.DAT` files
+# The file is read line by line, so a long log costs the memory of its
+# samples and no more. Keywords cover the other layouts: `value_col` and
+# `time_col` choose the columns, `header` skips lines of text, `scaling`
+# converts the unit of the samples, and a file with a single column takes
+# its sample interval from `tau0`. [`read_frequency`](@ref) reads
+# fractional frequency in the same way.
 #
-# Stable32 writes a 10-line text header and a single column of values. Say
-# so once: skip the header, no time column, values in column 1, and the
-# sample interval (the header's `Tau:` line). The repository's validation
-# fixture is such a file:
-
-datpath = joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation",
-                   "stable32gen.DAT")
-foreach(println, readlines(datpath)[1:10])
-
-#-
-
-pd_dat = read_phase(datpath; header = 10, time_col = 0, value_col = 1, tau0 = 1.0)
-
-# `read_frequency` takes the same keywords and returns a `FrequencyData`.
-# Every deviation function accepts either container.
-
+# ```julia
+# read_phase("log.txt"; value_col = 4, header = 1, scaling = 1e-9)  # nanoseconds
+# read_frequency("samples.txt"; tau0 = 0.1)                         # one column
+# ```
+#
 # ## Missing readings
 #
-# A reading missing from a timestamped log is not dropped: the readers put
-# every sample on the grid of its time column (jittered timestamps round to
-# their slot), and a missing timestamp leaves a `NaN` sample where it
-# belongs. Here twelve rows are missing:
+# A logger that drops readings leaves a file with rows missing. The readers
+# place every sample by its time, so a missing row becomes a missing sample,
+# `NaN`, and the samples on either side of it keep their distance. This file
+# lacks twelve rows:
 
-gaplog = joinpath(dir, "gaps.DAT")
-open(gaplog, "w") do io
-    for k in eachindex(x)
-        k in 1001:1012 && continue
-        println(io, (k - 1) * τ₀, "  ", x[k])
+gapfile = joinpath(dir, "gaps.txt")
+open(gapfile, "w") do io
+    for (k, x) in enumerate(clock.x)
+        k in 1001:1012 || println(io, k - 1, "  ", x)
     end
 end
-pd_gap = read_phase(gaplog)
-length(pd_gap), count(isnan, pd_gap.x)
 
-# ADEV, MDEV, HDEV, MHDEV, TDEV, MTIE and TIE rms skip the terms that touch a
-# missing sample; the totals, Theo1 and the spectra need the gaps filled
-# first. ISO 8601 or MJD timestamps also give the record its
-# [`start_time`](@ref), which `save` keeps. The readers stream the file line
-# by line and keep only the columns they return, so a multi-day log at a high
-# rate costs the memory of its samples.
+g = read_phase(gapfile)
+length(g), count(isnan, g.x)
+
+# The Allan and Hadamard deviations, their modified and time forms,
+# [`mtie`](@ref) and [`tierms`](@ref) leave the missing samples out, and a
+# result counts the terms that were used:
+
+adev(p, [8]).neff, adev(g, [8]).neff
+
+# The total, Thêo, parabolic and dynamic estimators and the spectra need a
+# complete record. [Timestamps and gaps](@ref) lists what every function
+# does with missing samples, and
+# [Gaps, outliers and drift](../guide/preparing.md) weighs filling them
+# against analyzing around them.
 #
-# ## Cleaning
+# ## A table from a logger
 #
-# `fillgaps` imputes missing samples with the Howe–Schlossberger
-# reflect-and-filter method, which preserves the local noise character
-# instead of flattening it:
+# [`read_data`](@ref) reads files that carry more than numbers: a line of
+# column names, units, timestamps, or the header of an instrument. This
+# table holds the offset of a 1 PPS output in nanoseconds, beside a
+# temperature:
 
-adev(pd_gap, [8]; ci = false).dev[1], adev(fillgaps(pd_gap), [8]; ci = false).dev[1]
+pps = noise_gen(PhaseData, 600, 1.0; sigma1 = Dict(2 => 1e-9), rng = Xoshiro(2))
+table = joinpath(dir, "gpsdo.csv")
+open(table, "w") do io
+    println(io, "timestamp,PPS offset (ns),temperature (C)")
+    for (k, x) in enumerate(pps.x)
+        t = DateTime(2026, 3, 1, 12) + Second(k - 1)
+        println(io, t, "Z,", round(1e9 * x; digits = 3), ",31.5")
+    end
+end
+foreach(println, readlines(table)[1:3])
 
-# `remove_outliers` applies Stable32's median-absolute-deviation test
-# (default 5 scaled MADs on the frequency record, or on the first differences
-# of a phase record) and imputes the flagged samples the same way:
+# The reader finds the format, takes the time column and the clock column
+# by their names, and converts the samples to seconds by the unit in the
+# name. The timestamps give the sample interval and the UTC time of the
+# first sample:
 
-y = diff(x) ./ τ₀
-y[700] = 3e-9                         # a counter glitch
-fd = FrequencyData(y, τ₀)
+q = read_data(table)
+detect_format(table), q.tau0, start_time(q), q.x[1:2]
 
-find_outliers(fd), adev(remove_outliers(fd), [8]; ci = false).dev[1]
-
-# `detrend` removes a mean, an endpoint line or a least-squares line
-# (`method = :mean`, `:endpoint`, `:linear`), or a quadratic from phase data.
-# On a frequency record `:linear` removes a frequency drift:
-
-ydrift = randn(4096) .* 1e-12 .+ 5e-16 .* (0:4095)
-fd_drift = FrequencyData(ydrift, 1.0)
-
-adev(fd_drift, [512]; ci = false).dev[1], adev(detrend(fd_drift), [512]; ci = false).dev[1]
-
-# All three are also keywords on the readers: `read_phase(path; fillgaps = true,
-# detrend = :linear)` cleans on the way in. `fillgaps = true` needs a time
-# column, since it is how missing rows are found.
-
-# ## Saving
+# The same call reads the `.phd` and `.frd` files of Stable32, the `.tim`
+# files of TimeLab, the readings of a counter, the BIPM files of
+# UTC − UTC(k) and RINEX clock files. The docstring of [`read_data`](@ref)
+# states how each format is read, how a column is chosen when a table has
+# several, and where a file can be read wrongly.
 #
-# `save` writes a `PhaseData` / `FrequencyData` as a two-column text file with
-# a short comment header; `read_phase` reads it back with no keywords, since
-# the header carries τ₀:
+# ## A first look
+#
+# [`summarize`](@ref) reports what a record holds before any analysis: its
+# length and span, the number of missing samples, the indices of its
+# outliers and the slope of its fractional frequency, per day. `pairs`
+# lists the fields one to a line:
 
-wfm = noise_gen(PhaseData, 1024, τ₀; sigma1 = Dict(0 => 1e-12))
-datafile = save(joinpath(dir, "white_fm.txt"), wfm)
-foreach(println, readlines(datafile)[1:5])
+pairs(summarize(g))
+
+# [Gaps, outliers and drift](../guide/preparing.md) goes through the
+# preparation of a record. `read_phase` and `read_frequency` can also
+# remove a trend and fill the gaps as they read, with the keywords
+# `detrend` and `fillgaps`.
+#
+# ## Saving a record
+#
+# [`save`](@ref) writes a record as text, under comment lines that hold
+# the file it came from, its sample interval and its start time:
+
+saved = save(joinpath(dir, "pps.txt"), q)
+foreach(println, readlines(saved)[1:6])
+
+# The readers take the last two from those lines, so the file reads back as
+# it was written, without keywords:
+
+back = read_phase(saved)
+back.x == q.x, start_time(back) == start_time(q)
+
+# ## Saving results
+#
+# A [`StabilityResult`](@ref) is saved as a table with tab-separated
+# columns, which a spreadsheet opens, under comment lines that describe it.
+# The file begins with those lines and the names of the columns:
+
+r = adev(q)
+resultfile = save(joinpath(dir, "adev.tsv"), r)
+foreach(println, readlines(resultfile)[1:7])
+
+# [`load`](@ref) returns what `save` wrote, whether a record, a result or a
+# [`StabilitySuite`](@ref):
+
+load(resultfile).dev == r.dev
 
 #-
 
-read_phase(datafile).x ≈ wfm.x
+suite = stability(q)
+suitefile = save(joinpath(dir, "suite.tsv"), suite; source_file = "gpsdo.csv")
+load(suitefile)[:mdev].dev == suite[:mdev].dev
 
-# The same `save` writes a `StabilityResult` or a `StabilitySuite` as a
-# self-describing tab-separated table that any spreadsheet can open;
-# `load` reads them back:
-
-result = adev(pd_dat)
-resultpath = save(joinpath(dir, "adev.tsv"), result)
-foreach(println, readlines(resultpath)[1:6])
-
-#-
-
-load(resultpath).dev ≈ result.dev
-
-#-
-
-suite = stability(pd_dat)              # adev, mdev, hdev, mhdev
-suitepath = save(joinpath(dir, "session.tsv"), suite; source_file = "stable32gen.DAT")
-load(suitepath)[:hdev].dev ≈ suite[:hdev].dev
+# The command line and the explorer read the same files
+# ([The record](../reference/cli.md#The-record);
+# [Opening a file](../explorer/data.md#Opening-a-file)).

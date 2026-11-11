@@ -1,369 +1,225 @@
 # Command line
 
-`sigmatau` is one compiled program with a subcommand per task. It runs the
-same library code as the Julia API, starts in about 30 ms, and needs no Julia
-install. The stability explorer runs the same binary with `--format json`.
-Each [release](https://github.com/ianlap/SigmaTau.jl/releases) carries it
-prebuilt as `sigmatau-<version>-<linux|macos>-<arch>.tar.gz`; unpack it and
-run `bin/sigmatau` (on macOS, clear the download flag first with
-`xattr -dr com.apple.quarantine sigmatau-*`).
+`sigmatau` is the package as one compiled program. It reads a record from a
+file, runs one analysis and writes CSV or JSON. It needs no Julia and
+starts in a few tens of milliseconds. It is compiled from the code of the
+Julia functions, and the tests require its results to equal theirs within
+a relative difference of ``10^{-12}``. The
+[explorer](../explorer/index.md) runs this program for every analysis it
+shows.
 
-```bash
-sigmatau analyze clock.dat --tau0 1 --devs adev,mdev,tdev
-sigmatau analyze freq.txt --freq --m 1,10,100 --format json --out result.json
-sigmatau check clock.dat --time-col 1 --value-col 3 --fillgaps
-sigmatau spectrum clock.dat --nperseg 4096
-sigmatau dynamic clock.dat --dev dhdev --window 4096
+This page covers the common tasks. The
+[Command-line reference](../reference/cli.md) lists every command and
+option, the columns of the CSV output, the JSON schema and the exit codes.
+
+```@setup cli
+using SigmaTau
+include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 ```
 
-## Getting it
+## Install
 
-Build it from the repository with Julia 1.12 or newer and
-[JuliaC](https://github.com/JuliaLang/JuliaC.jl) (`pkg> app add JuliaC`):
+A release carries the program for Linux and macOS, as
+`sigmatau-<version>-<linux|macos>-<arch>.tar.gz`:
 
 ```bash
+tar -xzf sigmatau-*.tar.gz
+xattr -dr com.apple.quarantine sigmatau-*/     # macOS: clear the download flag
+sigmatau-*/bin/sigmatau version
+```
+
+The folder holds the program and the Julia runtime libraries it loads, about
+150 MB in all. Keep it whole, and put its `bin` directory on the `PATH`.
+
+To build the program from the repository, with Julia 1.12 or later:
+
+```bash
+julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'      # installs ~/.julia/bin/juliac
 julia --project=cli -e 'using Pkg; Pkg.instantiate()'
 juliac --output-exe sigmatau --bundle cli/build --trim=safe --experimental cli
 cli/build/bin/sigmatau version
 ```
 
-The bundle (`cli/build/`, about 130 MB) holds the executable and the Julia
-runtime libraries it needs; keep them together when you copy it. Without a
-build, `julia --project=cli -m SigmaTauCLI ARGS…` runs the same commands, but
-each call pays Julia's start-up.
+Without a build, `julia --project=cli -m SigmaTauCLI analyze clock.dat`
+runs the same commands, at the cost of Julia's start-up on each call.
 
-## Commands
+## A first analysis
 
-| Command | Does |
-|:---|:---|
-| `sigmatau analyze FILE` | stability deviations σ(τ), with confidence intervals, EDF and noise type per τ |
-| `sigmatau check FILE` | read the record and summarise it: samples, span, gaps, 5σ outliers, linear drift per day |
-| `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
-| `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
-| `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
-| `sigmatau holdover FILE` | holdover test: the time error after a training stretch against holdover time, and the time to reach a limit ([holdover](../reference/holdover.md)) |
-| `sigmatau steer FILE` | steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts ([steering](../reference/steering.md)) |
-| `sigmatau cross FILE --with FILE2` | two channels measuring one device: cross Allan deviation and cross-spectrum ([two-channel measurements](cross.md)) |
-| `sigmatau timescale FILE --value-cols LIST` | a timescale (AT1 or EWFA) from several clocks read against one reference: each clock's weight and prediction error, and with JSON the ADEV of the scale and of each clock against it |
-| `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
-| `sigmatau report FILE` | a self-contained HTML report: record, settings, σ(τ) plots, per-τ tables and the command line (prints to PDF) |
-| `sigmatau completion SHELL` | a completion script for bash, zsh, fish or PowerShell |
-| `sigmatau version` | the SigmaTau version |
-| `sigmatau help [COMMAND]` | usage, or one command's options (also `COMMAND --help`) |
+Every command that reads a file takes `--synth N` in its place: a
+simulated record of `N` phase samples at 1 s, white FM with random-walk FM
+below it. It serves to try a command before there is a file:
 
-`FILE` is a whitespace, comma or tab separated table. By default column 1 is
-time and column 2 the value. Lines starting with `#` and a Stable32 header
-block are skipped, and a `# tau0:` line (as `save` writes) sets τ₀. Every
-analysis command also takes `--synth N` in place of `FILE`, a synthetic
-white FM plus random-walk FM record for trying things out.
-
-## Options
-
-The record (all four analysis commands):
-
-| Option | Meaning |
-|:---|:---|
-| `--phase` / `--freq` | the value column is phase in seconds (default) or fractional frequency |
-| `--tau0 SECONDS` | sample interval; default from the file header or the time column |
-| `--time-col N`, `--value-col N` | 1-based columns; `--time-col 0` means no time column |
-| `--reference-col N` | subtract this column from the value column (several clocks against one reference) |
-| `--header N` | extra header lines to skip |
-| `--delim CHAR` | field delimiter; default a comma when the first data line holds one, else whitespace; `'\t'` for a tab |
-| `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
-| `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
-| `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
-| `--fillgaps` | fill the missing samples from the data beside each gap, reflected ([`fillgaps`](@ref)): `NaN` readings, and readings missing from the time column; without it, they are gaps the gap-tolerant estimators skip (a frequency record with gaps must be filled) |
-| `--keep-zeros` | read the zeros of a Stable32 `.phd`/`.frd` file as readings (a quantized record); by default they are gaps, as in Stable32 |
-| `--remove-outliers` | replace 5σ outliers in frequency and fill them |
-| `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
-| `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
-| `--noise-model R:Q1:Q2:Q3` | with `--synth`: one simulated clock with these [`ClockModel`](@ref) levels (white PM variance in s², then the white FM, random-walk FM and random-run FM diffusions). Repeat it for each clock, which sets the number of clocks; `--clock I` then picks the one to read. `sigmatau model --synth N --noise-model …` prints the σ(τ) (MDEV, ADEV, MHDEV) the models predict without simulating |
-| `--clocks K`, `--clock I` | with `--synth`: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2, and read clock I of them; `timescale --synth` uses all K (default 4) |
-
-`analyze`:
-
-| Option | Meaning |
-|:---|:---|
-| `--devs LIST` | comma list (default `adev,mdev,hdev,mhdev`) of `adev mdev tdev hdev mhdev htdev totdev mtotdev ttotdev htotdev mhtotdev theo1 theoh pdev mtie tierms` |
-| `--grid GRID` | `octave` (default), `half-octave`, `quarter-octave`, `decade`, `half-decade` or `all`; `halfoctave` and the like work too |
-| `--m LIST` | explicit averaging factors, τ = m·τ₀, in place of `--grid` |
-| `--tau-min S`, `--tau-max S` | leave out averaging times below or above S seconds |
-| `--confidence P` | interval level (default 0.683, one sigma) |
-| `--no-ci` | skip intervals, EDF and noise identification |
-| `--bias MODE` | bias correction of the total estimators and Thêo1: `exact` (default), `published`, `stable32` or `none`, the library's [`correct_bias`](../explanation/noise_and_confidence.md#Matching-a-reference); `--no-bias-correction` is `--bias none` |
-| `--noise TYPE` | noise type behind the intervals and bias factors: `auto` (default, identified at each τ), `fit` (the strongest term of the power-law model fitted to MHDEV) or one of `WHPM FLPM WHFM FLFM RWFM FWFM RRFM` for every τ, the library's [`noise`](../explanation/noise_and_confidence.md#Stating-the-noise-type) |
-| `--spectrum` | add the spectrum to the JSON output |
-| `--nperseg N` | Welch segment length for `--spectrum` |
-| `--fit` | add the power-law noise model fitted to MHDEV to the JSON output |
-| `--component NOISE:A:B` | build that model by hand instead: fit NOISE (`WHFM`, `RWFM`, … or an α) on MHDEV between A and B seconds, against what the other components leave; repeat for each one (see [`noise_fit`](@ref)) |
-
-`spectrum`: `--nperseg N` (default: the largest power of two ≤ N/4, at least 16).
-
-`dynamic`: `--dev dadev|dhdev` (default `dadev`), `--grid GRID`,
-`--window N` (default: the largest power of two ≤ N/8, at least 16) and
-`--step N` (default half the window).
-
-`drift`: `--model linear|quadratic|log|diffusion` (default `linear`); see
-[`drift_fit`](@ref).
-
-`holdover`: `--train SECONDS` (default: a quarter of the record), or
-`--grow K` for a stretch K times each holdover time (2, or 3 with
-`--fit-drift`, is the test behind TDEV and HTDEV),
-`--tau LIST` for the holdover times in seconds (default: the octave
-multiples of τ₀ up to the training stretch), `--fit-drift` to fit a parabola
-to the stretch in place of a line, `--no-anchor` to start from the fit's
-value in place of the last reading, `--limit SECONDS` for the holdover time
-at which the error reaches it, and `--confidence P` (default 0.95 here) for
-the share of trials the quantile covers; see [`holdover`](@ref). With JSON,
-`--fit` adds the error that the power-law model fitted to the record
-predicts for the same test, and `reference` holds √6 TDEV at each holdover
-time (√20 HTDEV with `--fit-drift`), `null` past the τ the record gives it.
-`--kalman` predicts with a Kalman filter in place of the least-squares fit:
-its clock model is the power-law fit to the first training stretch alone,
-so no trial is predicted with noise levels learned from the readings it is
-compared with, and `claimed` is the error the filter itself expects
-(`--fit-drift` then gives the model a drift state). Flicker FM and flicker
-PM that the fit finds stay in the model, as Markov states out to the
-record's span.
-
-`steer`: the record is the free-running clock against its reference, and
-the command replays it through a steering loop ([`steer`](@ref)). The gains
-come from `--time-constant SECONDS`, a critically damped loop by pole
-placement ([`steering_gains`](@ref)), with `--integral` for a third gain,
-or from `--cost P:F:U`, the weights on phase, frequency and steer of a
-quadratic cost ([`lqg_gains`](@ref)). `--interval SECONDS` sets the time
-between steers (default τ₀). The clock model is the power-law fit to the
-first `--train SECONDS` alone (default: a quarter of the record), with the
-flicker it finds kept as Markov states, so the filter is not given noise
-levels learned from the readings it steers; the loop runs over the whole
-record and every result is taken from the end of that stretch on.
-`--fit-drift` gives the model a drift state, which the loop steers out.
-`--grid` or `--m` set the averaging times.
-
-`cross`: `--with FILE2`, the second channel, read with the same options as
-`FILE`; `--grid` or `--m` for the τ values and `--nperseg N` for the
-cross-spectrum. Both records must have the same length and τ₀ and no gaps.
-
-Output (all commands): `--format csv|json` (default `csv`), `--out PATH`
-in place of stdout, `--series N` to include up to N record points in the
-JSON, and `--quiet` to drop the "wrote PATH" note.
-
-## CSV
-
-`analyze` writes one row per deviation and τ:
-
-```text
-source,quantity,deviation,tau,dev,ci_lower,ci_upper,edf,neff,noise_type
+```@example cli
+sigmatau("analyze --synth 4096 --devs adev,mdev --m 1,10,100") # hide
 ```
 
-`tau` is in seconds. Without intervals (`--no-ci`, or a τ where they are
-undefined) `ci_lower`, `ci_upper`, `edf` and `noise_type` are blank; a value
-is never written as `NaN`. `check` writes
-`source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day`, `spectrum`
-writes `f,sy,sx` (without the DC bin), and `dynamic` writes `t,tau,dev`, one
-row per window and τ, with `t` the window centre in seconds. `drift` writes
-one row, `source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n`,
-with `c` blank for the linear model. `holdover` writes
-`source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit,claimed`,
-one row per holdover time (`train` is K times `tau` with `--grow`); `limit`
-is blank without `--limit`, `time_to_limit` is blank when the limit is not
-reached within the holdover times, and `claimed` is blank without
-`--kalman`. `steer` writes `source,tau,free,steered,predicted`, the Allan
-deviation of the record, of the steered record and of the steady state the
-clock model predicts; `predicted` is blank where there is no prediction (a
-steer less often than every sample, or random-run FM in the model). `cross` writes
-`tau,covar,dev,uncertainty,dev_a,dev_b,neff`, one row per τ (see
-[`cross_adev`](@ref)).
+There is a row for each deviation and averaging time: the deviation, the
+limits of its confidence interval, the EDF, the number of terms averaged
+and the noise type identified. Without `--devs` the deviations are
+`adev,mdev,hdev,mhdev`, and without `--m` the averaging factors are the
+octave grid of each one. The program writes its numbers in full. The
+transcripts on this page cut them to four significant digits.
 
-## JSON
+## Your own file
 
-Every command answers with one object in a versioned schema. A field is
-only added within a schema version, never renamed or removed; non-finite
-numbers are `null`.
-
-```json
-{
-  "schema_version": 1,
-  "sigmatau": "0.6.0",
-  "command": "analyze",
-  "source": "clock.dat",
-  "record": {
-    "quantity": "phase", "n": 16384, "tau0": 1.0, "span_s": 16384.0,
-    "start": "2026-11-08T12:00:00Z", "gaps": 0, "outliers": 2, "outlier_t": [812.0, 9031.0], "outlier_x": [3.1e-9, 3.4e-9],
-    "drift_per_day": 3.1e-14, "removed_offset": null, "removed_drift_per_day": null,
-    "series": { "t": [0.0, 4.0], "x": [0.0, 1.2e-12] }
-  },
-  "analysis": {
-    "quantity": "phase", "tau0": 1.0, "n": 16384, "tau_mode": "octave",
-    "ci": true, "confidence": 0.683, "bias_correction": "exact", "noise": "auto",
-    "deviations": ["adev", "tdev"],
-    "detrend": "none", "remove_drift": "none", "fillgaps": false, "remove_outliers": false, "reference_col": 0
-  },
-  "results": [
-    { "deviation": "adev", "label": "ADEV", "axis": "sigma_y",
-      "points": [ { "tau": 1.0, "dev": 1.2e-11, "ci_lower": 1.1e-11, "ci_upper": 1.3e-11,
-                    "edf": 16382.0, "neff": 16382, "noise_type": "WHFM" } ] }
-  ],
-  "spectrum": { "nperseg": 4096, "noverlap": 2048, "f": [], "sy": [], "sx": [] },
-  "elapsed_ms": 41.7
-}
+```bash
+sigmatau analyze clock.dat                   # time in column 1, phase in column 2
+sigmatau analyze clock.dat --tau0 0.1        # the sample interval, stated
+sigmatau analyze freq.txt --freq             # fractional frequency
+sigmatau analyze log.txt --value-col 3 --scaling 1e-9        # column 3, in ns
+sigmatau analyze bare.txt --time-col 0 --value-col 1 --tau0 1    # no time column
+sigmatau analyze trace.tim                   # a TimeLab file
+sigmatau analyze gnss.clk --column G08       # one clock of a RINEX clock file
 ```
 
-- `record` is in every answer; `series` only with `--series N`: the phase
-  itself when it has at most N samples, otherwise its first and last sample
-  and, in each of (N − 2) ÷ 3 equal stretches, its lowest and highest sample
-  and its first gap (`null`), so that a plot spans the record and keeps every
-  outlier and gap. At most 500 outliers are listed in
-  `outlier_t`/`outlier_x`; `outliers` is the full count. `start` is the
-  UTC time of the first sample from ISO 8601 or MJD timestamps, `""` when
-  the file has none; `gaps` counts the missing samples.
-- `axis` is `sigma_x` (seconds) for TDEV, HTDEV, TTOTDEV, MTIE and TIE rms,
-  and `sigma_y` for the rest. With `--m`, `tau_mode` is `"m"` and `m` lists
-  the factors.
-- `spectrum` comes from `sigmatau spectrum`, or `analyze --spectrum`. Its
-  arrays leave out the DC bin. Under `analyze`, a record with gaps gives
-  `{"error": "…"}` there and the estimators still run; `sigmatau spectrum`
-  stops on it with exit code 3.
-- `powerlaw` comes from `analyze --fit`: the fitted model
-  (`deviation`, `alphas`, `h`, `noise_types`; see [`powerlaw_fit`](@ref)),
-  its σ(τ) for each ADEV, MDEV, TDEV, HDEV and MHDEV result in `curves`, and
-  `sigma_at`, the model's ADEV at 1 s, 10 s, 100 s, 1000 s, 10⁴ s and one day
-  (those within half the record), and `clock_model`, the `R`, `q1`, `q2`,
-  `q3` of [`clock_model`](@ref). `mode` is `"fit"`, or `"components"` with
-  `--component`, which adds `components` (each one's `alpha`, `h`,
-  `tau_from`, `tau_to`) and `residual`, the MHDEV the components leave. A
-  record or a component the fit cannot use gives `{"error": "…"}` there
-  instead.
-- `masks` comes from `analyze --mask NAME` (or `all`): for each ITU-T
-  mask (see [`TELECOM_MASKS`](@ref)) its `name`, `title`, the `mtie` and
-  `tdev` limits in seconds over `tau` (0.1 s to 10⁶ s, `null` outside the
-  recommendation's range), and in `checks` each MTIE / TDEV result's
-  `limit` at its τ, `pass` and `margin` (see [`mask_check`](@ref)).
-- `sigmatau dynamic` adds `"dynamic": {"deviation", "window", "step", "t",
-  "tau", "dev"}`, where `dev` has one row per window (centre time `t`, in
-  seconds) and one column per τ.
-- `sigmatau drift` adds `"drift": {"model", "coef", "stderr",
-  "drift_per_day", "drift_per_day_err", "rms", "n"}`, and with `--series N`
-  a `series` of `t`, `y` and `fit`.
-- `sigmatau holdover` adds `"holdover": {"train", "grow", "drift", "anchor",
-  "confidence", "tau", "rms", "quantile", "worst", "mean", "n", "reference",
-  "limit", "time_to_limit"}`, the fields of [`HoldoverResult`](@ref) and the
-  scaled time deviation over `tau`; `time_to_limit` is `null` when the limit
-  is not reached. With `--fit`, `predicted` holds
-  `{"alphas", "noise_types", "sigma", "quantile", "budget",
-  "time_to_limit"}` from [`HoldoverPrediction`](@ref), with one `budget`
-  array (variance in s², over `tau`) per noise type. With `--kalman`,
-  `claimed` holds the filter's own standard deviation over `tau` and `model`
-  the `{"R", "q1", "q2", "q3", "flicker_fm", "flicker_pm"}` it ran on.
-- `sigmatau steer` adds `"steer": {"train", "interval", "gains",
-  "time_constants", "frequencies", "drift", "model", "tau", "free",
-  "steered", "phase_rms", "steers_rms", "predicted"}`: the `gains` are
-  `{"phase", "frequency", "integral"}`, `time_constants` (s) and
-  `frequencies` (Hz) those of the loop's poles ([`steering_poles`](@ref)),
-  `model` the clock model as for `holdover --kalman` and `drift` whether it
-  has a drift state, `free` and `steered` the Allan deviations over `tau`,
-  and `phase_rms` and `steers_rms` the RMS of the steered readings and of
-  the steers. `predicted` holds `{"phase", "frequency", "steers", "adev"}`
-  from [`SteeringPrediction`](@ref), or an `error` saying why there is
-  none. With `--series N`, `series` holds `t`,
-  the `steered` phase and the frequency `correction` in force.
-- `sigmatau cross` adds `"with"` (the second file), `"cross_adev": {"tau",
-  "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
-  `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`
-  without the DC bin.
-- `timescale`: `"timescale": {"algorithm", "tau0", "n", "reference", "wmax", "clocks", "weight", "weight_mean", "error_rms", "adev": {"tau", "scale", "clocks"}}`.
-  `weight` is the last sample's, while `weight_mean` and `error_rms` cover the
-  second half of the record. `adev.scale` is the scale against the reference.
-  `--series N` adds `"series": {"t", "scale", "weights"}`. The CSV form has
-  one row per clock: `clock,weight,weight_mean,error_rms`. With `--algorithm
-  greenhall` or `jones_tryon`, `--flicker` fits each clock with
-  [flicker states](@ref "Flicker states") and adds `"flicker": {"fm",
-  "pm"}`, the number of Markov states each clock's model carries. The levels
-  are only as good as the fit: on a short record flicker FM and random-walk
-  FM are hard to tell apart at the longest τ, so states can appear on a
-  clock that has no flicker.
-- On failure, with `--format json`, stdout holds
-  `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
+A file of plain columns holds phase in seconds unless `--freq` says
+otherwise. The sample interval is `--tau0`, else the one in the file's
+header, else the step of the time column. The files of instruments, and
+tables whose first line names the columns, are recognized and read as
+[`read_data`](@ref) reads them, with the kind of record and the unit taken
+from the file.
+
+`check` reads the record the same way and summarizes it, which shows
+whether the file was understood before any analysis:
+
+```@example cli
+sigmatau("check clock.dat") # hide
+```
+
+This file has 4096 samples at 1 s, of which the time column skips ten.
+
+## Preparing the record
+
+The steps of [Gaps, outliers and drift](preparing.md) are options of every
+command:
+
+```bash
+sigmatau analyze clock.dat --fillgaps                  # fill the missing samples
+sigmatau analyze clock.dat --remove-outliers           # replace the outliers
+sigmatau analyze clock.dat --remove-drift quadratic    # remove offset and linear drift
+sigmatau analyze clock.dat --range 3600:86400          # seconds 3600 to 86400 only
+sigmatau analyze clocks.dat --value-col 3 --reference-col 2   # column 3 less column 2
+```
+
+The Allan and Hadamard families, MTIE and TIE rms skip gaps in a phase
+record. The other deviations need the record filled first, and say so:
+
+```@example cli
+sigmatau("analyze clock.dat --devs adev,totdev --m 1,100") # hide
+```
+
+```@example cli
+sigmatau("analyze clock.dat --devs adev,totdev --m 1,100 --fillgaps") # hide
+```
+
+`--remove-drift quadratic` fits a parabola to the phase by least squares
+and removes it, which takes out a frequency offset and a linear frequency
+drift. `linear` removes the offset alone. The fit leaves out the samples
+that `--fillgaps` put in.
+
+A frequency file is integrated to phase as it is read, so one with missing
+samples needs `--fillgaps` for every command.
+
+## Deviations, averaging times and intervals
+
+```bash
+sigmatau analyze clock.dat --devs adev,mdev,tdev,totdev
+sigmatau analyze clock.dat --grid quarter-octave       # a finer grid
+sigmatau analyze clock.dat --m 1,2,5,10,20,50,100      # the averaging factors
+sigmatau analyze clock.dat --tau-min 10 --tau-max 1000 # part of the grid
+sigmatau analyze clock.dat --confidence 0.95           # 95 % intervals
+sigmatau analyze clock.dat --noise WHFM                # the noise type, stated
+sigmatau analyze clock.dat --bias stable32             # Stable32's bias convention
+sigmatau analyze clock.dat --no-ci                     # deviations alone
+```
+
+`--noise` and `--bias` are the keywords `noise` and `correct_bias` of the
+estimators, with `exact` for `true` and `none` for `false`
+([Confidence intervals](../explanation/confidence.md),
+[Bias correction](../explanation/bias.md)). The intervals are at 68.3 %
+unless `--confidence` says otherwise.
+
+## Other analyses
+
+```bash
+sigmatau spectrum clock.dat --nperseg 4096             # S_y(f) and S_x(f)
+sigmatau dynamic clock.dat --dev dhdev --window 4096   # deviation in a sliding window
+sigmatau drift ocxo.dat --freq --model log             # a model of frequency drift
+sigmatau holdover gpsdo.dat --train 86400 --limit 1e-6 # time error without a reference
+sigmatau steer maser.dat --time-constant 86400         # the record steered to its reference
+sigmatau cross a.dat --with b.dat                      # one device, two channels
+sigmatau timescale clocks.dat --value-cols 2,3,4       # a time scale from three clocks
+sigmatau report clock.dat --out clock.html             # an HTML report
+```
+
+`report` takes the options of `analyze` and writes one HTML file with the
+record, the settings, the plots, a table for each deviation and the command
+line that made it. The file refers to nothing outside itself and prints to
+PDF from a browser.
 
 ## Live measurement
 
-`sigmatau live SOURCE` reads one reading at a time and keeps ADEV, MDEV,
-HDEV and MHDEV up to date with [`LiveStability`](@ref), at constant work per
-reading. `SOURCE` is
+`sigmatau live SOURCE` keeps the Allan, modified Allan, Hadamard and
+modified Hadamard deviations up to date while readings arrive
+([`LiveStability`](@ref)). The source is one of:
 
-- `sim`, a simulated clock (white PM, white FM and random-walk FM) that gives
-  one phase reading per τ₀ (`--fast` runs it flat out);
-- `tcp://HOST:PORT`, an LXI instrument's SCPI socket (usually port 5025),
-  sent `--query` (default `READ?`) before every reading;
-- a path: a serial port set up with `stty` first, or a log file, read to its
-  end. Without `--query` the instrument is expected to stream.
-
-`tcp://` needs macOS or Linux. A reading of `9.91E+37` (SCPI's missed gate)
-stops the run with exit code 2: a running estimate cannot bridge a gap.
-
-The first number on each line is the reading: phase in seconds by default,
-fractional frequency with `--freq`, or a counter frequency in Hz with `--hz`
-(against `--nominal`, by default the first reading to 4 significant
-figures). `--tau0` is the time between readings (default 1 s), `--devs`
-the deviations (default all four) and `--m` or `--grid` the τ values.
+- `sim`, a simulated clock that gives one phase reading each sample
+  interval, or as fast as they compute with `--fast`;
+- `tcp://HOST:PORT`, the SCPI socket of an instrument on the network,
+  usually port 5025. The query `READ?` is sent before each reading, or the
+  one that `--query` gives. This source needs macOS or Linux;
+- a path: a serial port, set up with `stty` first (`stty -F` on Linux,
+  `stty -f` on macOS), or a file of readings, read to its end. Without
+  `--query` the instrument is expected to send readings on its own.
 
 ```bash
+sigmatau live sim --count 1000 --fast
 sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1 --devs adev,mdev
 stty -F /dev/ttyUSB0 9600 raw && sigmatau live /dev/ttyUSB0 --freq --tau0 0.1
 ```
 
-Every `--every N` readings (default 1) it writes one JSON object on a line:
+The first number on each line is the reading: phase in seconds, fractional
+frequency with `--freq`, or a counter's frequency in hertz with `--hz`,
+taken against `--nominal`. `--tau0` is the time between readings, 1 s by
+default. The program writes one line of JSON for every reading, or every
+`--every N` readings, and stops after `--count N` readings or when the
+source ends. The values carry no confidence intervals. Run `analyze` on
+the saved readings for those.
 
+A reading of `9.91E+37`, with which a counter reports a gate without a
+measurement, stops the run: a running estimate cannot leave a sample out.
+
+## In scripts
+
+`--format json` gives every answer as one JSON object in a versioned schema,
+and `--out PATH` writes to a file:
+
+```bash
+sigmatau analyze clock.dat --format json --out result.json
+sigmatau analyze clock.dat --format json |
+    jq -r '.results[0].points[] | [.tau, .dev] | @tsv'      # τ and σ, tab-separated
 ```
-{"schema_version": 1, "sigmatau", "command": "live", "source",
- "quantity": "phase" | "frequency" | "hz", "tau0", "nominal", "n",
- "readings": [the readings since the last line],
- "tau": […], "results": [{"deviation": "adev", "dev": […], "neff": […]}, …],
- "done": false, "elapsed_ms"}
-```
 
-`dev` is `null` at τ values that do not have two terms yet. It stops after
-`--count N` readings or when the source ends, with a last line that has
-`"done": true`; until then it runs until stopped. The values carry no
-confidence intervals: run `analyze` on the saved readings for those.
-## Report
-
-`sigmatau report` takes the same record and analysis options as `analyze`
-and writes HTML instead of CSV or JSON (so `--format` does not apply):
-
-```sh
-sigmatau report clock.dat --devs adev,mdev,tdev --out clock-report.html
-```
-
-The file has no outside references: styles and SVG plots are inline. It
-lists the record (samples, τ₀, span, gaps, outliers, drift, preprocessing),
-the settings, one plot per axis (σ_y and σ_x) with the confidence band, a
-table per estimator (τ, σ, interval, EDF, noise type, terms) and the command
-that produced it.
-
-## Exit codes
-
-| Code | Meaning |
-|:---|:---|
-| 0 | success |
-| 1 | usage: unknown command or option, bad value, missing FILE |
-| 2 | input: missing file, unreadable or non-numeric content, bad column |
-| 3 | analysis: record too short, gaps where the spectrum needs none |
-| 4 | output: `--out` cannot be written |
-
-Errors print one line, `sigmatau: …`, on stderr. A consumer that closes the
-pipe early (`sigmatau analyze … | head`) is not an error.
+The exit code is 0 on success, 1 for a mistake in the command line, 2 for
+a file that cannot be read, 3 for a record that the analysis cannot use and
+4 for output that cannot be written. An error prints one line on standard
+error, and with `--format json` also an object with `error` and `exit_code`
+on standard output, so that a program reading the output always gets JSON.
 
 ## Shell completion
 
-`sigmatau completion SHELL` prints a static script that completes commands,
-options, deviation names and option values, and leaves file names to the
-shell.
+`sigmatau completion SHELL` prints a script that completes the commands,
+the options and their values, and leaves file names to the shell:
 
 ```bash
-source <(sigmatau completion bash)                                  # bash, this shell
-sigmatau completion bash > /usr/local/etc/bash_completion.d/sigmatau  # bash, always
-sigmatau completion zsh > "${fpath[1]}/_sigmatau"                     # zsh
-sigmatau completion fish > ~/.config/fish/completions/sigmatau.fish   # fish
-sigmatau completion powershell | Out-String | Invoke-Expression      # PowerShell ($PROFILE)
+# bash, for this session
+source <(sigmatau completion bash)
+# bash, for every session
+sigmatau completion bash > /usr/local/etc/bash_completion.d/sigmatau
+# zsh
+sigmatau completion zsh > "${fpath[1]}/_sigmatau"
+# fish
+sigmatau completion fish > ~/.config/fish/completions/sigmatau.fish
+# PowerShell, in the profile
+sigmatau completion powershell | Out-String | Invoke-Expression
 ```

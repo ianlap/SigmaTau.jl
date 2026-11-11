@@ -1,59 +1,102 @@
-# Python bindings
+# Python
 
-SigmaTau ships an official Python package, `sigmatau`, in `python/`. It is a
-[juliacall](https://github.com/JuliaPy/PythonCall.jl)-based wrapper: every
-computation runs in an embedded Julia runtime with SigmaTau.jl loaded, so results
-match the Julia API on this site bit-for-bit — there is one numerics source, not a
-parallel Python implementation. It supersedes the earlier pure-Python/NumPy port
-([sigmatau.py](https://github.com/ianlap/sigmatau.py)), which is being deprecated;
-the wrapper mirrors that port's public API and extends it.
+`sigmatau` is the Python package of this project. It is a wrapper, not a
+second implementation: each function calls the Julia function of the same
+name in a Julia runtime inside the Python process, through
+[juliacall](https://github.com/JuliaPy/PythonCall.jl). The numbers are
+those of the Julia package, and this documentation applies to both.
 
 ## Install
 
 ```bash
-pip install sigmatau                 # or, from a checkout: pip install -e "python/[dev]"
+pip install sigmatau        # the latest release on PyPI
+pip install -e python       # from a checkout of the repository, as it stands
 ```
 
-The first `import sigmatau` performs a one-time juliapkg resolve — installing Julia
-1.11, creating a private Julia environment under the venv, and precompiling — which
-takes about two minutes. Warm imports after that take a few seconds.
+The package needs Python 3.11 or later. From a checkout the install has to
+be an editable one (`-e`), because the package finds the Julia code by its
+path in the checkout. The first `import sigmatau` finds a Julia of version
+1.11 or later, or installs one, creates a Julia environment inside the
+Python environment and precompiles the package, which takes a few minutes.
+Later imports take a few seconds.
 
-## Example
+Import `sigmatau` before `juliacall`. On import it asks juliacall to let
+Julia handle signals, so that Ctrl-C interrupts a long calculation, and to
+start Julia with all threads, for the total estimators. It cannot do either
+once `juliacall` is loaded, and warns. Leave Python's `faulthandler` off:
+it takes the signals that Julia's threads use among themselves for
+crashes.
+
+## A first analysis
 
 ```python
 import sigmatau as st
 
-pd = st.noise_gen(st.PhaseData, 4096, 1.0, sigma1={0: 1e-12}, rng=42)
-r = st.adev(pd)                      # Octave grid, noise ID + 68.3% CIs
-print(r.tau, r.dev, r.ci_lower, r.ci_upper, r.noise_type)
+p = st.noise_gen(st.PhaseData, 4096, 1.0, sigma1={0: 1e-12}, rng=42)
 
-suite = st.stability(pd)             # adev+mdev+hdev+mhdev in one call
-suite["adev"].dev
+r = st.adev(p)                    # octave spacing, noise type and intervals
+r.tau, r.dev, r.noise_type, r.ci_lower, r.ci_upper, r.edf
 
-st.deviation("mhtotdev", pd)         # any estimator by name; see st.estimators()
-st.psd_y(pd)                         # Welch S_y(f)
-st.drift_fit(pd).rate                # frequency drift per day
-st.powerlaw_fit(pd)                  # h_α of the power-law noise model
-st.save("adev.tsv", r)               # st.load("adev.tsv") reads it back
-st.mask_check(st.mtie(pd), "G8262_opt1").passed   # ITU-T wander mask
+r = st.adev(p, [1, 10, 100], confidence=0.95, noise="WHFM")
 
-m = st.clock_model(st.powerlaw_fit(pd), tau0=1.0)   # flicker=True keeps flicker as Markov states
-kf = st.kalman_filter(pd, m)         # phase and frequency estimates
-cc, _ = st.simulate_ensemble([m] * 4, 10_000)
-st.timescale(cc).weights             # AT1 weights over time
+suite = st.stability(p, devs=("adev", "mdev", "hdev"))
+suite["mdev"].dev
+
+st.save("adev.tsv", r)            # st.load reads it back
 ```
 
-The Python names and keywords match the Julia ones on this site (`psd_y`,
-`ncornered_hat`, `groslambert`, `cross_adev`, `save`/`load`, `m=` for the τ
-grid). Indices into and out of Python, such as `find_outliers`, `summarize`'s
-`outliers` and `simulate_ensemble(reference=)`, are 0-based; `mask_check`'s
-`pass` is `passed`. Live
-measurement ([`LiveStability`](@ref) and `sigmatau live`), `noise_id_nnls` and
-[`StreamingStability`](@ref) are Julia only.
+A record of your own is `st.PhaseData(x, tau0)` or
+`st.FrequencyData(y, tau0)` from a NumPy array, or the result of
+`st.read_phase`, `st.read_frequency` or `st.read_data` on a file.
 
-## More
+## From Julia to Python
 
-`python/README.md` is the canonical reference: full install notes, more examples
-(explicit τ grids, file IO, dynamic deviations), the development-vs-release
-`juliapkg.json` configuration, the divergence ledger against the retired
-`sigmatau.py` port, and how to run the test suite.
+The names and keywords are those of the Julia functions, so the
+[Reference](../reference/estimators.md) serves for both. The differences
+follow from the languages:
+
+| Julia | Python |
+|:---|:---|
+| a symbol, `:WHFM`, `:stable32` | a string, `"WHFM"`, `"stable32"` |
+| a named grid, `adev(p, Decade)` | `st.adev(p, st.Decade)` |
+| `r.ci`, a vector of `(lo, hi)` | `r.ci_lower`, `r.ci_upper`, two arrays |
+| `suite[:mdev]` | `suite["mdev"]` |
+| a named tuple, `summarize(p).gaps` | a dict, `st.summarize(p)["gaps"]` |
+| indices that count from 1 | indices that count from 0: `find_outliers`, the `outliers` of `summarize`, the `reference` and `pivot` of the ensemble functions |
+| `find_outliers(p; nsigma = 5)` | `st.find_outliers(p, n_sigma=5)` |
+| `mask_check(r, :G811).pass` | `st.mask_check(r, "G811").passed` |
+| `FrequencyData(p)`, `PhaseData(f)` | `p.to_frequency()`, `f.to_phase()` |
+| `Dict(0 => 1e-12)` | `{0: 1e-12}` |
+| `rng = Xoshiro(42)` | `rng=42`, which seeds the same generator |
+| `push!(s, x)`, `append!(s, xs)`, `snapshot(s)` on a [`StreamingStability`](@ref) | `s.push(x)`, `s.extend(xs)`, `s.snapshot()` |
+| `add_component!(fit, :WHFM, 1:6)`, `undo!(fit)`, `noise_residual(fit)` on a [`NoiseFit`](@ref) | `fit.add_component("WHFM", slice(0, 6))`, `fit.undo()`, `fit.residual()` |
+| an `ArgumentError` | a `ValueError` |
+
+Arrays come back as NumPy arrays and results as Python objects with the
+fields of the Julia types.
+
+Not wrapped: live measurement ([`LiveStability`](@ref) and its sources)
+and the plot recipes. Plot a result with any Python library from `r.tau`
+and `r.dev`.
+
+## More of the package
+
+```python
+st.deviation("mhtotdev", p)                 # any estimator by name
+st.psd_y(p)                                 # spectrum of fractional frequency
+st.drift_fit(p).rate                        # frequency drift, per day
+st.mask_check(st.mtie(p), "G8262_opt1").passed
+
+fit = st.powerlaw_fit(p)                    # power-law model of the noise
+model = st.clock_model(fit)                 # flicker=True keeps flicker noise as states
+kf = st.kalman_filter(p, model)             # phase and frequency estimates
+gains = st.steering_gains(3600.0, p.tau0)   # a steering loop, time constant 1 h
+st.steer(p, model, gains).steered           # the record as that loop would leave it
+
+cc, truth = st.simulate_ensemble([model] * 4, 10_000, rng=1)
+st.timescale(cc).weights                    # AT1 weights against time
+```
+
+The package's own
+[README](https://github.com/ianlap/SigmaTau.jl/blob/main/python/README.md)
+covers development installs and the release procedure.

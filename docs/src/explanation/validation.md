@@ -1,158 +1,251 @@
 # Validation
 
-SigmaTau is checked against two independent references:
+The results of this package rest on five kinds of evidence, described
+below. The second half of the page follows one record through a comparison
+with Stable32 and allantools at each averaging time. The
+[cross-check report](crosscheck.md) lists every comparison the test suite
+asserts, with its tolerance and the largest difference found.
 
-1. **Stable32** (W. Riley), the de facto reference application for
-   time-and-frequency stability analysis. Its outputs are printed to five
-   significant figures, which sets an agreement floor of about `5e-5`
-   relative.
-2. **allantools** (A. Wallin), an open-source Python library whose outputs
-   are full Float64, so kernel-level agreement can be checked to machine
-   precision.
+## Evidence
 
-Estimators that neither reference implements (`mhdev`, `htdev`, `mhtotdev`,
-`theoh`, `ncornered_hat`, the dynamic and streaming variants) are tested against
-inlined textbook kernels and algebraic identities in `test/stab/`.
+| Evidence | What it establishes | Where |
+|:---|:---|:---|
+| Other programs | The deviations, EDF, χ² limits, lag-1 estimates, spectra and drift fits agree with allantools, AllanDeviations.jl, scipy and Stable32 | `test/validation/` |
+| Published values | The deviations of the 1000-point test suite of [SP1065 §12.4](@cite riley-2008-sp1065) are reproduced | `test/validation/` |
+| Definitions | Each estimator equals a direct evaluation of its defining sum | `test/stab/` |
+| Exact moments | The bias factors and EDF models derived in this package equal the exact mean and variance of the estimator on Gaussian noise | `test/stab/`, `tools/` |
+| Simulation | How often the noise identification is right, and how often an interval holds the true value | the Background pages |
 
-Where the references disagree with each other, or with SigmaTau's default
-output, the difference is traced to a named definitional choice (a bias
-correction policy or a noise-identification convention), and the option that
-reproduces each reference is stated. The comparisons below use the shipped
-fixture `test/fixtures/validation/stable32gen.DAT`, an 8192-point phase
-record at τ₀ = 1 s, and `tools/validation/tables.jl` rewrites the per-τ
-tables from it:
+### Other programs
 
-```julia
-p = read_phase("test/fixtures/validation/stable32gen.DAT";
-               time_col=0, value_col=1, tau0=1.0, header=10)
+[Related software](related.md) describes the programs. allantools and
+AllanDeviations.jl compute in double precision, and the suite requires the
+deviations to agree with theirs within ``10^{-9}`` (``10^{-8}`` for the
+modified Allan and time deviations). Stable32 prints five significant
+digits, and the suite requires agreement with its result files within
+``10^{-4}`` for the deviations and ``10^{-3}`` for the confidence limits.
+The comparisons run on seven power-law records of 4096 points, from white
+PM to random-run FM, on the test record that Stable32 distributes and on a
+flicker PM record from its noise generator.
+
+Where two programs follow different conventions the suite compares like
+with like. Against allantools, which returns the total deviations
+uncorrected, it calls [`mtotdev`](@ref) with `correct_bias=false`. The
+report states each convention. The differences that remain, such as the
+EDF each program gives the total deviations at short averaging times, are
+listed in the report and not asserted.
+
+A continuous-integration job installs allantools 2024.6 and
+AllanDeviations.jl 0.3.0, regenerates their tables and repeats the
+comparison on every pull request, so that the stored tables cannot drift
+from the programs.
+
+### Published values
+
+[SP1065 §12.4](@cite riley-2008-sp1065) defines a 1000-point frequency
+record by a random number generator (its Eq. (73)) and lists its
+deviations in Table 31. The suite generates the record and reproduces the
+overlapping Allan, modified Allan, time, overlapping Hadamard, total and
+Hadamard total deviations of the table within ``3 × 10^{-7}``, the
+resolution of the seven digits printed.
+
+### Definitions
+
+`test/stab/reference_kernels.jl` holds an implementation of each variance
+written directly from its definition, sharing no code with the package.
+The optimized kernels agree with it within ``10^{-12}`` on a 4096-point
+record of white PM and random-walk FM. For the estimators that no other
+program computes ([`mhdev`](@ref), [`htdev`](@ref), [`mhtotdev`](@ref))
+this is the primary test.
+
+### Exact moments
+
+A squared deviation is a quadratic form in the phase samples, so its mean
+and its variance on Gaussian noise of a given spectrum follow exactly,
+without simulation. [Total estimators on PM noise](total_pm.md) and
+[MHTOTDEV bias and EDF](mhtotdev.md) derive bias factors and EDF models
+this way, with tools that do not call the package. The tests work in the
+other direction: they extract the quadratic form from each kernel and hold
+the bias factors to its exact mean and the EDF models to its exact EDF.
+
+### Simulation
+
+None of the four says how a default call behaves on noise of unknown type.
+The Background pages therefore give, in simulation, how often the
+noise identification is right
+([Noise identification](noise_identification.md)), how much bias a default
+call leaves ([Bias correction](bias.md)) and how often the interval holds
+the true value ([Confidence intervals](confidence.md)). Each statement
+gives the record length and the number of records. These runs are not part
+of the test suite.
+
+## One record in detail
+
+`test/fixtures/validation/stable32gen.DAT` is a phase record of 8192
+points at 1 s, in Stable32's file format. White PM dominates up to about
+250 s, flicker FM and random-walk FM beyond. The fixtures hold the tables
+that Stable32 and allantools computed from it
+(`stable32out/stable32_data_full.csv`,
+`allantools_out/allantools_data_full.csv`).
+
+```@example validation
+using SigmaTau
+file = joinpath(pkgdir(SigmaTau), "test", "fixtures", "validation",
+                "stable32gen.DAT")
+p = read_phase(file)
+adev(p, [1, 16, 256, 2048])
 ```
 
-The Stable32 reference is `stable32out/stable32_data_full.csv` (σ, the
-identified noise exponent α, and the 68.3 % confidence bounds); the
-allantools reference is `allantools_out/allantools_data_full.csv`.
+### Noise type
 
-This page walks through one fixture in detail. The
-[Cross-check report](crosscheck.md) summarizes every asserted comparison
-(against Stable32, allantools, the NBS 1000-point set and scipy),
-regenerated from the validation test group by
-`tools/validation/report.jl`.
+The EDF, and for the total deviations the bias factor, depend on the noise
+type, so the comparison starts there. Stable32 prints the same noise type
+for every overlapping estimator at a given averaging time:
 
-Default settings throughout, with two exceptions: the total-family tables
-additionally show `correct_bias=false` ("raw") columns, and the two Hadamard
-tables use `remove_drift=false`, Stable32's convention for the noise type.
+| ``τ`` (s) | 1 to 16 | 32, 64 | 128 | 256 | 512 | 1024 | 2048, 4096 |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Stable32 | white PM | flicker PM | white FM | white PM | flicker FM | white FM | white FM |
+| This package | white PM | flicker PM | white FM | white FM | flicker FM | flicker FM | random-walk FM |
+| Hadamard family, default | white PM | flicker PM | white FM | white FM | flicker FM | flicker FM | flicker FM |
 
-## Summary
+The programs differ at three places.
 
-| Estimator | σ vs Stable32 | σ (raw) vs allantools | CI bounds vs Stable32 |
-|---|---|---|---|
-| OADEV, MDEV, TDEV, OHDEV | ≤ 0.005 % (fixture precision) | ≤ 1e-13 | ≤ 0.06 % at 9 of 12 τ¹ |
-| TOTDEV | ≤ 0.005 % on FM rows with the same α¹; 0.02 to 0.34 % lower on the six PM rows² | ≤ 2.8e-15 | ≤ 0.07 % on FM rows with the same α¹; within 1.1 % on the PM rows² |
-| MTOTDEV (raw) | ≤ 0.004 % | ≤ 1.1e-15 | within 1.3 % up to τ = 512 s¹ (≤ 0.02 % at τ ≤ 8 s)³ |
-| HTOTDEV | ≤ 0.003 % on FM rows with the same α¹; 10 to 15 % lower on the six PM rows² | ≤ 4.4e-15 | ≤ 0.1 % on FM rows with the same α¹; 10 to 15 % lower on the PM rows² |
+- **256 s.** With 32 averaged points this is the longest averaging time at
+  which both use the lag-1 autocorrelation. Stable32 reads white PM and
+  this package white FM. [`identify_noise`](@ref) with
+  `remove_drift=false`, which leaves the averaged series as it is, reads
+  flicker PM. The Allan deviation falls as ``τ^{-0.85}`` from 128 s to
+  256 s and as ``τ^{-0.5}`` from 256 s to 512 s.
+- **1024 s and beyond.** With fewer than 30 averaged points both programs
+  turn to the ``B_1`` ratio. This package compares it with ``B_1(N, μ)``
+  at the number of averaged points and reads flicker FM at 1024 s and
+  random-walk FM beyond; the Allan deviation is flat from 512 s to 1024 s
+  and rises by a factor 1.47 to 2048 s. `identify_noise` with
+  `remove_drift=false` and `b1_length=:record` returns white FM there, as
+  Stable32 does. The labels at 2048 s and 4096 s come from six averaged
+  points, the fewest the ratio is computed on
+  ([Noise identification](noise_identification.md)).
+- **The Hadamard family.** By default [`hdev`](@ref),
+  [`htotdev`](@ref) and their modified forms identify the noise on the
+  record less its frequency drift, and there without the ``B_1`` ratio.
+  From 512 s on, where fewer than 30 averaged points remain, their label
+  is the one found at 273 s, the longest averaging time that has 30:
+  flicker FM, to the end of their tables at 2048 s. With
+  `remove_drift=false` they use the labels of the second row. The
+  Hadamard deviation is the same either way. Its default interval at
+  2048 s is ``[2.08, 6.64] × 10^{-3}``, and Stable32's, on white FM,
+  ``[2.13, 5.49] × 10^{-3}``.
 
-¹ The recurring residuals are two noise-identification conventions, at
-τ = 256 s and at τ ≥ 1024 s, not numerical disagreements; see below.
-² On the rows labelled white PM (τ = 2 s to 16 s) and flicker PM (32 s,
-64 s) both estimators read high and the published tables stop at α = 0.
-SigmaTau divides out the bias and takes the EDF of the total statistic
-itself ([Total estimators on PM noise](total_pm.md)); Stable32 reports the
-raw value. `correct_bias=false` matches it to fixture precision.
-³ From τ = 16 s Stable32's MTOT EDF follows no published table and at
-most τ runs 1.2 to 1.5 times the Howe and Peppler (2001, Table 2) value
-SigmaTau uses, so its intervals are usually the narrower ones; the bounds
-agree to ≤ 0.02 % at τ ≤ 8 s and to within 1.3 % wherever the two programs
-agree on the noise type.
+### Deviations
 
-Three per-estimator facts behind those rows:
+Without bias correction the deviations agree with those of allantools
+within ``10^{-13}``, for the seven estimators tabulated below.
 
-- **TOTDEV**: both programs apply the Howe/Walter `B = 1 − a·τ/T`
-  correction for FLFM/RWFM. SigmaTau's default (`correct_bias=true`)
-  matches Stable32's σ to ≤ 0.005 % on the FM rows where the noise types
-  agree, including the FLFM row at τ = 512 s. On the PM rows it also divides
-  out `B = 1 + a·τ/T`, which Stable32 does not, and reads 0.02 % (τ = 2 s)
-  to 0.34 % (64 s) lower. At τ ≥ 1024 s SigmaTau reads
-  flicker FM and random-walk FM where Stable32 reads white FM, and the
-  correction puts its σ 3.1 %, 10.9 % and 26.5 % higher (¹).
-  `correct_bias=false` reproduces allantools' raw SP1065 eq. 25 kernel to
-  ≤ 2.8e-15.
-- **HTOTDEV**: Stable32 *applies* the Howe 2005 bias correction by
-  default (the factors are exactly `1/√(1+a)`), and so does SigmaTau:
-  `correct_bias=true` (the default) matches Stable32 to ≤ 0.003 % at
-  every matching-α τ on FM. On the PM rows Stable32 reports the raw value,
-  which is 12 to 18 % above its own Hadamard deviation; SigmaTau's default
-  is 10 to 15 % lower and within 6 % of HDEV (0.03 % at τ = 2 s).
-  `correct_bias=false` reproduces allantools' raw kernel to ≤ 4.4e-15.
-- **MTOTDEV**: here the two programs deliberately report different
-  statistics. Stable32 reports the raw estimator; SigmaTau's raw kernel
-  matches it to ≤ 0.004 % (and allantools to ≤ 1.1e-15). The raw
-  estimator reads low against MDEV, and SigmaTau's default divides by
-  `√B(α)` (Howe and Peppler 2001, Table 2, `B < 1`) to unbias it, which
-  places the default output 0.1 to 0.25 % (WHPM) to 18 % (FLFM) and 21 % (RWFM)
-  above Stable32 on this fixture, and 41 % at τ = τ₀, where
-  the raw estimator is exactly MDEV/√2. Pass `correct_bias=false` to
-  reproduce Stable32 and allantools.
+With Stable32's conventions stated, which are its noise type at each
+averaging time (`noise=`) and its bias factors (`correct_bias=:stable32`),
+the deviations agree with Stable32 within ``5 × 10^{-5}``, one unit of the
+last digit it prints, at every averaging time and for the time total
+deviation as well.
 
-### The noise-identification residuals
+A default call differs from Stable32 in these rows:
 
-Because the EDF (and, for the total family, the bias factor) depend on α, a
-row where the two programs identify different noise types carries different
-CI bounds, and for TOTDEV and HTOTDEV a different σ. Those rows are marked ¹
-in the tables below. Two conventions produce them.
+| Estimator | Rows | Default call against Stable32 | Cause |
+|:---|:---|:---|:---|
+| Total | 2 s to 64 s | 0.02 to 0.34 % lower | the bias factor on PM noise ([Total estimators on PM noise](total_pm.md)) |
+| Total | 1024 s, 2048 s, 4096 s | 3.1 %, 10.9 %, 26.5 % higher | the noise type, and with it the factor ``1 - a\,τ/T`` |
+| Modified total, time total | every row | 41 % higher at ``τ_0``, 0.1 to 0.25 % on white PM, 8.4 % on flicker PM, 13.9 %, 18.1 % and 21.4 % on white, flicker and random-walk FM | Stable32 prints these two uncorrected |
+| Hadamard total | 2 s to 64 s | 10 to 15 % lower | the bias factor on PM noise |
+| Hadamard total | 256 s | 0.25 % higher | the noise type |
+| Hadamard total | 1024 s, 2048 s | 8.1 % higher | the noise type |
 
-At τ = 256 s (every estimator) Stable32 assigns α = +2 where SigmaTau's
-default identification assigns α = 0. This is a convention difference in
-the lag-1 ACF identifier: SigmaTau quadratically detrends each decimated
-subseries before classifying (`remove_drift=true` default); Stable32 does
-not. For HTOTDEV the row carries a 0.25 % σ difference.
+At ``τ_0`` the modified total variance is half the modified Allan variance
+on any record, which is the 41 % ([Bias correction](bias.md)). With
+`remove_drift=false`, as in the table further down, the Hadamard total
+deviation takes random-walk FM at 2048 s and is 13.6 % above Stable32
+there.
 
-From τ = 512 s fewer than 30 averaged points remain and both programs turn
-to the B1 ratio. They agree on flicker FM at 512 s. At τ ≥ 1024 s Stable32
-reads white FM; SigmaTau compares the ratio with B1(N, μ) at the number of
-averaged points, the N that B1 is defined for (SP1065 §5.7), and reads
-flicker FM at 1024 s and random-walk FM beyond, which is what σ(τ) does on
-this record: ADEV is flat from 512 s to 1024 s and rises by a factor 1.47 to
-2048 s. The labels at 2048 s and 4096 s are the one measured with six
-averaged points (m = 1365), the fewest SigmaTau runs the ratio on. With
-eight points or fewer either reading is weak evidence. `identify_noise(x, m_values; remove_drift=false,
-b1_length=:record)` reproduces Stable32's α at every τ but 256 s, where the
-R(n) confirmation of white PM gives +1, and the test suite checks TOTDEV's σ
-with Stable32's α at all 13 τ.
+### Confidence limits
 
-The Hadamard estimators differ in one more way. By default they identify the
-noise on the record less its least-squares frequency drift
-(`remove_drift=true`), which Stable32 does not do. The B1 ratio is not used
-on that record, so with fewer than 30 averaged points an FM type is the one
-found at the longest τ that has 30: flicker FM, from 273 s, at τ = 1024 s
-and 2048 s, where Stable32 reads white FM and the record as given flicker FM
-and random-walk FM. HDEV itself is unchanged; its default interval at 2048 s
-is [2.0803e-03, 6.6351e-03]. HTOTDEV follows the bias factor of the label,
-so its default values there are 2.6081e-03 and 3.1771e-03 where Stable32,
-on white FM, has 2.4120e-03 and 2.9382e-03. The two Hadamard tables below pass
-`remove_drift=false`, which identifies the noise on the record as given,
-like the other tables.
+Both programs compute the EDF of the Allan and Hadamard families by the
+algorithm of
+[Greenhall and Riley (2003)](@cite greenhall-2003-edf-stability), which
+Stable32 has used since version 1.41 according to that paper, and both
+take χ² limits. With Stable32's noise types stated, the 68.3 % limits
+differ by at most:
 
-### Confidence intervals
+| Estimator | Largest difference |
+|:---|:---|
+| Overlapping Allan, modified Allan, time, overlapping Hadamard | 0.06 % |
+| Total | 0.06 %, except 0.5 to 1.2 % at 32 s, 64 s and 256 s, which Stable32 labels flicker PM and, at 256 s, white PM |
+| Hadamard total | 0.26 % |
+| Modified total, time total | 0.01 % up to 8 s, 0.1 to 1.2 % from 16 s to 512 s, 5.0 % at 1024 s and 7.4 % at 2048 s |
 
-Stable32 has computed its confidence intervals with the Greenhall–Riley
-2003 EDF algorithm since v1.41 (stated in the paper itself, p. 268), and
-SigmaTau implements the same algorithm: wherever the two programs agree
-on α, the 68.3 % bounds agree to ≤ 0.06 % for the core estimators. The
-total-family differences at α > 0 (footnote ² above) come from the bias
-factor and EDF SigmaTau derives where the published tables stop, not from a
-different interval method.
+From ``16τ_0`` the EDF that Stable32 gives the modified total deviation
+follows no published table
+([cross-check report](crosscheck.md)). In a default call the limits also
+move wherever the noise type differs: at 256 s, where this package reads
+white FM, its interval for the Allan deviation is
+``[4.10, 5.06] × 10^{-3}`` against Stable32's ``[4.45, 4.55] × 10^{-3}``.
 
-## Per-τ comparison
+### Thêo1 with the bias removed
 
-The tables below compare Stable32, allantools, and SigmaTau at each
-averaging interval τ. Stable32 columns carry 5 significant figures (the
-fixture's precision); SigmaTau and allantools columns are truncated to 6.
-CI columns are the 68.3 % `[lower, upper]` bounds, Stable32's
-MinSigma/MaxSigma against SigmaTau's `ci_lower`/`ci_upper`. Rows marked ¹
-are those where the identified noise type differs from Stable32's.
+Stable32's ThêoH table for this record is in the fixtures. Up to 1024 s
+it gives the Allan deviation, as [`theoh`](@ref) does. Beyond, it gives
+the bias-removed Thêo1 at 1536 s and 3072 s. [`theo1`](@ref) with
+`correct_bias = :stable32` agrees with it to the five digits printed, and
+`theo1` by default is 1.8 % lower:
+
+| ``τ`` (s) | Stable32 | `theo1`, `:stable32` | `theo1` | `theo1`, `:published` | `theo1`, uncorrected |
+|---:|:---|:---|:---|:---|:---|
+| 1536 | 4.1340e-03 | 4.1340e-03 | 4.0596e-03 | 1.6896e-03 | 2.8344e-03 |
+| 3072 | 5.1100e-03 | 5.1100e-03 | 5.0181e-03 | 2.0885e-03 | 3.5035e-03 |
+
+The 1.8 % come from the samples used. Both take the ratio of the Allan
+variance to Thêo1 over averaging times up to half the record
+([SP1065 Eq. (33)](@cite riley-2008-sp1065);
+[IEEE Std 1139-2022, Eq. (A.37)](@cite ieee1139-2022-definitions)). The
+default takes it from all 8192 samples, and Stable32 from at most 3000.
+For this record `correct_bias = :stable32` takes every third sample and
+adds the term of
+[Taylor and Howe (2010), Eq. (4)](@cite taylor-2010-fast-theobr) for it,
+0.0011 in the ratio, which they derived for samples averaged in blocks.
+That Stable32 takes every third sample is inferred from this agreement:
+averages of three give values 6.5 % higher. On the 1001-point record of
+the [cross-check report](crosscheck.md), which needs no such step, the
+agreement holds at each of 181 averaging factors, and the default is
+within 0.1 % of it.
+
+`correct_bias = :published` is lower by a factor 2.4. The Allan deviation
+is ``3.14 × 10^{-3}`` at 1024 s and ``4.61 × 10^{-3}`` at 2048 s. The
+default values continue it, and those of `:published` do not: its 68.3 %
+interval at 1536 s, ``[1.35, 2.59] × 10^{-3}``, lies below both.
+
+The cause is the range over which the ratio is averaged. `:published`
+follows [Howe (2006), Eq. (6)](@cite howe-2006-theoh) and averages it up
+to a tenth of the record, 819 s here, where PM noise dominates and the
+ratio is 0.2 to 0.7. Its mean is 0.355. Up to half the record FM noise
+dominates and the ratio reaches 3.4, and the mean over that range is 2.05.
+Either mean is then applied at every averaging time. The correction
+assumes one noise type over the whole range, and this record does not have
+one ([Bias correction](bias.md) gives the size of the error in simulation,
+for both ranges).
+
+## Comparison at each averaging time
+
+[`tools/validation/tables.jl`](https://github.com/ianlap/SigmaTau.jl/blob/main/tools/validation/tables.jl)
+writes the tables below from the record and the two reference tables.
+Stable32's columns carry the five digits it prints. The intervals are the
+68.3 % limits. Rows marked ¹ are those where the noise type of this
+package differs from Stable32's.
+
+The tables show default calls, with two exceptions. The two Hadamard
+tables use `remove_drift=false`, so that their noise types are those of
+the other tables. The total tables add the uncorrected deviation, which is
+what allantools returns.
 
 ### Overlapping Allan
 
-| τ (s) | Stable32 | allantools | SigmaTau | Stable32 CI | SigmaTau CI |
+| τ (s) | Stable32 | allantools | SigmaTau | Stable32 interval | SigmaTau interval |
 |---:|:---|:---|:---|:---|:---|
 | 1 | 1.0097e+00 | 1.00975e+00 | 1.00975e+00 | [9.9898e-01, 1.0209e+00] | [9.9892e-01, 1.0209e+00] |
 | 2 | 5.0444e-01 | 5.04443e-01 | 5.04443e-01 | [4.9907e-01, 5.1000e-01] | [4.9903e-01, 5.1003e-01] |
@@ -169,7 +262,7 @@ are those where the identified noise type differs from Stable32's.
 
 ### Modified Allan
 
-| τ (s) | Stable32 | allantools | SigmaTau | Stable32 CI | SigmaTau CI |
+| τ (s) | Stable32 | allantools | SigmaTau | Stable32 interval | SigmaTau interval |
 |---:|:---|:---|:---|:---|:---|
 | 1 | 1.0097e+00 | 1.00975e+00 | 1.00975e+00 | [9.9898e-01, 1.0209e+00] | [9.9892e-01, 1.0209e+00] |
 | 2 | 3.5650e-01 | 3.56499e-01 | 3.56499e-01 | [3.5252e-01, 3.6062e-01] | [3.5249e-01, 3.6065e-01] |
@@ -186,7 +279,7 @@ are those where the identified noise type differs from Stable32's.
 
 ### Time
 
-| τ (s) | Stable32 | allantools | SigmaTau | Stable32 CI | SigmaTau CI |
+| τ (s) | Stable32 | allantools | SigmaTau | Stable32 interval | SigmaTau interval |
 |---:|:---|:---|:---|:---|:---|
 | 1 | 5.8298e-01 | 5.82978e-01 | 5.82978e-01 | [5.7676e-01, 5.8940e-01] | [5.7672e-01, 5.8944e-01] |
 | 2 | 4.1165e-01 | 4.11650e-01 | 4.11650e-01 | [4.0705e-01, 4.1641e-01] | [4.0702e-01, 4.1644e-01] |
@@ -203,10 +296,9 @@ are those where the identified noise type differs from Stable32's.
 
 ### Overlapping Hadamard
 
-SigmaTau columns use `remove_drift=false` (see the noise-identification
-residual above).
+Computed with `remove_drift=false`.
 
-| τ (s) | Stable32 | allantools | SigmaTau | Stable32 CI | SigmaTau CI |
+| τ (s) | Stable32 | allantools | SigmaTau | Stable32 interval | SigmaTau interval |
 |---:|:---|:---|:---|:---|:---|
 | 1 | 1.0646e+00 | 1.06459e+00 | 1.06459e+00 | [1.0522e+00, 1.0774e+00] | [1.0522e+00, 1.0775e+00] |
 | 2 | 5.3205e-01 | 5.32049e-01 | 5.32049e-01 | [5.2587e-01, 5.3845e-01] | [5.2584e-01, 5.3849e-01] |
@@ -223,17 +315,10 @@ residual above).
 
 ### Total
 
-`SigmaTau corrected` is the default (`correct_bias=true`); it differs
-from the raw column from τ = 2 s to 64 s, the rows labelled white or flicker
-PM, where TOTVAR reads high by a factor that grows with τ/T, and from
-τ = 512 s, where SigmaTau reads flicker FM or
-random-walk FM and the Howe/Walter `B = 1 − a·τ/T` correction applies. At
-512 s Stable32 reads flicker FM too and matches the corrected value,
-confirming Stable32 applies the same correction; beyond it Stable32 reads
-white FM and matches the raw one. The SigmaTau CI column belongs to the
-default (corrected) output.
+The interval is that of the default call. At 512 s, where both programs
+read flicker FM, Stable32's value is the corrected one.
 
-| τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI |
+| τ (s) | Stable32 | allantools | Uncorrected | Default | Stable32 interval | SigmaTau interval |
 |---:|:---|:---|:---|:---|:---|:---|
 | 1 | 1.0097e+00 | 1.00975e+00 | 1.00975e+00 | 1.00975e+00 | [9.9884e-01, 1.0210e+00] | [9.9892e-01, 1.0209e+00] |
 | 2 | 5.0443e-01 | 5.04428e-01 | 5.04428e-01 | 5.04346e-01 | [4.9898e-01, 5.1006e-01] | [4.9894e-01, 5.0993e-01] |
@@ -251,18 +336,10 @@ default (corrected) output.
 
 ### Modified Total
 
-Stable32 and allantools both report the raw estimator here; the SigmaTau
-raw column matches both (≤ 0.004 % / ≤ 1.1e-15). The corrected column is
-SigmaTau's default, the raw value divided by `√B(α)` from Howe and Peppler
-2001, Table 2, which on this fixture is 0.1 to 0.25 % (WHPM), 8.4 % (FLPM), 13.9 %
-(WHFM), 18.1 % (FLFM) or 21.4 % (RWFM) above Stable32, and √2 above it at
-τ = 1 s. It is
-the column to compare with the Modified Allan table above: from 128 s to
-512 s, where the raw value is 13 to 17 % below MDEV, the corrected one is
-within 5 %. The SigmaTau CI column belongs to the raw output for
-like-for-like comparison with Stable32's bounds.
+Stable32 prints this deviation uncorrected, so the interval shown is that of
+the uncorrected call.
 
-| τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI (raw) |
+| τ (s) | Stable32 | allantools | Uncorrected | Default | Stable32 interval | SigmaTau interval |
 |---:|:---|:---|:---|:---|:---|:---|
 | 1 | 7.1400e-01 | 7.13999e-01 | 7.13999e-01 | 1.00975e+00 | [7.0639e-01, 7.2186e-01] | [7.0634e-01, 7.2191e-01] |
 | 2 | 3.5625e-01 | 3.56253e-01 | 3.56253e-01 | 3.56628e-01 | [3.5227e-01, 3.6037e-01] | [3.5225e-01, 3.6040e-01] |
@@ -279,17 +356,10 @@ like-for-like comparison with Stable32's bounds.
 
 ### Hadamard Total
 
-Stable32 applies the Howe 2005 bias correction by default and so does
-SigmaTau: the corrected (default) column matches Stable32 at every
-matching-α τ on FM; the raw column matches allantools. From τ = 2 s to 64 s,
-the PM rows, Stable32 reports the raw value and the corrected column is the
-one to compare with the Overlapping Hadamard table above. On FM the two columns differ
-by exactly `√(1+a)` per Howe 2005, for example 0.9975 at WHFM and 0.9225
-at FLFM (τ = 512 s, where Stable32 = 3.3578e-03 matches the corrected
-3.35777e-03, not the raw 3.09753e-03). SigmaTau columns use
-`remove_drift=false`, and the CI column belongs to the bias-corrected output.
+The interval is that of the default call with `remove_drift=false`. On the
+FM rows Stable32's value is the corrected one.
 
-| τ (s) | Stable32 | allantools (raw) | SigmaTau raw | SigmaTau corrected | Stable32 CI | SigmaTau CI |
+| τ (s) | Stable32 | allantools | Uncorrected | Default | Stable32 interval | SigmaTau interval |
 |---:|:---|:---|:---|:---|:---|:---|
 | 1 | 1.0646e+00 | 1.06459e+00 | 1.06459e+00 | 1.06459e+00 | [1.0531e+00, 1.0765e+00] | [1.0522e+00, 1.0775e+00] |
 | 2 | 5.9406e-01 | 5.94056e-01 | 5.94056e-01 | 5.32224e-01 | [5.8764e-01, 6.0069e-01] | [5.2707e-01, 5.3753e-01] |
