@@ -308,6 +308,19 @@ Clock models, the Kalman filter and timescales.
 - `ncornered_hat` and `groslambert` take a `ClockComparisons`: clocks read
   against one reference, with the reference as one more clock unless
   `reference=false`.
+- `sample_statistics`, `sample_histogram` and `acf`: the statistics of a
+  record's samples (with the standard deviation of the fractional frequency
+  that Stable32 shows), their histogram with what a normal curve over it
+  needs (Scott's rule for the bins), and their autocorrelation at an
+  averaging factor with the lag-1 estimate of α, as Stable32's Statistics,
+  Histogram and Autocorrelation functions show them. In Python,
+  `st.sample_statistics`, `st.sample_histogram` and `st.acf`.
+- `sigmatau check` reports the statistics of the samples, and with
+  `--histogram` (`--bins`) and `--acf` (`--m`, `--lags`) their histogram and
+  autocorrelation, of phase or frequency (`--quantity`). Its CSV row has
+  nine more columns.
+- Explorer: Histogram and Autocorrelation views on the Data page, with the
+  statistics beside the histogram.
 
 ### Changed
 
@@ -340,7 +353,7 @@ Clock models, the Kalman filter and timescales.
   random-run FM had an HDEV EDF 26 % too high and an HTOTDEV 6 % too low.
   MHTOTDEV keeps random-walk FM's model for both labels. The explorer, the
   CLI report and the Python docs name the two labels. At long τ some
-  random-walk FM records are now labelled flicker-walk FM (6 % with 64
+  random-walk FM records are now labeled flicker-walk FM (6 % with 64
   averaged points left, 11 % with 32).
 - `identify_noise` and every estimator's noise type: with fewer than 30
   averaged points the B1 ratio is compared with B1(N, μ) at the number of
@@ -364,7 +377,7 @@ Clock models, the Kalman filter and timescales.
   noise"). HTOTDEV read 25 to 38 % high in variance on white PM and 4 to
   28 % on flicker PM; TOTDEV reads high in proportion to τ/T (33 % on white
   PM at τ = T/4). Stable32 applies no factor on PM, so the defaults differ
-  from it on rows labelled PM; `correct_bias=false` matches it.
+  from it on rows labeled PM; `correct_bias=false` matches it.
   **Breaking:** `bias_correction` now takes `(noises, var_type, m_values, N)`
   in place of `(noises, var_type, taus, T)`, in Julia and Python.
 - MTOTDEV, TTOTDEV, HTOTDEV and MHTOTDEV divide by the exact bias factor at
@@ -447,10 +460,10 @@ Clock models, the Kalman filter and timescales.
   Flicker PM with fewer than 6 averaged points is now reported as white FM.
 - `--series N` keeps each stretch's lowest and highest sample and its first
   gap, instead of an evenly strided subset.
-- `adev` and `hdev`: the overlapping kernels vectorise again on Julia 1.12
+- `adev` and `hdev`: the overlapping kernels vectorize again on Julia 1.12
   and newer, about 8× faster than since `overlapping=false` was added;
   values move by rounding at most.
-- Every estimator's `NaN`-gap check is one vectorised pass; a call on a
+- Every estimator's `NaN`-gap check is one vectorized pass; a call on a
   25 000-point record saves about 9 µs.
 - Documentation: every docstring checked against the code and its cited
   source and rewritten in one style; bibliography verified against publisher
@@ -518,6 +531,11 @@ Clock models, the Kalman filter and timescales.
   order of the Dict, which differs between Julia versions: a seeded record
   now agrees across versions to rounding error, and a seeded mixture differs
   from earlier releases.
+- `timescale`: `x`, `y` and `xhat` of a clock are `NaN` before its first
+  reading in every scale, and a record whose first rows hold no reading
+  forms every scale from the first row that has one.
+- `sigmatau timescale`: `--fillgaps` no longer hands a clock readings it did
+  not have; the filled samples are left out of the scale.
 
 ### Removed
 
@@ -559,7 +577,7 @@ Clock models, the Kalman filter and timescales.
   rounds, so its labels differ there.
 - Flicker PM is identified as flicker PM at long τ. The lag-1 test runs on
   phase decimated by m, which whitens flicker PM, so from m ≈ 16 a pure
-  flicker-PM record was labelled white PM (in 64 % of records at m = 16 and
+  flicker-PM record was labeled white PM (in 64 % of records at m = 16 and
   93 % at m = 64, N = 4096) and `adev` reported about six times the true
   EDF there. A white-PM result at m ≥ 4 is now confirmed with the R(n)
   ratio of SP1065 §5.5.2. Labels of the other four noise types, and of
@@ -585,7 +603,7 @@ Clock models, the Kalman filter and timescales.
   other, and so the widest on the plot. They used to be replaced by a
   Gaussian interval on the whole record length, which gave the least
   certain point the tightest bounds: ±2.4 % at the last τ of `mhtotdev` on a
-  1024-sample record, where its neighbour had −29 % / +290 %. The same
+  1024-sample record, where its neighbor had −29 % / +290 %. The same
   applied to `theo1` and `theoh` at τ beyond about 0.6 of the record. A
   point whose EDF model gives no positive value now has `NaN` bounds.
 - An averaging factor below 1 is an `ArgumentError` in every estimator. A
@@ -813,6 +831,14 @@ Clock models, the Kalman filter and timescales.
   control goes to a second line; they had pushed it out of the card and
   squeezed the hint to 41 px. An error in the status bar ends when the
   inputs change or a field is edited; it stayed until the next run.
+- `timescale(...; algorithm = :stein)`: the first row of `weights` is the
+  scale's starting weights, and a model with a flicker level but no flicker
+  states is no longer refused.
+- An unknown noise type is reported as "unknown noise type :XX; use an
+  integer α or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM" by
+  `add_component!`, `clock_model`, `powerlaw_sigma`, `powerlaw_psd` and
+  `holdover`; the message began "noise_gen:" whoever called, and listed the
+  types in no order.
 
 ### Security
 

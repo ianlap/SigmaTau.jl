@@ -217,10 +217,13 @@ function draw() {
   }, CONFIG);
 }
 
-// The readings as a one-column record: phase or fractional frequency.
+// The readings as a one-column record: phase or fractional frequency. The file
+// that Save readings writes and the record that Analyze readings loads are this
+// same text, so a report's hash is that of the saved file.
 function record() {
   const phase = run.quantity === "phase";
-  return { phase, text: (phase ? run.readings : frequencies()).map((v) => String(v)).join("\n") + "\n" };
+  const body = (phase ? run.readings : frequencies()).map((v) => String(v)).join("\n") + "\n";
+  return { phase, text: `# ${phase ? "phase (s)" : "fractional frequency"}, tau0 = ${run.tau0} s, source ${run.last?.source ?? ""}\n${body}` };
 }
 
 function stamp() {
@@ -238,8 +241,8 @@ async function analyze() {
 }
 
 function save() {
-  const { phase, text } = record();
-  ctx.save(`live-${stamp()}.txt`, new Blob([`# ${phase ? "phase (s)" : "fractional frequency"}, tau0 = ${run.tau0} s, source ${run.last?.source ?? ""}\n${text}`], { type: "text/plain" }));
+  const { text } = record();
+  ctx.save(`live-${stamp()}.txt`, new Blob([text], { type: "text/plain" }));
 }
 
 export function hint() {
