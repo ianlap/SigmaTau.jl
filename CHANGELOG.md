@@ -600,6 +600,13 @@ Clock models, the Kalman filter and timescales.
   `calculate_edf` accepts `:theobr`. The EDF of Thêo1 is no longer taken
   below 1, which gives `theo1` an interval on random-walk FM beyond 63 % of
   the record. Deviations are unchanged.
+- `timescale(...; algorithm=:greenhall)`: a clock without a reading has no
+  weight in the implicit ensemble mean and runs on its prediction (Greenhall
+  2006, §10). It kept a weight through a gap, and the scale took a phase
+  step when the clock returned, or when a clock or the pivot joined late (in
+  simulation, a median of 440 times the scale's rms step after a 2000-sample
+  gap on Greenhall's three clocks; now 1.5). Records with every clock read
+  are unchanged.
 
 ### Security
 
