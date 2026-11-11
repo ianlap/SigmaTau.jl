@@ -109,6 +109,8 @@ end
     for (c, arg, _) in SigmaTauCLI.COMMAND_HELP
         @test occursin("| `" * (isempty(arg) ? c : c * " " * arg) * "` |", page)
     end
+    # One row per option: the parser and the completions look an option up by its name.
+    @test allunique(op.long for op in SigmaTauCLI.OPTS)
     options = Set(op.long for op in SigmaTauCLI.OPTS)
     named = Set(m.match for m in eachmatch(r"--[a-z][a-z0-9-]*", page))
     @test setdiff(options, named) == Set{String}()      # every option is on the page
@@ -465,8 +467,8 @@ mktempdir() do dir
         @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--devs", "mdev", "--m", "1,4,16").out)) ≈ dev(rows)
         # The Groslambert covariance of records that close is the hat on ADEV.
         adev_rows = csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16").out)
-        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16", "--method", "groslambert").out)) ≈ dev(adev_rows)
-        r = run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--method", "klts", "--confidence", "0.95", "--m", "1,4", "--format=json")
+        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16", "--covariance").out)) ≈ dev(adev_rows)
+        r = run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--klts", "--confidence", "0.95", "--m", "1,4", "--format=json")
         @test r.code == 0 && occursin("\"method\":\"groslambert\",\"interval\":\"klts\",\"layout\":\"pairs\"", r.out)
         @test occursin("\"clocks\":[\"A\",\"B\",\"C\"],\"pairs\":[[1,2],[1,3],[2,3]]", r.out)
         # Pairs that do not close: B−C far noisier than the other two leaves
@@ -483,19 +485,19 @@ mktempdir() do dir
         # Missing readings: the hat and the covariance leave their terms out, KLTS refuses.
         gf = joinpath(dir, "gapped.csv")
         write(gf, replace(read(hf, String), r"^100,[^,]*,"m => "100,NaN,"))
-        gapped(method) = run_cli("hat", gf, "--value-cols", "2,3", "--m", "1,4", "--method", method)
-        for method in ("hat", "groslambert")
-            @test dev(csv_rows(gapped(method).out)) ≈ dev(adev_rows)[[1, 2, 4, 5, 7, 8]] rtol = 0.02
+        gapped(method...) = run_cli("hat", gf, "--value-cols", "2,3", "--m", "1,4", method...)
+        for method in ((), ("--covariance",))
+            @test dev(csv_rows(gapped(method...).out)) ≈ dev(adev_rows)[[1, 2, 4, 5, 7, 8]] rtol = 0.02
         end
-        @test gapped("klts").code == 3 && occursin("--fillgaps", gapped("klts").err)
+        @test gapped("--klts").code == 3 && occursin("--fillgaps", gapped("--klts").err)
         # Simulated clocks have a perfect reference, which is no clock.
         @test unique(getindex.(csv_rows(run_cli("hat", "--synth", "512", "--m", "1").out), 1)) == ["clock 1", "clock 2", "clock 3", "clock 4"]
         @test run_cli("hat", "--synth", "512", "--clocks", "2").code == 1
         @test run_cli("hat", hf, "--value-cols", "2,3", "--no-reference").code == 1     # two clocks
         @test run_cli("hat", hf, "--value-cols", "2,3", "--pairs").code == 1            # two of three pairs
         @test run_cli("hat", hf, "--value-cols", "2,3", "--devs", "totdev").code == 1
-        @test run_cli("hat", hf, "--value-cols", "2,3", "--method", "groslambert", "--devs", "mdev").code == 1
-        @test run_cli("hat", "--synth", "512", "--method", "klts").code == 1            # four clocks
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--covariance", "--devs", "mdev").code == 1
+        @test run_cli("hat", "--synth", "512", "--klts").code == 1            # four clocks
     end
 
     @testset "drift" begin
@@ -1012,7 +1014,7 @@ mktempdir() do dir
                          ["spectrum", pf],
                          ["cross", pf, "--with", pf, "--format", "json"],
                          ["hat", joinpath(dir, "hat.csv"), "--value-cols", "2,3", "--devs", "adev,mhdev", "--format", "json"],
-                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "4,5,6", "--pairs", "--method", "klts", "--m", "1,8"],
+                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "4,5,6", "--pairs", "--klts", "--m", "1,8"],
                          ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],
