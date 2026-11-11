@@ -20,10 +20,10 @@ function elapsed(io::IO, t_start::UInt64)
     print(io, "}\n")
 end
 
-function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args::Vector{String})
+function run_command(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt64, args::Vector{String})
     c = o.command
     c == "report"   && return cmd_report(io, o, data, args)
-    c == "analyze"  && return cmd_analyze(io, o, data, t_start)
+    c == "analyze"  && return cmd_analyze(io, err, o, data, t_start)
     c == "check"    && return cmd_check(io, o, data, t_start)
     c == "spectrum" && return cmd_spectrum(io, o, data, t_start)
     c == "dynamic"  && return cmd_dynamic(io, o, data, t_start)
@@ -32,6 +32,7 @@ function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args:
     c == "holdover" && return cmd_holdover(io, o, data, t_start)
     c == "steer"    && return cmd_steer(io, o, data, t_start)
     c == "timescale" && return cmd_timescale(io, o, data, t_start)
+    c == "hat"      && return cmd_hat(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
 
@@ -92,7 +93,7 @@ function analysis_results(o::Options, data::PhaseData)
     return results
 end
 
-function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+function cmd_analyze(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt64)
     results = analysis_results(o, data)
     N = length(data.x)
     src = source_name(o, data)
@@ -101,6 +102,7 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         for r in results
             csv_result(io, src, quantity(o), r)
         end
+        isempty(o.mask) || o.quiet || mask_verdicts(err, o.mask, results)
         return nothing
     end
     json_head(io, o, src)
@@ -151,8 +153,9 @@ function spectra(o::Options, data::PhaseData)
         throw(CLIError(EXIT_ANALYSIS, "the spectrum needs a record without gaps; fill them with --fillgaps"))
     N = length(data.x)
     # One segment length for both spectra, from the phase record's length (the
-    # library's own default for psd_y counts the N − 1 frequency samples).
-    np = o.nperseg > 0 ? min(o.nperseg, N) : SigmaTau._default_nperseg(N)
+    # library's own default for psd_y counts the N − 1 frequency samples), cut
+    # to those N − 1 samples.
+    np = min(o.nperseg > 0 ? o.nperseg : SigmaTau._default_nperseg(N), N - 1)
     return psd_y(data; nperseg=np), psd_x(data; nperseg=np)
 end
 
@@ -277,16 +280,17 @@ end
 
 # ── drift ─────────────────────────────────────────────────────────────────
 
-const CSV_DRIFT = "source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
+const CSV_DRIFT = "source,quantity,model,method,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
 
 function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 3, "a drift fit")   # drift_fit checks each model's own minimum
-    f = drift_fit(data; model=Symbol(o.model))
+    f = drift_fit(data; model=Symbol(o.model), method=Symbol(o.method))
     src = source_name(o, data)
     n = count(isfinite, f.y)
     if o.format != "json"
         print(io, CSV_DRIFT); print(io, '\n')
         csv_field(io, src); print(io, ','); print(io, quantity(o)); print(io, ','); print(io, o.model)
+        print(io, ','); print(io, o.method)
         for k in 1:3
             print(io, ','); k <= length(f.coef) && csv_number(io, f.coef[k])
             print(io, ','); k <= length(f.coef) && csv_number(io, f.stderr[k])
@@ -300,9 +304,11 @@ function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "analysis"); print(io, '{')
     json_key(io, "quantity", true); json_string(io, quantity(o))
     json_key(io, "model"); json_string(io, o.model)
+    json_key(io, "method"); json_string(io, o.method)
     json_preprocessing(io, o); print(io, '}')
     json_key(io, "drift"); print(io, '{')
     json_key(io, "model", true); json_string(io, o.model)
+    json_key(io, "method"); json_string(io, o.method)
     json_key(io, "coef"); json_array(io, f.coef)
     json_key(io, "stderr"); json_array(io, f.stderr)
     json_key(io, "drift_per_day"); json_number(io, f.rate)
@@ -362,6 +368,10 @@ function holdover_reference(data::PhaseData, h::HoldoverResult)
     return h.drift ? sqrt(20.0) .* htdev(data, ms; ci=false).dev : sqrt(6.0) .* tdev(data, ms; ci=false).dev
 end
 
+# The model's five power-law terms are fitted to MHDEV at the octaves m = 1 to
+# 16, and the point at m = 16 needs 4m + 1 samples.
+const KALMAN_MIN_TRAIN = 65
+
 # The clock model of a Kalman predictor: the power-law fit to the first
 # training stretch alone, so no trial is predicted with noise levels learned
 # from the readings it is compared with. Flicker the fit finds is kept, as
@@ -372,6 +382,9 @@ end
 function holdover_model(data::PhaseData, train::Float64, drift::Bool)
     τ₀ = Float64(data.tau0)
     b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
+    b >= KALMAN_MIN_TRAIN || throw(CLIError(EXIT_ANALYSIS, "the clock model needs a training stretch of " *
+        string(KALMAN_MIN_TRAIN) * " samples or more; this one has " * string(b) *
+        " (--train sets it, by default a quarter of the record)"))
     pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
     return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, tau_max=length(data.x) * τ₀), maximum(pf.x)
 end
@@ -498,11 +511,11 @@ end
 # test; the loop runs over the whole record and every result is taken from
 # the end of that stretch on.
 function cmd_steer(io::IO, o::Options, data::PhaseData, t_start::UInt64)
-    need_samples(data, 64, "a steering replay")
+    need_samples(data, KALMAN_MIN_TRAIN + 16, "a steering replay")   # a stretch to fit, 16 samples after it
     τ₀, N = Float64(data.tau0), length(data.x)
     train = isnan(o.train) ? (N ÷ 4) * τ₀ : o.train
     b = SigmaTau._whole_samples(train, τ₀, "train")
-    16 <= b <= N - 16 || throw(CLIError(EXIT_ANALYSIS, "steer: the training stretch must leave 16 samples on either side of its end"))
+    b <= N - 16 || throw(CLIError(EXIT_ANALYSIS, "steer: the training stretch must leave 16 samples after its end"))
     interval = isnan(o.interval) ? τ₀ : o.interval
     g = isempty(o.cost) ? steering_gains(o.time_constant, interval; integral=o.integral) :
         lqg_gains(interval; phase=o.cost[1], frequency=o.cost[2], steer=o.cost[3])
@@ -586,7 +599,7 @@ end
 
 # Each --value-cols column read like FILE, with the same options.
 function read_ensemble(o::Options)
-    isempty(o.value_cols) && throw(usage_error("timescale needs --value-cols with two or more columns, or --synth"))
+    isempty(o.value_cols) && throw(usage_error(o.command * " needs --value-cols with two or more columns, or --synth"))
     col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
     records = PhaseData{Float64}[]
     try
@@ -611,7 +624,6 @@ function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     alg = Symbol(o.algorithm)
     o.flicker && !(alg === :greenhall || alg === :jones_tryon) && throw(usage_error("--flicker needs --algorithm greenhall or jones_tryon"))
     if !kalman
-        isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
         isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax), ClockModel[]
         return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps)), ClockModel[]
     end
@@ -689,5 +701,105 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
         print(io, "]}")
     end
     print(io, '}')
+    return elapsed(io, t_start)
+end
+
+# ── hat ───────────────────────────────────────────────────────────────────
+
+const CSV_HAT = "clock,deviation,tau,dev,ci_lower,ci_upper,edf,neff"
+
+# The difference record of every pair of clocks, in one triangle of a matrix,
+# with the clocks' names. Clocks read against one reference: the pairs'
+# differences, and the reference as one more clock unless --no-reference says
+# otherwise; simulated clocks have a perfect reference, which is no clock.
+# With --pairs the three columns are A−B, B−C and C−A as measured.
+function hat_records(o::Options)
+    cc = o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
+    k = size(cc.x, 2)
+    if o.pairs
+        o.synth > 0 && throw(usage_error("--pairs goes with a FILE"))
+        k == 3 && o.reference || throw(usage_error("--pairs takes three columns, A−B, B−C and C−A, and no --no-reference"))
+        records = Matrix{PhaseData{Float64}}(undef, 3, 3)
+        records[1, 2] = cc[1]; records[2, 3] = cc[2]; records[3, 1] = cc[3]
+        return records, ["A", "B", "C"]
+    end
+    reference = o.reference && o.synth <= 0
+    k + reference >= 3 || throw(usage_error(o.synth > 0 ? "hat needs three or more simulated clocks (--clocks): their reference is perfect and counts as none" :
+                                                           "--no-reference needs three or more clocks"))
+    records = SigmaTau._hat_records(cc, reference, "hat")
+    return records, size(records, 1) > k ? [cc.names; "reference"] : cc.names
+end
+
+hat_record(records::Matrix{PhaseData{Float64}}, i::Int, j::Int) =
+    isassigned(records, i, j) ? records[i, j] : records[j, i]
+
+function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
+    covariance = o.covariance || o.klts
+    for d in o.devs
+        String(d) in HAT_DEVS || throw(usage_error("hat separates " * join(HAT_DEVS, ", ") * "; got " * String(d)))
+        covariance && d !== :adev && throw(usage_error((o.klts ? "--klts" : "--covariance") * " gives ADEV; leave --devs out"))
+    end
+    records, names = hat_records(o)
+    k = length(names)
+    o.klts && k != 3 && throw(usage_error("--klts is for three clocks; these are " * string(k)))
+    N, τ₀ = length(records[1, 2].x), records[1, 2].tau0
+    N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a hat needs at least 16 samples"))
+    o.klts && any(any(isnan, hat_record(records, i, j).x) for i in 1:k for j in i+1:k) &&
+        throw(CLIError(EXIT_ANALYSIS, "the KLTS interval needs records without gaps; fill them with --fillgaps"))
+    mode = tau_mode(o.grid)
+    pairs = Vector{StabilityResult}[]      # per deviation: every pair as measured, i < j
+    clocks = Vector{StabilityResult}[]     # per deviation: every clock, separated
+    for d in o.devs
+        ms = isempty(o.m) ? tau_values(mode, N, d) : o.m
+        measured = Matrix{StabilityResult}(undef, k, k)
+        for i in 1:k, j in i+1:k
+            measured[i, j] = run_deviation(d, hat_record(records, i, j), ms, o, false, :auto)
+        end
+        push!(pairs, StabilityResult[measured[i, j] for i in 1:k for j in i+1:k])
+        push!(clocks, !covariance ? ncornered_hat(measured) :
+                      groslambert(records, ms; confidence=o.confidence, interval=o.klts ? :klts : :chi2))
+    end
+    if o.format != "json"
+        print(io, CSV_HAT); print(io, '\n')
+        for rs in clocks, (c, r) in enumerate(rs), i in eachindex(r.tau)
+            csv_field(io, names[c]); print(io, ','); print(io, String(r.deviation_type)); print(io, ',')
+            csv_number(io, r.tau[i]); print(io, ','); csv_number(io, r.dev[i]); print(io, ',')
+            csv_number(io, r.ci[i].lo); print(io, ','); csv_number(io, r.ci[i].hi); print(io, ',')
+            csv_number(io, r.edf[i]); print(io, ','); print(io, r.neff[i]); print(io, '\n')
+        end
+        return nothing
+    end
+    json_head(io, o, o.synth > 0 ? "synthetic" : o.input)
+    json_key(io, "hat"); print(io, '{')
+    json_key(io, "method", true); json_string(io, covariance ? "groslambert" : "hat")
+    json_key(io, "interval"); json_string(io, o.klts ? "klts" : "chi2")
+    json_key(io, "layout"); json_string(io, o.pairs ? "pairs" : "reference")
+    json_key(io, "tau0"); json_number(io, τ₀)
+    json_key(io, "n"); print(io, N)
+    json_key(io, "confidence"); json_number(io, o.confidence)
+    json_key(io, "clocks"); json_array(io, names)
+    json_key(io, "pairs"); print(io, '[')
+    for i in 1:k, j in i+1:k
+        (i, j) == (1, 2) || print(io, ',')
+        json_array(io, [i, j])
+    end
+    print(io, ']')
+    json_key(io, "results"); print(io, '[')
+    for q in eachindex(o.devs)
+        q > 1 && print(io, ',')
+        e = registry_entry(o.devs[q])
+        print(io, '{')
+        json_key(io, "deviation", true); json_string(io, String(e.name))
+        for (key, rs) in (("clocks", clocks[q]), ("pairs", pairs[q]))
+            json_key(io, key); print(io, '[')
+            for (c, r) in enumerate(rs)
+                c > 1 && print(io, ',')
+                json_result(io, r, e.label, String(e.axis))
+            end
+            print(io, ']')
+        end
+        print(io, '}')
+    end
+    print(io, "]}")
     return elapsed(io, t_start)
 end

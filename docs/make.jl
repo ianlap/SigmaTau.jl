@@ -100,8 +100,21 @@ makedocs(
     doctest = true,
 )
 
-deploydocs(
-    repo         = "github.com/ianlap/SigmaTau.jl.git",
-    push_preview = true,
-    devbranch    = "main",
-)
+# Previews and the dev deploy push to the same gh-pages branch, so two runs that
+# finish together can make one push fail with "fetch first". deploydocs does not
+# retry; calling it again only re-fetches gh-pages and copies the built site
+# over it, so retry a few times with a random delay.
+for attempt in 1:5
+    try
+        deploydocs(
+            repo         = "github.com/ianlap/SigmaTau.jl.git",
+            push_preview = true,
+            devbranch    = "main",
+        )
+        break
+    catch
+        attempt == 5 && rethrow()
+        @warn "deploydocs failed (attempt $attempt of 5); retrying"
+        sleep(rand(5:20))
+    end
+end

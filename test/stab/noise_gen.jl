@@ -132,6 +132,13 @@ end
         c = noise_gen(PhaseData, 512, 1.0; sigma1 = Dict(0 => 1e-12), rng = Xoshiro(999))
         @test a.x == b.x
         @test a.x != c.x
+        # The components draw in order of α, so how the keys are written does not change the record.
+        h3 = (2 => 8π^2 * 1e-24, 0 => 2e-24, -1 => 1e-26, -2 => 1e-30)
+        n3 = (:WHPM => h3[1][2], :WHFM => h3[2][2], :FLFM => h3[3][2], :RWFM => h3[4][2])
+        r3 = noise_gen(PhaseData, 1024, 1.0; h = Dict(h3), rng = Xoshiro(1)).x
+        @test r3 == noise_gen(PhaseData, 1024, 1.0; h = Dict(reverse(h3)), rng = Xoshiro(1)).x
+        @test r3 == noise_gen(PhaseData, 1024, 1.0; h = Dict(n3), rng = Xoshiro(1)).x
+        @test r3 == noise_gen(PhaseData, 1024, 1.0; h = Dict(reverse(n3)), rng = Xoshiro(1)).x
         y1 = SigmaTau._gen_powerlaw_y(0.0, 256; rng = Xoshiro(7))
         y2 = SigmaTau._gen_powerlaw_y(0.0, 256; rng = Xoshiro(7))
         @test y1 == y2

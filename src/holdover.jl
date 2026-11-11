@@ -318,6 +318,10 @@ its best stretch it comes within a few percent
   past `train`.
 - `limit`, `confidence`: as for the least-squares test.
 
+A trial is left out when the reading it starts from or the reading it is
+compared with is missing: a start inside a gap would predict from an estimate
+that has already run free.
+
 # Examples
 
 ```julia
@@ -347,7 +351,7 @@ function holdover(data::PhaseData, m::ClockModel; train::Union{Real,Nothing}=not
         empty!(e)
         v = 0.0
         for k in b:N-h
-            isfinite(z[k+h]) || continue
+            isfinite(z[k]) && isfinite(z[k+h]) || continue
             push!(e, z[k+h] - dot(φ, view(kf.x, k, :)))
             v += dot(φ, view(kf.P, :, :, k), φ)
         end

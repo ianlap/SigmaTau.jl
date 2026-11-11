@@ -36,6 +36,29 @@ function ensemble_scatter(α, ms; N=1024, R=200, rng=Xoshiro(20261108))
 end
 
 @testset "ncornered_hat" begin
+    @testset "clocks read against one reference" begin
+        x = [noise_gen(PhaseData, 512, 1.0; h=Dict(0 => 1.0), rng=Xoshiro(k)).x for k in 1:4]
+        cc = ClockComparisons(hcat(x[1] .- x[4], x[2] .- x[4], x[3] .- x[4]), 1.0)   # clock 4 is the reference
+        ms = [1, 2, 4]
+        P = Matrix{StabilityResult}(undef, 4, 4)
+        for i in 1:4, j in i+1:4
+            P[i, j] = mdev(PhaseData(x[i] .- x[j], 1.0), ms)
+        end
+        same(a, b) = all(isapprox(p.dev, q.dev; rtol=1e-9, nans=true) && isapprox(p.edf, q.edf; rtol=1e-6, nans=true)
+                         for (p, q) in zip(a, b))
+        hat = ncornered_hat(cc, ms; deviation=:mdev)
+        @test length(hat) == 4 && same(hat, ncornered_hat(P))            # the reference is the last clock
+        # Without the reference: the three clocks' differences alone.
+        @test same(ncornered_hat(cc, ms; deviation=:mdev, reference=false), ncornered_hat(P[1, 2], P[2, 3], P[1, 3]))
+        # A column of zeros is the reference itself, and no clock is added.
+        @test same(ncornered_hat(ClockComparisons(hcat(cc.x, zeros(512)), 1.0), ms; deviation=:mdev), hat)
+        # These records close, so the Groslambert covariance is the hat on ADEV.
+        @test isapprox(groslambert(cc, ms)[4].dev, ncornered_hat(cc, ms)[4].dev; rtol=1e-9)
+        @test ncornered_hat(cc; deviation=:hdev)[1].tau == hdev(cc[1]).tau   # the estimator's own grid
+        @test_throws ArgumentError ncornered_hat(ClockComparisons(cc.x[:, 1:2], 1.0), ms; reference=false)
+        @test_throws ArgumentError ncornered_hat(cc, ms; deviation=:totdev)
+    end
+
     @testset "three white-FM clocks against the classic formula" begin
         N = 8192
         ms = unique(round.(Int, exp10.(range(0, log10(N ÷ 128); length = 12))))
@@ -147,6 +170,23 @@ end
     g4 = groslambert(Q, [1, 4])
     @test all(isapprox(g4[i].dev[1], adev(PhaseData(x[i], 1.0), [1]; ci=false).dev[1]; rtol=0.1) for i in 1:4)
     @test g4[1].deviation_type === :adev && length(g4[1].ci) == 2 && g4[1].confidence == DEFAULT_CONFIDENCE
+    # Missing samples: a term that reads one is left out. One missing reading
+    # of clock 1 costs each of its records three terms, so its own couples
+    # lose three each and two of the three couples of another clock; records
+    # that begin late give what the records cut to their readings give.
+    y = copy(x[1]); y[700] = NaN
+    for j in 2:4
+        Q[1, j] = PhaseData(y .- x[j], 1.0)
+    end
+    gap = groslambert(Q, [1, 4])
+    @test [r.neff[1] for r in gap] == 2046 .- [3, 2, 2, 2]
+    @test all(isapprox(gap[i].dev, g4[i].dev; rtol=0.01) for i in 1:4)
+    late(i, j) = PhaseData([fill(NaN, 100); d(i, j).x[101:end]], 1.0)
+    cut(i, j) = PhaseData(d(i, j).x[101:end], 1.0)
+    gl = groslambert(late(1, 2), late(2, 3), late(3, 1), [1, 2, 4])
+    gc = groslambert(cut(1, 2), cut(2, 3), cut(3, 1), [1, 2, 4])
+    @test all(gl[i].dev ≈ gc[i].dev && gl[i].edf ≈ gc[i].edf && gl[i].neff == gc[i].neff for i in 1:3)
+    @test_throws ArgumentError groslambert(late(1, 2), late(2, 3), late(3, 1), [1]; interval=:klts)
     P2 = Matrix{PhaseData}(undef, 2, 2); P2[1, 2] = d(1, 2)
     @test_throws ArgumentError groslambert(P2, [1])
     @test_throws ArgumentError groslambert(d(1, 2), d(2, 3), PhaseData(x[3][1:100], 1.0), [1])

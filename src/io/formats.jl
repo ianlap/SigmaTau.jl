@@ -480,7 +480,9 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     elseif fmt === :rinex_clk
         _read_rinex_clk(path, tau0, column, column_name, fillgaps)
     elseif fmt === :columns
-        v, t0, start, phase = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=2,
+        isempty(column_name) || throw(ArgumentError(
+            "read_data: a :columns file has no column names; pass column= a number, or format=:table for a file with a header"))
+        v, t0, start, phase = _ingest(path; tau0=isnan(tau0) ? nothing : tau0, time_col=1, value_col=column > 0 ? column : 2,
                                       header=0, delim=delim == '\0' ? nothing : delim, scaling=1.0,
                                       detrend=:none, fillgaps=fillgaps, hint=hint)
         _Record(v, t0, phase, falses(0), start)
@@ -583,7 +585,9 @@ timestamps and MJD values give the record its [`start_time`](@ref).
 - `tau0`: sample interval in seconds. By default that of the header of the
   file, else that of its timestamps. An error is thrown when the file has
   neither.
-- `column`: the clock to read. In a `:table` file, the number of its
+- `column`: the clock to read. In a `:columns` file, the number of the
+  column of samples, counted from 1, 2 by default, the first being the time
+  tags. In a `:table` file, the number of its
   column, counted from 1, or its name. In a `:rinex_clk` file, its position
   in order of first appearance, or its name, such as `"G08"`; by default
   the first clock. Names are matched without regard to case.

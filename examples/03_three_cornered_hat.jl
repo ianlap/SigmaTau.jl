@@ -181,10 +181,27 @@ hat4 = ncornered_hat(pairs)
 # four. The fourth clock adds three comparisons, and with them degrees of
 # freedom where the curve has fewest.
 #
+# ## Clocks read against one reference
+#
+# A counter with a channel for each clock gives the clocks against one
+# reference, and not the pairs. [`ClockComparisons`](@ref) holds such
+# readings, and both functions take it. They form the difference of every
+# pair, in which the reference cancels, and count the reference as one
+# clock more, which comes last. Clocks B and C read against A are the three
+# clocks of the first section:
+
+cc = ClockComparisons([b .- a c .- a], τ₀; names = ["B", "C"], reference = "A")
+
+ncornered_hat(cc, m)[3].dev ≈ hat[1].dev
+
+# The command [`sigmatau hat`](../reference/cli.md#hat) does the same from
+# the columns of a file.
+#
 # ## Which to use
 #
 # | At hand | Use |
 # |:---|:---|
+# | clocks read against one reference | either function on a [`ClockComparisons`](@ref) |
 # | the deviations of each pair | [`ncornered_hat`](@ref) |
 # | the difference records | [`groslambert`](@ref), which keeps the noise of the instruments out |
 # | three records, and a clock that may not be resolved | [`groslambert`](@ref) with `interval = :klts` |

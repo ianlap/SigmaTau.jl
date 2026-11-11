@@ -57,7 +57,7 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 | Fill | [`fillgaps`](@ref), by another method ([below](@ref stable32-differences)) |
 | Check | [`find_outliers`](@ref), by the same test, with five scaled median absolute deviations as the default. [`remove_outliers`](@ref) puts a filled value where Stable32 leaves a gap |
 | Statistics | [`summarize`](@ref) |
-| Drift | [`drift_fit`](@ref) for the fit, [`detrend`](@ref) for the removal |
+| Drift | [`drift_fit`](@ref) for the fit, [`detrend`](@ref) for the removal ([Drift types](@ref stable32-drift)) |
 | Sigma | an estimator at one averaging factor, `adev(p, [16])` |
 | Run | an estimator, or [`stability`](@ref) for several |
 | Dead Time, T/Tau, in Sigma and Run | `adev(f; dead_time, noise)`, with the time between readings in seconds in place of the ratio ([Dead time](@ref)) |
@@ -65,22 +65,44 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 | Power | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref) |
 | Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref) |
 | Noise | [`noise_gen`](@ref) |
-| 3-Cornered Hat | [`ncornered_hat`](@ref), for three clocks or more, and [`groslambert`](@ref) |
+| 3-Cornered Hat | [`ncornered_hat`](@ref), for three clocks or more, and [`groslambert`](@ref); [`sigmatau hat`](../reference/cli.md#hat) from a file |
 | Plot | the plot recipes ([Plotting and tables](plotting.md)) |
 
 The [explorer](../explorer/index.md) does these steps in a window, and the
 [command line](cli.md) in a shell.
 
-The drift models are fewer here. [`drift_fit`](@ref) fits the linear, log
-and diffusion models of the Drift function to the frequency, and a
-quadratic one. `detrend(p; method = :quadratic)` is its quadratic fit to
-phase data. The average of second differences, the three-point fit and the
-bisection fit are not here.
-
 Not in this package: the Filter, Histogram and Autocorrelation functions,
 the detection of frequency jumps and the scaling of a result for one of
 two identical units. For the last, divide `r.dev` by
 ``\sqrt{2}``.
+
+## [Drift types](@id stable32-drift)
+
+| Drift Type | SigmaTau |
+|:---|:---|
+| Quadratic Fit, phase data | `drift_fit(p; method = :phase_fit)` |
+| Avg of 2nd Diffs, phase data | `drift_fit(p; method = :second_difference)` |
+| 3-Point Fit, phase data | `drift_fit(p; method = :bisection)` |
+| Linear Fit, frequency data | `drift_fit(f)` |
+| Bisection Fit, frequency data | `drift_fit(f; method = :bisection)` |
+| Log Fit, Diffusion Fit | `drift_fit(f; model = :log)`, `model = :diffusion` |
+| Linear, Avg of 1st Diffs, Endpoints: the frequency offset of phase data | `detrend(p; method = :linear)` removes the first and `method = :endpoint` the other two, which are one number, the mean of `FrequencyData(p).y` |
+| Autoregression | not in this package |
+| Remove Drift | `detrend(p, fit)` with the result of [`drift_fit`](@ref), or `detrend(p; method = :quadratic)` for the quadratic fit |
+
+Every method takes a record of either kind. [`drift_fit`](@ref) also has
+a quadratic model of the frequency and the four-point estimator of
+[Greenhall 1997](@cite greenhall-1997-drift-estimator). Its slopes are per
+second and its drift rate per day, where the Drift function gives a slope
+per sample interval. On the 1000-point test suite of
+[SP1065 §12.4](@cite riley-2008-sp1065) the linear, bisection and
+first-difference slopes agree with the published values to their seven
+digits.
+
+For a record with an even number of phase samples, which has no middle
+sample, `:bisection` takes the mean frequencies of the two halves of the
+frequency record and leaves its middle sample out. The manual does not say
+what the 3-Point Fit does there.
 
 ## Variance types
 

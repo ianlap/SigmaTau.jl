@@ -31,6 +31,7 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | `steer FILE` | the Allan deviation of the record steered to its reference in replay, beside that of the record and of the steady state that the clock model predicts |
 | `cross FILE --with FILE2` | the cross Allan deviation and cross-spectrum of two channels |
 | `timescale FILE --value-cols LIST` | a time scale from several clocks read against one reference |
+| `hat FILE --value-cols LIST` | the deviation of each of three or more clocks that are measured against one another |
 | `model --synth N --noise-model R:Q1:Q2:Q3` | the deviations that a clock model predicts |
 | `report FILE` | the analysis of `analyze` as one HTML file |
 | `live SOURCE` | deviations kept up to date while readings arrive |
@@ -110,7 +111,7 @@ The sample interval of a simulated record is `--tau0`, or 1 s.
 | `--format FMT` | `csv`, the default, or `json` |
 | `--out PATH` | write to a file. By default the output goes to standard output |
 | `--series N` | include samples of the record in the JSON output, about `N`, for a plot |
-| `--quiet` | no note on standard error that the file was written |
+| `--quiet` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
 
 A value that does not exist is an empty field in CSV and `null` in JSON,
 never the text `NaN`. `model` and `live` write JSON only, and `report`
@@ -129,7 +130,7 @@ sigmatau_json("analyze --synth 1024 --devs adev,tdev --m 1,8 --series 2 --format
 ```
 
 `record` describes the record after its preparation. Every command that
-reads a record gives it, except `timescale`:
+reads a record gives it, except `timescale` and `hat`:
 
 | Member | Meaning |
 |:---|:---|
@@ -189,14 +190,15 @@ source,quantity,deviation,tau,dev,ci_lower,ci_upper,edf,neff,noise_type
 
 `tau` is in seconds, and `neff` is the number of terms averaged.
 
-Four options add a member to the JSON output and need `--format json`:
+Four options add a member to the JSON output. The first three need
+`--format json`:
 
 | Option | Member |
 |:---|:---|
 | `--spectrum` | `spectrum`, as the `spectrum` command gives it. `--nperseg N` sets the segment length. For a record with gaps the member is `{"error": "…"}`, and the deviations are computed all the same |
 | `--fit` | `powerlaw`, the power-law model that [`powerlaw_fit`](@ref) fits to the modified Hadamard deviation of the record |
 | `--component NOISE:A:B` | `powerlaw`, built one noise type at a time with [`noise_fit`](@ref): `NOISE`, a name such as `WHFM` or a value of ``α``, is fitted between `A` and `B` seconds to what the components before it leave. Either end can be left open. Repeat the option for each component, in order |
-| `--mask NAME` | `masks`, the limits of an ITU-T wander mask with the check of each MTIE and TDEV result against them. `NAME` is one of the [`TELECOM_MASKS`](@ref) (`G811`, `G813_opt1`, `G813_opt2`, `G8262_opt1`, `G8262_opt2`, `G823_PRC`, `G823_SSU`, `G823_SEC`, `G823_PDH`), or `all` |
+| `--mask NAME` | `masks`, the limits of an ITU-T wander mask with the check of each MTIE and TDEV result against them. `NAME` is one of the [`TELECOM_MASKS`](@ref), such as `G811`, `G8262_opt1`, `G8272_PRTC_A`, `G8272_PRTC_B` or `G823_SSU`, or `all`. With CSV output the table stays as it is and each check is one line on standard error, such as `sigmatau: MTIE passes, 3.2× under G8272_PRTC_A`, unless `--quiet` is given |
 
 ```@example cliref
 sigmatau_json("analyze --synth 1024 --component WHFM::8 --component RWFM:32: --format json"; only = "powerlaw") # hide
@@ -217,9 +219,10 @@ fitted, `powerlaw` holds an `error` instead.
 sigmatau_json("analyze --synth 1024 --devs mtie,tdev --mask G811 --format json"; only = "masks") # hide
 ```
 
-`mtie` and `tdev` are the limits of the mask, in seconds, at the averaging
-times `tau`, from 0.1 s to ``10^6`` s, and `null` outside the range of the
-recommendation. Each entry of `checks` is one result against the mask, as
+`source` is the edition of the recommendation and the tables that the
+limits were read from. `mtie` and `tdev` are the limits of the mask, in
+seconds, at the averaging times `tau`, from 0.1 s to ``10^6`` s, and `null`
+outside the range of the recommendation. Each entry of `checks` is one result against the mask, as
 [`mask_check`](@ref) returns it.
 
 ## `check`
@@ -238,7 +241,7 @@ nothing else. The record needs three samples or more.
 
 | Option | Meaning |
 |:---|:---|
-| `--nperseg N` | length of the segments. By default the largest power of two up to a quarter of the record, and at least 16 |
+| `--nperseg N` | length of the segments, cut to the record where it is longer. By default the largest power of two up to a quarter of the record, and at least 16 |
 
 The spectra are those of [`psd_y`](@ref) and [`psd_x`](@ref), with a Hann
 taper and segments that overlap by half. The record needs 16 samples or
@@ -273,16 +276,18 @@ sigmatau_json("dynamic --synth 1024 --format json"; only = "dynamic") # hide
 | Option | Meaning |
 |:---|:---|
 | `--model MODEL` | `linear` (the default), `quadratic`, `log` or `diffusion` |
+| `--method METHOD` | the estimator of the linear model: `frequency_fit` (the default), `phase_fit`, `bisection`, `second_difference` or `four_point` |
 
-The fit is that of [`drift_fit`](@ref), which defines the models and their
-coefficients. The CSV output is one row:
+The fit is that of [`drift_fit`](@ref), which defines the models, their
+coefficients and the methods. The CSV output is one row:
 
 ```text
-source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n
+source,quantity,model,method,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n
 ```
 
 `a`, `b` and `c` are the coefficients, with `c` empty for the linear model,
-and `n` is the number of frequency samples fitted.
+and `n` is the number of frequency samples fitted. A standard error that
+the method does not give is an empty field, and `null` in JSON.
 
 ```@example cliref
 sigmatau_json("drift --synth 1024 --series 2 --format json"; only = "drift") # hide
@@ -308,6 +313,8 @@ their times.
 The test is that of [`holdover`](@ref), which [Holdover](holdover.md)
 describes. The training stretch and the holdover times must be whole
 multiples of the sample interval, and the record needs 16 samples or more.
+With `--kalman` the training stretch needs 65 samples or more, which makes
+260 for the record by default, because the clock model is fitted to it.
 The CSV output has a row for each holdover time:
 
 ```@example cliref
@@ -396,9 +403,9 @@ describes. One of `--time-constant` and `--cost` is required:
 `holdover --kalman`, fitted to the first stretch alone, so its noise levels
 are not learned from the readings that the loop is judged on. The loop runs
 over the whole record, and every result is taken from the end of that
-stretch on. The record needs 64 samples or more, and the stretch must
-leave 16 on either side of its end. The CSV output has a row for each
-averaging time:
+stretch on. The stretch needs 65 samples or more, and must leave 16
+after its end, so the record needs 81 samples or more, and 260 by default.
+The CSV output has a row for each averaging time:
 
 ```@example cliref
 sigmatau("steer clock.dat --time-constant 64 --m 1,16,256") # hide
@@ -467,8 +474,9 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 Each column is read with the options of the record. With `--synth` the
 clocks are simulated: four of them, or those that `--clocks` or
 `--noise-model` describe. `greenhall`, `jones_tryon` and `stein` need three
-clocks or more, and fit a model to each with [`clock_models`](@ref). The
-record needs 16 samples or more.
+clocks or more, and fit a model to each with [`clock_models`](@ref), which
+leaves out the samples a missing reading touches. The record needs 16
+samples or more.
 
 The CSV output has a row for each clock:
 
@@ -489,6 +497,62 @@ sigmatau_json("timescale --synth 1024 --series 2 --format json"; only = "timesca
 scale and, for each clock, its weights at the times kept. With `--flicker`
 the object has a member `flicker`, whose arrays `fm` and `pm` give the
 number of Markov states in the model of each clock.
+
+## `hat`
+
+| Option | Meaning |
+|:---|:---|
+| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference, as for `timescale` |
+| `--pairs` | the three columns hold the differences A−B, B−C and C−A, each as it was measured, in place of clocks read against one reference |
+| `--no-reference` | leave the reference out, for three clocks or more |
+| `--covariance` | the Groslambert covariance in place of the hat |
+| `--klts` | the covariance with the KLTS interval, for three clocks |
+| `--devs LIST` | deviations, of `adev`, `mdev`, `hdev`, `mhdev`, `pdev`, `tdev` and `htdev`. By default `adev` |
+| `--grid GRID`, `--m LIST` | averaging factors, as for `analyze` |
+| `--confidence P` | confidence level of the intervals. By default 0.683 |
+
+A measurement of two clocks gives the noise of both. `hat` separates the
+clocks, three or more, from the deviations of every pair of them
+([Three clocks and the three-cornered hat](../tutorials/03_three_cornered_hat.md)).
+Each column is read with the options of the record. The reference cancels
+in the difference of two columns, and it counts as one clock more, named
+`reference`: two columns make a three-cornered hat. Where a column holds
+zeros only, that clock is the reference and none is added. With
+`--no-reference` the hat is that of the differences between the clocks
+alone, and a noisy reference stays out of it. With `--synth` the clocks are
+simulated as for `timescale`, three or more; their reference is perfect and
+counts as no clock.
+
+| Method | Estimate |
+|:---|:---|
+| the hat, by default | [`ncornered_hat`](@ref) on the deviations of every pair, for each deviation of `--devs` |
+| `--covariance` | [`groslambert`](@ref): the Allan deviation from the covariance of the difference records. The noise that each record of `--pairs` has on its own, such as that of its counter, stays out of it. On clocks read against one reference it equals the hat on `adev` |
+| `--klts` | `--covariance` with the interval of [Lantz et al. (2019)](@cite lantz-2019-klts), for three clocks. It is given also where the estimate is negative, and its lower limit is 0 where the records do not exclude a clock without noise |
+
+The estimate of a clock's variance can be negative: for a clock much more
+stable than the others, for clocks that are correlated, and where few terms
+are averaged. The clock is then not resolved at that averaging time, and its
+`dev` is empty in CSV and `null` in JSON. The intervals of the hat and of
+`--covariance` are too narrow for a clock that is close to that
+([`groslambert`](@ref)). The records need 16 samples or more. The hat and
+`--covariance` leave out the terms that a missing sample touches, and
+`--klts` takes no records with gaps. The CSV output has a row for each
+clock, deviation and averaging time:
+
+```text
+clock,deviation,tau,dev,ci_lower,ci_upper,edf,neff
+```
+
+```@example cliref
+sigmatau_json("hat --synth 1024 --clocks 3 --m 1,8 --format json"; only = "hat") # hide
+```
+
+`layout` is `"reference"` or, with `--pairs`, `"pairs"`. `clocks` names the
+clocks, and `pairs` lists every pair of them by position in `clocks`. Each
+entry of `results` belongs to one deviation: its `clocks` hold the
+separated result of each clock and its `pairs` the result measured for each
+pair, in the order of the lists above and in the form of a result of
+`analyze`.
 
 ## `model`
 

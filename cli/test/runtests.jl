@@ -99,6 +99,9 @@ end
     @test all(d -> occursin("  " * d * "\n", run_cli("help").out), last.(SigmaTauCLI.COMMAND_HELP))
     @test occursin("\nThe σ(τ)", run_cli("help", "model").out)
     @test !occursin("FILE", run_cli("help", "live").out)
+    # No help for a word that is no command: a usage error, on stderr.
+    r = run_cli("help", "nosuch")
+    @test r.code == 1 && isempty(r.out) && occursin("no help for \"nosuch\"", r.err)
 end
 
 @testset "the reference names every command and option" begin
@@ -106,6 +109,8 @@ end
     for (c, arg, _) in SigmaTauCLI.COMMAND_HELP
         @test occursin("| `" * (isempty(arg) ? c : c * " " * arg) * "` |", page)
     end
+    # One row per option: the parser and the completions look an option up by its name.
+    @test allunique(op.long for op in SigmaTauCLI.OPTS)
     options = Set(op.long for op in SigmaTauCLI.OPTS)
     named = Set(m.match for m in eachmatch(r"--[a-z][a-z0-9-]*", page))
     @test setdiff(options, named) == Set{String}()      # every option is on the page
@@ -251,9 +256,14 @@ mktempdir() do dir
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,mtie", "--mask", "G8262_opt1")
         @test r.code == 0 && occursin("\"masks\":[{\"name\":\"G8262_opt1\"", r.out)
         @test occursin("\"checks\":[{\"deviation\":\"tdev\"", r.out) && occursin("{\"deviation\":\"mtie\"", r.out)
-        @test run_cli("analyze", pf, "--mask", "G8262_opt1").code != 0      # JSON only
+        @test occursin("\"source\":\"G.8262 (10/2024), Tables 1 and 3\"", r.out)
         @test run_cli("analyze", pf, "--format=json", "--mask", "G999").code != 0
-        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 9
+        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 16
+        # With CSV the verdict goes to stderr: X swings 4.7 ns, under the 25 ns of PRTC-B.
+        r = run_cli("analyze", pf, "--devs", "adev,mtie", "--mask", "G8272_PRTC_B")
+        @test r.code == 0 && startswith(r.out, "source,quantity,deviation") && occursin(r"^sigmatau: MTIE passes, [\d.]+× under G8272_PRTC_B\n$", r.err)
+        @test occursin("--devs names neither", run_cli("analyze", pf, "--devs", "adev", "--mask", "G811").err)
+        @test isempty(run_cli("analyze", pf, "--devs", "mtie", "--mask", "G8272_PRTC_B", "--quiet").err)
     end
 
     @testset "no CI: nulls in JSON, blanks in CSV, never NaN" begin
@@ -404,7 +414,12 @@ mktempdir() do dir
         @test r.code == 0 && occursin("\"algorithm\":\"at2\"", r.out)
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--steps", "real", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"steps\":\"real\"", r.out)
-        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at1", "--steps", "best").code != 0
+        for alg in ("at1", "greenhall", "stein")
+            @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", alg, "--steps", "best").code == 1
+        end
+        for w in ("2", "0", "-1")
+            @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--wmax", w).code == 1
+        end
         # The Kalman scales fit a model per clock; --pivot picks the clock they read at.
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"greenhall\"", r.out) && occursin("\"pivot\":2", r.out)
@@ -446,14 +461,72 @@ mktempdir() do dir
         @test r.code == 2 && occursin("column 7 exceeds 4 columns", r.err)
     end
 
+    @testset "hat" begin
+        # Clocks A and B in columns 2 and 3, read against clock C; columns 4
+        # to 6 hold the same three clocks as the pairs A−B, B−C and C−A.
+        x = [s .* noise_gen(PhaseData, 1024, 1.0; h=Dict(0 => 1e-24), rng=Random.Xoshiro(k)).x for (k, s) in enumerate((1, 2, 3))]
+        hf = joinpath(dir, "hat.csv")
+        open(hf, "w") do io
+            for k in 1:1024
+                println(io, k - 1, ",", join((x[1][k] - x[3][k], x[2][k] - x[3][k], x[1][k] - x[2][k], x[2][k] - x[3][k], x[3][k] - x[1][k]), ","))
+            end
+        end
+        dev(rows) = parse.(Float64, getindex.(rows, 4))
+        rows = csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--devs", "mdev", "--m", "1,4,16").out)
+        @test getindex.(rows, 1) == repeat(["column 2", "column 3", "reference"]; inner=3)
+        lib = ncornered_hat(ClockComparisons(hcat(x[1] .- x[3], x[2] .- x[3]), 1.0), [1, 4, 16]; deviation=:mdev)
+        @test dev(rows) ≈ reduce(vcat, r.dev for r in lib) && parse(Float64, rows[1][7]) ≈ lib[1].edf[1]
+        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--devs", "mdev", "--m", "1,4,16").out)) ≈ dev(rows)
+        # The Groslambert covariance of records that close is the hat on ADEV.
+        adev_rows = csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16").out)
+        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16", "--covariance").out)) ≈ dev(adev_rows)
+        r = run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--klts", "--confidence", "0.95", "--m", "1,4", "--format=json")
+        @test r.code == 0 && occursin("\"method\":\"groslambert\",\"interval\":\"klts\",\"layout\":\"pairs\"", r.out)
+        @test occursin("\"clocks\":[\"A\",\"B\",\"C\"],\"pairs\":[[1,2],[1,3],[2,3]]", r.out)
+        # Pairs that do not close: B−C far noisier than the other two leaves
+        # nothing for clock A, whose deviation is then blank, null in JSON.
+        nf = joinpath(dir, "negative.csv")
+        open(nf, "w") do io
+            for k in 1:1024
+                println(io, k - 1, ",", join((x[1][k], 9x[3][k], x[2][k]), ","))
+            end
+        end
+        rows = csv_rows(run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4").out)
+        @test all(isempty, getindex.(rows[1:2], 4)) && all(!isempty, getindex.(rows[3:6], 4))
+        @test occursin("\"points\":[{\"tau\":1.0,\"dev\":null,", run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4", "--format=json").out)
+        # Missing readings: the hat and the covariance leave their terms out, KLTS refuses.
+        gf = joinpath(dir, "gapped.csv")
+        write(gf, replace(read(hf, String), r"^100,[^,]*,"m => "100,NaN,"))
+        gapped(method...) = run_cli("hat", gf, "--value-cols", "2,3", "--m", "1,4", method...)
+        for method in ((), ("--covariance",))
+            @test dev(csv_rows(gapped(method...).out)) ≈ dev(adev_rows)[[1, 2, 4, 5, 7, 8]] rtol = 0.02
+        end
+        @test gapped("--klts").code == 3 && occursin("--fillgaps", gapped("--klts").err)
+        # Simulated clocks have a perfect reference, which is no clock.
+        @test unique(getindex.(csv_rows(run_cli("hat", "--synth", "512", "--m", "1").out), 1)) == ["clock 1", "clock 2", "clock 3", "clock 4"]
+        @test run_cli("hat", "--synth", "512", "--clocks", "2").code == 1
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--no-reference").code == 1     # two clocks
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--pairs").code == 1            # two of three pairs
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--devs", "totdev").code == 1
+        @test run_cli("hat", hf, "--value-cols", "2,3", "--covariance", "--devs", "mdev").code == 1
+        @test run_cli("hat", "--synth", "512", "--klts").code == 1            # four clocks
+    end
+
     @testset "drift" begin
         # Frequency with an injected aging of 2e-15 per second.
         y = 1e-11 .* sinpi.((1:400) ./ 13) .+ 2e-15 .* (0:399) .* 60
         ff = write_table(joinpath(dir, "aging.csv"), y; tau0=60.0)
         ref = drift_fit(FrequencyData(y, 60.0))
         rows = csv_rows(run_cli("drift", ff, "--freq").out)
-        @test rows[1][3] == "linear" && isempty(rows[1][8])
-        @test parse(Float64, rows[1][10]) ≈ ref.rate rtol=1e-9
+        @test rows[1][3:4] == ["linear", "frequency_fit"] && isempty(rows[1][9])
+        @test parse(Float64, rows[1][11]) ≈ ref.rate rtol=1e-9
+        # The bisection has no standard error: an empty CSV field, null in JSON.
+        rows = csv_rows(run_cli("drift", ff, "--freq", "--method", "bisection").out)
+        @test parse(Float64, rows[1][11]) ≈ drift_fit(FrequencyData(y, 60.0); method=:bisection).rate rtol=1e-6
+        @test rows[1][4] == "bisection" && isempty(rows[1][12])
+        r = run_cli("drift", ff, "--freq", "--method", "four_point", "--format", "json")
+        @test r.code == 0 && occursin("\"method\":\"four_point\"", r.out) && occursin("\"drift_per_day_err\":null", r.out)
+        @test run_cli("drift", ff, "--method", "bisection", "--model", "log").code == 1
         r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
         @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
         @test run_cli("drift", ff, "--model", "cubic").code == 1
@@ -496,6 +569,13 @@ mktempdir() do dir
         r = run_cli("holdover", write_table(joinpath(dir, "flicker.csv"), ff.x), "--train", "512", "--tau", "1,16", "--kalman", "--format", "json")
         @test parse.(Float64, split(match(r"\"claimed\":\[([^\]]*)\]", r.out)[1], ',')) ≈ holdover(ff, kmodel(ff.x); train=512, tau=[1, 16]).claimed
         @test parse(Float64, match(r"\"flicker_fm\":([^,}]*)", r.out)[1]) > 1e-26
+        # The clock model needs a training stretch of 65 samples.
+        fl = joinpath(dir, "flicker.csv")
+        r = run_cli("holdover", fl, "--kalman", "--train", "64")
+        @test r.code == 3 && occursin("65 samples or more; this one has 64", r.err)
+        @test run_cli("holdover", fl, "--kalman", "--train", "65", "--tau", "1,4").code == 0
+        @test run_cli("holdover", fl, "--kalman", "--tau", "1,4").code == 0   # a quarter of 4096
+        @test occursin("this one has 32", run_cli("holdover", write_table(joinpath(dir, "short.csv"), ff.x[1:128]), "--kalman").err)
         @test run_cli("holdover", hf, "--kalman", "--no-anchor").code == 1
         @test run_cli("holdover", hf, "--kalman", "--grow", "2").code == 1
         @test run_cli("holdover", hf, "--train", "0.5").code == 3
@@ -527,6 +607,12 @@ mktempdir() do dir
         @test run_cli("steer", sf, "--cost", "0:0:1").code == 1
         @test run_cli("steer", sf, "--time-constant", "30", "--interval", "1.5").code == 3
         @test run_cli("steer", sf, "--time-constant", "30", "--train", "8190").code == 3
+        # The clock model needs a training stretch of 65 samples, and 16 more follow it.
+        r = run_cli("steer", sf, "--time-constant", "8", "--train", "64")
+        @test r.code == 3 && occursin("65 samples or more; this one has 64", r.err)
+        @test run_cli("steer", sf, "--time-constant", "8", "--train", "65").code == 0
+        r = run_cli("steer", write_table(joinpath(dir, "short.csv"), p.x[1:80]), "--time-constant", "8")
+        @test r.code == 3 && occursin("needs at least 81 samples; the record has 80", r.err)
     end
 
     @testset "--remove-drift" begin
@@ -604,6 +690,14 @@ mktempdir() do dir
         @test occursin("\"spectrum\":{\"nperseg\":32,\"noverlap\":16,", r.out)
         sy = psd_y(PhaseData(X, 1.0); nperseg=32)
         @test parse(Float64, csv_rows(run_cli("spectrum", pf, "--nperseg", "32").out)[1][2]) == sy.psd[2]
+        # A segment as long as the record, or longer, is cut to its 255 frequency samples.
+        for np in ("256", "100000")
+            @test occursin("\"spectrum\":{\"nperseg\":255,", run_cli("spectrum", pf, "--nperseg", np, "--format", "json").out)
+        end
+        # The shortest record the reference allows, with the default segment.
+        sh = write_table(joinpath(dir, "sixteen.csv"), X[1:16])
+        @test run_cli("spectrum", sh).code == 0
+        @test run_cli("analyze", sh, "--spectrum", "--format", "json").code == 0
     end
 
     @testset "dynamic" begin
@@ -844,6 +938,10 @@ mktempdir() do dir
         write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
         @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
+        # A Stable32 file without a sample interval asks for the option by its name.
+        wf = joinpath(dir, "w.frd")
+        write(wf, join(1e-12 .* sinpi.((1:32) ./ 7.3), "\n"))
+        @test occursin("pass --tau0", run_cli("check", wf).err)
         # An error inside a threaded loop is named by what the task threw.
         failed = try wait(Threads.@spawn throw(DomainError(-1.0))) catch e e end
         @test SigmaTauCLI.error_message(CompositeException([failed])) == "domain error in the analysis"
@@ -861,6 +959,21 @@ mktempdir() do dir
         @test isempty(String(take!(e)))
     end
 
+    # The compiled binary writes to file descriptor 1 itself; a reader that has gone is an IOError.
+    Sys.iswindows() || @testset "FdOut: a closed pipe throws" begin
+        fds = zeros(Cint, 2)
+        @test ccall(:pipe, Cint, (Ptr{Cint},), fds) == 0
+        out = SigmaTauCLI.FdOut(fds[2])
+        @test write(out, "abc") == 3
+        buf = zeros(UInt8, 3)
+        @test ccall(:read, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), fds[1], buf, 3) == 3
+        @test String(buf) == "abc"
+        ccall(:close, Cint, (Cint,), fds[1])
+        @test_throws Base.IOError write(out, "abc")
+        @test_throws Base.IOError write(out, 0x61)
+        ccall(:close, Cint, (Cint,), fds[2])
+    end
+
     @testset "--out writes what stdout would show" begin
         op = joinpath(dir, "out.csv")
         r = run_cli("analyze", pf, "--devs", "adev", "--out", op)
@@ -872,6 +985,25 @@ mktempdir() do dir
 
     exe = get(ENV, "SIGMATAU_EXE", "")
     if !isempty(exe)
+        # A reader that closes the pipe after one line: the command ends, exit 0, and
+        # the runtime's own `broken pipe` line stays off stderr.
+        Sys.iswindows() || @testset "compiled binary: reader closes the pipe" begin
+            for args in (["live", "sim", "--fast"], ["analyze", "--synth", "100000", "--grid", "all", "--devs", "adev"])
+                errf = joinpath(dir, "pipe.err")
+                proc = open(pipeline(`$exe $args`; stderr=errf), "r")
+                readline(proc)
+                close(proc.out)
+                hung = Ref(false)
+                timer = Timer(60) do _
+                    hung[] = true
+                    kill(proc)
+                end
+                wait(proc)
+                close(timer)
+                @test !hung[] && proc.exitcode == 0
+                @test isempty(read(errf, String))
+            end
+        end
         @testset "compiled binary matches" begin
             # elapsed_ms differs between runs; compare everything before it.
             strip_t(s) = replace(s, r"\"elapsed_ms\":[^}]*}" => "")
@@ -893,6 +1025,8 @@ mktempdir() do dir
                          ["check", pf, "--format", "json"],
                          ["spectrum", pf],
                          ["cross", pf, "--with", pf, "--format", "json"],
+                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "2,3", "--devs", "adev,mhdev", "--format", "json"],
+                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "4,5,6", "--pairs", "--klts", "--m", "1,8"],
                          ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
                          ["dynamic", pf, "--dev", "dhdev"],

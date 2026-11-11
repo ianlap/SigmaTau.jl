@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "hat", "model", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift)"),
@@ -12,6 +12,7 @@ const COMMAND_HELP = [
     ("holdover",   "FILE", "holdover test: the time error after a training stretch against holdover time, and the time to reach a limit"),
     ("steer",      "FILE", "steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts"),
     ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
+    ("hat",        "FILE --value-cols LIST", "the stability of each of three or more clocks measured against one another: N-cornered hat or Groslambert covariance"),
     ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "the σ(τ) that a clock noise model predicts (MDEV, ADEV and MHDEV), without a simulation"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
@@ -31,8 +32,10 @@ const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const STEPS = ["best", "real"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
+const DRIFT_METHODS = [String(m) for m in SigmaTau.DRIFT_METHODS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
+const HAT_DEVS = [String(d) for d in SigmaTau._HAT_DEVIATIONS]
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 
 struct Opt
@@ -66,7 +69,7 @@ const OPTS = [
     Opt("--value-col", "N", String[], false, "1-based value column (default 2)", ALL),
     Opt("--reference-col", "N", String[], false, "subtract this column from the value column (clocks measured against one reference)", ALL),
     Opt("--header", "N", String[], false, "header lines to skip; '#' lines and a Stable32 header are skipped anyway", ALL),
-    Opt("--delim", "CHAR", String[], false, "field delimiter (default: from the extension; '\\t' for tab)", ALL),
+    Opt("--delim", "CHAR", String[], false, "field delimiter (default: a comma where the first data line has one, a tab in a table or .tsv file, else blanks; '\\t' for tab)", ALL),
     Opt("--scaling", "X", String[], false, "multiply the values by X (1e-9 for nanoseconds)", ALL),
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
@@ -75,12 +78,12 @@ const OPTS = [
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyze only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
-    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live"]),
-    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "report", "live"]),
-    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "steer", "report", "live"]),
+    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev; for hat, adev); see below", ["analyze", "hat", "report", "live"]),
+    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "hat", "report", "live"]),
+    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "steer", "hat", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
     Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
-    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "report", "holdover"]),
+    Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "hat", "report", "holdover"]),
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
     Opt("--no-bias-correction", "", String[], false, "the same as --bias none", ["analyze", "report"]),
@@ -89,13 +92,17 @@ const OPTS = [
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only); with holdover, the error that model predicts and each noise type's share", ["analyze", "holdover"]),
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
-    Opt("--mask", "NAME", MASKS, false, "also check MTIE and TDEV against an ITU-T wander mask, or all of them (JSON only): G811, G813_opt1, G8262_opt1, G823_SSU ..., all", ["analyze"]),
+    Opt("--mask", "NAME", MASKS, false, "check MTIE and TDEV against an ITU-T wander mask, or all of them: G811, G8262_opt1, G8272_PRTC_A, G8272_PRTC_B, G823_SSU ..., all; JSON gains the limits and the checks, CSV a verdict on stderr", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
     Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE", ["cross"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
-    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale"]),
+    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale", "hat"]),
+    Opt("--pairs", "", String[], false, "the three --value-cols are the differences A−B, B−C and C−A, each measured on its own, not clocks read against one reference", ["hat"]),
+    Opt("--no-reference", "", String[], false, "leave the reference out: the hat of the clocks' differences from one another alone (three or more clocks)", ["hat"]),
+    Opt("--covariance", "", String[], false, "the Groslambert covariance of the difference records in place of the hat: ADEV, with the noise of each --pairs record's instrument kept out", ["hat"]),
+    Opt("--klts", "", String[], false, "--covariance with the interval of Lantz et al. (2019), for three clocks, given also where a clock is not resolved", ["hat"]),
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", STEPS, false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
@@ -113,6 +120,7 @@ const OPTS = [
     Opt("--cost", "P:F:U", String[], false, "in place of --time-constant: the gains that minimize P·phase² + F·frequency² + U·steer² (LQG), e.g. 1e-3:1e-3:1e12", ["steer"]),
     Opt("--interval", "SECONDS", String[], false, "seconds between steers, a whole multiple of τ₀ (default τ₀)", ["steer"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
+    Opt("--method", "METHOD", DRIFT_METHODS, false, "estimator of the linear model: frequency_fit (default, a least-squares line through the frequency), phase_fit (a least-squares parabola through the phase), bisection (the three-point fit), second_difference (mean second difference of the phase) or four_point", ["drift"]),
     # Live
     Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal", ["live"]),
     Opt("--query", "CMD", String[], false, "SCPI query sent before every reading, e.g. READ? (default: READ? for tcp://, none otherwise)", ["live"]),
@@ -172,6 +180,7 @@ mutable struct Options
     with::String              # cross: the second channel's file
     phase_given::Bool         # --phase given (else instrument readers pick the kind)
     model::String
+    method::String            # drift: estimator of the linear model
     hz::Bool
     query::String             # "\0" = the default for the source
     every::Int
@@ -204,17 +213,21 @@ mutable struct Options
     integral::Bool            # steer: an integral gain
     cost::Vector{Float64}     # steer: --cost weights on phase, frequency and steer; empty = not given
     interval::Float64         # steer: seconds between steers; NaN = τ₀
+    pairs::Bool               # hat: the columns are the pairwise differences
+    reference::Bool           # hat: the reference counts as a clock
+    covariance::Bool          # hat: the Groslambert covariance in place of the hat
+    klts::Bool                # hat: the covariance with the KLTS interval
     dead_time::Float64        # --dead-time: seconds unmeasured between frequency readings
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
+                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear", "frequency_fit",
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
-                    NaN, false, Float64[], NaN, 0.0)
+                    NaN, false, Float64[], NaN, false, true, false, false, 0.0)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -387,6 +400,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--window";         o.window = parse_int(v, name)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
+    elseif name == "--method";         o.method = check_choice(v, name, DRIFT_METHODS)
     elseif name == "--train";          o.train = parse_float(v, name)
     elseif name == "--grow";           o.grow = parse_int(v, name)
     elseif name == "--tau";            o.taus = parse_taus(v)
@@ -433,6 +447,10 @@ function set_flag!(o::Options, name::String)
     elseif name == "--kalman";             o.kalman = true
     elseif name == "--integral";           o.integral = true
     elseif name == "--flicker";            o.flicker = true
+    elseif name == "--pairs";              o.pairs = true
+    elseif name == "--no-reference";       o.reference = false
+    elseif name == "--covariance";         o.covariance = true
+    elseif name == "--klts";               o.klts = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end
@@ -497,6 +515,8 @@ function parse_args!(o::Options, args::Vector{String})
     o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2"))
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
+    o.method == "frequency_fit" || o.model == "linear" ||
+        throw(usage_error("--method " * o.method * " estimates a linear drift and goes with --model linear"))
     (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
         throw(usage_error("--train and --limit must be positive"))
     o.grow == 0 || isnan(o.train) && o.grow > 1 + o.fit_drift ||
@@ -508,6 +528,10 @@ function parse_args!(o::Options, args::Vector{String})
         (isnan(o.time_constant) || o.time_constant > 0) && (isnan(o.interval) || o.interval > 0) ||
             throw(usage_error("--time-constant and --interval must be positive"))
         o.integral && isnan(o.time_constant) && throw(usage_error("--integral goes with --time-constant"))
+    end
+    if o.command == "timescale"
+        0 < o.wmax <= 1 || throw(usage_error("--wmax must be above 0 and at most 1"))
+        isempty(o.steps) || o.algorithm == "at2" || throw(usage_error("--steps needs --algorithm at2"))
     end
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
@@ -526,7 +550,6 @@ function parse_args!(o::Options, args::Vector{String})
     o.spectrum && o.format != "json" &&
         throw(usage_error("--spectrum adds to the JSON output; use --format json, or `sigmatau spectrum`"))
     o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
-    isempty(o.mask) || o.format == "json" || throw(usage_error("--mask adds to the JSON output; use --format json"))
     if o.dead_time != 0
         o.devs == [:adev] || throw(usage_error("--dead-time corrects the Allan deviation alone; give --devs adev"))
         o.noise in ("WHPM", "FLPM", "WHFM", "FLFM", "RWFM") ||
@@ -572,6 +595,7 @@ function print_help(io::IO)
     print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
     print(io, "  sigmatau holdover gpsdo.dat --train 86400 --tau 3600,14400,86400 --limit 1e-6\n")
     print(io, "  sigmatau steer maser.dat --time-constant 86400 --format json\n")
+    print(io, "  sigmatau hat clocks.dat --value-cols 2,3 --devs adev,hdev\n")
     print(io, "  sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1\n")
     print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
 end
@@ -579,9 +603,6 @@ end
 function print_command_help(io::IO, cmd::String)
     if cmd == "completion"
         print(io, "Usage: sigmatau completion SHELL\n\nShells: ", join(SHELLS, ", "), "\n")
-        return
-    elseif !(cmd in COMMANDS)
-        print(io, "sigmatau: no help for \"", cmd, "\"; commands: ", join(COMMANDS, ", "), "\n")
         return
     end
     for (c, arg, h) in COMMAND_HELP
@@ -612,5 +633,7 @@ function print_command_help(io::IO, cmd::String)
         print(io, "\nDeviations: adev, mdev, hdev, mhdev\n")
     elseif cmd == "analyze" || cmd == "report"
         print(io, "\nDeviations: ", join(estimator_names(), ", "), "\n")
+    elseif cmd == "hat"
+        print(io, "\nDeviations: ", join(HAT_DEVS, ", "), "\n")
     end
 end
