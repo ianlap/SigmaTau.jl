@@ -19,8 +19,8 @@ SigmaTau.jl on it, and writes the record to `bench/results/input_25000.txt`
 and the timings to `bench/results/sigmatau_25000.json`.
 `bench_allantools.py` times allantools on that record, writes
 `bench/results/allantools_25000.json` and prints the tables of this page as
-Markdown. The two JSON files in the repository hold the timings of the
-tables below, and a run replaces them.
+Markdown. The JSON files in the repository hold the timings of the tables
+below, and a run replaces them.
 
 ```bash
 # AllanDeviations.jl, run between the two, adds its columns to the first table
@@ -121,7 +121,7 @@ repository, downloaded and not stored here), N = 556 990 at τ₀ = 1 s,
 (`ci=false, correct_bias=false`) and 14.0 s as the default call, each the
 fastest of three calls on the same machine and commit with 12 threads. The
 default call includes the ThêoBR bias ratio, the mean over the ⌊N/6 − 3⌋
-ladder of AVAR/Thêo1 terms out to half the record, with Thêo1 computed at 48
+ladder of AVAR/Thêo1 terms out to half the record, with Thêo1 computed at 47
 factors along it and interpolated between them, as well as the noise
 identification and the intervals. allantools is not timed here.
 

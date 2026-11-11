@@ -90,10 +90,11 @@ noise_residual
 [`ClockModel`](@ref) on which the [Kalman filter](kalman.md) and the
 [time scales](ensemble.md) run. White, random-walk and random-run FM drive
 the phase, the frequency and the drift, and PM noise becomes the variance
-of a reading. By default flicker FM has no state and is left out. With
-`flicker = true` flicker FM and flicker PM each become a set of Markov
-states. [The clock model](../explanation/clock_model.md) derives the
-mapping.
+of a reading. By default flicker FM has no state and is left out, and the
+model then holds less noise than the fit found. With `flicker = true`
+flicker FM and flicker PM each become a set of Markov states.
+[The clock model](../explanation/clock_model.md) derives the mapping and
+measures what the states change.
 
 ```@example spectra
 clock_model(m)

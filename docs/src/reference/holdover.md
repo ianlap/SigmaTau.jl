@@ -1,172 +1,239 @@
 # Holdover
 
-When a clock loses its reference it runs on what it learned while it had
-one. [`holdover`](@ref) measures how well that works on a phase record: it
-learns the frequency, and with `drift = true` the drift, from a training
-stretch, lets the clock run from the last reading of the stretch, and
-compares with what the record did next,
+A clock that loses its reference runs on what it learned while it had one.
+[`holdover`](@ref) measures how well that works on a phase record. It
+learns the frequency from a training stretch, and the drift as well with
+`drift = true`, lets the clock run from the last reading of the stretch,
+at time ``t``, and compares with what the record did next:
 
 ```math
-e(\tau) = x(t+\tau) - x(t) - \hat y\,\tau - \tfrac12 \hat D\,\tau^2 ,
+e(τ) = x(t + τ) - x(t) - \hat{y}\,τ - \tfrac{1}{2} \hat{D}\,τ^2 .
 ```
 
-the time interval error x(t + τ) − x(t) of ITU-T G.810, clause 4.5.14
-[ITU-G810](@cite), less the learned frequency and drift. Every sample the record allows is a
-start, the sliding test of Delporte et al.
-[delporte-2000-extrapolation](@cite), so the statistics at each holdover
-time come from the whole record: the RMS, the quantile at a chosen
-confidence, the worst case and the mean.
+That is the time interval error ``x(t + τ) - x(t)`` of
+[ITU-T G.810, clause 4.5.14](@cite ITU-G810), less the learned frequency
+and drift. Every sample that the record allows is a start, as in the
+sliding test of [Delporte et al. (2000)](@cite delporte-2000-extrapolation),
+so the statistics at each holdover time come from the whole record.
 
-```julia
-h = holdover(p; train=86400, tau=[60, 3600, 14400], limit=1e-6)
-h.rms              # RMS time error at each h.tau
-h.quantile         # the error 95 % of the starts stay within
-h.time_to_limit    # holdover time at which that reaches 1 µs
+```@example holdover
+using SigmaTau, Random
+
+# white FM of 1e-11 at 1 s that gives way to random-walk FM near 400 s
+p = noise_gen(PhaseData, 65_536, 1.0; h = Dict(0 => 2e-22, -2 => 1e-28),
+              rng = Xoshiro(1))
+h = holdover(p; train = 512, tau = [16, 64, 256, 1024], limit = 1e-9)
 ```
 
-No clock model enters. The learned frequency is the slope of a
-least-squares line through the stretch, or of a parabola at its last
-sample, and what limits it depends on the noise. For white FM `q1` and
-random-walk FM `q2` (see [`ClockModel`](@ref)) and a line over T seconds,
+The columns are the holdover time, the RMS error, the error that 95 % of
+the starts stay within, the largest error and the number of starts. With
+`limit`, the line above the table gives the holdover time at which the
+95 % column reaches that error.
+
+## The training stretch
+
+No clock model enters the test. The learned frequency is the slope of a
+least-squares line through the stretch, and what limits it depends on the
+noise. For white FM of level ``q_1`` and random-walk FM of level ``q_2``
+([Noise levels](@ref)) and a line over ``T`` seconds, the variance of the
+error is
 
 ```math
-\sigma_e^2(\tau) = q_1\tau\left(1 + \frac{6\tau}{5T}\right)
-                 + q_2\left(\frac{\tau^3}{3} + \frac{13\,T\tau^2}{35}\right).
+σ_e^2(τ) = q_1 τ \left(1 + \frac{6τ}{5T}\right)
+         + q_2 \left(\frac{τ^3}{3} + \frac{13\,T τ^2}{35}\right) .
 ```
 
-In each bracket the first term is the clock's own noise over τ and the
-second the error of the learned frequency: a longer stretch averages white
-FM down but lets the frequency walk away, so there is a best `train`,
-`√(42 q1 / 13 q2)` for this pair, and trying a few shows it on a real
-record. A mean error that grows as τ² under a line is drift the line
-cannot follow.
+In each bracket the first term is the noise of the clock over ``τ`` and
+the second the error of the learned frequency. The first terms,
+``q_1 τ`` and ``q_2 τ^3/3``, are ``τ^2 σ_y^2(τ)``, the mean square of the
+optimum prediction on each noise
+([Allan (1987), Table III](@cite allan-1987-prediction)). The second are
+the price of learning the frequency from a finite stretch: a longer one
+averages the white FM down and lets the frequency walk away, so there is a
+best `train`, ``\sqrt{42 q_1 / 13 q_2}``, about 400 s for this clock.
 
-With `anchor = false` the fit's own end value replaces the last reading,
-which is the extrapolated fit Delporte et al. analyze.
+```@example holdover
+q1, q2 = 1e-22, 2π^2 * 1e-28              # h₀/2 and 2π²h₋₂
+σe(τ, T) = sqrt(q1 * τ * (1 + 6τ / 5T) + q2 * (τ^3 / 3 + 13T * τ^2 / 35))
+T = [64, 128, 256, 512, 1024, 4096]
+# the stretch, the RMS error measured 256 s on, and the form
+[T  [holdover(p; train, tau = [256]).rms[1] for train in T]  σe.(256, T)]
+```
+
+The form is that of a line through a continuous stretch. With 64 samples
+in the stretch it holds within 0.1 % on white FM and 2 % on random-walk
+FM, and with 1024 within 0.2 % on both. One record scatters about it: over
+16 records like this one the measured RMS was within 3 % of the form in
+the median at every stretch, and from 0.82 to 1.28 times it in single
+records.
+
+A parabola, `drift = true`, also learns a frequency drift. Under a line a
+drift ``D`` leaves a mean error of ``\tfrac{1}{2} D τ (τ + T)``, which
+shows in the `mean` of the result. The parabola pays for its third
+coefficient in noise. Its RMS error over that of a line, on a clock
+without drift and with 256 samples in the stretch:
+
+| Noise | ``τ = T/16`` | ``T/4`` | ``T`` | ``4T`` |
+|:---|---:|---:|---:|---:|
+| white FM | 1.13 | 1.51 | 2.96 | 8.65 |
+| flicker FM | 1.11 | 1.31 | 2.07 | 4.81 |
+| random-walk FM | 0.82 | 0.92 | 1.27 | 2.18 |
+
+On random-walk FM the parabola predicts better than the line while the
+holdover is shorter than two fifths of the stretch.
+
+With `anchor = false` the value of the fit at ``t`` takes the place of the
+last reading, which is the extrapolated fit that Delporte et al. analyze.
+It averages the white PM of the readings down, and on a clock with
+random-walk FM it starts from the misfit of the fit.
 
 ## Predicted from a noise model
 
-The same call on a noise model predicts what the record should show: a
-[`PowerLawFit`](@ref), a [`ClockModel`](@ref), or a `Dict` of h_α such as a
-data sheet's levels.
+The same call on a noise model gives the error that a record of that noise
+should show. The model is a [`PowerLawFit`](@ref), a [`NoiseFit`](@ref), a
+[`ClockModel`](@ref), or a `Dict` of the levels ``h_α``, such as those of
+a data sheet.
 
-```julia
+```@example holdover
 fit = powerlaw_fit(p)
-m = holdover(p;   train=86400, limit=1e-6)      # measured
-q = holdover(fit; train=86400, limit=1e-6)      # predicted
-q.sigma            # against m.rms
-sqrt.(q.budget)    # what each noise type adds, one column per q.alphas
+pred = holdover(fit; train = 512, tau = [16, 64, 256, 1024], limit = 1e-9)
+```
+
+The columns after the 95 % error are the shares of the noise types, as
+standard deviations. Measured over predicted, for this record:
+
+```@example holdover
+h.rms ./ pred.sigma
 ```
 
 The error is a weighted sum of phase samples, so its variance follows
-exactly from the spectrum of the sampled record, the one
-[`powerlaw_sigma`](@ref) uses. Summing the weights once turns them into
-weights on the frequency samples, twice into weights on the frequency
-steps; that leaves white FM and random-walk FM as plain sums of squares
-and the flicker noises as a quadratic form with the kernel
-1/(1 − 4k²), the covariance of a sequence whose spectrum is sin(πfτ₀).
-The flicker noises are therefore predicted on the same footing as the
-rest, with no state model standing in for them.
+without approximation from the spectrum of the sampled record, the one
+that [`powerlaw_sigma`](@ref) integrates. The flicker noises are predicted
+on the same footing as the others, and no state model stands in for them.
+The tables of this page are such predictions. For a long stretch and
+`anchor = false` the prediction gives the closed forms of
+[Delporte et al. (2000), Eqs. (11)–(13) and (17)–(19)](@cite delporte-2000-extrapolation)
+for a parabola and for a line on white, flicker and random-walk FM, within
+0.2 % at 4096 samples in the stretch.
 
-For long stretches the prediction gives the closed forms of Delporte et
-al. (their eqs 11 to 13 for a parabola and 17 to 19 for a line, on white,
-flicker and random-walk FM, all with `anchor = false`); the tests hold it
-to them within 0.4 % at 2048 samples in the stretch, and hold the measured
-test to the prediction on all five noise types. The first term of each
-bracket above, q₁τ and q₂τ³/3, is τσ_y(τ), the error of the best possible
-predictor on that noise [allan-1987-prediction](@cite): what remains is
-the price of learning the frequency from a finite stretch.
-
-The prediction holds noise only. A drift D that a line does not follow
-adds the mean ½ D τ (τ + T).
+The prediction holds noise only. A drift that a line does not learn adds
+its mean error.
 
 ## With a Kalman filter as the predictor
 
-A record and a [`ClockModel`](@ref) together run the test with the filter in
-place of the fit: the filter passes once over the record, and from every
-sample past the first `train` seconds its estimate is carried τ ahead with
-no further readings and compared with the reading there.
+A record and a [`ClockModel`](@ref) together run the test with the
+[Kalman filter](kalman.md) in place of the fit. The filter passes once
+over the record, and from every sample past the first `train` seconds its
+estimate is carried ``τ`` ahead with no further readings and compared
+with the reading there.
 
-```julia
-m = clock_model(powerlaw_fit(p); flicker=true)
-k = holdover(p, m; limit=1e-6)
-k.rms ./ k.claimed     # near 1 when the model fits the clock
+```@example holdover
+m = clock_model(fit; flicker = true)
+k = holdover(p, m; tau = [16, 64, 256, 1024])
 ```
 
-`claimed` is the standard deviation the filter itself gives the error,
-[`holdover_error`](@ref) with the noise of the reading it is compared
-with (white PM, and the flicker PM states of a model that has them). The
-two columns side by side test the model where it matters for
-holdover: an `rms` above `claimed` says the model's noise is too low at
-that τ. With the right model the filter is the optimum predictor
-[allan-1987-prediction](@cite); a least-squares line at its best stretch
-comes within a few percent of it on white plus random-walk FM, and falls
-behind as the stretch moves away from that.
+`claimed` is the standard deviation that the filter itself gives the
+error: [`holdover_error`](@ref) with the noise of the reading it is
+compared with. The two columns side by side test the model where it
+matters for holdover. An `rms` well above `claimed` says that the model
+holds too little noise at that ``τ``.
 
-A model from a fit should keep the flicker the fit finds (`flicker=true`).
-Without its flicker FM the filter of a flicker FM clock is left with
-almost no process noise: on simulated records it claimed a tenth of the
-error it made at τ₀, against 0.97 to 1.01 times with the Markov states.
-`sigmatau holdover --kalman` and the explorer fit the model to the first
-training stretch alone and keep the flicker.
+A model made from a fit should keep the flicker FM that the fit finds,
+`clock_model(fit; flicker = true)`. Without it that noise is left out of
+the model, and in simulation the filter of a clock on its flicker floor
+claimed 1.4 to 8.7 times less than the error it made
+([What the states buy](@ref)). `sigmatau holdover --kalman` and the
+explorer fit the model to the first training stretch alone, so that the
+levels are not learned from the readings that the predictions are
+compared with, and keep the flicker.
 
-Two limits show at the longest holdover times, here a quarter of a record
-of 8192 samples with the model fitted to its first quarter. The measured
-RMS rests on few independent trials: on white FM, where the model has
-nothing to miss, `rms ./ claimed` ran from 0.3 to 1.4 over simulated
-records (10 % to 90 %), against 0.98 to 1.02 at τ₀. And a short stretch
-may not show the noise that takes over later: on white plus random-walk FM
-crossing at 390 s the ratio reached 8 where the fit of the stretch found
-too little random-walk FM. A ratio well above 1 at long τ says the stretch
-was too short to learn the slow noise.
+With the right model the filter's prediction is the conditional mean of
+the phase, which no predictor betters in mean square
+([Särkkä and Svensson (2023), §2.4 and Theorem 6.6](@cite sarkka-2023-bayesian-filtering)).
+A least-squares line comes close at its best stretch and falls behind away
+from it. For a clock of white and random-walk FM, the standard deviation
+of the line's error over that of the filter's, at holdover times from a
+tenth of the best stretch to six times it:
+
+| Stretch, over the best | 1/4 | 1/2 | 1 | 2 | 4 | 16 |
+|:---|:---|:---|:---|:---|:---|:---|
+| line over filter | 1.12 to 1.35 | 1.04 to 1.14 | 1.02 to 1.07 | 1.04 to 1.14 | 1.12 to 1.35 | 1.53 to 2.33 |
+
+The measured RMS errors of a simulated record of that clock gave the same
+ratios within 5 %.
+
+!!! note "At the longest holdover times"
+    The ratio of `rms` to `claimed` is least certain at the longest
+    holdover times. The RMS there rests on few independent trials, and
+    the claim on what one stretch shows of the slow noise. In simulation,
+    on records of 8192 samples with the first quarter as the stretch, the
+    ratio at 2048 s was, in four records out of five:
+
+    | Clock | With the true model | With the model fitted to the stretch |
+    |:---|:---|:---|
+    | white FM | 0.56 to 1.56 | 0.33 to 1.29 |
+    | white FM, random-walk FM from 390 s | 0.55 to 1.37 | 0.60 to 8.6 |
+
+    At ``τ_0`` it was 0.98 to 1.04 with the fitted model. On white FM the
+    fit found some flicker or random-walk FM in 61 of the 100 records, and
+    in the median the claim was twice that of the true model. On the
+    second clock the fit found less than 1 % of the random-walk FM in half
+    of the records, and in the median the claim was half that of the true
+    model. A ratio well above 1 at long ``τ`` says that the stretch was
+    too short to show the slow noise.
 
 ## Holdover and the time deviation
 
-The time variance is the mean square of an error of the same kind. With x̄
-the phase averaged over τ, the definitions of Mod σ\_y(τ) and σ\_x(τ)
-[ieee1139-1999-definitions](@cite) (eqs A.22 and A.23) give
+The time variance is the mean square of an error of the same kind. With
+``\bar{x}`` the phase averaged over ``τ``, the definitions of
+``\mathrm{Mod}\,σ_y(τ)`` and ``σ_x(τ)``
+([IEEE Std 1139-2022, Eqs. (A.26) and (A.29)](@cite ieee1139-2022-definitions))
+give
 
 ```math
-\sigma_x^2(\tau) = \tfrac16 \left\langle \left( \bar x(t+2\tau) - 2\,\bar x(t+\tau) + \bar x(t) \right)^2 \right\rangle ,
+σ_x^2(τ) = \tfrac{1}{6} \left\langle \left( \bar{x}(t + 2τ) - 2\,\bar{x}(t + τ)
+           + \bar{x}(t) \right)^2 \right\rangle ,
 ```
 
-and the bracket is the next τ-average less the line through the two before
-it. So √6 [`tdev`](@ref) is the RMS error of a holdover test that learns
-the frequency from two τ-averages and predicts the third. The third
-difference does the same with three averages and a parabola, drift
-learned: its mean square is 6τ² Mod σ²_H(τ), which makes that error
-√20 [`htdev`](@ref). [The Hadamard time deviation](@ref) has the steps.
+and the bracket is the next ``τ``-average less the line through the two
+before it. So ``\sqrt{6}`` [`tdev`](@ref) is the RMS error of a holdover
+test that learns the frequency from two ``τ``-averages and predicts the
+third. The third difference does the same with three averages and a
+parabola, drift learned: its mean square is
+``6τ^2\,\mathrm{Mod}\,σ_H^2(τ)``, which makes that error ``\sqrt{20}``
+[`htdev`](@ref). [The Hadamard time deviation](@ref) has the steps.
 
 `grow = k` in place of `train` gives the measured test the matching
-stretch, k times each holdover time, so that a longer holdover is learned
-over a longer stretch:
+stretch, ``k`` times each holdover time, so that a longer holdover is
+learned over a longer stretch:
 
-```julia
-g = holdover(p; grow=2)                         # a line over 2τ, then τ ahead
-g.rms ./ (sqrt(6) .* tdev(p, Int.(g.tau ./ p.tau0); ci=false).dev)
+```@example holdover
+g = holdover(p; grow = 2)                 # a line over 2τ, then τ ahead
+mτ = Int.(g.tau ./ p.tau0)
+[g.tau  g.rms ./ (sqrt(6) .* tdev(p, mτ; ci = false).dev)]
 ```
 
-The two differ in the readings: TDEV averages them over τ, the test
-compares one reading with a least-squares line. At τ = τ₀ an average is a
-reading and the two are equal. Above it the ratio depends on the noise
-type alone, from the exact variance of the last section:
+The two differ in the readings: TDEV averages them over ``τ``, and the
+test compares one reading with a least-squares line. At ``τ = τ_0`` an
+average is a reading and the two are equal. Above it the ratio depends on
+the noise type. On FM noise it settles within a few octaves, and on PM
+noise it keeps rising. At long ``τ``:
 
-| Noise | line over 2τ, over √6 TDEV | parabola over 3τ, over √20 HTDEV |
+| Noise | Line over ``2τ``, over ``\sqrt{6}`` TDEV | Parabola over ``3τ``, over ``\sqrt{20}`` HTDEV |
 |:---|:---|:---|
-| white FM | √(8/5) = 1.26 | 1.22 |
+| white FM | ``\sqrt{8/5}`` = 1.26 | 1.22 |
 | flicker FM | 1.31 | 1.31 |
-| random-walk FM | √(452/231) = 1.40 | 1.42 |
-| flicker PM | 1.3 to 1.8, rising with τ | 1.1 to 1.4 |
-| white PM | rising as √τ | rising as √τ |
+| random-walk FM | ``\sqrt{452/231}`` = 1.40 | 1.42 |
+| flicker PM | 1.3 at ``4τ_0``, 1.9 at ``4096τ_0`` | 1.1 at ``4τ_0``, 1.4 at ``4096τ_0`` |
+| white PM | ``\sqrt{τ/3τ_0}`` | ``\sqrt{τ/10τ_0}`` |
 
-On FM noise the test therefore runs parallel to the scaled time deviation,
-a quarter to two fifths above it, and √6 TDEV read as a holdover error
-understates it by that factor. On white PM the averages smooth what a
-single reading does not, and the two part. The ratios are this package's
-calculation; the tests hold the two white FM and random-walk FM values to
-their closed forms and the equality at τ₀ to rounding. With a fixed
-`train` there is no such relation, because the stretch no longer scales
-with τ.
+The record above goes from the white FM value toward that of random-walk
+FM as that noise takes over. On FM noise the test runs parallel to the
+scaled time deviation, 1.2 to 1.4 times it, so a scaled time deviation
+read as a holdover error understates the error of a least-squares fit by
+that factor. On white PM the averages smooth what a single reading does
+not, and the two part. With a fixed `train` there is no such relation,
+because the stretch no longer scales with ``τ``.
 
 ```@docs
 holdover

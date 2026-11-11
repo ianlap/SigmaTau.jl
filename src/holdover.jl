@@ -7,8 +7,10 @@
 """
     HoldoverResult
 
-Output of [`holdover`](@ref): the statistics of the time error at each
-holdover time, over every start the record allows.
+Output of [`holdover`](@ref) on a record: the statistics of the time error
+at each holdover time, over every start the record allows.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
@@ -156,65 +158,74 @@ end
 _limit(τ, q, limit) = limit === nothing ? (NaN, NaN) : (Float64(limit), _time_to_limit(τ, q, limit))
 
 """
-    holdover(data::PhaseData; train, grow, tau, drift=false, anchor=true, limit=nothing, confidence=0.95)
-        → HoldoverResult
+    holdover(data::PhaseData; train, grow, tau, drift=false, anchor=true,
+             limit=nothing, confidence=0.95) → HoldoverResult
 
-How far the clock wanders once its reference is gone, measured on the
-record itself. A line is fitted to `train` seconds of phase (a parabola
-with `drift = true`) and the clock is then left to run on the fit's
-frequency, and drift, from the last reading of the stretch:
+The time error of a clock that runs on without its reference, measured on
+the record itself at every start the record allows.
 
-    e(τ) = x(t + τ) − x(t) − ŷ τ − ½ D̂ τ²
+A line is fitted to `train` seconds of phase, or a parabola with
+`drift = true`. From the last reading of the stretch, at time ``t``, the
+clock is left to run on the fitted frequency ``\\hat{y}`` and drift
+``\\hat{D}``:
 
-the time interval error of ITU-T G.810 less what the stretch taught. The
-stretch then moves on one sample, and so on through the record, as in
-Delporte et al. (2000). The result holds the RMS, the `confidence`
-quantile, the worst case and the mean of e at each holdover time.
+```math
+e(τ) = x(t + τ) - x(t) - \\hat{y}\\,τ - \\tfrac{1}{2} \\hat{D}\\,τ^2 ,
+```
 
-`train` defaults to a quarter of the record and `tau` to the octave
-multiples of τ₀ up to `train`; both are whole multiples of τ₀. With `limit`
-(s), `time_to_limit` is the holdover time at which the quantile reaches it:
-`0` when it is passed at the first `tau` already, `Inf` when it is not
-reached at the last.
+the time interval error of
+[ITU-T G.810, clause 4.5.14](@cite ITU-G810) less what the stretch taught.
+The stretch then moves on by one sample, and so on through the record, as
+in the test of [Delporte et al. (2000)](@cite delporte-2000-extrapolation).
+The result holds the RMS, the `confidence` quantile, the largest value and
+the mean of ``e`` at each holdover time.
 
-With `grow = k` in place of `train`, the stretch is k times each holdover
-time, so a longer holdover is learned over a longer stretch; `tau` then
-defaults to the octaves that leave half the record as trials. At
-`grow = 2` (3 with `drift`) the test is the sibling of the time deviation:
-TVAR is by definition ⟨(Δ²x̄)²⟩/6, with x̄ the phase averaged over τ, so
-√6 [`tdev`](@ref) is the RMS error of extrapolating the next τ-average
-from the two before it, and √20 [`htdev`](@ref) that of the next from the
-three before it, drift included. This test compares single readings with
-a least-squares fit instead: it equals them at τ = τ₀, then runs a
-constant factor above wherever FM noise dominates (1.26 on white FM, 1.31
-on flicker FM, 1.40 on random-walk FM for a line; 1.22, 1.31 and 1.42 for
-a parabola), and parts from them on white PM, which the averages smooth
-and a single reading does not.
+With `anchor = false` the value of the fit at ``t`` takes the place of the
+reading ``x(t)``. That is the extrapolated fit of that paper: it averages
+white PM down, and on a clock with random-walk FM it starts from the misfit
+of the fit.
 
-With `anchor = false` the fit's own value at the last sample replaces the
-reading x(t): the extrapolated fit of Delporte et al., which averages
-white PM down but on a clock with random-walk FM starts from the fit's
-misfit.
-
-For a clock with white FM `q1` and random-walk FM `q2` (see
-[`ClockModel`](@ref)), a line over T seconds gives the variance
-
-    q1 τ (1 + 6τ/5T) + q2 (τ³/3 + 13 T τ²/35)
-
-the first term of each bracket the clock's own noise over τ, the second
-the error of the learned frequency. A line suits a clock without drift,
-such as caesium, and then holds better than a parabola; with drift, the
-line's mean error grows as τ².
+With `grow = k` in place of `train`, the stretch is ``k`` times each
+holdover time, so that a longer holdover is learned over a longer stretch.
+At `grow = 2`, or 3 with `drift`, the test is the counterpart of the time
+deviations: ``\\sqrt{6}`` [`tdev`](@ref) is the RMS error of extrapolating
+the next τ-average of the phase from the two before it, and ``\\sqrt{20}``
+[`htdev`](@ref) that of the next from the three before it.
+[Holdover and the time deviation](@ref) compares the three.
 
 The error includes the white PM of the readings. `NaN` samples are gaps: a
-start is skipped when gaps take more than half its training stretch, the
-reading it would be compared with or, when anchored, its last reading.
+start is skipped when gaps take more than half of its training stretch,
+the reading it would be compared with or, when anchored, its last reading.
+
+# Arguments
+
+- `data`: the phase record of the clock against its reference.
+
+# Keywords
+
+- `train`: length of the training stretch in seconds, a whole multiple of
+  τ₀; a quarter of the record by default.
+- `grow`: the stretch as a multiple of each holdover time, in place of
+  `train`; 2 or more, and 3 or more with `drift`.
+- `tau`: holdover times in seconds, rising whole multiples of τ₀. By
+  default the octave multiples of τ₀ up to `train`, and with `grow` those
+  that leave half the record as trials.
+- `drift`: fit a parabola, which learns a frequency drift. Under a line, a
+  drift ``D`` leaves a mean error that grows as ``\\tfrac{1}{2} D τ (τ + T)``
+  for a stretch of ``T`` seconds.
+- `anchor`: start each trial from the last reading of the stretch, or from
+  the value of the fit there.
+- `limit`: a time error in seconds. `time_to_limit` is then the holdover
+  time at which the quantile reaches it: `0` when the first `tau` is past
+  it already, `Inf` when the last has not reached it.
+- `confidence`: level of the quantile.
 
 # Examples
 
 ```julia
-using SigmaTau
-p = noise_gen(PhaseData, 65536, 1.0; h = Dict(0 => 2e-22, -2 => 1e-30))
+using SigmaTau, Random
+p = noise_gen(PhaseData, 65536, 1.0; h = Dict(0 => 2e-22, -2 => 1e-30),
+              rng = Xoshiro(1))
 h = holdover(p; train = 4096, limit = 1e-9)
 h.rms                 # at h.tau
 h.time_to_limit       # seconds within 1 ns, in 95 % of the trials
@@ -257,34 +268,63 @@ function holdover(data::PhaseData; train::Union{Real,Nothing}=nothing, grow::Uni
 end
 
 """
-    holdover(data::PhaseData, model::ClockModel; train, tau, limit=nothing, confidence=0.95)
-        → HoldoverResult
+    holdover(data::PhaseData, model::ClockModel; train, tau, limit=nothing,
+             confidence=0.95) → HoldoverResult
 
-The same test with a Kalman filter as the predictor. The filter for `model`
-runs once over the record ([`kalman_filter`](@ref)); at every sample past
-the first `train` seconds (a quarter of the record by default) its estimate
-is carried τ ahead with no further readings and compared with the reading
-there.
+The same test with a Kalman filter as the predictor.
 
-`claimed` is the standard deviation the filter itself gives that error,
-`√([Φ(τ) P Φ(τ)ᵀ + Q(τ)]₁₁ + R)`, [`holdover_error`](@ref) with the noise of
-the reading it is compared with; a model with flicker PM reads its Markov
-phase states along with the phase. It matches `rms` when the model fits the
-clock; an `rms` above it says the model's noise is too low. A model from
-a fit should keep the flicker the fit finds,
-`clock_model(fit; flicker = true)`: without its flicker FM the filter of a
-flicker FM clock claims a tenth of the error it makes. With the right
-model the filter is the optimum predictor (Allan 1987), so no training
-stretch makes a least-squares fit hold better, though at its best stretch
-the fit comes within a few percent.
+The filter for `model` runs once over the record
+([`kalman_filter`](@ref)). At every sample past the first `train` seconds
+its estimate is carried τ ahead without further readings and compared
+with the reading there. `claimed` is the standard deviation that the
+filter itself gives that error,
+
+```math
+σ^2(τ) = \\bigl[Φ(τ)\\,P\\,Φ(τ)^\\mathsf{T} + Q(τ)\\bigr]_{11} + R ,
+```
+
+which is [`holdover_error`](@ref) with the noise of the reading it is
+compared with, averaged over the trials. A model with flicker PM reads its
+Markov phase states along with the phase.
+
+`rms` agrees with `claimed` when the model fits the clock, and an `rms`
+above it says that the noise of the model is too low. A model made from a
+noise fit should keep the flicker FM that the fit finds,
+`clock_model(fit; flicker = true)`. Without it that noise is left out of
+the model, and in simulation the filter of a clock on its flicker floor
+claimed several times less than the error it made
+([Flicker states](@ref)).
+
+With the right model the prediction is the conditional mean of the phase,
+which no other predictor betters in mean square
+([Särkkä and Svensson (2023), §2.4 and Theorem 6.6](@cite sarkka-2023-bayesian-filtering)).
+A least-squares fit therefore holds no better at any training stretch; at
+its best stretch it comes within a few percent
+([With a Kalman filter as the predictor](@ref)).
+
+# Arguments
+
+- `data`: the phase record of the clock against its reference.
+- `model`: the [`ClockModel`](@ref) of the clock, with the `tau0` of
+  `data`.
+
+# Keywords
+
+- `train`: seconds from the start of the record that the filter is given
+  before the first trial, a whole multiple of τ₀; a quarter of the record
+  by default.
+- `tau`: holdover times in seconds, rising whole multiples of τ₀; by
+  default the octave multiples of τ₀ up to half of what the record has
+  past `train`.
+- `limit`, `confidence`: as for the least-squares test.
 
 # Examples
 
 ```julia
-using SigmaTau
+using SigmaTau, Random
 m = ClockModel(; tau0 = 1.0, q1 = 1e-22, q2 = 1e-26)
-p, _ = simulate_clock(m, 65536)
-h = holdover(p, m; limit = 1e-9)
+p, _ = simulate_clock(m, 65536; rng = Xoshiro(1))
+h = holdover(p, m; tau = [1, 10, 100, 1000])
 h.rms ./ h.claimed    # near 1
 ```
 """
@@ -363,8 +403,10 @@ end
 """
     HoldoverPrediction
 
-Output of [`holdover`](@ref) on a noise model: the time error the model
-predicts at each holdover time, and what each noise type adds to it.
+Output of [`holdover`](@ref) on a noise model: the time error that the
+model predicts at each holdover time, and what each noise type adds to it.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
@@ -415,34 +457,67 @@ function Base.show(io::IO, ::MIME"text/plain", h::HoldoverPrediction)
 end
 
 """
-    holdover(model; train, grow, tau, tau0, drift=false, anchor=true, limit=nothing, confidence=0.95)
-        → HoldoverPrediction
+    holdover(model; train, grow, tau, tau0, drift=false, anchor=true,
+             limit=nothing, confidence=0.95) → HoldoverPrediction
 
 The same test predicted from a noise model: the standard deviation of the
-error [`holdover`](@ref) measures on a record, for a clock with the
-power-law noise of `model`. `model` is a [`PowerLawFit`](@ref) or a
-[`ClockModel`](@ref) (whose `tau0` is the default), or a `Dict` of h_α
-keyed by α or noise type, as in [`powerlaw_sigma`](@ref). `train` has no
-default here, nor has `tau` with `grow`.
+error that [`holdover`](@ref) measures on a record, for a clock with the
+power-law noise of `model`.
 
 The error is a weighted sum of phase samples, so its variance follows
-exactly from the spectrum of the sampled record,
-`h_α (sin(πfτ₀)/(πτ₀))^α` up to 1/(2τ₀), flicker noise included; `budget`
-holds each noise type's share. For long stretches it gives the closed
-forms of Delporte et al. (2000). The quantile is the Gaussian one,
-1.96 σ at 95 %. A line takes α from 2 to −2; a parabola (`drift = true`)
-also −3 and −4.
+without approximation from the spectrum of the sampled record,
+``h_α\\,[\\sin(πfτ_0)/(πτ_0)]^α`` up to ``1/(2τ_0)``, flicker noise
+included. `budget` holds the share of each noise type. For the
+extrapolated fit, `anchor = false`, a long stretch gives the closed forms
+of
+[Delporte et al. (2000), Eqs. (11)–(13) and (17)–(19)](@cite delporte-2000-extrapolation).
+The quantile is the Gaussian one, 1.96 σ at 95 %.
 
-A drift D that the model does not hold adds the mean ½ D τ (τ + T) under a
-line over T seconds, and nothing under a parabola.
+A line takes ``α`` from 2 to −2, and a parabola −3 and −4 as well. A
+frequency drift ``D`` that the model does not hold adds the mean
+``\\tfrac{1}{2} D τ (τ + T)`` under a line over ``T`` seconds, and nothing
+under a parabola.
+
+# Arguments
+
+- `model`: a [`PowerLawFit`](@ref), a [`NoiseFit`](@ref), a
+  [`ClockModel`](@ref), or a `Dict` of the coefficients ``h_α`` keyed by
+  ``α`` or by noise type, as for [`powerlaw_sigma`](@ref).
+
+# Keywords
+
+- `train`: length of the training stretch in seconds, a whole multiple of
+  `tau0`. It has no default here.
+- `grow`: the stretch as a multiple of each holdover time, in place of
+  `train`; `tau` must then be given.
+- `tau`: holdover times in seconds, rising whole multiples of `tau0`; by
+  default the octave multiples of `tau0` up to `train`.
+- `tau0`: sample interval in seconds; that of a fit or a clock model by
+  default, and needed with a `Dict`.
+- `drift`, `anchor`, `limit`, `confidence`: as for the test on a record.
 
 # Examples
 
+```jldoctest
+julia> using SigmaTau
+
+julia> white = Dict(:WHFM => 2e-22);
+
+julia> h = holdover(white; tau0 = 1.0, train = 3600, tau = [900, 3600]);
+
+julia> round.(h.sigma; sigdigits = 3)     # √(q₁τ(1 + 6τ/5T)), q₁ = h₀/2
+2-element Vector{Float64}:
+ 3.42e-10
+ 8.9e-10
+```
+
+White FM and flicker FM side by side:
+
 ```julia
-using SigmaTau
-h = holdover(Dict(:WHFM => 2e-22, :FLFM => 1e-27); tau0 = 1.0, train = 3600, limit = 1e-9)
-h.sigma               # at h.tau
-sqrt.(h.budget)       # white FM and flicker FM, side by side
+h = holdover(Dict(:WHFM => 2e-22, :FLFM => 1e-27); tau0 = 1.0, train = 3600,
+             limit = 1e-9)
+sqrt.(h.budget)       # one column per noise type
+h.time_to_limit       # seconds within 1 ns at 95 %
 ```
 """
 function holdover(model; train::Union{Real,Nothing}=nothing, grow::Union{Integer,Nothing}=nothing,

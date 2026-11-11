@@ -83,7 +83,7 @@ two programs that need no Julia: the explorer as a desktop app, and the
 | Noise | `identify_noise`, `powerlaw_fit`, `noise_gen` |
 | Preparing a record | `read_data`, `fillgaps`, `remove_outliers`, `detrend`, `drift_fit` |
 | Clock model and Kalman filter | `noise_fit`, `clock_model`, `kalman_filter`, `holdover` |
-| Steering | `steering_gains`, `steer` |
+| Steering | `steering_gains`, `lqg_gains`, `steer` |
 | Time scales | `timescale`, `simulate_ensemble` |
 
 The estimators take a `PhaseData` or `FrequencyData` record, and the

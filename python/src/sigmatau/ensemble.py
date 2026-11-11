@@ -58,7 +58,7 @@ def _mat(a: Any) -> np.ndarray:
 @dataclass(frozen=True)
 class ClockModel:
     """Discrete clock model: phase, frequency and (with ``drift``) drift driven by
-    white noise (Zucca & Tavella 2005), with flicker noise as Markov states.
+    white noise (Zucca & Tavella 2015), with flicker noise as Markov states.
 
     ``R`` is the variance of a reading's noise, taken as white (s²), ``q1`` the white FM
     (s), ``q2`` the random-walk FM (1/s) and ``q3`` the random-run FM (1/s³)

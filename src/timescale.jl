@@ -1,11 +1,17 @@
-# Timescales from a clock ensemble. EWFA and AT1 average the clocks'
-# predicted phases, with equal or learned inverse-variance weights; the
-# reduced Kalman timescale runs one Kalman filter over all the clocks.
+# Time scales from a clock ensemble. EWFA, AT1 and AT2 average the clocks'
+# predicted phases, with equal or learned inverse-variance weights; the Kalman
+# scales run one filter over all the clocks, or one per clock difference.
 
 """
     TimescaleResult
 
-Output of [`timescale`](@ref).
+Output of [`timescale`](@ref): each clock against the scale at every
+sample, with its frequency, weight and prediction error.
+
+[`timescale_phase`](@ref) gives the scale itself, against the reference of
+the comparisons.
+
+# Fields
 
 $(TYPEDFIELDS)
 """
@@ -37,11 +43,31 @@ end
 """
     timescale_phase(r::TimescaleResult) → PhaseData
 
-The scale against the comparisons' reference: reference − clock i plus
-clock i − scale, the same for every clock read at that sample (`NaN` where
-none was). Its stability is the scale's,
-as far as the reference is better than it; against an ideal reference
-(as from [`simulate_ensemble`](@ref) with `reference = 0`) it is exact.
+The reference of the comparisons against the scale, as a phase record for
+the usual stability analysis.
+
+At each sample it is ``x_i - z_i`` for the first clock ``i`` read then:
+the clock against the scale, `r.x`, less the reading of the clock against
+the reference. The clocks read at one sample give the same value, and a
+sample at which none was read is `NaN`. Its deviations are those of the
+scale as far as the reference is the more stable of the two. Against the
+ideal reference of [`simulate_ensemble`](@ref) with `reference = 0` it is
+the error of the scale, with the sign reversed.
+
+# Examples
+
+Two clocks with equal weights: the scale runs midway between them.
+
+```jldoctest
+julia> using SigmaTau
+
+julia> cc = ClockComparisons([0.0 2.0; 1.0 5.0; 2.0 8.0; 3.0 11.0] .* 1e-9, 1.0);
+
+julia> u = timescale_phase(timescale(cc; algorithm = :ewfa));
+
+julia> u.x ≈ -[1.0, 3.0, 5.0, 7.0] .* 1e-9
+true
+```
 """
 function timescale_phase(r::TimescaleResult)
     c = r.comparisons.x
@@ -53,23 +79,40 @@ end
 """
     implicit_mean(r::TimescaleResult, truth) → PhaseData
 
-The implicit ensemble mean of a `:greenhall` scale against true time, in simulation.
+The implicit ensemble mean of a `:greenhall` scale against true time, for
+a simulated ensemble whose true phases are known.
 
 ```math
-\\bar x_0 = \\sum_i a_i\\,(x_i - \\hat x_i)
+\\bar{x}_0 = \\sum_i a_i\\,(x_i - \\hat{x}_i)
 ```
 
-It is the weighted mean of the corrected clocks, each clock's true phase
-``x_i`` less the filter's estimate ``\\hat x_i`` (`r.xhat`), with the weights
-``a_i`` of `r`
+It is the weighted mean of the corrected clocks: the true phase ``x_i`` of
+each clock less the filter's estimate ``\\hat{x}_i`` of it, `r.xhat`, with
+the weights ``a_i`` of the scale
 ([Greenhall (2006), Eqs. (3.8) and (3.13)](@cite greenhall-2006-measurement-noise)).
-`truth` is the states from [`simulate_ensemble`](@ref) (`truth[k, 1, i]` is
-clock `i`'s phase against true time). The mean carries no clock's reading
-noise, so its stability is the scale's own. The readout
-[`timescale_phase`](@ref) at a pivot clock adds that clock's reading noise;
-with every `R = 0` the corrected clocks of the clocks read agree and the
-readout is the mean with its sign reversed (`timescale_phase` is
-reference − scale). Only for `:greenhall`, whose weights define the mean.
+The mean carries the reading noise of no clock, so its stability is that
+of the scale itself. A measurement cannot give it: [`timescale_phase`](@ref)
+reads the scale at one clock and adds the noise of that clock's reading.
+With every `R = 0` the corrected clocks of the clocks read agree, and the
+readout is the mean with its sign reversed.
+
+# Arguments
+
+- `r`: a scale from [`timescale`](@ref) with `algorithm = :greenhall`.
+- `truth`: the true states from [`simulate_ensemble`](@ref);
+  `truth[k, 1, i]` is the phase of clock ``i`` at sample ``k``.
+
+# Examples
+
+```julia
+using SigmaTau, Random
+ms = [ClockModel(; tau0 = 1.0, R = 1e-24, q1 = q, q2 = 1e-6q)
+      for q in (1e-24, 4e-24, 1.6e-23)]
+cc, truth = simulate_ensemble(ms, 20_000; reference = 0, rng = Xoshiro(1))
+r = timescale(cc; algorithm = :greenhall, models = ms)
+adev(implicit_mean(r, truth), [1])      # the scale itself
+adev(timescale_phase(r), [1])           # read at clock 1, with its reading noise
+```
 """
 function implicit_mean(r::TimescaleResult, truth::AbstractArray{<:Real,3})
     r.algorithm === :greenhall ||
@@ -182,194 +225,316 @@ end
 _at2_steady(σα²::Float64, s::Float64) = (-s + sqrt(s^2 + 4 * σα² * s)) / 2
 
 """
-    timescale(cc::ClockComparisons; algorithm=:at1, …) → TimescaleResult
+    timescale(cc::ClockComparisons; algorithm=:at1, models=nothing, pivot=1,
+              tau_min=nothing, memory=1.728e6, bias=:paper, wmax=1.0,
+              outlier=Inf, steps=false, step_threshold=5.0, lmax=nothing,
+              step_inflate=4.0) → TimescaleResult
 
-Form a timescale from the clocks in `cc`. At each sample every clock's
-phase against the scale is predicted from the last one and its estimated
-frequency, and the scale is placed so that the weighted prediction errors
-sum to zero. A clock without a reading keeps its prediction and drops out
-of the average for that sample. A clock joins at its first reading; in
-`:ewfa`, `:at1` and `:at2` it joins again at the first reading after a gap:
-its phase is taken from the scale and it has no part in the average at that
-sample, so the scale does not step when it comes back (the papers give no
-rule for a returning clock). Each clock's frequency starts at its
-least-squares slope over the first 10 % of the record, less the mean slope.
+A time scale from the clocks of `cc`: the phase and frequency of each
+clock against the scale, and its weight, at every sample.
 
-- `:ewfa`, equal-weights frequency averaging, section 3.1 of
-  [kettering-2023-clock-ensemble](@cite): every clock weighs the same, and the
-  scale's frequency is the mean of the clocks' frequency steps over each
-  interval, so with every clock read at every sample the scale is the plain
-  mean of the clocks' phases. Gaps are not in the thesis: here a clock without
-  a reading keeps its prediction (its last frequency step carried on) and
-  drops out of the average for that sample, so the scale does not jump when a
-  clock drops out or comes back, as the plain mean would.
-- `:at1`, the NIST scale as Weiss & Weissert describe it
-  [weiss-weissert-1991-at2](@cite) (equation numbers are the paper's):
-  weights ``w_i = ε_x²/ε_i²`` (3), with ``ε_x² = (Σ 1/ε_i²)⁻¹`` (4), where
-  ``ε_i²`` is an exponential average (7) of the squared prediction error
-  estimate ``ε̂_i = |x̂_i − x_i| + K_i`` (5), the bias
-  ``K_i = 2ε_x²/√(2πε_i²)`` (6) making up for each clock being part of the
-  scale. Each clock's frequency is filtered (9) with its own constant from
-  its τ_min (10).
-- `:at2`, AT1 plus a frequency variance
-  [weiss-weissert-1991-at2](@cite): the weights are AT1's, and each clock's
-  frequency ``y`` is a Kalman filter on its average frequency ``ŷ`` (8): the
-  variance ``P`` grows by the random-walk FM impulse ``σ_β²τ`` (13), then
-  ``y ← (σ_α² y + P̂ ŷ)/(σ_α² + P̂)`` (14) and ``P ← σ_α² P̂/(σ_α² + P̂)`` (15), with the
-  white FM ``σ_α² = ε_i²/τ²`` from the prediction error, so the filter
-  adapts as ``ε_i`` does. ``σ_β²τ`` is fixed per clock from its τ_min by the
-  steady state ``m(m+1) = σ_α²/(σ_β²τ)`` (18), the starting ``σ_α²`` being the
-  starting variance, and ``P`` starts at its steady state (16). In steady state
-  this is AT1's filter (17). With `steps=true` the paper's frequency-step
-  detection (19–22) runs too, see below. Takes the AT1 keywords.
-- `:greenhall`, Greenhall's Kalman timescale
-  [greenhall-2003-jones-tryon, greenhall-2006-measurement-noise](@cite):
-  one Kalman filter over every clock's phase and frequency (and drift),
-  with one [`ClockModel`](@ref) per clock in `models`, whose `R` is the
-  clock's white PM against the reference. After each update the phase
-  part of the covariance is reduced about the implicit ensemble mean, a
-  weighted mean of the corrected clocks; this keeps the frequency
-  estimates and minimizes each step of the scale, so the scale is quiet at
-  short τ as well as long. The weights are those of that mean. A clock
-  without a reading has no weight in it and runs on its prediction
-  ([Greenhall (2006), §10](@cite greenhall-2006-measurement-noise)), so the
-  scale does not step when the clock returns. The scale's frequency against
-  the reference settles at a constant set by the start, which comes from a
-  line through each clock's first samples
-  [greenhall-2007-measurement-noise-corrections](@cite). With every `R = 0`
-  this is the reduced Kalman timescale of the 2003 paper; with `R > 0` it is
-  IEMx (2006), the same filter. Readings with noise leave the corrected clocks
-  unequal and the implicit ensemble mean unobservable, so the scale is
-  realized at clock `pivot` (default 1; the first clock read when it has no
-  reading): that clock's reading less its estimated offset from the implicit
-  mean. It carries that clock's own reading noise as white PM, so it is not
-  quieter than a weighted readout (three equal clocks: √3 noisier at short
-  τ), and pivots differ by that noise; at `R = 0` every pivot gives the same
-  scale. Models with flicker FM states bring them into the filter: at
-  `R = 0` that is the algorithm of
-  [davis-greenhall-stacey-2005-flicker](@cite) (its eqs 3.1–3.6 and 4.1),
-  and with `R > 0` the 2006 paper's reduction covers the same
-  state (its §2: states that reach the readings only through the phases).
-  The frequency reported for a clock then includes them. Flicker PM states
-  are measurement noise with memory: they enter the readings, not the phases
-  the scale is formed from, and move the weights little (strong flicker PM
-  on a clock's readings costs it about a tenth of its weight). That is
-  outside the 2006 paper, whose measurement noise is white; the reduction
-  only needs the readings to be differences of clocks, which they still are.
+| `algorithm`    | Scale                                     | Weights                       |
+|:---------------|:------------------------------------------|:------------------------------|
+| `:ewfa`        | equal-weights frequency averaging         | equal                         |
+| `:at1`         | NIST AT1                                  | from the prediction errors    |
+| `:at2`         | AT1 with a frequency variance             | as `:at1`                     |
+| `:greenhall`   | Kalman filter with covariance reduction   | of the implicit ensemble mean |
+| `:jones_tryon` | the same filter without the reduction     | not reported                  |
+| `:stein`       | a Kalman filter for each clock difference | inverse noise variances       |
 
-- `:jones_tryon`, the natural Jones–Tryon timescale
-  [jones-tryon-1983-estimating-time, greenhall-2003-jones-tryon](@cite): the same
-  filter as `:greenhall` without the covariance reduction. The scale is a
-  clock's reading less its estimated phase (JT83 §4, after eq. 4.17;
-  Greenhall 2003 eq. 10); with noiseless readings it is the same at every
-  clock. The frequency estimates are the same as `:greenhall`'s; the scale is
-  slightly noisier at short τ (the reduction is what minimizes its steps:
-  about 4% at τ = 1 on four white-FM clocks, ten seeds, with single records
-  up to 40% higher). Its weights are `NaN`: no weighted mean defines it. `R`
-  is the white PM of a clock's reading against the reference, so every
-  difference carries the reference's noise (correlated), where JT83 takes
-  independent errors in each difference. JT83's error
-  detection, step corrections and drift state are not part of it. A missing
-  reading drops its row of the measurement matrix, as in JT83, which gives no
-  rule for the scale: it steps by the clock's prediction error when a clock
-  comes back from a gap or joins late, where `:greenhall` does not.
-- `:stein`, Stein's Kalman timescale [stein-2003-demystified](@cite), the
-  KAS-2 algorithm [levine-2012-statistical-modeling, erickson-2011-symmetricom-time-scale](@cite),
-  with one [`ClockModel`](@ref) per clock in `models`. Each clock has phase,
-  frequency and aging states (no aging when no model has `q3 > 0`) driven by
-  independent shocks of variance `q1 τ`, `q2 τ` and `q3 τ`; `R` is the clock's
-  reading noise. The clocks are differenced against clock `pivot` and each
-  difference gets its own Kalman filter (Stein 2003 eq. 5.8). The pivot's own
-  shocks against the ensemble follow from the constraints that the weighted shocks
-  of all the clocks sum to zero (4.1, 7.1), one set of weights for each state, and
-  the other clocks are the pivot plus their difference estimates (6.3, 7.3). The
-  weights are inversely proportional to the variance of the matching noise
-  (Levine §XVI; a clock with no such noise takes all of it); `wmax` caps them as
-  in KAS-2. The weights returned are the phase weights. The scale is realized at
-  the pivot as for `:greenhall`. Departures from the paper: the shock variances
-  are `qτ` (no cross terms between the states, as in the paper's shock model,
-  where `:greenhall` integrates them), a clock without a reading in a step is
-  predicted from its difference state and the weights run over the clocks read
-  (less a clock at its first reading after a gap, whose innovation spans the
-  gap: it has no part in the pivot's shock, so the scale does not step at its
-  return), and the paper's independent difference filters ignore the correlation of
-  their innovations through the pivot, so the scale differs a little with the
-  pivot. With white FM clocks it matches `:greenhall` to a few percent at every τ.
-  The pivot should be read throughout: while it has no reading no difference
-  is measured, every clock runs on its prediction, and the scale steps when
-  the pivot returns.
+The first three learn what they need from the comparisons. The last three
+take one [`ClockModel`](@ref) per clock in `models`, which
+[`clock_models`](@ref) fits from `cc`. [Time scales](@ref) compares the six
+in simulation.
 
-AT1 keywords:
+# Averaging scales
 
-- `tau_min`: each clock's τ_min in seconds, a number or one per clock; the
-  paper takes it from the clock's characterization. Default: the lag of the
-  smallest ADEV of each clock, estimated from the record (the reference's
-  share taken out).
-- `memory`: the time constant of the variance average in seconds, the
-  paper's ``N_τ`` (20 days for cesium clocks, and the default; at most a
-  quarter of the record).
-- `bias`: `:paper` (default) for ``K_i`` above, or `:exact` for the squared
-  error divided by ``1 − w_i``, which is exact when the clocks' own errors
-  are independent and the weights optimal.
-- `steps` (`:at2`, default `false`): detect a clock's frequency step and rerun
-  the scale without it, in one of two modes. `:best` (`true`) replaces the
-  scale from the step on, the best estimate of a recorded history. `:real`
-  keeps every value already issued, as the paper does (it cannot change
-  history and steers forward): the rerun only corrects what follows, continuing from the
-  last issued phase, so a step costs the samples before it was caught.
-  After each sample, for windows of 2 to `lmax − 1`
-  intervals (`lmax` defaults to the clock's τ_min in samples, at least 4),
-  the clock's mean frequency against the scale over the window is compared
-  with its frequency estimate before the window (eqs 19–20). A difference
-  above `step_threshold` (default 5) standard deviations is a step at the
-  window's start: the scale is rerun from there with that clock's weight
-  zero until τ_min later and its frequency variance raised, and it comes back
-  with ``ε_i²`` multiplied by `step_inflate` (default 4, σ_α doubled), the
-  paper's "increased by a fixed amount". While it is out the clock is still
-  read against the scale, and its frequency and ``ε_i²`` go on being estimated
-  (the bias ``K_i`` is zero, as its weight is), so that it comes back with its
-  new frequency. Departures: eq 20 as printed mixes
-  units (τ_min/L is a time), so the deviation is the variance of the
-  difference, in fractional frequency squared,
-  ``P_{−L} + (σ_{α,i}² + σ_{αx}²)/s + (σ_{β,i}²τ + σ_{βx}²τ)(s+1)(2s+1)/(6s)``
-  for a window of ``s`` intervals: the estimate's variance, the white FM of
-  the mean over the window (clock and scale, eq 21), and the frequency random
-  walk over it (the mean of a random walk of impulse σ_β²τ per interval over
-  ``s`` intervals has variance σ_β²τ (s+1)(2s+1)/(6s), about s/3; scale term
-  as eq 22). The paper's ``(P_{-L}+P_{-2})/2`` is ``P_{-L}`` alone here, and
-  windows start at two intervals, my reading of its two-back start (one
-  interval would flag more small phase jumps; a large lone jump is still
-  flagged). The clock-minus-scale variance is
-  less than the sum of the two when the clock is in the scale, so the sum is
-  conservative, as in the paper. A clock is
-  not tested over windows that reach into its exclusion or behind the sample
-  it joined at. The paper's constant is 4, which gives about one false step per
-  3×10⁴ clock-samples on the noisier clocks of a step-free ensemble (53 in 24
-  runs of four clocks and 16384 samples, none at 5 or 6); a false step
-  excludes the clock for its τ_min and raises its ε², which shifts the
-  weights for good. At 5, in simulation (20 records, the step on a clock of
-  white FM 1.4×10⁻¹¹ per interval among four of 1.0 to 2.8×10⁻¹¹), a frequency
-  step of 5×10⁻¹¹ is caught after 3 to 11 samples, one of 2×10⁻¹¹ after 24 to
-  82 in 18 of the records, and one of 10⁻¹¹ in 6 of them, after 63 or more.
-  A step of up to about ten times the white FM per interval is learned while
-  the clock is out (five clocks of 10⁻¹² per interval, τ_min of 40 intervals,
-  medians of 20 records: 0.98 and 0.97 of steps of 3×10⁻¹² and 10⁻¹¹ at the
-  return). A larger one raises ``ε_i²`` at its first sample, so the filter
-  follows it slowly (0.45 of 3×10⁻¹¹ and 0.05 of 10⁻¹⁰ at the return): the
-  clock comes back with a weight near zero, is taken out once more, and holds
-  0.98 of the step at its second return. Pass `step_threshold=4` for the
-  paper's value.
-- `wmax` (default 1, no cap): the largest weight any clock may have.
-- `outlier` (default `Inf`, off): a clock whose prediction error passes
-  `outlier` ε_i is left out of that sample and of its variance; if that
-  would leave none, all stay.
+With ``x_i`` the phase of clock ``i`` against the scale, ``y_i`` its
+frequency and ``z_i`` its reading against the reference, each clock
+predicts its next phase, and the scale is placed where the weighted
+prediction errors sum to zero
+([Weiss and Weissert (1991), Eqs. (1)–(2)](@cite weiss-weissert-1991-at2),
+without the drift term of Eq. (1)):
 
-The weights are optimal for the interval of the readings: ε_i² is the
-clock's prediction error over one interval, so for τ well beyond it, and
-with clocks of different long-term behaviour, the scale can be worse than
-the best clock. With two clocks the comparisons alone cannot tell which is
-better, and the weights wander toward either; cap them with `wmax` or use
-EWFA. The frequency drift term of the paper's prediction (1) is not used.
+```math
+\\hat{x}_i = x_i(t) + y_i(t)\\,τ, \\qquad
+x_i(t + τ) = z_i(t + τ) + \\sum_j w_j \\bigl[\\hat{x}_j - z_j(t + τ)\\bigr] .
+```
+
+A clock without a reading keeps its prediction and takes no part in the
+sum. A clock joins at its first reading, and again at the first reading
+after a gap: its phase is then taken from the scale, and it takes part in
+the sum from the next sample, so the scale does not step when a clock
+returns. Where every clock read at a sample returns from a gap, they all
+take part. The sources give no procedure for a clock that returns, and
+this one is the package's own.
+[Weiss and Weissert (1991), §1](@cite weiss-weissert-1991-at2) name the
+aim: clocks are added to AT1 and removed from it with minimal impact on
+the scale.
+
+The scale starts at the mean of the first readings. Each frequency starts
+at the slope of a line through the first tenth of the clock's record, less
+the mean of those slopes.
+
+`:ewfa` gives every clock the same weight and takes ``y_i`` as the clock's
+last frequency step, ``[x_i(t) - x_i(t - τ)]/τ``
+([Kettering (2023), §3.1](@cite kettering-2023-clock-ensemble)). With every
+clock read at every sample the scale is the mean of the clocks' phases. The
+thesis does not treat missing readings. Under the rule above the scale
+keeps its phase when a clock drops out, and its frequency shifts by the
+noise of one frequency step until the clock returns.
+
+`:at1` is the NIST scale as
+[Weiss and Weissert (1991), Eqs. (3)–(10)](@cite weiss-weissert-1991-at2)
+give it. The weights are the inverse variances of the prediction errors,
+
+```math
+w_i = \\frac{ε_x^2}{ε_i^2}, \\qquad ε_x^2 = \\Bigl(\\sum_i ε_i^{-2}\\Bigr)^{-1} ,
+```
+
+where ``ε_i^2`` is an exponential average, of time constant `memory`, of
+the square of
+
+```math
+\\hat{ε}_i = |\\hat{x}_i - x_i| + K_i, \\qquad K_i = \\frac{2 ε_x^2}{\\sqrt{2π ε_i^2}} .
+```
+
+``K_i`` makes up for the clock being part of the scale it is compared
+with. ``ε_i^2`` starts at ``τ^2 σ_{y,i}^2(τ)``, estimated from the first
+tenth of the record. The frequency is an exponential average of the
+frequency steps,
+
+```math
+y_i(t + τ) = \\frac{1}{m_i + 1} \\Bigl[\\frac{x_i(t + τ) - x_i(t)}{τ} + m_i\\,y_i(t)\\Bigr],
+\\qquad m_i = \\frac{1}{2} \\Bigl[\\Bigl(\\frac{1}{3} + \\frac{4 τ_{\\min,i}^2}{3 τ^2}\\Bigr)^{1/2} - 1\\Bigr] ,
+```
+
+with ``τ_{\\min,i}`` the averaging time at which the Allan deviation of the
+clock is smallest.
+
+`:at2` keeps the weights of AT1 and estimates each frequency with a Kalman
+filter on the frequency steps ``\\bar{y}_i``
+([Weiss and Weissert (1991), Eqs. (11)–(18)](@cite weiss-weissert-1991-at2)).
+The white FM of a step has the variance ``σ_α^2 = ε_i^2/τ^2``, and the
+random walk of the frequency gains ``σ_β^2 τ`` per interval:
+
+```math
+\\hat{P} = P + σ_β^2 τ, \\qquad
+y_i \\leftarrow \\frac{σ_α^2\\,y_i + \\hat{P}\\,\\bar{y}_i}{σ_α^2 + \\hat{P}}, \\qquad
+P \\leftarrow \\frac{σ_α^2\\,\\hat{P}}{σ_α^2 + \\hat{P}} .
+```
+
+``σ_β^2 τ`` is fixed for each clock by ``m_i(m_i + 1) = σ_α^2/(σ_β^2 τ)``
+at the start, where ``P`` takes its steady state. As ``σ_α^2`` follows
+``ε_i^2``, the memory of the filter adapts to the clock; in steady state it
+is the filter of AT1.
+
+# Frequency steps
+
+With `steps = :best` or `:real`, `:at2` looks for a step in the frequency
+of each clock after every sample, after
+[Weiss and Weissert (1991), §4](@cite weiss-weissert-1991-at2). For windows
+of ``s = 2`` to `lmax` − 1 intervals that end at the current sample, the
+mean frequency of the clock over the window is compared with its estimate
+``y_i`` at the start of the window. The variance of the difference is
+taken as
+
+```math
+P_{-s} + \\frac{σ_{α,i}^2 + σ_{αx}^2}{s}
++ \\bigl(σ_{β,i}^2 τ + σ_{βx}^2 τ\\bigr) \\frac{(s + 1)(2s + 1)}{6s} ,
+```
+
+the variance of the estimate at the start of the window, the white FM of a
+mean over ``s`` intervals and the random walk of the frequency across
+them, the last two for the clock and for the scale, whose levels are
+``σ_{αx}^2 = (\\sum_i σ_{α,i}^{-2})^{-1}`` and likewise ``σ_{βx}^2``
+(Eqs. (21)–(22)). The largest difference beyond `step_threshold` standard
+deviations marks a step at the start of its window. No window starts
+before the sample at which the clock last joined the scale, or returned to
+it after a step.
+
+The scale is then run again from the step with the weight of that clock
+at zero and its ``P`` raised to ``σ_α^2``, and no further step is looked
+for until the rerun has reached the current sample. The clock stays out for
+``τ_{\\min,i}``. Meanwhile it is still read against the scale and its
+frequency and ``ε_i^2`` go on being estimated, so that it returns with its
+new frequency, and ``ε_i^2`` is multiplied by `step_inflate` at its return.
+`:best` replaces the scale from the step on, which suits a recorded
+history. `:real` keeps every value already issued and corrects only what
+follows, as a scale that runs in real time must.
+
+The test differs from the paper's in four ways. The variance above stands
+in place of that of Eq. (20). The windows end at the current sample and are
+at least two intervals long, where the average frequency of Eq. (19) ends
+one measurement earlier. The default threshold is 5 standard deviations,
+where the paper takes 4. And the paper gives neither the amount by which
+``P`` is raised nor that by which ``ε_i^2`` is. [Frequency-step detection](@ref)
+gives the steps caught and the false alarms in simulation.
+
+# Kalman scales
+
+`:greenhall` runs one Kalman filter over the states of all the clocks, with
+the transition and process noise of each model and the differences of the
+readings as measurements. After each measurement update the covariance
+``P`` is reduced in its phase part ``P_{xx}``:
+
+```math
+P \\leftarrow S P S^\\mathsf{T}, \\qquad
+S = \\begin{pmatrix} I - \\mathbf{1} a^\\mathsf{T} & 0 \\\\ 0 & I \\end{pmatrix}, \\qquad
+a = \\frac{P_{xx}^{-1} \\mathbf{1}}{\\mathbf{1}^\\mathsf{T} P_{xx}^{-1} \\mathbf{1}}
+```
+
+([Greenhall (2006), Eqs. (3.11)–(3.12) and (5.1)](@cite greenhall-2006-measurement-noise)).
+The reduction leaves the frequency estimates as they were, and the weights
+``a`` are those that minimize the variance of each step of the scale
+([Greenhall (2003), Theorems 1 and 2](@cite greenhall-2003-jones-tryon);
+Theorem B.2 of the 2006 paper with noise on the readings). With every
+`R = 0` this is the reduced Kalman scale of the 2003 paper, and with
+`R > 0` the IEMx algorithm of the 2006 paper. The weights returned are
+``a``, those of the implicit ensemble mean of [`implicit_mean`](@ref).
+
+A clock without a reading takes no part in the measurement or in ``a``,
+which is then taken over the clocks read, the procedure of
+[Greenhall (2006), §10](@cite greenhall-2006-measurement-noise). The clock
+runs on its prediction, and the scale does not step when its readings
+return.
+
+Noise on the readings leaves the corrected clocks ``x_i - \\hat{x}_i``
+unequal and their mean out of reach of a measurement (§4 of the 2006
+paper). The scale is therefore read at clock `pivot`, as the reading of
+that clock less its estimated phase, and it carries the white PM of that
+reading. With every `R = 0` all pivots give the same scale.
+
+The filter starts each clock from a line through its first 16 readings, or
+a parabola for a model with drift. An error in the starting frequencies
+stays in the scale as a constant frequency offset
+([Greenhall (2007), §2](@cite greenhall-2007-measurement-noise-corrections)).
+Models with flicker FM bring their Markov states into the filter, which at
+`R = 0` is the algorithm of
+[Davis et al. (2005), Eqs. (3.1)–(3.6) and (4.1)](@cite davis-greenhall-stacey-2005-flicker);
+the frequency returned for a clock includes them. Markov states for
+flicker PM belong to the readings and stay out of the phases that the
+scale is formed from. The papers take the noise of a reading as white, so
+that case is this package's own; see [Flicker states](@ref).
+
+`:jones_tryon` is the same filter without the reduction. Its scale is the
+one that [Jones and Tryon (1983), §4](@cite jones-tryon-1983-estimating-time)
+read from their filter, the reading of a clock less its estimated phase,
+which [Greenhall (2003), Eq. (10)](@cite greenhall-2003-jones-tryon) calls
+the raw Kalman scale and finds unstable at short averaging times. The
+frequency estimates are those of `:greenhall`. The weights are returned as
+`NaN`: those implied by the Kalman gain (Eq. (19) of the 2003 paper) are
+not worked out. Against the 1983 paper, the process noise is the
+integrated one of [`process_noise`](@ref) where the paper's is diagonal
+(its Eq. (2.2)), the differences share the reading noise of the clock they
+are taken against where the paper's errors are independent (Eq. (2.6)),
+and the paper's detection and correction of clock errors
+(Eqs. (4.6)–(4.13)) is left out. A missing reading leaves its difference
+out of the measurement, as in §2 of the paper, which gives no rule for the
+scale. When the readings of a clock return after a gap, or begin late, the
+scale takes a share of the clock's prediction error and steps.
+
+`:stein` is the scale of [Stein (2003)](@cite stein-2003-demystified), the
+KAS-2 algorithm that
+[Levine (2012), §XVI](@cite levine-2012-statistical-modeling) describes.
+The phase, the frequency and, where a model has `q3 > 0`, the aging of
+each clock take independent shocks (Eq. (3.1)), here of variance ``q_1 τ``,
+``q_2 τ`` and ``q_3 τ``. Each clock is differenced against clock `pivot`,
+and each difference has its own Kalman filter (Eq. (5.8)). The shocks of
+the pivot follow from the constraint that the weighted shocks of all the
+clocks sum to zero, with one set of weights for each state
+(Eqs. (4.1), (6.2) and (7.1)–(7.2)), and the other clocks are the pivot
+plus their differences. The weights are inversely proportional to the
+shock variances
+([Erickson et al. (2011), §3.1](@cite erickson-2011-symmetricom-time-scale))
+and capped at `wmax`; those returned are the phase weights. The scale is
+read at the pivot as for `:greenhall`. The paper runs a filter for every
+pair of clocks; with the filters of one pivot only, the scale depends on
+the pivot. Models with flicker states are refused.
+
+The paper does not treat missing readings. Here a clock without a reading
+runs on its prediction, and at its first reading after a gap it takes no
+part in the shocks of the pivot, because its innovation spans the gap; the
+scale does not step. While the pivot itself is unread no difference is
+measured, every clock runs on its prediction, and the scale steps when the
+pivot returns.
+
+!!! note "What the learned weights are optimal for"
+    `:at1` and `:at2` weigh a clock by its prediction error over one
+    sample interval. At averaging times far beyond it, among clocks whose
+    long-term noise differs in kind, the scale can be less stable than its
+    best clock. With two clocks the comparisons cannot tell which is the
+    better, and the weights stay equal when one is read against the other.
+
+!!! note "Missing readings"
+    No scale steps when a clock drops out. When the readings of a clock
+    return, `:jones_tryon` steps, and so does `:stein` when the clock is
+    its pivot: give `:stein` a pivot that is read throughout. The other
+    scales do not step. [Clocks that drop out and return](@ref) gives the
+    sizes in simulation.
+
+# Arguments
+
+- `cc`: the clocks, read against one reference.
+
+# Keywords
+
+- `algorithm`: one of the six scales of the table.
+- `models`: one [`ClockModel`](@ref) per clock, with the `tau0` of `cc`,
+  for the Kalman scales. At most one may be free of noise.
+- `pivot`: the clock at which a Kalman scale is read. Where it has no
+  reading, the first clock read stands in. `:stein` needs the first reading
+  of its pivot, and steps when the pivot returns from a gap.
+- `tau_min`: ``τ_{\\min}`` in seconds for `:at1` and `:at2`, one number or
+  one per clock. By default, the τ of the smallest Allan deviation of each
+  clock among the octaves of τ₀, estimated from the record with the share
+  of the reference removed.
+- `memory`: time constant in seconds of the average behind ``ε_i^2``. The
+  default is 20 days, the paper's value for cesium clocks; a quarter of the
+  record is used where that is shorter.
+- `bias`: `:paper` for ``K_i`` above, or `:exact` to divide the squared
+  prediction error by ``1 - w_i`` instead, the correction of
+  [Levine (2012), Eq. (27)](@cite levine-2012-statistical-modeling), which
+  is exact for independent clocks at the weights above.
+- `wmax`: the largest weight a clock may take in `:at1`, `:at2` and
+  `:stein`; the excess goes to the other clocks in proportion to their
+  weights. The NIST scale limits a weight to 0.3 (§IX and Eq. (27) of
+  that review).
+- `outlier`: in `:at1` and `:at2`, leave a clock out of a sample when its
+  prediction error is more than `outlier` times ``ε_i`` from the median
+  error of the clocks read, unless that leaves none. Off by default.
+- `steps`: `false`, `:best` (also `true`) or `:real`, for `:at2`.
+- `step_threshold`: standard deviations that a frequency difference must
+  pass to count as a step.
+- `lmax`: one more than the longest window of the step test, in samples;
+  by default ``τ_{\\min,i}/τ`` for each clock, and at least 4.
+- `step_inflate`: factor on ``ε_i^2`` when a clock returns after a step;
+  4 doubles ``σ_α``.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> cc = ClockComparisons([0.0 2.0; 1.0 5.0; 2.0 8.0; 3.0 11.0] .* 1e-9, 1.0);
+
+julia> r = timescale(cc; algorithm = :ewfa);
+
+julia> r.x[:, 1] ≈ -r.x[:, 2]      # the scale is midway between two clocks
+true
+```
+
+Three simulated clocks under the reduced Kalman scale, which weighs them
+by the inverse of their white FM:
+
+```julia
+using SigmaTau, Random
+ms = [ClockModel(; tau0 = 1.0, q1 = q, q2 = 1e-6q) for q in (1e-24, 4e-24, 1.6e-23)]
+cc, _ = simulate_ensemble(ms, 20_000; reference = 0, rng = Xoshiro(1))
+r = timescale(cc; algorithm = :greenhall, models = ms)
+r.weights[end, :]              # 0.762, 0.190, 0.048
+adev(timescale_phase(r))       # the scale against the ideal reference
+```
 """
 function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
                    tau_min::Union{Nothing,Real,AbstractVector{<:Real}}=nothing,
@@ -533,8 +698,8 @@ end
 # AT2 frequency-step test (Weiss & Weissert 1991, eqs 19-22), run on the clocks
 # kept at sample n: for each window of s = 2 … Lmax−1 intervals, the clock's mean
 # frequency against the scale over the window, y_avg = (x[n] − x[n−s])/(sτ),
-# is compared with the frequency estimate y₋ₗ before it. Eq 20 as printed
-# mixes units; this is the variance of the difference, in fractional frequency²:
+# is compared with the frequency estimate y₋ₗ before it. In place of the
+# variance of the paper's eq 20, that of the difference, in fractional frequency²:
 #   P₋ₗ + (σα,i² + σαx²)/s + (σβτ,i + σβτx)(s+1)(2s+1)/(6s)
 # the estimate's variance, the white-FM noise of the mean over s intervals (the
 # clock's and the scale's), and the random walk of the frequency over the window
