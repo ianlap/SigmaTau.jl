@@ -73,6 +73,7 @@ makedocs(
             "Spectra" => "reference/spectra.md",
             "Kalman filter" => "reference/kalman.md",
             "Holdover" => "reference/holdover.md",
+            "Steering" => "reference/steering.md",
             "Clock ensembles" => "reference/ensemble.md",
             "Noise and statistics" => "reference/statistics.md",
         ],

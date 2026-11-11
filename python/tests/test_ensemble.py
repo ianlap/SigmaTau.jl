@@ -149,6 +149,34 @@ def test_holdover_prediction_matches_julia(clock, jl):
         st.holdover({0: 1e-24}, train=200)  # no tau0
 
 
+def test_steering_matches_julia(clock, jl):
+    m, data, _ = clock
+    g = st.steering_gains(30.0, 1.0)
+    r = np.exp(-1 / 30)
+    np.testing.assert_allclose([g.phase, g.frequency, g.integral], [(1 - r) ** 2, 1 - r**2, 0])
+    p = st.steering_poles(g)
+    assert p["stable"] and p["poles"].dtype == np.complex128
+    np.testing.assert_allclose(p["time_constants"], [30.0, 30.0], rtol=1e-6)
+    k = st.steering_gains([0.9, 0.8 + 0.1j, 0.8 - 0.1j], 2.0)
+    np.testing.assert_allclose(
+        np.sort_complex(st.steering_poles(k)["poles"]), [0.8 - 0.1j, 0.8 + 0.1j, 0.9]
+    )
+    s = st.steer(data, m, g)
+    direct = jl.steer(_convert.to_jl_data(data), m._jl(), g._jl())
+    np.testing.assert_array_equal(s.steered.x, np.array(direct.steered.x))
+    np.testing.assert_array_equal(s.steers, np.array(direct.steers))
+    assert s.steered.tau0 == 1.0 and s.gains == g
+    q = st.steer(m, g, tau=[1, 16])
+    assert (q.phase, q.steers) == tuple(
+        float(v) for v in (jl.steer(m._jl(), g._jl()).phase, jl.steer(m._jl(), g._jl()).steers)
+    )
+    assert q.tau.tolist() == [1.0, 16.0] and q.adev.shape == (2,)
+    with pytest.raises(ValueError):
+        st.steer(m, st.steering_gains(30.0, 10.0))
+    with pytest.raises(TypeError):
+        st.steer(data, m)
+
+
 def test_timescale_matches_julia(jl):
     models = [st.ClockModel(1.0, q1=q) for q in (1e-24, 4e-24, 9e-24)]
     cc, truth = st.simulate_ensemble(models, 3000, reference=None, rng=2)
