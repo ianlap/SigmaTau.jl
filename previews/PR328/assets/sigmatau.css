@@ -1,0 +1,17 @@
+/* A name stays on one line: in a table always, and in running text unless
+   it is longer than the line. */
+.content :not(pre) > code {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.content :is(td, th) code {
+  display: inline;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .content :is(td, th) code {
+    white-space: normal;
+  }
+}
