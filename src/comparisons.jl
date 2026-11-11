@@ -117,9 +117,9 @@ flicker PM of its own clock's model.
 # Returns
 
 The comparisons, and the true states `truth[k, s, i]` of clock ``i`` at
-sample ``k`` against true time: phase (``s = 1``), frequency (2) and, for a
-model with drift, drift (3). The frequency includes the Markov states of a
-model with flicker FM.
+sample ``k`` against true time: phase (``s = 1``), frequency (2) and drift
+(3), which is zero for a model without drift. The frequency includes the
+Markov states of a model with flicker FM.
 
 # Examples
 

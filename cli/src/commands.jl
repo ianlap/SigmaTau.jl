@@ -649,7 +649,8 @@ function synth_ensemble(o::Options)
     return cc
 end
 
-# Each --value-cols column read like FILE, with the same options.
+# Each --value-cols column read like FILE, with the same options, less the
+# readings that --fillgaps put in: a clock has no part in the scale there.
 function read_ensemble(o::Options)
     isempty(o.value_cols) && throw(usage_error(o.command * " needs --value-cols with two or more columns, or --synth"))
     col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
@@ -657,7 +658,7 @@ function read_ensemble(o::Options)
     try
         for c in o.value_cols
             o.value_col = c
-            push!(records, load_record(o))
+            push!(records, load_record(o; unfilled=true))
         end
     catch e
         e isa CLIError && rethrow()

@@ -87,7 +87,7 @@ using Statistics
         @test findall(!iszero, t.steers) == 10:10:100_000
         @test rms(t.steered.x) ≈ rms(s.steered.x) rtol=0.02
         # Under a drift the model does not hold the phase stands off. A drift
-        # state steers it out; an integral gain centres the estimate.
+        # state steers it out; an integral gain centers the estimate.
         d = PhaseData(p.x .+ 1e-11 / 2 .* (0:99_999) .^ 2, 1.0)
         off = mean(steer(d, m, g).steered.x[1000:end])
         md = ClockModel(; tau0=1.0, R=m.R, q1=m.q1, q2=m.q2, drift=true)
