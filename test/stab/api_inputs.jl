@@ -44,6 +44,9 @@ using Test, Random, SigmaTau
         gapped = PhaseData([x[1:99]; NaN; x[101:end]], 1.0)
         @test all(f -> rejects(f, gapped, ms), (totdev, mtotdev, ttotdev, htotdev, mhtotdev,
                                                 pdev, theo1, theoh, dadev, dhdev))
+        @test_throws "ttotdev:" ttotdev(gapped, ms)               # not the mtotdev it runs on
+        @test_throws "one entry each" calculate_edf(:adev, [1.0, 2.0], [:WHFM], [1, 2], [1.0, 2.0], 1024, 1023.0)
+        @test_throws "one entry each" bias_correction([:FLFM, :WHFM], :mtot, [1], 1024)
     end
 
     @testset "identify_noise on a record" begin

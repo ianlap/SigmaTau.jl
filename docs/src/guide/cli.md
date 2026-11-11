@@ -145,10 +145,12 @@ unless `--confidence` says otherwise.
 sigmatau spectrum clock.dat --nperseg 4096             # S_y(f) and S_x(f)
 sigmatau dynamic clock.dat --dev dhdev --window 4096   # deviation in a sliding window
 sigmatau drift ocxo.dat --freq --model log             # a model of frequency drift
+sigmatau drift clock.dat --method bisection            # a linear drift by the three-point fit
 sigmatau holdover gpsdo.dat --train 86400 --limit 1e-6 # time error without a reference
 sigmatau steer maser.dat --time-constant 86400         # the record steered to its reference
 sigmatau cross a.dat --with b.dat                      # one device, two channels
 sigmatau timescale clocks.dat --value-cols 2,3,4       # a time scale from three clocks
+sigmatau hat clocks.dat --value-cols 2,3               # each clock by the three-cornered hat
 sigmatau report clock.dat --out clock.html             # an HTML report
 ```
 

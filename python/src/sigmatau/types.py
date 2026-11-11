@@ -265,13 +265,16 @@ class DriftFit:
     ``coef`` holds the parameters of the model, with t in seconds from the
     first sample: ``[a, b]`` for ``"linear"`` (a + b·t), and ``[a, b, c]`` for
     ``"quadratic"`` (a + b·t + c·t²), ``"log"`` (a·ln(1 + b·t) + c) and
-    ``"diffusion"`` (a + b·√(t + c)). ``stderr`` holds their standard errors,
-    ``rate`` the drift rate dy/dt at the end of the record, per day, and
-    ``rate_stderr`` its standard error. ``fit`` is the model at each ``t``,
-    and ``rms`` the rms of the residuals ``y - fit``.
+    ``"diffusion"`` (a + b·√(t + c)). ``method`` names the estimator.
+    ``stderr`` holds the standard errors of the parameters, ``rate`` the
+    drift rate dy/dt at the end of the record, per day, and ``rate_stderr``
+    its standard error; a standard error is ``nan`` where the method gives
+    none. ``fit`` is the model at each ``t``, and ``rms`` the rms of the
+    residuals ``y - fit``.
     """
 
     model: str
+    method: str
     coef: np.ndarray
     stderr: np.ndarray
     rate: float
@@ -282,7 +285,7 @@ class DriftFit:
     rms: float
 
     def __repr__(self) -> str:
-        return f"DriftFit({self.model}, {self.t.size} pts, rate={self.rate:.4g}/day)"
+        return f"DriftFit({self.model}, {self.method}, {self.t.size} pts, rate={self.rate:.4g}/day)"
 
 
 @dataclass(frozen=True)

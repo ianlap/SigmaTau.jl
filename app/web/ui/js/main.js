@@ -26,13 +26,13 @@ const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, hold
 const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "steering", "ensemble", "live"];
 let pageEl = document.getElementById("page");
 let page = null;
-let transient = null;      // { kind, text } shown in the status bar until the next change
+let transient = null;      // { kind, text } shown in the status bar in place of the state, until it is over
 
 const ctx = {
   run, addClock, openFile: openInto, reimport, useSynth, setRecord, addRecord, save: saveFile,
   goData: () => go("data"),
   go,
-  status: (kind, text) => { transient = { kind, text, until: kind === "error" ? Infinity : Date.now() + 8000 }; renderStatus(); },
+  status: (kind, text) => { transient = { kind, text, gen: state.run.gen ?? 0, until: Date.now() + 8000 }; renderStatus(); },
 };
 
 // ── Routing ──
@@ -374,7 +374,11 @@ function render() {
   page?.refresh();
   renderStatus();
 }
-subscribe(() => { if (transient && Date.now() > transient.until) transient = null; render(); });
+// A notice gives way to the first change after 8 s. An error stays until the inputs of the analysis change
+// or a field is edited (seen here before the field's own handler, which may put up the next error).
+const over = (t) => (t.kind === "error" ? (state.run.gen ?? 0) !== t.gen : Date.now() > t.until);
+subscribe(() => { if (transient && over(transient)) transient = null; render(); });
+document.addEventListener("change", () => { if (transient?.kind === "error") { transient = null; renderStatus(); } }, true);
 window.addEventListener("themechange", render);
 
 // ── File menu: exports, report, session ──

@@ -97,6 +97,8 @@ function load(path::AbstractString)
     occursin("StabilitySuite", first) && return _load_suite(path)
     startswith(first, "# SigmaTau phase data") && return read_phase(path)
     startswith(first, "# SigmaTau frequency data") && return read_frequency(path)
+    startswith(first, "# SigmaTau") || throw(ArgumentError(
+        "load: $path was not written by save; read a data file with read_phase, read_frequency or read_data"))
     return _load_result(path)
 end
 

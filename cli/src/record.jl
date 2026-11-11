@@ -219,4 +219,4 @@ end
 # read_data's errors in the words of the command line, where the keyword
 # `column` is --column (a name) or --value-cols (numbers).
 cli_wording(m::String) =
-    replace(replace(m, "pass column= one of" => "pass --column with one of"), "column=" => "column ")
+    replace(replace(replace(m, "pass column= one of" => "pass --column with one of"), "column=" => "column "), "pass tau0" => "pass --tau0")

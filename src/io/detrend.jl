@@ -167,8 +167,9 @@ frequency offset under white PM noise, and the least-squares parabola that
 of a frequency drift. The least-squares line through frequency data is the
 optimum estimate of a drift under white FM noise
 ([SP1065 §5.18, §5.21 and §5.22](@cite riley-2008-sp1065)). A fit is judged
-by whether its residuals are random. [`drift_fit`](@ref) reports the drift
-and fits the log and diffusion models as well.
+by whether its residuals are random. [`drift_fit`](@ref) reports the drift,
+by these fits and by other estimators, and fits the log and diffusion
+models as well; `detrend(data, fit)` removes the model of its result.
 
 Missing samples (`NaN`) stay in place and do not enter the fit, and
 `:endpoint` takes the first and last samples that are present.
