@@ -66,12 +66,17 @@ for (est, name) in ((adev, "ADEV"), (mdev, "MDEV"), (totdev, "TOTDEV"), (theo1, 
     r = est(p; noise = :WHFM)
     plot!(plt, r.tau, r.edf; label = name, marker = :circle, markersize = 3)
 end
+r = theo1(p; noise = :WHFM, correct_bias = false)
+plot!(plt, r.tau, r.edf; label = "Thêo1, bias not removed", linestyle = :dash)
 plt
 ```
 
 The record is white FM of 4096 points. At ``τ = 1024`` s, a quarter of the
 record, the Allan deviation has 4 degrees of freedom and the total
-deviation 6. Thêo1 has 19 at 768 s and 8 at 1536 s.
+deviation 6. Thêo1 has 19 at 768 s and 8 at 1536 s before its bias is
+removed, and 8 and 3 as [`theo1`](@ref) returns it: the ratio that removes
+the bias is an estimate too
+([How well the intervals hold](@ref) has the model).
 
 [`calculate_edf`](@ref) holds the models:
 
@@ -159,24 +164,32 @@ with ``c`` the relative scatter of ``R``, ``ν`` the EDF of Thêo1 and ``ρ``
 the correlation of the two on the log scale,
 
 ```math
-s_R^2 = \ln(1 + c^2), \qquad s_T^2 = \ln(1 + 2/ν), \qquad
+s_R^2 = \ln\bigl(1 + c^2\,[1 + (N_0/N)^{3/2}]\bigr), \qquad
+s_T^2 = \ln(1 + 2/ν), \qquad
 \mathrm{EDF} = \frac{2}{\exp(s_R^2 + s_T^2 + 2ρ\,s_R s_T) - 1} .
 ```
 
-``c`` and ``ρ`` are measured in simulation for each of the three noise
-types and each ratio (`tools/theobr_edf.jl`): ``c`` is 0.30, 0.28 and 0.26
-by default and 0.105, 0.088 and 0.074 with `correct_bias = :published`,
-somewhat more below 256 points, and ``ρ`` rises from zero at short
-averaging times to 0.77 to 0.89 near half the record. At short averaging
-times the EDF is then near ``2/c^2``, 22 to 30, whatever Thêo1 has, and
-from a fifth of the record it is 0.4 to 0.8 of that of Thêo1. The model is
-this package's own. It sits up to about 20 % below the EDF measured on
-simulated white and flicker FM, and down to half of it on random-walk FM
-beyond ``0.3\,T``, so it errs toward a wide interval. The share for `theo1` in
-the table is with this EDF; with `correct_bias = :published` it was 63 to
-82 % with the automatic label, and at the two ThêoBR points of an octave
-[`theoh`](@ref) run 68 to 85 %. The deviations are those of the published
-ThêoBR.
+``c``, ``N_0`` and ``ρ`` are measured in simulation for each of the three
+noise types and each ratio (`tools/theobr_edf.jl`). On a long record ``c``
+is 0.30, 0.28 and 0.26 by default and 0.105, 0.088 and 0.074 with
+`correct_bias = :published`; the term in ``N_0``, 55 and 225 points, makes
+the scatter 5 % and 35 % larger on 256 points and 1 % and 5 % on 1024.
+``ρ`` rises from zero at short averaging times to 0.77 to 0.89 near half
+the record. On a record of 4096 points or more the EDF at short averaging
+times is then near ``2/c^2``, 22 to 30, whatever Thêo1 has, and from a
+fifth of the record it is 0.4 to 0.6 of that of Thêo1 (0.5 to 0.9 with
+`correct_bias = :published`).
+
+The model is this package's own. By default it is within 25 % of the EDF
+measured on simulated white and flicker FM, mostly below it, and down to
+half of it on random-walk FM beyond ``0.3\,T``, so it errs toward a wide
+interval. With `correct_bias = :published` it is up to 35 % below at short
+averaging times and, on flicker FM from a fifth of the record, 10 to 45 %
+above, where the EDF is under 7 and the interval still held the true value
+in 69 to 78 % of the records. The share for `theo1` in the table is with
+this EDF; with `correct_bias = :published` it was 63 to 82 % with the
+automatic label, and at the two ThêoBR points of an octave [`theoh`](@ref)
+run 68 to 85 %. The deviations are those of the published ThêoBR.
 
 On random-walk FM the published EDF formula of Thêo1 falls below 1 beyond
 ``0.42\,T`` and below zero beyond ``0.63\,T``. No quadratic statistic has

@@ -447,26 +447,30 @@ factor `m` times the ratio of `_theobr_ratio`, on `N` phase samples. The
 published EDF is that of Thêo1 alone (Howe (2006), §6; SP1065 §5.4.4), which
 takes the ratio as exact. The ratio is an estimate from the same record: on
 FM noise it scatters by 26 to 30 % with the ladder to T/2 and by 7 to 11 %
-with Howe's (`howe=true`), at any record length, and at long `τ` it rises
-and falls with Thêo1 itself.
+with Howe's (`howe=true`) from 1024 samples, by 27 to 32 % and 10 to 14 % on
+256, and at long `τ` it rises and falls with Thêo1 itself.
 
 The model takes the ratio ``R`` and Thêo1 as jointly lognormal. With ``c``
-the relative scatter of ``R``, ``ν`` the EDF of Thêo1 and ``ρ`` their
-correlation on the log scale,
+the relative scatter of ``R`` on a long record, ``N_0`` the record length
+below which it grows (55 samples, 225 with `howe`), ``ν`` the EDF of Thêo1
+and ``ρ`` their correlation on the log scale,
 
 ```math
-s_R^2 = \\ln(1 + c^2), \\quad s_T^2 = \\ln(1 + 2/ν), \\quad
+s_R^2 = \\ln\\bigl(1 + c^2\\,[1 + (N_0/N)^{3/2}]\\bigr), \\quad
+s_T^2 = \\ln(1 + 2/ν), \\quad
 \\mathrm{EDF} = \\frac{2}{\\exp(s_R^2 + s_T^2 + 2ρ\\,s_R s_T) - 1} .
 ```
 
-``c`` and ``ρ`` were measured in simulation for white, flicker and
+``c``, ``N_0`` and ``ρ`` were measured in simulation for white, flicker and
 random-walk FM (`_THEOBR_SCATTER`), with ``ρ`` interpolated in ``τ/T``.
-Against the EDF measured on simulated records of 64 to 4096 samples the
-model is within 20 % on white and flicker FM, mostly below it, and down to
-half of it on random-walk FM beyond 0.3 T, where the published EDF of Thêo1
-that it starts from is as low. On white and flicker PM the result is the EDF
-of Thêo1: there the error of ThêoBR is the bias that one ratio leaves, which
-no EDF describes.
+Against the EDF measured on simulated records of 128 to 4096 samples the
+model is, with the ladder to T/2, within 25 % on white and flicker FM,
+mostly below it, and down to half of it on random-walk FM beyond 0.3 T,
+where the published EDF of Thêo1 that it starts from is as low. With Howe's
+ladder it is up to 35 % below at short `τ` and, on flicker FM from 0.2 T,
+10 to 45 % above. On white and flicker PM the result is the EDF of Thêo1:
+there the error of ThêoBR is the bias that one ratio leaves, which no EDF
+describes.
 """
 function _theobr_edf(alpha::Int, m::Int, N::Int; howe::Bool=false)
     ν = _theo1_edf(alpha, m, N)

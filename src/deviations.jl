@@ -989,15 +989,16 @@ the factor 0.75, which the white-FM bias of 1 in its Table 2 requires.
     [SP1065 §5.4.4](@cite riley-2008-sp1065) give ThêoBR the EDF of Thêo1,
     which takes the ratio as exact. The ratio is estimated from the same
     record. On FM noise of one type it scattered by 26 to 30 % in simulation
-    (7 to 11 % under `correct_bias=:published`), at every record length from
-    128 to 8192 samples, and one draw multiplies every ``τ``. With the
-    published EDF the 68.3 % interval then held the true value in 15 to 31 %
-    of records at ``τ ≤ 12τ_0`` and in 51 to 62 % beyond a fifth of the
-    record (``N = 1024``). This package therefore models the ratio and Thêo1
-    as jointly lognormal, with the scatter of the ratio and its correlation
-    with Thêo1 measured in simulation; the same intervals then held the true
-    value in 63 to 86 % of records, the higher figures at long ``τ``, where
-    a χ² interval is wider than the distribution of Thêo1
+    (7 to 11 % under `correct_bias=:published`) on records of 1024 to 8192
+    samples, by 27 to 32 % (10 to 14 %) on 256 samples, and one draw
+    multiplies every ``τ``. With the published EDF the 68.3 % interval then
+    held the true value in 15 to 31 % of records at ``τ ≤ 12τ_0`` and in 51
+    to 62 % beyond a fifth of the record (``N = 1024``). This package
+    therefore models the ratio and Thêo1 as jointly lognormal, with the
+    scatter of the ratio and its correlation with Thêo1 measured in
+    simulation; the same intervals then held the true value in 63 to 86 %
+    of records, the higher figures at long ``τ``, where a χ² interval is
+    wider than the distribution of Thêo1
     ([Howe (2006), §6](@cite howe-2006-theoh)). The model is this package's
     own. It does not cover white and flicker PM, where the error is the bias
     that one ratio leaves and the interval can miss the true value at most
