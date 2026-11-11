@@ -10,13 +10,13 @@ let nextRun = 1;
 // One analysis through the desktop shell; aborting stops the core process.
 async function invokeAnalyze(body, signal) {
   const id = nextRun++;
-  const abortError = () => new DOMException("The analysis was cancelled.", "AbortError");
+  const abortError = () => new DOMException("The analysis was canceled.", "AbortError");
   if (signal?.aborted) throw abortError();
-  const cancelled = new Promise((_, reject) => signal?.addEventListener("abort", () => {
+  const canceled = new Promise((_, reject) => signal?.addEventListener("abort", () => {
     tauri.invoke("cancel", { id }).catch(() => {});
     reject(abortError());
   }, { once: true }));
-  const out = await Promise.race([tauri.invoke("analyze", { id, req: body }), cancelled]);
+  const out = await Promise.race([tauri.invoke("analyze", { id, req: body }), canceled]);
   if (out.error) throw new Error(out.error);
   return out;
 }
@@ -57,8 +57,6 @@ async function post(body, signal) {
   return out;
 }
 
-// Command-line flags that describe one clock's record. A file travels
-// separately (the shell saves it and passes its path as FILE).
 // The flags that make a simulated record (or ensemble) of `src`: a
 // "--noise-model R:q1:q2:q3" per clock when it was made on the Synthesis page.
 export function synthArgs(src) {
@@ -68,6 +66,8 @@ export function synthArgs(src) {
   return a;
 }
 
+// Command-line flags that describe one clock's record. A file travels
+// separately (the shell saves it and passes its path as FILE).
 function recordArgs(clock) {
   const synth = clock.source.type === "synth";
   const a = synth ? synthArgs(clock.source) : [];
@@ -111,7 +111,7 @@ function request(clock, command, extra) {
   return { args: [command, ...recordArgs(clock), ...extra].map(String), file };
 }
 
-// The core answers in its versioned JSON (schema_version 1, see cli/README.md).
+// The core answers in its versioned JSON (schema_version 1, see docs/src/reference/cli.md).
 // The pages read columns, so it is reshaped once, here; `doc` keeps the
 // original for the JSON export.
 function view(doc) {
@@ -142,7 +142,12 @@ function view(doc) {
   return { record, results, spectrum: doc.spectrum, powerlaw: doc.powerlaw, masks: doc.masks ?? [], dynamic, drift: doc.drift, elapsed_ms: doc.elapsed_ms, doc };
 }
 
-const run = async (body, signal) => view(await post(body, signal));
+// For a record with gaps the core names the command line's remedy. A clock's
+// request carries the preparation of the Data page, where the remedy is a box.
+const GAP_REMEDY = /fill them with (--fillgaps|fillgaps first)$/;
+const run = (body, signal) => post(body, signal).then(view, (err) => {
+  throw GAP_REMEDY.test(err.message) ? new Error(err.message.replace(GAP_REMEDY, "turn on Fill gaps by reflection on the Data page")) : err;
+});
 
 // Read a record and its check (samples, span, gaps, outliers, drift),
 // without running any estimator.
@@ -292,7 +297,7 @@ export function liveStop() {
     : fetch("api/live/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
 }
 
-// The σ(τ) that noise models predict (MDEV and ADEV per model), closed form.
+// The σ(τ) that noise models predict (MDEV, ADEV and MHDEV per model), closed form.
 export async function modelPreview({ n, tau0, models }, signal) {
   const args = ["model", "--synth", n, "--tau0", tau0, ...models.flatMap((m) => ["--noise-model", m.join(":")]), "--format", "json"];
   const doc = await post({ args: args.map(String), file: null }, signal);

@@ -76,7 +76,9 @@ jobs:
         env:
           SIGMATAU_EXE: ${{ github.workspace }}/cli/build/bin/sigmatau
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish   # the completion scripts run in each shell
+          # the completion tests need zsh and fish: from Homebrew (preinstalled on the runner), as the Ubuntu mirrors have been unreachable for long stretches
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install zsh fish
           julia --project=cli cli/test/runtests.jl
 
       - name: serve.py checks
@@ -90,7 +92,7 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/pw/node_modules
         run: |
           npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright@1.63.0
-          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install chromium
           node --test app/web/test/explorer.e2e.mjs
 
       - name: Upload the juliac log on failure

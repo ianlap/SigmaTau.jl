@@ -22,11 +22,11 @@ fit = powerlaw_fit(p)
 ```
 
 ```@example kalman
-m = clock_model(fit; flicker = true)
+m = clock_model(fit)
 ```
 
-`flicker = true` keeps the flicker FM that the fit found, as Markov states
-over the averaging times at which it matters ([Flicker states](@ref)).
+The model keeps the flicker FM that the fit found, as Markov states over
+the averaging times at which it matters ([Flicker states](@ref)).
 
 ```@example kalman
 kf = kalman_filter(p, m)
@@ -61,12 +61,12 @@ innovation_check(kf)
 
 `nis` is the mean square of the innovations over their expected variance,
 and `acf` is their lag-1 autocorrelation. Here both are inside their
-intervals. The default model of the same fit leaves the flicker FM out and
-fails:
+intervals. With `flicker = false` the model of the same fit leaves the
+flicker FM out and fails:
 
 ```@example kalman
-kf0 = kalman_filter(p, clock_model(fit))
-innovation_check(kf0)
+m0 = clock_model(fit; flicker = false)
+innovation_check(kalman_filter(p, m0))
 ```
 
 An `nis` above its interval says that the model has too little noise. On a
@@ -78,7 +78,7 @@ the record and returns the RMS error beside the claim:
 
 ```@example kalman
 tau = [10, 100, 1000]
-a, b = holdover(p, m; tau), holdover(p, clock_model(fit); tau)
+a, b = holdover(p, m; tau), holdover(p, m0; tau)
 [a.rms ./ a.claimed  b.rms ./ b.claimed]    # with the states, and without
 ```
 

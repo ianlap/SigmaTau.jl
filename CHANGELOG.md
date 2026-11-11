@@ -448,6 +448,12 @@ Clock models, the Kalman filter and timescales.
   `Tau:` lines. `read_data(path; keep_zeros=true)`, CLI `--keep-zeros` and
   the explorer's *Keep zeros as readings* box keep them as readings for
   quantized records.
+- `clock_model` keeps the flicker FM and flicker PM of a fit as Markov
+  states by default (`flicker = true`). `clock_model(powerlaw_fit(p))` used
+  to leave the fitted flicker FM out, and its filter then claimed 1.2 to 8
+  times less error than it made on a clock with a flicker floor.
+  `flicker = false` gives the former model, which the `:stein` time scale
+  needs.
 
 ### Removed
 
@@ -651,6 +657,11 @@ Clock models, the Kalman filter and timescales.
   `:jones_tryon` start it from a clock already in the scale, without a step.
   A clock first read while no other clock is read no longer turns the
   `:ewfa`, `:at1` and `:at2` scales to NaN.
+- `timescale` with `:greenhall` or `:jones_tryon` and models with a drift
+  state no longer carries the drift of a parabola through the first 16
+  readings as a constant drift of the scale. The drift starts at zero (Jones
+  and Tryon 1983, Fig. 1), with a variance wide enough that the drifts of
+  the clocks against each other are still learned.
 - `read_phase` and `read_frequency` take the unit of a time column from its
   name in the line that `header` skips, as `read_data` does, so a column
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
@@ -680,6 +691,17 @@ Clock models, the Kalman filter and timescales.
   in it with "failed (CompositeException)", because a program that 1.12
   trims cannot start a task. The build now stops on 1.12, and an error
   inside a threaded loop is reported by what the loop threw.
+- Explorer: every page fits its window from 960 px (the ninth tab had
+  squeezed the top bar, and with several clocks the Dynamic maps lay over
+  each other); an error on a record with gaps names the
+  *Fill gaps by reflection* box in place of a command-line flag, and the
+  Ensemble page says which scales a file with missing samples can form;
+  labels that said something untrue are corrected (quadratic drift removal
+  and SP1065, the log drift model, the slow estimators, EWFA's largest
+  weight, what a run updates); the interface spells as the manual does.
+- Python: `clock_model` of a `PowerLawFit` uses Julia's default `tau_max`,
+  the longest τ of a fit of a deviation. It had used 10⁶ τ₀, which with the
+  flicker states on left the model with Markov states far past the record.
 
 ### Security
 

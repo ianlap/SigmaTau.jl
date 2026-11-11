@@ -30,9 +30,9 @@ export const state = {
   compareTau: null,        // τ of the "Compare at τ" table
   // Spectrum page (display settings, applied without a run)
   spec: { carrier: 10e6, carrierText: "10e6", phase: "L", avg: "log", guides: true },
-  // Dynamic page: estimator, window = record / frac, map or 3D waterfall
-  // Ensemble page: timescale settings and the last result ({ key, ts })
+  // Ensemble page: time scale settings and the last result ({ key, ts })
   ens: { algorithm: "at1", wmax: 1, pivot: 1, steps: "", flicker: false, result: null, error: null },
+  // Dynamic page: estimator, window = record / frac, map or 3D waterfall
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
   // Holdover page: training stretch = record / frac, line or parabola (drift), start from the last
   // reading (anchor), the time error limit in seconds (null = none) and the share of trials within it
@@ -64,7 +64,7 @@ export function newClock(fields = {}) {
   while (used.has(slot)) slot++;
   return {
     id: nextId++,
-    slot,                    // colour index: --s1 … --s8, then repeats
+    slot,                    // color index: --s1 … --s8, then repeats
     name: "Clock",
     visible: true,
     source: { type: "synth", n: 16384, seed: 42, tau0: 1 },
@@ -114,7 +114,7 @@ export function referenceColFor(c) {
   return r.value_col;
 }
 
-// Clocks that get analysed and plotted: not hidden, not the reference.
+// Clocks that get analyzed and plotted: not hidden, not the reference.
 export const visibleClocks = () => state.clocks.filter((c) => c.visible && !isReference(c));
 export const multi = () => state.clocks.length > 1;
 export const activeClock = () =>

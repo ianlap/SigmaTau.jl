@@ -225,7 +225,7 @@ async function setRecord(c, fields) {
 }
 
 // A record made on another page (the Live page's readings): a new clock,
-// analysed straight away.
+// analyzed straight away.
 async function addRecord(fields) {
   let c;
   update((s) => { c = newClock(fields); s.clocks.push(c); s.activeClock = c.id; s.dataMode = "file"; });
@@ -283,8 +283,8 @@ let runGen = 0;      // the input generation the run in flight started from
 function cancelRun() {
   if (state.run.state !== "running") return;
   runCtl?.abort();
-  update((s) => { s.run.state = "idle"; s.run.note = "Run cancelled"; });
-  ctx.status("warn", "Run cancelled. The results are from before it.");
+  update((s) => { s.run.state = "idle"; s.run.note = "Run canceled"; });
+  ctx.status("warn", "Run canceled. The results are from before it.");
 }
 
 // Run analysis (the button, F5). While a run is going it cancels it, or, when
@@ -313,7 +313,7 @@ async function run() {
       update(() => { c.result = null; c.error = err.message; });
     }
   }));
-  if (ctl.signal.aborted) return;       // cancelled or replaced: whoever did that has the state
+  if (ctl.signal.aborted) return;       // canceled or replaced: whoever did that has the state
   const s = (performance.now() - t0) / 1000;
   const nd = state.devs.length, ok = clocks.length - failed;
   const r = clocks[0].range, n = r ? Math.floor((r[1] - r[0]) / clocks[0].record.tau0) + 1 : clocks[0].record.n;
@@ -338,12 +338,12 @@ function renderChip() {
   if (withRec.length === 1 && !multi()) {
     const c = withRec[0], r = c.record;
     const facts = [`${thousands(r.n)} samples`, `τ<sub>0</sub> ${num(r.tau0, 4)} s`, duration(r.n * r.tau0),
-      fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analysed yet"];
+      fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
     text.innerHTML = `${h(c.source.type === "file" ? c.source.name : "synthetic record")} <span class="facts">${facts.join(" · ")}</span>`;
     return;
   }
   const n = withRec.reduce((a, c) => a + c.record.n, 0);
-  text.innerHTML = `${state.clocks.length} clocks <span class="facts">${thousands(n)} samples in all${fresh ? "" : " · not analysed yet"}</span>`;
+  text.innerHTML = `${state.clocks.length} clocks <span class="facts">${thousands(n)} samples in all${fresh ? "" : " · not analyzed yet"}</span>`;
 }
 
 function renderStatus() {
@@ -356,12 +356,12 @@ function renderStatus() {
   else if (!state.core.ok) [kind, msg] = ["error", "No analysis core. Start the explorer with serve.py."];
   else if (state.run.state === "running") [kind, msg] = ["busy", `Running ${state.devs.map(label).join(", ")}…`];
   else if (state.clocks.some((c) => c.loading)) [kind, msg] = ["busy", "Reading the record…"];
-  else if (!anyRecord) [kind, msg] = ["", "No record. Open a file on the Data page."];
+  else if (!anyRecord) [kind, msg] = state.clocks.some((c) => c.error) ? ["error", "No record could be read. The Data page says why."] : ["", "No record. Open a file on the Data page."];
   else if (state.run.stale) [kind, msg] = ["warn", state.run.stale === "record" ? "New record" : "Inputs changed"];
   else [kind, msg] = ["good", "Up to date"];
   dot.className = `status-dot ${kind}`;
   text.textContent = msg;
-  hintEl.textContent = kind === "warn" ? "Run analysis (F5) to update Stability, Spectrum and Dynamic" : (page?.hint() ?? "");
+  hintEl.textContent = kind === "warn" && !transient ? "Run analysis (F5) to update Stability and Spectrum" : (page?.hint() ?? "");
 }
 
 function render() {
@@ -396,7 +396,7 @@ exportMenu.addEventListener("click", async (e) => {
   const kind = e.target.closest("[data-export]")?.dataset.export;
   if (!kind) return;
   exportMenu.hidden = true;
-  const analysed = state.clocks.filter((c) => c.result);
+  const analyzed = state.clocks.filter((c) => c.result);
   if (kind === "save-session") {
     if (!state.clocks.length) return ctx.status("warn", "There is nothing to save yet.");
     return saveFile("sigmatau-session.json", new Blob([sessionText()], { type: "application/json" }));
@@ -417,14 +417,14 @@ exportMenu.addEventListener("click", async (e) => {
     const blob = await plotImage(kind);
     if (!blob) return ctx.status("warn", "Nothing to export on this page yet.");
     saveFile(`sigmatau-${state.page}.${kind}`, blob);
-  } else if (!analysed.length) {
+  } else if (!analyzed.length) {
     ctx.status("warn", "Run the analysis first; there are no results to export.");
   } else if (kind === "json") {
-    const out = analysed.map((c) => ({ clock: c.name, ...c.result.doc }));
-    saveFile("sigmatau-results.json", new Blob([JSON.stringify(analysed.length === 1 ? out[0] : out, null, 2)], { type: "application/json" }));
+    const out = analyzed.map((c) => ({ clock: c.name, ...c.result.doc }));
+    saveFile("sigmatau-results.json", new Blob([JSON.stringify(analyzed.length === 1 ? out[0] : out, null, 2)], { type: "application/json" }));
   } else {
     const lines = ["clock\testimator\ttau_s\tsigma\tci_lo\tci_hi\tedf\tnoise\tneff"];
-    for (const c of analysed) for (const r of c.result.results) r.tau.forEach((t, i) => {
+    for (const c of analyzed) for (const r of c.result.results) r.tau.forEach((t, i) => {
       lines.push([c.name, r.dev, t, r.sigma[i], r.ci_lo[i] ?? "", r.ci_hi[i] ?? "", r.edf[i] ?? "", r.noise[i] ?? "", r.neff[i] ?? ""].join("\t"));
     });
     saveFile("sigmatau-results.tsv", new Blob([lines.join("\n") + "\n"], { type: "text/tab-separated-values" }));

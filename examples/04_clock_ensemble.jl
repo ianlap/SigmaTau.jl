@@ -45,11 +45,11 @@ plot!(r.tau, powerlaw_sigma(fit, r.tau; deviation = :mhdev); label = "fit",
 # [`clock_model`](@ref) turns the levels into the noise of a state model:
 # white PM becomes the variance `R` of a reading, and white and random-walk
 # FM become the levels `q1` and `q2` that drive the phase and the frequency
-# ([Noise levels](@ref)). Flicker noise has no finite state. With
-# `flicker = true` the flicker FM is kept as a few Markov processes that
-# add to the frequency ([Flicker states](@ref)); by default it is left out.
+# ([Noise levels](@ref)). Flicker noise has no finite state. The flicker
+# FM is kept as a few Markov processes that add to the frequency
+# ([Flicker states](@ref)); `flicker = false` leaves it out.
 
-model = clock_model(fit; flicker = true)
+model = clock_model(fit)
 
 # The fit also finds a little flicker PM, which this clock does not have.
 # It never holds a quarter of the Allan variance, so the model gives it no
@@ -98,10 +98,10 @@ h = holdover(p, model; tau, limit = 1e-9)
 
 # `rms` is the error made and `claimed` the standard deviation that the
 # filter itself gives it. The columns are the holdover time and the ratio
-# of `rms` to `claimed`, for this model and for the default one, which
-# leaves the flicker FM out:
+# of `rms` to `claimed`, for this model and for the one that leaves the
+# flicker FM out:
 
-h0 = holdover(p, clock_model(fit); tau)
+h0 = holdover(p, clock_model(fit; flicker = false); tau)
 [tau  h.rms ./ h.claimed  h0.rms ./ h0.claimed]
 
 # With the states the errors are those claimed, within 4 %. Without them

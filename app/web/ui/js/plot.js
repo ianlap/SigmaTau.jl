@@ -1,5 +1,5 @@
-// Plotly loading, the series colours and line styles, and the shared look of
-// every plot. Colours come from theme.css.
+// Plotly loading, the series colors and line styles, and the shared look of
+// every plot. Colors come from theme.css.
 
 const PLOTLY_CDN = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js";
 
@@ -26,7 +26,7 @@ export async function loadPlotly() {
 
 export const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-// fn's result with the light theme's colours, for figures on white paper.
+// fn's result with the light theme's colors, for figures on white paper.
 // Synchronous, so the page never paints in between.
 export function inLightTheme(fn) {
   const root = document.documentElement, theme = root.dataset.theme;

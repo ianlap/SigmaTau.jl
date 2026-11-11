@@ -76,4 +76,4 @@ averaging times rest on few terms and move the most.
 | Button | Action |
 |:-------|:-------|
 | **Save readings** | Saves the readings as a text file, one per line, under a line that states the record type, the sample interval and the source. Counter readings are saved as fractional frequency |
-| **Analyse readings** | Loads the readings as a new clock, opens the [Stability](stability.md) page and runs the analysis, with confidence intervals, noise types and every estimator of the list. It needs a stopped measurement of 16 readings or more |
+| **Analyze readings** | Loads the readings as a new clock, opens the [Stability](stability.md) page and runs the analysis, with confidence intervals, noise types and every estimator of the list. It needs a stopped measurement of 16 readings or more |

@@ -27,6 +27,13 @@ The scale is formed from the columns as the
 the gap filling, the outlier removal and the analysis range of the Data
 page do not apply here.
 
+Where phase columns have missing samples, AT1, AT2 and EWFA form the scale
+without the clock at those samples
+([Clocks that drop out and return](../reference/ensemble.md#Clocks-that-drop-out-and-return)).
+Greenhall, Jones–Tryon and Stein first fit a model to each clock, which
+needs a file without missing samples. Frequency columns with missing
+samples cannot be read.
+
 ## Settings
 
 | Setting | Algorithms | Effect |
@@ -61,9 +68,6 @@ averaging times at which each matters. The levels are those that the fit
 finds, and on a short record it can find flicker in a clock that has none:
 of four simulated clocks of white and random-walk FM, 2048 samples long,
 one got two flicker FM states.
-
-The **Largest weight** field is also shown for EWFA, whose equal weights it
-does not change.
 
 The page forms the scale when it is shown and again when the clocks or a
 setting change. It needs no run.

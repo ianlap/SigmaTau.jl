@@ -75,7 +75,7 @@ using Random
         @test f.rms ≈ f.claimed rtol=0.05
         # A flicker FM clock, its model fitted to the first stretch: the flicker has to stay in.
         ff = noise_gen(PhaseData, 8192, 1.0; h=Dict(-1 => 3e-25), rng=MersenneTwister(5))
-        fk = holdover(ff, clock_model(powerlaw_fit(PhaseData(ff.x[1:2048], 1.0)); flicker=true); train=2048, tau=[1, 4])
+        fk = holdover(ff, clock_model(powerlaw_fit(PhaseData(ff.x[1:2048], 1.0))); train=2048, tau=[1, 4])
         @test fk.rms ≈ fk.claimed rtol=0.15
         @test_throws ArgumentError holdover(p, m; train=2000, tau=[1e6])
         @test_throws ArgumentError holdover(p, ClockModel(; tau0=1.0))      # no noise: nothing to weigh a reading with

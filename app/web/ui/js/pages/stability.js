@@ -103,7 +103,7 @@ export function refresh() {
   const other = state.axis === "sigma_y" ? "sigma_x" : "sigma_y";
 
   if (!hasRecord) showEmpty(`<h2>No record yet</h2><p>Load a phase or frequency file, or synthesize one, on the Data page.</p><button class="btn" data-act="load">Go to Data</button>`);
-  else if (!hasResult) showEmpty(`<h2>Not analysed yet</h2><p>Pick estimators in the panel and run the analysis.</p><button class="btn btn-primary" data-act="run">Run analysis</button>`);
+  else if (!hasResult) showEmpty(`<h2>Not analyzed yet</h2><p>Pick estimators in the panel and run the analysis.</p><button class="btn btn-primary" data-act="run">Run analysis</button>`);
   else if (!devs.length) showEmpty(`<h2>No ${state.axis === "sigma_y" ? "σ<sub>y</sub>" : "σ<sub>x</sub>"} estimator selected</h2><p>${state.axis === "sigma_x" ? "Add TDEV, MTIE or another time estimator" : "Add ADEV or another frequency estimator"}, or switch to ${AXES[other]}.</p>`);
   else if (!clocks.length) showEmpty(`<h2>All clocks are hidden</h2><p>Show a clock with ◉ in the panel.</p>`);
   else showEmpty("");
@@ -334,7 +334,7 @@ function noiseOverlay(layout, tr, clocks, devs) {
         const slope = noiseSlope(r.dev, u.noise);
         const pts = r.tau.slice(u.start, u.end).map((t, i) => [t, r.sigma[u.start + i]]).filter(([, v]) => v > 0);
         if (slope === null || !pts.length) continue;
-        // Through the run's centre of mass in log-log, across the run.
+        // Through the run's center of mass in log-log, across the run.
         const lx = pts.reduce((a, [t]) => a + Math.log10(t), 0) / pts.length;
         const ly = pts.reduce((a, [, v]) => a + Math.log10(v), 0) / pts.length;
         const at = (t) => 10 ** (ly + slope * (Math.log10(t) - lx)) * 1.6;
@@ -393,7 +393,7 @@ function modelBox(c) {
   const p = c.result?.powerlaw;
   if (!p) return "";
   const hand = c.components.length > 0;
-  const head = `<h3>Noise model <span class="muted">· S<sub>y</sub>(f) = Σ h<sub>α</sub> f<sup>α</sup>, ${hand ? "built by hand" : "fitted"} on MHDEV</span>
+  const head = `<h3><span>Noise model <span class="muted">· S<sub>y</sub>(f) = Σ h<sub>α</sub> f<sup>α</sup>, ${hand ? "built by hand" : "fitted"} on MHDEV</span></span>
     <button type="button" class="link-btn" data-fit="toggle">${state.fitEdit ? "Done" : "Edit"}</button></h3>`;
   const editor = state.fitEdit ? modelEditor(c) : "";
   if (p.error) return `<div class="model-box">${head}<p class="muted">No noise model: ${h(p.error)}</p>${editor}</div>`;
@@ -473,7 +473,6 @@ function renderCompare(box, clocks, devs) {
     <div class="card-foot" style="margin-top:0;border-top:0">Bold marks the most stable clock at this τ. Click the plot to move τ.${devs.length > 3 ? ` Showing the first three ${state.axis === "sigma_y" ? "σ<sub>y</sub>" : "σ<sub>x</sub>"} estimators.` : ""}</div>`;
 }
 
-// Plot element and table rows for the export menu.
 export function hint() {
   if (multi()) {
     const devs = devsOnAxis();

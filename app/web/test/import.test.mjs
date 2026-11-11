@@ -61,7 +61,7 @@ test("reopening a clock with a typed scale keeps it in the factor field", () => 
   assert.equal(parseFactor(scaleFields("phase", 3.07e-16).factor), 3.07e-16);
 });
 
-test("a BIPM UTC - UTC(k) file is recognised by its header despite the '+/-' columns", () => {
+test("a BIPM UTC - UTC(k) file is recognized by its header despite the '+/-' columns", () => {
   const rows = seq(30, (i) => `${50814 + 5 * i}   ${i % 4}.5   +/-   0.2   2.1   2.1   `);
   const s = sniff("utc-lab", ["  MJD  [UTC-UTC(LAB )]/ns  uA/ns  uB/ns  u/ns  \r", "\r", ...rows, "\x1a"].join("\n"));
   assert.equal(s.format, "bipm_utc");

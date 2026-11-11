@@ -3,7 +3,7 @@
 // Stability plot and the Holdover and Steering curves against the command
 // line's own JSON, then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
 // Live (simulated source) and Help, come back to Stability, and run a record
-// with gaps, with no page errors.
+// and a file of three clocks with gaps, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -183,6 +183,11 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator("#status-text").innerText(), /Up to date/);
     await page.click("a[data-page=spectrum]");
     await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
+    // The core refuses the map and names a command-line flag; the page names the box that sets it.
+    const n = errors.length;
+    await page.click("a[data-page=dynamic]");
+    await page.locator("#page.page-dynamic", { hasText: "cannot skip; turn on Fill gaps by reflection on the Data page" }).waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
   await t.test("Data: a zero in a Stable32 frequency file is a gap, filled", async () => {
@@ -234,6 +239,22 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await settled();
     await page.locator("#record-chip-text", { hasText: /p\.csv/ }).waitFor(SLOW);
     assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
+  });
+
+  await t.test("Ensemble: a file with gaps forms an averaging scale, and a Kalman scale says why it cannot", async () => {
+    const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
+    const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "three.csv", mimeType: "text/csv", buffer: Buffer.from(rows.map((i) => [i, clock(i, 1), clock(i, 2), clock(i, 3)].join(",")).join("\n")) });
+    for (const col of [3, 4]) await page.selectOption(`#import-dialog select[data-col="${col}"]`, "value");
+    await page.click("#import-dialog [data-act=load]");
+    await settled();
+    const n = errors.length;
+    await page.click("a[data-page=ensemble]");   // Greenhall, as the Ensemble step above left it
+    await page.locator("#page.page-ensemble [data-ref=empty]", { hasText: "needs a file without missing samples" }).waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+    await page.selectOption("#side [data-ctl=alg]", "at1");
+    await plotted("#page [data-ref=adev]");
   });
 
   assert.deepEqual(errors, []);
