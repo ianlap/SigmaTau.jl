@@ -918,6 +918,10 @@ Clock models, the Kalman filter and timescales.
   seed; `ClockComparisons` makes Julia's checks when built; an unknown noise
   type is named in the error; `holdover(record, model)` refuses `grow`,
   `drift` and `anchor`.
+- Explorer: on the Stability page a pinned curve of a single averaging time
+  is drawn as a point, where it drew nothing, and the τ axis labels every
+  other decade or fewer once it spans more than six, where the labels
+  collided in a narrow window.
 
 ### Security
 
