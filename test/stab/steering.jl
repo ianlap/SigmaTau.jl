@@ -125,6 +125,12 @@ using Statistics
         @test rms(sf.steers[1000:end]) ≈ steer(fm, c).steers rtol=0.05
         @test adev(PhaseData(sf.steered.x[1000:end], 1.0), [1]; ci=false).dev ≈ steer(fm, c; tau=[1.0], readings=true).adev rtol=0.02
         @test steer(m, g).tau == 2.0 .^ (0:9)
+        # A loop slower than 10⁶ steps leaves the clock as it is: white FM, random-walk FM and white PM.
+        τ = [1.0, 16.0, 256.0]
+        w = ClockModel(; tau0=1.0, R=1e-22, q1=1e-24, q2=1e-30)
+        for T in (1e6, 1e8, 1e9), (r, R) in ((false, 0.0), (true, 1e-22))
+            @test steer(w, steering_gains(T, 1.0); tau=τ, readings=r).adev ≈ sqrt.(1e-24 ./ τ .+ 1e-30 .* τ ./ 3 .+ 3R ./ τ .^ 2) rtol=1e-3
+        end
         @test_throws ArgumentError steer(m, steering_gains(30.0, 10.0))
         @test_throws ArgumentError steer(m, SteeringGains(1.01, 1.5, 0, 1.0))
         @test_throws ArgumentError steer(ClockModel(; tau0=1.0, q1=1e-22, q3=1e-40), g)
