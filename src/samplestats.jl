@@ -60,7 +60,7 @@ function _sample_statistics(v::Vector{Float64}, tau0::Float64, freq::Bool)
     end
     noise_x = _gap_noise_record(v, freq)
     return (n = n, gaps = length(v) - n, min = minimum(w), max = maximum(w),
-            mean = mean(w), median = median!(w), std = std(w),
+            mean = mean(w), median = _middle(w), std = std(w),
             adev = k > 0 ? sqrt(s / (2k)) : NaN,
             noise = identify_noise(noise_x, [1])[1])
 end
