@@ -190,6 +190,23 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
+  await t.test("A failed run: its error stays in the status bar until the box it names is ticked", async () => {
+    await page.click("a[data-page=stability]");
+    await page.click("[data-act=pick]");
+    await page.check("#picker-dialog input[value=totdev]");   // cannot skip gaps
+    await page.click("#picker-done");
+    const n = errors.length;
+    await page.click(".run-btn");
+    const failed = page.locator("#status-text", { hasText: "turn on Fill gaps by reflection on the Data page" });
+    await failed.waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+    await page.click("a[data-page=data]");
+    assert.equal(await failed.count(), 1);
+    await page.click("input[data-field=fillgaps]");
+    await settled();
+    assert.match(await page.locator("#status-hint").innerText(), /^Run analysis \(F5\)/);
+  });
+
   await t.test("Data: a zero in a Stable32 frequency file is a gap, filled", async () => {
     await page.goto(base + "#data");
     const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "0" : String(1e-12 * (2 + Math.sin(i / 3)))));
@@ -254,6 +271,24 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await scale("Greenhall");
     await page.selectOption("#side [data-ctl=alg]", "at1");
     await scale("AT1");
+  });
+
+  await t.test("Data at 960 px: a long file name and the plot's header stay inside their cards", async () => {
+    await page.setViewportSize({ width: 960, height: 800 });
+    await page.click("a[data-page=data]");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    const row = (i) => [i, ...[1, 2, 3].map((k) => (1e-9 * Math.sin(0.7 * k * i)).toExponential(6))].join(",");
+    // three clocks, read with the settings remembered from three.csv
+    await chooser.setFiles({ name: "three_clocks_with_a_long_name.csv", mimeType: "text/csv", buffer: Buffer.from(Array.from({ length: 600 }, (_, i) => row(i)).join("\n")) });
+    await settled();
+    await page.locator("#side .clock-row .clock-text").last().click();   // a clock named after the file
+    assert.match(await page.locator("[data-ref=plot-title]").innerText(), /three_clocks_with_a_long_name col 4$/);
+    const outside = await page.evaluate(() => [...document.querySelectorAll("#page .card")].flatMap((card) => {
+      const edge = card.getBoundingClientRect().right + 1;
+      return [...card.querySelectorAll(".file-title *, .card-row *")].filter((e) => e.getBoundingClientRect().right > edge).map((e) => e.className || e.tagName);
+    }));
+    assert.deepEqual(outside, []);
+    assert.ok((await page.locator("[data-ref=plot-hint]").boundingBox()).width >= 100, "the hint keeps 100 px");
   });
 
   assert.deepEqual(errors, []);

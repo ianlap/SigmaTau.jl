@@ -62,7 +62,7 @@ function fileCard(c) {
     ? `<input class="clock-name" data-field="name" value="${h(c.name)}" aria-label="Clock name" title="Rename this clock">`
     : `<b>${h(c?.name ?? "")}</b>`;
   return `<div class="card file-card">
-    ${isFile ? `<div class="file-title">${FILE_ICON}<div style="flex:1;min-width:0">${nameField}
+    ${isFile ? `<div class="file-title">${FILE_ICON}<div style="flex:1;min-width:0;overflow-wrap:anywhere">${nameField}
         <span class="muted small">${h(c.source.name)} · ${h(c.sourceInfo)}</span></div></div>
       <div class="file-actions"><button class="btn" data-act="import">Import settings…</button><button class="btn" data-act="open">Open another file…</button>${addClockBtn()}</div>`
     : `<div class="file-actions"><button class="btn btn-primary" data-act="open">Open a file…</button>${addClockBtn()}</div>`}
