@@ -61,6 +61,21 @@ csv_rows(s) = [split(l, ',') for l in split(strip(s), '\n')[2:end]]
     @test occursin("--devs", run_cli("analyze", "--help").out)
     @test !occursin("--devs", run_cli("spectrum", "--help").out)
     @test occursin("--window", run_cli("dynamic", "--help").out)
+    # A signature is set apart from its description, and σ keeps its case.
+    @test all(d -> occursin("  " * d * "\n", run_cli("help").out), last.(SigmaTauCLI.COMMAND_HELP))
+    @test occursin("\nThe σ(τ)", run_cli("help", "model").out)
+    @test !occursin("FILE", run_cli("help", "live").out)
+end
+
+@testset "the reference names every command and option" begin
+    page = read(joinpath(@__DIR__, "..", "..", "docs", "src", "reference", "cli.md"), String)
+    for (c, arg, _) in SigmaTauCLI.COMMAND_HELP
+        @test occursin("| `" * (isempty(arg) ? c : c * " " * arg) * "` |", page)
+    end
+    options = Set(op.long for op in SigmaTauCLI.OPTS)
+    named = Set(m.match for m in eachmatch(r"--[a-z][a-z0-9-]*", page))
+    @test setdiff(options, named) == Set{String}()      # every option is on the page
+    @test setdiff(named, options) == Set{String}()      # and the page names no other
 end
 
 @testset "unknown command or option" begin
@@ -268,7 +283,7 @@ mktempdir() do dir
         @test o.code == 0 && occursin("\"quantity\":\"phase\"", o.out)
         @test run_cli("check", fx("gpsdo.csv"), "--column", "OSC offset (ppb)", "--phase").code == 2
         @test run_cli("analyze", tim, "--input-format", "counter", "--tau0", "1").code == 2
-        # A BIPM UTC - UTC(k) file is recognised by its header: phase, five days apart, two rows missing.
+        # A BIPM UTC - UTC(k) file is recognized by its header: phase, five days apart, two rows missing.
         b = run_cli("check", fx("bipm_utc_lab.txt"), "--format", "json")
         @test b.code == 0 && occursin("\"quantity\":\"phase\"", b.out) && occursin("\"tau0\":432000.0", b.out)
         @test occursin("\"gaps\":2", b.out)
@@ -628,7 +643,7 @@ mktempdir() do dir
         rows = csv_rows(run_cli("analyze", pf, "--range", "10:200", "--detrend", "linear", "--devs", "adev", "--no-ci").out)
         ref = adev(detrend(PhaseData(X[11:201], 1.0); method=:linear), tau_values(Octave, 191, :adev); ci=false)
         @test parse.(Float64, getindex.(rows, 5)) ≈ ref.dev rtol=1e-12
-        # Dynamic window centres stay in the whole record's time.
+        # Dynamic window centers stay in the whole record's time.
         whole = run_cli("dynamic", pf, "--window", "64", "--format", "json").out
         part = run_cli("dynamic", pf, "--window", "64", "--range", "64:", "--format", "json").out
         t(s) = parse(Float64, match(r"\"t\":\[([^,\]]+)", s)[1])
@@ -695,6 +710,12 @@ mktempdir() do dir
         @test occursin("\"mdev\":[" * join(string.(powerlaw_sigma(ms[1], tau; deviation=:mdev)), ",")[1:12], r.out)
         @test occursin("\"mdev\":null,\"adev\":null,\"mhdev\":[", r.out)                       # random-run FM: Hadamard only
         @test run_cli("model", "--synth", "64").code == 1                                         # needs a model
+        @test run_cli("model", pf).code == 1                                                      # and reads no file
+        one = ["model", "--synth", "64", "--noise-model", "0:1e-24:0:0"]
+        @test occursin("does not apply", run_cli(one..., "--fillgaps").err)
+        mp = joinpath(dir, "model.json")
+        @test isempty(run_cli(one..., "--out", mp, "--quiet").out)
+        @test read(mp, String) == run_cli(one...).out
         @test run_cli("check", "--synth", "64", "--noise-model", "1:2:3").code == 1
         @test run_cli("check", "--synth", "64", "--noise-model", "-1:0:0:0").code == 1
         @test run_cli("check", "--synth", "64", "--clocks", "3", "--noise-model", "0:1e-24:0:0").code == 1
@@ -830,7 +851,9 @@ mktempdir() do dir
                          ["steer", joinpath(dir, "steer.csv"), "--cost", "1:0:1e4", "--fit-drift"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
+                         ["model", "--synth", "64", "--noise-model", "1e-22:1e-24:1e-30:0"],
                          ["completion", "bash"],
+                         ["help"],
                          ["version"])
                 o = IOBuffer()
                 p = run(pipeline(ignorestatus(`$exe $args`); stdout=o, stderr=devnull))

@@ -5,8 +5,8 @@ sigmatau COMMAND [FILE] [options]
 ```
 
 A call runs one command on one file. An option that takes a value is
-written `--name value` or `--name=value`. `sigmatau help COMMAND`, or
-`--help` after a command, prints the options of that command.
+written `--tau0 1` or `--tau0=1`. `sigmatau help COMMAND`, or `--help`
+after a command, prints the options of that command.
 [Command line](../guide/cli.md) shows the common tasks.
 
 The samples of output on this page are written by the program when the
@@ -40,8 +40,8 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 
 ## The record
 
-Every command but `live` reads a record, and takes the options of this
-section.
+Every command but `live` and `model` reads a record, and takes the options
+of this section.
 
 ### Reading
 
@@ -151,7 +151,8 @@ the deviations in seconds (TDEV, HTDEV, TTOTDEV, MTIE and TIE rms) and
 `"sigma_y"` for the others.
 
 When a command fails with `--format json`, the object holds `error` and
-`exit_code` in place of the results:
+`exit_code` in place of the results. `live` and `model`, which write JSON
+only, answer this way without the option:
 
 ```@example cliref
 sigmatau_json("analyze missing.dat --format json") # hide
@@ -484,10 +485,11 @@ number of Markov states in the model of each clock.
 
 ## `model`
 
-`model` simulates nothing. It writes, as JSON, the modified Allan, Allan
-and modified Hadamard deviations that [`powerlaw_sigma`](@ref) gives for
-each `--noise-model`, at the octave averaging times of a record of
-`--synth N` samples:
+`model` simulates nothing and reads no file. It writes, as JSON, the
+modified Allan, Allan and modified Hadamard deviations that
+[`powerlaw_sigma`](@ref) gives for each `--noise-model`, at the octave
+averaging times of a record of `--synth N` samples. Besides these two
+options it takes `--tau0`, by default 1 s, `--out` and `--quiet`:
 
 ```@example cliref
 sigmatau_json("model --synth 64 --noise-model 1e-22:1e-24:1e-30:0"; only = "model") # hide

@@ -108,7 +108,7 @@ function remove_drift!(o::Options, data::PhaseData, keep::BitVector)
         x[i] -= c[1] + (c[2] + c[3] * t) * t
     end
     tau0 = Float64(data.tau0)
-    # dx/dt at the record's centre is the frequency offset; d²x/dt² the drift.
+    # dx/dt at the record's center is the frequency offset; d²x/dt² the drift.
     o.removed_offset = c[2] / tau0
     o.removed_drift = quad ? 2.0 * c[3] / (tau0 * tau0) * 86400.0 : NaN
     return PhaseData(x, data.tau0; source=data.source, start=data.start)
