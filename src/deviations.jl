@@ -398,7 +398,8 @@ The statistic is defined in this package:
 time deviation. The factor is chosen as TDEV's is. On white PM the result is
 the standard deviation of the ``m``-sample mean of the phase, so `htdev` and
 `tdev` agree there, and `htdev` keeps the drift rejection of MHDEV. Use it in
-place of `tdev` when the clock drifts.
+place of `tdev` when the clock drifts. [The Hadamard time deviation](@ref)
+derives the factor.
 
 Arguments and keywords are those of [`mhdev`](@ref). The interval is
 MHDEV's scaled by the same factor, with the same EDF. See
