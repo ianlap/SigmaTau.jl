@@ -1,5 +1,6 @@
-# Readers for phase / frequency data files, with optional scaling, detrending
-# and gap filling, and the time grid that puts timestamped samples in place.
+# Readers for files of phase or frequency samples in numeric columns, with
+# optional scaling, detrending and gap filling, and the time grid that puts
+# timestamped samples in place.
 
 # The delimiter of a file whose first data line is `buf[r]`: tab for a `.tsv`
 # whose line holds one, else a comma when the line holds one, else runs of
@@ -319,68 +320,111 @@ function _unnamed_phase(v::Vector{Float64}, hint::Int)
 end
 
 """
-    read_phase(path; tau0=nothing, time_col=1, value_col=2, header=0,
-                     delim=nothing, scaling=1.0,
-                     detrend=:none, fillgaps=false) → PhaseData
+    read_phase(path; tau0=nothing, time_col=1, value_col=2, header=0, delim=nothing,
+               scaling=1.0, detrend=:none, fillgaps=false) → PhaseData
 
-Read a phase-data file and return a [`PhaseData`](@ref) ready for stability
-analysis. The returned record carries `path` in its `source` field.
+Read a text file of numeric columns as a [`PhaseData`](@ref) record. Each
+line holds one sample, in seconds, in column `value_col`, and its time in
+column `time_col`. A file with a single column is read as the samples
+alone. The record carries `path` as its `source`.
 
-Leading `#` comment lines (the header that [`save`](@ref) writes) are skipped
-automatically; a `# tau0: <value>` entry supplies the sample interval when the
-`tau0` keyword is omitted and a `# start: <ISO 8601>` entry the record's
-[`start_time`](@ref), so files written by `save(path, data)` round-trip with
-no keywords at all; a `# data interval 1.0 s` note does the same. Stable32 exports (a text header closed by `# Header End`)
-are read the same way, with `Tau:` supplying the sample interval. `#` lines
-later in the file are skipped too. The file is read line by line, keeping
-only the time and value columns, so multi-day records at high rates load in
-the memory of their samples.
+The file is read line by line and only the two columns are kept, so the
+memory used is that of the samples. [`read_data`](@ref) reads instrument
+files and tables with named columns.
 
-A time column of MJD values (from MJD 30000 to 90000, with steps under
-0.05 d and more than four decimals) is read in days and sets the record's
-[`start_time`](@ref); pass `tau0` for seconds timestamps that look like that.
+# Header
 
-The time column places the samples on a grid: its step is the mean of the
-regular steps, rounded to the shortest value that the scatter of the
-timestamps cannot tell from their least-squares step and that keeps every
-timestamp within a quarter step of its slot, so jittered or coarsely rounded timestamps (MJD to
-six decimals) give the true τ₀ and exact ones their own step at any length. Each step is rounded to
-a whole number of grid steps, so a missing reading leaves a `NaN` sample
-where it belongs, which the gap-tolerant estimators skip (see [Timestamps
-and gaps](@ref)). A record with no missing timestamps is read exactly as
-written. A column that is not a time axis (not increasing) leaves the
-samples in file order, and a file with one column is read as its values
-(`time_col=0`, `value_col=1`).
+Lines that begin with `#` at the head of the file are skipped, and three of
+them are read:
 
-# Keyword arguments
+- `# tau0: 10.0` gives the sample interval in seconds;
+- `# start: 2026-11-08T21:41:03Z` gives the UTC time of the first sample
+  ([`start_time`](@ref));
+- `# data interval 1.0 s`, or `# sample interval: 1.0 s`, gives the sample
+  interval when no `# tau0:` line does.
 
-- `tau0`: sample interval in seconds. When omitted, taken from a
-               `# tau0:` comment header if present, else from the time column
-               (its grid step); required when `time_col=0` and neither
-               fallback applies.
-- `time_col`: 1-based column index for timestamps (`0` = no time column; the
-               samples are then taken in file order, as they are when
-               `time_col == value_col`).
-- `value_col`: 1-based column index for phase samples.
-- `header`: number of non-comment header lines to skip (counted after any
-               leading `#` comment lines).
-- `delim`: field delimiter (`Char`). Auto-detected when `nothing`: a
-               comma when the first data line holds one (tab for a `.tsv`
-               holding one), whitespace otherwise.
-- `scaling`: multiply phase samples by this factor (e.g. `1e-12` for ps→s).
-- `detrend`: one of `:none`, `:mean`, `:endpoint`, `:linear`, `:quadratic`.
-               See [`detrend`](@ref).
-- `fillgaps`: when `true`, fill the missing samples (and any `NaN` reading)
-               with [`fillgaps`](@ref) (Howe's algorithm). Without a time
-               column only the `NaN` readings are missing.
+[`save`](@ref) writes the first two, so a saved record is read back without
+keywords. A Stable32 export begins with lines of text closed by
+`# Header End`. They are skipped, and their `Tau:` line gives the sample
+interval. Blank lines and lines that begin with `#` are skipped throughout
+the file.
+
+# Time column
+
+The sample interval is the keyword `tau0`, else that of the header, else
+the step of the time column. An error is thrown when the file gives none
+and the keyword is absent.
+
+The time column also places the samples. Its steps are fitted to an even
+grid, and a reading that is missing from the file leaves a `NaN` sample in
+its place (see [Timestamps and gaps](@ref)). A file with no reading missing
+is read as written.
+
+The grid step starts from the mean of the steps shorter than 1.5 times the
+shortest. It is rounded to the fewest significant figures, at most six, for
+which two conditions hold: the rounded step differs from the least-squares
+step of the timestamps by no more than the uncertainty of that step, which
+their scatter about the fit sets, nor by more than 1 %, and every timestamp
+lies within a quarter step of its place. When no rounding passes, the step
+is the span of the timestamps over the number of steps. Timestamps that
+jitter, or that are rounded to a coarse resolution, therefore give a round
+``τ_0``, and exact timestamps keep their own step whatever the length of
+the record.
+
+A column that is no time axis leaves the samples in file order: one that
+does not increase from line to line, or whose steps are not whole multiples
+of one step to within a quarter of it. ``τ_0`` is then the median step,
+which must be positive, unless the keyword or the header gives it.
+
+A time column is read as MJD when its values lie between 30000 and 90000,
+its median step is under 0.05 d and it has digits past the fourth decimal.
+It is converted to seconds and gives the record its [`start_time`](@ref).
+MJD values at longer steps are read as seconds, so that daily data need
+`tau0=86400`. Timestamps in seconds that meet the three conditions are
+taken for MJD: pass `tau0` for them, and disregard the start time.
+
+# Keywords
+
+- `tau0`: sample interval in seconds.
+- `time_col=1`: column of the timestamps, counted from 1. With `0`, or with
+  `time_col == value_col`, the file is read without a time column.
+- `value_col=2`: column of the samples.
+- `header=0`: number of lines to skip after the leading `#` lines, such as
+  a line of column names.
+- `delim`: character that separates the fields. By default a tab in a
+  `.tsv` file whose first line of data holds one, else a comma when that
+  line holds one, else runs of blanks. A field may be enclosed in double
+  quotes.
+- `scaling=1.0`: factor applied to the samples, `1e-9` for a file in
+  nanoseconds.
+- `detrend=:none`: trend to remove from the samples, one of the methods of
+  [`detrend`](@ref).
+- `fillgaps=false`: `true` fills the missing samples with
+  [`fillgaps`](@ref), with the reservations stated there: the readings
+  that the time column shows to be absent, and those written as `NaN`.
 
 # Examples
 
+```jldoctest
+julia> using SigmaTau
+
+julia> path = joinpath(mktempdir(), "phase.txt");
+
+julia> write(path, "0 1.0e-9\\n10 1.2e-9\\n20 1.1e-9\\n40 1.5e-9\\n");
+
+julia> p = read_phase(path);
+
+julia> p.tau0
+10.0
+
+julia> print(p.x)
+[1.0e-9, 1.2e-9, 1.1e-9, NaN, 1.5e-9]
+```
+
 ```julia
-pd = read_phase("phase.csv")                          # 2-col CSV, auto tau0
-pd = read_phase("p.tsv"; detrend=:linear)             # remove linear trend
-pd = read_phase("p.txt"; time_col=0, tau0=1.0)        # no time column
-pd = read_phase("g.csv"; fillgaps=true, scaling=1e-9) # ns→s + Howe fill
+p = read_phase("phase.csv"; scaling=1e-9)         # samples in nanoseconds
+p = read_phase("samples.txt"; tau0=0.1)           # one column, no timestamps
+p = read_phase("log.txt"; value_col=4, header=1)  # column 4, below the names
 ```
 """
 function read_phase(path::AbstractString; tau0::Union{Real,Nothing}=nothing, time_col::Int=1,
@@ -392,13 +436,19 @@ function read_phase(path::AbstractString; tau0::Union{Real,Nothing}=nothing, tim
 end
 
 """
-    read_frequency(path; tau0=nothing, time_col=1, value_col=2, header=0,
-                         delim=nothing, scaling=1.0,
-                         detrend=:none, fillgaps=false) → FrequencyData
+    read_frequency(path; tau0=nothing, time_col=1, value_col=2, header=0, delim=nothing,
+                   scaling=1.0, detrend=:none, fillgaps=false) → FrequencyData
 
-Read a fractional-frequency file. Same keyword arguments, comment-header and
-time-column handling as [`read_phase`](@ref); only the return type differs.
-The returned record carries `path` in its `source` field.
+Read a text file of numeric columns as a [`FrequencyData`](@ref) record of
+fractional-frequency samples. The header, the time column and the keywords
+are those of [`read_phase`](@ref).
+
+# Examples
+
+```julia
+y = read_frequency("frequency.csv")
+y = read_frequency("ffe_ppb.txt"; scaling=1e-9)    # samples in parts per billion
+```
 """
 function read_frequency(path::AbstractString; tau0::Union{Real,Nothing}=nothing, time_col::Int=1,
                         value_col::Int=2, header::Int=0, delim::Union{Char,Nothing}=nothing,
