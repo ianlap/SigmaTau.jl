@@ -320,17 +320,18 @@ itself claimed.
 | Model | Maser | Quartz |
 |:---|:---|:---|
 | fit without a flicker FM term | 1.09, 1.06, 0.59, 0.24 | 1.09, 0.72, 0.32, 0.15 |
-| the same, retuned | 2.2, 3.3, 3.5, 1.8 | 0.22, 0.34, 0.23, 0.11 |
+| the same, retuned | 1.2, 1.9, 2.0, 1.1 | 1.8, 2.8, 1.9, 0.91 |
 | default fit, flicker FM left out | 1.4, 2.7, 5.4, 8.2 | 8.7, 6.9, 3.1, 1.5 |
 | default fit, flicker FM kept | 1.04, 1.02, 1.02, 1.03 | 0.99, 1.01, 1.01, 0.97 |
 
 A fit without the term spreads the flicker over white and random-walk FM.
 Its predictions are up to 55 % worse, and at long times it claims 4 to 7
 times the error it makes. Retuning the two levels for prediction brings
-the long predictions closer, within 5 to 29 % of the states, and leaves a
-claim that means nothing: 2 to 3.5 times too small on the maser, 3 to 9
-times too large on the quartz, where the tuned white FM sat at the edge of
-the default grid, 100 times the fitted level. Leaving a fitted flicker out
+the long predictions closer, within 5 to 29 % of the states. Its claim is
+right one sample ahead, where [`tune_q`](@ref) sets the size of the
+levels, and 1.2 to 2.8 times too small from 10 to 1000 s. On both clocks
+the best pair of levels lay on the edge of the default grid in most
+records, which `tune_q` reports. Leaving a fitted flicker out
 removes that noise from the model, and the filter claims several times
 less than the error it makes. In that row the long-time figures depend on
 how much random-walk FM each fit found, and ran from 1 to 26 between

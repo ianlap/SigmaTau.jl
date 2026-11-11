@@ -96,7 +96,7 @@ def test_kalman_filter_matches_julia(clock, jl):
     assert np.all(np.diff(st.holdover_error(kf, [10.0, 100.0, 1000.0])) > 0)
     assert st.prediction_error(kf, data, [1, 10]).shape == (2,)
     t = st.tune_q(data, m, points=3)
-    assert t["cost"].shape == (3, 3) and t["model"].R == m.R
+    assert t["cost"].shape == (3, 3) and t["model"].R == pytest.approx(t["scale"] * m.R)
 
 
 def test_holdover_matches_julia(clock, jl):
