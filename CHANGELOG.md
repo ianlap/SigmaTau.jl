@@ -138,6 +138,10 @@ Clock models, the Kalman filter and timescales.
   the filter itself claims (`claimed`) beside the one measured. The CSV
   gains a trailing `claimed` column, empty without `--kalman`, so its header
   changes for existing readers.
+- `sigmatau holdover --kalman --format json` gives `fit_tau_max`, the
+  longest averaging time of the fit behind the predictor's clock model, and
+  the explorer dots the claimed curve past it, where the claim extrapolates
+  the model.
 - Clock steering: `steering_gains` sets the gains of a steering loop by pole
   placement, from a time constant or from poles, with or without an integral
   gain (Matsakis 2019, 2020); `steering_poles` gives the poles, time
@@ -650,6 +654,14 @@ Clock models, the Kalman filter and timescales.
   `q2`. The tuned levels are now scaled by the mean squared normalized
   innovation (Tryon and Jones 1983, Eq. 5.1), and the result carries `scale`
   and `edge` (best pair on the edge of the grid).
+- `sigmatau model` writes to `--out`, which it accepted and ignored, and
+  refuses a FILE and the options of the record, which it never used; its
+  errors are answered in JSON. `sigmatau help` sets the long command
+  signatures apart from their descriptions, `help model` names the three
+  deviations it writes, the help of `live` no longer speaks of a FILE, and
+  `--nominal` and `--tau0` state their defaults for `live`, `model` and
+  `--synth`. A test checks that the command-line reference names every
+  command and option.
 
 ### Security
 
