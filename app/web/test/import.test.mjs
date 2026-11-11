@@ -21,6 +21,8 @@ test("every column named for a reading is proposed as a clock, of the first one'
   assert.deepEqual([utc.g.values, utc.g.scaling], [[2, 3], 1e-9]);
   const mixed = read("m.csv", ["t,A phase (s),B freq,C phase (s)", ...seq(30, (i) => `${i},${1e-9 * i},${1e-12 * (i % 3)},${2e-9 * i}`)]);
   assert.deepEqual(mixed.g.values, [2, 4]);
+  const units = read("u.csv", ["t (s),A phase (ns),B phase (s),C phase (ns)", ...seq(30, (i) => `${i},${1e-9 * i},${2e-9 * Math.sin(i)},${3 * Math.cos(i)}`)]);
+  assert.deepEqual([units.g.values, units.g.scaling], [[2, 4], 1e-9]);
   const flag = read("f.dat", ["# t  ratio  flag", ...seq(30, (i) => `${59646 + i / 86400}\t${(i % 3 - 1) * 1e-15}\t1`)]);
   assert.deepEqual(flag.g.values, [2]);
   assert.deepEqual(read("plain.csv", seq(20, (i) => `${i},${1e-9 * Math.cos(i)},${3e-9 * Math.sin(i)}`)).g.values, [2]);

@@ -347,7 +347,7 @@ function onChange(e) {
   const f = e.target.dataset.field;
   const c = activeClock();
   if (!c || !f) return;
-  if (f === "name") { const v = e.target.value.trim() || c.name; update(() => { c.name = v; }); }
+  if (f === "name") { const v = e.target.value.trim() || c.name; update(() => { c.name = v; c.typedName = true; }); }
   else if (f === "fillgaps") ctx.setRecord(c, { fillgaps: e.target.checked });
 }
 

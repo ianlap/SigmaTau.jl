@@ -231,7 +231,8 @@ export function guessRoles(s) {
   const named = s.names.map((n, i) => i + 1).filter((c) => c !== time && !timeLike.includes(c) && READING.test(nm(c)));
   if (named.length) {
     const kind = (c) => (FREQ_NAME.test(nm(c)) ? "frequency" : "phase");
-    return { time, value: named[0], values: named.filter((c) => kind(c) === kind(named[0])), timeUnit, scaling: unitOf(nm(named[0])) };
+    // One scale reads them all: a column stating another unit is left for the user to add.
+    return { time, value: named[0], values: named.filter((c) => kind(c) === kind(named[0]) && unitOf(nm(c)) === unitOf(nm(named[0]))), timeUnit, scaling: unitOf(nm(named[0])) };
   }
   let value = 1;
   while (value <= s.nCols && (value === time || timeLike.includes(value))) value++;

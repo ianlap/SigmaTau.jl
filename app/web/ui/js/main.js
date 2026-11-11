@@ -105,12 +105,12 @@ async function importFile(file, clock, prev) {
       const given = settings.labels?.[k] ?? null;     // a name typed in the dialog
       const colName = given ?? settings.names[k] ?? (settings.value_cols.length > 1 ? `${baseName(file.name)} col ${col}` : baseName(file.name));
       if (!c) {
-        c = newClock({ name: colName });
+        c = newClock({ name: colName, typedName: !!given });
         s.clocks.push(c);
       } else if (given) {
-        c.name = given;
-      } else if (!multi() || c.source.type !== "file" || c.name === baseName(c.source.name ?? "")) {
-        c.name = settings.value_cols.length > 1 ? colName : baseName(file.name);
+        c.name = given; c.typedName = true;
+      } else if (!c.typedName) {
+        c.name = settings.value_cols.length > 1 ? colName : baseName(file.name);   // a name the explorer made gives way to the new file's
       }
       // Two files with clocks of one name (a record and its truth): the later one's say which file.
       if (!given && s.clocks.some((x) => x !== c && x.group !== group && x.name === c.name)) c.name = `${c.name} · ${baseName(file.name)}`;
