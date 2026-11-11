@@ -1,10 +1,11 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
 // Stability plot and the Holdover and Steering curves against the command
-// line's own JSON, then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
-// Live (simulated source) and Help, come back to Stability for a pinned run
-// and a telecom mask, and run a record and a file of three clocks with gaps,
-// with no page errors.
+// line's own JSON, then visit Spectrum, Dynamic, Ensemble (a Kalman scale with
+// flicker states, then the hat against the command line), Live (simulated
+// source) and Help, come back to Stability for a pinned run and a telecom
+// mask, and run a record and a file of three clocks with gaps, with no page
+// errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -126,6 +127,16 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
     assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
     await plotted("#page [data-ref=adev]");
+  });
+
+  await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
+    await page.click("[data-ctl=view][data-v=hat]");
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]").data?.some((d) => d.name === "Pairs, as measured"), null, SLOW);
+    assert.equal(await page.locator("#page [data-ref=title]").innerText(), "ADEV of each clock");
+    const shown = await page.evaluate(() => document.querySelector("#page [data-ref=adev]").data.filter((d) => /^clock \d$/.test(d.name)).map((d) => d.y));
+    const { hat } = JSON.parse(execFileSync(CLI, ["hat", "--synth", "16384", "--seed", "42", "--format", "json"]));   // the page's own four clocks
+    assert.deepEqual(shown, hat.results[0].clocks.map((c) => c.points.map((p) => p.dev)));
+    await page.click("[data-ctl=view][data-v=scale]");
   });
 
   await t.test("Live: a simulated source streams and stops", async () => {
@@ -276,7 +287,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
   });
 
-  await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale", async () => {
+  await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale, and its clocks are separated", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
     const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
     const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
@@ -289,6 +300,17 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await scale("Greenhall");
     await page.selectOption("#side [data-ctl=alg]", "at1");
     await scale("AT1");
+    // The hat and the covariance separate the three clocks and the reference; the KLTS interval says why it cannot.
+    const separated = (method) => page.waitForFunction((m) => document.querySelector("#page [data-ref=sub]")?.textContent.startsWith(m), method, SLOW);
+    await page.click("[data-ctl=view][data-v=hat]");
+    await separated("Hat · 4 clocks");
+    await page.selectOption("#side [data-ctl=method]", "groslambert");
+    await separated("Groslambert covariance · 4 clocks");
+    const n = errors.length;
+    await page.uncheck("#side [data-ctl=reference]");
+    await page.selectOption("#side [data-ctl=method]", "klts");
+    await page.locator("#page [data-ref=empty]", { hasText: "The KLTS interval needs a file without missing samples" }).waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
   await t.test("Data at 960 px: a long file name and the plot's header stay inside their cards", async () => {

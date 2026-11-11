@@ -1,11 +1,13 @@
-// Ensemble page: a time scale (AT1, AT2, EWFA or a Kalman scale) formed from
-// several clocks read against one reference. The clocks are the value columns
-// of one loaded file; without such a file the core simulates four. The scale
-// is computed when this page needs it and recomputed when the settings or the
-// clocks change.
+// Ensemble page: several clocks read against one reference. One view forms a
+// time scale from them (AT1, AT2, EWFA or a Kalman scale); the other separates
+// the stability of each clock by an N-cornered hat or the Groslambert
+// covariance. The clocks are the value columns of one loaded file; without
+// such a file the core simulates four. Either is computed when this page
+// needs it and recomputed when the settings or the clocks change.
 import { state, update, isReference } from "../state.js";
-import { timescale, synthArgs } from "../core.js";
+import { ensemble, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css } from "../plot.js";
+import { byId } from "../estimators.js";
 import { sci, num, inWords as plain, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
@@ -24,25 +26,36 @@ const ABOUT = {
   jones_tryon: "The Jones–Tryon Kalman scale: Greenhall's filter without the covariance reduction, so it has no per-clock weights. It needs three or more clocks.",
   stein: "Stein's Kalman scale (KAS-2) fits a model to each clock, filters each clock's difference from the pivot, and weighs each clock's phase, frequency and aging by the inverse of its noise. The weights shown are the phase weights. It needs three or more clocks.",
 };
+const HAT_DEVS = ["adev", "mdev", "hdev", "mhdev", "pdev", "tdev", "htdev"];
+const HAT_METHODS = [["hat", "Hat"], ["groslambert", "Groslambert covariance"], ["klts", "Groslambert, KLTS interval"]];
+const ABOUT_HAT = {
+  hat: "The hat takes the deviation of every pair of clocks, which holds the noise of both, and solves for each clock.",
+  groslambert: "The Groslambert covariance multiplies the differences of two records that share a clock. Noise that each record of a pair has on its own, such as its counter's, stays out. For three clocks read against one reference it equals the hat on ADEV.",
+  klts: "The Groslambert covariance with the interval of Lantz et al. (2019), for three clocks. Where a clock is not resolved, ▽ marks the upper limit.",
+};
 // The pivot as the core takes it: 1-based, back to the first clock when out of range.
 const pivotOf = (n) => (state.ens.pivot <= n ? state.ens.pivot : 1);
 // The file goes to the core as read, without the preparation of the Data page,
 // so the core's remedy for gaps (--fillgaps) has no counterpart on this page.
 const GAPS = [
   [/^clock_models: .* usable τ points/, "Greenhall, Jones–Tryon and Stein fit a model to each clock, and this file leaves one of them too few samples at which it is read with two others. AT1, AT2 and EWFA form a scale from it."],
+  [/^the KLTS interval needs/, "The KLTS interval needs a file without missing samples. The hat and the Groslambert covariance separate the clocks of this one."],
   [/^the frequency record is missing/, "Frequency columns with missing samples cannot be read."],
 ];
-const inWords = (message) => GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.") ?? plain(message);
+const FEW = [/^hat needs three or more simulated/, "Simulated clocks have a perfect reference, which counts as no clock. Simulate three or more, on the Data or the Synthesis page."];
+const inWords = (message) => GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.")
+  ?? (FEW[0].test(message) ? FEW[1] : plain(message));
 
 export const ownsPanel = true;
 
-// The clocks the scale is formed from: the first loaded file with two or
-// more phase or frequency columns (without the reference clock), else the
-// first ensemble simulated on the Data page. [] = the core simulates four.
-function fileClocks() {
+// The clocks of the page: the first loaded file with two or more phase or
+// frequency columns, else the first ensemble simulated on the Data page.
+// [] = the core simulates four. A scale leaves the reference clock out; a hat
+// (`all`) keeps it as one of the clocks.
+function fileClocks(all = false) {
   const groups = new Map();
   for (const c of state.clocks) {
-    if (c.source.type !== "file" || c.group === null || c.format || !c.record || isReference(c)) continue;
+    if (c.source.type !== "file" || c.group === null || c.format || !c.record || (!all && isReference(c))) continue;
     groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
   }
   const file = [...groups.values()].find((g) => g.length >= 2);
@@ -58,9 +71,9 @@ function fileClocks() {
   return ens ? ens.sort((a, b) => a.source.index - b.source.index) : [];
 }
 
-function request() {
-  const E = state.ens, clocks = fileClocks();
-  const a = ["timescale"];
+// The command, the flags that give it its clocks, and their file.
+function clockArgs(command, clocks) {
+  const a = [command];
   let file = null;
   if (clocks.length && clocks[0].source.type === "synth") {
     const src = clocks[0].source;
@@ -72,14 +85,60 @@ function request() {
     if (c.tau0) a.push("--tau0", c.tau0);
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
+  return [a, file];
+}
+
+// The hat of the page's clocks. Clocks of a file are read against its
+// reference, which is one more clock unless the box says otherwise; three
+// columns may hold the pairs instead. Simulated clocks have a perfect
+// reference, which is none. `corners` is the number of clocks separated.
+function hatRequest() {
+  const H = state.ens.hat, clocks = fileClocks(true);
+  const [a, file] = clockArgs("hat", clocks);
+  const pairs = !!file && clocks.length === 3 && H.pairs;
+  const reference = !!file && !pairs && (H.reference || clocks.length < 3);
+  const corners = (clocks.length || 4) + reference;
+  const method = H.method === "klts" && corners !== 3 ? "groslambert" : H.method;
+  if (pairs) a.push("--pairs");
+  else if (file && !reference) a.push("--no-reference");
+  a.push(...(method === "hat" ? ["--devs", H.dev] : [method === "klts" ? "--klts" : "--covariance"]), "--grid", state.grid, "--confidence", state.confidence, "--format", "json");
+  return { clocks, file: !!file, pairs, reference, corners, method, body: { args: a.map(String), file } };
+}
+
+function request() {
+  if (state.ens.view === "hat") return hatRequest();
+  const E = state.ens, clocks = fileClocks();
+  const [a, file] = clockArgs("timescale", clocks);
   a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : []), ...(CAPPED.has(E.algorithm) ? ["--wmax", E.wmax] : []),
     ...(E.algorithm === "at2" && E.steps ? ["--steps", E.steps] : []), ...(FLICKER.has(E.algorithm) && E.flicker ? ["--flicker"] : []), "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
+const views = () => `<div class="seg ens-view" role="group" aria-label="Analysis">${[["scale", "Time scale"], ["hat", "N-cornered hat"]].map(([id, label]) =>
+  `<button type="button" data-ctl="view" data-v="${id}" class="${state.ens.view === id ? "on" : ""}">${label}</button>`).join("")}</div>`;
+
+function hatControls() {
+  const H = state.ens.hat, { clocks, file, pairs, corners, method } = hatRequest();
+  const select = (ctl, options, value, off = () => false) => `<select data-ctl="${ctl}">${options.map(([id, label]) =>
+    `<option value="${id}" ${id === value ? "selected" : ""} ${off(id) ? "disabled" : ""}>${label}</option>`).join("")}</select>`;
+  return `${views()}
+    <label class="opt"><span>Method</span>${select("method", HAT_METHODS, method, (id) => id === "klts" && corners !== 3)}</label>
+    <label class="opt"><span>Deviation</span>${method === "hat" ? select("hat-dev", HAT_DEVS.map((d) => [d, byId[d].label]), H.dev) : `<select disabled><option>ADEV</option></select>`}</label>
+    ${file && clocks.length === 3 ? `<label class="opt"><span>Columns hold</span>${select("pairs", [["", "Clocks"], ["on", "Pairs"]], pairs ? "on" : "")}</label>` : ""}
+    ${file && clocks.length >= 3 && !pairs ? `<label class="check" title="The clocks are read against the file's reference, which is then one more clock of the hat"><input type="checkbox" data-ctl="reference" ${H.reference ? "checked" : ""}>The reference counts as a clock</label>` : ""}
+    <div class="rule"></div>
+    <p class="muted small">${!clocks.length
+      ? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."
+      : !file ? `${clocks.length} clocks simulated on the Data page. Their reference is perfect and counts as no clock.`
+      : pairs ? `The three columns of ${h(clocks[0].source.name)} as the differences A−B, B−C and C−A of clocks A, B and C, each measured on its own.`
+      : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference${corners > clocks.length ? ", which is one more clock" : ""}.`}</p>
+    <p class="muted small">${ABOUT_HAT[method]} Grid and confidence level are those of the Stability page.</p>`;
+}
+
 export function controls() {
+  if (state.ens.view === "hat") return hatControls();
   const E = state.ens, clocks = fileClocks();
-  return `<h2>Time scale</h2>
+  return `${views()}
     <label class="opt"><span>Algorithm</span><select data-ctl="alg">${ALGS.map(([id, label]) =>
       `<option value="${id}" ${E.algorithm === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     ${KALMAN.has(E.algorithm)
@@ -104,8 +163,13 @@ export function onControl(e) {
   const t = e.target.closest("[data-ctl]");
   if (!t) return;
   const k = t.dataset.ctl;
+  if (k === "view" && e.type === "click") update((s) => { s.ens.view = t.dataset.v; });
   if (e.type !== "change") return;
+  if (k === "reference") update((s) => { s.ens.hat.reference = t.checked; });
   const v = t.value.trim();
+  if (k === "method") update((s) => { s.ens.hat.method = v; });
+  if (k === "hat-dev") update((s) => { s.ens.hat.dev = v; });
+  if (k === "pairs") update((s) => { s.ens.hat.pairs = v === "on"; });
   if (k === "alg") update((s) => { s.ens.algorithm = v; });
   if (k === "steps") update((s) => { s.ens.steps = v; });
   if (k === "flicker") update((s) => { s.ens.flicker = v === "on"; });
@@ -120,7 +184,7 @@ export function mount(el, c) {
   root = el; ctx = c;
   root.innerHTML = `
     <div class="col">
-      <div class="card plot-card"><div class="card-row"><h2>ADEV of the scale and of each clock against it</h2><span class="muted small" data-ref="sub"></span></div>
+      <div class="card plot-card"><div class="card-row"><h2 data-ref="title"></h2><span class="muted small" data-ref="sub"></span></div>
         <div class="plot" data-ref="adev"></div><div class="empty" data-ref="empty" hidden></div></div>
       <div class="card plot-card ens-weights"><div class="card-row"><h2>Weights</h2></div><div class="plot" data-ref="weights"></div></div>
     </div>
@@ -128,7 +192,7 @@ export function mount(el, c) {
   loadPlotly().then((P) => { Plotly = P; refresh(); }).catch(() => {});
 }
 
-// Ask the core for the scale when it is missing or out of date.
+// Ask the core for the scale or the hat when it is missing or out of date.
 function ensure() {
   const { body } = request();
   const key = JSON.stringify(body);
@@ -137,10 +201,10 @@ function ensure() {
   const ctl = inflightCtl = new AbortController();
   inflight = key;
   state.ens.error = null;
-  timescale(body, ctl.signal).then((doc) => {
+  ensemble(body, ctl.signal).then((doc) => {
     if (inflight !== key) return;
     inflight = null;
-    update((s) => { s.ens.result = { key, ts: doc.timescale }; });
+    update((s) => { s.ens.result = { key, ts: doc.timescale, hat: doc.hat }; });
   }).catch((err) => {
     if (err.name === "AbortError" || inflight !== key) return;
     inflight = null;
@@ -159,15 +223,54 @@ function showEmpty(text) {
   if (text) for (const ref of ["table", "sub"]) root.querySelector(`[data-ref=${ref}]`).innerHTML = "";
 }
 
+// The hat: each clock's σ(τ) with its interval, over the pairs as measured.
+function refreshHat(r, { clocks, pairs }) {
+  const e = byId[r.results[0].deviation], res = r.results[0];
+  const col = (c, k) => c.points.map((p) => p[k]);
+  // The core names the file's clocks by column and its reference "reference".
+  const names = r.clocks.map((n, i) => (pairs ? n : clocks[i]?.name ?? (n === "reference" ? clocks[0]?.against || "Reference" : n)));
+  const color = (i) => (pairs || clocks[i] ? seriesColor(pairs ? i : clocks[i].slot) : clocks.length ? css("--ink-2") : seriesColor(i));
+  const sigma = e.axis === "sigma_x" ? "σ<sub>x</sub>(τ) (s)" : "σ<sub>y</sub>(τ)";
+  root.querySelector("[data-ref=title]").textContent = `${e.label} of each clock`;
+  root.querySelector("[data-ref=sub]").textContent = `${HAT_METHODS.find(([id]) => id === (r.interval === "klts" ? "klts" : r.method))[1]} · ${r.clocks.length} clocks · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · ${num(100 * r.confidence, 3)} % intervals`;
+  root.querySelector(".ens-weights").hidden = true;
+  const tau = col(res.clocks[0], "tau"), resolved = (c) => c.points.filter((p) => p.dev !== null).length;
+  const first = (p) => (p.dev === null && p.ci_upper !== null ? `&lt; ${sci(p.ci_upper, 3)}` : sci(p.dev, 3));
+  root.querySelector("[data-ref=table]").innerHTML = `<div class="card-row"><h2>Clocks</h2></div>
+    <div class="tbl hat-tbl"><div class="tbl-row tbl-head"><span>Clock</span><span>${e.label} at ${num(tau[0], 4)} s</span><span>Resolved</span></div>
+    ${res.clocks.map((c, i) => `<div class="tbl-row tbl-body"><span class="ens-name"><span class="clock-dot" style="background:${color(i)}"></span>${h(names[i])}</span>
+      <span>${first(c.points[0])}</span><span>${resolved(c)} of ${tau.length} τ</span></div>`).join("")}</div>
+    <p class="muted small ens-note">Resolved counts the averaging times at which the estimate of the clock's variance is positive. At the others the clock is not resolved under the noise of the rest, and it has no point${r.interval === "klts" ? ": ▽ and &lt; give its upper limit" : ""}.</p>`;
+  if (!Plotly) return;
+  const bar = (c) => ({ type: "data", symmetric: false, thickness: 1, width: 3,
+    array: c.points.map((p) => (p.dev !== null && p.ci_upper !== null ? p.ci_upper - p.dev : 0)),
+    arrayminus: c.points.map((p) => (p.dev !== null && p.ci_lower ? p.dev - p.ci_lower : 0)) });
+  const span = (p) => (p.ci_upper === null ? "" : `<br>${sci(p.ci_lower, 3)} to ${sci(p.ci_upper, 3)}`);
+  Plotly.react(root.querySelector("[data-ref=adev]"), [
+    ...res.pairs.map((c, k) => ({ x: tau, y: col(c, "dev"), name: "Pairs, as measured", legendgroup: "pairs", showlegend: k === 0, mode: "lines",
+      line: { color: css("--muted"), width: 1, dash: "dot" },
+      hovertemplate: `<b>${h(r.pairs[k].map((i) => names[i - 1]).join(" − "))}</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
+    ...res.clocks.map((c, i) => ({ x: tau, y: col(c, "dev"), name: names[i], mode: "lines+markers", line: { color: color(i), width: 2 }, marker: { color: color(i), size: 6 },
+      error_y: bar(c), text: c.points.map(span), hovertemplate: `<b>${h(names[i])}</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}%{text}<extra></extra>` })),
+    // KLTS gives an upper limit where the clock is not resolved.
+    ...res.clocks.map((c, i) => ({ x: tau, y: c.points.map((p) => (p.dev === null ? p.ci_upper : null)), name: `${names[i]}, upper limit`, showlegend: false, mode: "markers",
+      marker: { color: color(i), size: 9, symbol: "triangle-down-open" }, hovertemplate: `<b>${h(names[i])}</b>, not resolved<br>τ = %{x:.4g} s<br>σ < %{y:.3e}<extra></extra>` })),
+  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis(sigma), showlegend: true, uirevision: `hat-${res.deviation}` }, CONFIG);
+  Plotly.Plots.resize(root.querySelector("[data-ref=adev]"));
+}
+
 export function refresh() {
   if (!root) return;
   ensure();
-  const { clocks } = request();
-  const r = state.ens.result?.ts;
+  const req = request(), { clocks } = req;
+  const hat = state.ens.view === "hat";
+  const r = hat ? state.ens.result?.hat : state.ens.result?.ts;
   const table = root.querySelector("[data-ref=table]");
   if (state.ens.error) return showEmpty(h(state.ens.error.message));
-  if (!r) return showEmpty(state.core.ok ? "Forming the time scale…" : "No analysis core. Start the explorer with serve.py.");
+  if (!r) return showEmpty(!state.core.ok ? "No analysis core. Start the explorer with serve.py." : hat ? "Separating the clocks…" : "Forming the time scale…");
   showEmpty("");
+  if (hat) return refreshHat(r, req);
+  root.querySelector("[data-ref=title]").textContent = "ADEV of the scale and of each clock against it";
   const names = r.clocks.map((n, i) => clocks[i]?.name ?? n);
   const color = (i) => seriesColor(clocks[i]?.slot ?? i);
   // Jones–Tryon has no weights: its plot goes and the ADEV plot takes the room.
@@ -201,4 +304,7 @@ export function refresh() {
   { ...baseLayout(), margin: { l: 62, r: 14, t: 8, b: 44 }, xaxis: linAxis("Time (s)"), yaxis: { ...linAxis("Weight"), range: [0, 1] }, showlegend: false, uirevision: "ens-w" }, CONFIG);
 }
 
-export function hint() { return "Solid = the scale against the reference · dotted = each clock against the scale"; }
+export function hint() {
+  return state.ens.view === "hat" ? "Solid = each clock, separated · dotted = the pairs as measured · bars = the confidence interval"
+    : "Solid = the scale against the reference · dotted = each clock against the scale";
+}

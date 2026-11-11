@@ -433,6 +433,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .ens-table:empty { visibility: hidden; }
 .ens-table .tbl-row { grid-template-columns: minmax(0, 1.4fr) 56px 56px 1fr; }
 .ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
+.ens-table .hat-tbl .tbl-row { grid-template-columns: minmax(0, 1.3fr) 1fr 1fr; }
+.ens-view { align-self: flex-start; }
 .ens-table .card-row { padding: 14px 16px 8px; }
 .ens-note { padding: 8px 16px 14px; }
 .ens-warn { color: var(--warn); }

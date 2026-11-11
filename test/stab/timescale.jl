@@ -174,6 +174,17 @@ using Statistics
         # those samples, and the clock joins when the others are back.
         al = copy(x); al[20001:20010, 2:4] .= NaN
         @test findall(isnan, timescale_phase(timescale(ClockComparisons(al, 1.0))).x) == 20001:20010
+        # Before its first reading a clock is NaN in x, y and xhat, in every
+        # scale. Rows before any reading are left out: the scale is that of
+        # the rows after them.
+        cut = cc.x[1:2000, :]; cut[1:300, 1] .= NaN
+        lead = ClockComparisons([fill(NaN, 5, 4); cut], 1.0)
+        for kw in ((; algorithm=:ewfa), (; algorithm=:at2), (; algorithm=:greenhall, models=ms), (; algorithm=:jones_tryon, models=ms), (; algorithm=:stein, models=ms, pivot=2))
+            r, s = timescale(lead; kw...), timescale(ClockComparisons(cut, 1.0); kw...)
+            @test all(isnan, [r.x[1:305, 1]; r.y[1:305, 1]; r.xhat[1:305, 1]]) && all(isfinite, r.x[306:end, :])
+            @test isequal(r.x[6:end, :], s.x) && isequal(r.weights[6:end, :], s.weights)
+        end
+        @test_throws "no clock has a reading" timescale(ClockComparisons(fill(NaN, 10, 4), 1.0))
     end
 
     @testset "the start tells quiet clocks from noisy ones" begin
@@ -293,6 +304,7 @@ using Statistics
         @test st.algorithm === :stein
         @test st.xhat[2:end, :] ≈ st.x[2:end, :]              # noiseless readings: the estimate is the readout, past the start
         @test vec(mean(st.weights[late, :]; dims=1)) ≈ wopt rtol=1e-12
+        @test st.weights[1, :] ≈ wopt                         # from the first sample on
         @test adev1(st) ≈ sqrt(sum(wopt .^ 2 .* q)) rtol=0.05
         # The same optimum as Greenhall's reduced Kalman scale, to a few percent at every τ.
         τs = [1, 10, 100]
@@ -335,6 +347,11 @@ using Statistics
         @test cor(gf.y[rest, 1] .- gf.y[rest, 2], tf[rest, 2, 1] .- tf[rest, 2, 2]) > 0.75
         @test maximum(abs, timescale(cf; algorithm=:jones_tryon, models=mf).y .- gf.y) < 1e-6 * std(gf.y[rest, 1])
         @test_throws ArgumentError timescale(cf; algorithm=:stein, models=mf)
+        # A flicker level without states is white noise to every filter,
+        # Stein's included: 2h₋₁τ₀ of white FM, so the weights go as 1/(q1 + 2h₋₁τ₀).
+        h = [1.0, 2.0, 0.5, 0.0] .* 1e-25
+        low = [ClockModel(; tau0=1.0, q1=q[i], flicker_fm=h[i], tau_max=1.0) for i in 1:4]
+        @test timescale(cc; algorithm=:stein, models=low).weights[end, :] ≈ (1 ./ (q .+ 2h)) ./ sum(1 ./ (q .+ 2h))
         # Flicker PM on two of three equal clocks: the weights stay equal,
         # and past the shortest τ the scale is quieter than with that
         # flicker folded into R.

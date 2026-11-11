@@ -9,7 +9,8 @@ Output of [`timescale`](@ref): each clock against the scale at every
 sample, with its frequency, weight and prediction error.
 
 [`timescale_phase`](@ref) gives the scale itself, against the reference of
-the comparisons.
+the comparisons. Before a clock's first reading its `x`, `y` and `xhat`
+are `NaN`.
 
 # Fields
 
@@ -26,7 +27,7 @@ struct TimescaleResult
     x::Matrix{Float64}
     "Each clock's frequency against the scale, as the algorithm estimated it."
     y::Matrix{Float64}
-    "Weight of each clock at each sample (rows sum to 1)."
+    "Weight of each clock at each sample: a row sums to 1, or is zero where no clock of the scale is read; `NaN` for `:jones_tryon`, which has no weights."
     weights::Matrix{Float64}
     "Each clock's prediction error (s); `NaN` where it had no reading."
     error::Matrix{Float64}
@@ -537,7 +538,8 @@ and capped at `wmax`; those returned are the phase weights. The scale is
 read at the pivot as for `:greenhall`. The paper runs a filter for every
 pair of clocks; with the filters of one pivot only, the scale depends on
 the pivot. Models with flicker states are refused; `clock_model` makes
-one without them with `flicker = false`.
+one without them with `flicker = false`. A flicker level too low for
+states counts as white noise, as in the other filters.
 
 The paper starts from given values of the states (after Eq. (7.3)). Here
 the difference of each clock starts from the estimate of its filter at the
@@ -569,7 +571,9 @@ pivot returns.
 
 # Arguments
 
-- `cc`: the clocks, read against one reference.
+- `cc`: the clocks, read against one reference. The scale starts at the
+  first sample at which a clock is read; the samples before it are `NaN`
+  in the result.
 
 # Keywords
 
@@ -577,8 +581,8 @@ pivot returns.
 - `models`: one [`ClockModel`](@ref) per clock, with the `tau0` of `cc`,
   for the Kalman scales. At most one may be free of noise.
 - `pivot`: the clock at which a Kalman scale is read. Where it has no
-  reading, the first clock read stands in. `:stein` needs the first reading
-  of its pivot, and steps when the pivot returns from a gap.
+  reading, the first clock read stands in. `:stein` needs its pivot read at
+  the scale's first sample, and steps when the pivot returns from a gap.
 - `tau_min`: ``τ_{\\min}`` in seconds for `:at1` and `:at2`, one number or
   one per clock. By default, the τ of the smallest Allan deviation of each
   clock among the octaves of the interval between readings, estimated from
@@ -642,6 +646,15 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
     N, k = size(cc.x)
     N >= 3 || throw(ArgumentError("timescale: needs three or more samples"))
+    n₁ = findfirst(n -> any(isfinite, view(cc.x, n, :)), 1:N)
+    n₁ === nothing && throw(ArgumentError("timescale: no clock has a reading"))
+    if n₁ > 1       # the scale starts at the first sample with a reading
+        r = timescale(ClockComparisons(cc.x[n₁:N, :], cc.tau0; names=cc.names, reference=cc.reference);
+                      algorithm, tau_min, memory, bias, wmax, outlier, models, pivot, steps, step_threshold, lmax, step_inflate)
+        lead(A, v) = vcat(fill(v, n₁ - 1, k), A)
+        return TimescaleResult(algorithm, cc, collect((0:N-1) .* cc.tau0), lead(r.x, NaN), lead(r.y, NaN),
+                               lead(r.weights, algorithm === :jones_tryon ? NaN : 0.0), lead(r.error, NaN), lead(r.xhat, NaN))
+    end
     if algorithm in (:stein, :greenhall, :jones_tryon)
         models === nothing && throw(ArgumentError("timescale: :$algorithm needs models, one ClockModel per clock"))
         1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
@@ -669,7 +682,6 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     ε² = at1 ? _initial_variance(cc, stop, c) : ones(k)
     # Start: the scale is the plain mean of the first readings.
     ok = isfinite.(r[1, :])
-    any(ok) || throw(ArgumentError("timescale: no clock has a first reading"))
     u = -sum(r[1, ok]) / count(ok)
     X[1, :] = r[1, :] .+ u
     # The interval of eqs 7-15 is the time since the last sample with a reading,
@@ -800,6 +812,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
             Xo[m, :], Yo[m, :], Wo[m, :], Eo[m, :] = X[m, :] .+ shift, Y[m, :], W[m, :], E[m, :]
         end
     end
+    Yo[isnan.(Xo)] .= NaN       # no frequency before a clock's first reading
     return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), Xo, Yo, Wo, Eo, Xo)
 end
 
@@ -874,12 +887,11 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
     X̂ = zeros(ns * k)
     P = zeros(ns * k, ns * k)
     G, F = zeros(k, ns * k), zeros(k, ns * k)     # each clock's reading and frequency in state terms
-    # The clocks read at the first sample with a reading start from a line
-    # through their first readings, with the drift at zero: its common part
-    # is not observed, and what the start gives it stays in the scale. A
-    # later clock starts at its first reading.
-    n₁ = findfirst(n -> any(isfinite, view(cc.x, n, :)), 1:N)
-    started = n₁ === nothing ? trues(k) : isfinite.(cc.x[n₁, :])
+    # The clocks read at the first sample start from a line through their
+    # first readings, with the drift at zero: its common part is not
+    # observed, and what the start gives it stays in the scale. A later
+    # clock starts at its first reading, and is NaN in the result before it.
+    started = isfinite.(cc.x[1, :])
     for (i, m) in enumerate(models)
         φ, q, g = state_transition(m, τ), process_noise(m, τ), _reading_row(m)
         n = size(φ, 1)
@@ -899,7 +911,7 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         end
     end
     r = Float64[_reading_var(m) for m in models]
-    X, Y, W, E, Xh = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k), zeros(N, k)
+    X, Y, W, E, Xh = fill(NaN, N, k), fill(NaN, N, k), zeros(N, k), fill(NaN, N, k), fill(NaN, N, k)
     S = Matrix{Float64}(I, ns * k, ns * k)
     a = λ = fill(1.0 / k, k)
     for n in 1:N
@@ -972,12 +984,12 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
         # reading less its estimated phase.
         p = pivot in use ? pivot : (isempty(use) ? 0 : use[1])
         u = p == 0 ? NaN : X̂[p] - cc.x[n, p]     # no clock of the scale is read
-        for i in 1:k
+        ŷ = F * X̂                             # frequency: its own state plus the Markov frequency states
+        for i in findall(started)
             X[n, i] = isfinite(cc.x[n, i]) ? cc.x[n, i] + u : X̂[i]
-            Xh[n, i] = X̂[i]
+            Xh[n, i], Y[n, i] = X̂[i], ŷ[i]
         end
         n > 1 && (E[n, use] = X[n, use] .- x̂⁻[use])
-        Y[n, :] = F * X̂                       # frequency: its own state plus the Markov frequency states
         W[n, :] .= algorithm === :jones_tryon ? NaN : a
     end
     return TimescaleResult(algorithm, cc, collect((0:N-1) .* τ), X, Y, W, E, Xh)
@@ -1031,7 +1043,7 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     τ = cc.tau0
     all(m -> m.tau0 ≈ τ, models) || throw(ArgumentError("timescale: the models' tau0 must be the comparisons' τ₀"))
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
-    any(m -> m.flicker_fm > 0 || m.flicker_pm > 0, models) && throw(ArgumentError(
+    any(m -> _nstates(m) > _npoly(m), models) && throw(ArgumentError(
         "timescale: :stein has no flicker states; build the models with clock_model(...; flicker=false), or use :greenhall or :jones_tryon"))
     ns = any(m -> m.q3 > 0, models) ? 3 : 2
     Φ = zeros(ns, ns)                                 # element-wise: matrix literals are not trim-safe
@@ -1040,13 +1052,13 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     ns == 3 && (Φ[2, 3] = τ; Φ[1, 3] = τ^2 / 2)
     V = zeros(ns, k)                                  # shock variances per state and clock
     for (i, m) in enumerate(models)
-        V[1, i], V[2, i] = m.q1 * τ, m.q2 * τ
+        V[1, i], V[2, i] = (m.q1 + _fm_q1(m)) * τ, m.q2 * τ     # with the flicker FM that has no state
         ns == 3 && (V[3, i] = m.q3 * τ)
     end
-    r = Float64[m.R for m in models]
+    r = Float64[_reading_var(m) for m in models]
     p = pivot
-    isfinite(cc.x[1, p]) || throw(ArgumentError("timescale: the pivot clock $p has no reading at the first sample"))
-    X, Y, W, E, Xh = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k), zeros(N, k)
+    isfinite(cc.x[1, p]) || throw(ArgumentError("timescale: the pivot clock $p has no reading at the scale's first sample"))
+    X, Y, W, E, Xh = fill(NaN, N, k), fill(NaN, N, k), zeros(N, k), fill(NaN, N, k), fill(NaN, N, k)
     S = zeros(ns, k)                                  # difference states, clock i − pivot
     P = [zeros(ns, ns) for _ in 1:k]
     for i in 1:k
@@ -1062,11 +1074,12 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     xs = zeros(ns)
     for m in 1:ns
         w = _inverse_weights(V[m, :], members, wmax)
+        m == 1 && (W[1, :] = w)
         for i in members
             xs[m] -= w[i] * S[m, i]
         end
     end
-    W .= 1.0 / k
+    from = [something(findfirst(isfinite, view(cc.x, :, i)), N + 1) for i in 1:k]   # each clock's first reading
     for n in 1:N
         use = [i for i in 1:k if isfinite(cc.x[n, i])]
         xs⁻ = Φ * xs
@@ -1106,6 +1119,7 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
         end
         u = isfinite(cc.x[n, p]) ? xs[1] - cc.x[n, p] : 0.0
         for i in 1:k
+            n < from[i] && continue                   # NaN before it
             Xh[n, i] = xs[1] + (i == p ? 0.0 : S[1, i])
             X[n, i] = isfinite(cc.x[n, i]) && isfinite(cc.x[n, p]) ? cc.x[n, i] + u : Xh[n, i]
             Y[n, i] = xs[2] + (i == p ? 0.0 : S[2, i])
