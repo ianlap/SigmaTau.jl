@@ -1,8 +1,9 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
 // Stability plot and the Holdover curve against the command line's own JSON,
-// then visit Spectrum, Dynamic, Live (simulated source) and Help, come back to
-// Stability, and run a record with gaps, with no page errors.
+// then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
+// Live (simulated source) and Help, come back to Stability, and run a record
+// with gaps, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -91,6 +92,15 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.deepEqual(await claimed, JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover.claimed);
   });
 
+  await t.test("Ensemble: a Kalman scale with flicker states", async () => {
+    await page.click("a[data-page=ensemble]");
+    await page.selectOption("#side [data-ctl=alg]", "greenhall");
+    await page.selectOption("#side [data-ctl=flicker]", "on");
+    await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
+    assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
+    await plotted("#page [data-ref=adev]");
+  });
+
   await t.test("Live: a simulated source streams and stops", async () => {
     await page.click("a[data-page=live]");
     await page.click("[data-ctl=go]");
@@ -131,6 +141,29 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
   });
 
+  await t.test("Data: a zero in a Stable32 frequency file is a gap, filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "0" : String(1e-12 * (2 + Math.sin(i / 3)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.locator("#import-dialog .gap-card", { hasText: "1 zero reading" }).waitFor();
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /z\.frd.*51[23] samples/ }).waitFor();   // the new record, not the last one
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+  });
+
+  await t.test("Data: remembered .frd settings still show a file's zeros", async () => {
+    const y = Array.from({ length: 256 }, (_, i) => (i % 100 === 50 ? "0" : String(1e-12 * (2 + Math.cos(i / 5)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z2.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.locator("#import-dialog .gap-card", { hasText: "3 zero readings" }).waitFor();
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /z2\.frd.*25[67] samples/ }).waitFor();
+  });
+
   await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
     await page.goto(base + "#data");
     const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "NaN" : String(1e-12 * Math.sin(i / 3))));
@@ -139,8 +172,8 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor();   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
-    assert.match(await page.locator("#record-chip-text").innerText(), /y\.txt.*51[23] samples/);
   });
 
   assert.deepEqual(errors, []);

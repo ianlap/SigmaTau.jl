@@ -37,7 +37,7 @@ st.powerlaw_fit(pd)                  # h_α of the power-law noise model
 st.save("adev.tsv", r)               # st.load("adev.tsv") reads it back
 st.mask_check(st.mtie(pd), "G8262_opt1").passed   # ITU-T wander mask
 
-m = st.clock_model(st.powerlaw_fit(pd), tau0=1.0)
+m = st.clock_model(st.powerlaw_fit(pd), tau0=1.0)   # flicker=True keeps flicker as Markov states
 kf = st.kalman_filter(pd, m)         # phase and frequency estimates
 cc, _ = st.simulate_ensemble([m] * 4, 10_000)
 st.timescale(cc).weights             # AT1 weights over time

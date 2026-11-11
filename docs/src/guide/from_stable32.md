@@ -8,7 +8,8 @@ a Stable32 session onto SigmaTau and lists the few defaults that differ.
 ## Reading the file
 
 Stable32's `.phd` / `.frd` files, and text files with its header (`Tau:`
-lines closed by `# Header End`), read with no keywords:
+lines closed by `# Header End`, or the older bare `File:` … `Tau:` lines),
+read with no keywords:
 
 ```julia
 using SigmaTau
@@ -22,6 +23,7 @@ p = read_phase("export.dat")        # a Stable32 text export
 | Phase or frequency data type | `PhaseData` or `FrequencyData`; every estimator takes either |
 | Tau (sample interval) | `tau0`, from the header or the time column, or `tau0=` |
 | Multiplier | `scaling=` on the readers (`1e-9` for ns) |
+| Header `Multiplier:`, `Addend:`, `Tag Scale:` lines | not applied, as Stable32 applies them only when *Scale Data* is ticked on opening; `scaling=` multiplies the readings |
 | MJD time tags | the time column; `time_col=` picks it, τ₀ follows from it and [`start_time`](@ref) gives the first sample's date |
 | Converting phase ↔ frequency | not needed for the statistics, which take either; `FrequencyData(p)` and `PhaseData(y)` convert a record, `N` frequency samples integrating to `N + 1` phase points as in Stable32 |
 
@@ -94,7 +96,7 @@ and the explorer "As Stable32" under Bias correction.
 | | Stable32 | SigmaTau default | To match Stable32 |
 |---|---|---|---|
 | MTOTDEV | raw estimator, which reads low | raised to MDEV's expected value (Howe and Peppler 2001, Table 2) | `correct_bias=:stable32` |
-| Thêo1 | ThêoBR over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`; raw with Alpha set to 0 | ThêoBR over `i = 0…⌊N/30 − 3⌋` (Howe 2006) | `correct_bias=:stable32`; `correct_bias=false` for the raw run |
+| Thêo1 | ThêoBR over the ladder SP1065 prints, `i = 0…⌊N/6 − 3⌋`, on every `⌈N/3000⌉`-th phase above 3000 points; raw with Alpha set to 0 | ThêoBR over the same ladder on the full record (within 2 % on the 8192-point record, equal up to 3000 points but for a sampled sum) | `correct_bias=:stable32`; `correct_bias=false` for the raw run |
 | Noise identification | the subseries as they are | each decimated subseries quadratically detrended first | `identify_noise(x, m; remove_drift=false)` |
 | Noise type for HDEV and HTOTDEV | identified on the record as given | identified on the record less its least-squares frequency drift, without the B1 ratio: below 30 averaged points an FM type is the one at the longest τ that has 30 | `hdev(p; remove_drift=false)`, `htotdev(p; remove_drift=false)` |
 | Flicker PM | the lag-1 result as it comes | a white-PM result confirmed with R(n) | no switch |
@@ -144,8 +146,12 @@ and SigmaTau reads flicker FM and random-walk FM; TOTDEV is then 3.1 %,
 
 ## Gaps
 
-Stable32 needs gaps filled before most runs. In SigmaTau `NaN` marks a
-missing sample; ADEV, MDEV, HDEV, MHDEV, TDEV, HTDEV, MTIE and TIE rms skip
+Stable32 needs gaps filled before most runs. Its files mark a gap with a
+zero (any zero in frequency data, any but the first and last point in phase
+data), and SigmaTau's Stable32 reader reads those zeros as gaps. A quantized
+record can hold real zero readings, which Stable32 cannot tell from gaps:
+`read_data(path; keep_zeros=true)` (CLI `--keep-zeros`) keeps them. In SigmaTau
+`NaN` marks a missing sample; ADEV, MDEV, HDEV, MHDEV, TDEV, HTDEV, MTIE and TIE rms skip
 the terms that touch it, and [`fillgaps`](@ref) (or `fillgaps=true` on the
 readers) fills the record for the rest ([Choosing an
 estimator](choosing.md)).

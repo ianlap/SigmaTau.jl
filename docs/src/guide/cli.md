@@ -72,6 +72,7 @@ The record (all four analysis commands):
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
 | `--fillgaps` | fill the missing samples from the data beside each gap, reflected ([`fillgaps`](@ref)): `NaN` readings, and readings missing from the time column; without it, they are gaps the gap-tolerant estimators skip (a frequency record with gaps must be filled) |
+| `--keep-zeros` | read the zeros of a Stable32 `.phd`/`.frd` file as readings (a quantized record); by default they are gaps, as in Stable32 |
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
@@ -189,9 +190,10 @@ numbers are `null`.
 ```
 
 - `record` is in every answer; `series` only with `--series N`: the phase
-  itself when it has at most N samples, otherwise, in each of N ÷ 3 equal
-  stretches, its lowest and highest sample and its first gap (`null`), so
-  that a plot keeps every outlier and gap. At most 500 outliers are listed in
+  itself when it has at most N samples, otherwise its first and last sample
+  and, in each of (N − 2) ÷ 3 equal stretches, its lowest and highest sample
+  and its first gap (`null`), so that a plot spans the record and keeps every
+  outlier and gap. At most 500 outliers are listed in
   `outlier_t`/`outlier_x`; `outliers` is the full count. `start` is the
   UTC time of the first sample from ISO 8601 or MJD timestamps, `""` when
   the file has none; `gaps` counts the missing samples.
@@ -241,7 +243,10 @@ numbers are `null`.
   `weight` is the last sample's, while `weight_mean` and `error_rms` cover the
   second half of the record. `adev.scale` is the scale against the reference.
   `--series N` adds `"series": {"t", "scale", "weights"}`. The CSV form has
-  one row per clock: `clock,weight,weight_mean,error_rms`.
+  one row per clock: `clock,weight,weight_mean,error_rms`. With `--algorithm
+  greenhall` or `jones_tryon`, `--flicker` fits each clock with
+  [flicker states](@ref "Flicker states") and adds `"flicker": {"fm",
+  "pm"}`, the number of Markov states each clock's model carries.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 

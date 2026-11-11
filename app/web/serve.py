@@ -75,7 +75,11 @@ def request_to_args(req, workdir):
         if args[1:2] != ["--synth"] or not n.isdigit() or int(n) <= 0 or any(a.startswith("--synth") for a in args[3:]):
             raise ValueError("a request without a file must start with --synth N")
         return list(args)
+    if not isinstance(f, dict):
+        raise ValueError("file must be {name, content} or null")
     name = Path(str(f.get("name") or "record.txt")).name or "record.txt"
+    if name == "..":
+        raise ValueError("bad file name")
     path = Path(workdir) / name
     path.write_text(str(f.get("content", "")), encoding="utf-8")
     return [args[0], str(path), *args[1:]]
@@ -243,6 +247,8 @@ class Handler(SimpleHTTPRequestHandler):
             req = json.loads(self.rfile.read(length))
         except json.JSONDecodeError as e:
             return self.send_json(400, {"error": f"bad JSON: {e}"})
+        if not isinstance(req, dict):
+            return self.send_json(400, {"error": "the request must be a JSON object"})
         if self.path == "/api/live/stop":
             stop_live()
             return self.send_json(200, {"ok": True})
