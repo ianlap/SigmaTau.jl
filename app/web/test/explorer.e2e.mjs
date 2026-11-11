@@ -416,6 +416,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     }
     await page.click("a[data-page=ensemble]");
     await page.click("[data-ctl=view][data-v=hat]");
+    await page.selectOption("#side [data-ctl=method]", "hat");   // (an earlier step left KLTS, which a file with gaps refuses)
     await page.waitForFunction(() => document.querySelector("#page [data-ref=sub]")?.textContent.startsWith("Hat · "), null, SLOW);
     await plotted("#page [data-ref=adev]");
     const [legend, area] = await page.evaluate(() => ["#page [data-ref=adev] .legend", "#page [data-ref=adev] .nsewdrag"].map((q) => document.querySelector(q).getBoundingClientRect().toJSON()));
