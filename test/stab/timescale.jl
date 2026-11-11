@@ -155,8 +155,11 @@ using Statistics
         x = copy(cc.x); x[:, 1] .+= (0:49999) .* 1e-11; x[1:20000, 1] .= NaN
         lj = ClockComparisons(x, 1.0)
         @test mean(timescale(lj).weights[20002:22000, 1]) ≈ wopt[1] rtol=0.1
-        e = timescale_phase(timescale(lj; algorithm=:ewfa)).x
-        @test abs((e[end] - e[20001]) / 29999 - (e[20000] - e[1]) / 19999) < 2e-13
+        turn(e) = abs((e[end] - e[20001]) / 29999 - (e[20000] - e[1]) / 19999)
+        @test turn(timescale_phase(timescale(lj; algorithm=:ewfa)).x) < 2e-13
+        # :stein measures it against the pivot over its first tenth of the
+        # record (2×10⁻¹⁴; 5×10⁻¹⁴ at most over 20 seeds, 1.1×10⁻¹³ from 16 readings).
+        @test turn(timescale_phase(timescale(lj; algorithm=:stein, models=ms, pivot=2)).x) < 6e-14
         # Its start is taken against the scale, so a reference that changes
         # its rate before the join leaves the scale as it is. τ_min is given:
         # its estimate takes some of the reference's noise.
@@ -285,10 +288,12 @@ using Statistics
         sm = timescale(cm; algorithm=:stein, models=mix)
         @test all(adev(timescale_phase(sm), τs; ci=false).dev .< vec(best))
         @test vec(sm.weights[end, :]) ≈ [1, 100, 1, 100] ./ 202 rtol=1e-12
-        # The pivot is a choice of reference: another pivot gives the same weights and a scale as stable.
+        # The pivot is a choice of reference. The scale starts as the weighted
+        # mean of its clocks, and on clocks of one shape another pivot gives
+        # the same scale (within 2×10⁻¹⁵ s over 20 seeds; 15 ns apart before).
         s3 = timescale(cc; algorithm=:stein, models=ms, pivot=3)
         @test s3.weights[late, :] ≈ st.weights[late, :]
-        @test adev(timescale_phase(s3), τs; ci=false).dev ≈ adev(timescale_phase(st), τs; ci=false).dev rtol=0.02
+        @test maximum(abs, timescale_phase(s3).x .- timescale_phase(st).x) < 2e-14
         # wmax cuts the weights as in KAS-2; a gap in one clock is carried through.
         sc = timescale(cc; algorithm=:stein, models=ms, wmax=0.3)
         @test maximum(sc.weights[late, :]) ≈ 0.3 && all(sum(sc.weights; dims=2) .≈ 1)
