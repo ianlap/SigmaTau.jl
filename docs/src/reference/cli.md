@@ -365,9 +365,13 @@ sigmatau("holdover clock.dat --train 512 --tau 16,64,256 --kalman") # hide
 `claimed` is the standard deviation that the filter itself gives the error
 at each holdover time. The JSON output has it as an array, with a member
 `model` that holds the `R`, `q1`, `q2`, `q3`, `flicker_fm` and
-`flicker_pm` of the model, and with `anchor` `false`. The two columns agree where the model fits the clock, and
-an `rms` above `claimed` says that the clock has more noise at that
-holdover time than the model.
+`flicker_pm` of the model, and with `anchor` `false`. `fit_tau_max` is the
+longest averaging time of the fit that the model comes from, between an
+eighth and a quarter of the training stretch. At a longer holdover time
+`claimed` extrapolates the model
+([With a Kalman filter as the predictor](@ref)). The two columns agree
+where the model fits the clock, and an `rms` above `claimed` says that the
+clock has more noise at that holdover time than the model.
 
 ## `steer`
 

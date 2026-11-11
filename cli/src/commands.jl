@@ -357,11 +357,13 @@ end
 # from the readings it is compared with. Flicker the fit finds is kept, as
 # Markov states out to the record's span: without it the filter of a flicker
 # FM clock claims a tenth of the error it makes.
+# Returned with the longest τ of that fit: beyond it the model, and with it
+# the error the filter claims, is an extrapolation.
 function holdover_model(data::PhaseData, train::Float64, drift::Bool)
     τ₀ = Float64(data.tau0)
     b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
     pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
-    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, flicker=true, tau_max=length(data.x) * τ₀)
+    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, flicker=true, tau_max=length(data.x) * τ₀), maximum(pf.x)
 end
 
 function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
@@ -370,7 +372,8 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     train = isnan(o.train) ? (length(data.x) ÷ 4) * τ₀ : o.train
     limit = isnan(o.limit) ? nothing : o.limit
     tau = isempty(o.taus) ? nothing : o.taus
-    model = o.kalman ? holdover_model(data, train, o.fit_drift) : nothing
+    fitted = o.kalman ? holdover_model(data, train, o.fit_drift) : nothing
+    model = fitted === nothing ? nothing : fitted[1]
     # One call per predictor and kind of stretch: the trimmed build resolves each on its own.
     h = model !== nothing ? holdover(data, model; train, tau, limit, confidence=o.confidence) :
         o.grow > 0 ? holdover(data; grow=o.grow, tau, drift=o.fit_drift, anchor=o.anchor, limit, confidence=o.confidence) :
@@ -412,6 +415,7 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     if model !== nothing
         json_key(io, "claimed"); json_array(io, h.claimed)
         json_key(io, "model"); json_clock_model(io, model)
+        json_key(io, "fit_tau_max"); json_number(io, fitted[2])
     end
     print(io, '}')
     return elapsed(io, t_start)
@@ -492,7 +496,7 @@ function cmd_steer(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     interval = isnan(o.interval) ? τ₀ : o.interval
     g = isempty(o.cost) ? steering_gains(o.time_constant, interval; integral=o.integral) :
         lqg_gains(interval; phase=o.cost[1], frequency=o.cost[2], steer=o.cost[3])
-    model = holdover_model(data, train, o.fit_drift)
+    model = holdover_model(data, train, o.fit_drift)[1]
     r = steer(data, model, g)
     free = PhaseData(Float64[Float64(x) for x in view(data.x, b+1:N)], τ₀)
     steered = PhaseData(r.steered.x[b+1:N], τ₀)
