@@ -662,7 +662,7 @@ function ttotdev(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, correct_
     factor = res.tau ./ sqrt(3.0)
 
     if !ci
-        return _result(data, confidence, :ttotdev, res.tau, res.dev .* factor, Symbol[], _CIBound[], Float64[], res.neff)
+        return _result(data, confidence, :ttotdev, res.tau, res.dev .* factor, res.noise_type, _CIBound[], Float64[], res.neff)
     end
 
     return _result(data, confidence, :ttotdev, res.tau, res.dev .* factor, res.noise_type,
