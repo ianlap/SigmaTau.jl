@@ -41,9 +41,9 @@ a variance memory of 20 days (`memory`) capped at a quarter of the record.
 Kalman update that carries a frequency variance, which adapts as the clock's
 prediction error does; in steady state it is AT1's filter, so the scales are
 close. `steps=:best` or `:real` adds the paper's frequency-step detection (eqs 19–22):
-a clock whose frequency jumps is left out for τ\_min and the scale rerun from
-the step; the threshold's units are corrected from the printed equation (see
-the docstring), and off by default.
+a clock whose frequency jumps is left out for τ\_min, while its new frequency
+is learned, and the scale rerun from the step; the threshold's units are
+corrected from the printed equation (see the docstring), and off by default.
 [`timescale_phase`](@ref) returns the scale against the reference, for the
 usual stability analysis.
 

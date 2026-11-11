@@ -77,52 +77,58 @@ factors 1, 2, 4, …, 512, and computes all ten in one call. `adev` and
 ## Results
 
 Tables 1 and 2 are one run on a workstation with an AMD Ryzen 5 9600X
-(6 cores, 12 threads) under Fedora, otherwise idle: SigmaTau.jl 0.5.0 at
-commit `9c6acb7`, Julia 1.12.6 with 12 threads, Python 3.14.4, numpy 2.4.4
-and allantools 2024.06. The record has 25 000 samples. The two scripts were
-run three times, and the tables are those of the run with the smallest sum
-of SigmaTau.jl times. They have no columns for AllanDeviations.jl, whose
-script was added after the run.
+(6 cores, 12 threads) under Fedora 44 (Linux 6.19.14): SigmaTau.jl 0.6.0 at
+commit `6565d93`, Julia 1.12.6 with 12 threads, Python 3.14.4, numpy 2.5.4,
+allantools 2024.06 and AllanDeviations.jl 0.3.0. It was idle apart from one
+desktop process using about a third of one core. The record has 25 000
+samples. The three scripts were run three times, and the tables
+are those of the run with the smallest sum of SigmaTau.jl times.
 
 **Table 1.** Kernels.
 
-| Kernel | SigmaTau (12 threads) | allantools | Speed-up |
-|---|---:|---:|---:|
-| adev | 13.5 µs | 180 µs | 13× |
-| mdev | 34.1 µs | 860 µs | 25× |
-| hdev | 19.0 µs | 233 µs | 12× |
-| tdev | 32.2 µs | 860 µs | 27× |
-| totdev | 7.33 µs | 520 µs | 71× |
-| mtotdev | 26.3 ms | 108 s | 4,106× |
-| htotdev | 27.2 ms | 115 s | 4,228× |
+| Kernel | SigmaTau (12 threads) | allantools | Speed-up | AllanDeviations.jl | Speed-up |
+|---|---:|---:|---:|---:|---:|
+| adev | 14.9 µs | 177 µs | 12× | 91.4 µs | 6.1× |
+| mdev | 34.9 µs | 863 µs | 25× | 114 µs | 3.3× |
+| hdev | 20.3 µs | 234 µs | 12× | 95.0 µs | 4.7× |
+| tdev | 36.2 µs | 857 µs | 24× | 114 µs | 3.1× |
+| totdev | 7.36 µs | 530 µs | 72× | 129 µs | 18× |
+| mtotdev | 15.9 ms | 108 s | 6,792× | — | — |
+| htotdev | 15.8 ms | 115 s | 7,278× | — | — |
 
 **Table 2.** The default call of SigmaTau.jl, against the allantools times
 of Table 1.
 
 | Kernel | SigmaTau kernel-only | SigmaTau default call | allantools | Speed-up (allantools ÷ default call) |
 |---|---:|---:|---:|---:|
-| adev | 13.5 µs | 66.8 µs | 180 µs | 2.7× |
-| mdev | 34.1 µs | 125 µs | 860 µs | 6.9× |
-| hdev | 19.0 µs | 110 µs | 233 µs | 2.1× |
-| tdev | 32.2 µs | 87.2 µs | 860 µs | 9.9× |
-| totdev | 7.33 µs | 64.5 µs | 520 µs | 8.1× |
-| mtotdev | 26.3 ms | 26.8 ms | 108 s | 4,030× |
-| htotdev | 27.2 ms | 29.3 ms | 115 s | 3,925× |
+| adev | 14.9 µs | 159 µs | 177 µs | 1.1× |
+| mdev | 34.9 µs | 230 µs | 863 µs | 3.8× |
+| hdev | 20.3 µs | 168 µs | 234 µs | 1.4× |
+| tdev | 36.2 µs | 248 µs | 857 µs | 3.5× |
+| totdev | 7.36 µs | 234 µs | 530 µs | 2.3× |
+| mtotdev | 15.9 ms | 17.6 ms | 108 s | 6,136× |
+| htotdev | 15.8 ms | 16.0 ms | 115 s | 7,188× |
 
 For the first five estimators the noise identification and the intervals
-take 50 to 90 µs, which is more than the kernel takes, and the ratio falls
-to between 2 and 10. For `mtotdev` and `htotdev` the kernel is nearly the
-whole call, and the ratio stays near 4000.
+take 140 to 230 µs, which is more than the kernel takes, and the ratio falls
+to between 1.1 and 3.8. For `mtotdev` and `htotdev` the kernel is nearly the
+whole call, and the ratio stays between 6000 and 7200.
+
+**Thêo1.** On allantools' public phase record of a Cs 5071A against a
+hydrogen maser (`tests/Cs5071A/5071A_phase.txt.gz` in the allantools
+repository, downloaded and not stored here), N = 556 990 at τ₀ = 1 s,
+`theo1` at the octave factors up to m = 524 288 takes 1.44 s as a kernel
+(`ci=false, correct_bias=false`) and 14.0 s as the default call, each the
+fastest of three calls on the same machine and commit with 12 threads. The
+default call includes the ThêoBR bias ratio, the mean over the ⌊N/6 − 3⌋
+ladder of AVAR/Thêo1 terms out to half the record, with Thêo1 computed at 48
+factors along it and interpolated between them, as well as the noise
+identification and the intervals. allantools is not timed here.
 
 ## Reading the tables
 
-**They are for version 0.5.0.** The tables are not timed again at each
-release. Noise identification does more work since that version, and the
-default call of the first five estimators takes about twice as long: about
-0.4 ms on `main` at `7674356`, against about 0.2 ms for version 0.5.0, each
-the fastest of 50 calls on one 4-core machine with Julia 1.11. With the
-allantools times unchanged, the first five ratios of Table 2 would be about
-half of those printed.
+**They are for one commit.** The tables are not timed again at each
+release, and they hold for `main` at `6565d93` only.
 
 **The ratios are those of one machine.** `totdev`, `mtotdev` and `htotdev`
 use every thread in SigmaTau.jl and one in allantools, so their ratios
