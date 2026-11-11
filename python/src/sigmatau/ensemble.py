@@ -15,7 +15,9 @@ import juliacall
 import numpy as np
 
 from ._convert import (
+    as_int,
     data_from_jl,
+    noise_alpha,
     np_f64,
     powerlaw_to_jl,
     powerlawfit_to_jl,
@@ -25,8 +27,8 @@ from ._convert import (
     to_jl_ints,
 )
 from ._julia import VecStr, _map_errors, jl
-from .noise import _xoshiro
-from .types import PhaseData, PowerLawFit, StabilityResult
+from .noise import _seeded
+from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult
 
 _MatF64 = jl.seval("Matrix{Float64}")
 _VecModel = jl.seval("Vector{ClockModel}")
@@ -40,11 +42,15 @@ _component = jl.seval("c -> (c.alpha, c.h, first(c.range), last(c.range))")
 
 
 def _rng(seed: int | None) -> dict:
-    if seed is None:
-        return {}
-    if isinstance(seed, bool) or not isinstance(seed, int):
-        raise TypeError("rng: pass an int seed or None; sigmatau draws from Julia's RNG")
-    return {"rng": _xoshiro(seed)}
+    return {} if seed is None else {"rng": _seeded(seed)}
+
+
+def _clock(i: object, n: int, name: str) -> int:
+    """``i`` as the index, counted from 0, of one of ``n`` clocks."""
+    i = as_int(i, name)
+    if not 0 <= i < n:
+        raise ValueError(f"{name} must be the index of a clock, 0 to {n - 1}, got {i}")
+    return i
 
 
 def _mat(a: Any) -> np.ndarray:
@@ -229,6 +235,7 @@ class NoiseFit:
 
     @property
     def components(self) -> list[tuple[int, float, float, float]]:
+        """The components so far, as ``(alpha, h, tau_from, tau_to)`` in the order added."""
         tau = np_f64(self._jl.result.tau)
         out = []
         for c in self._jl.components:
@@ -250,9 +257,8 @@ class NoiseFit:
             lo, hi, _ = tau_index.indices(n)
             first, last = lo, hi - 1
         else:
-            first, last = int(tau_index[0]), int(tau_index[-1])
-        key = noise if isinstance(noise, int) else jl.Symbol(str(noise))
-        _add(self._jl, key, first + 1, last + 1)
+            first, last = as_int(tau_index[0], "tau_index"), as_int(tau_index[-1], "tau_index")
+        _add(self._jl, noise_alpha(noise), first + 1, last + 1)
         return self
 
     @_map_errors
@@ -483,13 +489,17 @@ def holdover(
     ``time_to_limit`` is then the holdover time at which the quantile at
     ``confidence`` reaches it.
     """
+    if isinstance(data, FrequencyData):
+        raise TypeError("holdover: the record must be PhaseData, as `data.to_phase()` gives")
     kw: dict[str, Any] = {"confidence": float(confidence)}
     if model is None:
         kw |= {"drift": bool(drift), "anchor": bool(anchor)}
+    elif grow is not None or drift or not anchor:
+        raise ValueError("holdover: `grow`, `drift` and `anchor` do not apply with a ClockModel")
     if train is not None:
         kw["train"] = float(train)
     if grow is not None:
-        kw["grow"] = int(grow)
+        kw["grow"] = as_int(grow, "grow")
     if tau is not None:
         kw["tau"] = to_jl_f64(tau)
     if limit is not None:
@@ -569,7 +579,12 @@ def prediction_error(
     the error holds the noise of that reading as well as the clock's. ``kf`` is
     the run of the filter over ``data``, not a smoothed one."""
     return np_f64(
-        jl.prediction_error(kf._jl, to_jl_data(data), to_jl_ints(horizons), burnin=int(burnin))
+        jl.prediction_error(
+            kf._jl,
+            to_jl_data(data),
+            to_jl_ints(horizons, "a horizon"),
+            burnin=as_int(burnin, "burnin"),
+        )
     )
 
 
@@ -601,13 +616,13 @@ def tune_q(
     best pair lies on the edge of the grid, where a larger ``decades`` is
     called for.
     """
-    kw = {} if burnin is None else {"burnin": int(burnin)}
+    kw = {} if burnin is None else {"burnin": as_int(burnin, "burnin")}
     r = jl.tune_q(
         to_jl_data(data),
         m._jl(),
-        horizons=to_jl_ints(horizons),
+        horizons=to_jl_ints(horizons, "a horizon"),
         decades=float(decades),
-        points=int(points),
+        points=as_int(points, "points"),
         **kw,
     )
     return {
@@ -627,7 +642,7 @@ def simulate_clock(
     """A phase record of ``n`` samples drawn from clock model ``m``, with the true
     states behind it: one row per sample and the columns of ``KalmanResult.x``.
     ``rng`` is an integer seed for a reproducible record."""
-    d, x = jl.simulate_clock(m._jl(), int(n), **_rng(rng))
+    d, x = jl.simulate_clock(m._jl(), as_int(n, "n"), **_rng(rng))
     return data_from_jl(d), _mat(x)
 
 
@@ -814,11 +829,12 @@ class ClockComparisons:
     Column ``i`` of ``x`` is clock i minus the reference, in seconds, with one
     row per sample and ``nan`` where a reading is missing. The reference may
     be one of the clocks, whose column is then zero, or an outside one.
-    ``names`` holds one name per clock, ``"clock 1"``, ``"clock 2"``, … by
-    default, and ``reference`` says what the clocks were read against.
-    ``cc[i]`` is the record of clock i as ``PhaseData``, and ``cc[i, j]`` the
-    difference clock i − clock j, in which the reference cancels; both count
-    from 0.
+    ``names`` holds one name per clock, all different, ``"clock 1"``,
+    ``"clock 2"``, … by default, and ``reference`` says what the clocks were
+    read against. ``cc[i]`` is the record of clock i as ``PhaseData``, and
+    ``cc[i, j]`` the difference clock i − clock j, in which the reference
+    cancels; both count from 0. :meth:`from_records` takes one phase record
+    per clock in place of the matrix.
     """
 
     x: np.ndarray
@@ -830,10 +846,33 @@ class ClockComparisons:
         x = np.array(self.x, dtype=np.float64)
         if x.ndim != 2:
             raise ValueError("ClockComparisons: x must be a samples × clocks matrix")
+        if x.shape[1] < 2:
+            raise ValueError("ClockComparisons: needs two or more clocks")
+        if not self.tau0 > 0:
+            raise ValueError(f"ClockComparisons: tau0 must be positive, got {self.tau0}")
+        names = tuple(self.names) or tuple(f"clock {i + 1}" for i in range(x.shape[1]))
+        if len(names) != x.shape[1]:
+            raise ValueError("ClockComparisons: one name per clock")
+        if len(set(names)) != len(names):
+            raise ValueError("ClockComparisons: clock names must differ")
         object.__setattr__(self, "x", x)
-        object.__setattr__(
-            self, "names", tuple(self.names) or tuple(f"clock {i + 1}" for i in range(x.shape[1]))
-        )
+        object.__setattr__(self, "names", names)
+
+    @classmethod
+    def from_records(
+        cls, records: Sequence[PhaseData], *, names: Sequence[str] = (), reference: str = ""
+    ) -> ClockComparisons:
+        """Comparisons from one phase record per clock, each read against the same
+        reference at the same instants: the records share one length and one τ₀."""
+        records = list(records)
+        if not records:
+            raise ValueError("ClockComparisons: no records")
+        tau0 = records[0].tau0
+        if not all(np.isclose(r.tau0, tau0, rtol=1e-9, atol=0.0) for r in records):
+            raise ValueError("ClockComparisons: the records must share one τ₀")
+        if len({len(r.x) for r in records}) != 1:
+            raise ValueError("ClockComparisons: the records must have the same length")
+        return cls(np.column_stack([r.x for r in records]), tau0, tuple(names), reference)
 
     def _jl(self) -> Any:
         return jl.ClockComparisons(
@@ -870,13 +909,12 @@ def simulate_ensemble(
     column is zero, or with ``reference=None`` against a perfect outside
     reference. Returns the comparisons and the true states ``truth[k, s, i]``
     of clock i at sample k against true time: phase (s = 0), frequency (1)
-    and, for a model with drift, drift (2). ``rng`` is an integer seed for a
-    reproducible ensemble.
+    and drift (2), which is zero for a model without drift. ``rng`` is an
+    integer seed for a reproducible ensemble.
     """
     ms = juliacall.convert(_VecModel, [m._jl() for m in models])
-    cc, truth = jl.simulate_ensemble(
-        ms, int(n), reference=0 if reference is None else int(reference) + 1, **_rng(rng)
-    )
+    ref = 0 if reference is None else 1 + _clock(reference, len(ms), "simulate_ensemble: reference")
+    cc, truth = jl.simulate_ensemble(ms, as_int(n, "n"), reference=ref, **_rng(rng))
     return _comparisons_from_jl(cc), _mat(truth)
 
 
@@ -896,7 +934,7 @@ def clock_models(
     ``flicker=True``, flicker FM joins the fit and each model keeps its
     flicker FM and flicker PM as Markov states.
     """
-    kw: dict[str, Any] = {} if alphas is None else {"alphas": to_jl_ints(alphas)}
+    kw: dict[str, Any] = {} if alphas is None else {"alphas": to_jl_ints(alphas, "an exponent α")}
     if flicker:
         kw["flicker"] = True
     return [_model_from_jl(m) for m in jl.clock_models(cc._jl(), **kw)]
@@ -1007,9 +1045,9 @@ def timescale(
         "step_inflate": float(step_inflate),
     }
     if lmax is not None:
-        kw["lmax"] = int(lmax)
+        kw["lmax"] = as_int(lmax, "lmax")
     if models is not None:
-        kw["pivot"] = int(pivot) + 1
+        kw["pivot"] = 1 + _clock(pivot, cc.x.shape[1], "timescale: pivot")
         kw["models"] = juliacall.convert(_VecModel, [m._jl() for m in models])
     if tau_min is not None:
         kw["tau_min"] = (

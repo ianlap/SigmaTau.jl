@@ -7,6 +7,7 @@ grid, so it is the one the estimators use.
 
 from __future__ import annotations
 
+import operator
 from enum import Enum
 
 from ._julia import _map_errors, jl
@@ -52,7 +53,8 @@ def tau_values(mode: TauMode, n: int, kernel: str) -> list[int]:
     For ``"theo1"``, which takes even factors only, odd entries are rounded up
     to the next even value. A ``"theoh"`` grid is in units of τ = m·τ₀.
     """
-    return [int(m) for m in jl.tau_values(_JL_TAUMODE[mode], int(n), jl.Symbol(str(kernel)))]
+    ms = jl.tau_values(_JL_TAUMODE[mode], operator.index(n), jl.Symbol(str(kernel)))
+    return [int(m) for m in ms]
 
 
 __all__ = [

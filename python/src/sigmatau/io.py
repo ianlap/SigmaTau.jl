@@ -11,6 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._convert import (
+    as_int,
     data_from_jl,
     driftfit_to_jl,
     np_f64,
@@ -29,9 +30,9 @@ from .types import DriftFit, FrequencyData, PhaseData, StabilityResult, Stabilit
 def _read_kwargs(tau0, time_col, value_col, header, delim, scaling, detrend, fillgaps) -> dict:
     """Reader keywords for Julia; a ``tau0`` or ``delim`` of ``None`` is left out."""
     kwargs = {
-        "time_col": int(time_col),
-        "value_col": int(value_col),
-        "header": int(header),
+        "time_col": as_int(time_col, "time_col"),
+        "value_col": as_int(value_col, "value_col"),
+        "header": as_int(header, "header"),
         "scaling": float(scaling),
         "detrend": jl.Symbol(str(detrend)),
         "fillgaps": bool(fillgaps),
@@ -171,7 +172,7 @@ def read_data(
     if tau0 is not None:
         kwargs["tau0"] = float(tau0)
     if column is not None:
-        kwargs["column"] = column if isinstance(column, str) else int(column)
+        kwargs["column"] = column if isinstance(column, str) else as_int(column, "column")
     if nominal is not None:
         kwargs["nominal"] = float(nominal)
     return data_from_jl(jl.read_data(str(path), **kwargs))
@@ -301,7 +302,7 @@ def sample_histogram(data: PhaseData | FrequencyData, *, bins: int | None = None
     and ``n``, ``mean`` and ``std`` of the samples measured, for the normal
     curve n·h·φ((v − mean)/std)/std over a bin of width h.
     """
-    kw = {} if bins is None else {"bins": int(bins)}
+    kw = {} if bins is None else {"bins": as_int(bins, "bins")}
     h = jl.sample_histogram(to_jl_data(data), **kw)
     return {
         "edges": np_f64(h.edges),
@@ -325,7 +326,9 @@ def acf(data: PhaseData | FrequencyData, *, m: int = 1, lags: int | None = None)
     fewer than 30 points) and ``noise`` (the type :func:`identify_noise`
     gives at m). A record with ``nan`` gaps raises an error: fill them first.
     """
-    kw = {"m": int(m)} if lags is None else {"m": int(m), "lags": int(lags)}
+    kw = {"m": as_int(m, "m")}
+    if lags is not None:
+        kw["lags"] = as_int(lags, "lags")
     a = jl.acf(to_jl_data(data), **kw)
     return {
         "lag": np_int(a.lag),

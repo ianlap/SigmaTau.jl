@@ -86,6 +86,10 @@ def test_bias_functions_match_the_published_tables():
     assert st.bias_b3(2, 8, 36, "WHPM") == 8.0
     with pytest.raises(ValueError):
         st.bias_b2(2, 2.5)
+    with pytest.raises(ValueError, match="N must be an integer"):
+        st.bias_b1(8.5, 2, 0.2)
+    with pytest.raises(TypeError, match="m must be an integer, got 4.0"):
+        st.bias_b3(2, 4.0, 2, "FLFM")
 
 
 def test_adev_dead_time_divides_by_b2_b3():
