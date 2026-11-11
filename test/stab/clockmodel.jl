@@ -32,6 +32,10 @@ using LinearAlgebra
         @test (m.R, m.q1, m.q2, m.q3) == (1e-22 / (8π^2 * 0.1), 0.5e-24, 2π^2 * 1e-30, 8π^4 * 1e-40)
         @test clock_model(Dict(:WHFM => 1e-24); tau0=1.0).q1 == 0.5e-24
         @test powerlaw_sigma(m, [0.1, 10.0]; deviation=:hdev) ≈ powerlaw_sigma(h, [0.1, 10.0]; deviation=:hdev, tau0=0.1)
+        # A drift state without random-run FM adds no noise: the deviation is that of the model without it.
+        d0 = ClockModel(; tau0=1.0, q1=1e-24, q2=1e-30)
+        @test powerlaw_sigma(ClockModel(; tau0=1.0, q1=1e-24, q2=1e-30, drift=true), [1.0, 100.0]) == powerlaw_sigma(d0, [1.0, 100.0])
+        @test powerlaw_sigma(clock_model(Dict(0 => 2e-24, -2 => 1e-30 / 2π^2); tau0=1.0, drift=true), [1.0, 100.0]) ≈ powerlaw_sigma(d0, [1.0, 100.0])
         @test powerlaw_psd(m2, [1e-3, 1.0]) ≈ 2 * 3e-24 .+ 2e-30 / (2π^2) ./ [1e-3, 1.0] .^ 2
         # Without flicker states, flicker PM folds into R: the white PM with
         # the PM's Allan variance at the last lag where the PM still leads the FM.

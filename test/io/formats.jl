@@ -16,6 +16,17 @@ fmt(f) = joinpath(FMT, f)
         @test detect_format(joinpath(@__DIR__, "..", "fixtures", "validation", "stable32gen.DAT")) === :columns
     end
 
+    @testset "column of a :columns file" begin
+        f = tempname() * ".dat"
+        write(f, join((string(k, " ", 1e-9k, " ", 5e-9k, " 1") for k in 0:9), "\n") * "\n")
+        @test detect_format(f) === :columns
+        @test read_data(f).x == read_data(f; column=2).x == 1e-9 .* (0:9)
+        @test read_data(f; column=3).x == 5e-9 .* (0:9) == read_phase(f; value_col=3).x
+        @test read_data(f; column=4, kind=:phase).x == ones(10)
+        @test_throws "no column names" read_data(f; column="clockB")
+        @test_throws ArgumentError read_data(f; column=99)
+    end
+
     @testset "BIPM UTC - UTC(k)" begin
         # CRLF, a "+/-" uncertainty column in the later rows, a DOS end mark, two rows missing.
         p = read_data(fmt("bipm_utc_lab.txt"))

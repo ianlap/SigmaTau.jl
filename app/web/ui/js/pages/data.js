@@ -82,7 +82,7 @@ function fileCard(c) {
     ? `<input class="clock-name" data-field="name" value="${h(c.name)}" aria-label="Clock name" title="Rename this clock">`
     : `<b>${h(c?.name ?? "")}</b>`;
   return `<div class="card file-card">
-    ${isFile ? `<div class="file-title">${FILE_ICON}<div style="flex:1;min-width:0">${nameField}
+    ${isFile ? `<div class="file-title">${FILE_ICON}<div style="flex:1;min-width:0;overflow-wrap:anywhere">${nameField}
         <span class="muted small">${h(c.source.name)} · ${h(c.sourceInfo)}</span></div></div>
       <div class="file-actions"><button class="btn" data-act="import">Import settings…</button><button class="btn" data-act="open">Open another file…</button>${addClockBtn()}</div>`
     : `<div class="file-actions"><button class="btn btn-primary" data-act="open">Open a file…</button>${addClockBtn()}</div>`}
@@ -177,8 +177,7 @@ export function refresh() {
     : view === "hist" ? `Histogram of ${of}${removed}`
     : view === "acf" ? `Autocorrelation of ${of}${removed}`
     : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
-  const t = root.querySelector("[data-ref=plot-title]");
-  t.textContent = t.title = multi() && c ? `${title} · ${c.name}` : title;
+  root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
   root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit in crimson · drag to zoom"
     : view === "hist" ? (state.dist.normal ? "Normal curve in crimson" : "")
     : view === "acf" ? (c?.range ? "Of the analysis range" : "")

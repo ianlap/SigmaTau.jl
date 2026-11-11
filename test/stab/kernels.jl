@@ -125,6 +125,10 @@ using SigmaTau
         @test hi[1] ≈ 1 / sqrt(0.039990) rtol=1e-4
         @test lo[2] < lo[1] && hi[2] > hi[1]          # fewer degrees of freedom, wider
         @test all(isnan, lo[3:4]) && all(isnan, hi[3:4])
+        for c in (-0.1, 0.0, 1.0, 1.5, NaN)    # a confidence is a probability, between 0 and 1
+            @test_throws "between 0 and 1" confidence_intervals([1.0], [10.0], c)
+            @test_throws "between 0 and 1" adev(PhaseData(randn(64), 1.0), [1]; confidence=c)
+        end
     end
 
     @testset "MTIE core" begin
