@@ -63,9 +63,9 @@ T = [64, 128, 256, 512, 1024, 4096]
 The form is that of a line through a continuous stretch. With 64 samples
 in the stretch it holds within 0.1 % on white FM and 2 % on random-walk
 FM, and with 1024 within 0.2 % on both. One record scatters about it: over
-16 records like this one the measured RMS was within 3 % of the form in
-the median at every stretch, and from 0.82 to 1.28 times it in single
-records.
+200 records like this one the measured RMS was within 1 % of the form in
+the median at every stretch, and four records in five were within 3 % of
+it with 64 samples in the stretch and within 17 % with 4096.
 
 A parabola, `drift = true`, also learns a frequency drift. Under a line a
 drift ``D`` leaves a mean error of ``\tfrac{1}{2} D τ (τ + T)``, which

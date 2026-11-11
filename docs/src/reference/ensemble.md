@@ -103,17 +103,20 @@ variance at a given ``τ`` than ``1/\sum_i σ_i^{-2}(τ)``, that of the
 average weighted by the inverse Allan variances of the clocks at that
 ``τ``. The tables give the Allan deviation of each scale over that bound,
 in simulation, on clocks without reading noise and with their true models.
+Each scale is set against that average of the same records, which takes
+the scatter of the records out of the ratio. The rows of `:ewfa`, whose
+weights are equal, and of the best clock follow from the models.
 
 With four clocks whose white FM and random-walk FM levels both rise by a
 factor of 4 from clock to clock, one set of weights is the best at every
-``τ`` (10 records of 32 768 samples):
+``τ`` (400 records of 32 768 samples; the last entry of `:at1` is good to
+0.03):
 
 | Scale | ``τ_0`` | ``16τ_0`` | ``256τ_0`` | ``4096τ_0`` |
 |:---|---:|---:|---:|---:|
-| `:greenhall`, `:stein` | 1.00 | 1.00 | 1.01 | 1.02 |
-| `:jones_tryon` | 1.00 | 1.00 | 1.02 | 1.02 |
-| `:at1` | 1.00 | 1.00 | 1.02 | 1.09 |
-| `:ewfa` | 2.65 | 2.66 | 2.76 | 2.98 |
+| `:greenhall`, `:stein`, `:jones_tryon` | 1.00 | 1.00 | 1.00 | 1.00 |
+| `:at1` | 1.00 | 1.00 | 1.01 | 1.07 |
+| `:ewfa` | 2.66 | 2.66 | 2.66 | 2.66 |
 | best clock | 1.15 | 1.15 | 1.15 | 1.15 |
 
 [Greenhall (2006), §7](@cite greenhall-2006-measurement-noise) takes three
@@ -122,16 +125,17 @@ clocks of white and random-walk FM with ``(q_1, q_2)`` = (4, 0.37),
 short ``τ`` and the quietest at long ``τ``, so the best weights change with
 ``τ``. Without reading noise, as in
 [Greenhall (2007), §3](@cite greenhall-2007-measurement-noise-corrections)
-(100 records of 8192 samples):
+(400 records of 8192 samples; `:at1` and `:at2` from ``64τ_0`` are good
+to 0.05):
 
 | Scale | ``τ_0`` | ``4τ_0`` | ``16τ_0`` | ``64τ_0`` | ``256τ_0`` | ``1024τ_0`` |
 |:---|---:|---:|---:|---:|---:|---:|
-| `:greenhall` | 1.01 | 1.07 | 1.08 | 1.08 | 1.03 | 1.06 |
-| `:stein` | 1.03 | 1.16 | 1.19 | 1.10 | 1.03 | 1.06 |
-| `:jones_tryon` | 3.08 | 2.62 | 1.38 | 1.03 | 1.03 | 1.06 |
-| `:at1` | 1.00 | 1.00 | 1.08 | 1.47 | 1.51 | 1.48 |
-| `:at2` | 1.00 | 1.00 | 1.09 | 1.51 | 1.55 | 1.52 |
-| `:ewfa` | 1.39 | 1.24 | 1.01 | 1.52 | 1.78 | 1.83 |
+| `:greenhall` | 1.01 | 1.07 | 1.08 | 1.08 | 1.01 | 1.00 |
+| `:stein` | 1.03 | 1.17 | 1.18 | 1.09 | 1.01 | 1.00 |
+| `:jones_tryon` | 3.10 | 2.63 | 1.38 | 1.01 | 1.00 | 1.00 |
+| `:at1` | 1.00 | 1.01 | 1.08 | 1.47 | 1.52 | 1.48 |
+| `:at2` | 1.00 | 1.00 | 1.09 | 1.51 | 1.56 | 1.52 |
+| `:ewfa` | 1.39 | 1.24 | 1.01 | 1.51 | 1.77 | 1.79 |
 | best clock | 1.47 | 1.50 | 1.60 | 1.12 | 1.08 | 1.08 |
 
 The reduced Kalman scale stays within 10 % of the bound, and the
@@ -140,8 +144,8 @@ unreduced one is three times above it at ``τ_0`` and reaches it from
 the first, and for the second at the bound from ``64τ_0`` and behind the
 first below ``32τ_0``. `:at1` and `:at2` take their weights from the
 prediction errors over one interval. They are at the bound at short ``τ``
-and half above it at long ``τ``, where the best clock alone is 40 % more
-stable than the scale.
+and half above it at long ``τ``, where the best clock alone is 30 to 45 %
+more stable than the scale.
 
 The unreduced filter is the more exposed to the long-term levels of the
 models. Its scale was within 1 % of `:greenhall` on the four clocks of one
@@ -165,14 +169,14 @@ fitted = clock_models(cc)
 The white FM levels come out within 5 %. The random-walk FM of these
 clocks shows only at the longest ``τ`` of 20 000 samples, and its levels
 do not: the first is 50 times too large here, and over 16 such records the
-fitted ``q_2`` ran from zero to 30 times the truth. `:greenhall` and
+fitted ``q_2`` ran from zero to 32 times the truth. `:greenhall` and
 `:stein` on the fitted models were then within 2 % of `:greenhall` on the
 true models up to 100 s and a quarter less stable at 1000 s, where `:at1`,
 which takes no model, was 1 % behind. `:jones_tryon` on the fitted models
 was 1.9 times less stable at every ``τ``. With 200 000 samples the fitted
 ``q_2`` lay between a quarter of the truth and 2.4 times it, `:greenhall`
-and `:stein` were within 4 % of the true models up to 10 000 s,
-`:jones_tryon` within 10 %, and `:at1` was 16 % behind at 10 000 s. A
+and `:stein` were within 5 % of the true models up to 10 000 s,
+`:jones_tryon` 5 to 10 % behind, and `:at1` 16 % behind at 10 000 s. A
 record has to be long enough to show the slow noise of each clock before a
 Kalman scale gains on AT1.
 
@@ -246,7 +250,7 @@ learned 0.45 of a step of 30 times its white FM and 0.05 of a step of 100
 times. It came back with a weight of 0.001 or less, was caught again, and
 held 0.98 of the step at its second return. At a return the scale stepped
 by 0.4 to 1.3 times its usual step. Two hundred samples after the step,
-the scale had lost 44 to 56 ns to it, against 830 to 2060 ns with the
+the scale had lost 44 to 56 ns to it, against 830 to 1680 ns with the
 same steps left in.
 
 ## Clocks that drop out and return
@@ -272,16 +276,16 @@ readings return:
 In simulation, three clocks with white FM of 1, 2 and ``4 × 10^{-12}`` at
 1 s ran at frequency offsets of 0, ``1 × 10^{-12}`` and ``-2 × 10^{-12}``,
 and one of them went unread for ``g`` samples. The table gives the step of
-the scale at the return over its RMS step, in the median of 50 records.
-For an ordinary step that ratio is 0.67.
+the scale at the return over its RMS step, in the median of 500 records,
+which is good to 10 %. For an ordinary step that ratio is 0.67.
 
 | Scale, and the clock unread | ``g = 10`` | ``g = 100`` | ``g = 2000`` |
 |:---|---:|---:|---:|
-| all but `:jones_tryon`, the noisiest clock | 0.8 to 0.9 | 0.7 to 0.9 | 0.8 to 0.9 |
-| all but `:jones_tryon`, the best clock | 0.9 to 1.2 | 0.8 to 1.3 | 0.6 to 1.2 |
-| `:jones_tryon`, the noisiest clock | 1.0 | 1.2 | 7.8 |
-| `:jones_tryon`, the best clock | 3.1 | 11 | 68 |
-| `:stein`, its pivot | 2.9 | 8.5 | 37 |
+| all but `:jones_tryon`, the noisiest clock | 0.7 to 0.8 | 0.7 to 0.8 | 0.7 to 0.8 |
+| all but `:jones_tryon`, the best clock | 1.0 to 1.4 | 1.1 to 1.3 | 1.0 to 1.3 |
+| `:jones_tryon`, the noisiest clock | 0.8 | 1.5 | 8.4 |
+| `:jones_tryon`, the best clock | 3.1 | 12 | 61 |
+| `:stein`, its pivot | 2.4 | 7.5 | 38 |
 
 At the sample of a return the scale is carried by the other clocks, and
 its step is theirs: larger than usual when the best clock is the one that
