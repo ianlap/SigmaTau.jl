@@ -984,7 +984,7 @@ function _avar_var_at(x::Vector{Float64}, m::Int, tau0::Float64)
 end
 
 # Thêo1 factors the fast ThêoBR ratio computes exactly: the first
-# _THEOBR_DENSE of the ladder and _THEOBR_SAMPLES spread over the rest.
+# _THEOBR_DENSE of the ladder and _THEOBR_SAMPLES spread over all of it.
 const _THEOBR_DENSE = 16
 const _THEOBR_SAMPLES = 32
 
@@ -1016,9 +1016,10 @@ The first error is the larger and nothing in the output shows it, so the
 long ladder is the default. The formulas give `n ≥ 0` only for `N ≥ 18` and
 `N ≥ 90`; shorter records use the first term alone.
 
-Unless `exact=true` or the ladder is short, Thêo1 is computed at the first
-16 factors and at 32 spread evenly over the rest, and interpolated between
-them linearly in log m and log σ², which is exact for a power law. AVAR is
+Unless `exact=true` or the ladder has 48 terms or fewer, Thêo1 is computed
+at its first 16 factors and at 32 spread evenly from the first to the last,
+47 at most, and interpolated between them linearly in log m and log σ²,
+which is exact for a power law. AVAR is
 computed at every factor. Against the exact ratio on simulated power-law
 noise (α = 2 … −2) and on white PM giving way to flicker FM (N = 2048 and
 8192) the result stays within 0.7 % (0.35 % on the deviation). The

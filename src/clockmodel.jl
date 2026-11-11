@@ -1,75 +1,122 @@
 # Clock state-space model: phase, frequency and (optionally) drift driven by
 # white noise, with optional Markov states for flicker FM (in the frequency)
-# and flicker PM (in the readings): the model the Kalman filters and
-# timescales run on, and its link to the power-law coefficients h_α.
+# and flicker PM (in the readings): the model the Kalman filters and time
+# scales run on, and its link to the power-law coefficients h_α.
 
 """
-    ClockModel(; tau0, R=0, q1=0, q2=0, q3=0, drift=q3 > 0, flicker_fm=0, flicker_pm=0, …)
+    ClockModel(; tau0, R=0, q1=0, q2=0, q3=0, drift=q3 > 0, flicker_fm=0,
+               flicker_pm=0, tau_max=1e6 * tau0, fm_band=nothing, pm_band=nothing)
 
-Discrete clock model with state `[phase, frequency]`, or
-`[phase, frequency, drift]` when `drift = true`. Each state is driven by
-white noise with the diffusion coefficients of Zucca & Tavella (2005):
+State-space model of a clock read every `tau0` seconds: phase, frequency
+and, with `drift = true`, frequency drift driven by white noises, with
+optional Markov states for flicker noise.
 
-| field | noise | S_y(f) | unit |
-|:------|:------|:-------|:-----|
-| `R`  | white PM, phase variance per sample at `tau0` | h₂ = 8π² τ₀ R | s² |
-| `q1` | white FM, phase diffusion | h₀ = 2 q1 | s |
-| `q2` | random-walk FM, frequency diffusion | h₋₂ = q2 / 2π² | 1/s |
-| `q3` | random-run FM, drift diffusion | h₋₄ = q3 / 8π⁴ | 1/s³ |
-| `flicker_fm` | flicker FM, floor σ_y = √(2 ln 2 · h₋₁) | h₋₁ | – |
-| `flicker_pm` | flicker PM of the readings | h₁ | s² |
+The phase ``x``, frequency ``y`` and drift ``d`` follow the three-state
+model of [Zucca and Tavella (2015), Eq. (1)](@cite zucca-2015-clock-jumps)
+without its deterministic terms,
 
-`R` is the noise of a reading, taken as white, and `flicker_pm` the flicker
-in it; `q1`–`q3` and `flicker_fm` are process noise, see
-[`process_noise`](@ref). Build one from a noise fit with
-[`clock_model`](@ref), and pass it to [`powerlaw_sigma`](@ref) or
-[`powerlaw_psd`](@ref) to see the σ(τ) or spectrum it stands for.
+```math
+dx = y\\,dt + \\sqrt{q_1}\\,dW_1, \\qquad dy = d\\,dt + \\sqrt{q_2}\\,dW_2,
+\\qquad dd = \\sqrt{q_3}\\,dW_3 ,
+```
+
+with independent Wiener processes ``W_i``; ``q_1``, ``q_2`` and ``q_3``
+are the squares of that paper's diffusion coefficients. A reading is the
+phase plus white noise of variance ``R``. The levels stand for the
+coefficients of ``S_y(f) = \\sum_α h_α f^α`` as follows, with the white PM
+taken up to the Nyquist frequency ``1/(2τ_0)``:
+
+| Field        | Noise                   | Level                      | Unit |
+|:-------------|:------------------------|:---------------------------|:-----|
+| `R`          | white PM of a reading   | ``h_2 = 8π^2 τ_0 R``       | s²   |
+| `q1`         | white FM                | ``h_0 = 2 q_1``            | s    |
+| `q2`         | random-walk FM          | ``h_{-2} = q_2/(2π^2)``    | 1/s  |
+| `q3`         | random-run FM           | ``h_{-4} = q_3/(8π^4)``    | 1/s³ |
+| `flicker_fm` | flicker FM              | ``h_{-1}``                 | –    |
+| `flicker_pm` | flicker PM of a reading | ``h_1``                    | s²   |
+
+`R` and `flicker_pm` describe the readings; `q1` to `q3` and `flicker_fm`
+are the clock's own noise, the process noise of [`process_noise`](@ref).
+[`clock_model`](@ref) builds a model from a noise fit, and
+[`powerlaw_sigma`](@ref) and [`powerlaw_psd`](@ref) take a model and return
+the deviation or the spectrum of the power law it stands for.
 
 With `flicker_fm > 0` the state gains Markov frequency processes that add
-to the frequency, the model of flicker FM of
-[davis-greenhall-stacey-2005-flicker](@cite) (its eqs 2.1–2.10, 3.3–3.4):
-independent single-pole processes of equal variance whose time constants
-rise geometrically. The paper spaces them by 8 or 16; here they are a
-decade apart, and their sum is flicker FM within about 3 % in σ(τ) across
-the τ they span. With `flicker_pm > 0` it gains Markov phase processes in
-the same way, which add to each reading and not to the phase: measurement
-noise with memory, which the filter estimates and keeps out of the phase.
-That is the same construction one integration up and is ours, with no
-published clock filter behind it.
+to the frequency: the flicker FM model of
+[Davis et al. (2005), Eqs. (2.1)–(2.10)](@cite davis-greenhall-stacey-2005-flicker),
+independent first-order processes of equal variance whose time constants
+rise geometrically. The paper spaces them by a factor of 8 or 16; here
+they are a decade apart, each of variance ``h_{-1} \\ln 10``. With
+`flicker_pm > 0` the state gains Markov phase processes of variance
+``h_1 \\ln 10/(4π^2)`` that add to each reading and not to the phase:
+measurement noise with memory, which a filter estimates and keeps out of
+the phase. The paper treats flicker FM only; using its construction on the
+readings is this package's choice.
 
-The states sit only where they are needed: `fm_band` and `pm_band` are the
-first and last τ (s) at which that flicker holds at least a quarter of the
-model's Allan variance, looked for from τ₀ to `tau_max` (default 10⁶ τ₀),
-and the time constants run a decade apart from the first to at least the
-last. That is typically three to five states each. A flicker that never
-reaches a quarter gets no states. What the states leave out at τ₀ is added
-as white noise, to `q1` for flicker FM and to `R` for flicker PM, so the
-model's Allan variance at τ₀ is that of the sampled flicker. Pass a band to
-place the states yourself, `(0, 0)` for none. See the clock model page for
-the levels and the accuracy.
+The states are placed where the flicker matters. By default `fm_band` and
+`pm_band` are the first and last τ, between τ₀ and `tau_max`, at which
+that flicker holds at least a quarter of the model's Allan variance. The
+time constants start at the lower end of the band and rise by decades
+until one reaches the upper end, which makes
+``1 + ⌈\\log_{10}(τ_2/τ_1)⌉`` states for a band from ``τ_1`` to ``τ_2``.
+A flicker that never holds a quarter gets no states. What the states leave
+out at τ₀ is added as white noise, to `q1` for flicker FM and to `R` for
+flicker PM, so that the model's Allan variance at τ₀ is that of the
+sampled flicker. [Flicker states](@ref) gives the accuracy of the
+approximation.
+
+# Keywords
+
+- `tau0`: sample interval in seconds.
+- `R`: white PM variance of a reading, in s².
+- `q1`, `q2`, `q3`: white FM, random-walk FM and random-run FM levels.
+- `drift`: whether the state carries a frequency drift; `q3 > 0` needs it.
+- `flicker_fm`, `flicker_pm`: flicker levels ``h_{-1}`` and ``h_1``.
+- `tau_max`: longest τ, in seconds, at which the default bands are looked
+  for.
+- `fm_band`, `pm_band`: first and last τ, in seconds, that the Markov
+  states span, in place of the default; `(0, 0)` for no states.
+
+# Fields
 
 $(TYPEDFIELDS)
+
+# Examples
+
+A hydrogen maser with white FM of ``10^{-12}`` at 1 s and a flicker floor
+of ``1.5 × 10^{-13}``:
+
+```jldoctest
+julia> using SigmaTau
+
+julia> ClockModel(; tau0 = 1.0, q1 = 5e-25, q2 = 1e-33, flicker_fm = 1.6e-26)
+8-state ClockModel, τ₀ = 1.0 s
+  R  0 s²
+  q1 5e-25 s
+  q2 1e-33 1/s
+  flicker FM 1.6e-26, 6 Markov states, 10 to 1e+06 s
+```
 """
 struct ClockModel
     "Sample interval in seconds, to which `R` refers."
     tau0::Float64
-    "White PM phase variance per sample (s²)."
+    "White PM variance of a reading (s²)."
     R::Float64
-    "White FM diffusion coefficient (s)."
+    "White FM level ``q_1`` (s)."
     q1::Float64
-    "Random-walk FM diffusion coefficient (1/s)."
+    "Random-walk FM level ``q_2`` (1/s)."
     q2::Float64
-    "Random-run FM diffusion coefficient (1/s³)."
+    "Random-run FM level ``q_3`` (1/s³)."
     q3::Float64
     "Whether the state carries a frequency drift."
     drift::Bool
-    "Flicker FM level h₋₁."
+    "Flicker FM level ``h_{-1}``."
     flicker_fm::Float64
-    "First and last τ (s) the Markov frequency states span; `(0, 0)` for none."
+    "First and last τ (s) that the Markov frequency states span; `(0, 0)` for none."
     fm_band::NTuple{2,Float64}
-    "Flicker PM level h₁ (s²)."
+    "Flicker PM level ``h_1`` (s²)."
     flicker_pm::Float64
-    "First and last τ (s) the Markov phase states span; `(0, 0)` for none."
+    "First and last τ (s) that the Markov phase states span; `(0, 0)` for none."
     pm_band::NTuple{2,Float64}
     function ClockModel(tau0, R, q1, q2, q3, drift, flicker_fm=0.0, fm_band=(0.0, 0.0), flicker_pm=0.0, pm_band=(0.0, 0.0))
         tau0 > 0 || throw(ArgumentError("ClockModel: tau0 must be positive, got $tau0"))
@@ -193,39 +240,77 @@ function Base.show(io::IO, ::MIME"text/plain", m::ClockModel)
 end
 
 """
-    clock_model(fit::PowerLawFit; drift=…, flicker=false, …) → ClockModel
-    clock_model(h::AbstractDict; tau0, drift=…, flicker=false, …) → ClockModel
+    clock_model(fit; drift, flicker=false, tau_max, fm_band, pm_band) → ClockModel
+    clock_model(h::AbstractDict; tau0, drift, flicker=false, tau_max, fm_band,
+                pm_band) → ClockModel
 
-The [`ClockModel`](@ref) of a power-law model: white FM (α = 0),
-random-walk FM (−2) and random-run FM (−4) drive the states, and the PM is
-the reading noise `R`. `drift` defaults to whether h₋₄ is positive. `h`
-takes α or noise names as keys, as in [`powerlaw_sigma`](@ref).
+The [`ClockModel`](@ref) of a power-law noise model.
 
-White PM (α = 2) is `R = h₂/8π²τ₀`. Flicker PM (α = 1) is not white and by
-default has no state; the filter averages it like white PM over its own
-response time and follows the slower part as if it were the clock. It is
-folded into `R` as the measurement variance of
-[van-dierendonck-1984-allan-kalman](@cite), the PM at the frequencies the
-tracker does not follow: `R` is the white PM with the model's PM Allan
-variance at the lag where PM hands over to FM. Leaving it out would make
-the filter trust its readings too much.
+White FM, random-walk FM and random-run FM (α = 0, −2, −4) become `q1`,
+`q2` and `q3`, and white PM (α = 2) becomes `R`, by the relations listed
+under [`ClockModel`](@ref). The flicker noises have no finite state, and
+`flicker` decides what becomes of them.
 
-Flicker FM and flicker walk (α = −1, −3) have no finite-state form and are
-left out. Compare `powerlaw_sigma(model, τ)` with `powerlaw_sigma(fit, τ)`
-to see what that costs over the τ you care about.
+With `flicker = false`, flicker FM and flicker-walk FM (α = −1, −3) are
+left out and flicker PM (α = 1) is folded into `R`. A filter averages the
+PM that is faster than its own response and follows the rest as if it were
+the clock, so `R` stands for the part it averages, as the measurement
+variance of
+[Van Dierendonck et al. (1984), Eqs. (68)–(69)](@cite van-dierendonck-1984-allan-kalman)
+is the phase noise that a tracking loop does not follow:
 
-With `flicker = true` flicker FM and flicker PM are kept instead, as the
-Markov states of [`ClockModel`](@ref), and `R` is the white PM alone.
-`fm_band`, `pm_band` and `tau_max` pass through; from a fit of a deviation
-`tau_max` defaults to its longest τ.
+```math
+R = \\frac{(m τ_0)^2\\, σ_{\\mathrm{PM}}^2(m τ_0)}{3} ,
+```
+
+with ``σ_{\\mathrm{PM}}^2`` the Allan variance of the white and flicker PM
+together and ``m`` the last lag, up to 65 536, at which it exceeds that of
+the FM terms (the Hadamard variances are compared when the model has
+α = −3 or −4). For white PM alone this is ``h_2/(8π^2 τ_0)`` at every lag.
+The paper gives the principle; the formula is this package's.
+
+With `flicker = true`, flicker FM and flicker PM are kept as the Markov
+states of [`ClockModel`](@ref) and `R` is the white PM alone. Flicker-walk
+FM is left out in either case. `powerlaw_sigma(model, τ)` beside
+`powerlaw_sigma(fit, τ)` shows what a model leaves out at the τ of
+interest.
+
+# Arguments
+
+- `fit`: a [`PowerLawFit`](@ref) that has a sample interval, or a
+  [`NoiseFit`](@ref).
+- `h`: a `Dict` of ``h_α`` keyed by ``α`` or by noise type, as in
+  [`powerlaw_sigma`](@ref).
+
+# Keywords
+
+- `tau0`: sample interval in seconds; a fit carries its own.
+- `drift`: whether the model has a drift state; by default, whether
+  ``h_{-4}`` is positive.
+- `flicker`: keep flicker FM and flicker PM as Markov states.
+- `tau_max`, `fm_band`, `pm_band`: passed to [`ClockModel`](@ref). From a
+  [`PowerLawFit`](@ref) of a deviation curve, `tau_max` defaults to its
+  longest τ.
 
 # Examples
 
+```jldoctest
+julia> using SigmaTau
+
+julia> h = Dict(2 => 8π^2 * 1e-22, 0 => 2e-24, -2 => 1e-30 / 2π^2);
+
+julia> m = clock_model(h; tau0 = 1.0);
+
+julia> (m.R, m.q1, m.q2) .≈ (1e-22, 1e-24, 1e-30)
+(true, true, true)
+```
+
+From a record, with the flicker that the fit finds kept as states:
+
 ```julia
-using SigmaTau
-p = noise_gen(PhaseData, 65536, 1.0; h = Dict(2 => 1e-22, 0 => 1e-24, -2 => 1e-30))
-m = clock_model(powerlaw_fit(p; alphas = [2, 0, -2]))
-process_noise(m, 10.0)        # Q over a 10 s step
+p = noise_gen(PhaseData, 65536, 1.0;
+              h = Dict(0 => 1e-24, -1 => 1.6e-26, -2 => 5e-34))
+m = clock_model(powerlaw_fit(p; alphas = [2, 1, 0, -1, -2]); flicker = true)
 ```
 """
 function clock_model(fit::PowerLawFit; tau_max::Real=fit.source in POWERLAW_DEVIATIONS ? maximum(fit.x) : 1e6 * fit.tau0, kw...)
@@ -290,14 +375,33 @@ function _powerlaw_h(m::ClockModel)
 end
 
 """
-    state_transition(m::ClockModel, δ) → Matrix
+    state_transition(m::ClockModel, δ) → Matrix{Float64}
 
-The matrix Φ(δ) that carries the state over a step of δ seconds:
-`[1 δ; 0 1]`, or `[1 δ δ²/2; 0 1 δ; 0 0 1]` with drift. Each Markov state
-of time constant T adds a row and column after these, the frequency states
-first: it decays by `a = exp(−δ/T)`, and a frequency state moves the phase
-by `T (1 − a)` times itself
-([davis-greenhall-stacey-2005-flicker](@cite), eqs 2.7 and 3.3).
+Matrix ``Φ(δ)`` that carries the state of `m` over a step of `δ` seconds.
+
+For phase, frequency and drift,
+
+```math
+Φ(δ) = \\begin{pmatrix} 1 & δ & δ^2/2 \\\\ 0 & 1 & δ \\\\ 0 & 0 & 1 \\end{pmatrix} ,
+```
+
+or its upper-left 2 × 2 block without drift. Each Markov state of time
+constant ``T`` adds a row and a column after these, the frequency states
+first: it decays by ``a = e^{-δ/T}``, and a frequency state moves the
+phase by ``T(1 - a)`` times itself
+([Davis et al. (2005), Eqs. (2.7) and (3.3)](@cite davis-greenhall-stacey-2005-flicker)).
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> state_transition(ClockModel(; tau0 = 1.0, q1 = 1e-24, q3 = 1e-40), 10.0)
+3×3 Matrix{Float64}:
+ 1.0  10.0  50.0
+ 0.0   1.0  10.0
+ 0.0   0.0   1.0
+```
 """
 function state_transition(m::ClockModel, δ::Real)
     # Filled in place: matrix literals are not trim-safe.
@@ -317,26 +421,55 @@ function state_transition(m::ClockModel, δ::Real)
 end
 
 """
-    process_noise(m::ClockModel, δ) → Matrix
+    process_noise(m::ClockModel, δ) → Matrix{Float64}
 
-Covariance Q(δ) of the noise the clock picks up over a step of δ seconds,
-the white-noise drives integrated over the step (Greenhall 2003, §2):
+Covariance ``Q(δ)`` of the noise that the state of `m` gathers over a step
+of `δ` seconds.
 
-    Q₁₁ = q1 δ + q2 δ³/3 + q3 δ⁵/20    Q₁₂ = q2 δ²/2 + q3 δ⁴/8    Q₁₃ = q3 δ³/6
-    Q₂₂ = q2 δ + q3 δ³/3               Q₂₃ = q3 δ²/2              Q₃₃ = q3 δ
+The white noises of the model, integrated over the step, give
+([Greenhall (2003), Eq. (5)](@cite greenhall-2003-jones-tryon);
+[Zucca and Tavella (2015), Eq. (3)](@cite zucca-2015-clock-jumps))
 
-Without drift, Q is the upper-left 2×2 block. It composes over steps:
-`Q(a + b) = Φ(b) Q(a) Φ(b)ᵀ + Q(b)`.
+```math
+Q(δ) = \\begin{pmatrix}
+q_1 δ + q_2 δ^3/3 + q_3 δ^5/20 & q_2 δ^2/2 + q_3 δ^4/8 & q_3 δ^3/6 \\\\
+q_2 δ^2/2 + q_3 δ^4/8 & q_2 δ + q_3 δ^3/3 & q_3 δ^2/2 \\\\
+q_3 δ^3/6 & q_3 δ^2/2 & q_3 δ
+\\end{pmatrix} ,
+```
 
-A Markov frequency state m, with time constant T, variance σ² and
-`a = exp(−δ/T)`, adds its own drive integrated over the step
-([davis-greenhall-stacey-2005-flicker](@cite), eqs 2.8–2.9 and 3.4), and a
-Markov phase state p only its own:
+or its upper-left 2 × 2 block without drift. Steps compose:
+``Q(a + b) = Φ(b)\\,Q(a)\\,Φ(b)^{\\mathsf T} + Q(b)``, with ``Φ`` from
+[`state_transition`](@ref).
 
-    Q₁₁ += σ² T² (2δ/T − 3 + 4a − a²)    Q₁ₘ = σ² T (1 − a)²    Qₘₘ = σ² (1 − a²)
-    Qₚₚ = σ² (1 − a²)
+A Markov frequency state ``j`` of time constant ``T`` and variance
+``σ^2``, with ``a = e^{-δ/T}``, adds
+([Davis et al. (2005), Eqs. (2.8)–(2.9) and (3.4)](@cite davis-greenhall-stacey-2005-flicker))
 
-The flicker FM that the states leave out at τ₀ adds white FM to `q1`.
+```math
+Q_{11} \\mathrel{+}= σ^2 T^2 \\left(2δ/T - 3 + 4a - a^2\\right), \\qquad
+Q_{1j} = σ^2 T (1 - a)^2, \\qquad Q_{jj} = σ^2 (1 - a^2) ,
+```
+
+and a Markov phase state only its own ``Q_{jj} = σ^2 (1 - a^2)``. The
+white FM that stands for the flicker FM the states leave out at ``τ_0``
+is added to ``q_1``.
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> m = ClockModel(; tau0 = 1.0, q1 = 1e-24, q2 = 3e-30);
+
+julia> process_noise(m, 10.0) ≈ [1e-23+1e-27 1.5e-28; 1.5e-28 3e-29]
+true
+
+julia> Φ, Q = state_transition(m, 5.0), process_noise(m, 5.0);
+
+julia> process_noise(m, 10.0) ≈ Φ * Q * Φ' + Q
+true
+```
 """
 function process_noise(m::ClockModel, δ::Real)
     (; q2, q3) = m

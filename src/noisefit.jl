@@ -14,6 +14,8 @@ A power-law model built one component at a time on a measured σ(τ), by
 [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref) and [`clock_model`](@ref)
 accept it as a model.
 
+# Fields
+
 $(TYPEDFIELDS)
 """
 struct NoiseFit
