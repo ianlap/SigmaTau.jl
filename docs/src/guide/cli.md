@@ -246,7 +246,10 @@ numbers are `null`.
   one row per clock: `clock,weight,weight_mean,error_rms`. With `--algorithm
   greenhall` or `jones_tryon`, `--flicker` fits each clock with
   [flicker states](@ref "Flicker states") and adds `"flicker": {"fm",
-  "pm"}`, the number of Markov states each clock's model carries.
+  "pm"}`, the number of Markov states each clock's model carries. The levels
+  are only as good as the fit: on a short record flicker FM and random-walk
+  FM are hard to tell apart at the longest τ, so states can appear on a
+  clock that has no flicker.
 - On failure, with `--format json`, stdout holds
   `{"schema_version": 1, "sigmatau", "command", "source", "error": "…", "exit_code": n}`.
 
