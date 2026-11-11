@@ -23,7 +23,7 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | Command | Result |
 |:---|:---|
 | `analyze FILE` | deviations against averaging time, each with its confidence interval, EDF and noise type |
-| `check FILE` | a summary of the record: samples, span, gaps, outliers and drift |
+| `check FILE` | a summary of the record: samples, span, gaps, outliers, drift and the statistics of its samples, with their histogram and autocorrelation on request |
 | `spectrum FILE` | the Welch spectra ``S_y(f)`` and ``S_x(f)`` |
 | `dynamic FILE` | the Allan or Hadamard deviation in a window that slides along the record |
 | `drift FILE` | the fit of a frequency drift model |
@@ -222,15 +222,42 @@ recommendation. Each entry of `checks` is one result against the mask, as
 
 ## `check`
 
-`check` takes the options of the record and of the output. Its CSV output
-is one row:
+| Option | Meaning |
+|:---|:---|
+| `--quantity Q` | `phase` or `frequency`: the samples that the statistics, the histogram and the autocorrelation describe. By default those of the record |
+| `--histogram` | the histogram of the samples, from [`sample_histogram`](@ref) |
+| `--bins N` | with `--histogram`, the number of bins. By default Scott's rule, with at most 1000 |
+| `--acf` | the autocorrelation of the samples, from [`acf`](@ref) |
+| `--m M` | with `--acf`, the averaging factor, 1 by default |
+| `--lags K` | with `--acf`, the largest lag. By default half the series, and at most 1000 |
+
+The record needs three samples or more. The CSV output is one row:
 
 ```text
-source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day
+source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,adev,noise_type
 ```
 
-The columns are the members of `record` in the JSON output, which holds
-nothing else. The record needs three samples or more.
+The columns up to `drift_per_day` are the members of `record` in the JSON
+output, and the others those of `statistics`, which
+[`sample_statistics`](@ref) computes from the samples that `statistics_of`
+names. With `--histogram` the CSV output is the table of bins in its place,
+`bin_lower,bin_upper,count`, and with `--acf` that of lags, `lag,tau,acf`.
+The JSON output can hold both, beside `statistics`:
+
+```@example cliref
+sigmatau_json("check --synth 1024 --quantity frequency --format json"; only = "statistics") # hide
+```
+
+```@example cliref
+sigmatau_json("check --synth 1024 --quantity frequency --acf --m 4 --format json"; only = "acf") # hide
+```
+
+`histogram` holds the `edges` and `counts` of the bins and the `n`, `mean`
+and `std` of the samples.
+
+The noise types are those of [`identify_noise`](@ref). `acf.alpha` is the
+lag-1 estimate of ``α``, `null` with fewer than 30 points. The
+autocorrelation needs a record without gaps.
 
 ## `spectrum`
 
