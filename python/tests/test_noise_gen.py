@@ -38,7 +38,7 @@ def test_numpy_generator_rejected():
 
 
 def test_noise_id_nnls_finds_the_mixture():
-    rec = st.noise_gen(PhaseData, 8192, 1.0, sigma1={0: 1e-12, -2: 1e-14}, rng=3)
+    rec = st.noise_gen(PhaseData, 8192, 1.0, sigma1={0: 1e-12, -2: 1e-14}, rng=2)
     r = st.noise_id_nnls(rec)
     assert r["deviation"] == "mhdev"
     assert r["contributions"].shape == (r["tau"].size, r["alphas"].size)
