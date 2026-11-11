@@ -6,21 +6,21 @@
   "N": 25000, "tau0": 1.0, "m_values": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
   "reps": {"adev": 20, "mdev": 20, "hdev": 20, "tdev": 20, "totdev": 20, "mtotdev": 3, "htotdev": 3},
   "seconds": {
-    "adev": 1.787000e-05,
-    "mdev": 3.730000e-05,
-    "hdev": 2.302000e-05,
-    "tdev": 3.766000e-05,
-    "totdev": 1.547000e-05,
-    "mtotdev": 1.527753e-02,
-    "htotdev": 1.407734e-02
+    "adev": 1.495000e-05,
+    "mdev": 3.490000e-05,
+    "hdev": 2.034000e-05,
+    "tdev": 3.618000e-05,
+    "totdev": 7.360000e-06,
+    "mtotdev": 1.586473e-02,
+    "htotdev": 1.575481e-02
   },
   "seconds_default_call": {
-    "adev": 2.116010e-04,
-    "mdev": 2.513710e-04,
-    "hdev": 1.608410e-04,
-    "tdev": 2.670210e-04,
-    "totdev": 3.197910e-04,
-    "mtotdev": 1.581214e-02,
-    "htotdev": 1.552654e-02
+    "adev": 1.593110e-04,
+    "mdev": 2.304510e-04,
+    "hdev": 1.683910e-04,
+    "tdev": 2.477220e-04,
+    "totdev": 2.336710e-04,
+    "mtotdev": 1.755103e-02,
+    "htotdev": 1.604508e-02
   }
 }
