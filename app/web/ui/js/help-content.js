@@ -122,7 +122,7 @@ export const TOPICS = [
     ] },
     { id: "The-import-dialog", level: 2, title: "The import dialog", html: [
       "<h2>The import dialog</h2>",
-      "<p>The dialog shows the top of the file and what the explorer proposes to read from it. The proposal comes from the names of the columns, the header and the size of the values. Check it before loading, the record type above all.</p>",
+      "<p>The dialog shows the top of the file and what the explorer proposes to read from it. The proposal comes from the names of the columns, the header and the size of the values. When several columns are named for readings, such as <code>maser1 phase (s)</code> and <code>maser2 phase (s)</code>, each is proposed as a clock, and the button counts them (<b>Load 6 clocks</b>). Check the proposal before loading, the record type above all.</p>",
       "<p>The heading of each column is a menu:</p>",
       "<table><thead><tr><th>Choice</th><th>The column holds</th></tr></thead><tbody><tr><td><b>Ignore</b></td><td>Nothing to read</td></tr><tr><td><b>Time (s)</b>, <b>Time (days, MJD)</b>, <b>Time (h)</b>, <b>Time (min)</b></td><td>The time of each reading, in that unit</td></tr><tr><td><b>Clock</b></td><td>The readings of one clock</td></tr></tbody></table>",
       "<p>Every column marked <b>Clock</b> becomes a clock, all measured against the same reference at the same instants. A click on the name of a column adds it as a clock or drops it.</p>",
@@ -334,7 +334,7 @@ export const TOPICS = [
     ] },
     { id: "Several-clocks", level: 2, title: "Several clocks", html: [
       "<h2>Several clocks</h2>",
-      "<p>With several clocks, the settings but the last move to a bar above the plot, and each clock has one color: its RMS as a solid line and the chosen share of its trials as a dashed one. The worst trial, the prediction and the reference curve are not drawn. The card lists, for each clock, the time within the limit and the RMS at its longest holdover time.</p>",
+      "<p>With several clocks, the settings but the last move to a bar above the plot, and each clock has one color: its RMS as a solid line and the chosen share of its trials as a dashed one. The worst trial, the prediction and the reference curve are not drawn. The card lists, for each clock, the time within the limit and the RMS at its longest holdover time. A clock whose test cannot be computed, for instance because its training stretch holds no readings, is named with the reason on a line above the plot and is left out of the card.</p>",
     ] },
   ] },
   { id: "steering", nav: "Steering", web: "https://ianlap.github.io/SigmaTau.jl/dev/explorer/steering/", sections: [
@@ -362,7 +362,7 @@ export const TOPICS = [
     ] },
     { id: "Several-clocks", level: 2, title: "Several clocks", html: [
       "<h2>Several clocks</h2>",
-      "<p>With several clocks, the settings move to a bar above the plot, and each clock has one color. With <b>σ(τ)</b> its steered deviation is a solid line and its free-running one a dashed line, and the prediction is not drawn. With <b>Record</b> the plot gives the steered phase of each clock. The card lists the RMS of the steered phase and of the steers of each clock.</p>",
+      "<p>With several clocks, the settings move to a bar above the plot, and each clock has one color. With <b>σ(τ)</b> its steered deviation is a solid line and its free-running one a dashed line, and the prediction is not drawn. With <b>Record</b> the plot gives the steered phase of each clock. The card lists the RMS of the steered phase and of the steers of each clock. A clock whose replay cannot be computed is named with the reason on a line above the plot and is left out of the card.</p>",
     ] },
   ] },
   { id: "ensemble", nav: "Ensemble", web: "https://ianlap.github.io/SigmaTau.jl/dev/explorer/ensemble/", sections: [

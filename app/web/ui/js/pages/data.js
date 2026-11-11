@@ -4,7 +4,7 @@
 import { state, update, activeClock, multi, markStale } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
-import { thousands, duration, sci, escapeHtml as h } from "../format.js";
+import { thousands, duration, sci, startText, escapeHtml as h } from "../format.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
 // Fitted to the phase and removed before every analysis. On phase a line is a
@@ -52,7 +52,7 @@ export function mount(el, c) {
             <button type="button" data-view="phase">Phase</button><button type="button" data-view="drift">Frequency drift</button></div>
           <h2 data-ref="plot-title">Phase x(t)</h2><span class="muted small" data-ref="plot-hint"></span><span class="range-bar" data-ref="range"></span></div>
         <div class="drift-bar" data-ref="drift-bar" hidden></div>
-        <div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div>
+        <div class="plot-box"><div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
       </div>
     </div>`;
   plotEl = root.querySelector("[data-ref=plot]");
@@ -121,7 +121,7 @@ function checkCard(c) {
     <h2>Record check</h2>
     <div class="kv"><span>Samples</span><span class="mono">${thousands(k.samples)}</span></div>
     <div class="kv"><span>Span</span><span class="mono">${duration(k.span_s)}</span></div>
-    ${k.start ? `<div class="kv" title="UTC time of the first sample, from the file's timestamps"><span>Start</span><span class="mono">${k.start.replace("T", " ")}</span></div>` : ""}
+    ${k.start ? `<div class="kv" title="UTC time of the first sample, from the file's timestamps"><span>Start</span><span class="mono">${startText(k.start)}</span></div>` : ""}
     ${gapRow(k)}
     <div class="kv"><span>Points past 5σ</span>${out}</div>
     <div class="kv" title="Least-squares linear frequency drift of the record as analyzed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>

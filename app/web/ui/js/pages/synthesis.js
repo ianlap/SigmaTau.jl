@@ -132,9 +132,10 @@ function onClick(e) {
 }
 
 // ── the preview ──
+const previewBody = () => ({ n: state.synth.n, tau0: state.synth.tau0, models: state.synth.clocks.map(model) });
 function ensure() {
   const S = state.synth;
-  const body = { n: S.n, tau0: S.tau0, models: S.clocks.map(model) };
+  const body = previewBody();
   const key = JSON.stringify(body);
   if (S.preview?.key === key || inflight === key || !state.core.ok) return;
   inflightCtl?.abort();
@@ -170,6 +171,7 @@ export function refresh() {
   const doc = S.preview?.doc;
   if (S.error) return showEmpty(h(S.error));
   if (!doc) return showEmpty(state.core.ok ? "Working out the stability…" : "No analysis core. Start the explorer with serve.py.");
+  if (S.preview.key !== JSON.stringify(previewBody())) return;   // the clocks changed: the plot stays until the new preview comes
   const lines = doc.clocks.map((c, i) => ({ i, y: c[S.dev] })).filter((l) => l.y && l.y.some((v) => v > 0));
   const label = DEVS.find(([id]) => id === S.dev)[1];
   const missing = doc.clocks.some((c) => !c[S.dev]);

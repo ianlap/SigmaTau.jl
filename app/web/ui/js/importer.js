@@ -34,7 +34,7 @@ export function openImport(file, prev = null) {
     kind: kind0,
     time: p?.time_col ?? guess.time,          // 0 = no time column
     timeUnit: p?.timeUnit ?? guess.timeUnit,
-    values: (p?.value_cols ?? [guess.value]).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
+    values: (p?.value_cols ?? guess.values).filter((c) => c >= 1 && c <= Math.max(1, s.nCols)),
     tau0In: p?.tau0 ?? s.tau0Hint ?? "",     // no guess: without a time column τ0 must be given
     against: p?.against ?? "",
     keepZeros: p?.keep_zeros ?? false,          // Stable32 file: zeros are readings, not gaps

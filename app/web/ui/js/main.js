@@ -112,6 +112,8 @@ async function importFile(file, clock, prev) {
       } else if (!multi() || c.source.type !== "file" || c.name === baseName(c.source.name ?? "")) {
         c.name = settings.value_cols.length > 1 ? colName : baseName(file.name);
       }
+      // Two files with clocks of one name (a record and its truth): the later one's say which file.
+      if (!given && s.clocks.some((x) => x !== c && x.group !== group && x.name === c.name)) c.name = `${c.name} · ${baseName(file.name)}`;
       Object.assign(c, {
         source: { type: "file", name: file.name, content: file.text, sha256: file.sha256 ?? "" }, group,
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,

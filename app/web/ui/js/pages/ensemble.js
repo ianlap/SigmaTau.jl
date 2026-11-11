@@ -6,7 +6,7 @@
 import { state, update, isReference } from "../state.js";
 import { timescale, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css } from "../plot.js";
-import { sci, num, escapeHtml as h } from "../format.js";
+import { sci, num, inWords as plain, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 let inflight = null;           // key of the run in progress
@@ -32,7 +32,7 @@ const GAPS = [
   [/^clock_models: .* usable τ points/, "Greenhall, Jones–Tryon and Stein fit a model to each clock, and this file leaves one of them too few samples at which it is read with two others. AT1, AT2 and EWFA form a scale from it."],
   [/^the frequency record is missing/, "Frequency columns with missing samples cannot be read."],
 ];
-const inWords = (message) => GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.") ?? message;
+const inWords = (message) => GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.") ?? plain(message);
 
 export const ownsPanel = true;
 
@@ -175,7 +175,7 @@ export function refresh() {
   const wcard = root.querySelector(".ens-weights"), relaid = wcard.hidden === weighted;
   wcard.hidden = !weighted;
   const alg = ALGS.find(([id]) => id === r.algorithm)?.[1] ?? r.algorithm;
-  root.querySelector("[data-ref=sub]").textContent = `${alg}${r.pivot ? ` at ${names[r.pivot - 1]}` : ""}${r.steps ? `, ${r.steps} steps` : ""}${r.flicker ? ", flicker states" : ""} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || "the file's reference"}`;
+  root.querySelector("[data-ref=sub]").textContent = `${alg}${r.pivot ? ` at ${names[r.pivot - 1]}` : ""}${r.steps ? `, ${r.steps} steps` : ""}${r.flicker ? ", flicker states" : ""} · ${r.n} samples · τ₀ = ${num(r.tau0, 4)} s · against ${r.reference || clocks[0]?.against || "the file's reference"}`;
   // With flicker states on: the Markov states each clock's fitted model carries.
   const states = (i) => [[r.flicker.fm[i], "FM"], [r.flicker.pm[i], "PM"]].filter(([k]) => k).map(([k, kind]) => `${k} ${kind}`).join(" + ");
   const carried = r.flicker ? names.map((n, i) => [n, states(i)]).filter(([, s]) => s) : [];
@@ -192,7 +192,7 @@ export function refresh() {
       hovertemplate: "<b>Time scale</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>" },
     ...r.adev.clocks.map((dev, i) => ({ x: r.adev.tau, y: dev, name: names[i], mode: "lines", line: { color: color(i), width: 1.5, dash: "dot" },
       hovertemplate: `<b>${h(names[i])}</b> − scale<br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
-  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis("σ<sub>y</sub>(τ)"), showlegend: true, uirevision: "ens" }, CONFIG);
+  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis("σ<sub>y</sub>(τ)"), showlegend: false, uirevision: "ens" }, CONFIG);
   if (relaid) Plotly.Plots.resize(root.querySelector("[data-ref=adev]"));
   const s = r.series;
   Plotly.react(root.querySelector("[data-ref=weights]"), s && weighted ? s.weights.map((w, i) => ({

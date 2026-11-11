@@ -186,6 +186,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .synth-grid .clock-name { height: 30px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-popover); color: var(--ink); font: inherit; padding: 0 8px; }
 .synth-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); }
 .record-card { flex: 1; min-height: 0; padding: 18px 18px 10px; display: flex; flex-direction: column; position: relative; }
+.record-card .plot-box { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }   /* a message covers the plot, not the buttons above it */
 /* The plot's header: the title folds down to 140 px and the hint to 100 px, the title taking the room first;
    what still does not fit goes to a second line */
 .record-card .card-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; }

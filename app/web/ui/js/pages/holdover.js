@@ -9,7 +9,7 @@
 import { state, update, visibleClocks, multi } from "../state.js";
 import { holdover as fetchHoldover, holdoverKey } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, css } from "../plot.js";
-import { sci, num, thousands, duration, modelText, escapeHtml as h } from "../format.js";
+import { sci, num, thousands, duration, modelText, inWords, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
@@ -74,6 +74,7 @@ export function mount(el, c) {
   root.innerHTML = `
     <div class="col">
       <div class="toolbar hold-bar" data-ref="toolbar"></div>
+      <p class="spec-note muted small" data-ref="note"></p>
       <div class="card plot-card"><div class="card-row"><h2>Time error in holdover</h2><span class="muted small" data-ref="sub"></span></div>
         <div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
     </div>
@@ -149,7 +150,7 @@ function renderSide(box, clocks) {
     ${ratios(hd)}
     <div class="tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>RMS (s)</span><span>${pct(hd.confidence)}</span><span>worst</span><span>trials</span></div>
     ${hd.tau.map((t, i) => `<div class="tbl-row tbl-body"><span>${num(t, 5)}</span><span>${sci(hd.rms[i], 3)}</span><span>${sci(hd.quantile[i], 3)}</span><span>${sci(hd.worst[i], 3)}</span><span>${thousands(hd.n[i])}</span></div>`).join("")}</div>
-    ${p?.error ? `<p class="muted small hold-note">No predicted curve: ${h(p.error)}</p>` : ""}
+    ${p?.error ? `<p class="muted small hold-note">No predicted curve. ${h(inWords(p.error))}</p>` : ""}
     ${hd.claimed ? `<p class="muted small hold-note" title="Above 1, the clock did worse than the filter's model said it would">RMS over the filter's own claim: ${(hd.rms[0] / hd.claimed[0]).toFixed(2)} at ${duration(hd.tau[0])}, ${(hd.rms[last] / hd.claimed[last]).toFixed(2)} at ${duration(hd.tau[last])}. Model fitted to the first ${duration(hd.train)}, at τ up to ${duration(hd.fit_tau_max)}; past that the claim extrapolates it (dotted): ${modelText(hd.model)}.</p>` : ""}`;
 }
 
@@ -174,7 +175,9 @@ export function refresh() {
   const ready = current.filter((c) => !c.holdover.error);
   const failed = current.filter((c) => c.holdover.error);
   renderSide(side, ready);
-  if (!ready.length) return showEmpty(`<p>${failed.length ? h(failed.map((c) => `${several ? `${c.name}: ` : ""}${c.holdover.error}`).join(" · ")) : "Running the holdover test…"}</p>`);
+  // A clock whose test failed is named with the reason, beside the ones that worked.
+  root.querySelector("[data-ref=note]").innerHTML = ready.length ? failed.map((c) => `No holdover test for <b>${h(c.name)}</b>: ${h(inWords(c.holdover.error))}`).join("<br>") : "";
+  if (!ready.length) return showEmpty(`<p>${failed.length ? h(failed.map((c) => `${several ? `${c.name}: ` : ""}${inWords(c.holdover.error)}`).join(" · ")) : "Running the holdover test…"}</p>`);
   showEmpty("");
   if (!Plotly) return;
 
