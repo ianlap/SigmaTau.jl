@@ -173,13 +173,22 @@ end
 # clock with white FM and random-walk FM whose ADEV has its minimum at τ_min.
 _filter_constant(τmin::Real, τ₀::Real) = (-1 + sqrt(1 / 3 + 4 * (τmin / τ₀)^2 / 3)) / 2
 
+# The stretch the starting values are taken from, and the usual spacing of
+# the readings in it: the last of the first max(16, P/10) of the P samples
+# with a reading, and the median number of samples from one to the next.
+function _start(r::AbstractMatrix{Float64})
+    rows = findall(n -> any(isfinite, view(r, n, :)), axes(r, 1))
+    head = rows[1:min(length(rows), max(16, length(rows) ÷ 10))]
+    return last(head), length(head) < 2 ? 1 : round(Int, _middle(Float64.(diff(head))))
+end
+
 # Each clock's own τ_min: the lag where its individual ADEV is smallest over
-# the octaves the record supports.
-function _estimate_tau_min(cc::ClockComparisons)
+# the octaves of the spacing `c` that the record supports.
+function _estimate_tau_min(cc::ClockComparisons, c::Int)
     N, k = size(cc.x)
-    best, tmin = fill(Inf, k), fill(cc.tau0, k)
-    m = 1
-    while N - 2m >= 16
+    best, tmin = fill(Inf, k), fill(c * cc.tau0, k)
+    m = c
+    while N - 2m >= 16c
         v = _time_variances(cc.x, m)
         for i in 1:k
             s = sqrt(v[i]) / m
@@ -190,24 +199,24 @@ function _estimate_tau_min(cc::ClockComparisons)
     return tmin
 end
 
-# Starting prediction-error variances ε_i²(τ₀) = τ₀² σ_y,i²(τ₀) (eq. 7), from
-# the first max(16, N/10) readings; a clock with no usable estimate takes
-# the largest of the others.
-function _initial_variance(cc::ClockComparisons)
-    N, k = size(cc.x)
-    v = _time_variances(view(cc.x, 1:min(N, max(16, N ÷ 10)), :), 1)
+# Starting prediction-error variances ε_i²(τ) = τ² σ_y,i²(τ) (eq. 7) at the
+# spacing τ = cτ₀, from the samples up to `stop`; a clock with no usable
+# estimate takes the largest of the others.
+function _initial_variance(cc::ClockComparisons, stop::Int, c::Int)
+    k = size(cc.x, 2)
+    v = _time_variances(view(cc.x, 1:stop, :), c)
     ok = filter(s -> isfinite(s) && s > 0, v)
     isempty(ok) && return ones(k)
     return Float64[isfinite(s) && s > 0 ? s : maximum(ok) for s in v]
 end
 
 # Starting frequencies against the scale: each clock's least-squares slope
-# over the first max(16, N/10) readings less the mean slope, so clocks with
-# frequency offsets start tracking them (the mean of the offsets is the
-# scale's own).
-function _initial_frequency(cc::ClockComparisons)
-    N, k = size(cc.x)
-    rows = 1:min(N, max(16, N ÷ 10))
+# over the samples up to `stop` (the first max(16, N/10) unless given) less
+# the mean slope, so clocks with frequency offsets start tracking them (the
+# mean of the offsets is the scale's own).
+function _initial_frequency(cc::ClockComparisons, stop::Int=min(size(cc.x, 1), max(16, size(cc.x, 1) ÷ 10)))
+    k = size(cc.x, 2)
+    rows = 1:stop
     slope = zeros(k)
     for i in 1:k
         ok = isfinite.(cc.x[rows, i])
@@ -272,9 +281,18 @@ this one is the package's own.
 aim: clocks are added to AT1 and removed from it with minimal impact on
 the scale.
 
+In these three scales the interval ``τ`` of the equations is the time since
+the last sample with a reading, as a clock's frequency comes from its
+latest two readings
+([Weiss and Weissert (1991), §2.8](@cite weiss-weissert-1991-at2)): clocks
+read together at every tenth sample give the scale of those readings alone,
+and the constants below are taken at that spacing. The clocks have to be
+read at the same samples; one read less often than the others joins anew at
+each of its readings and never has a weight.
+
 The scale starts at the mean of the first readings. Each frequency starts
-at the slope of a line through the first tenth of the clock's record, less
-the mean of those slopes.
+at the slope of a line through the first tenth of the readings, less the
+mean of those slopes.
 
 `:ewfa` gives every clock the same weight and takes ``y_i`` as the clock's
 last frequency step, ``[x_i(t) - x_i(t - τ)]/τ``
@@ -301,7 +319,7 @@ the square of
 
 ``K_i`` makes up for the clock being part of the scale it is compared
 with. ``ε_i^2`` starts at ``τ^2 σ_{y,i}^2(τ)``, estimated from the first
-tenth of the record. The frequency is an exponential average of the
+tenth of the readings. The frequency is an exponential average of the
 frequency steps,
 
 ```math
@@ -487,8 +505,8 @@ pivot returns.
   of its pivot, and steps when the pivot returns from a gap.
 - `tau_min`: ``τ_{\\min}`` in seconds for `:at1` and `:at2`, one number or
   one per clock. By default, the τ of the smallest Allan deviation of each
-  clock among the octaves of τ₀, estimated from the record with the share
-  of the reference removed.
+  clock among the octaves of the interval between readings, estimated from
+  the record with the share of the reference removed.
 - `memory`: time constant in seconds of the average behind ``ε_i^2``. The
   default is 20 days, the paper's value for cesium clocks; a quarter of the
   record is used where that is shorter.
@@ -506,7 +524,7 @@ pivot returns.
 - `steps`: `false`, `:best` (also `true`) or `:real`, for `:at2`.
 - `step_threshold`: standard deviations that a frequency difference must
   pass to count as a step.
-- `lmax`: one more than the longest window of the step test, in samples;
+- `lmax`: one more than the longest window of the step test, in intervals;
   by default ``τ_{\\min,i}/τ`` for each clock, and at least 4.
 - `step_inflate`: factor on ``ε_i^2`` when a clock returns after a step;
   4 doubles ``σ_α``.
@@ -563,32 +581,35 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     at2 = algorithm === :at2
     at1 = algorithm === :at1 || at2
     τ = cc.tau0
-    τmin = tau_min === nothing ? (at1 ? _estimate_tau_min(cc) : fill(τ, k)) :
+    r = cc.x
+    stop, c = _start(r)         # c: the usual spacing of the readings, in samples
+    τmin = tau_min === nothing ? (at1 ? _estimate_tau_min(cc, c) : fill(τ, k)) :
            tau_min isa Real ? fill(Float64(tau_min), k) : Float64.(tau_min)
     length(τmin) == k || throw(ArgumentError("timescale: $(length(τmin)) tau_min values for $k clocks"))
-    mf = at1 ? Float64[_filter_constant(t, τ) for t in τmin] : zeros(k)
-    Nτ = max(1.0, min(memory, N * τ / 4) / τ)
-    r = cc.x
+    mf = at1 ? Float64[_filter_constant(t, c * τ) for t in τmin] : zeros(k)
+    Nτ = max(1.0, min(memory, N * τ / 4) / (c * τ))
     X, Y, W, E = zeros(N, k), zeros(N, k), zeros(N, k), fill(NaN, N, k)
-    ε² = at1 ? _initial_variance(cc) : ones(k)
+    ε² = at1 ? _initial_variance(cc, stop, c) : ones(k)
     # Start: the scale is the plain mean of the first readings.
     ok = isfinite.(r[1, :])
     any(ok) || throw(ArgumentError("timescale: no clock has a first reading"))
     u = -sum(r[1, ok]) / count(ok)
     X[1, :] = r[1, :] .+ u
-    seen = copy(ok)             # read at the last sample; a clock joins at a reading that follows none
-    y = _initial_frequency(cc)
+    # The interval of eqs 7-15 is the time since the last sample with a reading,
+    # `prev`; a clock joins at a reading that follows none of its own there.
+    seen, prev = copy(ok), 1
+    y = _initial_frequency(cc, stop)
     # AT2: the random-walk FM impulse σ_β²τ of each clock from its τ_min through
     # the steady state m(m+1) = σα²/(σ_β²τ) (eq 18), and the frequency variance P
-    # at its steady state (eq 16), both from the starting σα² = ε²/τ².
-    σβτ = ε² ./ τ^2 ./ (mf .* (mf .+ 1))
-    Pf = Float64[_at2_steady(ε²[i] / τ^2, σβτ[i]) for i in 1:k]
+    # at its steady state (eq 16), both from the starting σα² = ε²/τ² at τ = cτ₀.
+    σβτ = ε² ./ (c * τ)^2 ./ (mf .* (mf .+ 1))
+    Pf = Float64[_at2_steady(ε²[i] / (c * τ)^2, σβτ[i]) for i in 1:k]
     W[1, :] = ok ./ count(ok)
     # Step detector state (AT2, eqs 19-22): the state after each sample, kept
     # to rerun the scale from a detected step; `blocked[i]` is the last sample
     # clock i is kept out of the scale; no detection until `replay`.
-    Lmax = [lmax === nothing ? max(4, round(Int, t / τ)) : Int(lmax) for t in τmin]
-    ε²h, yh, Pfh = zeros(N, k), zeros(N, k), zeros(N, k)
+    Lmax = [lmax === nothing ? max(4, round(Int, t / (c * τ))) : Int(lmax) for t in τmin]
+    ε²h, yh, Pfh, prevh = zeros(N, k), zeros(N, k), zeros(N, k), ones(Int, N)
     blocked, replay = zeros(Int, k), 0
     joined = ones(Int, k)       # the sample each clock last joined at: no step window reaches behind it
     # :real keeps what was issued: rows are copied out once, after a rerun
@@ -599,15 +620,16 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     n = 2
     while n <= N
         if real && n - 1 > issued
-            if pending     # phase continuity with the last row issued
-                j = findall(isfinite, view(r, issued, :))
-                shift = isempty(j) ? 0.0 : sum(Xo[issued, j] .- X[issued, j]) / length(j)
+            if pending     # phase continuity with the last readings issued
+                p = prevh[issued]
+                j = findall(isfinite, view(r, p, :))
+                shift = isempty(j) ? 0.0 : sum(Xo[p, j] .- X[p, j]) / length(j)
                 pending = false
             end
             Xo[n-1, :], Yo[n-1, :], Wo[n-1, :], Eo[n-1, :] = X[n-1, :] .+ shift, Y[n-1, :], W[n-1, :], E[n-1, :]
             issued = n - 1
         end
-        ε²h[n-1, :], yh[n-1, :], Pfh[n-1, :] = ε², y, Pf
+        ε²h[n-1, :], yh[n-1, :], Pfh[n-1, :], prevh[n-1] = ε², y, Pf, prev
         for i in 1:k
             n == blocked[i] + 1 && (ε²[i] *= step_inflate)   # back in, with σα raised
         end
@@ -623,8 +645,8 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
             any(keep) && (use = keep)
         end
         if !any(use)
-            X[n, :] = x̂
-            seen = read
+            X[n, :], Y[n, :] = x̂, y
+            any(read) && ((seen, prev) = (read, n))
             n += 1
             continue
         end
@@ -650,32 +672,35 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
                     ε²[i] = (ε̂² + Nτ * ε²[i]) / (1 + Nτ)
                 end
                 if est
-                    ŷ = (X[n, i] - X[n-1, i]) / τ
+                    m = n - prev
+                    ŷ = (X[n, i] - X[prev, i]) / (m * τ)
                     if at2          # Kalman update of y (eqs 13-15), σα² = ε²/τ²
-                        σα² = ε²[i] / τ^2
-                        P̂ = Pf[i] + σβτ[i]
+                        σα² = ε²[i] / (c * m * τ^2)
+                        P̂ = Pf[i] + σβτ[i] * m / c
                         y[i] = (σα² * y[i] + P̂ * ŷ) / (σα² + P̂)
                         Pf[i] = σα² * P̂ / (σα² + P̂)
                     else
-                        y[i] = (mf[i] * y[i] + ŷ) / (mf[i] + 1)
+                        mᵢ = at1 ? _filter_constant(τmin[i], m * τ) : 0.0
+                        y[i] = (mᵢ * y[i] + ŷ) / (mᵢ + 1)
                     end
                 end
             else
                 X[n, i] = x̂[i]
             end
         end
-        seen = read
+        seen, prev = read, n
         Y[n, :] = y
         W[n, :] = wu
         if mode !== :none && n > replay
-            n0, i0 = _at2_step(X, yh, Pfh, ε², σβτ, use, max.(blocked .+ 1, joined), Lmax, n, τ, step_threshold)
+            n0, i0 = _at2_step(X, yh, Pfh, ε², σβτ, use, max.(blocked .+ 1, joined), Lmax, n, c, c * τ, step_threshold)
             if i0 > 0       # a frequency step: rerun from its start without that clock
                 blocked[i0] = n0 + max(1, round(Int, τmin[i0] / τ))
                 replay = n
                 pending = real
                 ε², y, Pf = ε²h[n0, :], yh[n0, :], Pfh[n0, :]
-                Pf[i0] = ε²[i0] / τ^2          # P raised at the step
-                seen = isfinite.(r[n0, :])
+                Pf[i0] = ε²[i0] / (c * τ)^2    # P raised at the step
+                prev = prevh[n0]
+                seen = isfinite.(r[prev, :])
                 joined .= min.(joined, n0)
                 n = n0 + 1
                 continue
@@ -685,8 +710,9 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     end
     if real && N > issued       # the last row, when no rerun is pending for it
         if pending
-            j = findall(isfinite, view(r, issued, :))
-            shift = isempty(j) ? 0.0 : sum(Xo[issued, j] .- X[issued, j]) / length(j)
+            p = prevh[issued]
+            j = findall(isfinite, view(r, p, :))
+            shift = isempty(j) ? 0.0 : sum(Xo[p, j] .- X[p, j]) / length(j)
         end
         for m in issued+1:N
             Xo[m, :], Yo[m, :], Wo[m, :], Eo[m, :] = X[m, :] .+ shift, Y[m, :], W[m, :], E[m, :]
@@ -696,8 +722,8 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
 end
 
 # AT2 frequency-step test (Weiss & Weissert 1991, eqs 19-22), run on the clocks
-# kept at sample n: for each window of s = 2 … Lmax−1 intervals, the clock's mean
-# frequency against the scale over the window, y_avg = (x[n] − x[n−s])/(sτ),
+# kept at sample n: for each window of s = 2 … Lmax−1 intervals (τ, `c` samples
+# each), the clock's mean frequency against the scale over the window, y_avg = (x[n] − x[n−sc])/(sτ),
 # is compared with the frequency estimate y₋ₗ before it. In place of the
 # variance of the paper's eq 20, that of the difference, in fractional frequency²:
 #   P₋ₗ + (σα,i² + σαx²)/s + (σβτ,i + σβτx)(s+1)(2s+1)/(6s)
@@ -707,7 +733,7 @@ end
 # variance σβτ (s+1)(2s+1)/(6s)). σαx² and σβτx combine the clocks' levels as in eqs 21-22,
 # with σβτ the paper's σβ²τ. Returns (start sample, clock) of the window with
 # the largest ratio above `thr`, or (0, 0).
-function _at2_step(X, yh, Pfh, ε², σβτ, use, from, Lmax, n, τ, thr)
+function _at2_step(X, yh, Pfh, ε², σβτ, use, from, Lmax, n, c, τ, thr)
     σαx⁻, σβx⁻ = 0.0, 0.0
     for j in eachindex(use)
         use[j] || continue
@@ -718,8 +744,8 @@ function _at2_step(X, yh, Pfh, ε², σβτ, use, from, Lmax, n, τ, thr)
     for i in eachindex(use)
         use[i] || continue
         σα² = ε²[i] / τ^2
-        for s in 2:min(Lmax[i] - 1, n - from[i])
-            n0 = n - s
+        for s in 2:min(Lmax[i] - 1, (n - from[i]) ÷ c)
+            n0 = n - s * c
             var = Pfh[n0, i] + (σα² + 1 / σαx⁻) / s + (σβτ[i] + 1 / σβx⁻) * (s + 1) * (2s + 1) / (6s)
             z = abs((X[n, i] - X[n0, i]) / (s * τ) - yh[n0, i]) / sqrt(var)
             z > best && ((best, n0b, ib) = (z, n0, i))

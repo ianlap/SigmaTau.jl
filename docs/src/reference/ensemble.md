@@ -307,6 +307,17 @@ samples, the mean frequency of `:ewfa` over the gap differed from that of
 the 2000 samples before it by 37 times as much as in the same records
 without the gap. For the other scales the factor was 1.0 to 1.2.
 
+The clocks need not be read at every sample of the record. In `:ewfa`,
+`:at1` and `:at2` the interval of the equations is the time since the last
+sample with a reading
+([Weiss and Weissert (1991), §2.8](@cite weiss-weissert-1991-at2)), so
+clocks read together at every tenth sample give the scale of those readings
+alone. They do have to be read together: a clock read less often than the
+others joins anew at each of its readings and never has a weight. For
+clocks on different schedules, form the scale on the samples they share:
+the Kalman scales take each reading when it comes, but then lean on the
+clock read most often.
+
 ```@docs
 timescale
 TimescaleResult

@@ -504,6 +504,10 @@ function parse_args!(o::Options, args::Vector{String})
     o.time_col >= 0 || throw(usage_error("--time-col must be 0 (no time column) or more"))
     o.value_col >= 1 || throw(usage_error("--value-col must be 1 or more"))
     o.header >= 0 || throw(usage_error("--header must be 0 or more"))
+    if !isempty(o.value_cols)
+        isempty(o.column) || throw(usage_error("--column names one clock; give the clocks of a timescale with --value-cols"))
+        o.value_col = o.value_cols[1]
+    end
     isnan(o.tau0) || o.tau0 > 0 || throw(usage_error("--tau0 must be positive"))
     isnan(o.nominal) || o.nominal > 0 || throw(usage_error("--nominal must be positive"))
     o.scaling != 0 || throw(usage_error("--scaling must not be 0"))

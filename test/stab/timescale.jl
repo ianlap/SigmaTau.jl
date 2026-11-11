@@ -107,6 +107,13 @@ using Statistics
         free = timescale(sc; algorithm=:at2)
         @test timescale(sc; algorithm=:at2, steps=:best).weights == free.weights
         @test timescale(sc; algorithm=:at2, steps=:real).weights == free.weights
+        # Readings at every fourth sample: the interval of the equations is the
+        # time between readings (Weiss & Weissert 1991, §2.8), so the scale is
+        # that of the readings alone, the caught step included.
+        x4 = fill(NaN, 32000, 4); x4[1:4:end, :] = sx
+        for kw in ((; algorithm=:ewfa), (; algorithm=:at1), (; algorithm=:at2, steps=:real))
+            @test timescale(ClockComparisons(x4, 0.25); kw...).x[1:4:end, :] ≈ timescale(stepped; kw...).x rtol=1e-9
+        end
     end
 
     @testset "caps, gaps and outliers" begin
