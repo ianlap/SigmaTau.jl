@@ -123,6 +123,23 @@ using Statistics
         @test timescale(ClockComparisons(x, 1.0)).weights[40000, 2] > 0   # not by default
     end
 
+    @testset "a clock back from a gap joins anew" begin
+        # No paper gives a rule. The clock has no weight at its first reading
+        # after the gap and the scale does not step there.
+        x = cc.x[1:8000, :]; x[3001:5000, 1] .= NaN
+        cg = ClockComparisons(x, 1.0)
+        function rejoin(; kw...)                            # step at the return over the scale's rms step
+            r = timescale(cg; kw...)
+            e = timescale_phase(r).x
+            @test r.weights[5001, 1] == 0 && r.weights[5002, 1] > 0
+            abs(e[5001] - e[5000]) / sqrt(mean(abs2, diff(e[1:3000])))
+        end
+        @test rejoin(; algorithm=:ewfa) < 8
+        @test rejoin(; algorithm=:at1) < 8
+        @test rejoin(; algorithm=:at2, steps=true) < 8
+        @test rejoin(; algorithm=:stein, models=ms, pivot=2) < 8
+    end
+
     @testset "offsets, gaps near the start and short records (AT1)" begin
         # Frequency offsets 1000 times the clocks' noise: weights unchanged,
         # also with the outlier test on, which never rejects every clock.
