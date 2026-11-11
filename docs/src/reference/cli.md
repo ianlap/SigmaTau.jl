@@ -114,7 +114,8 @@ The sample interval of a simulated record is `--tau0`, or 1 s.
 
 A value that does not exist is an empty field in CSV and `null` in JSON,
 never the text `NaN`. `model` and `live` write JSON only, and `report`
-writes HTML.
+writes HTML: `live` and `report` take no `--format`, and `model` takes
+`--format json` alone.
 
 ### JSON
 

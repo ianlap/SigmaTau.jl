@@ -120,7 +120,7 @@ const OPTS = [
     Opt("--fast", "", String[], false, "run the simulator flat out instead of one reading per τ₀", ["live"]),
     # Output
     Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
-    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; model writes JSON only", [TABULAR; "model"]),
+    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; for model, json alone", [TABULAR; "model"]),
     Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", BATCH),
     Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY),
     Opt("--help", "", String[], false, "show this command's options", ANY),
@@ -401,7 +401,10 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--query";          o.query = v
     elseif name == "--every";          o.every = parse_int(v, name)
     elseif name == "--count";          o.count = parse_int(v, name)
-    elseif name == "--format";         o.format = check_choice(v, name, FORMATS)
+    elseif name == "--format"
+        # Refused here, so that a later error on the line is still answered in JSON.
+        o.command == "model" && v != "json" && throw(usage_error("model writes JSON only"))
+        o.format = check_choice(v, name, FORMATS)
     elseif name == "--out";            o.out = v
     elseif name == "--with";           o.with = v
     elseif name == "--mask";           o.mask = check_choice(v, name, MASKS)

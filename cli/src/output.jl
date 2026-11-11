@@ -61,8 +61,9 @@ function json_head(io::IO, o::Options, source::String)
     json_key(io, "source"); json_string(io, source)
 end
 
+# The source is the one a result of the command names, as far as it is known without the record.
 function write_error_json(io::IO, o::Options, code::Int, msg::String)
-    json_head(io, o, isempty(o.input) ? (o.synth > 0 ? "synthetic" : "") : o.input)
+    json_head(io, o, o.command == "model" ? "model" : !isempty(o.input) ? o.input : o.synth > 0 ? "synthetic" : "")
     json_key(io, "error"); json_string(io, msg)
     json_key(io, "exit_code"); print(io, code)
     print(io, "}\n")
