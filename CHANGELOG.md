@@ -469,6 +469,13 @@ Clock models, the Kalman filter and timescales.
   by many times what the noise of the clocks gives, the rate and drift of
   the scale no longer depend on the pivot at the start, and models with
   aging no longer run the scale away. Every `:stein` result changes.
+- `timescale` with `:at1` or `:at2`: the starting prediction-error variances
+  are an N-cornered hat over the clocks and the reference, the default
+  `tau_min` is taken from the octaves up to a tenth of the record and beyond
+  them only while the Allan deviation still falls, and the scale starts at
+  the mean rate of its clocks under their starting weights. Scales of clocks
+  that differ much in noise change from their first sample; `:ewfa` and the
+  Kalman scales do not change.
 
 ### Removed
 
