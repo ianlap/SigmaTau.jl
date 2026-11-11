@@ -658,14 +658,39 @@ mktempdir() do dir
         r = run_cli("check", pf)
         @test r.code == 0
         lines = split(strip(r.out), '\n')
-        @test lines[1] == "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day"
-        @test split(lines[2], ',')[3] == "256"
+        @test lines[1] == "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day," *
+                          "statistics_of,min,max,mean,median,std,std_y,adev,noise_type"
+        row = split(lines[2], ',')
+        st = sample_statistics(PhaseData(X, 1.0))
+        @test row[3] == "256" && row[9] == "phase"
+        @test parse.(Float64, row[10:16]) == [st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev]
+        @test row[17] == String(st.noise)
         r = run_cli("check", pf, "--format", "json", "--series", "4000")
         @test r.code == 0
         @test occursin("\"command\":\"check\"", r.out)
         @test occursin("\"n\":256", r.out) && occursin("\"gaps\":0", r.out)
         @test occursin("\"series\":{\"t\":[0.0,1.0,", r.out)
-        @test !occursin("\"results\"", r.out)
+        @test occursin("\"statistics\":{\"quantity\":\"phase\",\"n\":256,", r.out)
+        @test !occursin("\"results\"", r.out) && !occursin("\"histogram\"", r.out)
+        # The histogram and the autocorrelation, of the frequency on request.
+        fd = FrequencyData(PhaseData(X, 1.0))
+        h = sample_histogram(fd; bins=4)
+        rows = csv_rows(run_cli("check", pf, "--quantity", "frequency", "--histogram", "--bins", "4").out)
+        @test parse.(Int, getindex.(rows, 3)) == h.counts
+        @test parse.(Float64, getindex.(rows, 1)) == h.edges[1:4]
+        a = acf(PhaseData(X, 1.0); m=2, lags=5)
+        rows = csv_rows(run_cli("check", pf, "--acf", "--m", "2", "--lags", "5").out)
+        @test parse.(Float64, getindex.(rows, 3)) == a.r && getindex.(rows, 2) == ["0.0", "2.0", "4.0", "6.0", "8.0", "10.0"]
+        @test length(csv_rows(run_cli("check", pf, "--acf").out)) == 129       # half the series
+        r = run_cli("check", pf, "--format", "json", "--histogram", "--acf", "--quantity", "frequency")
+        @test occursin("\"statistics\":{\"quantity\":\"frequency\",\"n\":255,", r.out)
+        @test occursin("\"histogram\":{\"edges\":[", r.out) && occursin("\"acf\":{\"m\":1,\"tau\":1.0,\"n\":255,\"lag\":[0,1,", r.out)
+        @test run_cli("check", pf, "--histogram", "--acf").code == 1               # two tables
+        @test run_cli("check", pf, "--bins", "4").code == 1                        # needs --histogram
+        @test run_cli("check", pf, "--acf", "--m", "1,2").code == 1
+        @test run_cli("check", pf, "--acf", "--m", "128").code == 3                # two points
+        r = run_cli("check", pf, "--acf", "--lags", "500")
+        @test r.code == 3 && occursin("--lags must lie between 0 and 255", r.err) && !occursin("acf:", r.err)
     end
 
     @testset "spectrum" begin
@@ -992,7 +1017,7 @@ mktempdir() do dir
                                 string(spectrum_sigma(f, L, [1e-5]; f_carrier=10e6).below[1]) * ",")
         # S_φ(f) in another column, a narrower band.
         write(joinpath(dir, "sphi.dat"), join(string.(f, " ", L, " ", 2 .* exp10.(L ./ 10)), "\n") * "\n")
-        r = run_cli("phasenoise", joinpath(dir, "sphi.dat"), "--quantity", "Sphi", "--value-col", "3", "--carrier", "10e6",
+        r = run_cli("phasenoise", joinpath(dir, "sphi.dat"), "--density", "Sphi", "--value-col", "3", "--carrier", "10e6",
                     "--band", "10:1e4", "--devs", "mhdev", "--tau", "0.01,1")
         @test occursin(",mhdev,1.0," * string(spectrum_sigma(f, L, tau; f_carrier=10e6, deviation=:mhdev, band=(10, 1e4)).dev[2])[1:12], r.out)
         @test run_cli(pn[1:4]...).code == 1                                   # ℒ(f) needs the carrier
@@ -1045,6 +1070,7 @@ mktempdir() do dir
                          ["analyze", pf, "--devs", "mdev,mhtotdev", "--noise", "fit"],
                          ["analyze", pf, "--format", "json", "--spectrum", "--series", "100"],
                          ["check", pf, "--format", "json"],
+                         ["check", pf, "--format", "json", "--histogram", "--acf", "--quantity", "frequency"],
                          ["spectrum", pf],
                          ["cross", pf, "--with", pf, "--format", "json"],
                          ["hat", joinpath(dir, "hat.csv"), "--value-cols", "2,3", "--devs", "adev,mhdev", "--format", "json"],
@@ -1062,7 +1088,7 @@ mktempdir() do dir
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["model", "--synth", "64", "--noise-model", "1e-22:1e-24:1e-30:0"],
                          ["phasenoise", joinpath(dir, "pn.csv"), "--header", "1", "--carrier", "10e6", "--devs", "adev,tdev,hdev,mhdev"],
-                         ["phasenoise", joinpath(dir, "sphi.dat"), "--quantity", "Sphi", "--value-col", "3", "--carrier", "10e6", "--format", "json"],
+                         ["phasenoise", joinpath(dir, "sphi.dat"), "--density", "Sphi", "--value-col", "3", "--carrier", "10e6", "--format", "json"],
                          ["phasenoise", joinpath(dir, "pn.csv"), "--carrier", "10e6", "--format", "json"],
                          ["completion", "bash"],
                          ["help"],

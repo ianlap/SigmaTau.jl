@@ -127,6 +127,46 @@ function json_record(io::IO, o::Options, data::PhaseData)
     print(io, '}')
 end
 
+# The statistics of the samples `check` describes (phase or frequency).
+function json_statistics(io::IO, st, what::String)
+    print(io, '{')
+    json_key(io, "quantity", true); json_string(io, what)
+    json_key(io, "n"); print(io, st.n)
+    json_key(io, "gaps"); print(io, st.gaps)
+    json_key(io, "min"); json_number(io, st.min)
+    json_key(io, "max"); json_number(io, st.max)
+    json_key(io, "mean"); json_number(io, st.mean)
+    json_key(io, "median"); json_number(io, st.median)
+    json_key(io, "std"); json_number(io, st.std)
+    json_key(io, "std_y"); json_number(io, st.std_y)
+    json_key(io, "adev"); json_number(io, st.adev)
+    json_key(io, "noise_type"); json_string(io, String(st.noise))
+    print(io, '}')
+end
+
+function json_histogram(io::IO, h)
+    print(io, '{')
+    json_key(io, "edges", true); json_array(io, h.edges)
+    json_key(io, "counts"); json_array(io, h.counts)
+    json_key(io, "n"); print(io, h.n)
+    json_key(io, "mean"); json_number(io, h.mean)
+    json_key(io, "std"); json_number(io, h.std)
+    print(io, '}')
+end
+
+function json_acf(io::IO, o::Options, rec)
+    a = acf_of(o, rec)
+    print(io, '{')
+    json_key(io, "m", true); print(io, a.m)
+    json_key(io, "tau"); json_number(io, a.tau)
+    json_key(io, "n"); print(io, a.n)
+    json_key(io, "lag"); json_array(io, a.lag)
+    json_key(io, "r"); json_array(io, a.r)
+    json_key(io, "alpha"); json_number(io, a.alpha)
+    json_key(io, "noise_type"); json_string(io, String(a.noise))
+    print(io, '}')
+end
+
 function json_preprocessing(io::IO, o::Options)
     json_key(io, "detrend"); json_string(io, o.detrend)
     json_key(io, "remove_drift"); json_string(io, o.remove_drift)

@@ -53,6 +53,7 @@ include("comparisons.jl")
 include("timescale.jl")
 include("deviations.jl")
 include("registry.jl")
+include("samplestats.jl")
 include("suite.jl")
 include("klts.jl")
 include("ensemble.jl")
@@ -102,6 +103,7 @@ export TimescaleResult, timescale, timescale_phase, implicit_mean
 export theo1, theoh
 export stability, DEFAULT_DEVIATIONS
 export estimators, deviation, tau_mode, summarize
+export sample_statistics, sample_histogram, acf
 export StreamingStability, snapshot, nsamples
 export LiveStability, SimulatedSource, InstrumentSource, read_reading
 

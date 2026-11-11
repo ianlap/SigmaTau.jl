@@ -23,7 +23,7 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | Command | Result |
 |:---|:---|
 | `analyze FILE` | deviations against averaging time, each with its confidence interval, EDF and noise type |
-| `check FILE` | a summary of the record: samples, span, gaps, outliers and drift |
+| `check FILE` | a summary of the record: samples, span, gaps, outliers, drift and the statistics of its samples, with their histogram and autocorrelation on request |
 | `spectrum FILE` | the Welch spectra ``S_y(f)`` and ``S_x(f)`` |
 | `dynamic FILE` | the Allan or Hadamard deviation in a window that slides along the record |
 | `drift FILE` | the fit of a frequency drift model |
@@ -57,7 +57,7 @@ takes the options of this section.
 | `--header N` | number of lines to skip after the leading `#` lines, such as a line of column names |
 | `--delim CHAR` | character between the fields, `'\t'` for a tab. By default a comma where the first line of data has one, a tab where a table or a `.tsv` file has one, and blanks otherwise |
 | `--scaling X` | factor applied to the samples, `1e-9` for nanoseconds |
-| `--column NAME` | the column of a table with named columns, or the clock of a RINEX clock file, by name |
+| `--column NAME` | the column of a table with named columns, or the clock of a RINEX clock file, by name. By default the column that [`read_data`](@ref) picks from the names of a table, and the first clock of a RINEX clock file |
 | `--nominal HZ` | nominal frequency, for readings in hertz. By default their mean, rounded to four significant figures |
 | `--keep-zeros` | read the zeros of a Stable32 `.phd` or `.frd` file as samples. By default a zero there is a missing sample, as in Stable32, except the first and the last sample of a phase file |
 
@@ -70,6 +70,7 @@ column is applied, so `phase_ns` needs no `--scaling`. With `--time-col`,
 `--value-col` or `--header` given, such a table is read by position
 instead, and `--header 1` skips its line of names. The name of the time
 column still sets its unit, so a column named `MJD` is in days either way.
+A file compressed with gzip (`.gz`) must be unpacked first.
 
 The program holds every record as phase. It integrates a frequency file of
 ``N`` samples to ``N + 1`` phase samples, and reports that number. A
@@ -170,7 +171,7 @@ sigmatau_json("analyze missing.dat --format json") # hide
 | `--m LIST` | the averaging factors themselves, `1,2,5,10`, in place of a grid |
 | `--tau-min S`, `--tau-max S` | leave out the averaging times below or above `S` seconds |
 | `--confidence P` | confidence level of the intervals. By default 0.683 |
-| `--no-ci` | no intervals, EDF or noise types |
+| `--no-ci` | no intervals or EDF, and no noise types but those that the bias factors of `totdev`, `mtotdev`, `ttotdev`, `htotdev` and `mhtotdev` rest on |
 | `--noise TYPE` | noise type behind the intervals and the bias factors: `auto` (the default, identified at each averaging time), `fit` (the dominant term at each averaging time of the model that [`powerlaw_fit`](@ref) fits to the record), or one of `WHPM`, `FLPM`, `WHFM`, `FLFM`, `RWFM`, `FWFM`, `RRFM` for every averaging time |
 | `--bias MODE` | bias correction of the total deviations and Thêo1: `exact` (the default), `published`, `stable32` or `none`, for `correct_bias = true`, `:published`, `:stable32` and `false` ([Bias correction](../explanation/bias.md)). `--no-bias-correction` is `--bias none` |
 
@@ -227,15 +228,42 @@ outside the range of the recommendation. Each entry of `checks` is one result ag
 
 ## `check`
 
-`check` takes the options of the record and of the output. Its CSV output
-is one row:
+| Option | Meaning |
+|:---|:---|
+| `--quantity Q` | `phase` or `frequency`: the samples that the statistics, the histogram and the autocorrelation describe. By default those of the record |
+| `--histogram` | the histogram of the samples, from [`sample_histogram`](@ref) |
+| `--bins N` | with `--histogram`, the number of bins. By default Scott's rule, with at most 1000 |
+| `--acf` | the autocorrelation of the samples, from [`acf`](@ref) |
+| `--m M` | with `--acf`, the averaging factor, 1 by default |
+| `--lags K` | with `--acf`, the largest lag. By default half the series, and at most 1000 |
+
+The record needs three samples or more. The CSV output is one row:
 
 ```text
-source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day
+source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
 ```
 
-The columns are the members of `record` in the JSON output, which holds
-nothing else. The record needs three samples or more.
+The columns up to `drift_per_day` are the members of `record` in the JSON
+output, and the others those of `statistics`, which
+[`sample_statistics`](@ref) computes from the samples that `statistics_of`
+names. With `--histogram` the CSV output is the table of bins in its place,
+`bin_lower,bin_upper,count`, and with `--acf` that of lags, `lag,tau,acf`.
+The JSON output can hold both, beside `statistics`:
+
+```@example cliref
+sigmatau_json("check --synth 1024 --quantity frequency --format json"; only = "statistics") # hide
+```
+
+```@example cliref
+sigmatau_json("check --synth 1024 --quantity frequency --acf --m 4 --format json"; only = "acf") # hide
+```
+
+`histogram` holds the `edges` and `counts` of the bins and the `n`, `mean`
+and `std` of the samples.
+
+The noise types are those of [`identify_noise`](@ref). `acf.alpha` is the
+lag-1 estimate of ``α``, `null` with fewer than 30 points. The
+autocorrelation needs a record without gaps.
 
 ## `spectrum`
 
@@ -261,9 +289,10 @@ sigmatau_json("spectrum --synth 1024 --format json"; only = "spectrum") # hide
 | `--step N` | step of the window, in samples. By default half the window |
 | `--grid GRID` | grid of averaging factors within the window. By default `octave` |
 
-The result is that of [`dadev`](@ref) or [`dhdev`](@ref). The CSV columns
-are `t,tau,dev`, with a row for each window and averaging time. `t` is the
-center of the window, in seconds from the first sample of the file.
+The result is that of [`dadev`](@ref) or [`dhdev`](@ref), which take a
+record without gaps. The CSV columns are `t,tau,dev`, with a row for each
+window and averaging time. `t` is the center of the window, in seconds from
+the first sample of the file.
 
 ```@example cliref
 sigmatau_json("dynamic --synth 1024 --format json"; only = "dynamic") # hide
@@ -466,7 +495,7 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 |:---|:---|
 | `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4`. In a table with named columns each is read by its number as `--column` reads one by its name, with the unit in its name |
 | `--algorithm ALG` | `at1` (the default), `at2`, `ewfa`, `greenhall`, `jones_tryon` or `stein`, the algorithms of [`timescale`](@ref) |
-| `--wmax W` | largest weight that one clock may take, from 0 to 1. By default 1, which sets no limit |
+| `--wmax W` | with `at1`, `at2` or `stein`, the largest weight that one clock may take, from 1 over the number of clocks to 1. By default 1, which sets no limit |
 | `--steps MODE` | with `at2`, detect frequency steps of the clocks: `best` or `real` |
 | `--pivot K` | with `greenhall`, `jones_tryon` or `stein`, the clock at which the scale is read. By default 1 |
 | `--flicker` | with `greenhall` or `jones_tryon`, fit flicker FM as well, and keep the flicker FM and the flicker PM of each clock as [Markov states](../explanation/clock_model.md#Flicker-states) of its model. By default flicker FM is not fitted and flicker PM counts as noise of the readings |
@@ -486,7 +515,8 @@ clock,weight,weight_mean,error_rms
 
 `weight` is the weight at the last sample. `weight_mean` and `error_rms`
 are the mean weight and the root mean square of the prediction error over
-the second half of the record.
+the second half of the record. `jones_tryon` gives no weights: the two
+fields are empty, and `null` for each clock in JSON.
 
 ```@example cliref
 sigmatau_json("timescale --synth 1024 --series 2 --format json"; only = "timescale") # hide
@@ -581,7 +611,7 @@ are those of the other commands.
 | Option | Meaning |
 |:---|:---|
 | `--carrier HZ` | carrier frequency in Hz, needed for ``ℒ(f)`` and ``S_φ(f)`` |
-| `--quantity Q` | what the table holds: `L` (the default), ``ℒ(f)`` in dBc/Hz; `Sphi`, ``S_φ(f)`` in rad²/Hz; `Sx`, ``S_x(f)`` in s²/Hz; or `Sy`, ``S_y(f)`` in 1/Hz |
+| `--density S` | the spectral density that the table holds: `L` (the default), ``ℒ(f)`` in dBc/Hz; `Sphi`, ``S_φ(f)`` in rad²/Hz; `Sx`, ``S_x(f)`` in s²/Hz; or `Sy`, ``S_y(f)`` in 1/Hz |
 | `--devs LIST` | `adev`, `mdev`, `tdev`, `hdev` and `mhdev`. By default all but `tdev` |
 | `--tau LIST` | averaging times in seconds. By default 1, 2 and 5 in each decade from ``1/f_h`` to ``0.1/f_1``, for a table from ``f_1`` to ``f_h`` |
 | `--band A:B` | integrate from `A` to `B` hertz only, inside the table |

@@ -13,7 +13,7 @@ using SigmaTau, Random
 
 # 8192 phase samples at 1 s: white FM of 1e-12 at 1 s, and random-walk FM
 p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14),
-              rng = Xoshiro(5))
+              rng = Xoshiro(3))
 adev(p)
 ```
 

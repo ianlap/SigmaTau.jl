@@ -15,6 +15,7 @@ using SigmaTau
         :adev, :mdev, :tdev, :hdev, :mhdev, :htdev, :totdev, :mtotdev,
         :ttotdev, :htotdev, :mhtotdev, :mtie, :tierms, :pdev, :theo1, :theoh,
         :dadev, :dhdev, :stability, :deviation, :estimators, :summarize,
+        :sample_statistics, :sample_histogram, :acf,
         :ncornered_hat, :groslambert, :StreamingStability, :snapshot, :nsamples,
         :identify_noise, :noise_id_nnls, :calculate_edf, :confidence_intervals, :bias_correction,
         :LiveStability, :SimulatedSource, :InstrumentSource, :read_reading,

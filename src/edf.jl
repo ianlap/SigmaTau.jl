@@ -642,9 +642,9 @@ as white FM. Below, ``s = τ/T = m/(N-1)``.
 A noise type not listed for a `var_type`, or any other `var_type`, gives
 ``B = 1``.
 
-The PM values of `:totvar` and `:htot`, every value below ``m = 16`` and all
-of `:mhtot` have no published source: they are the expectation of each
-statistic, computed in this package (see
+The PM values of `:totvar` and `:htot`, the values of `:mtot` and `:htot`
+below ``m = 16`` and all of `:mhtot` have no published source: they are the
+expectation of each statistic, computed in this package (see
 [Total estimators on PM noise](@ref) and [MHTOTDEV bias and EDF](@ref)).
 `published=true` leaves them out. It gives ``B = 1`` on PM for `:totvar` and
 `:htot`, and the published value of `:mtot` and `:htot` at every ``m > 1``.
