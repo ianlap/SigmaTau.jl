@@ -27,12 +27,13 @@ The scale is formed from the columns as the
 the gap filling, the outlier removal and the analysis range of the Data
 page do not apply here.
 
-Where phase columns have missing samples, AT1, AT2 and EWFA form the scale
-without the clock at those samples
+Where phase columns have missing samples, the scale is formed without the
+clock at those samples
 ([Clocks that drop out and return](../reference/ensemble.md#Clocks-that-drop-out-and-return)).
-Greenhall, Jones–Tryon and Stein first fit a model to each clock, which
-needs a file without missing samples. Frequency columns with missing
-samples cannot be read.
+Greenhall, Jones–Tryon and Stein first fit a model to each clock, from the
+samples at which it is read with two others. A file that leaves a clock too
+few of them stops the fit; AT1, AT2 and EWFA form a scale from it.
+Frequency columns with missing samples cannot be read.
 
 ## Settings
 

@@ -181,6 +181,17 @@ clocks like these, whose best weights are the same at every ``τ``, a record
 has to be long enough to show the slow noise of each clock before a Kalman
 scale matches AT1.
 
+The comparisons may have missing readings: the covariance leaves out the
+terms that read one, and clocks read at every tenth sample are fitted from
+the multiples of ten. In simulation (four clocks, 20 000 samples; a clock
+unread for a tenth of the record, a clock that joins at a third of it, a
+tenth of all readings missing at random, every clock read at every tenth
+sample), `:greenhall` and `:stein` on the models fitted from such a record
+were within 2 % of the same scale on the true models up to 100 s and 4 to
+17 % less stable at 1000 s, against 7 and 10 % without gaps.
+`:jones_tryon` was 1.2 to 1.4 times less stable at every ``τ``, against
+1.3.
+
 ### Reading noise and the pivot
 
 With noise on the readings the clocks, each corrected by the filter's

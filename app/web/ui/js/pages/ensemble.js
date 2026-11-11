@@ -29,7 +29,7 @@ const pivotOf = (n) => (state.ens.pivot <= n ? state.ens.pivot : 1);
 // The file goes to the core as read, without the preparation of the Data page,
 // so the core's remedy for gaps (--fillgaps) has no counterpart on this page.
 const GAPS = [
-  [/^cross: the records have gaps/, "Greenhall, Jones–Tryon and Stein fit a model to each clock, which needs a file without missing samples. AT1, AT2 and EWFA form a scale from this one."],
+  [/^clock_models: .* usable τ points/, "Greenhall, Jones–Tryon and Stein fit a model to each clock, and this file leaves one of them too few samples at which it is read with two others. AT1, AT2 and EWFA form a scale from it."],
   [/^the frequency record is missing/, "Frequency columns with missing samples cannot be read."],
 ];
 const inWords = (message) => GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.") ?? message;
