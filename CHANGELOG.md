@@ -274,6 +274,12 @@ Clock models, the Kalman filter and timescales.
   or a `NoiseFit`; `holdover` of a `NoiseFit`; `tune_q` with `burnin`;
   `timescale` with `step_threshold`, `lmax` and `step_inflate`;
   `clock_model` with `fm_band` and `pm_band`.
+- `groslambert` takes phase records with missing samples (`NaN`) under
+  `interval=:chi2`: a term that reads one is left out (SP1065 §10.4), `neff`
+  counts the terms kept and the EDF follows them. `clock_models` therefore
+  fits models from comparisons with missing readings, at the octaves of each
+  clock's interval between readings, and `sigmatau timescale` and the
+  explorer form the Kalman scales on files with gaps.
 
 ### Changed
 
@@ -476,6 +482,8 @@ Clock models, the Kalman filter and timescales.
   the mean rate of its clocks under their starting weights. Scales of clocks
   that differ much in noise change from their first sample; `:ewfa` and the
   Kalman scales do not change.
+- `clock_models` names the clock whose curve leaves the fit too few points,
+  in place of the `powerlaw_fit` error.
 
 ### Removed
 
