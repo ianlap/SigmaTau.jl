@@ -154,7 +154,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))
         end
         try
-            run_command(buf, o, data, t_start, args)
+            run_command(buf, err, o, data, t_start, args)
         catch e
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
         end

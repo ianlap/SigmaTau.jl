@@ -20,10 +20,10 @@ function elapsed(io::IO, t_start::UInt64)
     print(io, "}\n")
 end
 
-function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args::Vector{String})
+function run_command(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt64, args::Vector{String})
     c = o.command
     c == "report"   && return cmd_report(io, o, data, args)
-    c == "analyze"  && return cmd_analyze(io, o, data, t_start)
+    c == "analyze"  && return cmd_analyze(io, err, o, data, t_start)
     c == "check"    && return cmd_check(io, o, data, t_start)
     c == "spectrum" && return cmd_spectrum(io, o, data, t_start)
     c == "dynamic"  && return cmd_dynamic(io, o, data, t_start)
@@ -83,7 +83,7 @@ function analysis_results(o::Options, data::PhaseData)
     return results
 end
 
-function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+function cmd_analyze(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt64)
     results = analysis_results(o, data)
     N = length(data.x)
     src = source_name(o, data)
@@ -92,6 +92,7 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         for r in results
             csv_result(io, src, quantity(o), r)
         end
+        isempty(o.mask) || o.quiet || mask_verdicts(err, o.mask, results)
         return nothing
     end
     json_head(io, o, src)

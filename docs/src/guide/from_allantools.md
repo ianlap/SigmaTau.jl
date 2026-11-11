@@ -71,6 +71,7 @@ standard recommends over them for their better confidence
 | `confidence_interval` | [`confidence_intervals`](@ref) |
 | `confidence_interval_noiseID` | the estimator, which identifies the noise and computes the EDF and the interval in one call |
 | `mask.prc_tdev`, `mask.prc_mtie` | `telecom_mask(:G811, :tdev, τ)`, `telecom_mask(:G811, :mtie, τ)`; [`mask_check`](@ref) |
+| `mask.prtcA_*`, `prtcB_*`, `eprtc_*` | [`telecom_mask`](@ref) with `:G8272_PRTC_A`, `:G8272_PRTC_B`, `:G8272_1`, which is `NaN` outside the range of ``τ`` of the tables |
 | `realtime.oadev_realtime`, `ohdev_realtime`, `tdev_realtime` | [`StreamingStability`](@ref) |
 | `Dataset` | [`stability`](@ref) for several estimators, [`save`](@ref) for the file |
 | `Plot` | the plot recipes ([Plotting and tables](plotting.md)) |
@@ -101,9 +102,6 @@ the comparison with allantools 2024.6 on every change.
 - `psd2allan`, which integrates a tabulated spectrum to an Allan or modified
   Allan deviation. [`powerlaw_sigma`](@ref) gives the deviations of a
   power-law model.
-- The masks of G.8272 and G.8272.1 for primary reference time clocks
-  (`prtcA_*`, `prtcB_*`, `eprtc_*`). [`TELECOM_MASKS`](@ref) lists the
-  masks here.
 - `phase2radians` and `frequency2fractional`. [`read_data`](@ref) converts
   counter readings in hertz to fractional frequency as it reads them.
 

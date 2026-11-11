@@ -6,13 +6,21 @@ import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope,
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css } from "../plot.js";
 import { sci, num, escapeHtml as h } from "../format.js";
 
-// ITU-T wander masks the core checks (sigmatau --mask), by its names.
-const MASKS = [
-  ["G811", "G.811 PRC"], ["G813_opt1", "G.813 SEC opt 1"], ["G813_opt2", "G.813 SEC opt 2"],
-  ["G8262_opt1", "G.8262 EEC opt 1"], ["G8262_opt2", "G.8262 EEC opt 2"],
-  ["G823_PRC", "G.823 PRC interface"], ["G823_SSU", "G.823 SSU interface"],
-  ["G823_SEC", "G.823 SEC interface"], ["G823_PDH", "G.823 PDH interface"],
+// ITU-T wander masks the core checks (sigmatau --mask), by its names: the
+// wander a clock generates, then the limits of a network at an interface.
+const MASK_GROUPS = [
+  ["Clock", [
+    ["G811", "G.811 PRC"], ["G811_1", "G.811.1 ePRC"], ["G812_I", "G.812 type I"], ["G812_II_III", "G.812 types II, III"],
+    ["G813_opt1", "G.813 SEC opt 1"], ["G813_opt2", "G.813 SEC opt 2"],
+    ["G8262_opt1", "G.8262 EEC opt 1"], ["G8262_opt2", "G.8262 EEC opt 2"], ["G8262_1", "G.8262.1 eEEC"],
+    ["G8272_PRTC_A", "G.8272 PRTC-A"], ["G8272_PRTC_B", "G.8272 PRTC-B"], ["G8272_1", "G.8272.1 ePRTC"],
+  ]],
+  ["Network", [
+    ["G823_PRC", "G.823 PRC interface"], ["G823_SSU", "G.823 SSU interface"],
+    ["G823_SEC", "G.823 SEC interface"], ["G823_PDH", "G.823 PDH interface"],
+  ]],
 ];
+const MASKS = MASK_GROUPS.flatMap(([, masks]) => masks);
 
 const AXES = { sigma_y: "Frequency σ<sub>y</sub>(τ)", sigma_x: "Time σ<sub>x</sub>(τ)" };
 const Y_TITLE = { sigma_y: "σ<sub>y</sub>(τ)", sigma_x: "σ<sub>x</sub>(τ) (s)" };
@@ -33,7 +41,8 @@ export function mount(el, ctx) {
           <label class="check" title="Draw the confidence intervals as a shaded band instead of error bars"><input type="checkbox" data-tog="band">CI band</label>
           <label class="check" title="The power-law noise model fitted to MHDEV: its curve for each estimator, and h_α with the ADEV it gives at round τ"><input type="checkbox" data-tog="fit">Fit</label>
           <select data-ref="mask" aria-label="Telecom mask" title="ITU-T wander mask drawn over MTIE and TDEV, with pass or fail">
-            <option value="">No mask</option>${MASKS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
+            <option value="">No mask</option>${MASK_GROUPS.map(([g, masks]) =>
+              `<optgroup label="${g}">${masks.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</optgroup>`).join("")}</select>
         </span>
       </div>
       <div class="card plot-card"><div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
@@ -206,7 +215,7 @@ function traces(clocks, devs) {
         out.unshift({
         x: k.map((i) => mask.tau[i]), y: k.map((i) => mask[d][i]), name: `${maskName()} ${label(d)} mask`, mode: "lines",
         line: { color: css("--accent"), width: 1.6, dash: d === "mtie" ? "dash" : "dashdot" },
-        hovertemplate: `<b>${h(mask.title)}</b><br>${label(d)} limit<br>τ = %{x:.4g} s<br>%{y:.4e} s<extra></extra>`,
+        hovertemplate: `<b>${h(mask.title)}</b><br>${h(mask.source ?? "")}<br>${label(d)} limit<br>τ = %{x:.4g} s<br>%{y:.4e} s<extra></extra>`,
         });
       }
       // The power-law model's curve, dotted under the measurement.
@@ -233,7 +242,7 @@ function maskBox(c, devs) {
   const m = state.mask && c.result?.masks?.find((k) => k.name === state.mask);
   const checks = m ? m.checks.filter((k) => devs.includes(k.deviation)) : [];
   if (!checks.length) return "";
-  return `<div class="model-box"><h3>${h(m.title)}</h3><div class="model-grid">${checks.map((k) => {
+  return `<div class="model-box"><h3>${h(m.title)}</h3><p class="muted mask-source">${h(m.source ?? "")}</p><div class="model-grid">${checks.map((k) => {
     const ok = k.pass, q = k.margin;
     const text = q === null ? "no τ in the mask's range" : ok ? `passes, ${num(q, 3)}× under` : `fails, ${num(1 / q, 3)}× over`;
     return `<span>${label(k.deviation)}</span><span></span><span class="${ok ? "" : "warnv"}">${text}</span>`;
