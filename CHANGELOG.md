@@ -421,6 +421,14 @@ Clock models, the Kalman filter and timescales.
 - Documentation: a background page, "The Hadamard time deviation", on where
   the 10/3 of `htdev` comes from, and √6·TDEV and √20·HTDEV as the errors of
   predicting the next τ-average with a line and with a parabola.
+- Documentation: the clock model, Kalman filter, clock ensembles, holdover
+  and steering pages and Tutorial 4 are rewritten, and the docstrings of the
+  clock-model, Kalman, time-scale, comparison and holdover functions follow
+  the layout of the rest, each citation with its equation or section. Every
+  figure given in simulation was measured again. Corrected: what
+  `:jones_tryon` loses against `:greenhall`, that it carries a drift state,
+  what leaving flicker FM out of a clock model costs, and where a parabola
+  predicts better than a line.
 - Explorer: the help is the manual. **?** opens a menu with a search through
   the manual and the sections on the page in view, F1 opens the help of that
   page, and the help page shows the manual by topic, written from
