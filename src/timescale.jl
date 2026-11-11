@@ -345,14 +345,12 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     bias in (:paper, :exact) || throw(ArgumentError("timescale: bias must be :paper or :exact, got :$bias"))
     N, k = size(cc.x)
     N >= 3 || throw(ArgumentError("timescale: needs three or more samples"))
-    if algorithm === :stein
-        models === nothing && throw(ArgumentError("timescale: :stein needs models, one ClockModel per clock"))
-        1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
-        return _stein(cc, models, Int(pivot), Float64(wmax))
-    end
-    if algorithm === :greenhall || algorithm === :jones_tryon
+    if algorithm in (:stein, :greenhall, :jones_tryon)
         models === nothing && throw(ArgumentError("timescale: :$algorithm needs models, one ClockModel per clock"))
         1 <= pivot <= k || throw(ArgumentError("timescale: pivot $pivot is not one of the $k clocks"))
+        count(_noiseless, models) <= 1 || throw(ArgumentError(
+            "timescale: two or more clock models have no noise, so the filter cannot weigh their readings"))
+        algorithm === :stein && return _stein(cc, models, Int(pivot), Float64(wmax))
         return _reduced_kalman(cc, models, Int(pivot), algorithm)
     end
     mode = steps === true ? :best : steps === false ? :none : steps
