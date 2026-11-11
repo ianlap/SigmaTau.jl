@@ -93,7 +93,7 @@ function synthCard(c) {
 // NaN samples from the core, which puts a reading missing from the time
 // column in its slot as one.
 function gapRow(k) {
-  const tip = `${thousands(k.gaps)} missing sample${k.gaps === 1 ? "" : "s"}, skipped by the gap-tolerant estimators${k.gaps ? " (turn on Fill gaps to interpolate them)" : ""}`;
+  const tip = `${thousands(k.gaps)} missing sample${k.gaps === 1 ? "" : "s"}, skipped by the gap-tolerant estimators${k.gaps ? " (turn on Fill gaps to fill them)" : ""}`;
   return `<div class="kv" title="${tip}"><span>Gaps</span><span class="mono ${k.gaps ? "warnv" : ""}">${thousands(k.gaps)}</span></div>`;
 }
 
@@ -115,8 +115,8 @@ function checkCard(c) {
     <div class="kv" title="Least-squares linear frequency drift of the record as analysed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
     <div class="rule"></div>
     ${driftBlock(c, k)}
-    <label class="check" title="${c.hasTimeCol ? "Fill the missing samples by interpolation (Howe's method)" : "Needs a time column in the file"}">
-      <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""} ${c.hasTimeCol ? "" : "disabled"}>Fill gaps by interpolation</label>
+    <label class="check" title="Fill the missing samples and NaN readings from the data beside each gap, reflected (Howe and Schlossberger)">
+      <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""}>Fill gaps by reflection</label>
   </div>`;
 }
 
@@ -258,7 +258,7 @@ function drawRecord(c) {
   const maxAbs = Math.max(...finite.map(Math.abs), ...(k?.outlier_x ?? []).map(Math.abs));
   const [f, u] = timeUnit(maxAbs || 1);
   const traces = [{
-    x: s.t, y: s.x.map((v) => v / f), mode: "lines", line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.4 },
+    x: s.t, y: s.x.map((v) => (Number.isFinite(v) ? v / f : null)), mode: "lines", line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.4 },
     hovertemplate: `t = %{x:.6g} s<br>x = %{y:.5g} ${u}<extra></extra>`, name: "phase",
   }];
   if (k?.outlier_t?.length && !c.remove_outliers) {
@@ -330,7 +330,6 @@ function onChange(e) {
   else if (f === "fillgaps") ctx.setRecord(c, { fillgaps: e.target.checked });
 }
 
-export function plotElement() { return plotEl; }
 export function hint() {
   return state.dataDrag === "range"
     ? "Drag across the plot to choose the part of the record to analyse"

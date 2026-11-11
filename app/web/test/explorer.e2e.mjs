@@ -1,9 +1,9 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
-// Stability plot against the command line's own JSON, then visit Spectrum,
-// Dynamic, Ensemble (a Kalman scale with flicker states), Live (simulated
-// source) and Help, come back to Stability, and run a record with gaps, with
-// no page errors.
+// Stability plot and the Holdover curve against the command line's own JSON,
+// then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
+// Live (simulated source) and Help, come back to Stability, and run a record
+// with gaps, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -73,6 +73,25 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await plotted("#page [data-ref=map]");
   });
 
+  await t.test("Holdover: the plotted RMS equals the command line's", async () => {
+    await page.click("a[data-page=holdover]");
+    await plotted("#page [data-ref=plot]");
+    const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
+    const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
+    assert.deepEqual(rms, doc.holdover.rms);
+    // A stretch of twice the holdover time: equal to √6·TDEV at τ₀.
+    await page.click("[data-ctl=frac][data-v='0']");
+    await page.waitForFunction(() => document.querySelector("#page .hold-card .cell-kv")?.innerText.includes("2τ"));
+    const at0 = await page.evaluate(() => ["RMS", "√6·TDEV"].map((n) => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === n).y[0]));
+    const grown = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--grow", "2", "--format", "json"])).holdover;
+    assert.deepEqual(at0, [grown.rms[0], grown.reference[0]]);
+    assert.ok(Math.abs(at0[0] / at0[1] - 1) < 1e-9);
+    // A Kalman filter as the predictor: its claim equals the command line's.
+    await page.click('[data-ctl=kalman][data-v="1"]');
+    const claimed = (await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "Claimed by the filter")?.y, null, SLOW)).jsonValue();
+    assert.deepEqual(await claimed, JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover.claimed);
+  });
+
   await t.test("Ensemble: a Kalman scale with flicker states", async () => {
     await page.click("a[data-page=ensemble]");
     await page.selectOption("#side [data-ctl=alg]", "greenhall");
@@ -120,6 +139,41 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator("#status-text").innerText(), /Up to date/);
     await page.click("a[data-page=spectrum]");
     await page.waitForFunction(() => /record has gaps/.test(document.querySelector("#page [data-ref=empty]")?.textContent), null, SLOW);
+  });
+
+  await t.test("Data: a zero in a Stable32 frequency file is a gap, filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "0" : String(1e-12 * (2 + Math.sin(i / 3)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.locator("#import-dialog .gap-card", { hasText: "1 zero reading" }).waitFor();
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /z\.frd.*51[23] samples/ }).waitFor();   // the new record, not the last one
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+  });
+
+  await t.test("Data: remembered .frd settings still show a file's zeros", async () => {
+    const y = Array.from({ length: 256 }, (_, i) => (i % 100 === 50 ? "0" : String(1e-12 * (2 + Math.cos(i / 5)))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "z2.frd", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.locator("#import-dialog .gap-card", { hasText: "3 zero readings" }).waitFor();
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /z2\.frd.*25[67] samples/ }).waitFor();
+  });
+
+  await t.test("Data: a one-column frequency file with NaN readings is filled", async () => {
+    await page.goto(base + "#data");
+    const y = Array.from({ length: 512 }, (_, i) => (i === 100 ? "NaN" : String(1e-12 * Math.sin(i / 3))));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "y.txt", mimeType: "text/plain", buffer: Buffer.from(y.join("\n")) });
+    await page.fill("#imp-tau0", "1");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor();   // the new record, not the last one
+    assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
   });
 
   assert.deepEqual(errors, []);

@@ -88,6 +88,7 @@ function recordArgs(clock) {
     } else if (clock.format === "rinex_clk") opt("--column", clock.column_name);
   } else recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
+  if (clock.keep_zeros) a.push("--keep-zeros");
   if (clock.fillgaps) a.push("--fillgaps");
   if (clock.remove_outliers) a.push("--remove-outliers");
   a.push("--format", "json");
@@ -193,15 +194,42 @@ export const driftKey = (clock) => JSON.stringify([request(clock, "drift", []), 
 export const dynamicKey = (clock) =>
   JSON.stringify([request(clock, "dynamic", rangeArgs(clock)), state.dyn.dev, state.dyn.frac, state.grid]);
 
+// Samples of the record, or of its analysis range.
+const samples = (clock) =>
+  clock.range ? Math.floor((clock.range[1] - clock.range[0]) / clock.record.tau0) + 1 : clock.record?.n ?? 0;
+
 // Sliding-window deviation map for one clock (window = record / frac).
 export function dynamic(clock, signal) {
-  const n = clock.range ? Math.floor((clock.range[1] - clock.range[0]) / clock.record.tau0) + 1 : clock.record?.n ?? 0;
   return run(request(clock, "dynamic", [
     ...rangeArgs(clock),
     "--grid", state.grid,
     "--dev", state.dyn.dev,
-    "--window", Math.max(16, Math.floor(n / state.dyn.frac)),
+    "--window", Math.max(16, Math.floor(samples(clock) / state.dyn.frac)),
   ]), signal);
+}
+
+// The holdover test of one clock (training stretch = record / frac, or with
+// frac 0 as many holdover times as the fit has terms: the test behind TDEV
+// and HTDEV; a Kalman filter trains on a share only), with the error its
+// fitted noise model predicts or the filter claims.
+const holdoverRequest = (clock, frac = state.hold.frac || (state.hold.kalman ? 4 : 0)) => request(clock, "holdover", [
+  ...rangeArgs(clock),
+  ...(frac ? ["--train", Math.max(4, Math.floor(samples(clock) / frac)) * clock.record.tau0]
+    : ["--grow", state.hold.drift ? 3 : 2]),
+  ...(state.hold.drift ? ["--fit-drift"] : []),
+  ...(state.hold.kalman ? ["--kalman"] : [...(state.hold.anchor ? [] : ["--no-anchor"]), "--fit"]),
+  ...(state.hold.limit ? ["--limit", state.hold.limit] : []),
+  "--confidence", state.hold.confidence,
+]);
+
+// Settings that decide a clock's holdover test; a change means recompute.
+export const holdoverKey = (clock) => JSON.stringify(holdoverRequest(clock));
+
+// The core's JSON as is.
+export async function holdover(clock, signal) {
+  const doc = await post(holdoverRequest(clock), signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc;
 }
 
 // A timescale from several clocks; the core's JSON as is.

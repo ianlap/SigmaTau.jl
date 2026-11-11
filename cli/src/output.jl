@@ -68,8 +68,36 @@ function write_error_json(io::IO, o::Options, code::Int, msg::String)
     print(io, "}\n")
 end
 
-# The record and its summary; `series` adds an evenly strided subset of the
-# phase for plotting.
+# Samples of x to plot with at most n points: x itself when short enough,
+# otherwise its first and last sample and, in each of (n - 2) ÷ 3 equal
+# stretches, the lowest and highest sample and the first gap, in time order, so
+# the plot spans the record and no outlier or gap falls between drawn points.
+function series_index(x::AbstractVector, n::Int)
+    N = length(x)
+    N <= n && return collect(1:N)
+    nb = max(1, (n - 2) ÷ 3)
+    idx = [1]
+    for b in 1:nb
+        imin = imax = inan = 0
+        for i in ((b - 1) * N ÷ nb + 1):(b * N ÷ nb)
+            v = x[i]
+            if isnan(v)
+                inan == 0 && (inan = i)
+            else
+                (imin == 0 || v < x[imin]) && (imin = i)
+                (imax == 0 || v > x[imax]) && (imax = i)
+            end
+        end
+        for i in sort!([imin, imax, inan])
+            i > 0 && idx[end] != i && push!(idx, i)
+        end
+    end
+    idx[end] == N || push!(idx, N)
+    return idx
+end
+
+# The record and its summary; `series` adds the phase thinned for plotting
+# (`series_index`).
 function json_record(io::IO, o::Options, data::PhaseData)
     s = summarize(data)
     tau0 = Float64(data.tau0)
@@ -88,8 +116,7 @@ function json_record(io::IO, o::Options, data::PhaseData)
     json_key(io, "removed_offset"); json_number(io, o.removed_offset)
     json_key(io, "removed_drift_per_day"); json_number(io, o.removed_drift)
     if o.series > 0
-        N = length(data.x)
-        idx = collect(1:max(1, cld(N, o.series)):N)
+        idx = series_index(data.x, o.series)
         json_key(io, "series")
         print(io, '{')
         json_key(io, "t", true); json_array(io, Float64[(i - 1) * tau0 for i in idx])

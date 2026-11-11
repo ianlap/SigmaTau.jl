@@ -286,8 +286,19 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .pills { display: flex; gap: 8px; }
 .pill { height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--bg-card); font: inherit; font-size: 12px; cursor: pointer; color: var(--ink); }
 .pill.on { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
+.pill:disabled { opacity: 0.5; cursor: default; }
 .btn-round.on { border-color: var(--accent); color: var(--accent); }
 a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
+
+/* ── Holdover ── */
+.hold-card .tbl-row { grid-template-columns: 62px repeat(3, minmax(0, 1fr)) 58px; }
+.hold-cmp .tbl-row { grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr)); }
+.hold-cmp .name { display: flex; align-items: center; gap: 8px; font-family: var(--font-sans); white-space: nowrap; overflow: hidden; }
+.hold-cmp .clock-dot { width: 9px; height: 9px; }
+.hold-note { padding: 0 16px 12px; margin: 0; }
+.hold-bar { gap: 10px; }
+.hold-bar .seg button { padding: 0 10px; white-space: nowrap; }
+.hold-bar .carrier { width: 84px; }
 
 /* ── Spectrum ── */
 .spec-card { padding-top: 14px; }

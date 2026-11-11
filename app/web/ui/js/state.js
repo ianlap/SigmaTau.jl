@@ -34,6 +34,9 @@ export const state = {
   // Ensemble page: timescale settings and the last result ({ key, ts })
   ens: { algorithm: "at1", wmax: 1, pivot: 1, steps: "", flicker: false, result: null, error: null },
   dyn: { dev: "dadev", frac: 8, view: "map", cell: null, sliceTau: null },  // sliceTau: τ of the multi-clock comparison
+  // Holdover page: training stretch = record / frac, line or parabola (drift), start from the last
+  // reading (anchor), the time error limit in seconds (null = none) and the share of trials within it
+  hold: { frac: 4, kalman: false, drift: false, anchor: true, limit: null, limitText: "", confidence: 0.95 },
   // Live page: where the readings come from and what they are
   live: { source: "sim", address: "192.168.1.20:5025", device: "/dev/ttyUSB0", query: "READ?", deviceQuery: "", reading: "hz",
           nominal: "", tau0: 0.1, devs: ["adev", "mdev"] },
@@ -73,10 +76,10 @@ export function newClock(fields = {}) {
     fillgaps: false,
     range: null,             // [start, end] in seconds from the first sample, or null = all
     remove_outliers: false,
-    hasTimeCol: false,
     record: null,            // record + check from the core
     result: null,            // last analysis from the core (with the spectrum)
     dynamic: null,           // last dynamic-deviation map, with its settings key
+    holdover: null,          // last holdover test, with its settings key
     driftFit: null,          // last frequency drift fit, with its settings key
     components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
     error: null,

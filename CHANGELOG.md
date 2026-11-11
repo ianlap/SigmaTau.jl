@@ -107,6 +107,37 @@ Clock models, the Kalman filter and timescales.
   al., PTTI 2000). It gives the RMS, a quantile, the worst case and the mean of
   the time error at each holdover time, and the time at which the quantile
   reaches a limit.
+- Predicted holdover: `holdover(model; train, tau, tau0, …)` predicts the
+  error the measured test finds from a `PowerLawFit`, a `ClockModel` or a
+  `Dict` of h_α, with `budget`, the variance each noise type adds
+  (`HoldoverPrediction`; Python too). Exact for the sampled spectrum,
+  flicker noises included; matches the closed forms of Delporte et al.
+  (PTTI 2000) within 0.4 %.
+- `sigmatau holdover FILE` runs the holdover test from the command line:
+  `--train`, `--tau`, `--fit-drift`, `--no-anchor`, `--limit`,
+  `--confidence`; CSV with one row per holdover time, or JSON, where `--fit`
+  adds the error predicted from the power-law fit with its budget by noise
+  type.
+- Explorer: a Holdover page shows the time error after a training stretch
+  against holdover time (RMS, a chosen share of the trials, the worst trial
+  and the noise model's prediction) and how long each clock stays within a
+  limit.
+- Holdover with a stretch that grows with the holdover time:
+  `holdover(…; grow=k)`, `sigmatau holdover --grow K`, a "2τ" stretch on the
+  explorer's Holdover page. At `grow = 2` (3 with drift) it equals √6·TDEV
+  (√20·HTDEV) at τ₀ and runs a constant factor above on FM noise; the page
+  and the CLI's JSON (`reference`) show that curve.
+- Holdover with a Kalman filter as the predictor:
+  `holdover(data, model::ClockModel; …)` carries the filter's estimate ahead
+  from every sample past the training stretch; `HoldoverResult.claimed` is
+  the filter's own standard deviation for that error, to set beside the
+  measured RMS (Python too).
+- `sigmatau holdover --kalman` and a "Predicted by" choice on the explorer's
+  Holdover page: the holdover test with a Kalman filter as the predictor, on
+  a clock model fitted to the first training stretch alone, with the error
+  the filter itself claims (`claimed`) beside the one measured. The CSV
+  gains a trailing `claimed` column, empty without `--kalman`, so its header
+  changes for existing readers.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
@@ -190,6 +221,16 @@ Clock models, the Kalman filter and timescales.
 - `groslambert(...; interval=:klts)`: KLTS confidence intervals (Lantz et al.
   2019) for three clocks, valid for a clock quieter than the others; the χ²
   interval is no longer given below 1 EDF.
+- Flicker FM and flicker PM states in the Kalman clock model:
+  `clock_model(fit; flicker=true)` and `clock_models(cc; flicker=true)` give
+  a `ClockModel` with `flicker_fm`, `fm_band`, `flicker_pm`, `pm_band`, and
+  `kalman_filter`, `kalman_smooth`, `holdover_error`, `prediction_error`,
+  `tune_q`, `simulate_clock`, `simulate_ensemble` and the `:greenhall` and
+  `:jones_tryon` scales run on it. Flicker FM is the Markov frequency states
+  of Davis, Greenhall & Stacey (Metrologia 42, 2005); flicker PM states are
+  the package's own, held as measurement noise with memory. States sit only
+  across the τ where the flicker holds a quarter of the model's Allan
+  variance. Off by default; `:stein` refuses such models.
 
 ### Changed
 
@@ -274,13 +315,72 @@ Clock models, the Kalman filter and timescales.
   goes through filtered generator sums, and is shared between m = 1 and the
   R(n) check. The fast estimators' default call is about 15× faster than on
   0.6.0 (about 0.4 ms on 25 000 points).
+- `theo1(...; correct_bias=:stable32)` now reproduces Stable32's Thêo1 run
+  with automatic noise identification, which is ThêoBR over the ladder
+  SP1065 prints (to N/6), on every `⌈N/3000⌉`-th phase for records above
+  Stable32's 3000-point limit; checked on all 181 rows of its result file
+  for PHASE.DAT and on its two bias-removed rows for the 8192-point record.
+  It returned raw Thêo1, which Stable32 gives only with Alpha set to 0.
+  `correct_bias=false` still gives raw Thêo1.
+- `analyze --spectrum` on a record with gaps runs the estimators and reports
+  `"spectrum": {"error": …}` instead of stopping; `sigmatau spectrum` still
+  stops. The explorer analyses such a record and its Spectrum page says why
+  it has no spectrum.
+- `:greenhall` with some noiseless-reading clocks and some with reading
+  noise: the noiseless clocks are treated as one in the implicit-mean
+  weights, so the reported weights follow clock stability (before, the clock
+  with reading noise was pulled toward 1/k) and the scale changes slightly
+  with them (up to about 15 % in ADEV at short τ in the mixed case).
+  Frequencies are unchanged.
+- `theo1` and `theoh` sum Thêo1 in cache-sized blocks across all threads; a
+  default `theo1` call on 557 000 points takes 19 s instead of 2 minutes on
+  4 threads. Values move by rounding only.
+- `psd_x`, `cross_psd_x` and `ssb_phase_noise` estimate S_x as the Welch S_y
+  over the response of the first difference, 4 sin²(πfτ₀)/τ₀². A Welch
+  estimate on the phase itself read high at the lowest bins on FM noise
+  (random-walk FM about 100 times at the second bin) and was swamped by a
+  frequency offset. The value at f = 0 is now `NaN`, and `nperseg` counts
+  frequency samples, at most one fewer than the phase samples. The Welch
+  estimators remove each segment's taper-weighted mean instead of its plain
+  mean, which read white PM `1 + nperseg/(12π²)` times high at the first
+  bin; `psd_y` changes at its first two values only and equals scipy from
+  the second bin.
+- `fillgaps` follows Howe and Schlossberger (2022) and their script where it
+  had departed (the reflected samples are inserted unfiltered and the
+  filter, now their 16-sample form, only sets the line that joins them),
+  sets the series' trend aside while filling, and takes the series it fills
+  (phase or frequency, `form=:auto`) and the filter's averaging span from
+  the record's own two-sample deviation. A filled record read 8 % low at
+  short τ, a phase record with a frequency offset several times high, and a
+  frequency record of white PM 55 times high at long τ after a 30 % fill;
+  with one to six gaps ADEV is now within 5 % of the gap-free record's on
+  every power-law noise. The docstring states what a fill does not recover:
+  many gaps in a frequency record, a strong periodic term (remove it before
+  filling), MDEV at the longest τ on white PM. `form=:phase` or `:frequency`
+  forces the series; Python takes `form=`.
+- Noise labels where an averaging factor leaves fewer than 30 averaged
+  points. A result is PM only if it is PM at the longest τ with 30 points
+  and R(n) at the τ itself agrees; otherwise it is the FM type of the B1
+  ratio. `hdev`, `mhdev`, `htotdev` and `mhtotdev` with `remove_drift=true`
+  no longer use the B1 ratio on the drift-removed record: an FM type there
+  is the one at the longest τ with 30 points
+  (`identify_noise(...; b1=false)`). Default `htotdev` on flicker FM and
+  redder was 7–20 % low in variance at 16 points and fewer; `totdev`,
+  `mtotdev` and `htotdev` on white PM were up to 33, 12 and 19 % high.
+  Flicker PM with fewer than 6 averaged points is now reported as white FM.
+- `--series N` keeps each stretch's lowest and highest sample and its first
+  gap, instead of an evenly strided subset.
+- `adev` and `hdev`: the overlapping kernels vectorise again on Julia 1.12
+  and newer, about 8× faster than since `overlapping=false` was added;
+  values move by rounding at most.
 
 ### Removed
 
 - **Breaking:** the names deprecated in 0.6: `Sy`, `Sx`, `L`, `nch`,
   `save_result`, `save_suite`, `load_result`, `load_suite`, the five-argument
-  `confidence_intervals`, `SpectralResult.window` and `stability(; taus=)`;
-  their replacements are listed under 0.6.0, Deprecated.
+  `confidence_intervals`, `SpectralResult.window`, `stability(; taus=)` and
+  `identify_noise(; detrend=)`; their replacements are listed under 0.6.0,
+  Deprecated.
 
 ### Fixed
 
@@ -383,7 +483,42 @@ Clock models, the Kalman filter and timescales.
   (MJD 30000 to 90000, steps under 0.05 d, more than four decimals), a
   `ratio` column as frequency, and unnamed columns of median size under
   1e-11 as frequency; ROCIT files now read as downloaded.
+- `push!` on a `StreamingStability` throws on a sample that is not finite
+  instead of turning every later estimate into `NaN`.
+- `ncornered_hat` no longer gives a χ² interval below 1 EDF, as
+  `groslambert` now does.
+- `totdev` with an explicit averaging factor above N − 1, where the
+  reflected extension ends, read outside the record and returned an
+  arbitrary value with an interval; it now gives a `NaN` row with `neff` 0,
+  as the other estimators do past their limits.
+- Readers: exact timestamps keep their own sample interval on short records
+  (86400 s no longer reads as 86000 s below 55 rows); a unit in a table
+  column's name sets phase or frequency (`ppb`, `ppm`, `ns/s` are frequency;
+  `ns`, `ms` phase) and a time unit in the time column's name is applied
+  (`time (ms)`); `read_data` keeps `delim` for plain columns, and a
+  comma-separated file without column names reads whatever its extension.
+- Explorer: page buttons act once per click again. After a page was
+  revisited, "Pin run" pinned twice and the noise model's Edit could not be
+  opened.
+- `remove_outliers` replaces only the outliers: samples already missing stay
+  missing, where they were filled whenever the record held an outlier and
+  left when it held none. Fill them with `fillgaps` (`--fillgaps`) when that
+  is wanted.
+- A record without a time column can have its `NaN` readings filled
+  (`fillgaps=true`, `--fillgaps`, the explorer's Fill gaps), so a one-column
+  frequency file with missing readings can be analyzed; the explorer turns
+  Fill gaps on for such a file.
+- Explorer: hover labels are readable in both themes; the Data page's phase
+  plot breaks at a gap instead of dropping to zero and draws every outlier;
+  τ min then τ max can be typed in one go; the run note counts the analysis
+  range; PDEV's white PM slope guide is τ^−3/2; PNG and SVG export holds
+  every plot of the page.
 
+### Security
+
+- `serve.py` runs a request without a file only when it starts with
+  `--synth N`, and its API refuses another host name on loopback and a POST
+  that is not JSON.
 
 ## [0.6.0] - 2026-11-08
 

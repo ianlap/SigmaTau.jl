@@ -47,9 +47,11 @@ def test_detrend_changes_values_preserves_n_and_source(small_phase):
 
 def test_fillgaps_interpolates_nan(small_phase):
     gapped = small_phase.x.copy()
-    gapped[100] = np.nan
+    gapped[100:140] = np.nan
     filled = st.fillgaps(PhaseData(gapped, 1.0))
     assert np.all(np.isfinite(filled.x))
+    forced = st.fillgaps(PhaseData(gapped, 1.0), form="frequency")
+    assert np.all(np.isfinite(forced.x)) and np.array_equal(forced.x[:100], gapped[:100])
 
 
 def test_find_outliers_flags_planted_glitch(small_phase):

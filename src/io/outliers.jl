@@ -1,39 +1,38 @@
-# Stable32-style median-absolute-deviation outlier detection and removal.
-#
-# The check function in Stable32 (NIST SP1065 §10.10, "Check" data function)
-# flags frequency samples whose absolute deviation from the median exceeds
-# nsigma times the median absolute deviation scaled to a Gaussian sigma
-# (MAD / 0.6745). Removal replaces the flagged samples with imputed values
-# from the Howe gap-filling machinery so the noise character is preserved.
+# Outlier detection by the median absolute deviation (SP1065 §10.11; the
+# Check function of Stable32): a frequency sample is an outlier when it lies
+# more than nsigma scaled MADs from the median, the scaled MAD being
+# MAD / 0.6745, the standard deviation of normal data. Removal replaces the
+# outliers by filled values (`fillgaps`), where Stable32 leaves gaps.
 
 """
-    find_outliers(data::Union{PhaseData,FrequencyData}; nsigma::Real=5) → Vector{Int}
+    find_outliers(data; nsigma=5) → Vector{Int}
 
-Return the (sorted, unique) indices of outlying samples using the
-Stable32-style median-absolute-deviation test [riley-2008-sp1065](@cite):
-a sample is an outlier when
+Indices of the outlying samples of a record, by the median absolute
+deviation test of [SP1065 §10.11](@cite riley-2008-sp1065) and of the Check
+function of [Stable32](@cite hamilton-2008-stable32-manual). A fractional
+frequency sample ``y_i`` is an outlier when
 
+```math
+\\lvert y_i - m \\rvert > n_σ \\frac{\\mathrm{MAD}}{0.6745},
+\\qquad m = \\operatorname{median}(y),
+\\quad \\mathrm{MAD} = \\operatorname{median} \\lvert y - m \\rvert .
 ```
-|yᵢ − median(y)| / (MAD / 0.6745) > nsigma
-```
 
-where `MAD = median(|y − median(y)|)` and 0.6745 rescales the MAD into an
-estimate of the standard deviation for normally distributed data. `nsigma=5`
-is Stable32's default deglitching threshold.
+The factor 0.6745 makes the scaled MAD equal to the standard deviation of
+normally distributed data. The default `nsigma=5` is the limit that SP1065
+calls common and the default of Stable32.
 
-For `FrequencyData` the test runs directly on the samples `y`. For
-`PhaseData` it runs on the first differences `Δᵢ = x[i+1] − x[i]` (a phase
-glitch appears as a step in frequency), and each flagged difference `Δᵢ`
-flags **phase sample `i+1`**, the sample where the step lands. An isolated
-phase glitch at `x[j]` therefore produces two flagged differences (`Δⱼ₋₁` up,
-`Δⱼ` down) and flags samples `j` and `j+1`.
+For a `FrequencyData` record the test is made on its samples. For a
+`PhaseData` record it is made on the first differences, because a phase
+jump is a spike in frequency, and a flagged difference ``x_{i+1} - x_i``
+marks phase sample ``i + 1``, where the jump lands. A single displaced
+phase sample ``x_j`` therefore marks samples ``j`` and ``j + 1``.
 
-`NaN` samples (existing gaps) are excluded from the median/MAD estimates and
-are never flagged. Returns an empty vector when nothing exceeds the
-threshold, or when the MAD is zero (more than half the samples equal, as in
-a coarsely quantized record), which leaves no scale to test against.
-
-See also [`remove_outliers`](@ref), [`fillgaps`](@ref).
+Missing samples are left out of the median and of the MAD and are never
+marked. The test is applied once; the automatic removal of Stable32 repeats
+it until no outlier is left. The result is empty when no sample exceeds the
+limit, and when the MAD is zero, as in a coarsely quantized record where
+more than half of the samples are equal.
 """
 function find_outliers(data::FrequencyData; nsigma::Real=5)
     nsigma > 0 || throw(ArgumentError("find_outliers: nsigma must be positive, got $nsigma"))
@@ -62,41 +61,45 @@ function _mad_outliers(v::AbstractVector{<:Real}, nsigma::Real)
 end
 
 """
-    remove_outliers(data::Union{PhaseData,FrequencyData}; nsigma::Real=5)
-        → PhaseData | FrequencyData
+    remove_outliers(data; nsigma=5) → PhaseData or FrequencyData
 
-Detect outliers with [`find_outliers`](@ref) and return a new record with the
-flagged samples replaced by imputed values from [`fillgaps`](@ref) (Howe &
-Schlossberger's reflect-and-filter algorithm, which preserves the local noise
-character). The `tau0` and `source` fields carry over; the input is left
-untouched. When nothing is flagged the input is returned as-is.
+Copy of a record with the outliers found by [`find_outliers`](@ref)
+replaced by filled values from [`fillgaps`](@ref). A record without
+outliers is returned as it is.
 
-`PhaseData` is cleaned in frequency space: the record is differenced to
-`yᵢ = (x[i+1] − x[i]) / τ₀`, the flagged frequency samples are gapped and
-filled, and the result is integrated back to phase from `x[1]`. A phase
-step is a single bad frequency sample, so this removes the step itself
-rather than refilling the phase sample it lands on (which would leave the
-step in place). Existing `NaN` gaps in the phase record are filled first.
+An isolated outlier takes the mean of its two neighbors. A run of them is
+filled by reflection, with the reservations stated for [`fillgaps`](@ref).
 
-This is the Stable32 deglitching idiom [riley-2008-sp1065](@cite): flag
-samples more than `nsigma` scaled MADs from the median, gap them, and fill.
+A `PhaseData` record is cleaned as frequency: it is differenced, the
+outlying frequency samples are replaced, and the result is summed back to
+phase from the first sample. A phase jump is one outlying frequency sample,
+so this takes the jump out, where replacing the phase sample it lands on
+would leave it in.
+
+Samples that were missing stay missing. Only the outliers are replaced,
+and [`fillgaps`](@ref) fills the gaps when that is wanted.
+
+[SP1065 §10.11](@cite riley-2008-sp1065) and
+[Stable32](@cite hamilton-2008-stable32-manual) replace an outlier by a gap,
+which the estimators then skip. For a frequency record that is
+`y[find_outliers(fd)] .= NaN` on a copy of its samples.
 
 # Examples
 
 ```julia
 fd = read_frequency("counter_log.csv")
-fd_clean = remove_outliers(fd)               # 5-sigma default
-fd_strict = remove_outliers(fd; nsigma=3)
+clean = remove_outliers(fd)                # limit of 5
+strict = remove_outliers(fd; nsigma=3)
 ```
-
-See also [`find_outliers`](@ref), [`fillgaps`](@ref).
 """
 function remove_outliers(data::PhaseData; nsigma::Real=5)
     idx = find_outliers(data; nsigma=nsigma)
     isempty(idx) && return data
     # Work in frequency space: a phase step is one outlying frequency sample,
     # so fix it there and integrate back, anchored at the first phase sample.
-    pd = any(isnan, data.x) ? fillgaps(data) : data
+    # The sum needs every sample, so the gaps are filled for it and put back.
+    gaps = isnan.(data.x)
+    pd = any(gaps) ? fillgaps(data) : data
     x  = pd.x
     T  = eltype(x)
     t0 = pd.tau0
@@ -107,6 +110,7 @@ function remove_outliers(data::PhaseData; nsigma::Real=5)
     @inbounds for i in 1:length(x) - 1
         out[i + 1] = out[i] + fd.y[i] * t0
     end
+    out[gaps] .= NaN
     return PhaseData(out, t0; source=pd.source, start=pd.start)
 end
 
@@ -115,5 +119,7 @@ function remove_outliers(data::FrequencyData; nsigma::Real=5)
     isempty(idx) && return data
     y = Vector{Float64}(data.y)
     y[idx] .= NaN
-    return fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
+    out = fillgaps(FrequencyData(y, data.tau0; source=data.source, start=data.start))
+    out.y[isnan.(data.y)] .= NaN
+    return out
 end

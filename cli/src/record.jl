@@ -71,29 +71,24 @@ function range_indices(o::Options, data::PhaseData)
 end
 
 # Which samples were measured, as opposed to put back by --fillgaps: the
-# readers place the samples on the grid of their time column (SigmaTau's
-# _time_grid) and fill the empty slots, so the same slots of the raw time
-# column are the measured ones. All true without --fillgaps or when the time
-# column is no time axis. Instrument formats report their filled samples
-# directly (read_instrument).
+# finite samples of the value (and reference) column read without filling,
+# which puts them on the grid of their time column with NaN in its empty
+# slots. A filled frequency sample leaves the phase sample after it
+# unmeasured. All true without --fillgaps. Instrument formats report their
+# filled samples directly (read_instrument).
 function measured_mask(o::Options, N::Int)
     length(o.measured) == N && return copy(o.measured)
     keep = trues(N)
-    (o.fillgaps && o.synth <= 0 && o.time_col >= 1 && input_format(o) === :columns) || return keep
-    slots = SigmaTau._time_grid(read_times(o))[1]
-    (isempty(slots) || slots[end] != N) && return keep
-    fill!(keep, false)
-    keep[slots] .= true
+    (o.fillgaps && o.synth <= 0 && input_format(o) === :columns) || return keep
+    for c in (o.value_col, o.reference_col)
+        c > 0 || continue
+        kw = (time_col=o.time_col, value_col=c, header=o.header, scaling=1.0, detrend=:none, fillgaps=false)
+        v = o.freq ? read_freq(o, kw).y : read_phase_col(o, kw).x
+        ok = o.freq ? vcat(trues(1), isfinite.(v)) : isfinite.(v)
+        length(ok) == N || return trues(N)
+        keep .&= ok
+    end
     return keep
-end
-
-# The time column, read as a value column with the same header and delimiter.
-function read_times(o::Options)
-    kw = (time_col=0, value_col=o.time_col, header=o.header, scaling=1.0,
-          detrend=:none, fillgaps=false, tau0=1.0)
-    p = o.input
-    pd = o.delim == '\0' ? read_phase(p; kw...) : read_phase(p; delim=o.delim, kw...)
-    return Float64[Float64(v) for v in pd.x]
 end
 
 # Least-squares line (frequency offset) or parabola (offset and a linear
@@ -199,7 +194,7 @@ function read_instrument(o::Options, fmt::Symbol)
     o.reference_col > 0 && throw(usage_error("--reference-col applies to column files only"))
     r = SigmaTau._read_data(o.input, fmt; tau0=o.tau0, column_name=o.column, nominal=o.nominal,
                             kind=o.freq ? :frequency : o.phase_given ? :phase : :auto, scaling=o.scaling, delim=o.delim,
-                            fillgaps=o.fillgaps)
+                            fillgaps=o.fillgaps, keep_zeros=o.keep_zeros)
     o.freq = !r.phase
     # A filled frequency sample leaves the phase sample after it unmeasured.
     o.measured = isempty(r.filled) ? falses(0) : r.phase ? .!r.filled : [true; .!r.filled]

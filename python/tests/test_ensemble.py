@@ -100,7 +100,7 @@ def test_kalman_filter_matches_julia(clock, jl):
 
 
 def test_holdover_matches_julia(clock, jl):
-    _, data, _ = clock
+    m, data, _ = clock
     h = st.holdover(data, train=200, tau=[10, 100], limit=1e-10)
     direct = jl.holdover(
         _convert.to_jl_data(data), train=200, tau=_convert.to_jl_f64([10, 100]), limit=1e-10
@@ -111,6 +111,22 @@ def test_holdover_matches_julia(clock, jl):
     assert np.isnan(st.holdover(data).limit)
     with pytest.raises(ValueError):
         st.holdover(data, train=0.5)
+    # A stretch of twice the holdover time: at τ₀ the second difference behind TDEV.
+    g = st.holdover(data, grow=2, tau=[1, 10])
+    assert g.grow == 2 and np.isnan(g.train) and h.grow == 0
+    np.testing.assert_allclose(g.rms[0], np.sqrt(6) * st.tdev(data, [1], ci=False).dev[0])
+    assert st.holdover(m, grow=2, tau=[1, 10]).grow == 2
+
+
+def test_holdover_with_a_kalman_filter(clock, jl):
+    m, data, _ = clock
+    k = st.holdover(data, m, train=200, tau=[10, 100])
+    direct = jl.holdover(
+        _convert.to_jl_data(data), m._jl(), train=200, tau=_convert.to_jl_f64([10, 100])
+    )
+    np.testing.assert_array_equal(k.rms, np.array(direct.rms))
+    np.testing.assert_array_equal(k.claimed, np.array(direct.claimed))
+    assert k.train == 200.0 and st.holdover(data, train=200).claimed.size == 0
 
 
 def test_holdover_prediction_matches_julia(clock, jl):

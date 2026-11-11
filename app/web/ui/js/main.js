@@ -8,6 +8,7 @@ import * as stability from "./pages/stability.js";
 import * as data from "./pages/data.js";
 import * as spectrum from "./pages/spectrum.js";
 import * as dynamicPage from "./pages/dynamic.js";
+import * as holdover from "./pages/holdover.js";
 import * as live from "./pages/live.js";
 import * as ensemble from "./pages/ensemble.js";
 import * as synthesis from "./pages/synthesis.js";
@@ -19,8 +20,8 @@ import { sessionText, parseSession, applySession, isSession } from "./session.js
 import { loadPlotly, css } from "./plot.js";
 import { thousands, num, duration, escapeHtml as h } from "./format.js";
 
-const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, ensemble, live, help };
-const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "ensemble", "live"];
+const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, ensemble, live, help };
+const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "ensemble", "live"];
 let pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar until the next change
@@ -72,7 +73,7 @@ const DRIFT_FACT = { none: "drift kept", linear: "offset removed", quadratic: "d
 const baseName = (n) => n.replace(/\.[^.]+$/, "");
 
 // A frequency record cannot be read with samples missing, so a file with gaps is filled from the start.
-const fillNeeded = (settings) => settings.kind === "frequency" && settings.gaps > 0;
+const fillNeeded = (settings) => settings.kind === "frequency" && (settings.gaps > 0 || settings.blanks > 0);
 
 let nextGroup = 1;
 
@@ -101,8 +102,8 @@ async function importFile(file, clock, prev) {
         source: { type: "file", name: file.name, content: file.text, sha256: file.sha256 ?? "" }, group,
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
-        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo,
-        fillgaps: settings.hasTimeCol ? c.fillgaps || fillNeeded(settings) : false, remove_outliers: false, range: null, result: null,
+        sourceInfo: settings.sourceInfo,
+        keep_zeros: settings.keep_zeros, fillgaps: c.fillgaps || fillNeeded(settings), remove_outliers: false, range: null, result: null,
       });
       touched.push(c);
     });
@@ -159,8 +160,8 @@ async function reimport(c) {
       Object.assign(k, {
         group: c.group, kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[i] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
-        hasTimeCol: settings.hasTimeCol, sourceInfo: settings.sourceInfo, source: c.source,
-        fillgaps: settings.hasTimeCol ? k.fillgaps || fillNeeded(settings) : false, result: null,
+        sourceInfo: settings.sourceInfo, source: c.source,
+        keep_zeros: settings.keep_zeros, fillgaps: k.fillgaps || fillNeeded(settings), result: null,
       });
       touched.push(k);
     });
@@ -191,7 +192,7 @@ async function useSynth(c, { n, tau0, seed, clocks = 1, models = null, names = n
       Object.assign(x, {
         source: { type: "synth", n, seed, tau0, ...(models ? { models } : {}), ...(k > 1 ? { clocks: k, index: i + 1 } : {}) },
         sourceInfo: k > 1 ? `simulated clock ${i + 1} of ${k}` : models ? "simulated clock" : "white + random-walk FM", kind: "phase", group: null,
-        tau0, hasTimeCol: false, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
+        tau0, fillgaps: false, remove_outliers: false, drift: "none", range: null, result: null,
       });
       if (names) x.name = names[i];
       else if (wasFile || DEFAULT_NAMES.test(x.name)) x.name = k > 1 ? `Sim ${i + 1}` : "Synthetic record";
@@ -301,7 +302,8 @@ async function run() {
   if (ctl.signal.aborted) return;       // cancelled or replaced: whoever did that has the state
   const s = (performance.now() - t0) / 1000;
   const nd = state.devs.length, ok = clocks.length - failed;
-  const what = clocks.length > 1 ? `${ok === clocks.length ? "" : `${ok} of `}${clocks.length} clocks` : `${thousands(clocks[0].record.n)} samples`;
+  const r = clocks[0].range, n = r ? Math.floor((r[1] - r[0]) / clocks[0].record.tau0) + 1 : clocks[0].record.n;
+  const what = clocks.length > 1 ? `${ok === clocks.length ? "" : `${ok} of `}${clocks.length} clocks` : `${thousands(n)} samples`;
   update((st) => {
     st.run.state = failed ? "error" : "idle";
     // Inputs changed while this ran: the results are already out of date.
@@ -351,7 +353,7 @@ function renderStatus() {
 function render() {
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.page === state.page));
   document.getElementById("help-btn").classList.toggle("on", state.page === "help");
-  // One clock: Spectrum and Dynamic put their settings in the panel. Several
+  // One clock: Spectrum, Dynamic and Holdover put their settings in the panel. Several
   // clocks: the panel keeps the clocks and the page shows a toolbar.
   renderPanel(page?.controls && (!multi() || page.ownsPanel) ? page.controls() : null);
   renderChip();
@@ -393,13 +395,9 @@ exportMenu.addEventListener("click", async (e) => {
     }
   }
   if (kind === "png" || kind === "svg") {
-    const el = page?.plotElement();
-    if (!el?.data) return ctx.status("warn", "Nothing to export on this page yet.");
-    const P = await loadPlotly();
-    // A dark plot keeps its card behind it; light plots export on clear paper.
-    const fig = document.documentElement.dataset.theme === "dark" ? { data: el.data, layout: { ...el.layout, paper_bgcolor: css("--bg-card") } } : el;
-    const url = await P.toImage(fig, { format: kind, scale: kind === "png" ? 2 : 1, width: el.clientWidth, height: el.clientHeight });
-    saveFile(`sigmatau-${state.page}.${kind}`, await (await fetch(url)).blob());
+    const blob = await plotImage(kind);
+    if (!blob) return ctx.status("warn", "Nothing to export on this page yet.");
+    saveFile(`sigmatau-${state.page}.${kind}`, blob);
   } else if (!analysed.length) {
     ctx.status("warn", "Run the analysis first; there are no results to export.");
   } else if (kind === "json") {
@@ -413,6 +411,41 @@ exportMenu.addEventListener("click", async (e) => {
     saveFile("sigmatau-results.tsv", new Blob([lines.join("\n") + "\n"], { type: "text/tab-separated-values" }));
   }
 });
+
+// Every plot shown on the page (both spectra, each clock's map), placed as on
+// screen, in one PNG (at twice the size) or SVG.
+async function plotImage(kind) {
+  const els = [...pageEl.querySelectorAll(".js-plotly-plot")]
+    .filter((el) => el.data?.length && el.offsetParent && getComputedStyle(el).visibility !== "hidden");
+  if (!els.length) return null;
+  const P = await loadPlotly();
+  // A dark plot keeps its card behind it; light plots export on clear paper.
+  const paper = document.documentElement.dataset.theme === "dark" ? css("--bg-card") : null;
+  const boxes = els.map((el) => el.getBoundingClientRect());
+  const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top));
+  const W = Math.round(Math.max(...boxes.map((b) => b.right)) - x0), H = Math.round(Math.max(...boxes.map((b) => b.bottom)) - y0);
+  const k = kind === "png" ? 2 : 1;
+  const parts = await Promise.all(els.map(async (el, i) => {
+    const b = boxes[i], fig = paper ? { data: el.data, layout: { ...el.layout, paper_bgcolor: paper } } : el;
+    const url = await P.toImage(fig, { format: kind, scale: k, width: Math.round(b.width), height: Math.round(b.height) });
+    return { x: Math.round(b.left - x0), y: Math.round(b.top - y0), w: Math.round(b.width), h: Math.round(b.height), url };
+  }));
+  if (kind === "svg") {
+    const inner = parts.map((p) => decodeURIComponent(p.url.slice(p.url.indexOf(",") + 1)).replace("<svg ", `<svg x="${p.x}" y="${p.y}" `));
+    const bg = paper ? `<rect width="100%" height="100%" fill="${paper}"/>` : "";
+    return new Blob([`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}">${bg}${inner.join("")}</svg>`], { type: "image/svg+xml" });
+  }
+  const canvas = Object.assign(document.createElement("canvas"), { width: W * k, height: H * k });
+  const g = canvas.getContext("2d");
+  if (paper) { g.fillStyle = paper; g.fillRect(0, 0, canvas.width, canvas.height); }
+  for (const p of parts) {
+    const img = new Image();
+    img.src = p.url;
+    await img.decode();
+    g.drawImage(img, p.x * k, p.y * k, p.w * k, p.h * k);
+  }
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
 
 // ── Header buttons and keys ──
 document.getElementById("record-chip").addEventListener("click", () => go("data"));
@@ -428,7 +461,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) { e.preventDefault(); run(); return; }
   if (e.key === "Escape" && state.run.state === "running") { e.preventDefault(); cancelRun(); return; }
   if (e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  const i = "1234567".indexOf(e.key);
+  const i = "12345678".indexOf(e.key);
   if (i >= 0) go(ORDER[i]);
   if (e.key === "?") go("help");
 });

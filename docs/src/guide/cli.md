@@ -41,6 +41,7 @@ each call pays Julia's start-up.
 | `sigmatau spectrum FILE` | Welch power spectral densities S_y(f) and S_x(f) (Hann taper, half overlap) |
 | `sigmatau dynamic FILE` | dynamic ADEV or HDEV: σ(τ) in sliding windows |
 | `sigmatau drift FILE` | fit a frequency drift model: aging per day with its uncertainty |
+| `sigmatau holdover FILE` | holdover test: the time error after a training stretch against holdover time, and the time to reach a limit ([holdover](../reference/holdover.md)) |
 | `sigmatau cross FILE --with FILE2` | two channels measuring one device: cross Allan deviation and cross-spectrum ([two-channel measurements](cross.md)) |
 | `sigmatau timescale FILE --value-cols LIST` | a timescale (AT1 or EWFA) from several clocks read against one reference: each clock's weight and prediction error, and with JSON the ADEV of the scale and of each clock against it |
 | `sigmatau live SOURCE` | running σ(τ) from an instrument or the simulator, one JSON line per update |
@@ -70,7 +71,8 @@ The record (all four analysis commands):
 | `--scaling X` | multiply the values by X (`1e-9` for nanoseconds) |
 | `--detrend MODE` | `none` (default), `mean`, `endpoint` or `linear`, applied by the reader to the column as read |
 | `--remove-drift MODE` | `none` (default), `linear` (frequency offset) or `quadratic` (offset and linear frequency drift): a least-squares fit to the phase, over the non-gap samples, removed after reading |
-| `--fillgaps` | fill the missing samples by interpolation (needs a time column; without it, a reading missing from the time column is a gap the gap-tolerant estimators skip) |
+| `--fillgaps` | fill the missing samples from the data beside each gap, reflected ([`fillgaps`](@ref)): `NaN` readings, and readings missing from the time column; without it, they are gaps the gap-tolerant estimators skip (a frequency record with gaps must be filled) |
+| `--keep-zeros` | read the zeros of a Stable32 `.phd`/`.frd` file as readings (a quantized record); by default they are gaps, as in Stable32 |
 | `--remove-outliers` | replace 5σ outliers in frequency and fill them |
 | `--range A:B` | analyse only seconds A to B from the first sample (`3600:` and `:86400` leave one end open); applied before the preprocessing |
 | `--synth N`, `--seed S` | synthetic record instead of `FILE` (seed 42) |
@@ -103,6 +105,24 @@ The record (all four analysis commands):
 `drift`: `--model linear|quadratic|log|diffusion` (default `linear`); see
 [`drift_fit`](@ref).
 
+`holdover`: `--train SECONDS` (default: a quarter of the record), or
+`--grow K` for a stretch K times each holdover time (2, or 3 with
+`--fit-drift`, is the test behind TDEV and HTDEV),
+`--tau LIST` for the holdover times in seconds (default: the octave
+multiples of τ₀ up to the training stretch), `--fit-drift` to fit a parabola
+to the stretch in place of a line, `--no-anchor` to start from the fit's
+value in place of the last reading, `--limit SECONDS` for the holdover time
+at which the error reaches it, and `--confidence P` (default 0.95 here) for
+the share of trials the quantile covers; see [`holdover`](@ref). With JSON,
+`--fit` adds the error that the power-law model fitted to the record
+predicts for the same test, and `reference` holds √6 TDEV at each holdover
+time (√20 HTDEV with `--fit-drift`), `null` past the τ the record gives it.
+`--kalman` predicts with a Kalman filter in place of the least-squares fit:
+its clock model is the power-law fit to the first training stretch alone,
+so no trial is predicted with noise levels learned from the readings it is
+compared with, and `claimed` is the error the filter itself expects
+(`--fit-drift` then gives the model a drift state).
+
 `cross`: `--with FILE2`, the second channel, read with the same options as
 `FILE`; `--grid` or `--m` for the τ values and `--nperseg N` for the
 cross-spectrum. Both records must have the same length and τ₀ and no gaps.
@@ -126,7 +146,12 @@ is never written as `NaN`. `check` writes
 writes `f,sy,sx` (without the DC bin), and `dynamic` writes `t,tau,dev`, one
 row per window and τ, with `t` the window centre in seconds. `drift` writes
 one row, `source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n`,
-with `c` blank for the linear model. `cross` writes
+with `c` blank for the linear model. `holdover` writes
+`source,train,tau,rms,quantile,worst,mean,n,limit,time_to_limit,claimed`,
+one row per holdover time (`train` is K times `tau` with `--grow`); `limit`
+is blank without `--limit`, `time_to_limit` is blank when the limit is not
+reached within the holdover times, and `claimed` is blank without
+`--kalman`. `cross` writes
 `tau,covar,dev,uncertainty,dev_a,dev_b,neff`, one row per τ (see
 [`cross_adev`](@ref)).
 
@@ -164,8 +189,11 @@ numbers are `null`.
 }
 ```
 
-- `record` is in every answer; `series` only with `--series N`, as an evenly
-  strided subset of the phase. At most 500 outliers are listed in
+- `record` is in every answer; `series` only with `--series N`: the phase
+  itself when it has at most N samples, otherwise its first and last sample
+  and, in each of (N − 2) ÷ 3 equal stretches, its lowest and highest sample
+  and its first gap (`null`), so that a plot spans the record and keeps every
+  outlier and gap. At most 500 outliers are listed in
   `outlier_t`/`outlier_x`; `outliers` is the full count. `start` is the
   UTC time of the first sample from ISO 8601 or MJD timestamps, `""` when
   the file has none; `gaps` counts the missing samples.
@@ -197,6 +225,16 @@ numbers are `null`.
 - `sigmatau drift` adds `"drift": {"model", "coef", "stderr",
   "drift_per_day", "drift_per_day_err", "rms", "n"}`, and with `--series N`
   a `series` of `t`, `y` and `fit`.
+- `sigmatau holdover` adds `"holdover": {"train", "grow", "drift", "anchor",
+  "confidence", "tau", "rms", "quantile", "worst", "mean", "n", "reference",
+  "limit", "time_to_limit"}`, the fields of [`HoldoverResult`](@ref) and the
+  scaled time deviation over `tau`; `time_to_limit` is `null` when the limit
+  is not reached. With `--fit`, `predicted` holds
+  `{"alphas", "noise_types", "sigma", "quantile", "budget",
+  "time_to_limit"}` from [`HoldoverPrediction`](@ref), with one `budget`
+  array (variance in s², over `tau`) per noise type. With `--kalman`,
+  `claimed` holds the filter's own standard deviation over `tau` and `model`
+  the `{"R", "q1", "q2", "q3"}` it ran on.
 - `sigmatau cross` adds `"with"` (the second file), `"cross_adev": {"tau",
   "covar", "dev", "uncertainty", "dev_a", "dev_b", "neff"}` and
   `"cross_spectrum": {"nperseg", "nseg", "f", "sy", "floor", "sy_a", "sy_b"}`
