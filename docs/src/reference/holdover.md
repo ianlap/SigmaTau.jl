@@ -88,7 +88,7 @@ sample past the first `train` seconds its estimate is carried τ ahead with
 no further readings and compared with the reading there.
 
 ```julia
-m = clock_model(powerlaw_fit(p))
+m = clock_model(powerlaw_fit(p); flicker=true)
 k = holdover(p, m; limit=1e-6)
 k.rms ./ k.claimed     # near 1 when the model fits the clock
 ```
@@ -102,6 +102,23 @@ that τ. With the right model the filter is the optimum predictor
 [allan-1987-prediction](@cite); a least-squares line at its best stretch
 comes within a few percent of it on white plus random-walk FM, and falls
 behind as the stretch moves away from that.
+
+A model from a fit should keep the flicker the fit finds (`flicker=true`).
+Without its flicker FM the filter of a flicker FM clock is left with
+almost no process noise: on simulated records it claimed a tenth of the
+error it made at τ₀, against 0.97 to 1.01 times with the Markov states.
+`sigmatau holdover --kalman` and the explorer fit the model to the first
+training stretch alone and keep the flicker.
+
+Two limits show at the longest holdover times, here a quarter of a record
+of 8192 samples with the model fitted to its first quarter. The measured
+RMS rests on few independent trials: on white FM, where the model has
+nothing to miss, `rms ./ claimed` ran from 0.3 to 1.4 over simulated
+records (10 % to 90 %), against 0.98 to 1.02 at τ₀. And a short stretch
+may not show the noise that takes over later: on white plus random-walk FM
+crossing at 390 s the ratio reached 8 where the fit of the stretch found
+too little random-walk FM. A ratio well above 1 at long τ says the stretch
+was too short to learn the slow noise.
 
 ## Holdover and the time deviation
 
