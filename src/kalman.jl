@@ -68,13 +68,21 @@ _markov_vars(m::ClockModel) = vcat(fill(_fm_var(m), length(_fm_taus(m))), fill(_
 
 # The start for model `m`: the polynomial start for phase, frequency and
 # drift; the Markov states at zero with their stationary variance. The
-# readings the phase starts from carry the Markov phase states.
-function _model_start(z::Vector{Float64}, m::ClockModel; widen::Float64=1.0)
+# readings the phase starts from carry the Markov phase states. With
+# `zero_drift` the drift starts at zero with the variance the parabola gives
+# it, and phase and frequency start from a line: for a filter that cannot
+# observe the drift itself, only its differences between clocks.
+function _model_start(z::Vector{Float64}, m::ClockModel; widen::Float64=1.0, zero_drift::Bool=false)
     np, n = _npoly(m), _nstates(m)
     xp, Pp = _kalman_start(z, m.tau0, np)
     x, P = zeros(n), zeros(n, n)
-    x[1:np] = xp
-    P[1:np, 1:np] = widen .* Pp
+    if zero_drift && np == 3
+        x[1:2], P[1:2, 1:2] = _kalman_start(z, m.tau0, 2)
+        P[3, 3] = Pp[3, 3]
+    else
+        x[1:np] = xp
+        P[1:np, 1:np] = widen .* Pp
+    end
     for (j, v) in enumerate(_markov_vars(m))
         P[np+j, np+j] = v
     end

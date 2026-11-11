@@ -462,10 +462,16 @@ that clock less its estimated phase, and it carries the white PM of that
 reading. With every `R = 0` all pivots give the same scale.
 
 The filter starts each clock read at the first sample from a line through
-its first 16 readings, or a parabola for a model with drift. An error in
-those starting frequencies
-stays in the scale as a constant frequency offset
+its first 16 readings. An error in those starting frequencies stays in the
+scale as a constant frequency offset
 ([Greenhall (2007), §2](@cite greenhall-2007-measurement-noise-corrections)).
+The drift of a model with drift starts at zero, as in the initialization of
+[Jones and Tryon (1983), Fig. 1](@cite jones-tryon-1983-estimating-time),
+with the variance that a parabola through those readings gives it. The
+filter observes the differences between the drifts of the clocks and not
+their common part, so a drift fitted to the first readings would stay in
+the scale as a constant drift; started at zero, the drift of the scale is a
+weighted mean of the drifts of the clocks.
 Models with flicker FM bring their Markov states into the filter, which at
 `R = 0` is the algorithm of
 [Davis et al. (2005), Eqs. (3.1)–(3.6) and (4.1)](@cite davis-greenhall-stacey-2005-flicker);
@@ -837,13 +843,15 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
     P = zeros(ns * k, ns * k)
     G, F = zeros(k, ns * k), zeros(k, ns * k)     # each clock's reading and frequency in state terms
     # The clocks read at the first sample with a reading start from a line
-    # through their first readings; a later one starts at its first reading.
+    # through their first readings, with the drift at zero: its common part
+    # is not observed, and what the start gives it stays in the scale. A
+    # later clock starts at its first reading.
     n₁ = findfirst(n -> any(isfinite, view(cc.x, n, :)), 1:N)
     started = n₁ === nothing ? trues(k) : isfinite.(cc.x[n₁, :])
     for (i, m) in enumerate(models)
         φ, q, g = state_transition(m, τ), process_noise(m, τ), _reading_row(m)
         n = size(φ, 1)
-        x0, P0 = started[i] ? _model_start(cc.x[:, i], m) : (zeros(n), zeros(n, n))
+        x0, P0 = started[i] ? _model_start(cc.x[:, i], m; zero_drift=true) : (zeros(n), zeros(n, n))
         F[i, idx(i, 2)] = 1.0
         for s in _npoly(m) .+ (1:length(_fm_taus(m)))
             F[i, idx(i, s)] = 1.0

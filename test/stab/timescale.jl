@@ -230,6 +230,12 @@ using Statistics
         @test maximum(abs, jt.y .- rk.y) < 1e-3 * std(rk.y[late, 1])   # frequency estimates agree (Theorem 1)
         @test timescale_phase(timescale(cc; algorithm=:jones_tryon, models=ms, pivot=3)).x ≈ timescale_phase(jt).x atol=1e-12
         @test adev1(rk) < adev1(jt) < 1.6 * adev1(rk)             # the reduction quiets the scale at short τ
+        # Models with a drift state: the drift starts at zero (JT83 Fig. 1), as the
+        # filter sees only the differences of the drifts. The scale stays that of
+        # the models without one (within 8×10⁻¹⁰ s over 20 seeds); a drift fitted
+        # to the first readings carried it off by 85 µs.
+        md = [ClockModel(; tau0=1.0, q1=qi, drift=true) for qi in q]
+        @test maximum(abs, timescale_phase(timescale(cc; algorithm=:greenhall, models=md)).x .- timescale_phase(rk).x) < 5e-9
         # Greenhall 2006 §7: clocks 1 and 2 read without noise, clock 3 with noise of
         # variance 10. The implicit mean is Σ aᵢ(xᵢ − x̂ᵢ) (3.13). The corrected clocks
         # stay about it with the variances printed in §9.1, and its ADEV is the theory
