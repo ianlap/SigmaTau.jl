@@ -194,16 +194,18 @@ fewer than 30 averaged points an FM label is therefore the one found at
 subject to the two conditions above. A change from one FM type to another
 beyond that averaging time is not seen. State it with `noise`.
 
-`remove_drift=false` on [`hdev`](@ref), [`mhdev`](@ref), [`htdev`](@ref)
-and [`htotdev`](@ref) identifies the noise on the record as given, with the
-``B_1`` ratio, which is what Stable32 does. The deviation is the same
-either way. In simulation, on white FM with a drift that dominates the
-Allan deviation at the longest averaging times, the default labeled the
-points with 16, 8 and 4 averaged values white FM in 98 % of records, and
-`remove_drift=false` labeled them random-walk FM in every record. On
-flicker-walk and random-run FM it is the other way round: with
-`remove_drift=false` neither was found in any record below 30 points,
-where the default kept the labels it found at 30 (tables below).
+`remove_drift=false` on [`hdev`](@ref), [`mhdev`](@ref), [`htdev`](@ref),
+[`htotdev`](@ref) and [`mhtotdev`](@ref) identifies the noise on the record
+as given, with the ``B_1`` ratio, which is what Stable32 does. The
+deviation is the same either way, except through the bias factor of
+`htotdev` and `mhtotdev`, which follows the label. In simulation, on white
+FM with a drift that dominates the Allan deviation at the longest
+averaging times, the default labeled the points with 16, 8 and 4 averaged
+values white FM in 98 % of records, and `remove_drift=false` labeled them
+random-walk FM in every record. On flicker-walk and random-run FM it is
+the other way round: with `remove_drift=false` neither was found in any
+record below 30 points, where the default kept the labels it found at 30
+(tables below).
 
 ## How far to trust a label
 

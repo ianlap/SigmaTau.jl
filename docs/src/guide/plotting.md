@@ -9,7 +9,7 @@ using SigmaTau, Plots, Random
 
 # white FM of 1e-12 at 1 s and random-walk FM, 8192 samples at 1 s
 p = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14),
-              rng = Xoshiro(5))
+              rng = Xoshiro(3))
 r = adev(p)
 nothing # hide
 ```

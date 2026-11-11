@@ -42,8 +42,9 @@ limit lies several times farther from the estimate than the lower one. An
 error bar of plus or minus one standard error would misstate both.
 
 [`ci_lower`](@ref) and [`ci_upper`](@ref) return the limits as vectors, and
-`ci=false` skips the noise identification, the EDF and the interval, which
-is faster when only the deviation is wanted.
+`ci=false` skips the EDF and the interval, and the noise identification
+where no bias factor rests on it, which is faster when only the deviation
+is wanted.
 
 ## Equivalent degrees of freedom
 
