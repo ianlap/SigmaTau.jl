@@ -99,6 +99,9 @@ end
     @test all(d -> occursin("  " * d * "\n", run_cli("help").out), last.(SigmaTauCLI.COMMAND_HELP))
     @test occursin("\nThe σ(τ)", run_cli("help", "model").out)
     @test !occursin("FILE", run_cli("help", "live").out)
+    # No help for a word that is no command: a usage error, on stderr.
+    r = run_cli("help", "nosuch")
+    @test r.code == 1 && isempty(r.out) && occursin("no help for \"nosuch\"", r.err)
 end
 
 @testset "the reference names every command and option" begin
@@ -239,9 +242,14 @@ mktempdir() do dir
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,mtie", "--mask", "G8262_opt1")
         @test r.code == 0 && occursin("\"masks\":[{\"name\":\"G8262_opt1\"", r.out)
         @test occursin("\"checks\":[{\"deviation\":\"tdev\"", r.out) && occursin("{\"deviation\":\"mtie\"", r.out)
-        @test run_cli("analyze", pf, "--mask", "G8262_opt1").code != 0      # JSON only
+        @test occursin("\"source\":\"G.8262 (10/2024), Tables 1 and 3\"", r.out)
         @test run_cli("analyze", pf, "--format=json", "--mask", "G999").code != 0
-        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 9
+        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 16
+        # With CSV the verdict goes to stderr: X swings 4.7 ns, under the 25 ns of PRTC-B.
+        r = run_cli("analyze", pf, "--devs", "adev,mtie", "--mask", "G8272_PRTC_B")
+        @test r.code == 0 && startswith(r.out, "source,quantity,deviation") && occursin(r"^sigmatau: MTIE passes, [\d.]+× under G8272_PRTC_B\n$", r.err)
+        @test occursin("--devs names neither", run_cli("analyze", pf, "--devs", "adev", "--mask", "G811").err)
+        @test isempty(run_cli("analyze", pf, "--devs", "mtie", "--mask", "G8272_PRTC_B", "--quiet").err)
     end
 
     @testset "no CI: nulls in JSON, blanks in CSV, never NaN" begin
@@ -392,7 +400,12 @@ mktempdir() do dir
         @test r.code == 0 && occursin("\"algorithm\":\"at2\"", r.out)
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--steps", "real", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"steps\":\"real\"", r.out)
-        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at1", "--steps", "best").code != 0
+        for alg in ("at1", "greenhall", "stein")
+            @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", alg, "--steps", "best").code == 1
+        end
+        for w in ("2", "0", "-1")
+            @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--wmax", w).code == 1
+        end
         # The Kalman scales fit a model per clock; --pivot picks the clock they read at.
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"greenhall\"", r.out) && occursin("\"pivot\":2", r.out)
@@ -491,8 +504,15 @@ mktempdir() do dir
         ff = write_table(joinpath(dir, "aging.csv"), y; tau0=60.0)
         ref = drift_fit(FrequencyData(y, 60.0))
         rows = csv_rows(run_cli("drift", ff, "--freq").out)
-        @test rows[1][3] == "linear" && isempty(rows[1][8])
-        @test parse(Float64, rows[1][10]) ≈ ref.rate rtol=1e-9
+        @test rows[1][3:4] == ["linear", "frequency_fit"] && isempty(rows[1][9])
+        @test parse(Float64, rows[1][11]) ≈ ref.rate rtol=1e-9
+        # The bisection has no standard error: an empty CSV field, null in JSON.
+        rows = csv_rows(run_cli("drift", ff, "--freq", "--method", "bisection").out)
+        @test parse(Float64, rows[1][11]) ≈ drift_fit(FrequencyData(y, 60.0); method=:bisection).rate rtol=1e-6
+        @test rows[1][4] == "bisection" && isempty(rows[1][12])
+        r = run_cli("drift", ff, "--freq", "--method", "four_point", "--format", "json")
+        @test r.code == 0 && occursin("\"method\":\"four_point\"", r.out) && occursin("\"drift_per_day_err\":null", r.out)
+        @test run_cli("drift", ff, "--method", "bisection", "--model", "log").code == 1
         r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
         @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
         @test run_cli("drift", ff, "--model", "cubic").code == 1
@@ -535,6 +555,13 @@ mktempdir() do dir
         r = run_cli("holdover", write_table(joinpath(dir, "flicker.csv"), ff.x), "--train", "512", "--tau", "1,16", "--kalman", "--format", "json")
         @test parse.(Float64, split(match(r"\"claimed\":\[([^\]]*)\]", r.out)[1], ',')) ≈ holdover(ff, kmodel(ff.x); train=512, tau=[1, 16]).claimed
         @test parse(Float64, match(r"\"flicker_fm\":([^,}]*)", r.out)[1]) > 1e-26
+        # The clock model needs a training stretch of 65 samples.
+        fl = joinpath(dir, "flicker.csv")
+        r = run_cli("holdover", fl, "--kalman", "--train", "64")
+        @test r.code == 3 && occursin("65 samples or more; this one has 64", r.err)
+        @test run_cli("holdover", fl, "--kalman", "--train", "65", "--tau", "1,4").code == 0
+        @test run_cli("holdover", fl, "--kalman", "--tau", "1,4").code == 0   # a quarter of 4096
+        @test occursin("this one has 32", run_cli("holdover", write_table(joinpath(dir, "short.csv"), ff.x[1:128]), "--kalman").err)
         @test run_cli("holdover", hf, "--kalman", "--no-anchor").code == 1
         @test run_cli("holdover", hf, "--kalman", "--grow", "2").code == 1
         @test run_cli("holdover", hf, "--train", "0.5").code == 3
@@ -566,6 +593,12 @@ mktempdir() do dir
         @test run_cli("steer", sf, "--cost", "0:0:1").code == 1
         @test run_cli("steer", sf, "--time-constant", "30", "--interval", "1.5").code == 3
         @test run_cli("steer", sf, "--time-constant", "30", "--train", "8190").code == 3
+        # The clock model needs a training stretch of 65 samples, and 16 more follow it.
+        r = run_cli("steer", sf, "--time-constant", "8", "--train", "64")
+        @test r.code == 3 && occursin("65 samples or more; this one has 64", r.err)
+        @test run_cli("steer", sf, "--time-constant", "8", "--train", "65").code == 0
+        r = run_cli("steer", write_table(joinpath(dir, "short.csv"), p.x[1:80]), "--time-constant", "8")
+        @test r.code == 3 && occursin("needs at least 81 samples; the record has 80", r.err)
     end
 
     @testset "--remove-drift" begin
@@ -643,6 +676,14 @@ mktempdir() do dir
         @test occursin("\"spectrum\":{\"nperseg\":32,\"noverlap\":16,", r.out)
         sy = psd_y(PhaseData(X, 1.0); nperseg=32)
         @test parse(Float64, csv_rows(run_cli("spectrum", pf, "--nperseg", "32").out)[1][2]) == sy.psd[2]
+        # A segment as long as the record, or longer, is cut to its 255 frequency samples.
+        for np in ("256", "100000")
+            @test occursin("\"spectrum\":{\"nperseg\":255,", run_cli("spectrum", pf, "--nperseg", np, "--format", "json").out)
+        end
+        # The shortest record the reference allows, with the default segment.
+        sh = write_table(joinpath(dir, "sixteen.csv"), X[1:16])
+        @test run_cli("spectrum", sh).code == 0
+        @test run_cli("analyze", sh, "--spectrum", "--format", "json").code == 0
     end
 
     @testset "dynamic" begin
@@ -883,6 +924,10 @@ mktempdir() do dir
         write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
         @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
+        # A Stable32 file without a sample interval asks for the option by its name.
+        wf = joinpath(dir, "w.frd")
+        write(wf, join(1e-12 .* sinpi.((1:32) ./ 7.3), "\n"))
+        @test occursin("pass --tau0", run_cli("check", wf).err)
         # An error inside a threaded loop is named by what the task threw.
         failed = try wait(Threads.@spawn throw(DomainError(-1.0))) catch e e end
         @test SigmaTauCLI.error_message(CompositeException([failed])) == "domain error in the analysis"
@@ -900,6 +945,21 @@ mktempdir() do dir
         @test isempty(String(take!(e)))
     end
 
+    # The compiled binary writes to file descriptor 1 itself; a reader that has gone is an IOError.
+    Sys.iswindows() || @testset "FdOut: a closed pipe throws" begin
+        fds = zeros(Cint, 2)
+        @test ccall(:pipe, Cint, (Ptr{Cint},), fds) == 0
+        out = SigmaTauCLI.FdOut(fds[2])
+        @test write(out, "abc") == 3
+        buf = zeros(UInt8, 3)
+        @test ccall(:read, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), fds[1], buf, 3) == 3
+        @test String(buf) == "abc"
+        ccall(:close, Cint, (Cint,), fds[1])
+        @test_throws Base.IOError write(out, "abc")
+        @test_throws Base.IOError write(out, 0x61)
+        ccall(:close, Cint, (Cint,), fds[2])
+    end
+
     @testset "--out writes what stdout would show" begin
         op = joinpath(dir, "out.csv")
         r = run_cli("analyze", pf, "--devs", "adev", "--out", op)
@@ -911,6 +971,25 @@ mktempdir() do dir
 
     exe = get(ENV, "SIGMATAU_EXE", "")
     if !isempty(exe)
+        # A reader that closes the pipe after one line: the command ends, exit 0, and
+        # the runtime's own `broken pipe` line stays off stderr.
+        Sys.iswindows() || @testset "compiled binary: reader closes the pipe" begin
+            for args in (["live", "sim", "--fast"], ["analyze", "--synth", "100000", "--grid", "all", "--devs", "adev"])
+                errf = joinpath(dir, "pipe.err")
+                proc = open(pipeline(`$exe $args`; stderr=errf), "r")
+                readline(proc)
+                close(proc.out)
+                hung = Ref(false)
+                timer = Timer(60) do _
+                    hung[] = true
+                    kill(proc)
+                end
+                wait(proc)
+                close(timer)
+                @test !hung[] && proc.exitcode == 0
+                @test isempty(read(errf, String))
+            end
+        end
         @testset "compiled binary matches" begin
             # elapsed_ms differs between runs; compare everything before it.
             strip_t(s) = replace(s, r"\"elapsed_ms\":[^}]*}" => "")

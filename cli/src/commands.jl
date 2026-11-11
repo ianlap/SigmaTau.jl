@@ -20,10 +20,10 @@ function elapsed(io::IO, t_start::UInt64)
     print(io, "}\n")
 end
 
-function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args::Vector{String})
+function run_command(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt64, args::Vector{String})
     c = o.command
     c == "report"   && return cmd_report(io, o, data, args)
-    c == "analyze"  && return cmd_analyze(io, o, data, t_start)
+    c == "analyze"  && return cmd_analyze(io, err, o, data, t_start)
     c == "check"    && return cmd_check(io, o, data, t_start)
     c == "spectrum" && return cmd_spectrum(io, o, data, t_start)
     c == "dynamic"  && return cmd_dynamic(io, o, data, t_start)
@@ -84,7 +84,7 @@ function analysis_results(o::Options, data::PhaseData)
     return results
 end
 
-function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+function cmd_analyze(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt64)
     results = analysis_results(o, data)
     N = length(data.x)
     src = source_name(o, data)
@@ -93,6 +93,7 @@ function cmd_analyze(io::IO, o::Options, data::PhaseData, t_start::UInt64)
         for r in results
             csv_result(io, src, quantity(o), r)
         end
+        isempty(o.mask) || o.quiet || mask_verdicts(err, o.mask, results)
         return nothing
     end
     json_head(io, o, src)
@@ -142,8 +143,9 @@ function spectra(o::Options, data::PhaseData)
         throw(CLIError(EXIT_ANALYSIS, "the spectrum needs a record without gaps; fill them with --fillgaps"))
     N = length(data.x)
     # One segment length for both spectra, from the phase record's length (the
-    # library's own default for psd_y counts the N − 1 frequency samples).
-    np = o.nperseg > 0 ? min(o.nperseg, N) : SigmaTau._default_nperseg(N)
+    # library's own default for psd_y counts the N − 1 frequency samples), cut
+    # to those N − 1 samples.
+    np = min(o.nperseg > 0 ? o.nperseg : SigmaTau._default_nperseg(N), N - 1)
     return psd_y(data; nperseg=np), psd_x(data; nperseg=np)
 end
 
@@ -268,16 +270,17 @@ end
 
 # ── drift ─────────────────────────────────────────────────────────────────
 
-const CSV_DRIFT = "source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
+const CSV_DRIFT = "source,quantity,model,method,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
 
 function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 3, "a drift fit")   # drift_fit checks each model's own minimum
-    f = drift_fit(data; model=Symbol(o.model))
+    f = drift_fit(data; model=Symbol(o.model), method=Symbol(o.method))
     src = source_name(o, data)
     n = count(isfinite, f.y)
     if o.format != "json"
         print(io, CSV_DRIFT); print(io, '\n')
         csv_field(io, src); print(io, ','); print(io, quantity(o)); print(io, ','); print(io, o.model)
+        print(io, ','); print(io, o.method)
         for k in 1:3
             print(io, ','); k <= length(f.coef) && csv_number(io, f.coef[k])
             print(io, ','); k <= length(f.coef) && csv_number(io, f.stderr[k])
@@ -291,9 +294,11 @@ function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "analysis"); print(io, '{')
     json_key(io, "quantity", true); json_string(io, quantity(o))
     json_key(io, "model"); json_string(io, o.model)
+    json_key(io, "method"); json_string(io, o.method)
     json_preprocessing(io, o); print(io, '}')
     json_key(io, "drift"); print(io, '{')
     json_key(io, "model", true); json_string(io, o.model)
+    json_key(io, "method"); json_string(io, o.method)
     json_key(io, "coef"); json_array(io, f.coef)
     json_key(io, "stderr"); json_array(io, f.stderr)
     json_key(io, "drift_per_day"); json_number(io, f.rate)
@@ -353,6 +358,10 @@ function holdover_reference(data::PhaseData, h::HoldoverResult)
     return h.drift ? sqrt(20.0) .* htdev(data, ms; ci=false).dev : sqrt(6.0) .* tdev(data, ms; ci=false).dev
 end
 
+# The model's five power-law terms are fitted to MHDEV at the octaves m = 1 to
+# 16, and the point at m = 16 needs 4m + 1 samples.
+const KALMAN_MIN_TRAIN = 65
+
 # The clock model of a Kalman predictor: the power-law fit to the first
 # training stretch alone, so no trial is predicted with noise levels learned
 # from the readings it is compared with. Flicker the fit finds is kept, as
@@ -363,6 +372,9 @@ end
 function holdover_model(data::PhaseData, train::Float64, drift::Bool)
     τ₀ = Float64(data.tau0)
     b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
+    b >= KALMAN_MIN_TRAIN || throw(CLIError(EXIT_ANALYSIS, "the clock model needs a training stretch of " *
+        string(KALMAN_MIN_TRAIN) * " samples or more; this one has " * string(b) *
+        " (--train sets it, by default a quarter of the record)"))
     pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
     return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, tau_max=length(data.x) * τ₀), maximum(pf.x)
 end
@@ -489,11 +501,11 @@ end
 # test; the loop runs over the whole record and every result is taken from
 # the end of that stretch on.
 function cmd_steer(io::IO, o::Options, data::PhaseData, t_start::UInt64)
-    need_samples(data, 64, "a steering replay")
+    need_samples(data, KALMAN_MIN_TRAIN + 16, "a steering replay")   # a stretch to fit, 16 samples after it
     τ₀, N = Float64(data.tau0), length(data.x)
     train = isnan(o.train) ? (N ÷ 4) * τ₀ : o.train
     b = SigmaTau._whole_samples(train, τ₀, "train")
-    16 <= b <= N - 16 || throw(CLIError(EXIT_ANALYSIS, "steer: the training stretch must leave 16 samples on either side of its end"))
+    b <= N - 16 || throw(CLIError(EXIT_ANALYSIS, "steer: the training stretch must leave 16 samples after its end"))
     interval = isnan(o.interval) ? τ₀ : o.interval
     g = isempty(o.cost) ? steering_gains(o.time_constant, interval; integral=o.integral) :
         lqg_gains(interval; phase=o.cost[1], frequency=o.cost[2], steer=o.cost[3])
@@ -602,7 +614,6 @@ function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     alg = Symbol(o.algorithm)
     o.flicker && !(alg === :greenhall || alg === :jones_tryon) && throw(usage_error("--flicker needs --algorithm greenhall or jones_tryon"))
     if !kalman
-        isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
         isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax), ClockModel[]
         return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps)), ClockModel[]
     end

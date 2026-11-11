@@ -424,6 +424,24 @@ function _lyapunov(M::Matrix{Float64}, W::Matrix{Float64})
     return (Σ + Σ') ./ 2
 end
 
+# D = Mʲ − I and W = Σᵢ<ⱼ Mⁱ W₀ Mⁱᵀ, the change of the state over j steps and
+# the noise that j steps add, by doubling on j. Mʲ is kept as I + D, because a
+# loop with a time constant of 10⁹ steps has Mʲ within 10⁻⁹ of I, and Mʲ − I
+# taken from Mʲ would keep nothing of it.
+function _steps(M::Matrix{Float64}, W₀::Matrix{Float64}, j::Int)
+    D₁ = M - I
+    D, W = D₁, copy(W₀)
+    for bit in bitstring(j)[findfirst('1', bitstring(j))+1:end]
+        W += (I + D) * W * (I + D)'
+        D = D * D + 2D
+        if bit == '1'
+            W += (I + D) * W₀ * (I + D)'
+            D = D * D₁ + D + D₁
+        end
+    end
+    return D, W
+end
+
 # X = Aᵀ X (I + G X)⁻¹ A + H, the discrete Riccati equation, by doubling:
 # each pass stands for twice as many steps of the recursion as the last,
 # which reaches the limit however slowly the recursion itself would.
@@ -558,11 +576,15 @@ function steer(m::ClockModel, g::SteeringGains; tau::Union{AbstractVector{<:Real
     ms = tau === nothing ? _grid(Octave, ceil(Int, 32 * maximum(poles.time_constants) / τ)) :
          [(k = round(Int, t / τ); k >= 1 && isapprox(k * τ, t; rtol=1e-9) ? k :
            throw(ArgumentError("steer: tau = $t is not a whole multiple of tau0 = $τ"))) for t in tau]
-    # σ_y²(jτ) = ⟨(p₂ⱼ − 2pⱼ + p₀)²⟩ / 2(jτ)², from the covariance of the phase j and 2j steps apart.
+    # σ_y²(jτ) = ⟨(p₂ⱼ − 2pⱼ + p₀)²⟩ / 2(jτ)². With D = Mʲ − I the state at j and
+    # 2j steps is ζⱼ = (I + D)ζ₀ + s₁ and ζ₂ⱼ = (I + D)ζⱼ + s₂, the s the noise
+    # of the j steps, so the second difference is cᵀ(D²ζ₀ + (D − I)s₁ + s₂): three
+    # terms that add, none a difference of large covariances, which a loop slower
+    # than 10⁶ steps would have rounded away. A reading's noise v adds cᵀD(D − 2I)bv.
     σy = map(ms) do j
-        r₁ = (M^j)' * cp
-        r₂ = (M^j)' * r₁
-        sqrt(max(3dot(cp, Σ, cp) - 4dot(r₁, Σ, cp) + dot(r₂, Σ, cp) + 3Rz - 4dot(r₁, bv) + dot(r₂, bv), 0.0)) / (j * τ)
+        D, Wj = _steps(M, B * N * B', j)
+        r₁, r₂ = (D * D)' * cp, (D - I)' * cp
+        sqrt(max((dot(r₁, Σ, r₁) + dot(r₂, Wj, r₂) + dot(cp, Wj, cp)) / 2 + 3Rz + dot(D' * cp, (D - 2I) * bv), 0.0)) / (j * τ)
     end
     return SteeringPrediction(g, sqrt(dot(cp, Σ, cp) + Rz), sqrt(dot(cy, Σ, cy)), sqrt(dot(cu, Σ, cu)), ms .* τ, σy)
 end

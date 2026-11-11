@@ -543,6 +543,10 @@ _noise_alpha(s::Symbol) = haskey(_NOISE_ALPHA, s) ? _NOISE_ALPHA[s] :
     throw(ArgumentError("noise_gen: unknown noise type :$s; use one of " * join(keys(_NOISE_ALPHA), ", ")))
 _noise_alpha(k) = throw(ArgumentError("noise_gen: keys must be an Int α or a noise-type Symbol, got $(typeof(k))"))
 
+# The components draw from one stream, so their order fixes the record: by
+# α, not in the order the Dict iterates, which differs between Julia versions.
+_by_alpha(d::AbstractDict) = sort!(collect(d); by=kv -> (_noise_alpha(kv[1]), string(kv[1])))
+
 function _noise_gen_y(N::Int, tau0::Float64,
                      sigma1::AbstractDict, h::AbstractDict; rng=nothing)
     !isempty(sigma1) && !isempty(h) &&
@@ -563,7 +567,7 @@ function _noise_gen_y(N::Int, tau0::Float64,
     if !isempty(sigma1)
         # Empirical calibration: rescale the realization so its overlapping
         # ADEV at τ₀ equals the request exactly.
-        for (key, s) in sigma1
+        for (key, s) in _by_alpha(sigma1)
             α = _noise_alpha(key)
             check(α, s, "σ")
             s == 0 && continue
@@ -578,7 +582,7 @@ function _noise_gen_y(N::Int, tau0::Float64,
         # 2τ₀·|2 sin(πfτ₀)|^α (Kasdin and Walter (1992), Eq. (37)), which is
         # 2τ₀·(2πτ₀f)^α at low frequency, so scaling by
         # √(h_α / (2τ₀(2πτ₀)^α)) gives S_y(f) = h_α f^α there.
-        for (key, hα) in h
+        for (key, hα) in _by_alpha(h)
             α = _noise_alpha(key)
             check(α, hα, "h")
             hα == 0 && continue

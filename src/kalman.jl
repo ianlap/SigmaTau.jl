@@ -396,6 +396,7 @@ sqrt(sum(abs2, kf.x[:, 1] .- X[:, 1]) / 4096)    # RMS error of the phase estima
 ```
 """
 function simulate_clock(m::ClockModel, N::Int; rng=nothing)
+    N >= 1 || throw(ArgumentError("simulate_clock: N must be ≥ 1, got $N"))
     np, n = _npoly(m), _nstates(m)
     Φ, Q = state_transition(m, m.tau0), process_noise(m, m.tau0)
     L = _psd_sqrt(Q)
@@ -527,6 +528,7 @@ t.model.q1 / m.q1, t.model.q2 / m.q2, t.edge
 function tune_q(data::PhaseData, m::ClockModel; horizons::AbstractVector{<:Integer}=[10, 100, 1000],
                 decades::Real=2, points::Integer=9, burnin::Integer=length(data.x) ÷ 10)
     m.q1 > 0 && m.q2 > 0 || throw(ArgumentError("tune_q: needs a model with q1 > 0 and q2 > 0 to centre the grid"))
+    points >= 2 || throw(ArgumentError("tune_q: points must be at least 2, got $points"))
     hs = filter(h -> h < length(data.x) - burnin, horizons)
     isempty(hs) && throw(ArgumentError("tune_q: every horizon is longer than the record past the burn-in"))
     grid(q) = q .* exp10.(range(-decades, decades; length=points))

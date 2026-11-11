@@ -92,6 +92,10 @@ Run one `sigmatau` command and return its exit code (0 ok, 1 usage, 2 input,
 """
 function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     if isempty(args) || args[1] in ("help", "-h", "--help")
+        if length(args) >= 2 && args[2] != "completion" && !(args[2] in COMMANDS)
+            print(err, "sigmatau: no help for \"", args[2], "\"; commands: ", join(COMMANDS, ", "), "\n")
+            return EXIT_USAGE
+        end
         help_buf = IOBuffer()
         length(args) >= 2 ? print_command_help(help_buf, args[2]) : print_help(help_buf)
         write(out, take!(help_buf))
@@ -155,7 +159,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))
         end
         try
-            run_command(buf, o, data, t_start, args)
+            run_command(buf, err, o, data, t_start, args)
         catch e
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
         end
@@ -176,8 +180,43 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     return EXIT_OK
 end
 
+# Standard output as file descriptor 1. A write to Core.stdout goes to libuv,
+# which reports a closed pipe on stderr (`jl_uv_writecb() ERROR: broken pipe`)
+# and throws nothing, so `live` never saw its reader go. A write here fails
+# with an IOError, which the commands already treat as the reader's goodbye.
+struct FdOut <: IO
+    fd::Cint
+end
+
+function Base.unsafe_write(io::FdOut, p::Ptr{UInt8}, n::UInt)
+    done = 0
+    while done < n
+        w = ccall(:write, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), io.fd, p + done, n - done)
+        if w >= 0
+            done += w
+            continue
+        end
+        errno = Libc.errno()
+        errno == Libc.EINTR && continue
+        # Another part of the runtime may have made the pipe non-blocking: wait for room.
+        errno == Libc.EAGAIN && (Libc.systemsleep(0.001); continue)
+        throw(Base.IOError("write", -errno))
+    end
+    return Int(n)
+end
+
+function Base.write(io::FdOut, b::UInt8)
+    r = Ref(b)
+    GC.@preserve r unsafe_write(io, Base.unsafe_convert(Ptr{UInt8}, r), UInt(1))
+    return 1
+end
+
+Base.flush(::FdOut) = nothing
+
 function (@main)(args::Vector{String})::Cint
-    return Cint(sigmatau(args; out=Core.stdout, err=Core.stderr))
+    # Windows has no write(2) in the runtime: keep Core.stdout there.
+    Sys.iswindows() && return Cint(sigmatau(args; out=Core.stdout, err=Core.stderr))
+    return Cint(sigmatau(args; out=FdOut(Cint(1)), err=Core.stderr))
 end
 
 end # module
