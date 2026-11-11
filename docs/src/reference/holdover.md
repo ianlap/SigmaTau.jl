@@ -63,9 +63,11 @@ T = [64, 128, 256, 512, 1024, 4096]
 The form is that of a line through a continuous stretch. With 64 samples
 in the stretch it holds within 0.1 % on white FM and 2 % on random-walk
 FM, and with 1024 within 0.2 % on both. One record scatters about it: over
-200 records like this one the measured RMS was within 1 % of the form in
-the median at every stretch, and four records in five were within 3 % of
-it with 64 samples in the stretch and within 17 % with 4096.
+1000 records like this one the median of the measured RMS was within
+0.5 % of the form at stretches up to 1024 samples and 1.5 % below it at
+4096, and the mean square agreed within 1 % at every stretch. Four records
+in five were within 3 % of the form with 64 samples in the stretch and
+within 15 % with 4096.
 
 A parabola, `drift = true`, also learns a frequency drift. Under a line a
 drift ``D`` leaves a mean error of ``\tfrac{1}{2} D τ (τ + T)``, which
@@ -143,7 +145,7 @@ states where it holds a quarter of the model's Allan variance
 ([Where the states sit](@ref)). This clock has none and the fit finds a
 little, too little for a state, so `m` has two states. With
 `flicker = false` that noise is left out of the model, and in simulation
-the filter of a clock on its flicker floor claimed 1.4 to 8.7 times less
+the filter of a clock on its flicker floor claimed 1.4 to 9.1 times less
 than the error it made ([What the states buy](@ref)).
 `sigmatau holdover --kalman` and the explorer fit the model to the first
 training stretch alone, so that the levels are not learned from the
@@ -168,27 +170,28 @@ ratios within 5 %.
     The ratio of `rms` to `claimed` is least certain at the longest
     holdover times. The RMS there rests on few independent trials, and
     the claim on what one stretch shows of the slow noise. In simulation,
-    on records of 8192 samples with the first quarter as the stretch, the
-    ratio at 2048 s was, in four records out of five:
+    on 2000 records of 8192 samples for each clock, with the first quarter
+    as the stretch, the ratio at 2048 s was, in four records out of five:
 
     | Clock | With the true model | With the model fitted to the stretch |
     |:---|:---|:---|
-    | white FM | 0.56 to 1.56 | 0.33 to 1.29 |
-    | white FM, random-walk FM from 390 s | 0.55 to 1.37 | 0.60 to 8.6 |
+    | white FM | 0.58 to 1.5 | 0.31 to 1.3 |
+    | white FM, random-walk FM from 390 s | 0.59 to 1.4 | 0.51 to 8.1 |
 
     At ``τ_0`` it was 0.98 to 1.04 with the fitted model. On white FM the
-    fit found some flicker or random-walk FM in 61 of the 100 records, and
-    in the median the claim was twice that of the true model. On the
-    second clock the fit found less than 1 % of the random-walk FM in half
-    of the records, and in the median the claim was half that of the true
-    model. A ratio well above 1 at long ``τ`` says that the stretch was
-    too short to show the slow noise.
+    fit found some flicker or random-walk FM in 57 % of the records, and
+    in the median the claim was 1.5 times that of the true model. On the
+    second clock the fit found less than 1 % of the random-walk FM in
+    64 % of the records, and in the median the claim was half that of the
+    true model. A ratio well above 1 at long ``τ`` says that the stretch
+    was too short to show the slow noise.
 
     The fit of the stretch has points up to between an eighth and a
     quarter of it, 256 s here, and a claim past that extrapolates the
     model. On the same records the claim of the fitted model over that of
-    the true model was 0.96 to 1.75 at 256 s and 0.96 to 6.0 at 2048 s on
-    white FM, and 0.62 to 1.30 and 0.20 to 1.63 on the second clock.
+    the true model was 0.97 to 1.8 at 256 s and 0.97 to 6.2 at 2048 s on
+    white FM, and 0.63 to 1.4 and 0.20 to 1.7 on the second clock. The
+    limits of this note have a standard error of 3.5 % or less.
     `sigmatau holdover --kalman` gives that averaging time as
     `fit_tau_max`, and the explorer dots the claimed curve past it.
 

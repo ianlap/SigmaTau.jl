@@ -255,7 +255,9 @@ function refreshHat(r, { clocks, pairs }) {
     // KLTS gives an upper limit where the clock is not resolved.
     ...res.clocks.map((c, i) => ({ x: tau, y: c.points.map((p) => (p.dev === null ? p.ci_upper : null)), name: `${names[i]}, upper limit`, showlegend: false, mode: "markers",
       marker: { color: color(i), size: 9, symbol: "triangle-down-open" }, hovertemplate: `<b>${h(names[i])}</b>, not resolved<br>τ = %{x:.4g} s<br>σ < %{y:.3e}<extra></extra>` })),
-  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis(sigma), showlegend: true, uirevision: `hat-${res.deviation}` }, CONFIG);
+  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis(sigma), showlegend: true,
+    legend: { ...baseLayout().legend, orientation: "h", x: 0, xanchor: "left", y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", borderwidth: 0 },   // above the curves, not over them
+    margin: { l: 62, r: 14, t: 40, b: 48 }, uirevision: `hat-${res.deviation}` }, CONFIG);
   Plotly.Plots.resize(root.querySelector("[data-ref=adev]"));
 }
 
@@ -283,11 +285,14 @@ export function refresh() {
   const states = (i) => [[r.flicker.fm[i], "FM"], [r.flicker.pm[i], "PM"]].filter(([k]) => k).map(([k, kind]) => `${k} ${kind}`).join(" + ");
   const carried = r.flicker ? names.map((n, i) => [n, states(i)]).filter(([, s]) => s) : [];
   const flicker = !r.flicker ? "" : carried.length ? `Flicker states: ${carried.map(([n, s]) => `${h(n)} (${s})`).join(", ")}. ` : "No clock's fit has flicker that needs states. ";
+  // A Kalman scale shows the white FM fitted to each clock; a fit without any takes nearly all of the weight.
+  const fitted = r.models, bare = (fitted ?? []).flatMap((m, i) => (m.q1 === 0 && m.flicker_fm === 0 ? [names[i]] : []));
+  const unresolved = bare.length ? `The fit finds no white FM in ${bare.map(h).join(", ")}: the record does not resolve ${bare.length > 1 ? "them" : "it"}, and the scale follows ${bare.length > 1 ? "them" : "it"}. AT1 takes no model. ` : "";
   table.innerHTML = `<div class="card-row"><h2>Clocks</h2></div>
-    <div class="tbl"><div class="tbl-row tbl-head"><span>Clock</span><span>Weight</span><span>Mean</span><span>RMS error</span></div>
+    <div class="tbl${fitted ? " fitted" : ""}"><div class="tbl-row tbl-head"><span>Clock</span><span>Weight</span><span>Mean</span><span>RMS error</span>${fitted ? "<span>White FM</span>" : ""}</div>
     ${names.map((n, i) => `<div class="tbl-row tbl-body"><span class="ens-name"><span class="clock-dot" style="background:${color(i)}"></span>${h(n)}</span>
-      <span>${weight(r.weight[i])}</span><span>${weight(r.weight_mean[i])}</span><span>${sci(r.error_rms[i], 2)} s</span></div>`).join("")}</div>
-    <p class="muted small ens-note">${flicker}${weighted ? "" : "The Jones–Tryon scale has no per-clock weights. "}Mean weight and RMS prediction error cover the second half of the record.</p>`;
+      <span>${weight(r.weight[i])}</span><span>${weight(r.weight_mean[i])}</span><span>${sci(r.error_rms[i], 2)} s</span>${fitted ? `<span>${sci(fitted[i].q1, 2)}</span>` : ""}</div>`).join("")}</div>
+    <p class="muted small ens-note">${unresolved}${flicker}${weighted ? "" : "The Jones–Tryon scale has no per-clock weights. "}Mean weight and RMS prediction error cover the second half of the record.</p>`;
   if (!Plotly) return;
   const scale = css("--accent");
   Plotly.react(root.querySelector("[data-ref=adev]"), [

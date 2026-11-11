@@ -54,7 +54,8 @@ def powerlaw_fit(
     """Coefficients h_α of the power-law model S_y(f) = Σ h_α f^α, fitted by
     nonnegative least squares to the deviation of a record or to a spectrum.
 
-    Four forms, as in Julia:
+    Four forms, as in Julia, of which ``data`` is the first positional argument
+    and ``second`` the averaging factors ``m`` or the values ``S``:
 
     - ``powerlaw_fit(record[, m], deviation="mhdev", alphas=...)`` computes the
       deviation of the record (``"adev"``, ``"mdev"``, ``"hdev"`` or

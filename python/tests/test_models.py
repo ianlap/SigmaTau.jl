@@ -183,6 +183,7 @@ def test_groslambert_forms(jl):
     for a, b in zip(g, st.groslambert(matrix, m=ms), strict=True):
         np.testing.assert_array_equal(a.dev, b.dev)
     assert st.groslambert(*d, m=ms, confidence=0.95)[0].confidence == 0.95
+    assert np.array_equal(st.groslambert(*d, m=ms, weighted=True)[0].dev, g[0].dev)   # one pair: nothing to weigh
     k = st.groslambert(*d, m=ms, interval="klts")
     np.testing.assert_array_equal(k[1].dev, g[1].dev)
     assert np.all(k[1].ci_lower <= k[1].dev) and np.all(k[1].dev <= k[1].ci_upper)

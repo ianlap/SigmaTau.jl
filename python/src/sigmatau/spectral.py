@@ -36,11 +36,12 @@ def psd_y(
     """One-sided power spectral density of the fractional frequency, S_y(f) in 1/Hz
     (IEEE Std 1139-2022, Eq. (A.8)), estimated by Welch's method (Welch 1967).
 
-    A phase record is differenced to frequency first. ``nperseg`` is the
-    segment length in samples, by default the largest power of two up to a
-    quarter of the record and at least 16. ``noverlap`` is the number of
-    samples that successive segments share, half a segment by default.
-    ``taper`` is ``"hann"``, ``"hamming"`` or ``"rectangular"``.
+    ``data`` is the record, and a phase record is differenced to frequency
+    first. ``nperseg`` is the segment length in samples, by default the
+    largest power of two up to a quarter of the record and at least 16.
+    ``noverlap`` is the number of samples that successive segments share,
+    half a segment by default. ``taper`` is ``"hann"``, ``"hamming"`` or
+    ``"rectangular"``.
 
     The mean removed from each segment is the one weighted by the taper, so
     the estimate is zero at f = 0. ``scipy.signal.welch`` with
@@ -66,9 +67,10 @@ def psd_x(
     (IEEE Std 1139-2022, Eq. (A.14)): the estimate of :func:`psd_y` divided by
     the response of the first difference, 4·sin²(πfτ₀)/τ₀².
 
-    The value at f = 0 is ``nan``. The keywords are those of :func:`psd_y`,
-    except that the default ``nperseg`` is the largest power of two up to a
-    quarter of the number of phase samples, and at least 16.
+    The value at f = 0 is ``nan``. ``data``, ``noverlap`` and ``taper`` are
+    those of :func:`psd_y`, and so is ``nperseg``, except that its default is
+    the largest power of two up to a quarter of the number of phase samples,
+    and at least 16.
     """
     return spectral_from_jl(jl.psd_x(to_jl_data(data), **_welch_kwargs(nperseg, noverlap, taper)))
 
@@ -83,14 +85,14 @@ def ssb_phase_noise(
     taper: str = "hann",
 ) -> SpectralResult:
     """Phase noise ℒ(f) in dBc/Hz of a signal at the carrier frequency
-    ``f_carrier``, in Hz, from its phase or frequency record.
+    ``f_carrier``, in Hz, from its phase or frequency record ``data``.
 
     The time spectrum of :func:`psd_x` gives the phase spectrum
     S_φ(f) = (2πν₀)²·S_x(f), and the phase noise is half of it,
     ℒ(f) = S_φ(f)/2, reported as 10·log₁₀ ℒ(f) (IEEE Std 1139-2022,
     Eqs. (A.13) and (A.15)). The result runs from the first bin to the Nyquist
-    frequency: the bin at f = 0 is dropped. The other keywords are those of
-    :func:`psd_x`.
+    frequency: the bin at f = 0 is dropped. ``nperseg``, ``noverlap`` and
+    ``taper`` are those of :func:`psd_x`.
     """
     kwargs = _welch_kwargs(nperseg, noverlap, taper)
     kwargs["f_carrier"] = float(f_carrier)

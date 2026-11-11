@@ -5,6 +5,8 @@ import { state, update, visibleClocks, multi, markStale } from "../state.js";
 import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope, BIAS_CORRECTED, biasEntry } from "../estimators.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css } from "../plot.js";
 import { sci, num, escapeHtml as h } from "../format.js";
+import { phaseNoise } from "../core.js";
+import { carrierLabel } from "./spectrum.js";
 
 // ITU-T wander masks the core checks (sigmatau --mask), by its names: the
 // wander a clock generates, then the limits of a network at an interface.
@@ -36,6 +38,7 @@ export function mount(el, ctx) {
           `<button type="button" data-axis="${k}">${v}</button>`).join("")}</div>
         <span class="caption" data-ref="caption"></span>
         <span class="pin-list" data-ref="pins"></span>
+        <input type="file" data-ref="pn-file" hidden>
         <span class="toggles">
           <label class="check" title="Noise type identified at each τ (lag-1 autocorrelation), with the power-law slope it implies"><input type="checkbox" data-tog="noiseId">Noise ID</label>
           <label class="check" title="Draw the confidence intervals as a shaded band instead of error bars"><input type="checkbox" data-tog="band">CI band</label>
@@ -56,6 +59,7 @@ export function mount(el, ctx) {
     if (e.target.closest("[data-act=load]")) ctx.goData();
     if (e.target.closest("[data-act=run]")) ctx.run();
     if (e.target.closest("[data-act=pin]")) pinRun();
+    if (e.target.closest("[data-act=pn]")) root.querySelector("[data-ref=pn-file]").click();
     const act = e.target.closest("[data-fit]")?.dataset.fit;
     if (act) editModel(act, ctx);
     const un = e.target.closest("[data-unpin]")?.dataset.unpin;
@@ -65,6 +69,11 @@ export function mount(el, ctx) {
     const tog = e.target.dataset.tog;
     if (tog) { update((s) => { s[tog] = e.target.checked; }); return; }
     const r = e.target.dataset.ref;
+    if (r === "pn-file") {
+      const file = e.target.files[0];
+      e.target.value = "";             // the same file can be chosen again
+      if (file) pinPhaseNoise(file, ctx);
+    }
     if (r === "table-dev") update((s) => { s.tableDev = e.target.value; });
     if (r === "cmp-tau") update((s) => { s.compareTau = Number(e.target.value); });
     if (r === "mask") update((s) => { s.mask = e.target.value; });
@@ -134,7 +143,8 @@ function pinTraces(devs) {
       const color = hexAlpha(seriesColor(multi() ? c.slot : Math.max(di, 0)), 0.75);
       const name = `${p.label} · ${multi() ? `${c.name} · ` : ""}${label(r.dev)}`;
       out.push({
-        x: r.tau, y: r.sigma, name, mode: "lines", line: { color, width: 1.3, dash: PIN_DASH[k % PIN_DASH.length] },
+        x: r.tau, y: r.sigma, name, mode: r.tau.length > 1 ? "lines" : "markers",   // one τ has no line to draw
+        line: { color, width: 1.3, dash: PIN_DASH[k % PIN_DASH.length] }, marker: { color, size: 6 },
         hovertemplate: `<b>${h(name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}<extra></extra>`,
       });
     }
@@ -167,10 +177,40 @@ export function pinRun() {
   return true;
 }
 
+// A phase-noise table as a pin: the σ(τ) that its ℒ(f) gives over the band
+// of the table, at the carrier of the Spectrum page, beside the deviations
+// of the record.
+async function pinPhaseNoise(file, ctx) {
+  const hz = (f) => carrierLabel(f);
+  try {
+    const carrier = state.spec.carrier;
+    const doc = await phaseNoise({ name: file.name, content: await file.text() }, carrier);
+    const [f1, fh] = doc.spectrum.band;
+    const of = (dev) => doc.results.find((r) => r.deviation === dev);
+    const tau = of("adev").tau, last = tau.length - 1;
+    const title = [
+      `${file.name}: ℒ(f) at ${doc.spectrum.n} offsets from ${hz(f1)} to ${hz(fh)}, carrier ${hz(carrier)}`,
+      `σ(τ) of the noise inside that band, for τ from ${num(tau[0], 3)} s to ${num(tau[last], 3)} s`,
+      `At ${num(tau[last], 3)} s the noise below ${hz(f1)} would add ${num(100 * of("adev").below[last], 2)} % to the Allan variance`,
+      ...(of("adev").above[0] === null ? [`ADEV and HDEV depend on the measurement bandwidth here: they hold for ${hz(fh)}`] : []),
+    ].join("\n");
+    update((s) => {
+      const n = (s.pinCount = (s.pinCount ?? 0) + 1);
+      s.pins.push({
+        id: n, label: `ℒ(f) ${n}`, title,
+        clocks: [{ name: file.name, slot: s.clocks.length, results: doc.results.map((r) => ({ dev: r.deviation, tau: r.tau, sigma: r.dev })) }],
+      });
+    });
+    ctx.status("good", `σ(τ) from ${file.name} is on the plot as ℒ(f) ${state.pinCount}, for a carrier of ${hz(carrier)} (set on the Spectrum page).`);
+  } catch (err) {
+    ctx.status("error", `${file.name}: ${err.message}`);
+  }
+}
+
 function renderPins() {
   const el = root.querySelector("[data-ref=pins]");
   const has = visibleClocks().some((c) => c.result);
-  el.innerHTML = `<button class="btn btn-sm" data-act="pin" ${has ? "" : "disabled"} title="Keep these results on the plot to compare with the next run">Pin run</button>${state.pins.map((p) =>
+  el.innerHTML = `<button class="btn btn-sm" data-act="pin" ${has ? "" : "disabled"} title="Keep these results on the plot to compare with the next run">Pin run</button><button class="btn btn-sm" data-act="pn" ${has ? "" : "disabled"} title="Draw the σ(τ) that a table of phase noise gives: a file of offset frequency in Hz and ℒ(f) in dBc/Hz, at the carrier of the Spectrum page">Phase noise…</button>${state.pins.map((p) =>
     `<span class="chip" title="${h(p.title)}">${h(p.label)}<button class="link-btn" data-unpin="${p.id}" aria-label="Remove ${h(p.label)}">×</button></span>`).join("")}`;
 }
 
@@ -261,6 +301,9 @@ export function figure(clocks, devs, axis = state.axis) {
     uirevision: `${axis}`,
   };
   const data = traces(clocks, devs);
+  // About six labels on the τ axis at most, however far a pinned table stretches it.
+  const taus = data.flatMap((d) => d.x ?? []).filter((t) => t > 0);
+  if (taus.length) layout.xaxis.dtick = Math.max(1, Math.ceil(Math.log10(Math.max(...taus) / Math.min(...taus)) / 6));
   if (state.noiseId && state.ci && axis === "sigma_y") noiseOverlay(layout, data, clocks, devs);
   return { data, layout };
 }

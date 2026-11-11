@@ -34,8 +34,8 @@ def cross_psd_y(
     averages toward zero and leaves the residual given in ``floor``.
 
     ``a`` and ``b`` are two ``PhaseData`` or two ``FrequencyData`` records with
-    the same sample interval and length and no gaps. The keywords are those of
-    :func:`psd_y`.
+    the same sample interval and length and no gaps. ``nperseg``, ``noverlap``
+    and ``taper`` are those of :func:`psd_y`.
     """
     return cross_spectral_from_jl(
         jl.cross_psd_y(to_jl_data(a), to_jl_data(b), **_welch_kwargs(nperseg, noverlap, taper))
@@ -58,8 +58,8 @@ def cross_psd_x(
     each channel, each divided by the response of the first difference as in
     :func:`psd_x`. Every field is ``nan`` at f = 0.
 
-    Arguments and keywords are those of :func:`cross_psd_y`, with ``nperseg``
-    counted and its default chosen as in :func:`psd_x`.
+    ``a``, ``b``, ``noverlap`` and ``taper`` are those of :func:`cross_psd_y`,
+    and ``nperseg`` is counted and its default chosen as in :func:`psd_x`.
     """
     return cross_spectral_from_jl(
         jl.cross_psd_x(to_jl_data(a), to_jl_data(b), **_welch_kwargs(nperseg, noverlap, taper))

@@ -338,6 +338,28 @@ Clock models, the Kalman filter and timescales.
   covariance with the KLTS interval, from clocks read against one reference
   or from three pairwise columns, and plots each clock with its interval
   over the pairs as measured.
+- `spectrum_sigma`: the Allan, modified Allan, Hadamard or modified Hadamard
+  deviation from a table of ℒ(f), S_φ(f), S_x(f) or S_y(f), integrated
+  through the transfer function of the estimator over the band of the table.
+  The result states the band and what the noise below and above it could
+  add, which has no limit where the deviation depends on the bandwidth of
+  the measurement (white and flicker PM in the Allan and Hadamard
+  deviations). Also in Python.
+- `sigmatau phasenoise TABLE --carrier HZ`: σ(τ) from a table of phase
+  noise, as ADEV, MDEV, TDEV, HDEV or MHDEV, with `--density`, `--tau` and
+  `--band`, in CSV or JSON.
+- `quantity=:Sphi`, S_φ(f) in rad²/Hz, in `powerlaw_fit`, `powerlaw_psd` and
+  `integrated_jitter`, and `"Sphi"` in Python.
+- Python: `ClockComparisons.from_records`, one phase record per clock.
+- Explorer: **Phase noise…** on the Stability page draws the σ(τ) that a
+  table of ℒ(f) gives, beside the deviations of the record.
+- `groslambert(...; weighted = true)` weighs each pair of the other clocks
+  by the inverse of the product of its records' Allan variances (Python:
+  `weighted=True`).
+- `sigmatau timescale`: the JSON output of a Kalman scale has `models`, the
+  model fitted to each clock, and a message on stderr names a clock whose
+  fit has no white FM; the explorer's Ensemble page shows the fitted white
+  FM.
 
 ### Changed
 
@@ -553,6 +575,29 @@ Clock models, the Kalman filter and timescales.
   forms every scale from the first row that has one.
 - `sigmatau timescale`: `--fillgaps` no longer hands a clock readings it did
   not have; the filled samples are left out of the scale.
+- Explorer: the import dialog proposes every column named for a reading
+  (`maser1 phase (s)`, `UTC-UTC(PTB) (ns)`) as a clock, of the first one's
+  kind and stated unit, so a file of several clocks loads in one step
+  ("Load 6 clocks"); a file without column names still proposes one. A
+  clock's automatic name gives way to the column of a newly opened file; a
+  typed name stays.
+- Explorer: refusals of the core that named command-line flags and library
+  functions (`--algorithm greenhall`, `wmax`, `powerlaw_fit … alphas`, the
+  steady state of a steer every n samples) are said in the page's words. The
+  Ensemble ADEV plot has no legend.
+- Python: an argument that counts (an averaging factor, a number of samples,
+  a window, a segment length, a clock index, a column) must be an `int` or a
+  NumPy integer; a float is a `TypeError`, where it was cut to its whole
+  part.
+- Explorer: on the Data page the plot keeps a usable height in a small
+  window (the page scrolls); the hat plot's legend sits above the curves,
+  not over them.
+- `clock_models` weighs the pairs by their noise, so the fitted models
+  change for four clocks or more; a quiet clock beside noisy ones is now
+  resolved.
+- `timescale` refuses `steps` with a Kalman scale, `models` with an
+  averaging scale, and a `tau_min`, `memory` or `step_threshold` that is out
+  of range.
 
 ### Removed
 
@@ -856,6 +901,27 @@ Clock models, the Kalman filter and timescales.
   `add_component!`, `clock_model`, `powerlaw_sigma`, `powerlaw_psd` and
   `holdover`; the message began "noise_gen:" whoever called, and listed the
   types in no order.
+- Explorer: Holdover and Steering name a clock whose computation fails, with
+  the reason, on a line above the plot beside the clocks that worked; they
+  dropped it without a word.
+- Explorer: removing a clock on the Synthesis page no longer raises a
+  TypeError; the plot stays until the new preview arrives. The report's
+  SHA-256 of a Live record is that of the file Save readings writes. The
+  Ensemble sub line names the typed reference; clocks of two files with one
+  name say which file the later one is from; the record check's start time
+  is rounded to the microsecond. On the Data page a message over the plot
+  covers the plot row only, in all four views, so the view buttons stay
+  reachable.
+- Python: `timescale(pivot=...)` and `simulate_ensemble(reference=...)`
+  check the index against the clocks and name the value passed, and
+  `reference=-1` no longer means the ideal reference; a NumPy integer is a
+  seed; `ClockComparisons` makes Julia's checks when built; an unknown noise
+  type is named in the error; `holdover(record, model)` refuses `grow`,
+  `drift` and `anchor`.
+- Explorer: on the Stability page a pinned curve of a single averaging time
+  is drawn as a point, where it drew nothing, and the τ axis labels every
+  other decade or fewer once it spans more than six, where the labels
+  collided in a narrow window.
 
 ### Security
 

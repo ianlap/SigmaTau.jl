@@ -114,14 +114,14 @@ c, d = holdover(p, t.model; tau), holdover(p, m3; tau)
 [c.rms ./ a.rms  d.rms ./ a.rms]
 ```
 
-The tuned levels leave the innovations white with close to unit variance,
-so the error claimed one sample ahead is the error made (`t.converged` says
+The tuned levels give the innovations the variance the filter claims, so the
+error claimed one sample ahead is the error made (`t.converged` says
 that the search ended within tolerance, `t.cost` is -2 ln L). Farther ahead
 the covariance of the tuned filter, and with it [`holdover_error`](@ref),
 is not to be relied on, and the predictions are those of a model that lacks
-the flicker. In simulation they were 2 to 43 % worse than those of models
-with flicker states, and the errors the tuned models claimed from 100 to
-10 000 s were 1.6 to 7.7 times the errors made ([What the states buy](@ref)).
+the flicker. In simulation they were 2 to 55 % worse than those of models
+with flicker states, and the errors the tuned models claimed at 1000 and
+10 000 s were too large, 2 to 8 times the errors made ([What the states buy](@ref)).
 
 ## Simulated clocks
 

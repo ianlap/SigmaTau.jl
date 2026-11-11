@@ -126,6 +126,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.selectOption("#side [data-ctl=flicker]", "on");
     await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
     assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
+    assert.match(await page.locator("#page [data-ref=table]").innerText(), /White FM/);   // the fitted models
     await plotted("#page [data-ref=adev]");
   });
 
@@ -195,6 +196,26 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(text.includes(mask.source) && text.includes(mask.checks[0].pass ? "passes" : "fails"), text);
     assert.ok(await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.some((d) => d.name === "G.8272 PRTC-A MTIE mask")));
     await page.click("[data-axis=sigma_y]");
+  });
+
+  await t.test("Stability: a phase-noise table is drawn as the command line converts it", async () => {
+    const table = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "ocxo.csv");
+    writeFileSync(table, "Offset (Hz),L(f) (dBc/Hz)\n1,-100\n10,-130\n100,-150\n1000,-160\n1e4,-165\n1e5,-165\n");
+    await page.setInputFiles("#page [data-ref=pn-file]", table);
+    await page.waitForFunction(() => document.querySelectorAll("#page [data-unpin]").length === 2, null, SLOW);
+    assert.match(await page.locator("#page .chip").last().getAttribute("title"), /from 1 Hz to 100 kHz, carrier 10 MHz[^]*hold for 100 kHz/);
+    const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ℒ(f) 2 · MDEV"));
+    const doc = JSON.parse(execFileSync(CLI, ["phasenoise", table, "--header", "1", "--carrier", "10e6", "--devs", "mdev", "--format", "json"]));
+    assert.deepEqual([shown.x, shown.y], [doc.results[0].tau, doc.results[0].dev]);
+    assert.equal(await page.evaluate(() => document.querySelector("#page .js-plotly-plot").layout.xaxis.dtick), 2, "nine decades of τ, a label every other one");
+    await page.click("#page .chip:last-child [data-unpin]");
+    // A table of one decade gives one τ, drawn as a point.
+    writeFileSync(table, "1,-100\n10,-130\n");
+    await page.setInputFiles("#page [data-ref=pn-file]", table);
+    await page.waitForFunction(() => document.querySelectorAll("#page [data-unpin]").length === 2, null, SLOW);
+    const point = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ℒ(f) 3 · MDEV"));
+    assert.deepEqual([point.x.length, point.mode], [1, "markers"]);
+    await page.click("#page .chip:last-child [data-unpin]");
   });
 
   await t.test("A record with gaps runs without its spectrum", async () => {
@@ -394,6 +415,34 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.equal(analyzed, saved);
     // Analyze readings runs every loaded clock: the 422s are the records the earlier steps left (three samples, TOTDEV on gaps), not the Live record.
     assert.equal(await page.evaluate(async (url) => (await import(url)).state.clocks.at(-1).record?.n, base + "js/state.js"), readings);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+  });
+
+  await t.test("A small window keeps the Data plot usable in every view and the hat's legend off the curves", async () => {
+    await page.setViewportSize({ width: 960, height: 640 });
+    await page.goto(base + "#data");
+    const n = errors.length;
+    let seed = 7;
+    const noise = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+    const rows = Array.from({ length: 600 }, (_, i) => [i, ...[1, 2, 3].map(() => 1e-9 * noise())].join(",")).join("\n");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "three_clocks_in_a_long_named_file.csv", mimeType: "text/csv", buffer: Buffer.from(rows + "\n") });
+    await page.locator("#import-dialog [data-act=load]").click({ timeout: 5000 }).catch(() => {});
+    await settled();
+    for (const view of ["phase", "drift", "hist", "acf"]) {
+      await page.click(`[data-view=${view}]`);
+      await settled();
+      const h = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").getBoundingClientRect().height);
+      assert.ok(h >= 250, `${view}: the plot is ${h} px high`);
+    }
+    await page.click("a[data-page=ensemble]");
+    await page.click("[data-ctl=view][data-v=hat]");
+    await page.selectOption("#side [data-ctl=method]", "hat");   // (an earlier step left KLTS, which a file with gaps refuses)
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=sub]")?.textContent.startsWith("Hat · "), null, SLOW);
+    await plotted("#page [data-ref=adev]");
+    const [legend, area] = await page.evaluate(() => ["#page [data-ref=adev] .legend", "#page [data-ref=adev] .nsewdrag"].map((q) => document.querySelector(q).getBoundingClientRect().toJSON()));
+    assert.ok(legend.bottom <= area.top + 1, "the legend sits above the plot area");
+    await page.setViewportSize({ width: 1280, height: 800 });
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 

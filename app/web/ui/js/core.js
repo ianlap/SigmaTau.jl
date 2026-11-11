@@ -325,6 +325,27 @@ export function liveStop() {
     : fetch("api/live/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
 }
 
+// Lines above the first row of two numbers in a table: a title, column names.
+function headingLines(text) {
+  const number = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i;
+  const lines = text.split(/\r?\n/);
+  const first = lines.findIndex((l) => {
+    const cells = l.trim().split(/[\s,;]+/);
+    return cells.length > 1 && number.test(cells[0]) && number.test(cells[1]);
+  });
+  return Math.max(first, 0);
+}
+
+// The σ(τ) that a table of ℒ(f) gives over its band (ADEV, MDEV, TDEV, HDEV
+// and MHDEV), at a carrier frequency in Hz; the core's JSON as is.
+export async function phaseNoise(file, carrier, signal) {
+  const args = ["phasenoise", "--carrier", carrier, "--devs", "adev,mdev,tdev,hdev,mhdev",
+    "--header", headingLines(file.content), "--format", "json"];
+  const doc = await post({ args: args.map(String), file }, signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc;
+}
+
 // The σ(τ) that noise models predict (MDEV, ADEV and MHDEV per model), closed form.
 export async function modelPreview({ n, tau0, models }, signal) {
   const args = ["model", "--synth", n, "--tau0", tau0, ...models.flatMap((m) => ["--noise-model", m.join(":")]), "--format", "json"];

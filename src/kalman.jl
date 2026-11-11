@@ -480,11 +480,11 @@ one natural logarithm, so it finds the optimum from a start whose ratio
 `q1 / q2` is off by a factor of ten or more.
 
 A noise fit gives the levels that match ``σ(τ)``; the likelihood gives the
-levels that leave the innovations white with close to unit variance, and so
+levels under which the innovations have the variance the filter claims, and so
 the error the filter claims one sample ahead is the error it makes. The two
 differ when the record has noise that the model lacks, such as flicker FM.
 The error the filter claims is then right at one sample and not beyond,
-and in simulation it was wrong by a factor of up to 2.8 at longer holdover
+and in simulation it was wrong by a factor of up to 8 at longer holdover
 times ([What the states buy](@ref)). A model with flicker states, the
 default of [`clock_model`](@ref), carries that noise instead, and predicted
 better there. See also [`innovation_check`](@ref).
