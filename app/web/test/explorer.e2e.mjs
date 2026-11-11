@@ -128,10 +128,29 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => /Stopped/.test(document.querySelector("#page .live-state")?.textContent ?? ""), null, SLOW);
   });
 
-  await t.test("Help opens", async () => {
-    await page.click("#help-btn");
-    await page.waitForFunction(() => document.querySelector("#page")?.className.includes("page-help"));
-    assert.ok((await page.locator("#page").innerText()).length > 200);
+  await t.test("Help: the menu lists the page in view, a search opens a section, F1 the page's own help", async () => {
+    await page.keyboard.press("?");
+    await page.waitForSelector("#help-menu:not([hidden])");
+    assert.match(await page.locator("#help-items").textContent(), /On this page\s*About Live[\s\S]*While it runs/);
+    await page.fill("#help-search", "pinned runs");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => location.hash === "#help/stability/Pinned-runs" && document.querySelector("#page").className.includes("page-help"));
+    assert.ok(await page.locator("#help-menu").isHidden());
+    const at = await page.evaluate(() => ({
+      heading: document.querySelector('#page section[data-id="Pinned-runs"] h2').getBoundingClientRect().top,
+      button: document.getElementById("help-btn").getBoundingClientRect().right,
+    }));
+    const { width, height } = page.viewportSize();
+    assert.ok(at.heading >= 0 && at.heading < height, `the section is in view (its heading at ${at.heading} px)`);
+    assert.ok(at.button <= width, `the ? button is inside the window (its right edge at ${at.button} px)`);
+    await page.click("a[data-page=spectrum]");
+    await page.waitForSelector("#page.page-spectrum");
+    await page.keyboard.press("F1");
+    await page.waitForFunction(() => location.hash === "#help/spectrum");
+    assert.deepEqual(await page.locator("#page article h1, #page .help-nav a.on").allInnerTexts(), ["Spectrum", "Spectrum"]);
+    // An address that names no section of the topic is put right.
+    await page.evaluate(() => { location.hash = "#help/spectrum/nowhere"; });
+    await page.waitForFunction(() => location.hash === "#help/spectrum");
   });
 
   await t.test("Stability, revisited: one click pins one run and opens the model editor", async () => {

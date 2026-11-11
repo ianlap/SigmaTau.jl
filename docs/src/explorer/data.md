@@ -144,7 +144,8 @@ missing. **undo** brings the outliers back.
     a complete record stops the run with an error, and the
     [Spectrum](spectrum.md#Records-with-gaps) page has no spectrum for the
     record. A frequency record with missing samples cannot be read while
-    **Fill gaps by reflection** is off.
+    **Fill gaps by reflection** is off, and the record check then keeps
+    that box alone, to turn the filling back on.
 
 ## The phase plot and the analysis range
 

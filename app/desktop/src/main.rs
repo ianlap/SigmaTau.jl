@@ -6,6 +6,7 @@
 //   analyze(id, req)    -> the core's JSON (request shape: app/web/README.md)
 //   cancel(id)          -> stop a running analysis
 //   save_file(name, data) -> save dialog, then write the bytes
+//   open_url(url)       -> show a web address in the system browser
 //   live_start(args)    -> run `sigmatau live`, returns its id
 //   live_poll(id, since) -> { lines, next, running, error }, its JSON lines from `since`
 //   live_stop()         -> stop the live measurement
@@ -223,6 +224,31 @@ async fn save_file(app: AppHandle, name: String, data: Vec<u8>) -> Result<bool, 
     Ok(true)
 }
 
+/// The window opens no pages of the web itself: the links of the help to the
+/// documentation go to the system browser. The address of a link is printable
+/// ASCII without spaces or quotes; anything else is refused, as rundll32
+/// splits its command line by its own rule.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") || !url.bytes().all(|b| b.is_ascii_graphic() && b != b'"') {
+        return Err(format!("not a web address: {url}"));
+    }
+    let mut browser = if cfg!(target_os = "macos") {
+        Command::new("open")
+    } else if cfg!(windows) {
+        let mut c = Command::new("rundll32");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    } else {
+        Command::new("xdg-open")
+    };
+    let mut child = browser.arg(&url).spawn().map_err(|e| format!("could not open {url}: {e}"))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
 #[tauri::command]
 fn live_start(app: AppHandle, args: Vec<String>, slot: State<'_, LiveSlot>) -> Result<u64, String> {
     let core = core_path(&app).ok_or("no analysis core: the app bundle is missing core/")?;
@@ -285,7 +311,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Runs::default())
         .manage(LiveSlot::default())
-        .invoke_handler(tauri::generate_handler![health, analyze, cancel, save_file, live_start, live_poll, live_stop])
+        .invoke_handler(tauri::generate_handler![health, analyze, cancel, save_file, open_url, live_start, live_poll, live_stop])
         .on_page_load(move |_, payload| {
             if std::env::var_os("SIGMATAU_DESKTOP_LOG").is_some() {
                 eprintln!("page {:?} at {} ms", payload.event(), launched.elapsed().as_millis());
