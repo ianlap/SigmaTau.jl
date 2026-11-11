@@ -214,7 +214,8 @@ the model at the averaging times of each ADEV, MDEV, TDEV, HDEV and MHDEV
 result. `sigma_at` is its Allan deviation at 1 s, 10 s, 100 s, 1000 s,
 ``10^4`` s and one day, as far as half the record. `clock_model` holds the
 white levels `R`, `q1`, `q2` and `q3` of the [`clock_model`](@ref) of the
-fit with `flicker = false`. Where the record or a component cannot be
+fit with `flicker = false`, or `null` where flicker FM is the fit's only
+frequency noise, which that model would lack. Where the record or a component cannot be
 fitted, `powerlaw` holds an `error` instead.
 
 ```@example cliref

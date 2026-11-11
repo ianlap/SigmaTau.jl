@@ -246,6 +246,13 @@ mktempdir() do dir
         @test occursin("{\"deviation\":\"tdev\"", r.out) && !occursin("{\"deviation\":\"totdev\",\"tau\"", r.out)
         @test occursin("\"sigma_at\":{\"tau\":[1.0,10.0,100.0]", r.out)
         @test run_cli("analyze", pf, "--fit").code != 0
+        # A fit whose only frequency noise is flicker FM has no white clock model:
+        # the fit is still written, with the model null.
+        ff = joinpath(dir, "flicker.csv")
+        write_table(ff, noise_gen(PhaseData, 4096, 1.0; h=Dict(-1 => 1e-26), rng=MersenneTwister(9110)).x)
+        r = run_cli("analyze", ff, "--format=json", "--devs", "mhdev", "--fit")
+        @test r.code == 0 && occursin("\"curves\":[{\"deviation\":\"mhdev\"", r.out)
+        @test occursin("\"clock_model\":null}", r.out)
         r = run_cli("analyze", "--synth", "4096", "--format=json", "--devs", "mhdev", "--component", "WHFM::64", "--component", "-2:256:")
         @test r.code == 0
         @test occursin("\"alphas\":[0,-2],\"h\":[", r.out) && occursin("\"mode\":\"components\"", r.out)
