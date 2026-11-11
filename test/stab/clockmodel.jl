@@ -121,6 +121,12 @@ using LinearAlgebra
         @test avp(1.0) ≈ powerlaw_sigma(pm, [1.0])[1]^2 rtol=1e-12
         # From a fit: kept unless turned off.
         hs = Dict(1 => hp, 0 => 2e-24, -1 => hf, -2 => 1e-31)
+        # A fit whose only frequency noise is flicker FM cannot lose it: the
+        # model would have a frozen frequency.
+        only = Dict(2 => 1e-22, -1 => 7e-25)
+        @test_throws "frozen frequency" clock_model(only; tau0=1.0, flicker=false)
+        @test clock_model(only; tau0=1.0).flicker_fm == 7e-25
+        @test clock_model(merge(only, Dict(0 => 2e-24)); tau0=1.0, flicker=false).q1 ≈ 1e-24
         off, on = clock_model(hs; tau0=1.0, flicker=false), clock_model(hs; tau0=1.0)
         @test (off.flicker_fm, off.flicker_pm) == (0, 0) && (on.flicker_fm, on.flicker_pm) == (hf, hp)
         @test clock_model(hs; tau0=1.0, fm_band=(10, 1000)).fm_band == (10.0, 1000.0)

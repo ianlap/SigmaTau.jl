@@ -257,7 +257,8 @@ the model's Allan variance, and `R` is the white PM alone. A fit without
 flicker gives the same model with either setting.
 
 With `flicker = false`, flicker FM is left out and flicker PM is folded
-into `R`. The model then has two states, or three with drift, as the
+into `R`; a fit whose only frequency noise is flicker FM is refused, since
+the model would have none. The model then has two states, or three with drift, as the
 `:stein` time scale of [`timescale`](@ref) needs, and it has less noise
 than the fit: in simulation the filter of a clock on its flicker floor
 claimed several times less than the error it made
@@ -333,6 +334,9 @@ function clock_model(h::AbstractDict; tau0::Real, drift::Union{Bool,Nothing}=not
     hd = _powerlaw_h(h)
     hα(α) = get(hd, α, 0.0)
     q3 = 8π^4 * hα(-4)
+    flicker || hα(-1) <= 0 || hα(0) > 0 || hα(-2) > 0 || q3 > 0 || throw(ArgumentError(
+        "clock_model: flicker = false leaves out the flicker FM, the only frequency noise of this fit, " *
+        "and the model would have a frozen frequency; fit with alphas = [2, 0, -2] or keep flicker = true"))
     return ClockModel(; tau0, R=flicker ? hα(2) / (8π^2 * tau0) : _reading_noise(hd, Float64(tau0)),
                       q1=hα(0) / 2, q2=2π^2 * hα(-2), q3, drift=drift === nothing ? q3 > 0 : drift,
                       flicker_fm=flicker ? hα(-1) : 0.0, flicker_pm=flicker ? hα(1) : 0.0, kw...)

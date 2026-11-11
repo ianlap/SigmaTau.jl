@@ -50,6 +50,8 @@ def test_flicker_states_match_julia(jl):
     assert st.clock_model(h, tau0=1.0, flicker=False).flicker_fm == 0  # left out on request
     assert st.clock_model(h, tau0=1.0, pm_band=(2.0, 50.0)).pm_band == (2.0, 50.0)  # as given
     assert st.ClockModel(1.0, flicker_fm=1e-26, tau_max=1e3).fm_band == (1.0, 1000.0)
+    with pytest.raises(ValueError, match="frozen frequency"):
+        st.clock_model({2: 1e-22, -1: 7e-25}, tau0=1.0, flicker=False)  # flicker FM is the only FM
     with pytest.raises(ValueError):
         st.ClockModel(1.0, fm_band=(10.0, 100.0))  # a band without its flicker
     data, truth = st.simulate_clock(m, 500, rng=1)

@@ -74,7 +74,8 @@ states above. Flicker-walk FM is left out either way.
 !!! warning "`flicker = false` leaves the flicker FM of a fit out"
     [`powerlaw_fit`](@ref) fits flicker FM by default, and
     `clock_model(fit; flicker = false)` leaves it out, so the model has
-    less noise than the fit found. On a clock with a flicker floor its
+    less noise than the fit found, and a fit whose only frequency noise is
+    flicker FM is refused, since the model would have none. On a clock with a flicker floor its
     filter claims several times less error than it makes
     ([What the states buy](@ref)). The `:stein` time scale of
     [`timescale`](@ref) is the one place that needs a model without the
