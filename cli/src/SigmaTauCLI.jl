@@ -12,8 +12,11 @@
 module SigmaTauCLI
 
 # A program that Julia 1.12 trims cannot start a task, so every threaded loop
-# fails in it. Pkg skips the julia compat when a Manifest is already there.
-VERSION < v"1.13" && error("SigmaTauCLI needs Julia 1.13 or later")
+# fails in it: refuse to precompile, which a build does first. Pkg skips the
+# julia compat when a Manifest is already there. The docs include this file
+# on Julia 1.11 without precompiling it.
+VERSION < v"1.13" && Base.generating_output() &&
+    error("SigmaTauCLI needs Julia 1.13 or later")
 
 using SigmaTau
 using Random
