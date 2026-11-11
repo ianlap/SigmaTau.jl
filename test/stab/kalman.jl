@@ -112,4 +112,5 @@ using Statistics
 
     @test_throws ArgumentError kalman_filter(PhaseData(p.x, 2.0), m)
     @test_throws ArgumentError kalman_filter(p, m; x0=[0.0, 0.0, 0.0], P0=zeros(3, 3))
+    @test_throws "no noise" kalman_filter(p, ClockModel(; tau0=1.0))
 end
