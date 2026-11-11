@@ -32,8 +32,10 @@ that its model was learned from.
 
 The page computes when it is shown and again when the record, its
 preparation, its analysis range or a setting changes. It needs no run. Of
-the side panel it takes the τ grid alone. The record needs 64 samples or
-more.
+the side panel it takes the τ grid alone. The stretch that the clock model
+is fitted to needs 65 samples or more, and the loop 16 after it: the record
+needs 520 samples with the first 1/8, 260 with the first 1/4 and 130 with
+the first 1/2.
 
 ## [The plot](@id explorer-steering-plot)
 

@@ -12,7 +12,8 @@ def test_telecom_mask_scalar_and_vector():
     assert st.telecom_mask("G8262_opt1", "tdev", 10.0) == pytest.approx(3.2e-9)
     lim = st.telecom_mask("G8262_opt1", "tdev", [10.0, 1e9])
     assert lim[0] == pytest.approx(3.2e-9) and np.isnan(lim[1])
-    assert "G811" in st.TELECOM_MASKS
+    assert "G811" in st.TELECOM_MASKS and "G8272_PRTC_A" in st.TELECOM_MASKS
+    assert st.telecom_mask("G8272_PRTC_B", "mtie", 100.0) == pytest.approx(40e-9)
 
 
 def test_mask_check(small_phase):

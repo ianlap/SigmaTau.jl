@@ -1,11 +1,16 @@
 """ITU-T wander masks for MTIE and TDEV.
 
-``TELECOM_MASKS`` names the masks: ``G811`` (wander generation of a primary
-reference clock, G.811), ``G813_opt1`` and ``G813_opt2`` (an SDH equipment
-clock in locked mode at constant temperature, G.813), ``G8262_opt1`` and
-``G8262_opt2`` (a synchronous equipment clock, G.8262, with the limits of
-G.813) and ``G823_PRC``, ``G823_SSU``, ``G823_SEC`` and ``G823_PDH`` (network
-limits for wander at those synchronization interfaces, G.823).
+``TELECOM_MASKS`` names the masks. Twelve limit the wander that a clock
+generates in locked mode: ``G811`` and ``G811_1`` (a primary reference clock
+and an enhanced one), ``G812_I`` and ``G812_II_III`` (a node clock of type I,
+and of types II and III), ``G813_opt1`` and ``G813_opt2`` (an SDH equipment
+clock), ``G8262_opt1``, ``G8262_opt2`` and ``G8262_1`` (a synchronous
+equipment clock, with the limits of G.813, and an enhanced one),
+``G8272_PRTC_A``, ``G8272_PRTC_B`` and ``G8272_1`` (a primary reference time
+clock of class A and of class B, and an enhanced one). ``G823_PRC``,
+``G823_SSU``, ``G823_SEC`` and ``G823_PDH`` are the network limits for wander
+at those synchronization interfaces. The Julia documentation of
+``TELECOM_MASKS`` gives the edition and the tables of each recommendation.
 """
 
 from __future__ import annotations
