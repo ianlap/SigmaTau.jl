@@ -420,10 +420,11 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         for (q, m) in enumerate(m_values)
             # Weight of each couple: the inverse of the product of its records'
             # Allan variances, which its term's variance follows; 1 for the best.
-            # They are those of the next shorter τ, which has more terms and
-            # shares fewer of them with the products.
+            # They are those of the next shorter τ of `m_values`, which has more
+            # terms and shares fewer of them with the products; the shortest
+            # serves itself.
             if weighted
-                b = max(q - 1, 1)
+                b = argmax(p -> m_values[p] < m ? m_values[p] : -(p != q), 1:K)
                 w = [1 / (s2[i, j][b] * s2[i, k][b]) for (j, k) in couples]
                 a[:, q] = [isfinite(v) ? v : 0.0 for v in w ./ maximum(filter(isfinite, w); init=0.0)]
             end

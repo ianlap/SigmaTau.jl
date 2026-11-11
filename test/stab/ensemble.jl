@@ -182,6 +182,7 @@ end
         W[i, j] = PhaseData(z[i] .- z[j], 1.0)
     end
     @test groslambert(W, [1]; weighted=true)[1].dev[1] ≈ adev(PhaseData(z[1], 1.0), [1]; ci=false).dev[1] rtol=0.15
+    @test groslambert(W, [4, 1]; weighted=true)[1].dev == reverse(groslambert(W, [1, 4]; weighted=true)[1].dev)   # the order of τ does not matter
     # Missing samples: a term that reads one is left out. One missing reading
     # of clock 1 costs each of its records three terms, so its own couples
     # lose three each and two of the three couples of another clock; records

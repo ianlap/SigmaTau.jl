@@ -184,12 +184,13 @@ scale matches AT1.
 With four clocks or more the fit weighs the pairs of the other clocks by
 their noise (`weighted = true` of [`groslambert`](@ref)), so that a quiet
 clock is read against the other quiet clocks. In simulation (three clocks
-beside three with ``10^5`` times their white FM, 20 000 samples, 60
-records) the fitted white FM of every clock was within 20 % of the truth,
+beside three with ``10^5`` times their white FM, 20 000 samples, 120
+records) the fitted white FM of every clock was within 21 % of the truth,
 and `:greenhall` on the fitted models was within 1 % of the true models up
-to 100 s and 4 % behind at 1000 s. With equal weights the white FM of the
-quiet clocks came out between zero and 2500 times the truth, and
-`:greenhall` was 100 times less stable at 1000 s. With three clocks there
+to 100 s; at 1000 s it was 4 % behind in the median and 1.6 times less
+stable at worst. With equal weights the white FM of the quiet clocks came
+out between zero and 2500 times the truth, and `:greenhall` was 100 times
+less stable at 1000 s in the median. With three clocks there
 is one pair and nothing to weigh: a clock much quieter than the other two
 is not resolved.
 
