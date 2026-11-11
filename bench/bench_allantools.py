@@ -17,7 +17,8 @@ bench_sigmatau.jl.
 Writes bench/results/allantools_<key>.json and prints a Markdown table (and the
 end-to-end default-call table when the SigmaTau JSON carries one), with an
 AllanDeviations.jl column when bench/results/allandeviations_<key>.json exists. With
---report-only it skips the timing and prints the tables from the saved JSON.
+--report-only it skips the timing and prints the tables from the saved JSON,
+for which it does not need the record.
 
 Times are printed to three significant figures and each speed-up is the ratio
 of the two printed times: whole numbers from 10× up, one decimal below.
@@ -57,13 +58,14 @@ def read_last_column(path):
     return np.array(vals)
 
 
-if opt.input:
-    x = read_last_column(opt.input)
-    ref = np.loadtxt(OUT / f"input_{key}.txt")
-    assert np.array_equal(x, ref), "samples differ from those SigmaTau timed"
-else:
-    x = np.loadtxt(OUT / f"input_{key}.txt")
-assert len(x) == sig["N"], f"N = {len(x)} but SigmaTau timed N = {sig['N']}"
+if not opt.report_only:
+    if opt.input:
+        x = read_last_column(opt.input)
+        ref = np.loadtxt(OUT / f"input_{key}.txt")
+        assert np.array_equal(x, ref), "samples differ from those SigmaTau timed"
+    else:
+        x = np.loadtxt(OUT / f"input_{key}.txt")
+    assert len(x) == sig["N"], f"N = {len(x)} but SigmaTau timed N = {sig['N']}"
 assert math.isclose(opt.tau0, sig.get("tau0", 1.0)), "tau0 differs from SigmaTau's"
 taus = np.array(sig["m_values"], dtype=float) * opt.tau0
 

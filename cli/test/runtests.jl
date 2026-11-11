@@ -171,6 +171,7 @@ mktempdir() do dir
         x = zeros(1000); x[437] = 1.0; x[800] = NaN
         idx = SigmaTauCLI.series_index(x, 30)
         @test 437 in idx && 800 in idx && issorted(idx) && length(idx) <= 30
+        @test idx[1] == 1 && idx[end] == 1000
         @test SigmaTauCLI.series_index(x[1:20], 30) == 1:20
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,totdev", "--fit")
         @test r.code == 0
@@ -350,6 +351,10 @@ mktempdir() do dir
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"stein\"", r.out)
         @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
+        # --flicker fits flicker states per clock; these clocks have no flicker, so none.
+        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--flicker", "--format=json", "--series", "0")
+        @test r.code == 0 && occursin("\"flicker\":{\"fm\":[0,0,0],\"pm\":[0,0,0]}", r.out)
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--flicker").code != 0
         @test run_cli("timescale", tf, "--value-cols", "2,3", "--algorithm", "greenhall").code != 0
         @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
         # --clocks sets how many clocks are simulated (four by default).
@@ -415,6 +420,32 @@ mktempdir() do dir
         @test run_cli("holdover", hf, "--train", "0.5").code == 3
         @test run_cli("holdover", hf, "--limit", "-1").code == 1
         @test run_cli("holdover", hf, "--fit").code == 1                           # CSV has no room for it
+    end
+
+    @testset "steer" begin
+        p, _ = simulate_clock(ClockModel(; tau0=1.0, R=1e-20, q1=1e-22, q2=1e-26), 8192; rng=Random.Xoshiro(5))
+        sf = write_table(joinpath(dir, "steer.csv"), p.x)
+        # The model comes from the first stretch alone; every result from its end on.
+        model = clock_model(powerlaw_fit(PhaseData(p.x[1:2048], 1.0)); flicker=true, tau_max=8192)
+        g = steering_gains(30.0, 1.0)
+        s = steer(p, model, g)
+        rows = csv_rows(run_cli("steer", sf, "--time-constant", "30", "--m", "1,16,256").out)
+        @test parse.(Float64, getindex.(rows, 3)) ≈ adev(PhaseData(p.x[2049:end], 1.0), [1, 16, 256]; ci=false).dev
+        @test parse.(Float64, getindex.(rows, 4)) ≈ adev(PhaseData(s.steered.x[2049:end], 1.0), [1, 16, 256]; ci=false).dev
+        @test parse.(Float64, getindex.(rows, 5)) ≈ steer(model, g; tau=[1.0, 16.0, 256.0], readings=true).adev
+        # Gains from a cost, a steer every fourth sample: no prediction at that interval.
+        r = run_cli("steer", sf, "--cost", "1:0:1e4", "--interval", "4", "--train", "1024", "--format", "json", "--series", "50")
+        @test r.code == 0 && occursin("\"predicted\":{\"error\":", r.out) && occursin("\"correction\":[", r.out)
+        @test parse(Float64, match(r"\"gains\":\{\"phase\":([^,]*)", r.out)[1]) ≈ lqg_gains(4.0; phase=1, steer=1e4).phase
+        @test all(isempty, getindex.(csv_rows(run_cli("steer", sf, "--cost", "1:0:1e4", "--interval", "4").out), 5))
+        r = run_cli("steer", sf, "--time-constant", "30", "--integral", "--fit-drift", "--format", "json")
+        @test r.code == 0 && occursin("\"drift\":true", r.out) && !occursin("\"integral\":0,", r.out)
+        @test run_cli("steer", sf).code == 1
+        @test run_cli("steer", sf, "--time-constant", "30", "--cost", "1:0:1").code == 1
+        @test run_cli("steer", sf, "--cost", "1:0:1", "--integral").code == 1
+        @test run_cli("steer", sf, "--cost", "0:0:1").code == 1
+        @test run_cli("steer", sf, "--time-constant", "30", "--interval", "1.5").code == 3
+        @test run_cli("steer", sf, "--time-constant", "30", "--train", "8190").code == 3
     end
 
     @testset "--remove-drift" begin
@@ -718,6 +749,11 @@ mktempdir() do dir
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
         @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
+        # A zero in a Stable32 frequency file is a gap, unless it is kept as a reading.
+        zf = joinpath(dir, "z.frd")
+        write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
+        @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
+        @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
     end
 
     @testset "output error -> exit 4" begin
@@ -771,6 +807,8 @@ mktempdir() do dir
                          ["holdover", pf, "--grow", "3", "--fit-drift", "--fit", "--format", "json"],
                          ["holdover", pf, "--train", "512", "--kalman", "--format", "json"],
                          ["holdover", joinpath(dir, "flicker.csv"), "--kalman", "--format", "json"],
+                         ["steer", joinpath(dir, "steer.csv"), "--time-constant", "30", "--integral", "--format", "json", "--series", "40"],
+                         ["steer", joinpath(dir, "steer.csv"), "--cost", "1:0:1e4", "--fit-drift"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
                          ["completion", "bash"],

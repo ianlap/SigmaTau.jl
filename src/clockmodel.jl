@@ -163,6 +163,9 @@ end
 # Variance of the white noise on a reading.
 _reading_var(m::ClockModel) = m.R + _pm_R(m)
 
+# No reading noise and no process noise: a filter's gain is 0/0 once its start is used up.
+_noiseless(m::ClockModel) = _reading_var(m) == 0 && iszero(process_noise(m, m.tau0))
+
 # A reading in state terms: the phase plus the Markov phase states.
 function _reading_row(m::ClockModel)
     h = zeros(_nstates(m))

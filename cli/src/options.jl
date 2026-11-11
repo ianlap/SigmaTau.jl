@@ -1,7 +1,7 @@
 # Options: one table drives the parser, the help text and the shell
 # completions, so the three cannot drift apart.
 
-const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "timescale", "model", "report", "live"]
+const COMMANDS = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model", "report", "live"]
 const COMMAND_HELP = [
     ("analyze",    "FILE", "stability deviations σ(τ) with confidence intervals"),
     ("check",      "FILE", "read a record and summarise it (samples, span, gaps, outliers, drift)"),
@@ -10,6 +10,7 @@ const COMMAND_HELP = [
     ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
     ("holdover",   "FILE", "holdover test: the time error after a training stretch against holdover time, and the time to reach a limit"),
+    ("steer",      "FILE", "steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts"),
     ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
     ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "σ(τ) a clock noise model predicts (MDEV and ADEV), no simulation"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
@@ -44,7 +45,7 @@ end
 
 const ALL = filter(!=("live"), COMMANDS)   # the commands that read a FILE
 const ANY = COMMANDS
-const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "timescale", "model"]   # CSV or JSON out (report writes HTML; model is always JSON)
+const TABULAR = ["analyze", "check", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "model"]   # CSV or JSON out (report writes HTML; model is always JSON)
 const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE", ALL),
@@ -67,12 +68,13 @@ const OPTS = [
     Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
     Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps and NaN readings", ALL),
+    Opt("--keep-zeros", "", String[], false, "read the zeros of a Stable32 .phd/.frd file as readings, not gaps (quantized data)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyse only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
     Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev); see below", ["analyze", "report", "live"]),
-    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "report", "live"]),
-    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "report", "live"]),
+    Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "report", "live"]),
+    Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid", ["analyze", "cross", "steer", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
     Opt("--tau-max", "SECONDS", String[], false, "leave out averaging times above SECONDS", ["analyze", "report"]),
     Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "report", "holdover"]),
@@ -93,14 +95,19 @@ const OPTS = [
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", ["best", "real"], false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
+    Opt("--flicker", "", String[], false, "greenhall and jones_tryon only: keep each clock's flicker FM and flicker PM as Markov states where the fit finds them, instead of folding flicker PM into the reading noise", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
-    Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record)", ["holdover"]),
+    Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record); for steer, the stretch the clock model is fitted to, with results from its end on", ["holdover", "steer"]),
     Opt("--grow", "K", String[], false, "in place of --train: a stretch K times each holdover time (2, or 3 with --fit-drift, is the test behind TDEV and HTDEV)", ["holdover"]),
     Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch)", ["holdover"]),
-    Opt("--fit-drift", "", String[], false, "fit a parabola to the stretch, so the frequency drift is learned and carried on (default: a line)", ["holdover"]),
+    Opt("--fit-drift", "", String[], false, "fit a parabola to the stretch, so the frequency drift is learned and carried on (default: a line); for steer, a drift state in the clock model, steered out", ["holdover", "steer"]),
     Opt("--no-anchor", "", String[], false, "start from the fit's value at the end of the stretch, not from the last reading", ["holdover"]),
     Opt("--kalman", "", String[], false, "predict with a Kalman filter in place of the least-squares fit; its clock model is fitted to the first training stretch alone, and `claimed` is the error the filter itself expects", ["holdover"]),
     Opt("--limit", "SECONDS", String[], false, "also give the holdover time at which the error reaches SECONDS (1e-6 for a microsecond)", ["holdover"]),
+    Opt("--time-constant", "SECONDS", String[], false, "time constant of a critically damped loop: gains by pole placement", ["steer"]),
+    Opt("--integral", "", String[], false, "with --time-constant: a third gain, on the running sum of the phase", ["steer"]),
+    Opt("--cost", "P:F:U", String[], false, "in place of --time-constant: the gains that minimize P·phase² + F·frequency² + U·steer² (LQG), e.g. 1e-3:1e-3:1e12", ["steer"]),
+    Opt("--interval", "SECONDS", String[], false, "seconds between steers, a whole multiple of τ₀ (default τ₀)", ["steer"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
     # Live
     Opt("--hz", "", String[], false, "readings are counter frequencies in Hz, against --nominal (default: the first reading to 4 significant figures)", ["live"]),
@@ -131,6 +138,7 @@ mutable struct Options
     scaling::Float64
     detrend::String
     fillgaps::Bool
+    keep_zeros::Bool
     remove_outliers::Bool
     devs::Vector{Symbol}
     grid::String
@@ -187,15 +195,21 @@ mutable struct Options
     limit::Float64            # holdover: NaN = none
     grow::Int                 # holdover: the stretch as a multiple of each holdover time; 0 = --train
     kalman::Bool              # holdover: a Kalman filter as the predictor
+    flicker::Bool             # --flicker: flicker states in the Kalman scales' clock models
+    time_constant::Float64    # steer: NaN = not given
+    integral::Bool            # steer: an integral gain
+    cost::Vector{Float64}     # steer: --cost weights on phase, frequency and steer; empty = not given
+    interval::Float64         # steer: seconds between steers; NaN = τ₀
 end
 
-Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false,
+Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
                     false, " ", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
-                    NaN, Float64[], false, true, NaN, 0, false)
+                    NaN, Float64[], false, true, NaN, 0, false, false,
+                    NaN, false, Float64[], NaN)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -228,6 +242,15 @@ function parse_noise_model!(o::Options, s::String)
     v = Float64[parse_float(String(p), "--noise-model") for p in parts]
     all(>=(0), v) || throw(usage_error("--noise-model levels must not be negative"))
     push!(o.models, (v[1], v[2], v[3], v[4]))
+end
+
+# "P:F:U": weights on phase, frequency and steer.
+function parse_cost(s::String)
+    parts = split(s, ':')
+    length(parts) == 3 || throw(usage_error("--cost expects P:F:U, got \"" * s * "\""))
+    v = Float64[parse_float(String(p), "--cost") for p in parts]
+    v[1] > 0 && v[2] >= 0 && v[3] > 0 || throw(usage_error("--cost: the phase and steer weights must be positive and the frequency weight not negative"))
+    return v
 end
 
 # "NOISE:A:B", A and B in seconds; an empty side is open.
@@ -363,6 +386,9 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--grow";           o.grow = parse_int(v, name)
     elseif name == "--tau";            o.taus = parse_taus(v)
     elseif name == "--limit";          o.limit = parse_float(v, name)
+    elseif name == "--time-constant";  o.time_constant = parse_float(v, name)
+    elseif name == "--cost";           o.cost = parse_cost(v)
+    elseif name == "--interval";       o.interval = parse_float(v, name)
     elseif name == "--value-cols";     o.value_cols = parse_cols(v)
     elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
@@ -385,6 +411,7 @@ function set_flag!(o::Options, name::String)
     if name == "--phase";                  o.freq = false; o.phase_given = true
     elseif name == "--freq";               o.freq = true
     elseif name == "--fillgaps";           o.fillgaps = true
+    elseif name == "--keep-zeros";         o.keep_zeros = true
     elseif name == "--remove-outliers";    o.remove_outliers = true
     elseif name == "--no-ci";              o.ci = false
     elseif name == "--no-bias-correction"; o.bias = "none"
@@ -395,6 +422,8 @@ function set_flag!(o::Options, name::String)
     elseif name == "--fit-drift";          o.fit_drift = true
     elseif name == "--no-anchor";          o.anchor = false
     elseif name == "--kalman";             o.kalman = true
+    elseif name == "--integral";           o.integral = true
+    elseif name == "--flicker";            o.flicker = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end
@@ -462,6 +491,12 @@ function parse_args!(o::Options, args::Vector{String})
         throw(usage_error("--grow goes without --train and is 2 or more, 3 or more with --fit-drift"))
     o.kalman && (o.fit || !o.anchor || o.grow > 0) &&
         throw(usage_error("--kalman goes with none of --fit, --no-anchor and --grow"))
+    if o.command == "steer"
+        isnan(o.time_constant) == isempty(o.cost) && throw(usage_error("steer: give one of --time-constant SECONDS and --cost P:F:U"))
+        (isnan(o.time_constant) || o.time_constant > 0) && (isnan(o.interval) || o.interval > 0) ||
+            throw(usage_error("--time-constant and --interval must be positive"))
+        o.integral && isnan(o.time_constant) && throw(usage_error("--integral goes with --time-constant"))
+    end
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))
@@ -508,6 +543,7 @@ function print_help(io::IO)
     print(io, "  sigmatau dynamic clock.dat --dev dhdev --window 4096\n")
     print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
     print(io, "  sigmatau holdover gpsdo.dat --train 86400 --tau 3600,14400,86400 --limit 1e-6\n")
+    print(io, "  sigmatau steer maser.dat --time-constant 86400 --format json\n")
     print(io, "  sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1\n")
     print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")
 end

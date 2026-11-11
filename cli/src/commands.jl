@@ -30,6 +30,7 @@ function run_command(io::IO, o::Options, data::PhaseData, t_start::UInt64, args:
     c == "cross"    && return cmd_cross(io, o, data, t_start)
     c == "drift"    && return cmd_drift(io, o, data, t_start)
     c == "holdover" && return cmd_holdover(io, o, data, t_start)
+    c == "steer"    && return cmd_steer(io, o, data, t_start)
     c == "timescale" && return cmd_timescale(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
@@ -410,14 +411,7 @@ function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     o.fit && (json_key(io, "predicted"); json_holdover_fit(io, data, h))
     if model !== nothing
         json_key(io, "claimed"); json_array(io, h.claimed)
-        json_key(io, "model"); print(io, '{')
-        json_key(io, "R", true); json_number(io, model.R)
-        json_key(io, "q1"); json_number(io, model.q1)
-        json_key(io, "q2"); json_number(io, model.q2)
-        json_key(io, "q3"); json_number(io, model.q3)
-        json_key(io, "flicker_fm"); json_number(io, model.flicker_fm)
-        json_key(io, "flicker_pm"); json_number(io, model.flicker_pm)
-        print(io, '}')
+        json_key(io, "model"); json_clock_model(io, model)
     end
     print(io, '}')
     return elapsed(io, t_start)
@@ -450,6 +444,116 @@ function run_model(io::IO, o::Options)
     end
     print(io, "]}}\n")
     return nothing
+end
+
+# ── steer ─────────────────────────────────────────────────────────────────
+
+const CSV_STEER = "source,tau,free,steered,predicted"
+
+# The steady state the clock model predicts for the loop, or why there is none.
+function steer_prediction(model::ClockModel, g::SteeringGains, tau::Vector{Float64})
+    return try
+        steer(model, g; tau, readings=true)
+    catch err
+        err isa ArgumentError || rethrow()
+        error_message(err)
+    end
+end
+
+function rms_finite(v::AbstractVector{Float64})
+    s, n = 0.0, 0
+    for x in v
+        isnan(x) && continue
+        s += abs2(x); n += 1
+    end
+    return n == 0 ? NaN : sqrt(s / n)
+end
+
+function json_clock_model(io::IO, m::ClockModel)
+    print(io, '{')
+    json_key(io, "R", true); json_number(io, m.R)
+    json_key(io, "q1"); json_number(io, m.q1)
+    json_key(io, "q2"); json_number(io, m.q2)
+    json_key(io, "q3"); json_number(io, m.q3)
+    json_key(io, "flicker_fm"); json_number(io, m.flicker_fm)
+    json_key(io, "flicker_pm"); json_number(io, m.flicker_pm)
+    print(io, '}')
+end
+
+# The record is the free-running clock against its reference. The clock model
+# is fitted to the first training stretch alone, as for the Kalman holdover
+# test; the loop runs over the whole record and every result is taken from
+# the end of that stretch on.
+function cmd_steer(io::IO, o::Options, data::PhaseData, t_start::UInt64)
+    need_samples(data, 64, "a steering replay")
+    τ₀, N = Float64(data.tau0), length(data.x)
+    train = isnan(o.train) ? (N ÷ 4) * τ₀ : o.train
+    b = SigmaTau._whole_samples(train, τ₀, "train")
+    16 <= b <= N - 16 || throw(CLIError(EXIT_ANALYSIS, "steer: the training stretch must leave 16 samples on either side of its end"))
+    interval = isnan(o.interval) ? τ₀ : o.interval
+    g = isempty(o.cost) ? steering_gains(o.time_constant, interval; integral=o.integral) :
+        lqg_gains(interval; phase=o.cost[1], frequency=o.cost[2], steer=o.cost[3])
+    model = holdover_model(data, train, o.fit_drift)
+    r = steer(data, model, g)
+    free = PhaseData(Float64[Float64(x) for x in view(data.x, b+1:N)], τ₀)
+    steered = PhaseData(r.steered.x[b+1:N], τ₀)
+    ms = isempty(o.m) ? tau_values(tau_mode(o.grid), N - b, :adev) : o.m
+    σfree, σsteered = adev(free, ms; ci=false), adev(steered, ms; ci=false)
+    p = steer_prediction(model, g, Float64[m * τ₀ for m in ms])
+    src = source_name(o, data)
+    if o.format != "json"
+        print(io, CSV_STEER); print(io, '\n')
+        for i in eachindex(ms)
+            csv_field(io, src); print(io, ','); csv_number(io, σfree.tau[i]); print(io, ',')
+            csv_number(io, σfree.dev[i]); print(io, ','); csv_number(io, σsteered.dev[i]); print(io, ',')
+            p isa SteeringPrediction && csv_number(io, p.adev[i]); print(io, '\n')
+        end
+        return nothing
+    end
+    poles = steering_poles(g)
+    n = round(Int, interval / τ₀)
+    json_head(io, o, src)
+    json_key(io, "record"); json_record(io, o, data)
+    json_key(io, "analysis"); print(io, '{')
+    json_key(io, "quantity", true); json_string(io, quantity(o))
+    json_preprocessing(io, o); print(io, '}')
+    json_key(io, "steer"); print(io, '{')
+    json_key(io, "train", true); json_number(io, train)
+    json_key(io, "interval"); json_number(io, interval)
+    json_key(io, "gains"); print(io, '{')
+    json_key(io, "phase", true); json_number(io, g.phase)
+    json_key(io, "frequency"); json_number(io, g.frequency)
+    json_key(io, "integral"); json_number(io, g.integral)
+    print(io, '}')
+    json_key(io, "time_constants"); json_array(io, poles.time_constants)
+    json_key(io, "frequencies"); json_array(io, poles.frequencies)
+    json_key(io, "drift"); json_bool(io, model.drift)
+    json_key(io, "model"); json_clock_model(io, model)
+    json_key(io, "tau"); json_array(io, σfree.tau)
+    json_key(io, "free"); json_array(io, σfree.dev)
+    json_key(io, "steered"); json_array(io, σsteered.dev)
+    json_key(io, "phase_rms"); json_number(io, rms_finite(steered.x))
+    json_key(io, "steers_rms"); json_number(io, rms_finite(r.steers[(b ÷ n + 1) * n:n:N]))
+    json_key(io, "predicted"); print(io, '{')
+    if p isa SteeringPrediction
+        json_key(io, "phase", true); json_number(io, p.phase)
+        json_key(io, "frequency"); json_number(io, p.frequency)
+        json_key(io, "steers"); json_number(io, p.steers)
+        json_key(io, "adev"); json_array(io, p.adev)
+    else
+        json_key(io, "error", true); json_string(io, p)
+    end
+    print(io, '}')
+    if o.series > 0
+        idx = series_index(r.steered.x, o.series)
+        json_key(io, "series"); print(io, '{')
+        json_key(io, "t", true); json_array(io, Float64[(i - 1) * τ₀ for i in idx])
+        json_key(io, "steered"); json_array(io, r.steered.x[idx])
+        json_key(io, "correction"); json_array(io, r.correction[idx])
+        print(io, '}')
+    end
+    print(io, '}')
+    return elapsed(io, t_start)
 end
 
 # ── timescale ─────────────────────────────────────────────────────────────
@@ -488,18 +592,21 @@ function read_ensemble(o::Options)
     return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
 end
 
-# The Kalman scales fit a model per clock and read the scale at --pivot.
+# The Kalman scales fit a model per clock (with --flicker, flicker states
+# included) and read the scale at --pivot. Returns the scale and the models.
 function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     alg = Symbol(o.algorithm)
+    o.flicker && !(alg === :greenhall || alg === :jones_tryon) && throw(usage_error("--flicker needs --algorithm greenhall or jones_tryon"))
     if !kalman
         isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
-        isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax)
-        return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps))
+        isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax), ClockModel[]
+        return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps)), ClockModel[]
     end
     k = size(cc.x, 2)
     k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
     1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
-    return timescale(cc; algorithm=alg, models=clock_models(cc), pivot=o.pivot, wmax=o.wmax)
+    models = clock_models(cc; flicker=o.flicker)
+    return timescale(cc; algorithm=alg, models, pivot=o.pivot, wmax=o.wmax), models
 end
 
 function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
@@ -507,7 +614,7 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     N, k = size(cc.x)
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
     kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
-    r = run_timescale(cc, o, kalman)
+    r, models = run_timescale(cc, o, kalman)
     late = max(1, N ÷ 2):N
     wmean = [sum(r.weights[late, i]) / length(late) for i in 1:k]
     rms = Float64[]
@@ -535,6 +642,12 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     json_key(io, "wmax"); json_number(io, o.wmax)
     kalman && (json_key(io, "pivot"); json_number(io, o.pivot))
     isempty(o.steps) || (json_key(io, "steps"); json_string(io, o.steps))
+    if o.flicker   # Markov states each clock's model carries
+        json_key(io, "flicker"); print(io, '{')
+        json_key(io, "fm", true); json_array(io, Int[length(SigmaTau._fm_taus(m)) for m in models])
+        json_key(io, "pm"); json_array(io, Int[length(SigmaTau._pm_taus(m)) for m in models])
+        print(io, '}')
+    end
     json_key(io, "clocks"); json_array(io, cc.names)
     json_key(io, "weight"); json_array(io, r.weights[end, :])
     json_key(io, "weight_mean"); json_array(io, wmean)

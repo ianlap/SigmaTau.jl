@@ -177,7 +177,7 @@ function _read_timelab(path::AbstractString, tau0::Float64)
     return _Record(v, t0, true, falses(0), NaN)
 end
 
-function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps::Bool)
+function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps::Bool, keep_zeros::Bool)
     nskip, htau, hstart = _scan_comment_header(path)
     # Record type: the header's "Type:" line, else the extension.
     phase = lowercase(splitext(path)[2]) != ".frd"
@@ -189,6 +189,10 @@ function _read_stable32(path::AbstractString, tau0::Float64, hint::Int, fillgaps
     (t, v), ncols = _read_cols(path, nskip, nothing, [1, 0])
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 samples in " * String(path)))
     ncols >= 2 || (t = Float64[])
+    # Stable32 writes a gap as a zero; only the end points of phase data may be zero.
+    keep_zeros || for i in eachindex(v)
+        v[i] == 0 && !(phase && (i == 1 || i == length(v))) && (v[i] = NaN)
+    end
     # A Stable32 time tag is an MJD (days); a large value with sub-day steps.
     start = hstart
     if length(t) >= 2 && t[1] > 30000 && _median_step(t) < 1
@@ -466,7 +470,7 @@ end
 # meaning "not given", `kind` one of :auto, :phase, :frequency.
 function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, column::Int=0,
                     column_name::String="", nominal::Float64=NaN, kind::Symbol=:auto,
-                    scaling::Float64=1.0, delim::Char='\0', fillgaps::Bool=false)
+                    scaling::Float64=1.0, delim::Char='\0', fillgaps::Bool=false, keep_zeros::Bool=false)
     isfile(path) || throw(ArgumentError("read_data: file not found: " * String(path)))
     kind in (:auto, :phase, :frequency) ||
         throw(ArgumentError("read_data: kind must be :auto, :phase or :frequency, got :" * String(kind)))
@@ -475,7 +479,7 @@ function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, col
     r = if fmt === :timelab
         _read_timelab(path, tau0)
     elseif fmt === :stable32
-        _read_stable32(path, tau0, hint, fillgaps)
+        _read_stable32(path, tau0, hint, fillgaps, keep_zeros)
     elseif fmt === :counter
         _read_counter(path, tau0, nominal, hint, delim, fillgaps)
     elseif fmt === :table
@@ -500,7 +504,7 @@ end
 """
     read_data(path; format=:auto, tau0=nothing, column=nothing, nominal=nothing,
               kind=:auto, scaling=1.0, delim=nothing,
-              fillgaps=false) → PhaseData or FrequencyData
+              fillgaps=false, keep_zeros=false) → PhaseData or FrequencyData
 
 Read a measurement file in one of the [`INPUT_FORMATS`](@ref) and return
 its record, phase or frequency as the file has it. The format is found by
@@ -538,11 +542,12 @@ its record, phase or frequency as the file has it. The format is found by
   chosen by `column`. Exponents written with `D` are read. A compressed
   file must be unpacked first.
 
-!!! warning "Gaps in Stable32 files"
+!!! note "Gaps in Stable32 files"
     Stable32 marks a missing sample with a value of zero
     ([Stable32 manual, "Gaps & Outliers"](@cite hamilton-2008-stable32-manual)).
-    This reader takes a zero as a sample. Set the zeros that mark gaps to
-    `NaN` in the record after reading.
+    This reader does the same: a zero in a `:stable32` file becomes `NaN`,
+    except the first and the last sample of phase data. `keep_zeros=true`
+    keeps every zero as a sample, as a record of quantized readings needs.
 
 # Named columns
 
@@ -606,6 +611,8 @@ timestamps and MJD values give the record its [`start_time`](@ref).
 - `fillgaps=false`: `true` fills the missing samples with
   [`fillgaps`](@ref), with the reservations stated there: the readings
   that the timestamps show to be absent, and those that are `NaN`.
+- `keep_zeros=false`: `true` reads the zeros of a `:stable32` file as
+  samples and not as gaps.
 
 # Examples
 
@@ -636,14 +643,15 @@ function read_data(path::AbstractString; format::Symbol=:auto, tau0::Union{Real,
                    column::Union{Integer,AbstractString,Nothing}=nothing,
                    nominal::Union{Real,Nothing}=nothing, kind::Symbol=:auto,
                    scaling::Real=1.0, delim::Union{AbstractChar,Nothing}=nothing,
-                   fillgaps::Bool=false)
+                   fillgaps::Bool=false, keep_zeros::Bool=false)
     r = _read_data(path, format;
                    tau0=tau0 === nothing ? NaN : Float64(tau0),
                    column=column isa Integer ? Int(column) : 0,
                    column_name=column isa AbstractString ? String(column) : "",
                    nominal=nominal === nothing ? NaN : Float64(nominal),
                    kind=kind, scaling=Float64(scaling),
-                   delim=delim === nothing ? '\0' : Char(delim), fillgaps=fillgaps)
+                   delim=delim === nothing ? '\0' : Char(delim), fillgaps=fillgaps,
+                   keep_zeros=keep_zeros)
     return r.phase ? PhaseData(r.v, r.tau0; source=String(path), start=r.start) :
                      FrequencyData(r.v, r.tau0; source=String(path), start=r.start)
 end

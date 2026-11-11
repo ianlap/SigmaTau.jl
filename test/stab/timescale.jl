@@ -81,11 +81,15 @@ using Statistics
         @test all(iszero, on.weights[4001:4020, 2]) && off.weights[4005, 2] > 0.1
         @test adev(timescale_phase(on), [1000]; ci=false).dev[1] < 0.6 * adev(timescale_phase(off), [1000]; ci=false).dev[1]
         @test timescale(stepped; algorithm=:at2, steps=false).x == off.x
+        # Out of the scale the clock is still estimated (Weiss & Weissert 1991, §4),
+        # so its frequency holds the step 20 samples on (0.96 ± 0.08 of it over 200 seeds).
+        @test on.y[4020, 2] - on.y[3990, 2] ≈ 5e-11 rtol=0.45
         # :real keeps what was issued: identical up to the catch, and the scale
         # stays continuous where the rerun corrects it.
         re = timescale(stepped; algorithm=:at2, steps=:real)
         @test re.weights[1:4000, :] == on.weights[1:4000, :] && re.x[1:4000, :] == off.x[1:4000, :]
         @test all(iszero, re.weights[4010:4020, 2]) && all(isfinite, timescale_phase(re).x)
+        @test re.y[4020, 2] - re.y[3990, 2] ≈ 5e-11 rtol=0.45
         @test maximum(abs, diff(timescale_phase(re).x)) < 20 * maximum(abs, diff(timescale_phase(off).x))
         @test adev(timescale_phase(re), [1000]; ci=false).dev[1] < adev(timescale_phase(off), [1000]; ci=false).dev[1]
         @test timescale(stepped; algorithm=:at2, steps=true).x == on.x
@@ -222,6 +226,7 @@ using Statistics
         @test_throws ArgumentError timescale(cc; algorithm=:stein)
         @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, pivot=9)
         @test_throws ArgumentError timescale(cc; algorithm=:stein, models=ms, wmax=0.2)
+        @test_throws "no noise" timescale(cc; algorithm=:stein, models=[ClockModel(; tau0=1.0), ClockModel(; tau0=1.0), ms[3]])
     end
 
     @testset "flicker states in the Kalman scales" begin

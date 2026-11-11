@@ -4,7 +4,7 @@ using DocStringExtensions
 using Statistics
 using Distributions
 using FFTW
-using LinearAlgebra: I, Diagonal, Symmetric, cholesky, diag, dot, eigen, issuccess
+using LinearAlgebra: I, Diagonal, Symmetric, cholesky, diag, dot, eigen, eigvals, issuccess
 using Dates
 using Printf
 
@@ -48,6 +48,7 @@ include("clockmodel.jl")
 include("noisefit.jl")
 include("kalman.jl")
 include("holdover.jl")
+include("steering.jl")
 include("comparisons.jl")
 include("timescale.jl")
 include("deviations.jl")
@@ -95,6 +96,7 @@ export NoiseFit, noise_fit, add_component!, undo!, noise_residual
 export KalmanResult, kalman_filter, kalman_smooth, holdover_error, innovation_check, simulate_clock
 export prediction_error, tune_q
 export holdover, HoldoverResult, HoldoverPrediction
+export SteeringGains, steering_gains, lqg_gains, steering_poles, steer, SteeringResult, SteeringPrediction
 export ClockComparisons, simulate_ensemble, clock_models
 export TimescaleResult, timescale, timescale_phase, implicit_mean
 export theo1, theoh

@@ -1,6 +1,10 @@
-# Suites, grids, streaming and live
+# Suites, grids and streaming
 
 ## Several estimators at once
+
+[`stability`](@ref) runs several estimators on one record with one set of
+keywords and returns a [`StabilitySuite`](@ref), which is indexed by the
+name of the estimator.
 
 ```@docs
 stability
@@ -9,10 +13,10 @@ DEFAULT_DEVIATIONS
 
 ## Estimators by name
 
-[`estimators`](@ref) describes every estimator (name, label, family, axis,
-whether it takes `correct_bias`, a one-line description), and
-[`deviation`](@ref) runs one chosen by its name. The explorer and the
-command-line tool use both, so they list the same estimators as the library.
+[`deviation`](@ref) runs the estimator of a given name, for a choice that
+is made at run time. [`estimators`](@ref) lists the names with the label,
+the family and the unit of each. The command-line program and the explorer
+offer the same list.
 
 ```@docs
 estimators
@@ -21,28 +25,30 @@ deviation
 
 ## τ grids
 
+An estimator takes its averaging factors as a vector, as a range or as a
+grid. The six grids are the instances of [`TauMode`](@ref): `AllTaus`,
+`Octave`, `HalfOctave`, `QuarterOctave`, `Decade` and `HalfDecade`.
+[Averaging times](../guide/choosing.md#Averaging-times) says which to
+choose.
+
 ```@docs
 TauMode
 tau_mode
 tau_values
 ```
 
-The exported [`TauMode`](@ref) instances are `AllTaus`, `Octave`,
-`HalfOctave`, `QuarterOctave`, `Decade` and `HalfDecade`.
-
 ## Streaming
 
-[`StreamingStability`](@ref) computes `adev`, `mdev`, `hdev` or `mhdev` as
-phase samples arrive, at O(1) cost per sample per averaging factor. At every
-sample count the streamed estimate equals the batch call on the samples seen
-so far.
+[`StreamingStability`](@ref) keeps running sums for ADEV, MDEV, HDEV or
+MHDEV and updates them with each phase sample. The deviation is available
+while the measurement runs, and the record need not be kept.
 
 ```julia
 acc = StreamingStability(:adev, 1.0, [1, 10, 100])
 push!(acc, x_next)        # one phase sample
-append!(acc, xs)          # a chunk, in order
-snapshot(acc)             # StabilityResult over everything seen so far
-nsamples(acc)             # samples streamed so far
+append!(acc, xs)          # several, in order
+snapshot(acc)             # the StabilityResult of the samples so far
+nsamples(acc)             # their number
 ```
 
 ```@docs
@@ -55,22 +61,29 @@ nsamples
 
 ## Live measurement
 
-[`LiveStability`](@ref) holds one accumulator per deviation and takes
-readings as an instrument gives them: phase, fractional frequency, or a
-counter frequency in hertz. A source is anything with
-[`read_reading`](@ref), which returns `NaN` once the stream ends.
+[`LiveStability`](@ref) holds one accumulator for each deviation and takes
+the readings as an instrument gives them: phase, fractional frequency, or
+the frequency of a counter in hertz. [`read_reading`](@ref) returns the
+next reading of a source, and `NaN` once its stream has ended:
 
 ```julia
 using Sockets
-counter = InstrumentSource(Sockets.connect("192.168.1.20", 5025); query="READ?")
-live = LiveStability([:adev, :mdev], 1.0, [1, 2, 4, 8, 16]; quantity=:hz, nominal=10e6)
-for _ in 1:3600
-    push!(live, read_reading(counter))
+
+counter = InstrumentSource(connect("192.168.1.20", 5025); query="READ?")
+live = LiveStability([:adev, :mdev], 1.0, [1, 2, 4, 8, 16];
+                     quantity=:hz, nominal=10e6)
+while true
+    reading = read_reading(counter)
+    isnan(reading) && break
+    push!(live, reading)
 end
-snapshot(live)            # one StabilityResult per deviation
+snapshot(live)            # one StabilityResult for each deviation
 ```
 
-`SimulatedSource()` stands in for the instrument when trying a setup out.
+[`SimulatedSource`](@ref) stands in for the instrument while a setup is
+tried out. The command line follows a measurement with
+[`sigmatau live`](cli.md), and the explorer on its
+[Live](../explorer/live.md) page.
 
 ```@docs
 LiveStability

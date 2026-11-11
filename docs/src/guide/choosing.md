@@ -1,103 +1,156 @@
 # Choosing an estimator
 
-Start with the question you are asking of the clock, then pick the estimator
-that answers it with the least bias and the narrowest interval. When in
-doubt, run the default suite, `stability(p)` (ADEV, MDEV, HDEV and MHDEV), and
-compare the curves.
+The estimator follows from the question asked of the record and from what
+the record contains. The table gives the short answer and the sections
+below it the reasons, after the advice of
+[SP1065 §5.2 and §10.13](@cite riley-2008-sp1065). With no question yet,
+run [`stability`](@ref), which computes `adev`, `mdev`, `hdev` and `mhdev`,
+and compare the curves.
 
-## Quick guide
-
-| Your situation | Use | Why |
+| Question | Use | Reason |
 |:---|:---|:---|
-| A first look, or a number for a spec sheet | `adev` | The standard measure σ\_y(τ); every datasheet quotes it. |
-| Short τ dominated by phase noise (white or flicker PM) | `mdev` | ADEV falls as τ⁻¹ for both white and flicker PM; MDEV separates them (τ⁻³ᐟ² vs τ⁻¹). |
-| The clock drifts (rubidium, quartz, uncorrected hydrogen maser) | `hdev`, `mhdev` | The third difference removes linear frequency drift, which turns ADEV into a τ¹ ramp. |
-| Long τ, where few averages remain and the intervals are wide | `totdev`, `mtotdev`, `htotdev`, `mhtotdev` | Total estimators extend the record by reflection, so the last τ values carry more degrees of freedom. |
-| The longest τ the record can support | `theo1` (ThêoBR), `theoh` | Thêo1 reaches 75 % of the record span; ThêoH joins it to ADEV at short τ. Slow on long records. |
-| Time error of a clock or a timing link, in seconds | `tdev`, `htdev`, `ttotdev` | σ\_x(τ): the time deviation scaled from MDEV, MHDEV or MTOTDEV. |
-| Telecom timing masks (ITU-T G.810 family) | `mtie`, `tierms` | Maximum and RMS time interval error over each window. |
-| Data from an averaging (Λ-type) frequency counter | `pdev` | The parabolic deviation is the matched estimator for averaged frequency readings. |
-| Does the stability change during the record? | `dadev`, `dhdev` | σ(t, τ) over sliding windows; see [Plotting](plotting.md#Dynamic-deviations). |
-| Several clocks compared in pairs, and you want each clock alone | `ncornered_hat` | The N-cornered hat separates the pairwise variances, assuming independent clocks. |
-| Live data, updated sample by sample | `StreamingStability`, `LiveStability` | ADEV, MDEV, HDEV and MHDEV at O(1) cost per sample; equals the batch call at every step. `LiveStability` takes instrument readings (phase, frequency or Hz) from an `InstrumentSource`. |
+| A first look, or a figure to hold against a specification | [`adev`](@ref) | The overlapping Allan deviation is the general-purpose measure and the most widely used. |
+| Which phase noise limits the short averaging times | [`mdev`](@ref) | It separates white PM from flicker PM, which the Allan deviation does not. |
+| The stability of a clock that drifts | [`hdev`](@ref), [`mhdev`](@ref) | The third difference does not respond to linear frequency drift. |
+| The long averaging times, with better confidence | [`totdev`](@ref), [`mtotdev`](@ref), [`htotdev`](@ref), [`mhtotdev`](@ref) | A total estimator extends the data by reflection and gains degrees of freedom. |
+| Averaging times beyond half the record | [`theo1`](@ref), [`theoh`](@ref) | Thêo1 reaches three quarters of the record. Its bias removal holds on FM noise of one type. |
+| The time error of a clock or a link, in seconds | [`tdev`](@ref), [`htdev`](@ref), [`ttotdev`](@ref) | The time deviations are the modified deviations times ``τ``, within a constant. |
+| The peak time error, or a telecom mask | [`mtie`](@ref), [`tierms`](@ref), [`mask_check`](@ref) | MTIE is the largest peak-to-peak time error within any interval of a given length. |
+| The same, from the shortest record | [`pdev`](@ref) | The parabolic deviation has the two slopes of `mdev` and is the more efficient of the two. |
+| Whether the stability changes during the record | [`dadev`](@ref), [`dhdev`](@ref) | The dynamic deviations follow ``σ_y(τ)`` over a sliding window. |
+| Each clock, from comparisons among three or more | [`ncornered_hat`](@ref), [`groslambert`](@ref) | They separate the clocks that the pairwise deviations combine. |
+| One device, measured through two channels | [`cross_adev`](@ref) | Noise in only one channel averages out of the covariance ([Two-channel measurements](cross.md)). |
+| A measurement still in progress | [`StreamingStability`](@ref), [`LiveStability`](@ref) | They update the deviation with each sample. |
 
-## The estimators
+[`estimators`](@ref) returns the list as data, and [`deviation`](@ref) runs
+an estimator chosen by name.
 
-`estimators()` returns the same list as data (name, label, family, axis and a
-one-line description), and `deviation(:mdev, p, m)` runs any of them by name.
+## Drift
 
-### σ\_y(τ): fractional-frequency stability
+A linear frequency drift ``D`` adds ``D^2τ^2/2`` to the Allan variance
+and hides the noise at long averaging times
+([Power-law noise](../explanation/noise.md)). There are two ways around it.
 
-| Function | Name | Note |
+The Hadamard family (`hdev`, `mhdev`, `htdev`, `htotdev`, `mhtotdev`)
+takes a third difference of the phase, to which a linear frequency drift
+contributes nothing. It also converges on flicker-walk and random-run FM,
+where the Allan family does not. The price is confidence: at the same
+averaging time a Hadamard deviation has fewer degrees of freedom than the
+Allan deviation ([SP1065 §5.2](@cite riley-2008-sp1065)).
+
+The other way is to estimate the drift, remove it, and use the Allan
+family on what remains. SP1065 advises it as the usual course: the
+stability plot shows the noise, and the drift is analyzed separately
+([§5.19 and §11.2](@cite riley-2008-sp1065)).
+
+```julia
+d = drift_fit(p)                          # the drift and its model
+adev(detrend(p; method = :quadratic))     # the noise that remains
+```
+
+[Gaps, outliers and drift](preparing.md) covers both functions.
+
+## Phase noise
+
+White and flicker PM both give the Allan deviation a slope near ``τ^{-1}``.
+The modified deviations average the phase over ``τ`` before differencing
+and fall as ``τ^{-3/2}`` on white PM and ``τ^{-1}`` on flicker PM. Use
+[`mdev`](@ref), or [`mhdev`](@ref) when the record also drifts, wherever a
+phase noise is to be identified or its level read off.
+
+[`pdev`](@ref) has the same two slopes. It estimates each frequency by
+linear regression on the phase, the best estimate in white phase noise,
+which makes it the more efficient of the two and lets it identify a noise
+type from a shorter record
+([IEEE Std 1139-2022, A.3.4](@cite ieee1139-2022-definitions)).
+
+## Long averaging times
+
+At the longest averaging times an estimator rests on a few terms. The
+equivalent degrees of freedom (EDF) say how few. Here they are for three
+estimators at ``τ ≈ T/32``, ``T/8`` and ``T/4`` on white FM:
+
+```@example choosing
+using SigmaTau, Random
+p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(0 => 1e-12), rng = Xoshiro(1))
+edf(est, m) = round.(est(p, m; noise = :WHFM).edf; digits = 1)
+
+(adev = edf(adev, [128, 512, 1024]), totdev = edf(totdev, [128, 512, 1024]),
+ theo1 = edf(theo1, [170, 682, 1366]))
+```
+
+The total estimators extend the record by reflection at both ends, which
+adds half again to the EDF of the Allan deviation at a quarter of the
+record. Each keeps the properties of the deviation it extends: `totdev`
+goes with `adev`, `mtotdev` with `mdev`, `htotdev` with `hdev` and
+`mhtotdev` with `mhdev`. They are biased by an amount that depends on the
+noise type, which the package identifies and corrects for
+([Bias correction](../explanation/bias.md)). State the noise type with
+`noise=` when it is known, because the label is least certain where these
+estimators are most useful.
+
+Thêo1 has about three times the EDF of the Allan deviation and reaches
+three quarters of the record. [`theo1`](@ref) removes its bias by a ratio
+measured on the record, which holds on FM noise of a single type and adds
+a scatter of its own, about 15 % in deviation. It reads wrong where PM
+noise dominates and where the noise type changes within the record
+([Bias correction](../explanation/bias.md#Thêo1) has the sizes). At short
+averaging times that scatter leaves it less precise than the Allan
+deviation, so for a whole curve use [`theoh`](@ref), which joins the Allan
+deviation at short averaging times to the corrected Thêo1 at long ones.
+
+## Time error
+
+[`tdev`](@ref), [`htdev`](@ref) and [`ttotdev`](@ref) are the modified
+deviations as a time, in seconds: the usual measure of a time-transfer
+link or a network clock. [`mtie`](@ref) gives the largest peak-to-peak
+time error within any interval of length ``τ``, and [`tierms`](@ref) the
+rms change of the phase over ``τ``, which includes any frequency offset.
+MTIE is a peak, not an average: a single outlier sets it, and it has no
+confidence interval. The ITU-T masks for network clocks limit MTIE and
+TDEV, and [`mask_check`](@ref) compares a result with one of them.
+
+## Averaging times
+
+Octave spacing, the default, gives points evenly spaced on a logarithmic
+axis, and `Decade` gives round values. `AllTaus` computes every averaging
+factor. It shows a periodic disturbance as a ripple in the curve
+([SP1065 §5.23](@cite riley-2008-sp1065)), and costs a call for each
+factor.
+
+```julia
+adev(p, AllTaus)
+```
+
+## Counter readings
+
+What a deviation of frequency readings estimates depends on how the
+counter averaged each reading
+([IEEE Std 1139-2022, A.3.1.2](@cite ieee1139-2022-definitions)). A Π
+counter weights the interval uniformly, and the two-sample deviation of
+its readings is the Allan deviation. A Λ counter weights it with a
+triangle and an Ω counter with a parabola. The two-sample deviation of
+their readings is a modified Allan deviation and a parabolic deviation,
+whatever the function that computed it is called. Phase samples avoid the
+question. The standard also prefers them where there is dead time between
+the readings, which this package does not correct for.
+
+## What each estimator needs
+
+| Estimators | Gaps | Cost for each ``τ`` |
 |:---|:---|:---|
-| [`adev`](@ref) | Allan deviation (overlapping) | The standard. Cannot tell white PM from flicker PM; diverges under drift. |
-| [`mdev`](@ref) | Modified Allan deviation | Averages phase over each τ, which separates white and flicker PM. |
-| [`hdev`](@ref) | Hadamard deviation (overlapping) | Insensitive to linear frequency drift. |
-| [`mhdev`](@ref) | Modified Hadamard deviation | Drift-insensitive and separates white and flicker PM. |
-| [`pdev`](@ref) | Parabolic deviation | Least-squares frequency estimate per window; matched to averaging counters. |
-| [`totdev`](@ref) | Total Allan deviation | ADEV with a reflected record: more EDF at long τ. |
-| [`mtotdev`](@ref) | Total modified Allan deviation | MDEV with per-window drift removal and reflection. |
-| [`htotdev`](@ref) | Total Hadamard deviation | HDEV with reflection: drift-insensitive with good long-τ confidence. |
-| [`mhtotdev`](@ref) | Total modified Hadamard deviation | MHDEV with reflection. New in SigmaTau; see [MHTOTDEV bias and EDF](../explanation/mhtotdev.md). |
-| [`theo1`](@ref) | Thêo1, bias-corrected (ThêoBR) by default | Reaches τ up to 75 % of the span. O(N·m) per τ, so seconds on long records. |
-| [`theoh`](@ref) | ThêoH | ADEV at short τ joined to ThêoBR at long τ: one curve over the full range. |
+| `adev`, `mdev`, `tdev`, `hdev`, `mhdev`, `htdev` | skipped | ``O(N)`` |
+| `mtie`, `tierms` | skipped | ``O(N)`` |
+| `pdev` | must be filled | ``O(N)`` |
+| `totdev` | must be filled | ``O(N)`` |
+| `mtotdev`, `ttotdev`, `htotdev`, `mhtotdev` | must be filled | ``O(Nm)``, on all threads |
+| `theo1`, `theoh` | must be filled | ``O(Nm)``, on all threads |
+| `dadev`, `dhdev` | must be filled | one deviation for each window |
 
-### σ\_x(τ): time stability, in seconds
-
-| Function | Name | Note |
-|:---|:---|:---|
-| [`tdev`](@ref) | Time deviation | τ/√3 · MDEV. The usual measure for time transfer and network timing. |
-| [`htdev`](@ref) | Hadamard time deviation | τ/√(10/3) · MHDEV: TDEV with drift removed. New in SigmaTau. |
-| [`ttotdev`](@ref) | Total time deviation | τ/√3 · MTOTDEV. |
-| [`mtie`](@ref) | Maximum time interval error | Largest peak-to-peak time error in any window of length τ. A deterministic envelope, so it has no confidence interval. |
-| [`tierms`](@ref) | RMS time interval error | RMS of the time error over windows of length τ. |
-
-### Time-resolved and multi-clock
-
-| Function | Returns |
-|:---|:---|
-| [`dadev`](@ref), [`dhdev`](@ref) | a [`DynamicStabilityResult`](@ref): ADEV or HDEV in each window of a sliding window |
-| [`ncornered_hat`](@ref) | one [`StabilityResult`](@ref) per clock from the pairwise results |
-| [`StreamingStability`](@ref) | an accumulator; [`snapshot`](@ref) gives the current [`StabilityResult`](@ref) |
-
-## Reading the slope
-
-On a log-log σ\_y(τ) plot each power-law noise has its own slope, which is how
-you read the noise mix off a curve (and how SigmaTau's noise identification
-works; see [Noise, EDF and confidence](../explanation/noise_and_confidence.md)):
-
-| Noise | ADEV slope | MDEV slope |
-|:---|:---|:---|
-| White PM | τ⁻¹ | τ⁻³ᐟ² |
-| Flicker PM | τ⁻¹ | τ⁻¹ |
-| White FM | τ⁻¹ᐟ² | τ⁻¹ᐟ² |
-| Flicker FM | τ⁰ (flat) | τ⁰ |
-| Random-walk FM | τ¹ᐟ² | τ¹ᐟ² |
-| Linear frequency drift | τ¹ | τ¹ |
-
-HDEV and MHDEV follow the ADEV and MDEV slopes for these noises, but a
-linear drift does not appear in them at all.
-
-## Practical notes
-
-- **Drift.** If ADEV turns up as τ¹ at long τ, either use the Hadamard family
-  or remove the drift first with [`detrend`](@ref)`(p; method=:quadratic)`
-  (on phase, the quadratic term is the frequency drift).
-- **Bias correction.** The total estimators and Thêo1 are bias-corrected by
-  default. `correct_bias=false` gives the raw statistic, as allantools
-  does, and `correct_bias=:stable32` what Stable32 reports for each.
-- **Speed.** The Allan and Hadamard estimators are O(N) per τ. The total
-  family is heavier but multithreaded (start Julia with `--threads=auto`).
-  Thêo1 and ThêoH are O(N²) overall, so they are off by default in the
-  explorer.
-- **Gaps.** `adev`, `mdev`, `tdev`, `hdev`, `mhdev`, `htdev`, `tierms` and
-  `mtie` skip `NaN` gaps, as allantools' `gradev` does for ADEV: on phase, a
-  term counts when every sample it reads was measured; on frequency, when no
-  missing sample falls inside its span. `neff` is the number of terms used
-  and the EDF follows from it. The total estimators, Thêo1, PDEV and the
-  dynamic deviations still need a gap-free record: fill it with
-  [`fillgaps`](@ref) first. Filling changes the noise inside the gap, so
-  prefer skipping where the estimator allows it.
-- **Glitches.** Remove phase steps or frequency spikes with
-  [`remove_outliers`](@ref) before the analysis; see
-  [Reading and saving data](../tutorials/02_reading_your_data.md).
+An estimator that skips gaps leaves out the terms that touch a missing
+sample. The others need [`fillgaps`](@ref) first, which changes the noise
+inside each gap, so prefer an estimator that skips them when the record
+has many ([Gaps, outliers and drift](preparing.md)). Start Julia with
+`--threads=auto` for the last rows of the table: on a long record the
+modified total and Thêo1 estimators are the only ones that take
+noticeable time.

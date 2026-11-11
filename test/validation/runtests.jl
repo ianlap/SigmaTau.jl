@@ -8,7 +8,7 @@
 #     allandeviations/devs.csv, from tools/validation/gen_allandeviations.jl),
 #   * Stable32 runs on PHASE.DAT (fixtures/validation/stable32_phasedat/) and
 #     on a flicker PM frequency record (fixtures/validation/stable32_flickerpm/),
-#   * the NBS 1000-point published values (NIST SP1065 §12.3),
+#   * the published values of the 1000-point test suite (NIST SP1065 §12.4),
 #   * scipy.signal.welch for S_y / S_x and scipy.optimize.least_squares for
 #     the drift fits.
 #
@@ -29,7 +29,7 @@ const _CC = CrossCheck
     for (label, f) in (
             ("allantools σ, every estimator × α = +2…−4", _CC.allantools_dev_rows),
             ("AllanDeviations.jl σ, every estimator × α", _CC.allandeviations_dev_rows),
-            ("NBS 1000-point published values",          _CC.nbs14_rows),
+            ("1000-point test suite, published values",  _CC.nbs14_rows),
             ("Stable32 PHASE.DAT σ, α and CI",            _CC.stable32_rows),
             ("Stable32 CI with Stable32's α",             _CC.stable32_ci_forced_alpha_rows),
             ("Stable32 σ on a flicker PM record",         _CC.stable32_flickerpm_rows),
