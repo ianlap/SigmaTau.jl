@@ -143,7 +143,8 @@ function pinTraces(devs) {
       const color = hexAlpha(seriesColor(multi() ? c.slot : Math.max(di, 0)), 0.75);
       const name = `${p.label} · ${multi() ? `${c.name} · ` : ""}${label(r.dev)}`;
       out.push({
-        x: r.tau, y: r.sigma, name, mode: "lines", line: { color, width: 1.3, dash: PIN_DASH[k % PIN_DASH.length] },
+        x: r.tau, y: r.sigma, name, mode: r.tau.length > 1 ? "lines" : "markers",   // one τ has no line to draw
+        line: { color, width: 1.3, dash: PIN_DASH[k % PIN_DASH.length] }, marker: { color, size: 6 },
         hovertemplate: `<b>${h(name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}<extra></extra>`,
       });
     }
@@ -300,6 +301,9 @@ export function figure(clocks, devs, axis = state.axis) {
     uirevision: `${axis}`,
   };
   const data = traces(clocks, devs);
+  // About six labels on the τ axis at most, however far a pinned table stretches it.
+  const taus = data.flatMap((d) => d.x ?? []).filter((t) => t > 0);
+  if (taus.length) layout.xaxis.dtick = Math.max(1, Math.ceil(Math.log10(Math.max(...taus) / Math.min(...taus)) / 6));
   if (state.noiseId && state.ci && axis === "sigma_y") noiseOverlay(layout, data, clocks, devs);
   return { data, layout };
 }
