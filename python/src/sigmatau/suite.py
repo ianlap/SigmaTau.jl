@@ -1,11 +1,10 @@
-"""Compute-all entry point and the clock-ensemble separations — mirrors ``suite.jl``
-and ``ensemble.jl``.
+"""Several deviations in one call, and the separation of clocks measured against
+each other.
 
-``stability`` runs a set of deviations on one record in a single Julia call and
-collects them into a ``StabilitySuite``; ``ncornered_hat`` separates per-clock
-deviations from pairwise results (the classic three-cornered hat at N=3) and
-``groslambert`` does the same from the pairwise difference records without
-subtracting variances.
+``stability`` runs a set of estimators on one record and returns a
+``StabilitySuite``. ``ncornered_hat`` gives the deviation of each clock from the
+deviations measured between every pair of them, and ``groslambert`` gives its
+Allan deviation from the difference records themselves.
 """
 
 from __future__ import annotations
@@ -27,9 +26,8 @@ from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult, Stabi
 
 DEFAULT_DEVIATIONS = tuple(str(s) for s in jl.DEFAULT_DEVIATIONS)
 
-# Build a possibly part-filled Julia StabilityResult matrix for the nch matrix
-# form: unassigned cells stay ``undef`` (Julia reads the upper or lower
-# triangle, so only the measured pairs need filling).
+# A Julia matrix for the matrix forms, with the cells that are not given left
+# unassigned: Julia reads either triangle, so only the measured pairs are set.
 _new_result_matrix = jl.seval("n -> Matrix{StabilityResult}(undef, n, n)")
 _new_data_matrix = jl.seval("n -> Matrix{AbstractTimingData}(undef, n, n)")
 _assign_result = jl.seval("(M, r, i, j) -> (M[i, j] = r; nothing)")
@@ -63,13 +61,20 @@ def stability(
     remove_drift: bool = True,
     noise: str | Sequence[str] | PowerLawFit = "auto",
 ) -> StabilitySuite:
-    """Compute several deviations on one record and collect them into a suite.
+    """Several deviations of one record in a single call, as a ``StabilitySuite``
+    indexed by name.
 
-    ``devs`` is a sequence of deviation names (default ``DEFAULT_DEVIATIONS``,
-    the four σ_y quantities ``("adev", "mdev", "hdev", "mhdev")``). ``m`` is a
-    ``TauMode`` grid selector or an explicit sequence of averaging factors;
-    ``ci``/``confidence``, ``correct_bias`` (total family), ``remove_drift``
-    (Hadamard family) and ``noise`` flow through to each deviation.
+    ``devs`` names the estimators to run, from :func:`estimators`. The default
+    is ``DEFAULT_DEVIATIONS``, ``("adev", "mdev", "hdev", "mhdev")``. ``m`` is a
+    ``TauMode`` grid, cut for each estimator at the largest averaging factor it
+    supports, or a sequence of averaging factors that every estimator takes as
+    it stands. ``theo1`` reads such a sequence as even Thêo1 factors and
+    ``theoh`` as factors of τ = m·τ₀, so prefer a ``TauMode`` when the suite
+    mixes them with other estimators.
+
+    ``ci``, ``confidence`` and ``noise`` are those of the estimators.
+    ``correct_bias`` reaches the total estimators and ``theo1``, and
+    ``remove_drift`` the Hadamard family.
     """
     return suite_from_jl(
         jl.stability(
@@ -89,19 +94,28 @@ def stability(
 def ncornered_hat(
     *results: StabilityResult | Sequence[Sequence[StabilityResult | None]],
 ) -> list[StabilityResult]:
-    """N-cornered-hat noise separation (Gray–Allan three-cornered hat at N=3).
+    """Deviation of each of N ≥ 3 clocks from the deviations measured between every
+    pair of them: the three-cornered hat of Gray and Allan (1974) and its
+    extension to N clocks (SP1065 §10.14).
 
-    Two call forms, mirroring the Julia package:
+    Two call forms:
 
-    - ``ncornered_hat(r_ab, r_bc, r_ca)`` — the three-cornered convenience form: the three
-      pairwise deviations in cyclic order A−B, B−C, C−A. Returns ``[A, B, C]``.
-    - ``ncornered_hat(matrix)`` — a square list-of-lists ``matrix[i][j]`` of the pairwise
-      deviation between clocks ``i`` and ``j`` (0-based), with ``None`` where a
-      pair is not filled. Fill either triangle (or both); the orientation of
-      each difference record does not matter.
+    - ``ncornered_hat(r_ab, r_bc, r_ca)``: for three clocks, the results for
+      A−B, B−C and C−A. The clocks are returned in the order A, B, C.
+    - ``ncornered_hat(matrix)``: a square list of lists whose entry ``[i][j]``
+      is the result of an estimator on the difference record of clocks i and j,
+      counted from 0, with ``None`` elsewhere. One entry per pair is enough, in
+      either triangle.
 
-    Every pairwise result must share one ``deviation_type`` and one τ grid.
-    Returns one ``StabilityResult`` per clock, in clock order.
+    The sign of each difference does not matter. All results must come from
+    one estimator on one τ grid, and the estimator must be one whose variance
+    adds for independent clocks, such as ``adev``, ``mdev`` or ``hdev``.
+
+    The estimate can be negative for a clock much more stable than the others,
+    for clocks that are correlated and where few terms are averaged; ``dev``
+    is ``nan`` there. The EDF and the interval are filled when every input has
+    an EDF (Vernotte and Lantz 2019, Appendix B). The interval is too narrow
+    for a clock that is no longer resolved under the others.
     """
     if len(results) == 3:
         separated = jl.ncornered_hat(
@@ -128,19 +142,35 @@ def groslambert(
     confidence: float = DEFAULT_CONFIDENCE,
     interval: str = "chi2",
 ) -> list[StabilityResult]:
-    """Groslambert covariance: each clock's Allan deviation from the pairwise records.
+    """Allan deviation of each of N ≥ 3 clocks from the difference records between
+    them, by the Groslambert covariance: the cross Allan variance of two records
+    that share the clock (Vernotte, Calosso and Rubiola 2016, after Groslambert
+    et al. 1981).
 
-    Two call forms, as for ``ncornered_hat`` but on the difference records
-    themselves (``PhaseData`` or ``FrequencyData``, same τ₀ and length):
+    Two call forms, on ``PhaseData`` or ``FrequencyData`` records with one
+    sample interval and length and no gaps:
 
-    - ``groslambert(x_ab, x_bc, x_ca)`` — the records A−B, B−C, C−A. Returns ``[A, B, C]``.
-    - ``groslambert(matrix)`` — ``matrix[i][j]`` is the record x_i − x_j (0-based),
-      ``None`` where a pair is missing; the transposed entry, negated, stands in.
+    - ``groslambert(x_ab, x_bc, x_ca)``: for three clocks, the records A−B, B−C
+      and C−A. The clocks are returned in the order A, B, C.
+    - ``groslambert(matrix)``: a square list of lists whose entry ``[i][j]`` is
+      the record x_i − x_j, counted from 0, with ``None`` elsewhere. One entry
+      per pair is enough, in either triangle: the entry across the diagonal
+      stands in, with its sign reversed.
 
-    Each result is an ``"adev"`` ``StabilityResult`` with χ² intervals at
-    ``confidence`` from the covariance model of Vernotte & Lantz (2019), or,
-    for three clocks with ``interval="klts"``, the KLTS intervals of Lantz
-    et al. (2019), which hold also for a clock quieter than the others.
+    Noise that each record carries on its own, such as that of the counter
+    that measured it, biases the hat of :func:`ncornered_hat` and averages out
+    of the covariance. Like the hat, the estimate can be negative for a clock
+    much more stable than the others; ``dev`` is ``nan`` there.
+
+    ``m`` is a ``TauMode`` grid or a sequence of averaging factors. Each result
+    is an ``"adev"`` ``StabilityResult`` without noise types.
+
+    ``interval="chi2"`` gives the χ² interval at ``confidence`` on the EDF of
+    the estimate, from the variance model of Vernotte and Lantz (2019,
+    Appendix B). It holds for a clock that dominates its records and is too
+    narrow for a clock that is no longer resolved under the others.
+    ``interval="klts"``, for three clocks, gives the interval of Lantz et al.
+    (2019), which is given also where the estimate is negative.
     """
     kwargs = {"confidence": float(confidence), "interval": jl.Symbol(interval)}
     if len(records) == 3:

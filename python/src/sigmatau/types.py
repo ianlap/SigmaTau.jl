@@ -1,10 +1,8 @@
-"""Shared data records and result types — mirrors ``types.jl``.
+"""The data records and the result types.
 
-``PhaseData``/``FrequencyData`` are the input records; ``StabilityResult``,
-``StabilitySuite``, ``SpectralResult``, and ``DynamicStabilityResult`` are the
-outputs. All are frozen dataclasses with NumPy array fields, matching the Julia
-package's non-parametric ``Vector{Float64}`` design. This module is pure Python
-— importing it does not boot Julia.
+``PhaseData`` and ``FrequencyData`` are the records that the estimators take,
+and the other classes are what they return. All are frozen dataclasses with
+NumPy array fields. Importing this module does not start Julia.
 """
 
 from __future__ import annotations
@@ -17,7 +15,7 @@ import numpy as np
 
 
 def _as_samples(v: object, name: str) -> np.ndarray:
-    """Promote a sample vector to a contiguous 1-D float64 array."""
+    """The samples as a contiguous one-dimensional array of float64."""
     arr = np.ascontiguousarray(v, dtype=np.float64)
     if arr.ndim != 1:
         raise ValueError(f"{name}: expected a 1-D sample vector, got {arr.ndim}-D")
@@ -26,10 +24,15 @@ def _as_samples(v: object, name: str) -> np.ndarray:
 
 @dataclass(frozen=True)
 class PhaseData:
-    """Phase residuals ``x(t)`` sampled at uniform interval ``tau0`` (default 1.0 s).
+    """Phase samples x(t) in seconds at the uniform sample interval ``tau0``: the
+    time deviation of a clock from its reference (IEEE Std 1139-2022, 3.1).
 
-    ``start`` is the time of the first sample in seconds since 2000-01-01T00:00Z,
-    or ``None``; read it as a ``datetime`` with :func:`start_time`."""
+    ``nan`` marks a missing sample, and a record holds at least two samples.
+    ``source`` is ``"user"`` for a record made from an array and the path of
+    the file for a record that was read. ``start`` is the time of the first
+    sample in seconds since 2000-01-01T00:00Z, or ``None``; read it as a
+    ``datetime`` with :func:`start_time`.
+    """
 
     x: np.ndarray
     tau0: float = 1.0
@@ -50,16 +53,20 @@ class PhaseData:
         return f"PhaseData(N={self.x.size}, tau0={self.tau0} s{src})"
 
     def to_frequency(self) -> FrequencyData:
-        """Fractional frequency ``y[k] = (x[k+1] - x[k]) / tau0``: N - 1 samples, and
-        a missing (NaN) phase sample makes the two beside it missing."""
+        """The record as fractional frequency, y[k] = (x[k+1] − x[k])/τ₀: N − 1
+        samples (SP1065 §3.4). A missing phase sample makes the two frequency
+        samples beside it missing."""
         return FrequencyData(np.diff(self.x) / self.tau0, self.tau0, self.source, self.start)
 
 
 @dataclass(frozen=True)
 class FrequencyData:
-    """Fractional-frequency samples ``y(t)`` at uniform interval ``tau0`` (default 1.0 s).
+    """Fractional-frequency samples y(t) = (ν(t) − ν₀)/ν₀, dimensionless, at the
+    uniform sample interval ``tau0`` (IEEE Std 1139-2022, 3.1). Each sample is
+    taken as the average over its interval, with no dead time.
 
-    ``start`` is as for :class:`PhaseData`."""
+    ``nan``, ``source`` and ``start`` are as for :class:`PhaseData`.
+    """
 
     y: np.ndarray
     tau0: float = 1.0
@@ -80,8 +87,9 @@ class FrequencyData:
         return f"FrequencyData(N={self.y.size}, tau0={self.tau0} s{src})"
 
     def to_phase(self) -> PhaseData:
-        """Phase ``x = tau0 * [0, cumsum(y)]``: N + 1 samples from 0. A missing (NaN)
-        frequency sample leaves the later phase unknown, so fill gaps first."""
+        """The record as phase, x[k+1] = x[k] + τ₀·y[k] from x[0] = 0: N + 1 samples
+        (SP1065 §3.4). A missing frequency sample leaves every later phase
+        unknown and raises ``ValueError``: fill it first with ``fillgaps``."""
         if np.isnan(self.y).any():
             raise ValueError(
                 "to_phase: a missing frequency sample leaves the phase after it unknown; "
@@ -95,10 +103,10 @@ _EPOCH = datetime(2000, 1, 1, tzinfo=UTC)
 
 
 def start_time(data: PhaseData | FrequencyData) -> datetime | None:
-    """UTC time of the record's first sample (to the millisecond), or ``None``
-    when the record does not know it. The readers take it from ISO 8601 or MJD
-    timestamps and from the ``# start:`` line ``save`` writes; sample ``i``
-    (0-based) is at ``start_time(data) + i * tau0``."""
+    """UTC time of the first sample of a record, to the millisecond, or ``None``
+    when the record does not carry it. The readers take it from ISO 8601 or MJD
+    timestamps and from the ``# start:`` line that ``save`` writes. Sample
+    ``i``, counted from 0, is at ``start_time(data) + i * tau0``."""
     if data.start is None:
         return None
     return _EPOCH + timedelta(milliseconds=round(data.start * 1000))
@@ -106,13 +114,19 @@ def start_time(data: PhaseData | FrequencyData) -> datetime | None:
 
 @dataclass(frozen=True)
 class StabilityResult:
-    """Unified return type for every stability calculation.
+    """Result of every stability estimator: one deviation per averaging time, with
+    the noise type, the equivalent degrees of freedom and the confidence
+    interval when the estimator was called with ``ci=True``.
 
-    ``noise_type``, ``ci_lower``, ``ci_upper``, and ``edf`` are empty arrays when
-    the calculation was invoked with ``ci=False`` (and always for ``mtie``/
-    ``tierms``); ``neff`` is always populated. ``tau0`` and ``n`` describe the
-    record the result came from (``nan`` and ``0`` when unknown), and
-    ``confidence`` is the level of the intervals (``None`` without them).
+    ``dev`` is dimensionless for the σ_y estimators and in seconds for
+    ``tdev``, ``htdev``, ``ttotdev``, ``mtie`` and ``tierms``. ``ci_lower``,
+    ``ci_upper`` and ``edf`` are empty for a call with ``ci=False``, and always
+    for ``mtie`` and ``tierms``; ``noise_type`` is empty too, unless a bias
+    correction needed the noise type. ``neff``, the number of terms averaged
+    at each τ, is always filled. ``tau0`` and ``n`` are the sample interval
+    and the number of phase samples of the record (``nan`` and 0 when
+    unknown), and ``confidence`` is the level of the interval (``None``
+    without one).
     """
 
     deviation_type: str
@@ -140,9 +154,13 @@ class StabilityResult:
 
 @dataclass(frozen=True)
 class StabilitySuite:
-    """Ordered, name-indexable collection of ``StabilityResult``s + session metadata.
+    """The results of one ``stability`` call: a ``StabilityResult`` per estimator,
+    in the order requested, with the record and grid settings that produced
+    them.
 
-    Index by deviation name (``suite["adev"]``) or position (``suite[0]``).
+    ``suite["adev"]`` returns a result by estimator name and ``suite[0]`` by
+    position. The suite iterates in order and supports ``keys``, ``in`` and
+    ``len``. ``tau_mode`` is the name of the ``TauMode``, or ``"explicit"``.
     """
 
     results: tuple[StabilityResult, ...]
@@ -159,6 +177,7 @@ class StabilitySuite:
         return iter(self.results)
 
     def keys(self) -> tuple[str, ...]:
+        """The names of the estimators, in order."""
         return tuple(r.deviation_type for r in self.results)
 
     def __contains__(self, key: str) -> bool:
@@ -183,10 +202,12 @@ class StabilitySuite:
 
 @dataclass(frozen=True)
 class SpectralResult:
-    """Unified return type for every spectral-density estimate (``Sy``/``Sx``/``L``).
+    """Result of the spectral-density estimates ``psd_y``, ``psd_x`` and
+    ``ssb_phase_noise``: the one-sided frequency grid ``freq`` in Hz, the
+    estimated density ``psd`` and the Welch settings that produced it.
 
-    A flat, non-parametric record: the one-sided frequency grid, the estimated
-    spectrum, and the Welch parameters that produced it.
+    ``spectral_type`` is ``"Sy"``, ``"Sx"`` or ``"L"``, and ``units`` names the
+    unit of ``psd``: ``"per_Hz"``, ``"s2_per_Hz"`` or ``"dBc_per_Hz"``.
     """
 
     spectral_type: str
@@ -208,12 +229,16 @@ class SpectralResult:
 
 @dataclass(frozen=True)
 class DynamicStabilityResult:
-    """Return type of the dynamic (time-resolved) deviations ``dadev``/``dhdev``.
+    """Result of the dynamic deviations ``dadev`` and ``dhdev``: a map σ_y(t, τ) of
+    the deviation computed inside a window of ``window`` phase samples that
+    slides along the record.
 
-    ``dev[i, j]`` is the deviation of analysis window ``i`` (centered at
-    ``t[i]``) at averaging interval ``tau[j]``; ``NaN`` wherever the window is
-    too short to support the averaging factor. No noise-ID/EDF/CI machinery is
-    carried — the literature gives no EDF model for the time-resolved map.
+    Row ``i`` of ``dev`` is the window centered at ``t[i]``, in seconds from
+    the first sample, and column ``j`` the averaging time ``tau[j]``. An entry
+    is ``nan`` where the window is too short for the averaging factor. The
+    result carries no noise type, EDF or interval: Galleani (2011) derives
+    confidence surfaces for the dynamic Allan variance, which are not
+    implemented here.
     """
 
     deviation_type: str
@@ -235,13 +260,15 @@ class DynamicStabilityResult:
 
 @dataclass(frozen=True)
 class DriftFit:
-    """Return type of ``drift_fit``: a frequency drift model fitted to y(t).
+    """Result of ``drift_fit``: a frequency drift model fitted to y(t).
 
-    ``coef`` holds the model parameters with ``t`` in seconds from the first
-    sample (``[a, b]`` for ``"linear"``, ``[a, b, c]`` otherwise; see the Julia
-    docstring for each model's form), ``stderr`` their one-σ errors, ``rate``
-    the drift dy/dt at the end of the record per day with ``rate_stderr``, and
-    ``fit`` the model at each ``t``. The residuals are ``y - fit``.
+    ``coef`` holds the parameters of the model, with t in seconds from the
+    first sample: ``[a, b]`` for ``"linear"`` (a + b·t), and ``[a, b, c]`` for
+    ``"quadratic"`` (a + b·t + c·t²), ``"log"`` (a·ln(1 + b·t) + c) and
+    ``"diffusion"`` (a + b·√(t + c)). ``stderr`` holds their standard errors,
+    ``rate`` the drift rate dy/dt at the end of the record, per day, and
+    ``rate_stderr`` its standard error. ``fit`` is the model at each ``t``,
+    and ``rms`` the rms of the residuals ``y - fit``.
     """
 
     model: str
@@ -260,13 +287,15 @@ class DriftFit:
 
 @dataclass(frozen=True)
 class PowerLawFit:
-    """Return type of ``powerlaw_fit``: the coefficients h_α of S_y(f) = Σ h_α f^α.
+    """Result of ``powerlaw_fit``: the coefficients h_α of the power-law model
+    S_y(f) = Σ h_α f^α, with S_y in 1/Hz, and the fit they give.
 
-    ``source`` names what was fitted (a deviation such as ``"mhdev"``, or a
-    spectrum ``"Sy"``/``"Sx"``/``"L"``); ``x`` is τ in seconds or f in Hz
-    accordingly, ``y`` the measured values and ``fit`` the model at each ``x``.
-    ``tau0`` is the record's sample interval (``nan`` for a spectrum given as
-    points).
+    ``alphas`` holds the exponents, highest first, and ``h`` the coefficient of
+    each. ``source`` names what was fitted: a deviation (``"adev"``,
+    ``"mdev"``, ``"hdev"`` or ``"mhdev"``) or a spectrum (``"Sy"``, ``"Sx"`` or
+    ``"L"``). ``x`` is τ in seconds or f in Hz accordingly, ``y`` the measured
+    values and ``fit`` the model at each ``x``. ``tau0`` is the sample
+    interval of the record, ``nan`` for a spectrum given as points.
     """
 
     alphas: np.ndarray
@@ -284,11 +313,15 @@ class PowerLawFit:
 
 @dataclass(frozen=True)
 class CrossSpectralResult:
-    """Return type of ``cross_psd_y`` / ``cross_psd_x``.
+    """Result of ``cross_psd_y`` and ``cross_psd_x``.
 
-    ``psd`` is the real part of the averaged cross-spectrum (the noise common to
-    both channels) and ``floor`` its residual √(S_aa S_bb / K) after ``K``
-    independent averages; ``psd_a`` and ``psd_b`` are the channels alone.
+    ``psd`` is the real part of the averaged cross-spectrum: the spectrum of
+    the noise common to both channels. ``floor`` is the rms magnitude of the
+    residual that the noise the channels do not share leaves in the average,
+    √(S_aa·S_bb/K), with K the number of segments reduced for the correlation
+    of overlapping ones (Welch 1967). A bin where ``psd`` is not well above
+    the floor is not resolved. ``psd_a`` and ``psd_b`` are the spectra of the
+    channels alone, and ``nseg`` is the number of segments averaged.
     """
 
     spectral_type: str
@@ -311,12 +344,15 @@ class CrossSpectralResult:
 
 @dataclass(frozen=True)
 class CrossStabilityResult:
-    """Return type of ``cross_adev``: the cross Allan variance of two channels.
+    """Result of ``cross_adev``: the cross Allan variance of two channels.
 
-    ``covar`` keeps its sign (negative where the shared noise is below the
-    floor) and ``dev`` is √covar where positive, else ``nan``; ``uncertainty``
-    is the 1σ statistical uncertainty of ``covar``; ``dev_a`` and ``dev_b`` are
-    the channels' own Allan deviations.
+    ``covar`` keeps its sign, negative where the common noise is below the
+    scatter of the estimate, and ``dev`` is √covar where it is positive and
+    ``nan`` elsewhere. ``uncertainty`` is the standard uncertainty of
+    ``covar``, from the covariance model of Vernotte and Lantz (2019):
+    ``covar`` well above it is resolved. ``dev_a`` and ``dev_b`` are the Allan
+    deviations of the channels alone, and ``neff`` is the number of second
+    differences averaged at each τ.
     """
 
     tau: np.ndarray

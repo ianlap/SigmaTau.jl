@@ -1,8 +1,10 @@
-"""sigmatau — clock-stability analysis, Python bindings for SigmaTau.jl.
+"""sigmatau: analysis of clock and oscillator stability, the Python package of SigmaTau.jl.
 
-The public surface mirrors the retired pure-Python port one-to-one (plus the
-estimators it never had); all computation runs in an embedded Julia runtime
-via juliacall, so results are bit-identical to the Julia package.
+Each function calls the Julia function of the same name in a Julia runtime
+inside the Python process, through juliacall, so the numbers are those of the
+Julia package. The names and keywords are the same, and the documentation at
+https://ianlap.github.io/SigmaTau.jl gives the equations, the sources cited in
+these docstrings and what differs between the two languages.
 """
 
 __version__ = "0.6.0"

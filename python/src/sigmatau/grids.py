@@ -1,9 +1,8 @@
-"""Averaging-factor grids — thin delegation to Julia's ``grids.jl``.
+"""Grids of averaging factors.
 
-``TauMode`` selects the averaging-factor spacing; ``tau_values`` resolves it to
-a concrete integer grid bounded by each kernel's algorithmic m-max. Resolution
-happens in Julia, so the grids are guaranteed identical to Julia's —
-including the theo1 even-rounding and the theoh/tierms m-max rules.
+A ``TauMode`` names the spacing of a grid, and ``tau_values`` gives its
+averaging factors for a record length and an estimator. Julia builds the
+grid, so it is the one the estimators use.
 """
 
 from __future__ import annotations
@@ -14,7 +13,15 @@ from ._julia import _map_errors, jl
 
 
 class TauMode(Enum):
-    """Averaging-factor grid spacing. Mirrors the Julia ``@enum TauMode``."""
+    """Spacing of the averaging-factor grid: every integer (``AllTaus``), or
+    successive factors in the ratio 2 (``Octave``, the default of every
+    estimator), √2 (``HalfOctave``), 2^(1/4) (``QuarterOctave``), 10
+    (``Decade``) or √10 (``HalfDecade``).
+
+    The geometric grids are rounded to integers, duplicates are dropped, and
+    each grid stops at the largest factor the estimator supports for the
+    record length.
+    """
 
     AllTaus = "AllTaus"
     Octave = "Octave"
@@ -24,7 +31,7 @@ class TauMode(Enum):
     HalfDecade = "HalfDecade"
 
 
-# Module-level singletons so callers write `adev(pd, Octave)`, matching Julia.
+# The instances by name, so that a call reads `adev(pd, Octave)` as in Julia.
 AllTaus = TauMode.AllTaus
 Octave = TauMode.Octave
 HalfOctave = TauMode.HalfOctave
@@ -38,7 +45,13 @@ _JL_TAUMODE = {mode: getattr(jl, mode.name) for mode in TauMode}
 
 @_map_errors
 def tau_values(mode: TauMode, n: int, kernel: str) -> list[int]:
-    """Averaging factors ``m`` (τ = m·τ₀) for ``mode``, bounded by ``kernel``'s m-max."""
+    """Averaging factors m (τ = m·τ₀) of the grid ``mode`` for a record of ``n``
+    phase samples, up to the largest that the estimator ``kernel`` (``"adev"``,
+    ``"mdev"``, …) supports.
+
+    For ``"theo1"``, which takes even factors only, odd entries are rounded up
+    to the next even value. A ``"theoh"`` grid is in units of τ = m·τ₀.
+    """
     return [int(m) for m in jl.tau_values(_JL_TAUMODE[mode], int(n), jl.Symbol(str(kernel)))]
 
 

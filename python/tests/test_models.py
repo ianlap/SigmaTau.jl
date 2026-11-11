@@ -75,6 +75,40 @@ def test_powerlaw_fit_spectrum_forms(small_phase, jl):
         st.powerlaw_fit([1.0, 2.0])
 
 
+def test_powerlaw_fit_of_a_result(jl):
+    pd = st.noise_gen(PhaseData, 4096, 1.0, h={0: 1e-24, -2: 1e-30}, rng=11)
+    f = st.powerlaw_fit(st.mhdev(pd))
+    direct = _convert.powerlaw_from_jl(
+        jl.seval("d -> powerlaw_fit(mhdev(d))")(_convert.to_jl_data(pd))
+    )
+    assert f.source == "mhdev" and f.tau0 == 1.0
+    np.testing.assert_array_equal(f.h, direct.h)
+    np.testing.assert_array_equal(f.fit, direct.fit)
+    with pytest.raises(ValueError):
+        st.powerlaw_fit(st.totdev(pd, [1, 2, 4]))  # no model of the total deviation
+
+
+def test_powerlaw_curves_of_a_model_and_a_noise_fit(jl):
+    tau, f = [1.0, 16.0, 256.0], [1e-3, 1e-2, 1e-1]
+    jtau, jf = _convert.to_jl_f64(tau), _convert.to_jl_f64(f)
+    m = st.ClockModel(1.0, R=1e-22, q1=1e-24, q2=1e-30, flicker_fm=1.6e-26)
+    np.testing.assert_array_equal(
+        st.powerlaw_sigma(m, tau), np.array(jl.powerlaw_sigma(m._jl(), jtau))
+    )
+    np.testing.assert_array_equal(st.powerlaw_psd(m, f), np.array(jl.powerlaw_psd(m._jl(), jf)))
+    # White FM alone: σ_y(τ) = √(q₁/τ) and S_y = 2q₁.
+    white = st.ClockModel(1.0, q1=1e-24)
+    np.testing.assert_allclose(st.powerlaw_sigma(white, [1.0, 4.0]), [1e-12, 5e-13], rtol=1e-12)
+    np.testing.assert_allclose(st.powerlaw_psd(white, f), 2e-24, rtol=1e-12)
+    # A noise fit is read as its components, at the sample interval of its result.
+    nf = st.noise_fit(st.adev(st.noise_gen(PhaseData, 4096, 1.0, h={0: 1e-24}, rng=3)))
+    h = nf.add_component("WHFM", slice(0, 6)).components[0][1]
+    np.testing.assert_allclose(
+        st.powerlaw_sigma(nf, tau), st.powerlaw_sigma({0: h}, tau, tau0=1.0), rtol=1e-12
+    )
+    np.testing.assert_array_equal(st.powerlaw_psd(nf, f), np.array(jl.powerlaw_psd(nf._jl, jf)))
+
+
 @pytest.fixture(scope="module")
 def two_channels():
     dut = st.noise_gen(FrequencyData, 2048, 1.0, h={0: 1e-24}, rng=2).y

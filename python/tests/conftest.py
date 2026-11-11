@@ -1,8 +1,8 @@
 """Shared session-scoped fixtures for the sigmatau test suite.
 
-The Julia runtime boots once per session (``import sigmatau`` is slow), so every
-fixture here is ``scope="session"``. Records are deterministic — no RNG — unless
-a test seeds ``noise_gen`` explicitly.
+The Julia runtime starts once per session (``import sigmatau`` is slow), so every
+fixture here is ``scope="session"``. The records are deterministic, without
+random numbers, unless a test seeds ``noise_gen``.
 """
 
 from __future__ import annotations

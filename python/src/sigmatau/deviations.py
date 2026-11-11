@@ -1,23 +1,19 @@
-"""Deviation wrappers: each calls the identically-named Julia function and
-down-converts the returned ``StabilityResult``.
+"""The stability estimators.
 
-``m`` accepts a ``TauMode`` grid selector (default ``Octave``) or an
-explicit sequence of integer averaging factors; noise ID + χ² confidence
-bounds are computed unless ``ci=False``; the total family applies bias
-correction by default (``correct_bias=True``; ``"published"`` keeps to the
-published tables, ``"stable32"`` does what Stable32 does for each estimator,
-``False`` returns the raw statistic, as allantools does); the Hadamard family identifies
-noise on the record less its frequency drift by default (``remove_drift=True``;
-``False`` uses the record as given, as Stable32 does). ``noise`` states the
-noise type behind the EDF and the bias factor in place of identifying it
-(``"auto"``): one type for every τ (``"WHFM"``), a sequence with one per
-averaging factor, or a ``PowerLawFit``, whose strongest term at each τ is taken.
-``mtie``/``tierms`` have no CI model — their ``ci``/``confidence`` kwargs are
-accepted and ignored, matching the Julia surface.
+Each takes a ``PhaseData`` or ``FrequencyData`` record and ``m``, a ``TauMode``
+grid (``Octave`` by default) or a sequence of averaging factors, and returns a
+``StabilityResult``. The docstring of each ends with the keywords that it
+shares with the others: ``ci`` and ``noise``, ``remove_drift`` in the Hadamard
+family, and ``correct_bias`` in the total estimators and ``theo1``.
+
+``mtie`` and ``tierms`` report no interval; they accept ``ci`` and
+``confidence`` and ignore them.
 """
 
 from __future__ import annotations
 
+import inspect
+import textwrap
 from collections.abc import Sequence
 
 from ._convert import powerlawfit_to_jl, resolve_m, result_from_jl, to_jl_data, to_jl_syms
@@ -28,8 +24,46 @@ from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult
 DEFAULT_CONFIDENCE = float(jl.DEFAULT_CONFIDENCE)
 
 
+# The keywords that the estimators share. `_estimator` adds to the docstring of
+# each estimator those that it takes.
+_KEYWORDS = {
+    "ci": (
+        "Identify the noise type at each τ and report the equivalent degrees of "
+        "freedom (EDF) and a χ² confidence interval at ``confidence``. ``False`` "
+        "computes the deviation alone."
+    ),
+    "correct_bias": (
+        '``True`` removes the bias of the estimator. ``"published"`` keeps to the '
+        'published definitions and tables, ``"stable32"`` does what Stable32 does '
+        "for that estimator, and ``False`` returns the uncorrected value."
+    ),
+    "remove_drift": (
+        "Identify the noise on the record less its frequency drift. ``False`` uses "
+        "the record as given, as Stable32 does."
+    ),
+    "noise": (
+        'The noise type that sets the EDF and the bias factor. ``"auto"`` identifies '
+        'it at each τ. A name such as ``"WHFM"`` states one type for every τ, a '
+        "sequence one per averaging factor, and a ``PowerLawFit`` gives its "
+        "strongest term at each τ."
+    ),
+}
+
+
+def _estimator(fn):
+    """Add to the docstring of an estimator the shared keywords that it takes."""
+    if fn.__doc__:
+        entries = [
+            f"``{name}``\n" + textwrap.indent(textwrap.fill(_KEYWORDS[name], 75), "    ")
+            for name in inspect.signature(fn).parameters
+            if name in _KEYWORDS
+        ]
+        fn.__doc__ = inspect.cleandoc(fn.__doc__) + "\n\n" + "\n".join(entries)
+    return fn
+
+
 def _noise(noise: str | Sequence[str] | PowerLawFit):
-    """``noise`` for Julia: ``"auto"`` or one noise type as a Symbol, one per
+    """``noise`` for Julia: ``"auto"`` or one noise type as a Symbol, one type per
     averaging factor as a ``Vector{Symbol}``, or a ``PowerLawFit``."""
     if isinstance(noise, str):
         return jl.Symbol(noise)
@@ -43,10 +77,11 @@ def _bias(correct_bias: bool | str):
 
 @_map_errors
 def _run(jlfn, data, m, **kwargs) -> StabilityResult:
-    """Shared call path: convert inputs, call Julia, down-convert the result."""
+    """Convert the arguments, call the Julia estimator and convert its result."""
     return result_from_jl(jlfn(to_jl_data(data), resolve_m(m), **kwargs))
 
 
+@_estimator
 def adev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -56,8 +91,12 @@ def adev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Allan deviation σ_y(τ): overlapping, or the original non-overlapped one with
-    ``overlapping=False`` (allantools' ``adev``, Stable32's Normal Allan)."""
+    """Overlapping Allan deviation σ_y(τ) (IEEE Std 1139-2022, Eq. (A.23); SP1065 §5.2.4).
+
+    ``overlapping=False`` gives the non-overlapped estimator of SP1065 §5.2.2
+    (Stable32's Normal Allan deviation, allantools' ``adev``), which needs a
+    record without gaps.
+    """
     return _run(
         jl.adev,
         data,
@@ -69,6 +108,7 @@ def adev(
     )
 
 
+@_estimator
 def mdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -77,10 +117,11 @@ def mdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Modified Allan deviation Mod σ_y(τ)."""
+    """Modified Allan deviation Mod σ_y(τ) (IEEE Std 1139-2022, Eq. (A.27); SP1065 §5.2.5)."""
     return _run(jl.mdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
+@_estimator
 def tdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -89,10 +130,12 @@ def tdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Time deviation σ_x(τ) = (τ/√3)·Mod σ_y(τ). Units of seconds."""
+    """Time deviation σ_x(τ) = (τ/√3)·Mod σ_y(τ), in seconds (IEEE Std 1139-2022,
+    Eq. (A.29); SP1065 §5.2.6)."""
     return _run(jl.tdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
+@_estimator
 def hdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -103,8 +146,13 @@ def hdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Hadamard deviation: overlapping, or non-overlapped with ``overlapping=False``
-    (allantools' ``hdev``, Stable32's Normal Hadamard)."""
+    """Overlapping Hadamard deviation (SP1065 §5.2.9), which ignores linear
+    frequency drift.
+
+    ``overlapping=False`` gives the non-overlapped estimator of SP1065 §5.2.8
+    (Stable32's Normal Hadamard deviation, allantools' ``hdev``), which needs a
+    record without gaps.
+    """
     return _run(
         jl.hdev,
         data,
@@ -117,6 +165,7 @@ def hdev(
     )
 
 
+@_estimator
 def mhdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -126,7 +175,7 @@ def mhdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Modified Hadamard deviation."""
+    """Modified Hadamard deviation Mod σ_H(τ) (SP1065 §5.2.10; Bregni and Jmoda 2006)."""
     return _run(
         jl.mhdev,
         data,
@@ -138,6 +187,7 @@ def mhdev(
     )
 
 
+@_estimator
 def htdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -147,7 +197,12 @@ def htdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Hadamard time deviation σ_x,HT(τ) = (τ/√(10/3))·Mod σ_y,MH(τ). Units of seconds."""
+    """Hadamard time deviation (τ/√(10/3))·Mod σ_H(τ), in seconds: the time-stability
+    form of ``mhdev``, as ``tdev`` is of ``mdev``.
+
+    The statistic is defined in this package: SP1065 and IEEE Std 1139-2022
+    define no Hadamard time deviation.
+    """
     return _run(
         jl.htdev,
         data,
@@ -159,6 +214,7 @@ def htdev(
     )
 
 
+@_estimator
 def pdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -167,10 +223,12 @@ def pdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Parabolic deviation σ_PDEV(τ) (Vernotte). PDEV(τ₀) ≡ ADEV(τ₀)."""
+    """Parabolic deviation (Vernotte, Lenczner, Bourgeois and Rubiola 2016). At m = 1
+    it is the Allan deviation by definition. The record must have no gaps."""
     return _run(jl.pdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
+@_estimator
 def theoh(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -179,7 +237,12 @@ def theoh(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """ThêoH composite σ_y(τ) (SP1065 §5.2.16): overlapping ADEV at short τ, ThêoBR beyond."""
+    """ThêoH: the overlapping Allan deviation up to a fifth of the record length and
+    ThêoBR, the bias-removed Thêo1, beyond it (Howe 2006; SP1065 §5.2.16).
+
+    The crossover is that of SP1065; Howe (2006) places it at a tenth. The
+    record must have no gaps.
+    """
     return _run(jl.theoh, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
 
 
@@ -190,10 +253,11 @@ def mtie(
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Maximum Time Interval Error (ITU-T G.810). Units of seconds.
+    """Maximum time interval error, in seconds: the largest peak-to-peak phase
+    excursion within any window of m + 1 samples (ITU-T G.810; SP1065 §5.2.17).
 
-    MTIE has no published EDF/CI model, so ``ci``/``confidence`` are accepted for
-    signature uniformity but are no-ops (the result always has empty CI fields).
+    MTIE is a peak statistic and has no χ² interval. ``ci`` and ``confidence``
+    are accepted, so that every estimator can be called alike, and ignored.
     """
     return _run(jl.mtie, data, m, ci=ci, confidence=float(confidence))
 
@@ -205,14 +269,16 @@ def tierms(
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """RMS Time Interval Error (TIE rms, SP1065 §5.2.18). Units of seconds.
+    """RMS time interval error, in seconds: the rms phase change over τ
+    (SP1065 §5.2.18; ITU-T G.810).
 
-    Like ``mtie``, TIE rms has no published EDF/CI model, so ``ci``/``confidence``
-    are accepted for signature uniformity but are no-ops (empty CI fields).
+    It includes any frequency offset in the record. Like ``mtie`` it has no χ²
+    interval, and ``ci`` and ``confidence`` are accepted and ignored.
     """
     return _run(jl.tierms, data, m, ci=ci, confidence=float(confidence))
 
 
+@_estimator
 def totdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -222,7 +288,10 @@ def totdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Total deviation (Howe / SP1065 mean-flip extension)."""
+    """Total deviation: an estimator of the Allan deviation with more degrees of
+    freedom at long τ, from the record extended at each end by reflection about
+    the end sample (Greenhall et al. 1999; SP1065 §5.2.11). The record must have
+    no gaps."""
     return _run(
         jl.totdev,
         data,
@@ -234,6 +303,7 @@ def totdev(
     )
 
 
+@_estimator
 def mtotdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -243,7 +313,8 @@ def mtotdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Modified Total deviation (Greenhall extension)."""
+    """Modified total deviation, the total form of ``mdev`` (Howe and Vernotte 1999;
+    Howe and Peppler 2001; SP1065 §5.2.12). The record must have no gaps."""
     return _run(
         jl.mtotdev,
         data,
@@ -255,6 +326,7 @@ def mtotdev(
     )
 
 
+@_estimator
 def ttotdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -264,7 +336,8 @@ def ttotdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Time Total deviation σ_x(τ) = (τ/√3)·Mod-Total σ_y(τ). Units of seconds."""
+    """Time total deviation (τ/√3)·Mod σ_total(τ), in seconds: the time-stability
+    form of ``mtotdev`` (Howe and Peppler 2001; SP1065 §5.2.13)."""
     return _run(
         jl.ttotdev,
         data,
@@ -276,6 +349,7 @@ def ttotdev(
     )
 
 
+@_estimator
 def htotdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -286,7 +360,8 @@ def htotdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Hadamard Total deviation (Greenhall extension on y = diff(x))."""
+    """Hadamard total deviation, the total form of ``hdev`` (Howe et al. 2005;
+    SP1065 §5.2.14). The record must have no gaps."""
     return _run(
         jl.htotdev,
         data,
@@ -299,6 +374,7 @@ def htotdev(
     )
 
 
+@_estimator
 def theo1(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -308,7 +384,14 @@ def theo1(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Thêo1 deviation (SP1065 §5.2.15) — extends the usable τ range to 75 % of the record span."""
+    """Thêo1 deviation, with its bias removed by default (ThêoBR): an estimator of
+    the Allan deviation out to 75 % of the record length (Howe and Peppler 2003;
+    SP1065 §5.2.15 and §5.2.16).
+
+    ``m`` holds even Thêo1 factors, and the result reports τ = 0.75·m·τ₀.
+    ``correct_bias=False`` returns Thêo1 uncorrected. The record must have no
+    gaps.
+    """
     return _run(
         jl.theo1,
         data,
@@ -320,6 +403,7 @@ def theo1(
     )
 
 
+@_estimator
 def mhtotdev(
     data: PhaseData | FrequencyData,
     m: TauMode | Sequence[int] = Octave,
@@ -330,7 +414,12 @@ def mhtotdev(
     noise: str | Sequence[str] | PowerLawFit = "auto",
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
-    """Modified Hadamard Total deviation (SigmaTau-original; Greenhall methodology)."""
+    """Modified Hadamard total deviation, the total form of ``mhdev``.
+
+    The construction, its bias and its EDF are defined in this package.
+    Vernotte and Howe (2000) outline a related total form of the same
+    variance. The record must have no gaps.
+    """
     return _run(
         jl.mhtotdev,
         data,
@@ -343,6 +432,7 @@ def mhtotdev(
     )
 
 
+@_estimator
 @_map_errors
 def deviation(
     name: str,
@@ -355,11 +445,12 @@ def deviation(
     remove_drift: bool = True,
     noise: str | Sequence[str] | PowerLawFit = "auto",
 ) -> StabilityResult:
-    """Run the estimator called ``name`` (any name from :func:`estimators`).
+    """Run the estimator called ``name``, any name from :func:`estimators`.
 
-    ``correct_bias`` applies to the total family and ``remove_drift`` to the
-    Hadamard family; each is ignored elsewhere, so one call shape works for
-    every estimator. ``noise`` states the noise type, as in :func:`adev`.
+    ``correct_bias`` reaches the total estimators and ``theo1``, and
+    ``remove_drift`` the Hadamard family. Each is ignored elsewhere, so one
+    call serves every estimator. The non-overlapped forms are reached through
+    :func:`adev` and :func:`hdev`.
     """
     return result_from_jl(
         jl.deviation(
@@ -376,10 +467,12 @@ def deviation(
 
 
 def estimators() -> list[dict]:
-    """The estimators :func:`deviation` accepts, one dict per estimator.
+    """The estimators that :func:`deviation` and :func:`stability` run, one dict each.
 
-    Keys: ``name``, ``label``, ``family``, ``axis``, ``correct_bias`` and
-    ``description``, as in the Julia registry.
+    Keys: ``name``, ``label``, ``family`` (``"allan"``, ``"total"``, ``"theo"``
+    or ``"time"``), ``axis`` (``"sigma_y"``, or ``"sigma_x"`` for seconds),
+    ``correct_bias`` (whether that keyword applies) and ``description``. The
+    dynamic deviations ``dadev`` and ``dhdev`` are not listed.
     """
     return [
         {

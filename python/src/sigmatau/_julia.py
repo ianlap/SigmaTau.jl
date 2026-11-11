@@ -12,11 +12,10 @@ import os
 import sys
 import warnings
 
-# juliacall reads its configuration from the environment at import time: signal
-# handling must be Julia's (or Ctrl-C during a long kernel can crash the
-# process), and the thread count must be >1 or the threaded total-family
-# kernels (mtotdev/htotdev/mhtotdev) run serial, ~3-4x slower. Explicit user
-# settings are respected.
+# juliacall reads its configuration from the environment at import time. Signal
+# handling must be Julia's, or Ctrl-C during a long call can crash the process,
+# and Julia needs more than one thread for the threaded loops of the total and
+# Thêo estimators. Settings the user has made are kept.
 if "juliacall" in sys.modules:
     warnings.warn(
         "juliacall was imported before sigmatau, so sigmatau could not "
@@ -30,7 +29,7 @@ else:
         warnings.warn(
             "PYTHON_JULIACALL_HANDLE_SIGNALS="
             f"{os.environ['PYTHON_JULIACALL_HANDLE_SIGNALS']!r}; sigmatau "
-            "expects 'yes' — Ctrl-C during a Julia call may crash the process.",
+            "expects 'yes': Ctrl-C during a Julia call may crash the process.",
             stacklevel=2,
         )
     os.environ.setdefault("PYTHON_JULIACALL_HANDLE_SIGNALS", "yes")
@@ -47,13 +46,13 @@ jl.seval("import Random")
 
 # Conversion targets and helpers, seval'd once. `juliacall.convert` needs the
 # Julia type objects; the lambdas cover constructs attribute access can't reach.
+Char = jl.seval("Char")
 VecF64 = jl.seval("Vector{Float64}")
 VecInt = jl.seval("Vector{Int}")
 VecStr = jl.seval("Vector{String}")
 VecResult = jl.seval("Vector{StabilityResult}")
 DictIntF64 = jl.seval("Dict{Int,Float64}")
 _to_syms = jl.seval("v -> Symbol.(v)")  # Vector{String} -> Vector{Symbol}
-_char = jl.seval("only")  # 1-char str -> Char at the io boundary
 
 # Rebuild a Julia StabilityResult from unpacked Python fields (save/ncornered_hat).
 _make_result = jl.seval("""

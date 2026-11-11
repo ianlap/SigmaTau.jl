@@ -1,4 +1,4 @@
-"""Frequency drift models — mirrors ``drift.jl``."""
+"""Frequency drift models."""
 
 from __future__ import annotations
 
@@ -11,12 +11,19 @@ DRIFT_MODELS = tuple(str(m) for m in jl.seval("SigmaTau.DRIFT_MODELS"))
 
 @_map_errors
 def drift_fit(data: PhaseData | FrequencyData, *, model: str = "linear") -> DriftFit:
-    """Fit a frequency drift model to a record, as Stable32's Drift function does.
+    """Least-squares fit of a frequency drift model to the frequency of a record.
 
-    ``model`` is ``"linear"``, ``"quadratic"``, ``"log"`` (the MIL-PRF-55310
-    aging model a·ln(1 + b·t) + c) or ``"diffusion"`` (a + b·√(t + c)). Phase
-    records are differenced to frequency first; ``nan`` samples are skipped.
-    The standard errors assume white residuals.
+    ``model`` is ``"linear"`` (a + b·t), ``"quadratic"`` (a + b·t + c·t²),
+    ``"log"`` (a·ln(1 + b·t) + c, the stabilization of an oscillator) or
+    ``"diffusion"`` (a + b·√(t + c)), with t in seconds from the first sample.
+    The linear, log and diffusion models are those of SP1065 §5.22 and of
+    Stable32's Drift function.
+
+    A phase record is differenced to frequency first, and ``nan`` samples are
+    skipped. The result gives the parameters, their standard errors and the
+    drift rate at the end of the record, per day. The standard errors assume
+    white residuals and are too small otherwise, as on a record with flicker
+    FM or random-walk FM.
     """
     return driftfit_from_jl(jl.drift_fit(to_jl_data(data), model=jl.Symbol(str(model))))
 

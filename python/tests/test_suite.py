@@ -1,4 +1,4 @@
-"""StabilitySuite behaviour: keys, indexing, iteration, ci=False, and parity."""
+"""StabilitySuite behavior: keys, indexing, iteration, ci=False, and parity."""
 
 from __future__ import annotations
 
