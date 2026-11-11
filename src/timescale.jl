@@ -188,9 +188,12 @@ Form a timescale from the clocks in `cc`. At each sample every clock's
 phase against the scale is predicted from the last one and its estimated
 frequency, and the scale is placed so that the weighted prediction errors
 sum to zero. A clock without a reading keeps its prediction and drops out
-of the average for that sample; a clock joins at its first reading. Each
-clock's frequency starts at its least-squares slope over the first 10 % of
-the record, less the mean slope.
+of the average for that sample. A clock joins at its first reading; in
+`:ewfa`, `:at1` and `:at2` it joins again at the first reading after a gap:
+its phase is taken from the scale and it has no part in the average at that
+sample, so the scale does not step when it comes back (the papers give no
+rule for a returning clock). Each clock's frequency starts at its
+least-squares slope over the first 10 % of the record, less the mean slope.
 
 - `:ewfa`, equal-weights frequency averaging, section 3.1 of
   [kettering-2023-clock-ensemble](@cite): every clock weighs the same, and the
@@ -199,7 +202,7 @@ the record, less the mean slope.
   mean of the clocks' phases. Gaps are not in the thesis: here a clock without
   a reading keeps its prediction (its last frequency step carried on) and
   drops out of the average for that sample, so the scale does not jump when a
-  clock drops out, as the plain mean would.
+  clock drops out or comes back, as the plain mean would.
 - `:at1`, the NIST scale as Weiss & Weissert describe it
   [weiss-weissert-1991-at2](@cite) (equation numbers are the paper's):
   weights ``w_i = ε_x²/ε_i²`` (3), with ``ε_x² = (Σ 1/ε_i²)⁻¹`` (4), where
@@ -266,7 +269,10 @@ the record, less the mean slope.
   is the white PM of a clock's reading against the reference, so every
   difference carries the reference's noise (correlated), where JT83 takes
   independent errors in each difference. JT83's error
-  detection, step corrections and drift state are not part of it.
+  detection, step corrections and drift state are not part of it. A missing
+  reading drops its row of the measurement matrix, as in JT83, which gives no
+  rule for the scale: it steps by the clock's prediction error when a clock
+  comes back from a gap or joins late, where `:greenhall` does not.
 - `:stein`, Stein's Kalman timescale [stein-2003-demystified](@cite), the
   KAS-2 algorithm [levine-2012-statistical-modeling, erickson-2011-symmetricom-time-scale](@cite),
   with one [`ClockModel`](@ref) per clock in `models`. Each clock has phase,
@@ -283,10 +289,15 @@ the record, less the mean slope.
   the pivot as for `:greenhall`. Departures from the paper: the shock variances
   are `qτ` (no cross terms between the states, as in the paper's shock model,
   where `:greenhall` integrates them), a clock without a reading in a step is
-  predicted from its difference state and the weights run over the clocks read,
-  and the paper's independent difference filters ignore the correlation of
+  predicted from its difference state and the weights run over the clocks read
+  (less a clock at its first reading after a gap, whose innovation spans the
+  gap: it has no part in the pivot's shock, so the scale does not step at its
+  return), and the paper's independent difference filters ignore the correlation of
   their innovations through the pivot, so the scale differs a little with the
   pivot. With white FM clocks it matches `:greenhall` to a few percent at every τ.
+  The pivot should be read throughout: while it has no reading no difference
+  is measured, every clock runs on its prediction, and the scale steps when
+  the pivot returns.
 
 AT1 keywords:
 
@@ -331,7 +342,8 @@ AT1 keywords:
   flagged). The clock-minus-scale variance is
   less than the sum of the two when the clock is in the scale, so the sum is
   conservative, as in the paper. A clock is
-  not tested over windows that reach into its exclusion. The paper's constant is 4, which gives about one false step per
+  not tested over windows that reach into its exclusion or behind the sample
+  it joined at. The paper's constant is 4, which gives about one false step per
   3×10⁴ clock-samples on the noisier clocks of a step-free ensemble (53 in 24
   runs of four clocks and 16384 samples, none at 5 or 6); a false step
   excludes the clock for its τ_min and raises its ε², which shifts the
@@ -399,7 +411,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     any(ok) || throw(ArgumentError("timescale: no clock has a first reading"))
     u = -sum(r[1, ok]) / count(ok)
     X[1, :] = r[1, :] .+ u
-    seen = copy(ok)             # a clock joins the scale at its first reading
+    seen = copy(ok)             # read at the last sample; a clock joins at a reading that follows none
     y = _initial_frequency(cc)
     # AT2: the random-walk FM impulse σ_β²τ of each clock from its τ_min through
     # the steady state m(m+1) = σα²/(σ_β²τ) (eq 18), and the frequency variance P
@@ -413,6 +425,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
     Lmax = [lmax === nothing ? max(4, round(Int, t / τ)) : Int(lmax) for t in τmin]
     ε²h, yh, Pfh = zeros(N, k), zeros(N, k), zeros(N, k)
     blocked, replay = zeros(Int, k), 0
+    joined = ones(Int, k)       # the sample each clock last joined at: no step window reaches behind it
     # :real keeps what was issued: rows are copied out once, after a rerun
     # continued from the last issued phase (the correction steers forward).
     real = mode === :real
@@ -434,7 +447,9 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
             n == blocked[i] + 1 && (ε²[i] *= step_inflate)   # back in, with σα raised
         end
         x̂ = X[n-1, :] .+ y .* τ
-        use = isfinite.(r[n, :]) .& seen .& (n .> blocked)
+        read = isfinite.(r[n, :])
+        use = read .& seen .& (n .> blocked)
+        any(use) || (use = read .& (n .> blocked))      # every clock read is back from a gap
         if at1 && isfinite(outlier) && n > 2 && any(use)
             # The median prediction error places the scale for the test, so
             # that one clock's jump cannot carry it.
@@ -444,6 +459,7 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
         end
         if !any(use)
             X[n, :] = x̂
+            seen = read
             n += 1
             continue
         end
@@ -453,10 +469,10 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
         _cap_weights!(wu, max(Float64(wmax), 1 / count(use)))
         u = sum(wu[use] .* (x̂[use] .- r[n, use]))
         for i in 1:k
-            if isfinite(r[n, i]) && !seen[i]
+            if read[i] && !seen[i] && !use[i]
                 X[n, i] = r[n, i] + u
-                seen[i] = true
-            elseif isfinite(r[n, i])
+                joined[i] = n
+            elseif read[i]
                 X[n, i] = r[n, i] + u
                 E[n, i] = X[n, i] - x̂[i]
                 # A clock kept out after a step is still estimated, so that it
@@ -483,19 +499,19 @@ function timescale(cc::ClockComparisons; algorithm::Symbol=:at1,
                 X[n, i] = x̂[i]
             end
         end
+        seen = read
         Y[n, :] = y
         W[n, :] = wu
         if mode !== :none && n > replay
-            n0, i0 = _at2_step(X, yh, Pfh, ε², σβτ, use, blocked, Lmax, n, τ, step_threshold)
+            n0, i0 = _at2_step(X, yh, Pfh, ε², σβτ, use, max.(blocked .+ 1, joined), Lmax, n, τ, step_threshold)
             if i0 > 0       # a frequency step: rerun from its start without that clock
                 blocked[i0] = n0 + max(1, round(Int, τmin[i0] / τ))
                 replay = n
                 pending = real
                 ε², y, Pf = ε²h[n0, :], yh[n0, :], Pfh[n0, :]
                 Pf[i0] = ε²[i0] / τ^2          # P raised at the step
-                for i in 1:k
-                    seen[i] = any(isfinite, view(r, 1:n0, i))
-                end
+                seen = isfinite.(r[n0, :])
+                joined .= min.(joined, n0)
                 n = n0 + 1
                 continue
             end
@@ -526,7 +542,7 @@ end
 # variance σβτ (s+1)(2s+1)/(6s)). σαx² and σβτx combine the clocks' levels as in eqs 21-22,
 # with σβτ the paper's σβ²τ. Returns (start sample, clock) of the window with
 # the largest ratio above `thr`, or (0, 0).
-function _at2_step(X, yh, Pfh, ε², σβτ, use, blocked, Lmax, n, τ, thr)
+function _at2_step(X, yh, Pfh, ε², σβτ, use, from, Lmax, n, τ, thr)
     σαx⁻, σβx⁻ = 0.0, 0.0
     for j in eachindex(use)
         use[j] || continue
@@ -537,7 +553,7 @@ function _at2_step(X, yh, Pfh, ε², σβτ, use, blocked, Lmax, n, τ, thr)
     for i in eachindex(use)
         use[i] || continue
         σα² = ε²[i] / τ^2
-        for s in 2:min(Lmax[i] - 1, n - max(1, blocked[i] + 1))
+        for s in 2:min(Lmax[i] - 1, n - from[i])
             n0 = n - s
             var = Pfh[n0, i] + (σα² + 1 / σαx⁻) / s + (σβτ[i] + 1 / σβx⁻) * (s + 1) * (2s + 1) / (6s)
             z = abs((X[n, i] - X[n0, i]) / (s * τ) - yh[n0, i]) / sqrt(var)
@@ -749,10 +765,15 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
                 end
             end
             xs = xs⁻
+            # A clock back from a gap joins anew: its innovation spans the gap,
+            # not one interval, and has no part in the pivot's shock (all of
+            # them have, when every clock read is back from a gap).
+            kept = [i for i in use if isfinite(cc.x[n-1, i])]
+            isempty(kept) && (kept = use)
             if live && length(use) >= 2
                 for m in 1:ns
-                    w = _inverse_weights(V[m, :], use, wmax)
-                    xs[m] -= sum(w[i] * K[m, i] * ν[i] for i in use)
+                    w = _inverse_weights(V[m, :], kept, wmax)
+                    xs[m] -= sum(w[i] * K[m, i] * ν[i] for i in kept)
                     m == 1 && (W[n, :] .= w)
                 end
             elseif n > 1
