@@ -145,6 +145,10 @@ Clock models, the Kalman filter and timescales.
   a phase record through the loop on one Kalman filter pass, and
   `steer(model, gains)` predicts the steady-state RMS of phase, frequency
   and steers and the Allan deviation of the steered clock. Also in Python.
+- `lqg_gains`: steering gains that minimize a quadratic cost in phase,
+  frequency and steer, the linear quadratic Gaussian design (Koppang &
+  Leland 1999); it reproduces the three designs that paper prints. Also in
+  Python.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
