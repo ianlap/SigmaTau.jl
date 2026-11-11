@@ -32,6 +32,7 @@ const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const STEPS = ["best", "real"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
+const DRIFT_METHODS = [String(m) for m in SigmaTau.DRIFT_METHODS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
@@ -116,6 +117,7 @@ const OPTS = [
     Opt("--cost", "P:F:U", String[], false, "in place of --time-constant: the gains that minimize P·phase² + F·frequency² + U·steer² (LQG), e.g. 1e-3:1e-3:1e12", ["steer"]),
     Opt("--interval", "SECONDS", String[], false, "seconds between steers, a whole multiple of τ₀ (default τ₀)", ["steer"]),
     Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
+    Opt("--method", "METHOD", DRIFT_METHODS, false, "estimator of the linear model: frequency_fit (default, a least-squares line through the frequency), phase_fit (a least-squares parabola through the phase), bisection (the three-point fit), second_difference (mean second difference of the phase) or four_point", ["drift"]),
     Opt("--carrier", "HZ", String[], false, "carrier frequency ν₀ in Hz, which ℒ(f) and S_φ(f) need", ["phasenoise"]),
     Opt("--quantity", "Q", QUANTITIES, false, "what the table holds: L (default, ℒ(f) in dBc/Hz), Sphi (S_φ(f) in rad²/Hz), Sx (S_x(f) in s²/Hz) or Sy (S_y(f) in 1/Hz)", ["phasenoise"]),
     Opt("--band", "A:B", String[], false, "integrate from A to B hertz only, inside the table (default: the whole table)", ["phasenoise"]),
@@ -178,6 +180,7 @@ mutable struct Options
     with::String              # cross: the second channel's file
     phase_given::Bool         # --phase given (else instrument readers pick the kind)
     model::String
+    method::String            # drift: estimator of the linear model
     hz::Bool
     query::String             # "\0" = the default for the source
     every::Int
@@ -218,7 +221,7 @@ end
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear",
+                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear", "frequency_fit",
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
@@ -404,6 +407,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--window";         o.window = parse_int(v, name)
     elseif name == "--step";           o.step = parse_int(v, name)
     elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
+    elseif name == "--method";         o.method = check_choice(v, name, DRIFT_METHODS)
     elseif name == "--train";          o.train = parse_float(v, name)
     elseif name == "--grow";           o.grow = parse_int(v, name)
     elseif name == "--tau";            o.taus = parse_taus(v)
@@ -521,6 +525,8 @@ function parse_args!(o::Options, args::Vector{String})
     o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2"))
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
+    o.method == "frequency_fit" || o.model == "linear" ||
+        throw(usage_error("--method " * o.method * " estimates a linear drift and goes with --model linear"))
     (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
         throw(usage_error("--train and --limit must be positive"))
     o.grow == 0 || isnan(o.train) && o.grow > 1 + o.fit_drift ||

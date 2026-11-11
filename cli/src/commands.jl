@@ -269,16 +269,17 @@ end
 
 # ── drift ─────────────────────────────────────────────────────────────────
 
-const CSV_DRIFT = "source,quantity,model,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
+const CSV_DRIFT = "source,quantity,model,method,a,a_err,b,b_err,c,c_err,drift_per_day,drift_per_day_err,rms,n"
 
 function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 3, "a drift fit")   # drift_fit checks each model's own minimum
-    f = drift_fit(data; model=Symbol(o.model))
+    f = drift_fit(data; model=Symbol(o.model), method=Symbol(o.method))
     src = source_name(o, data)
     n = count(isfinite, f.y)
     if o.format != "json"
         print(io, CSV_DRIFT); print(io, '\n')
         csv_field(io, src); print(io, ','); print(io, quantity(o)); print(io, ','); print(io, o.model)
+        print(io, ','); print(io, o.method)
         for k in 1:3
             print(io, ','); k <= length(f.coef) && csv_number(io, f.coef[k])
             print(io, ','); k <= length(f.coef) && csv_number(io, f.stderr[k])
@@ -292,9 +293,11 @@ function cmd_drift(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     json_key(io, "analysis"); print(io, '{')
     json_key(io, "quantity", true); json_string(io, quantity(o))
     json_key(io, "model"); json_string(io, o.model)
+    json_key(io, "method"); json_string(io, o.method)
     json_preprocessing(io, o); print(io, '}')
     json_key(io, "drift"); print(io, '{')
     json_key(io, "model", true); json_string(io, o.model)
+    json_key(io, "method"); json_string(io, o.method)
     json_key(io, "coef"); json_array(io, f.coef)
     json_key(io, "stderr"); json_array(io, f.stderr)
     json_key(io, "drift_per_day"); json_number(io, f.rate)

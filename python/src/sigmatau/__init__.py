@@ -32,7 +32,7 @@ from .deviations import (
     totdev,
     ttotdev,
 )
-from .drift import DRIFT_MODELS, drift_fit
+from .drift import DRIFT_METHODS, DRIFT_MODELS, drift_fit
 from .dynamic import dadev, dhdev
 from .edf import bias_correction, calculate_edf, confidence_intervals
 from .ensemble import (
@@ -173,6 +173,7 @@ __all__ = [
     # drift and power-law models
     "drift_fit",
     "DRIFT_MODELS",
+    "DRIFT_METHODS",
     "powerlaw_fit",
     "powerlaw_sigma",
     "powerlaw_psd",

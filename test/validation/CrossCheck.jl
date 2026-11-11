@@ -400,7 +400,19 @@ const NBS14_TABLE = [
         [2.9223187810675200e-01, 2.1445233564252639e-01, 1.5618112158618463e-01, 1.1709745745448434e-01,
          6.9029585189839343e-02, 4.9749707730398392e-02, 3.8947417330713739e-02, 3.0862392741372108e-02,
          1.2447414341332683e-02], "SigmaTheta 3.0 PDev, from the allantools test"),
+    ("linear slope", (d, m) -> _averaged_drift(d, m, f -> drift_fit(f).coef[2]),
+        [1, 10, 100], [6.490910e-06, 5.979804e-05, 1.056376e-03], "per sample of the record averaged by m"),
+    ("linear intercept", (d, m) -> _averaged_drift(d, m, f -> (c = drift_fit(f).coef; c[1] - c[2])),
+        [1, 10, 100], [4.865258e-01, 4.867547e-01, 4.839644e-01], "one sample before the first: the table counts the samples from 1"),
+    ("bisection slope", (d, m) -> _averaged_drift(d, m, f -> drift_fit(f; method=:bisection).coef[2]),
+        [1, 10, 100], [-6.104214e-06, -6.104214e-05, -6.104214e-04], "per sample of the record averaged by m"),
+    ("1st difference slope", (d, m) -> _averaged_drift(d, m, f -> drift_fit(f; method=:second_difference).coef[2]),
+        [1, 10, 100], [1.517561e-04, 9.648320e-04, 1.011791e-03], "mean second difference of the phase, per sample of the record averaged by m"),
 ]
+
+# A drift quantity of the record averaged in blocks of each m, with τ0 = 1.
+_averaged_drift(d, ms, pick) =
+    [pick(FrequencyData([sum(view(d.y, i:i+m-1)) / m for i in 1:m:length(d.y)], 1.0)) for m in ms]
 
 function nbs14_rows()
     fd = FrequencyData(nbs14_frequency(), 1.0)

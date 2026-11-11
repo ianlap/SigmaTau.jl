@@ -147,6 +147,33 @@ also fits the logarithmic and diffusion models of an oscillator that is
 still stabilizing. The Hadamard family needs no fit at all
 ([Choosing an estimator](choosing.md#Drift)).
 
+The line through the frequency is the estimate of least variance where the
+noise is white FM, as it is here. `method` chooses another estimator of the
+linear drift for another noise
+([SP1065 §5.20, Table 13](@cite riley-2008-sp1065)):
+
+| Noise at the long averaging times | `method` |
+|:---|:---|
+| white PM | `:phase_fit`, a parabola through the phase |
+| white FM | `:frequency_fit`, the default |
+| random-walk FM | `:second_difference`, the mean second difference of the phase |
+| white FM and random-walk FM together | `:bisection`, the three-point fit of the phase |
+| not known | `:four_point` |
+
+```@example prep
+[m => drift_fit(q; method = m).rate for m in (:frequency_fit, :phase_fit, :bisection)]
+```
+
+`:four_point` needs a record without gaps, such as `fillgaps(q)`.
+
+The variance of the bisection is within a factor 1.4 of the least on white,
+flicker and random-walk FM, and that of the four-point estimator within a
+factor 1.6 on all five power-law noises
+([Greenhall 1997, Table 1](@cite greenhall-1997-drift-estimator)). These
+two have no standard error from the record itself: [`drift_fit`](@ref)
+gives their variances in terms of the deviation of the record at a long
+averaging time. `detrend(q, fit)` removes the drift that a fit found.
+
 ## What cannot be removed
 
 A frequency step means that the statistics changed during the record.

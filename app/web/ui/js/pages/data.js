@@ -2,7 +2,7 @@
 // the record check, and the phase plot with outliers in orange, or the
 // frequency with a fitted drift model.
 import { state, update, activeClock, multi, markStale } from "../state.js";
-import { drift as fetchDrift, driftKey } from "../core.js";
+import { drift as fetchDrift, driftKey, driftMethod } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
 import { thousands, duration, sci, escapeHtml as h } from "../format.js";
 
@@ -21,6 +21,15 @@ const MODELS = [
   ["quadratic", "Quadratic", "y = a + b·t + c·t²"],
   ["log", "Log", "y = a·ln(1 + b·t) + c, the stabilization of an oscillator"],
   ["diffusion", "Diffusion", "y = a + b·√(t + c)"],
+];
+
+// Estimators of the linear model (drift_fit's methods).
+const METHODS = [
+  ["frequency_fit", "Line through frequency", "Least-squares line through the frequency: least variance on white FM"],
+  ["phase_fit", "Parabola through phase", "Least-squares parabola through the phase: least variance on white PM"],
+  ["bisection", "Bisection (three-point)", "Mean frequency of the second half less that of the first, over half the record"],
+  ["second_difference", "Mean second difference", "Mean of the second differences of the phase: least variance on random-walk FM"],
+  ["four_point", "Four-point", "Greenhall's estimator from four values of the summed phase: near the least variance on every noise"],
 ];
 
 const MAX_SIM_CLOCKS = 8;
@@ -190,13 +199,19 @@ function driftBar(c) {
   const f = fitReady(c) ? c.driftFit : null;
   const err = c?.driftFit?.key === driftKey(c) ? c.driftFit.error : null;
   const names = ["a", "b", "c"];
-  const coef = f ? f.coef.map((v, i) => `${names[i]} = ${sci(v, 4)} ± ${sci(f.stderr[i], 2)}`).join(" · ") : "";
+  // A method without a standard error gives null.
+  const pm = (v, digits) => (Number.isFinite(v) ? ` ± ${sci(v, digits)}` : "");
+  const coef = f ? f.coef.map((v, i) => `${names[i]} = ${sci(v, 4)}${pm(f.stderr[i], 2)}`).join(" · ") : "";
+  const linear = state.driftModel === "linear";
+  const method = driftMethod();
   const result = err ? `<span class="error">${h(err)}</span>`
-    : f ? `<span title="${h(coef)}"><b class="mono">${sci(f.drift_per_day, 3)} ± ${sci(f.drift_per_day_err, 2)} /day</b> at the end of the record
+    : f ? `<span title="${h(coef)}"><b class="mono">${sci(f.drift_per_day, 3)}${pm(f.drift_per_day_err, 2)} /day</b> at the end of the record
         <span class="muted">· rms residual ${sci(f.rms, 3)}</span></span>`
     : `<span class="muted">Fitting…</span>`;
   return `<div class="seg seg-sm" role="group" aria-label="Drift model">${MODELS.map(([v, l, tip]) =>
       `<button type="button" data-model="${v}" class="${v === state.driftModel ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</div>
+    <label class="tool-field" title="${linear ? "How the linear drift is estimated" : "The estimators apply to the linear model"}">Estimator <select data-ref="method" ${linear ? "" : "disabled"}>${METHODS.map(([v, l, tip]) =>
+      `<option value="${v}" title="${tip}" ${v === method ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <label class="check"><input type="checkbox" data-ref="resid" ${state.driftResid ? "checked" : ""}>Residuals</label>
     <span class="drift-result small">${result}</span>`;
 }
@@ -328,6 +343,7 @@ function onClick(e) {
 
 function onChange(e) {
   if (e.target.dataset.ref === "resid") { update((s) => { s.driftResid = e.target.checked; }); return; }
+  if (e.target.dataset.ref === "method") { update((s) => { s.driftMethod = e.target.value; }); return; }
   const f = e.target.dataset.field;
   const c = activeClock();
   if (!c || !f) return;
