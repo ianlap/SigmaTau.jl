@@ -147,6 +147,13 @@ try {
   await settled();
   await shot("holdover");
 
+  // Steering on the same clock.
+  await go("steering");
+  await page.waitForFunction(() => document.querySelector("#page [data-ref=empty]")?.hidden
+    && /Time constant/.test(document.querySelector("#page [data-ref=side]")?.textContent ?? ""), null, SLOW);
+  await settled();
+  await shot("steering");
+
   // Dynamic: a clock whose noise changes during the record.
   await start("data");
   await open(stepFile());

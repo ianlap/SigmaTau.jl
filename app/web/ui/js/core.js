@@ -232,6 +232,35 @@ export async function holdover(clock, signal) {
   return doc;
 }
 
+// The time constant the Steering page starts from: 1/128 of the record.
+export const steerDefault = (clock) => Math.max(4, Math.round(samples(clock) / 128)) * clock.record.tau0;
+
+// The steering replay of one clock: gains from a time constant or a cost, a
+// steer every so many samples, the clock model fitted to the first
+// record / frac alone.
+const steerRequest = (clock) => {
+  const o = state.steer, tau0 = clock.record.tau0;
+  return request(clock, "steer", [
+    ...rangeArgs(clock),
+    ...(o.from === "cost" ? ["--cost", o.cost.join(":")]
+      : ["--time-constant", o.T ?? steerDefault(clock), ...(o.integral ? ["--integral"] : [])]),
+    ...(o.every > 1 ? ["--interval", o.every * tau0] : []),
+    "--train", Math.max(16, Math.floor(samples(clock) / o.frac)) * tau0,
+    ...(o.drift ? ["--fit-drift"] : []),
+    "--grid", state.grid, "--series", 2000,
+  ]);
+};
+
+// Settings that decide a clock's replay; a change means recompute.
+export const steerKey = (clock) => JSON.stringify(steerRequest(clock));
+
+// The core's `steer` object as is.
+export async function steer(clock, signal) {
+  const doc = await post(steerRequest(clock), signal);
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  return doc.steer;
+}
+
 // A timescale from several clocks; the core's JSON as is.
 export async function timescale(body, signal) {
   const doc = await post(body, signal);

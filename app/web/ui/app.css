@@ -300,6 +300,12 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .hold-bar .seg button { padding: 0 10px; white-space: nowrap; }
 .hold-bar .carrier { width: 84px; }
 
+/* ── Steering ── */
+.steer-card .tbl-row { grid-template-columns: 62px repeat(3, minmax(0, 1fr)); }
+.steer-w { width: 96px; }
+.steer-bar { flex-wrap: wrap; }
+.steer-bar .steer-w { width: 64px; }
+
 /* ── Spectrum ── */
 .spec-card { padding-top: 14px; }
 .spec-note { margin: 0; }

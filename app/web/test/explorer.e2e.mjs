@@ -1,7 +1,7 @@
 // End-to-end smoke test of the explorer in a browser, against a real analysis
 // core: load a fixture on the Data page, run the analysis and check the
-// Stability plot and the Holdover curve against the command line's own JSON,
-// then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
+// Stability plot and the Holdover and Steering curves against the command
+// line's own JSON, then visit Spectrum, Dynamic, Ensemble (a Kalman scale with flicker states),
 // Live (simulated source) and Help, come back to Stability, and run a record
 // with gaps, with no page errors.
 //
@@ -90,6 +90,25 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click('[data-ctl=kalman][data-v="1"]');
     const claimed = (await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "Claimed by the filter")?.y, null, SLOW)).jsonValue();
     assert.deepEqual(await claimed, JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--kalman", "--format", "json"])).holdover.claimed);
+  });
+
+  await t.test("Steering: the plotted σ equal the command line's", async () => {
+    await page.click("a[data-page=steering]");
+    await plotted("#page.page-steering [data-ref=plot]");
+    const curve = (name) => page.evaluate((n) => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === n)?.y, name);
+    const args = ["steer", FIXTURE, "--format", "json"];   // the page's stretch, a quarter of the record, is the default
+    const doc = JSON.parse(execFileSync(CLI, [...args, "--time-constant", "64"])).steer;
+    assert.deepEqual(await curve("Steered"), doc.steered);
+    assert.deepEqual(await curve("Predicted (clock model)"), doc.predicted.adev);
+    // Gains from a cost: the loop card shows the command line's phase gain.
+    await page.click('[data-ctl=from][data-v="cost"]');
+    await page.waitForFunction(() => /Rings/.test(document.querySelector("#page .steer-card")?.innerText ?? ""), null, SLOW);
+    const cost = JSON.parse(execFileSync(CLI, [...args, "--cost", "1:0:1e8"])).steer;
+    assert.deepEqual(await curve("Steered"), cost.steered);
+    assert.ok((await page.locator("#page .steer-card").innerText()).includes(cost.gains.phase.toExponential(3)));
+    // The steered phase over the record, with the correction on its own axis.
+    await page.click('[data-ctl=view][data-v="record"]');
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.some((d) => d.yaxis === "y2"));
   });
 
   await t.test("Ensemble: a Kalman scale with flicker states", async () => {

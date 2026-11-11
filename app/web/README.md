@@ -43,7 +43,7 @@ command as `POST /api/analyze` with the body
 ```
 
 The first argument must be `check`, `analyze`, `spectrum`, `dynamic`,
-`drift`, `holdover`, `timescale` or `model`, and `--out` is refused. The
+`drift`, `holdover`, `steer`, `timescale` or `model`, and `--out` is refused. The
 server saves `file` in a temporary folder and puts its path after the
 command. A request for a simulated record has no `file`, and `--synth N`
 must then follow the command directly, so that no request names a path on

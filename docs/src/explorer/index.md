@@ -34,8 +34,8 @@ open.
    the bias correction and the noise type are under **Options**.
 4. **Run the analysis** with **Run analysis** or F5.
 5. **Read the results** on the [Stability](stability.md),
-   [Spectrum](spectrum.md), [Dynamic](dynamic.md) and
-   [Holdover](holdover.md) pages.
+   [Spectrum](spectrum.md), [Dynamic](dynamic.md),
+   [Holdover](holdover.md) and [Steering](steering.md) pages.
 6. **Keep them.** The **File** menu saves the plot, the numbers, a report
    and the whole [session](export.md).
 
@@ -43,7 +43,7 @@ open.
 
 | Part | Holds |
 |:-----|:------|
-| Tabs | The eight pages: [Data](data.md), [Synthesis](synthesis.md), [Stability](stability.md), [Spectrum](spectrum.md), [Dynamic](dynamic.md), [Holdover](holdover.md), [Ensemble](ensemble.md) and [Live](live.md) |
+| Tabs | The nine pages: [Data](data.md), [Synthesis](synthesis.md), [Stability](stability.md), [Spectrum](spectrum.md), [Dynamic](dynamic.md), [Holdover](holdover.md), [Steering](steering.md), [Ensemble](ensemble.md) and [Live](live.md) |
 | Record chip | The record in use: its name, the number of samples, the sample interval, the span and what was removed from it. With several clocks, their number and the samples in all. A click opens the Data page |
 | **File** menu | The [exports](export.md): the plot, the results, a report, and saving and opening a session |
 | Theme button | Switches between the colors of the system, a light theme and a dark theme. The choice is remembered |
@@ -69,7 +69,7 @@ loaded; and after each change to a noise model built by hand.
 | Stability, Spectrum | By **Run analysis** |
 | The record check and the phase plot of Data | When the record or its preparation changes |
 | The frequency drift fit of Data | When its model changes |
-| Dynamic, Holdover | When the page is shown and the record or its settings have changed |
+| Dynamic, Holdover, Steering | When the page is shown and the record or its settings have changed |
 | The predicted stability of Synthesis | When a value is entered |
 | Ensemble | When the page is shown and the clocks or its settings have changed |
 | Live | With every batch of readings |
@@ -79,7 +79,7 @@ loaded; and after each change to a noise model built by hand.
 | Key | Action |
 |:----|:-------|
 | F5, or Ctrl+Enter (Cmd+Enter on macOS) | Run the analysis. During a run: cancel it, or start it again if the inputs have changed since |
-| 1 to 8 | Data, Synthesis, Stability, Spectrum, Dynamic, Holdover, Ensemble, Live |
+| 1 to 9 | Data, Synthesis, Stability, Spectrum, Dynamic, Holdover, Steering, Ensemble, Live |
 | ? | Help |
 | Esc | Cancel a run, close a dialog |
 

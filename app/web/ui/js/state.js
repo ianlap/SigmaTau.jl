@@ -37,6 +37,11 @@ export const state = {
   // Holdover page: training stretch = record / frac, line or parabola (drift), start from the last
   // reading (anchor), the time error limit in seconds (null = none) and the share of trials within it
   hold: { frac: 4, kalman: false, drift: false, anchor: true, limit: null, limitText: "", confidence: 0.95 },
+  // Steering page: gains from a time constant in seconds (null = 1/128 of the record, with an
+  // integral gain or not) or from a cost (weights on phase, frequency and steer, as typed), a steer
+  // every `every` samples, the clock model fitted to the first record / frac with a drift state or
+  // not, and the plot: "sigma" | "record"
+  steer: { from: "time", T: null, TText: "", integral: false, cost: ["1", "0", "1e8"], every: 1, frac: 4, drift: false, view: "sigma" },
   // Live page: where the readings come from and what they are
   live: { source: "sim", address: "192.168.1.20:5025", device: "/dev/ttyUSB0", query: "READ?", deviceQuery: "", reading: "hz",
           nominal: "", tau0: 0.1, devs: ["adev", "mdev"] },
@@ -80,6 +85,7 @@ export function newClock(fields = {}) {
     result: null,            // last analysis from the core (with the spectrum)
     dynamic: null,           // last dynamic-deviation map, with its settings key
     holdover: null,          // last holdover test, with its settings key
+    steer: null,             // last steering replay, with its settings key
     driftFit: null,          // last frequency drift fit, with its settings key
     components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
     error: null,

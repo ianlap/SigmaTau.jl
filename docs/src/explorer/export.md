@@ -80,7 +80,7 @@ which the program reads it.
 - the reference clock;
 - the estimators and options of the side panel;
 - the display settings of the Stability, Spectrum and Dynamic pages and
-  the settings of the Holdover page.
+  the settings of the Holdover and Steering pages.
 
 It holds no results. **Open session…**, or the file dropped on the window,
 puts these clocks and settings in the place of those on screen and runs the
