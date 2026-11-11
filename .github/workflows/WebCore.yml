@@ -75,7 +75,9 @@ jobs:
       - name: CLI tests (library and compiled binary)
         env:
           SIGMATAU_EXE: ${{ github.workspace }}/cli/build/bin/sigmatau
-        run: julia --project=cli cli/test/runtests.jl
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish   # the completion scripts run in each shell
+          julia --project=cli cli/test/runtests.jl
 
       - name: serve.py checks
         env:
