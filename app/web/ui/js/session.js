@@ -9,7 +9,7 @@ const VERSION = 1;
 // Settings saved as they are.
 const SETTINGS = ["devs", "grid", "ci", "confidence", "band", "noiseId", "fit", "mask", "bias", "noise", "tauMin", "tauMax", "axis", "spec", "dyn", "hold", "steer"];
 // Per-clock fields that are results or bookkeeping, not inputs.
-const TRANSIENT = new Set(["id", "slot", "record", "result", "dynamic", "holdover", "steer", "error", "loading", "source", "driftFit"]);
+const TRANSIENT = new Set(["id", "slot", "record", "result", "dynamic", "holdover", "steer", "error", "loading", "source", "driftFit", "hist", "acf"]);
 
 export function sessionText() {
   const sources = [];

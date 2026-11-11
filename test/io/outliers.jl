@@ -56,7 +56,7 @@
         @test clean isa FrequencyData
         @test all(isfinite, clean.y)
         @test isempty(find_outliers(clean))
-        @test clean.y[49] == y[49]                 # neighbours untouched
+        @test clean.y[49] == y[49]                 # neighbors untouched
         @test abs(clean.y[50]) < 1e-10             # glitch replaced
         @test clean.tau0 == 2.0                    # metadata carries over
         @test clean.source == "glitchy.csv"

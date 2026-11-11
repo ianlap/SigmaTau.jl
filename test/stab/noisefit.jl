@@ -40,6 +40,7 @@ using Random
 
     @test_throws ArgumentError add_component!(f, 0, 6:9)          # already in
     @test_throws ArgumentError add_component!(noise_fit(adev(p)), -4, 1:3)
+    @test_throws "unknown noise type :PINK; use an integer α or one of WHPM," add_component!(noise_fit(adev(p)), :PINK, 1:3)
     over = add_component!(noise_fit(r), 0, 12:14)                 # white FM fitted on random walk
     @test_throws ArgumentError add_component!(over, 2, 6:9)       # residual ≤ 0 there
     @test_throws ArgumentError noise_fit(tdev(p))

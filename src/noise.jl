@@ -337,7 +337,7 @@ function _preprocess(x::Vector{Float64})
 end
 
 # Drift removal for the noise identifier: the least-squares quadratic in the
-# centred index t in closed form (the odd moments of t vanish), with one
+# centered index t in closed form (the odd moments of t vanish), with one
 # correction pass on the residual. It agrees with `_remove_quadratic` to
 # rounding at about a seventh of the cost; a record with gaps or under three
 # points takes that general fit.
@@ -535,13 +535,15 @@ function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
     return _adev_core(x, [1], tau0)[1]
 end
 
-# Power-law exponent α of a noise_gen key: an integer α or a noise-type name.
+# Power-law exponent α of a key: an integer α or a noise-type name. The keys
+# of `noise_gen` and of a model given as a Dict pass here, and the noise of
+# `add_component!`.
 const _NOISE_ALPHA = Dict(:WHPM => 2, :FLPM => 1, :WHFM => 0, :FLFM => -1,
                           :RWFM => -2, :FWFM => -3, :RRFM => -4)
 _noise_alpha(α::Integer) = Int(α)
 _noise_alpha(s::Symbol) = haskey(_NOISE_ALPHA, s) ? _NOISE_ALPHA[s] :
-    throw(ArgumentError("noise_gen: unknown noise type :$s; use one of " * join(keys(_NOISE_ALPHA), ", ")))
-_noise_alpha(k) = throw(ArgumentError("noise_gen: keys must be an Int α or a noise-type Symbol, got $(typeof(k))"))
+    throw(ArgumentError("unknown noise type :$s; use an integer α or one of " * join(reverse(_NOISE_SYMBOLS), ", ")))
+_noise_alpha(k) = throw(ArgumentError("a noise type is an integer α or a Symbol such as :WHFM, got $(typeof(k))"))
 
 # The components draw from one stream, so their order fixes the record: by
 # α, not in the order the Dict iterates, which differs between Julia versions.
