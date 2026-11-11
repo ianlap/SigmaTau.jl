@@ -89,7 +89,7 @@ st.mask_check(st.mtie(p), "G8262_opt1").passed
 st.bias_b2(36, "FLFM")                      # dead-time bias function B2(r, μ)
 
 fit = st.powerlaw_fit(p)                    # power-law model of the noise
-model = st.clock_model(fit)                 # clock model; flicker noise kept as states
+model = st.clock_model(fit)                 # clock model with those levels
 kf = st.kalman_filter(p, model)             # phase and frequency estimates
 gains = st.steering_gains(3600.0, p.tau0)   # a steering loop, time constant 1 h
 st.steer(p, model, gains).steered           # the record as that loop would leave it

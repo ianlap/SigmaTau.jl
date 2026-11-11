@@ -159,3 +159,15 @@ def test_start_time_from_timestamps(tmp_path):
     st.save(str(q), rec)
     assert st.start_time(st.load(str(q))) == t0
     assert st.start_time(PhaseData(np.zeros(4))) is None
+
+
+def test_sample_statistics_histogram_and_acf(small_phase):
+    f = small_phase.to_frequency()
+    s = st.sample_statistics(f)
+    assert s["n"] == f.y.size and s["median"] == np.median(f.y) and s["noise"] in st.identify_noise(f, [1])
+    np.testing.assert_allclose(s["std"], np.std(f.y, ddof=1))
+    np.testing.assert_allclose(st.sample_statistics(small_phase)["std_y"], s["std"])
+    h = st.sample_histogram(f, bins=5)
+    assert h["counts"].sum() == f.y.size and h["edges"].size == 6
+    a = st.acf(f, m=2, lags=4)
+    assert a["lag"].tolist() == [0, 1, 2, 3, 4] and a["r"][0] == 1.0 and a["tau"] == 2 * f.tau0

@@ -40,22 +40,74 @@ end
 
 function cmd_check(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 3, "a record")
+    # The record as the samples the statistics describe: one concrete type per call.
+    described = isempty(o.quantity) ? quantity(o) : o.quantity
+    described == "frequency" ? check_samples(io, o, data, FrequencyData(data), t_start) :
+                               check_samples(io, o, data, data, t_start)
+end
+
+function check_samples(io::IO, o::Options, data::PhaseData, rec::Union{PhaseData,FrequencyData}, t_start::UInt64)
     src = source_name(o, data)
+    st = sample_statistics(rec)
+    what = rec isa FrequencyData ? "frequency" : "phase"
     if o.format == "json"
         json_head(io, o, src)
         json_key(io, "record"); json_record(io, o, data)
         json_key(io, "analysis"); print(io, '{')
         json_key(io, "quantity", true); json_string(io, quantity(o))
         json_preprocessing(io, o); print(io, '}')
+        json_key(io, "statistics"); json_statistics(io, st, what)
+        o.histogram && (json_key(io, "histogram"); json_histogram(io, histogram_of(o, rec)))
+        o.acf && (json_key(io, "acf"); json_acf(io, o, rec))
         return elapsed(io, t_start)
     end
+    if o.histogram
+        h = histogram_of(o, rec)
+        print(io, "bin_lower,bin_upper,count\n")
+        for k in eachindex(h.counts)
+            csv_number(io, h.edges[k]); print(io, ','); csv_number(io, h.edges[k+1])
+            print(io, ','); print(io, h.counts[k]); print(io, '\n')
+        end
+        return nothing
+    elseif o.acf
+        a = acf_of(o, rec)
+        print(io, "lag,tau,acf\n")
+        for k in eachindex(a.lag)
+            print(io, a.lag[k]); print(io, ','); csv_number(io, a.lag[k] * a.tau)
+            print(io, ','); csv_number(io, a.r[k]); print(io, '\n')
+        end
+        return nothing
+    end
     s = summarize(data)
-    print(io, "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day\n")
+    print(io, "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,")
+    print(io, "statistics_of,min,max,mean,median,std,std_y,adev,noise_type\n")
     csv_field(io, src); print(io, ','); print(io, quantity(o)); print(io, ',')
     print(io, s.n); print(io, ','); csv_number(io, Float64(s.tau0)); print(io, ',')
     csv_number(io, Float64(s.span)); print(io, ','); print(io, s.gaps); print(io, ',')
     print(io, length(s.outliers)); print(io, ','); csv_number(io, Float64(s.drift_per_day))
-    print(io, '\n')
+    print(io, ','); print(io, what)
+    for v in (st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev)
+        print(io, ','); csv_number(io, v)
+    end
+    print(io, ','); print(io, String(st.noise)); print(io, '\n')
+end
+
+# --bins, or the library's Scott's rule.
+histogram_of(o::Options, rec) = o.bins > 0 ? sample_histogram(rec; bins=o.bins) : sample_histogram(rec)
+
+# --lags, or half the series up to 1000 lags. A record the autocorrelation
+# cannot take (gaps, too few points at --m) is a CLI error.
+function acf_of(o::Options, rec)
+    m = isempty(o.m) ? 1 : o.m[1]
+    n = rec isa FrequencyData ? length(rec.y) ÷ m : cld(length(rec.x), m)
+    lags = o.lags >= 0 ? o.lags : min(n ÷ 2, 1000)
+    try
+        return acf(rec; m=m, lags=lags)
+    catch err
+        err isa ArgumentError || rethrow()
+        msg = replace(replace(error_message(err), "acf: " => ""), "fillgaps first" => "--fillgaps")
+        throw(CLIError(EXIT_ANALYSIS, replace(msg, "lags must" => "--lags must")))
+    end
 end
 
 # ── analyze ───────────────────────────────────────────────────────────────

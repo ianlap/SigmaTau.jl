@@ -159,7 +159,8 @@ that it keeps every outlying sample.
 **Select range** turns the drag into a choice of the part of the record to
 analyze. The range is shaded, and the line above the plot gives its limits.
 It needs at least 16 samples. The Stability, Spectrum, Dynamic, Holdover
-and Steering pages then use that part alone, with the drift removal fitted
+and Steering pages, and the Histogram and Autocorrelation views, then use
+that part alone, with the drift removal fitted
 to it. The check and the plot keep the whole record. **whole record**
 clears the range. Each clock has its own.
 
@@ -206,3 +207,60 @@ measure.
 
 To fit the drift of the record as measured, set **Drift removal** to
 **None**: the view shows the frequency after the removal.
+
+## Histogram and statistics
+
+The **Histogram** view plots the histogram of the samples, as Stable32's
+Histogram function does, and lists the statistics of its Statistics
+function beside it ([`sample_statistics`](@ref), [`sample_histogram`](@ref)).
+**Phase** and **Frequency**, in the line above the plot, choose the samples: those of the record by
+default, or the record converted to the other kind. A distribution far from
+normal, such as one with two peaks, points to a problem with the record.
+
+| Statistic | Meaning |
+|:----------|:--------|
+| **Points** | The samples measured, with the number missing |
+| **Min**, **Max**, **Mean**, **Median** | Of the samples measured |
+| **Std dev** | Their standard deviation, with ``n - 1`` in the denominator |
+| **Std dev (freq.)** | For phase, that of the fractional frequency: the Std Dev that Stable32 shows for either kind of record |
+| **σ<sub>y</sub>(τ<sub>0</sub>)** | The Allan deviation at the sample interval |
+| **Noise** | The noise type identified at the sample interval |
+
+The standard deviation of phase grows with the length of the record under
+any frequency noise, so it describes that record only. That of the
+frequency, **Std dev (freq.)**, is the one to compare with
+**σ<sub>y</sub>(τ<sub>0</sub>)**: for white FM the two agree, apart from the
+scatter of the estimates.
+
+**Bins** sets the number of bins. Left empty it follows Scott's rule, with
+at most 1000. **Normal curve** draws, in crimson, the normal distribution
+with the mean and the standard deviation of the samples, scaled to the
+expected count in each bin. Samples far from zero next to their spread, such
+as a frequency offset with little noise on it, are plotted less their mean,
+which the axis title gives.
+
+## Autocorrelation
+
+The **Autocorrelation** view plots the autocorrelation of the samples
+against the lag, as Stable32's Autocorrelation function does
+([`acf`](@ref)). **m** is the averaging factor: the phase is taken every
+``m`` samples and the frequency averaged over ``m``. **Lags** sets the
+largest lag; left empty it is half the series, and at most 1000. The value
+at lag 1 tells the noise types apart
+([SP1065 §5.5.4](@cite riley-2008-sp1065)):
+
+| Noise | Autocorrelation of frequency at lag 1 |
+|:------|:--------------------------------------|
+| White PM | ``-1/2`` |
+| Flicker PM | ``-1/3`` |
+| White FM | 0 |
+| Flicker FM and the more divergent noises | Positive, nearer 1 the longer the record |
+
+A periodic component shows as an oscillation of its period. The list beside
+the plot gives ``r_1``, the lag-1 estimate of ``α`` that
+[`identify_noise`](@ref) rounds to a noise type, and that type. For a mix of
+two noises ``α`` falls between their values. It needs a record of
+``30 m`` samples or more.
+The autocorrelation needs a record without missing samples: turn on
+**Fill gaps by reflection**.
+

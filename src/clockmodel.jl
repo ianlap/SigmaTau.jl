@@ -284,8 +284,10 @@ the FM terms (the Hadamard variances are compared when the model has
 The paper gives the principle; the formula is this package's.
 
 Flicker-walk FM (α = −3) is left out with either setting.
-`powerlaw_sigma(model, τ)` beside `powerlaw_sigma(fit, τ)` shows what a
-model leaves out at the τ of interest.
+`powerlaw_sigma(model, τ)` beside `powerlaw_sigma(fit, τ)` shows what that
+and `flicker = false` leave out at the τ of interest. It is the deviation
+of the power law that the model stands for and not of its states, so a
+flicker without states, or a τ outside their band, does not show in it.
 
 # Arguments
 

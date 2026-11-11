@@ -56,13 +56,15 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 | Scale | `scaling=` on the readers, or arithmetic on the samples |
 | Fill | [`fillgaps`](@ref), by another method ([below](@ref stable32-differences)) |
 | Check | [`find_outliers`](@ref), by the same test, with five scaled median absolute deviations as the default. [`remove_outliers`](@ref) puts a filled value where Stable32 leaves a gap |
-| Statistics | [`summarize`](@ref) |
+| Statistics | [`sample_statistics`](@ref), and [`summarize`](@ref) for gaps, outliers and drift |
 | Drift | [`drift_fit`](@ref) for the fit, [`detrend`](@ref) for the removal ([Drift types](@ref stable32-drift)) |
 | Sigma | an estimator at one averaging factor, `adev(p, [16])` |
 | Run | an estimator, or [`stability`](@ref) for several |
 | Dead Time, T/Tau, in Sigma and Run | `adev(f; dead_time, noise)`, with the time between readings in seconds in place of the ratio ([Dead time](@ref)) |
 | Dynamic Stability | [`dadev`](@ref), [`dhdev`](@ref) |
 | Power | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref) |
+| Histogram | [`sample_histogram`](@ref) |
+| Autocorrelation | [`acf`](@ref). The lag scatter plot is not here |
 | Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref) |
 | Noise | [`noise_gen`](@ref) |
 | 3-Cornered Hat | [`ncornered_hat`](@ref), for three clocks or more, and [`groslambert`](@ref); [`sigmatau hat`](../reference/cli.md#hat) from a file |
@@ -71,10 +73,9 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 The [explorer](../explorer/index.md) does these steps in a window, and the
 [command line](cli.md) in a shell.
 
-Not in this package: the Filter, Histogram and Autocorrelation functions,
-the detection of frequency jumps and the scaling of a result for one of
-two identical units. For the last, divide `r.dev` by
-``\sqrt{2}``.
+Not in this package: the Filter function, the detection of frequency
+jumps and the scaling of a result for one of two identical units. For the
+last, divide `r.dev` by ``\sqrt{2}``.
 
 ## [Drift types](@id stable32-drift)
 

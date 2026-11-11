@@ -89,6 +89,9 @@ from .io import (
     read_phase,
     remove_outliers,
     save,
+    acf,
+    sample_histogram,
+    sample_statistics,
     summarize,
 )
 from .masks import TELECOM_MASKS, MaskCheck, mask_check, telecom_mask
@@ -236,6 +239,9 @@ __all__ = [
     "find_outliers",
     "remove_outliers",
     "summarize",
+    "sample_statistics",
+    "sample_histogram",
+    "acf",
     "save",
     "load",
     # runtime introspection

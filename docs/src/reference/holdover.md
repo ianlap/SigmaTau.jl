@@ -138,7 +138,10 @@ compared with. The two columns side by side test the model where it
 matters for holdover. An `rms` well above `claimed` says that the model
 holds too little noise at that ``τ``.
 
-A model made from a fit keeps the flicker FM that the fit finds. With
+A model made from a fit keeps the flicker FM that the fit finds, as Markov
+states where it holds a quarter of the model's Allan variance
+([Where the states sit](@ref)). This clock has none and the fit finds a
+little, too little for a state, so `m` has two states. With
 `flicker = false` that noise is left out of the model, and in simulation
 the filter of a clock on its flicker floor claimed 1.4 to 8.7 times less
 than the error it made ([What the states buy](@ref)).
