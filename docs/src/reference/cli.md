@@ -239,7 +239,7 @@ nothing else. The record needs three samples or more.
 
 | Option | Meaning |
 |:---|:---|
-| `--nperseg N` | length of the segments. By default the largest power of two up to a quarter of the record, and at least 16 |
+| `--nperseg N` | length of the segments, cut to the record where it is longer. By default the largest power of two up to a quarter of the record, and at least 16 |
 
 The spectra are those of [`psd_y`](@ref) and [`psd_x`](@ref), with a Hann
 taper and segments that overlap by half. The record needs 16 samples or
@@ -309,6 +309,8 @@ their times.
 The test is that of [`holdover`](@ref), which [Holdover](holdover.md)
 describes. The training stretch and the holdover times must be whole
 multiples of the sample interval, and the record needs 16 samples or more.
+With `--kalman` the training stretch needs 65 samples or more, which makes
+260 for the record by default, because the clock model is fitted to it.
 The CSV output has a row for each holdover time:
 
 ```@example cliref
@@ -397,9 +399,9 @@ describes. One of `--time-constant` and `--cost` is required:
 `holdover --kalman`, fitted to the first stretch alone, so its noise levels
 are not learned from the readings that the loop is judged on. The loop runs
 over the whole record, and every result is taken from the end of that
-stretch on. The record needs 64 samples or more, and the stretch must
-leave 16 on either side of its end. The CSV output has a row for each
-averaging time:
+stretch on. The stretch needs 65 samples or more, and must leave 16
+after its end, so the record needs 81 samples or more, and 260 by default.
+The CSV output has a row for each averaging time:
 
 ```@example cliref
 sigmatau("steer clock.dat --time-constant 64 --m 1,16,256") # hide

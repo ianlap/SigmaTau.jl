@@ -142,8 +142,9 @@ function spectra(o::Options, data::PhaseData)
         throw(CLIError(EXIT_ANALYSIS, "the spectrum needs a record without gaps; fill them with --fillgaps"))
     N = length(data.x)
     # One segment length for both spectra, from the phase record's length (the
-    # library's own default for psd_y counts the N − 1 frequency samples).
-    np = o.nperseg > 0 ? min(o.nperseg, N) : SigmaTau._default_nperseg(N)
+    # library's own default for psd_y counts the N − 1 frequency samples), cut
+    # to those N − 1 samples.
+    np = min(o.nperseg > 0 ? o.nperseg : SigmaTau._default_nperseg(N), N - 1)
     return psd_y(data; nperseg=np), psd_x(data; nperseg=np)
 end
 
@@ -353,6 +354,10 @@ function holdover_reference(data::PhaseData, h::HoldoverResult)
     return h.drift ? sqrt(20.0) .* htdev(data, ms; ci=false).dev : sqrt(6.0) .* tdev(data, ms; ci=false).dev
 end
 
+# The model's five power-law terms are fitted to MHDEV at the octaves m = 1 to
+# 16, and the point at m = 16 needs 4m + 1 samples.
+const KALMAN_MIN_TRAIN = 65
+
 # The clock model of a Kalman predictor: the power-law fit to the first
 # training stretch alone, so no trial is predicted with noise levels learned
 # from the readings it is compared with. Flicker the fit finds is kept, as
@@ -363,6 +368,9 @@ end
 function holdover_model(data::PhaseData, train::Float64, drift::Bool)
     τ₀ = Float64(data.tau0)
     b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
+    b >= KALMAN_MIN_TRAIN || throw(CLIError(EXIT_ANALYSIS, "the clock model needs a training stretch of " *
+        string(KALMAN_MIN_TRAIN) * " samples or more; this one has " * string(b) *
+        " (--train sets it, by default a quarter of the record)"))
     pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
     return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, tau_max=length(data.x) * τ₀), maximum(pf.x)
 end
@@ -489,11 +497,11 @@ end
 # test; the loop runs over the whole record and every result is taken from
 # the end of that stretch on.
 function cmd_steer(io::IO, o::Options, data::PhaseData, t_start::UInt64)
-    need_samples(data, 64, "a steering replay")
+    need_samples(data, KALMAN_MIN_TRAIN + 16, "a steering replay")   # a stretch to fit, 16 samples after it
     τ₀, N = Float64(data.tau0), length(data.x)
     train = isnan(o.train) ? (N ÷ 4) * τ₀ : o.train
     b = SigmaTau._whole_samples(train, τ₀, "train")
-    16 <= b <= N - 16 || throw(CLIError(EXIT_ANALYSIS, "steer: the training stretch must leave 16 samples on either side of its end"))
+    b <= N - 16 || throw(CLIError(EXIT_ANALYSIS, "steer: the training stretch must leave 16 samples after its end"))
     interval = isnan(o.interval) ? τ₀ : o.interval
     g = isempty(o.cost) ? steering_gains(o.time_constant, interval; integral=o.integral) :
         lqg_gains(interval; phase=o.cost[1], frequency=o.cost[2], steer=o.cost[3])
@@ -602,7 +610,6 @@ function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     alg = Symbol(o.algorithm)
     o.flicker && !(alg === :greenhall || alg === :jones_tryon) && throw(usage_error("--flicker needs --algorithm greenhall or jones_tryon"))
     if !kalman
-        isempty(o.steps) || alg === :at2 || throw(usage_error("--steps needs --algorithm at2"))
         isempty(o.steps) && return timescale(cc; algorithm=alg, wmax=o.wmax), ClockModel[]
         return timescale(cc; algorithm=alg, wmax=o.wmax, steps=Symbol(o.steps)), ClockModel[]
     end
