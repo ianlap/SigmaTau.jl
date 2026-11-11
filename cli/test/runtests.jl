@@ -829,6 +829,9 @@ mktempdir() do dir
         write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
         @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
+        # An error inside a threaded loop is named by what the task threw.
+        failed = try wait(Threads.@spawn throw(DomainError(-1.0))) catch e e end
+        @test SigmaTauCLI.error_message(CompositeException([failed])) == "domain error in the analysis"
     end
 
     @testset "output error -> exit 4" begin
