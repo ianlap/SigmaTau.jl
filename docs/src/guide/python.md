@@ -70,7 +70,13 @@ follow from the languages:
 | `rng = Xoshiro(42)` | `rng=42`, which seeds the same generator |
 | `push!(s, x)`, `append!(s, xs)`, `snapshot(s)` on a [`StreamingStability`](@ref) | `s.push(x)`, `s.extend(xs)`, `s.snapshot()` |
 | `add_component!(fit, :WHFM, 1:6)`, `undo!(fit)`, `noise_residual(fit)` on a [`NoiseFit`](@ref) | `fit.add_component("WHFM", slice(0, 6))`, `fit.undo()`, `fit.residual()` |
+| `ClockComparisons(records)`, from one phase record per clock | `st.ClockComparisons.from_records(records)` |
 | an `ArgumentError` | a `ValueError` |
+| a `MethodError`, as for a float where an integer counts samples | a `TypeError` |
+
+A float is refused even when it is a whole number, so a grid of averaging
+factors built with NumPy is converted first:
+`st.adev(p, np.unique(np.round(np.logspace(0, 3, 30)).astype(int)))`.
 
 Arrays come back as NumPy arrays and results as Python objects with the
 fields of the Julia types.

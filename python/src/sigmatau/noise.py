@@ -7,11 +7,14 @@ of τ, and ``noise_gen`` simulates a record with a power-law frequency spectrum.
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
 from ._convert import (
+    as_int,
     data_from_jl,
     np_f64,
     np_syms,
@@ -26,6 +29,13 @@ from .grids import TauMode
 from .types import FrequencyData, PhaseData
 
 _xoshiro = jl.seval("Random.Xoshiro")
+
+
+def _seeded(seed: object) -> Any:
+    """Julia's ``Xoshiro`` generator seeded with the integer ``seed``."""
+    if isinstance(seed, bool) or not hasattr(seed, "__index__"):
+        raise TypeError("rng: pass an integer seed or None; sigmatau draws from Julia's RNG")
+    return _xoshiro(operator.index(seed))
 
 
 @_map_errors
@@ -69,8 +79,8 @@ def identify_noise(
         jl.identify_noise(
             to_jl_data(x) if isinstance(x, (PhaseData, FrequencyData)) else to_jl_f64(x),
             resolve_m(m_values),
-            dmin=int(dmin),
-            dmax=int(dmax),
+            dmin=as_int(dmin, "dmin"),
+            dmax=as_int(dmax, "dmax"),
             remove_drift=bool(remove_drift),
             b1_length=jl.Symbol(str(b1_length)),
             b1=bool(b1),
@@ -114,8 +124,10 @@ def noise_id_nnls(
         "weights": jl.Symbol(weights) if isinstance(weights, str) else to_jl_f64(weights),
     }
     if alphas is not None:
-        kwargs["alphas"] = to_jl_ints(alphas)
-    args = (to_jl_data(data),) if m_values is None else (to_jl_data(data), to_jl_ints(m_values))
+        kwargs["alphas"] = to_jl_ints(alphas, "an exponent α")
+    args = (to_jl_data(data),)
+    if m_values is not None:
+        args += (to_jl_ints(m_values, "an averaging factor"),)
     r = jl.noise_id_nnls(*args, **kwargs)
     return {
         "deviation": str(r.deviation),
@@ -175,11 +187,9 @@ def noise_gen(
     if h is not None:
         kwargs["h"] = to_jl_dict_int_f64(h)
     if rng is not None:
-        if isinstance(rng, bool) or not isinstance(rng, int):
-            raise TypeError("rng: pass an int seed or None; sigmatau draws from Julia's RNG")
-        kwargs["rng"] = _xoshiro(int(rng))
+        kwargs["rng"] = _seeded(rng)
 
-    return data_from_jl(jl.noise_gen(jl_kind, int(n), float(tau0), **kwargs))
+    return data_from_jl(jl.noise_gen(jl_kind, as_int(n, "n"), float(tau0), **kwargs))
 
 
 __all__ = ["identify_noise", "noise_id_nnls", "noise_gen"]
