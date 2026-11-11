@@ -245,8 +245,8 @@ function Base.show(io::IO, ::MIME"text/plain", m::ClockModel)
 end
 
 """
-    clock_model(fit; drift, flicker=false, tau_max, fm_band, pm_band) → ClockModel
-    clock_model(h::AbstractDict; tau0, drift, flicker=false, tau_max, fm_band,
+    clock_model(fit; drift, flicker=true, tau_max, fm_band, pm_band) → ClockModel
+    clock_model(h::AbstractDict; tau0, drift, flicker=true, tau_max, fm_band,
                 pm_band) → ClockModel
 
 The [`ClockModel`](@ref) of a power-law noise model.
@@ -256,11 +256,20 @@ White FM, random-walk FM and random-run FM (α = 0, −2, −4) become `q1`,
 under [`ClockModel`](@ref). The flicker noises have no finite state, and
 `flicker` decides what becomes of them.
 
-With `flicker = false`, flicker FM and flicker-walk FM (α = −1, −3) are
-left out and flicker PM (α = 1) is folded into `R`. A filter averages the
-PM that is faster than its own response and follows the rest as if it were
-the clock, so `R` stands for the part it averages, as the measurement
-variance of
+By default, flicker FM and flicker PM (α = −1, 1) are kept as the Markov
+states of [`ClockModel`](@ref), across the τ where each holds a quarter of
+the model's Allan variance, and `R` is the white PM alone. A fit without
+flicker gives the same model with either setting.
+
+With `flicker = false`, flicker FM is left out and flicker PM is folded
+into `R`. The model then has two states, or three with drift, as the
+`:stein` time scale of [`timescale`](@ref) needs, and it has less noise
+than the fit: in simulation the filter of a clock on its flicker floor
+claimed several times less than the error it made
+([What the states buy](@ref)). The fold rests on what a filter does with
+PM: it averages the PM that is faster than its own response and follows
+the rest as if it were the clock. `R` stands for the part it averages, as
+the measurement variance of
 [Van Dierendonck et al. (1984), Eqs. (68)–(69)](@cite van-dierendonck-1984-allan-kalman)
 is the phase noise that a tracking loop does not follow:
 
@@ -274,11 +283,9 @@ the FM terms (the Hadamard variances are compared when the model has
 α = −3 or −4). For white PM alone this is ``h_2/(8π^2 τ_0)`` at every lag.
 The paper gives the principle; the formula is this package's.
 
-With `flicker = true`, flicker FM and flicker PM are kept as the Markov
-states of [`ClockModel`](@ref) and `R` is the white PM alone. Flicker-walk
-FM is left out in either case. `powerlaw_sigma(model, τ)` beside
-`powerlaw_sigma(fit, τ)` shows what a model leaves out at the τ of
-interest.
+Flicker-walk FM (α = −3) is left out with either setting.
+`powerlaw_sigma(model, τ)` beside `powerlaw_sigma(fit, τ)` shows what a
+model leaves out at the τ of interest.
 
 # Arguments
 
@@ -292,7 +299,8 @@ interest.
 - `tau0`: sample interval in seconds; a fit carries its own.
 - `drift`: whether the model has a drift state; by default, whether
   ``h_{-4}`` is positive.
-- `flicker`: keep flicker FM and flicker PM as Markov states.
+- `flicker`: keep flicker FM and flicker PM as Markov states; `false`
+  leaves flicker FM out and folds flicker PM into `R`.
 - `tau_max`, `fm_band`, `pm_band`: passed to [`ClockModel`](@ref). From a
   [`PowerLawFit`](@ref) of a deviation curve, `tau_max` defaults to its
   longest τ.
@@ -315,7 +323,7 @@ From a record, with the flicker that the fit finds kept as states:
 ```julia
 p = noise_gen(PhaseData, 65536, 1.0;
               h = Dict(0 => 1e-24, -1 => 1.6e-26, -2 => 5e-34))
-m = clock_model(powerlaw_fit(p; alphas = [2, 1, 0, -1, -2]); flicker = true)
+m = clock_model(powerlaw_fit(p; alphas = [2, 1, 0, -1, -2]))
 ```
 """
 function clock_model(fit::PowerLawFit; tau_max::Real=fit.source in POWERLAW_DEVIATIONS ? maximum(fit.x) : 1e6 * fit.tau0, kw...)
@@ -324,7 +332,7 @@ function clock_model(fit::PowerLawFit; tau_max::Real=fit.source in POWERLAW_DEVI
     return clock_model(_powerlaw_h(fit); tau0=fit.tau0, tau_max, kw...)
 end
 
-function clock_model(h::AbstractDict; tau0::Real, drift::Union{Bool,Nothing}=nothing, flicker::Bool=false, kw...)
+function clock_model(h::AbstractDict; tau0::Real, drift::Union{Bool,Nothing}=nothing, flicker::Bool=true, kw...)
     hd = _powerlaw_h(h)
     hα(α) = get(hd, α, 0.0)
     q3 = 8π^4 * hα(-4)

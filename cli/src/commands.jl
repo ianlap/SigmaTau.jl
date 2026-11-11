@@ -363,7 +363,7 @@ function holdover_model(data::PhaseData, train::Float64, drift::Bool)
     τ₀ = Float64(data.tau0)
     b = min(SigmaTau._whole_samples(train, τ₀, "train"), length(data.x))
     pf = powerlaw_fit(PhaseData(data.x[1:b], data.tau0))
-    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, flicker=true, tau_max=length(data.x) * τ₀), maximum(pf.x)
+    return clock_model(Dict{Int,Float64}(zip(pf.alphas, pf.h)); tau0=τ₀, drift, tau_max=length(data.x) * τ₀), maximum(pf.x)
 end
 
 function cmd_holdover(io::IO, o::Options, data::PhaseData, t_start::UInt64)

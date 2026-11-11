@@ -289,9 +289,9 @@ Markov phase states along with the phase.
 
 `rms` agrees with `claimed` when the model fits the clock, and an `rms`
 above it says that the noise of the model is too low. A model made from a
-noise fit should keep the flicker FM that the fit finds,
-`clock_model(fit; flicker = true)`. Without it that noise is left out of
-the model, and in simulation the filter of a clock on its flicker floor
+noise fit keeps the flicker FM that the fit finds, as [`clock_model`](@ref)
+does by default. With `flicker = false` that noise is left out of the
+model, and in simulation the filter of a clock on its flicker floor
 claimed several times less than the error it made
 ([Flicker states](@ref)).
 

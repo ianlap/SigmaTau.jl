@@ -514,7 +514,8 @@ shock variances
 and capped at `wmax`; those returned are the phase weights. The scale is
 read at the pivot as for `:greenhall`. The paper runs a filter for every
 pair of clocks; with the filters of one pivot only, the scale depends on
-the pivot. Models with flicker states are refused.
+the pivot. Models with flicker states are refused; `clock_model` makes
+one without them with `flicker = false`.
 
 The paper does not treat missing readings. Here a clock without a reading
 runs on its prediction, and at its first reading after a gap it takes no
@@ -986,7 +987,7 @@ function _stein(cc::ClockComparisons, models::AbstractVector{ClockModel}, pivot:
     all(m -> m.tau0 ≈ τ, models) || throw(ArgumentError("timescale: the models' tau0 must be the comparisons' τ₀"))
     k * wmax >= 1 || throw(ArgumentError("timescale: wmax below 1/$k leaves weights that cannot sum to 1"))
     any(m -> m.flicker_fm > 0 || m.flicker_pm > 0, models) && throw(ArgumentError(
-        "timescale: :stein has no flicker states; pass models without flicker, or use :greenhall or :jones_tryon"))
+        "timescale: :stein has no flicker states; build the models with clock_model(...; flicker=false), or use :greenhall or :jones_tryon"))
     ns = any(m -> m.q3 > 0, models) ? 3 : 2
     Φ = zeros(ns, ns)                                 # element-wise: matrix literals are not trim-safe
     for d in 1:ns; Φ[d, d] = 1.0; end

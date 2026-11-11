@@ -206,9 +206,10 @@ sigmatau_json("analyze --synth 1024 --component WHFM::8 --component RWFM:32: --f
 the deviation that the components leave. `curves` holds the deviations of
 the model at the averaging times of each ADEV, MDEV, TDEV, HDEV and MHDEV
 result. `sigma_at` is its Allan deviation at 1 s, 10 s, 100 s, 1000 s,
-``10^4`` s and one day, as far as half the record. `clock_model` is the
-[`clock_model`](@ref) of the fit. Where the record or a component cannot
-be fitted, `powerlaw` holds an `error` instead.
+``10^4`` s and one day, as far as half the record. `clock_model` holds the
+white levels `R`, `q1`, `q2` and `q3` of the [`clock_model`](@ref) of the
+fit with `flicker = false`. Where the record or a component cannot be
+fitted, `powerlaw` holds an `error` instead.
 
 ```@example cliref
 sigmatau_json("analyze --synth 1024 --devs mtie,tdev --mask G811 --format json"; only = "masks") # hide

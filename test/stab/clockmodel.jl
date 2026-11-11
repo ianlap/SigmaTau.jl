@@ -33,21 +33,21 @@ using LinearAlgebra
         @test clock_model(Dict(:WHFM => 1e-24); tau0=1.0).q1 == 0.5e-24
         @test powerlaw_sigma(m, [0.1, 10.0]; deviation=:hdev) ≈ powerlaw_sigma(h, [0.1, 10.0]; deviation=:hdev, tau0=0.1)
         @test powerlaw_psd(m2, [1e-3, 1.0]) ≈ 2 * 3e-24 .+ 2e-30 / (2π^2) ./ [1e-3, 1.0] .^ 2
-        # Flicker PM folds into R: the white PM with the PM's Allan variance
-        # at the last lag where the PM still leads the FM.
+        # Without flicker states, flicker PM folds into R: the white PM with
+        # the PM's Allan variance at the last lag where the PM still leads the FM.
         pm, fm = Dict(2 => 1e-22, 1 => 2e-22), Dict(0 => 2e-24)
         k = SigmaTau._pm_handover(merge(pm, fm), 1.0)
         σ(h, m) = powerlaw_sigma(h, [m]; tau0=1.0)[1]
         @test σ(pm, k) > σ(fm, k) && σ(pm, k + 1) < σ(fm, k + 1)
-        mf = clock_model(merge(pm, fm); tau0=1.0)
+        mf = clock_model(merge(pm, fm); tau0=1.0, flicker=false)
         @test mf.R ≈ σ(pm, k)^2 * k^2 / 3 && mf.q1 == 1e-24
         @test mf.R > σ(pm, 1)^2 / 3 > 1e-22 / 8π^2
-        @test clock_model(Dict(1 => 1e-26, 0 => 2e-24); tau0=1.0).R ≈ σ(Dict(1 => 1e-26), 1)^2 / 3
+        @test clock_model(Dict(1 => 1e-26, 0 => 2e-24); tau0=1.0, flicker=false).R ≈ σ(Dict(1 => 1e-26), 1)^2 / 3
         run = merge(pm, Dict(-4 => 1e-36))
         kh = SigmaTau._pm_handover(run, 1.0)
         σh(h, m) = powerlaw_sigma(h, [m]; tau0=1.0, deviation=:hdev)[1]
         @test 1 < kh < 2^16 && σh(pm, kh) > σh(Dict(-4 => 1e-36), kh)
-        @test clock_model(run; tau0=1.0).R ≈ σ(pm, kh)^2 * kh^2 / 3
+        @test clock_model(run; tau0=1.0, flicker=false).R ≈ σ(pm, kh)^2 * kh^2 / 3
     end
 
     @testset "from a record's fit" begin
@@ -115,11 +115,11 @@ using LinearAlgebra
                   3 * SigmaTau._reading_var(pm)) / τ^2
         @test sqrt.(avp.(τ)) ≈ powerlaw_sigma(pm, τ) rtol=0.03
         @test avp(1.0) ≈ powerlaw_sigma(pm, [1.0])[1]^2 rtol=1e-12
-        # From a fit: kept only on request.
+        # From a fit: kept unless turned off.
         hs = Dict(1 => hp, 0 => 2e-24, -1 => hf, -2 => 1e-31)
-        off, on = clock_model(hs; tau0=1.0), clock_model(hs; tau0=1.0, flicker=true)
+        off, on = clock_model(hs; tau0=1.0, flicker=false), clock_model(hs; tau0=1.0)
         @test (off.flicker_fm, off.flicker_pm) == (0, 0) && (on.flicker_fm, on.flicker_pm) == (hf, hp)
-        @test clock_model(hs; tau0=1.0, flicker=true, fm_band=(10, 1000)).fm_band == (10.0, 1000.0)
+        @test clock_model(hs; tau0=1.0, fm_band=(10, 1000)).fm_band == (10.0, 1000.0)
         @test_throws ArgumentError ClockModel(; tau0=1.0, flicker_fm=hf, fm_band=(0.5, 100.0))
     end
 
