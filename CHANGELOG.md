@@ -153,6 +153,16 @@ Clock models, the Kalman filter and timescales.
   Allan deviation free-running, steered and as the clock model predicts.
   Gains from `--time-constant` (with `--integral`) or `--cost P:F:U`; the
   clock model is fitted to the first `--train` stretch alone.
+- `steer(model, gains; readings=true)`: the predicted time error and Allan
+  deviation of the readings of a steered clock, with the noise each reading
+  carries, to set beside a replayed record. `sigmatau steer`'s `predicted`
+  column now uses it; before, it was for the clock without that noise and
+  sat below the steered column at short averaging times. Also in Python.
+- Explorer: a Steering page. It replays a steering loop on the record, with
+  gains from a time constant or a cost, and shows the Allan deviation
+  free-running, steered and as the clock model predicts, or the steered
+  phase with the frequency correction in force. Keys: 7 Steering, 8
+  Ensemble, 9 Live.
 - Clock ensembles: `ClockComparisons` holds several clocks read against one
   reference (`cc[i]` one clock, `cc[i, j]` a difference), and
   `simulate_ensemble` draws one from a `ClockModel` per clock, with the true
