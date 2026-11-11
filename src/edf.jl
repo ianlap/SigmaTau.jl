@@ -45,7 +45,11 @@ they report.
   `:mhdev` at ``m = 1``.
 - `:theo1`: the empirical formulas of
   [SP1065 §5.2.15, Table 3](@cite riley-2008-sp1065), for white PM to
-  random-walk FM.
+  random-walk FM, not taken below 1.
+- `:theobr`: Thêo1 with the bias removed, as [`theo1`](@ref) returns it by
+  default. On white, flicker and random-walk FM the EDF of `:theo1` is
+  reduced for the scatter of the bias ratio, which is estimated from the
+  same record (see [`theo1`](@ref)); on PM it is that of `:theo1`.
 - `:pdev`: the approximation of
   [Vernotte et al. (2021), Eqs. (16), (18) and (22) to (24)](@cite vernotte-2021-pvar-noninteger),
   for white PM to random-walk FM, and the EDF of `:adev` at ``m = 1``.
@@ -113,6 +117,8 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
             end
         elseif method == :theo1
             edfs[k] = _theo1_edf(alpha, m, N)
+        elseif method == :theobr
+            edfs[k] = _theobr_edf(alpha, m, N)
         elseif method == :pdev
             edfs[k] = _pvar_edf(alpha, m, N)
         else
@@ -388,13 +394,15 @@ end
 Equivalent degrees of freedom of Thêo1 at the even averaging factor `m` on
 `N` phase samples: the empirical formulas of SP1065 §5.2.15, Table 3, with
 `r = 0.75·m`, stated there for `τ0 ≤ T/10`. One formula per noise type from
-white PM to random-walk FM; any other gives `NaN`. ThêoBR and the Thêo1
-segment of ThêoH take the same EDF, as in SP1065 §5.4.4.
+white PM to random-walk FM; any other gives `NaN`. The result is not taken
+below 1, the least a quadratic statistic can have and the range Howe (2006),
+Eq. (8), states: the random-walk FM formula falls below it from `r = 0.42·N`
+and below zero from `0.63·N`, where the measured EDF is 1.1 to 1.7.
 """
-function _theo1_edf(alpha::Int, m::Int, N::Int)
-    m < 2 && return NaN
-    r = 0.75 * m
-    Nf = Float64(N)
+_theo1_edf(alpha::Int, m::Int, N::Int) =
+    m < 2 ? NaN : max(_theo1_edf_sp1065(alpha, 0.75 * m, Float64(N)), 1.0)
+
+function _theo1_edf_sp1065(alpha::Int, r::Float64, Nf::Float64)
     if alpha == 2        # WHPM
         return (0.86 * (Nf + 1.0) * (Nf - 4.0 * r / 3.0) / (Nf - r)) *
                (r / (r + 1.14))
@@ -414,6 +422,74 @@ function _theo1_edf(alpha::Int, m::Int, N::Int)
     end
     return NaN
 end
+
+# ThêoBR's ratio as a random factor (tools/theobr_edf.jl): `c`, its relative
+# scatter on a long record of white, flicker and random-walk FM, and `rho`,
+# its correlation with Thêo1 on the log scale at τ/T = `_THEOBR_U`. `half` is
+# the ladder to T/2 and `tenth` Howe's ladder to T/10. On a record of `N`
+# samples the squared scatter is larger by the factor 1 + (`n0`/N)^1.5.
+const _THEOBR_U = (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.75)
+const _THEOBR_SCATTER = (
+    half = (n0=55.0, c=(0.30, 0.28, 0.26),
+            rho=((0.0, 0.0, 0.05, 0.15, 0.27, 0.51, 0.71, 0.77, 0.74, 0.52),
+                 (0.0, 0.0, 0.0, 0.09, 0.22, 0.50, 0.73, 0.84, 0.84, 0.70),
+                 (0.0, 0.08, 0.17, 0.28, 0.39, 0.61, 0.78, 0.87, 0.89, 0.79))),
+    tenth = (n0=225.0, c=(0.105, 0.088, 0.074),
+             rho=((0.0, 0.39, 0.89, 0.86, 0.72, 0.54, 0.46, 0.36, 0.26, 0.11),
+                  (0.0, 0.33, 0.86, 0.91, 0.80, 0.58, 0.44, 0.34, 0.24, 0.13),
+                  (0.0, 0.49, 0.85, 0.93, 0.90, 0.77, 0.66, 0.58, 0.52, 0.44))))
+
+"""
+    _theobr_edf(alpha::Int, m::Int, N::Int; howe=false) → Float64
+
+Equivalent degrees of freedom of ThêoBR, the Thêo1 variance at the even
+factor `m` times the ratio of `_theobr_ratio`, on `N` phase samples. The
+published EDF is that of Thêo1 alone (Howe (2006), §6; SP1065 §5.4.4), which
+takes the ratio as exact. The ratio is an estimate from the same record: on
+FM noise it scatters by 26 to 30 % with the ladder to T/2 and by 7 to 11 %
+with Howe's (`howe=true`) from 1024 samples, by 27 to 32 % and 10 to 14 % on
+256, and at long `τ` it rises and falls with Thêo1 itself.
+
+The model takes the ratio ``R`` and Thêo1 as jointly lognormal. With ``c``
+the relative scatter of ``R`` on a long record, ``N_0`` the record length
+below which it grows (55 samples, 225 with `howe`), ``ν`` the EDF of Thêo1
+and ``ρ`` their correlation on the log scale,
+
+```math
+s_R^2 = \\ln\\bigl(1 + c^2\\,[1 + (N_0/N)^{3/2}]\\bigr), \\quad
+s_T^2 = \\ln(1 + 2/ν), \\quad
+\\mathrm{EDF} = \\frac{2}{\\exp(s_R^2 + s_T^2 + 2ρ\\,s_R s_T) - 1} .
+```
+
+``c``, ``N_0`` and ``ρ`` were measured in simulation for white, flicker and
+random-walk FM (`_THEOBR_SCATTER`), with ``ρ`` interpolated in ``τ/T``.
+Against the EDF measured on simulated records of 128 to 4096 samples the
+model is, with the ladder to T/2, within 25 % on white and flicker FM,
+mostly below it, and down to half of it on random-walk FM beyond 0.3 T,
+where the published EDF of Thêo1 that it starts from is as low. With Howe's
+ladder it is up to 35 % below at short `τ` and, on flicker FM from 0.2 T,
+10 to 45 % above. On white and flicker PM the result is the EDF of Thêo1:
+there the error of ThêoBR is the bias that one ratio leaves, which no EDF
+describes.
+"""
+function _theobr_edf(alpha::Int, m::Int, N::Int; howe::Bool=false)
+    ν = _theo1_edf(alpha, m, N)
+    -2 <= alpha <= 0 || return ν
+    s = howe ? _THEOBR_SCATTER.tenth : _THEOBR_SCATTER.half
+    u = min(0.75 * m / N, _THEOBR_U[end])
+    j = 1
+    while j < length(_THEOBR_U) - 1 && _THEOBR_U[j+1] <= u
+        j += 1
+    end
+    ρs = s.rho[1-alpha]
+    ρ = ρs[j] + (ρs[j+1] - ρs[j]) * (u - _THEOBR_U[j]) / (_THEOBR_U[j+1] - _THEOBR_U[j])
+    sR = log1p(s.c[1-alpha]^2 * (1 + (s.n0 / N)^1.5))
+    sT = log1p(2 / ν)
+    return 2 / expm1(sR + sT + 2ρ * sqrt(sR * sT))
+end
+
+_theobr_edfs(noises::Vector{Symbol}, m_values::Vector{Int}, N::Int; howe::Bool=false) =
+    Float64[_theobr_edf(_alpha_from_noise(nz), m, N; howe=howe) for (nz, m) in zip(noises, m_values)]
 
 function _coeff_htot(alpha::Int)
     # b₀ and b₁ of edf(τ) = (T/τ) / (b₀ + b₁·τ/T): Howe and Peppler (2001),

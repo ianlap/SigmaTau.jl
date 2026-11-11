@@ -68,15 +68,17 @@ type from a shorter record
 
 At the longest averaging times an estimator rests on a few terms. The
 equivalent degrees of freedom (EDF) say how few. Here they are for three
-estimators at ``τ ≈ T/32``, ``T/8`` and ``T/4`` on white FM:
+estimators at ``τ ≈ T/32``, ``T/8`` and ``T/4`` on white FM, and for Thêo1
+before its bias is removed:
 
 ```@example choosing
 using SigmaTau, Random
 p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(0 => 1e-12), rng = Xoshiro(1))
-edf(est, m) = round.(est(p, m; noise = :WHFM).edf; digits = 1)
+edf(est, m; kw...) = round.(est(p, m; noise = :WHFM, kw...).edf; digits = 1)
 
 (adev = edf(adev, [128, 512, 1024]), totdev = edf(totdev, [128, 512, 1024]),
- theo1 = edf(theo1, [170, 682, 1366]))
+ theo1 = edf(theo1, [170, 682, 1366]),
+ theo1_uncorrected = edf(theo1, [170, 682, 1366]; correct_bias = false))
 ```
 
 The total estimators extend the record by reflection at both ends, which
@@ -90,9 +92,13 @@ noise type, which the package identifies and corrects for
 estimators are most useful.
 
 Thêo1 has about three times the EDF of the Allan deviation and reaches
-three quarters of the record. [`theo1`](@ref) removes its bias by a ratio
-measured on the record, which holds on FM noise of a single type and adds
-a scatter of its own, about 15 % in deviation. It reads wrong where PM
+three quarters of the record, but it is biased. [`theo1`](@ref) removes
+the bias by a ratio measured on the record, which holds on FM noise of a
+single type and adds a scatter of its own, about 15 % in deviation. The
+EDF it reports, and its interval, include that scatter
+([Confidence intervals](../explanation/confidence.md)): in the table the
+corrected estimate has fewer degrees of freedom than the Allan deviation
+at ``T/32`` and more from ``T/8``. It reads wrong where PM
 noise dominates and where the noise type changes within the record
 ([Bias correction](../explanation/bias.md#Thêo1) has the sizes). At short
 averaging times that scatter leaves it less precise than the Allan

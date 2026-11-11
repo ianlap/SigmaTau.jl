@@ -159,8 +159,9 @@ of the Allan deviation is 5 to 7 %. It is the more precise of the two only
 from about a tenth of the record on: 22 to 34 % against 27 to 35 % at
 ``T/5``, and 40 to 60 % against 62 to 64 % at ``T/2``. The corrected
 variance averages 6 to 9 % below the Allan variance between ``48τ_0`` and
-``T/5``, and 8 to 14 % above it at ``T/2``. The interval does not include
-the scatter of the ratio ([Confidence intervals](confidence.md)).
+``T/5``, and 8 to 14 % above it at ``T/2``. The interval includes the
+scatter of the ratio, through an EDF of its own
+([Confidence intervals](confidence.md)).
 
 **It assumes one noise type.** One ratio is applied at every averaging
 time. Its size depends on the noise type: in the fit of
