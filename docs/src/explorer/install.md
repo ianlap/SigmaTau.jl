@@ -55,7 +55,7 @@ The script looks for the program in this order:
 1. the path in the environment variable `SIGMATAU_CLI`;
 2. `cli/build/bin/sigmatau`, where the
    [build](../guide/cli.md#Install) leaves it;
-3. `julia --project=cli -m SigmaTauCLI`, which needs Julia 1.12 or later and
+3. `julia --project=cli -m SigmaTauCLI`, which needs Julia 1.13 or later and
    the packages of `cli` installed
    (`julia --project=cli -e 'using Pkg; Pkg.instantiate()'`).
 

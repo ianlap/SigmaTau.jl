@@ -31,7 +31,7 @@ sigmatau-*/bin/sigmatau version
 The folder holds the program and the Julia runtime libraries it loads, about
 150 MB in all. Keep it whole, and put its `bin` directory on the `PATH`.
 
-To build the program from the repository, with Julia 1.12 or later:
+To build the program from the repository, with Julia 1.13 or later:
 
 ```bash
 julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'      # installs ~/.julia/bin/juliac

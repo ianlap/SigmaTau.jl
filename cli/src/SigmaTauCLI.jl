@@ -11,6 +11,10 @@
 # All output is rendered into an IOBuffer first and written in one go.
 module SigmaTauCLI
 
+# A program that Julia 1.12 trims cannot start a task, so every threaded loop
+# fails in it. Pkg skips the julia compat when a Manifest is already there.
+VERSION < v"1.13" && error("SigmaTauCLI needs Julia 1.13 or later")
+
 using SigmaTau
 using Random
 
@@ -42,6 +46,11 @@ include("completion.jl")
 # The message for an exception that is not a CLIError. No showerror: it
 # dispatches on the exception type, which trimming cannot resolve.
 function error_message(err)
+    # A threaded loop wraps what its task threw; name that instead.
+    if err isa CompositeException && !isempty(err.exceptions)
+        err = err.exceptions[1]
+        err isa TaskFailedException && (err = err.task.result)
+    end
     err isa CLIError && return err.msg
     if err isa ArgumentError
         m = err.msg
@@ -49,7 +58,7 @@ function error_message(err)
     end
     err isa DomainError && return "domain error in the analysis"
     err isa BoundsError && return "index out of range in the analysis"
-    return "failed (" * String(nameof(typeof(err))) * ")"
+    return "failed (" * string(nameof(typeof(err))) * ")"
 end
 
 # Plain open/close: a do-block closure would box captured locals.
