@@ -373,7 +373,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .drift-result { flex: 1 1 320px; min-width: 0; }
 
 /* Stability toolbar: overlay toggles */
-.toggles { display: inline-flex; gap: 14px; margin-left: auto; font-size: 12.5px; }
+.toggles { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 14px; margin-left: auto; font-size: 12.5px; }
+.toggles select { width: 154px; }   /* its longest label; the grouped entries are indented wider */
 .toggles .check { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); white-space: nowrap; }
 
 /* Dynamic: σ(t) at one τ across clocks */

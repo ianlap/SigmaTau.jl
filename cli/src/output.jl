@@ -289,8 +289,10 @@ end
 
 # Beside the CSV: the verdict of each mask on each MTIE / TDEV result, one line each.
 function mask_verdicts(err::IO, name::String, results::Vector{StabilityResult})
+    checked = false
     for m in mask_names(name), r in results
         r.deviation_type in (:mtie, :tdev) || continue
+        checked = true
         c = mask_check(r, m)
         print(err, "sigmatau: "); print(err, r.deviation_type === :mtie ? "MTIE " : "TDEV ")
         if isnan(c.margin)
@@ -302,6 +304,7 @@ function mask_verdicts(err::IO, name::String, results::Vector{StabilityResult})
         end
         print(err, String(m)); print(err, '\n')
     end
+    checked || print(err, "sigmatau: --mask checks MTIE and TDEV, and --devs names neither\n")
     return nothing
 end
 

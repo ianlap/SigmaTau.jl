@@ -245,6 +245,7 @@ mktempdir() do dir
         # With CSV the verdict goes to stderr: X swings 4.7 ns, under the 25 ns of PRTC-B.
         r = run_cli("analyze", pf, "--devs", "adev,mtie", "--mask", "G8272_PRTC_B")
         @test r.code == 0 && startswith(r.out, "source,quantity,deviation") && occursin(r"^sigmatau: MTIE passes, [\d.]+× under G8272_PRTC_B\n$", r.err)
+        @test occursin("--devs names neither", run_cli("analyze", pf, "--devs", "adev", "--mask", "G811").err)
         @test isempty(run_cli("analyze", pf, "--devs", "mtie", "--mask", "G8272_PRTC_B", "--quiet").err)
     end
 
