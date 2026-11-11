@@ -409,5 +409,33 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
+  await t.test("A small window keeps the Data plot usable in every view and the hat's legend off the curves", async () => {
+    await page.setViewportSize({ width: 960, height: 640 });
+    await page.goto(base + "#data");
+    const n = errors.length;
+    let seed = 7;
+    const noise = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+    const rows = Array.from({ length: 600 }, (_, i) => [i, ...[1, 2, 3].map(() => 1e-9 * noise())].join(",")).join("\n");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "three_clocks_in_a_long_named_file.csv", mimeType: "text/csv", buffer: Buffer.from(rows + "\n") });
+    await page.locator("#import-dialog [data-act=load]").click({ timeout: 5000 }).catch(() => {});
+    await settled();
+    for (const view of ["phase", "drift", "hist", "acf"]) {
+      await page.click(`[data-view=${view}]`);
+      await settled();
+      const h = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").getBoundingClientRect().height);
+      assert.ok(h >= 250, `${view}: the plot is ${h} px high`);
+    }
+    await page.click("a[data-page=ensemble]");
+    await page.click("[data-ctl=view][data-v=hat]");
+    await page.selectOption("#side [data-ctl=method]", "hat");   // (an earlier step left KLTS, which a file with gaps refuses)
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=sub]")?.textContent.startsWith("Hat · "), null, SLOW);
+    await plotted("#page [data-ref=adev]");
+    const [legend, area] = await page.evaluate(() => ["#page [data-ref=adev] .legend", "#page [data-ref=adev] .nsewdrag"].map((q) => document.querySelector(q).getBoundingClientRect().toJSON()));
+    assert.ok(legend.bottom <= area.top + 1, "the legend sits above the plot area");
+    await page.setViewportSize({ width: 1280, height: 800 });
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+  });
+
   assert.deepEqual(errors, []);
 });

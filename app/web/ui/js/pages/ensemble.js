@@ -255,7 +255,9 @@ function refreshHat(r, { clocks, pairs }) {
     // KLTS gives an upper limit where the clock is not resolved.
     ...res.clocks.map((c, i) => ({ x: tau, y: c.points.map((p) => (p.dev === null ? p.ci_upper : null)), name: `${names[i]}, upper limit`, showlegend: false, mode: "markers",
       marker: { color: color(i), size: 9, symbol: "triangle-down-open" }, hovertemplate: `<b>${h(names[i])}</b>, not resolved<br>τ = %{x:.4g} s<br>σ < %{y:.3e}<extra></extra>` })),
-  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis(sigma), showlegend: true, uirevision: `hat-${res.deviation}` }, CONFIG);
+  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis(sigma), showlegend: true,
+    legend: { ...baseLayout().legend, orientation: "h", x: 0, xanchor: "left", y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", borderwidth: 0 },   // above the curves, not over them
+    margin: { l: 62, r: 14, t: 40, b: 48 }, uirevision: `hat-${res.deviation}` }, CONFIG);
   Plotly.Plots.resize(root.querySelector("[data-ref=adev]"));
 }
 
