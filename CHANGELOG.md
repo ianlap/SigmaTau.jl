@@ -399,6 +399,17 @@ Clock models, the Kalman filter and timescales.
 - Documentation: every docstring checked against the code and its cited
   source and rewritten in one style; bibliography verified against publisher
   records, with DOIs, and 21 sources added.
+- Documentation site, Tutorials 1 to 3 and the READMEs rewritten from the
+  code and the cited sources, in six parts: tutorials, how-to guides,
+  explorer, background, reference, bibliography. New: a manual of the
+  explorer with screenshots of simulated records, a command-line reference
+  whose samples the docs build produces by running the program, a guide to
+  gaps, outliers and drift, and a page on related software. The cross-check
+  group "NBS 1000-point" is now "1000-point test suite" (SP1065 §12.4), and
+  the benchmark table of a measured record is removed with its two result
+  files.
+- `bench/README.md` re-timed on a Fedora workstation, with a Thêo1 timing on
+  the public allantools Cs 5071A record.
 - The Stable32 reader (`.phd`, `.frd`) reads a value of zero as a gap, as
   Stable32 does (all zeros in frequency data; all but the first and last
   point in phase data), and reads Stable32's older header of bare `File:` …
@@ -555,6 +566,14 @@ Clock models, the Kalman filter and timescales.
   Markov states; without them the filter of a flicker FM clock claimed a
   tenth of its error or stopped on NaN. `holdover(data, model)` refuses a
   model with no noise.
+- Explorer: *Fill gaps* no longer stays on from the previous file, and its
+  box stays on the Data page when a frequency record with gaps fails to read
+  without it.
+- AT2 step detector (`timescale(...; algorithm=:at2, steps=…)`): a clock
+  kept out of the scale after a frequency step is still estimated, as in
+  Weiss & Weissert 1991 §4, so it comes back with its new frequency. Before,
+  it came back with the old one, was taken out again, and a large step moved
+  the scale at the return.
 
 ### Security
 
