@@ -468,11 +468,11 @@ package sets both from the record:
     In simulation (4096 samples; the five power-law noises and seven sums
     of two of them; phase and frequency records; one to six gaps removing
     up to 30 % of the record; with and without a frequency offset and
-    drift; 100 records each) the Allan deviation of the filled record was
-    within 5 % of that of the whole record from ``τ_0`` to ``256τ_0``, and
-    within 11 % at ``256τ_0`` for a gap of 30 % at the end of the record.
-    The modified Allan deviation was within 4 % up to ``16τ_0``. A fill
-    does not recover three things:
+    drift; the mean of 1000 records each) the Allan deviation of the
+    filled record was within 6 % of that of the whole record from ``τ_0``
+    to ``256τ_0``, and within 10 % at ``256τ_0`` for a gap of 30 % at the
+    end of the record. The modified Allan deviation was within 4 % up to
+    ``16τ_0``. A fill does not recover three things:
 
     - The modified Allan deviation of white PM at long ``τ``, which
       resolves an error of level that the Allan deviation does not. With
@@ -480,18 +480,18 @@ package sets both from the record:
       ``256τ_0``, and 1.9 times for a frequency record with six gaps.
     - The phase step across a gap of a frequency record, so that the
       errors of many gaps add. With gaps of 1 to 12 samples removing a
-      quarter of a frequency record, white PM read 1.3 and 1.9 times high
-      in the Allan deviation at ``64τ_0`` and ``256τ_0`` (4.8 and 19 times
+      fifth of a frequency record, white PM read 1.3 and 1.9 times high
+      in the Allan deviation at ``64τ_0`` and ``256τ_0`` (4.7 and 19 times
       in the modified one), flicker PM 1.5 times high at ``256τ_0`` and
-      white FM 6 % high, and white PM with flicker FM read 15 % low there.
-      The same gaps in a phase record left the Allan deviation within 8 %.
+      white FM 7 % high, and white PM with flicker FM read 14 % low there.
+      The same gaps in a phase record left the Allan deviation within 9 %.
     - A periodic term that stands out of the noise. On a phase record of
       white FM with a sine in the frequency, of period 512 samples and
       amplitude ``3σ_y(τ_0)``, the Allan deviation read 1.15 times high
-      and the modified one 1.40 times at ``256τ_0`` across one gap of
+      and the modified one 1.39 times at ``256τ_0`` across one gap of
       30 %, where the frequency is filled (1.00 with `form=:phase`). Past
       gaps of 1 to 12 samples, where the phase is filled in nine records
-      in ten, it read 1.42 times high at ``τ_0`` (1.00 with
+      in ten, it read 1.44 times high at ``τ_0`` (1.00 with
       `form=:frequency`), and 1.05 times at a third of that amplitude.
       Remove such a term before filling and put it back after.
 

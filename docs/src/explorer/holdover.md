@@ -117,15 +117,15 @@ the flicker FM `h₋₁` and the flicker PM `h₁` where the fit finds them.
   has more noise at that holdover time than the model.
 - The longest holdover times are the least certain. The RMS there rests
   on few independent trials, and the claim on what one stretch shows of
-  the slow noise. In simulation, on records of 8192 samples with a quarter
-  of the record as the stretch, the ratio at the sample interval was 0.97
-  to 1.04 in four records out of five, on white FM, on flicker FM, and on
-  white FM that gives way to random-walk FM at 390 s. At 2048 s it was 0.3
-  to 1.3 on white FM, 0.4 to 1.3 on flicker FM, and 0.5 to 8 on the white
-  and random-walk FM.
+  the slow noise. In simulation, on 2000 records of 8192 samples for each
+  clock, with a quarter of the record as the stretch, the ratio at the
+  sample interval was 0.97 to 1.04 in four records out of five, on white
+  FM, on flicker FM, and on white FM that gives way to random-walk FM at
+  390 s. At 2048 s it was 0.3 to 1.3 on white FM, 0.4 to 1.4 on flicker
+  FM, and 0.5 to 8 on the white and random-walk FM.
 - The levels are those of a fit to one stretch, which can find a noise
   type that the clock does not have. In the same simulation the model of
-  79 of the 200 white FM records held some flicker FM, and that of 48
+  41 % of the white FM records held some flicker FM, and that of 23 %
   some random-walk FM.
 
 ## Several clocks
