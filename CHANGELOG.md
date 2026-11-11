@@ -350,6 +350,9 @@ Clock models, the Kalman filter and timescales.
   `--band`, in CSV or JSON.
 - `quantity=:Sphi`, S_φ(f) in rad²/Hz, in `powerlaw_fit`, `powerlaw_psd` and
   `integrated_jitter`, and `"Sphi"` in Python.
+- Python: `ClockComparisons.from_records`, one phase record per clock.
+- Explorer: **Phase noise…** on the Stability page draws the σ(τ) that a
+  table of ℒ(f) gives, beside the deviations of the record.
 
 ### Changed
 
@@ -575,6 +578,13 @@ Clock models, the Kalman filter and timescales.
   functions (`--algorithm greenhall`, `wmax`, `powerlaw_fit … alphas`, the
   steady state of a steer every n samples) are said in the page's words. The
   Ensemble ADEV plot has no legend.
+- Python: an argument that counts (an averaging factor, a number of samples,
+  a window, a segment length, a clock index, a column) must be an `int` or a
+  NumPy integer; a float is a `TypeError`, where it was cut to its whole
+  part.
+- Explorer: on the Data page the plot keeps a usable height in a small
+  window (the page scrolls); the hat plot's legend sits above the curves,
+  not over them.
 
 ### Removed
 
@@ -889,6 +899,12 @@ Clock models, the Kalman filter and timescales.
   is rounded to the microsecond. On the Data page a message over the plot
   covers the plot row only, in all four views, so the view buttons stay
   reachable.
+- Python: `timescale(pivot=...)` and `simulate_ensemble(reference=...)`
+  check the index against the clocks and name the value passed, and
+  `reference=-1` no longer means the ideal reference; a NumPy integer is a
+  seed; `ClockComparisons` makes Julia's checks when built; an unknown noise
+  type is named in the error; `holdover(record, model)` refuses `grow`,
+  `drift` and `anchor`.
 
 ### Security
 
