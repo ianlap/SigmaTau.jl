@@ -723,8 +723,8 @@ function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     o.method == "klts" && k != 3 && throw(usage_error("--method klts is for three clocks; these are " * string(k)))
     N, τ₀ = length(records[1, 2].x), records[1, 2].tau0
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a hat needs at least 16 samples"))
-    covariance && any(any(isnan, hat_record(records, i, j).x) for i in 1:k for j in i+1:k) &&
-        throw(CLIError(EXIT_ANALYSIS, "the Groslambert covariance needs records without gaps; fill them with --fillgaps"))
+    o.method == "klts" && any(any(isnan, hat_record(records, i, j).x) for i in 1:k for j in i+1:k) &&
+        throw(CLIError(EXIT_ANALYSIS, "the KLTS interval needs records without gaps; fill them with --fillgaps"))
     mode = tau_mode(o.grid)
     pairs = Vector{StabilityResult}[]      # per deviation: every pair as measured, i < j
     clocks = Vector{StabilityResult}[]     # per deviation: every clock, separated

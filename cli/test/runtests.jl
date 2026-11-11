@@ -467,6 +467,14 @@ mktempdir() do dir
         rows = csv_rows(run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4").out)
         @test all(isempty, getindex.(rows[1:2], 4)) && all(!isempty, getindex.(rows[3:6], 4))
         @test occursin("\"points\":[{\"tau\":1.0,\"dev\":null,", run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4", "--format=json").out)
+        # Missing readings: the hat and the covariance leave their terms out, KLTS refuses.
+        gf = joinpath(dir, "gapped.csv")
+        write(gf, replace(read(hf, String), r"^100,[^,]*,"m => "100,NaN,"))
+        gapped(method) = run_cli("hat", gf, "--value-cols", "2,3", "--m", "1,4", "--method", method)
+        for method in ("hat", "groslambert")
+            @test dev(csv_rows(gapped(method).out)) ≈ dev(adev_rows)[[1, 2, 4, 5, 7, 8]] rtol = 0.02
+        end
+        @test gapped("klts").code == 3 && occursin("--fillgaps", gapped("klts").err)
         # Simulated clocks have a perfect reference, which is no clock.
         @test unique(getindex.(csv_rows(run_cli("hat", "--synth", "512", "--m", "1").out), 1)) == ["clock 1", "clock 2", "clock 3", "clock 4"]
         @test run_cli("hat", "--synth", "512", "--clocks", "2").code == 1

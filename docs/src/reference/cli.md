@@ -526,9 +526,10 @@ stable than the others, for clocks that are correlated, and where few terms
 are averaged. The clock is then not resolved at that averaging time, and its
 `dev` is empty in CSV and `null` in JSON. The intervals of `hat` and
 `groslambert` are too narrow for a clock that is close to that
-([`groslambert`](@ref)). The records need 16 samples or more, and
-`groslambert` and `klts` take none with gaps. The CSV output has a row for
-each clock, deviation and averaging time:
+([`groslambert`](@ref)). The records need 16 samples or more. `hat` and
+`groslambert` leave out the terms that a missing sample touches, and `klts`
+takes no records with gaps. The CSV output has a row for each clock,
+deviation and averaging time:
 
 ```text
 clock,deviation,tau,dev,ci_lower,ci_upper,edf,neff
