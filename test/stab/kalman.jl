@@ -52,18 +52,19 @@ using Statistics
     @testset "prediction error and tuning" begin
         line = PhaseData(1e-9 .+ 2e-12 .* (0:999), 1.0)
         @test prediction_error(kalman_filter(line, m), line, [1, 10]; burnin=100) ≈ [0, 0] atol=1e-18
-        start = ClockModel(; tau0=1.0, R=1e-20, q1=1e-21, q2=1e-29)
-        t = tune_q(p, start; horizons=[10, 100], points=5)
-        @test t.model.q1 / t.scale ≈ 1e-22 rtol=1e-9       # on the grid, one decade down
-        @test t.scale ≈ 1 rtol=0.1
-        @test size(t.cost) == (5, 5) && t.edge == any(in((1, 5)), Tuple(argmin(t.cost)))
-        @test minimum(t.cost) == t.cost[argmin(t.cost)] <= t.cost[3, 3]
-        # Predictions do not see the size of the levels: from a start a
-        # hundred times too large, the scale brings the model back.
-        big = tune_q(p, ClockModel(; tau0=1.0, R=1e-18, q1=1e-19, q2=1e-27); horizons=[10, 100], points=5)
-        @test [big.model.R, big.model.q1, big.model.q2] ≈ [t.model.R, t.model.q1, t.model.q2] rtol=1e-3
+        # From starts ten times too far apart either way and a hundred times
+        # too large the search ends on one optimum, and no other level moves.
+        nll(mm) = (kf = kalman_filter(p, mm); k = length(p.x) ÷ 10 + 1:length(p.x);
+                   sum(i -> log(kf.innovation_var[i]) + kf.innovation[i]^2 / kf.innovation_var[i], k))
+        starts = [ClockModel(; tau0=1.0, R=1e-20, q1=a, q2=b) for (a, b) in ((1e-21, 1e-29), (1e-23, 1e-27), (1e-20, 1e-28))]
+        ends = tune_q.(Ref(p), starts)
+        @test all(t -> t.converged && t.model.R == 1e-20, ends)
+        @test all(t -> isapprox([t.model.q1, t.model.q2], [ends[1].model.q1, ends[1].model.q2]; rtol=0.05), ends)
+        @test ends[1].model.q1 ≈ 1e-22 rtol=0.5            # the generating level
+        @test ends[1].cost ≈ nll(ends[1].model) && all(t -> t.cost <= nll(starts[1]), ends)
+        @test !tune_q(p, starts[1]; maxiter=3).converged
         @test_throws ArgumentError tune_q(p, ClockModel(; tau0=1.0, q1=1e-22))
-        @test_throws "points must be at least 2" tune_q(p, ClockModel(; tau0=1.0, R=1e-18, q1=1e-19, q2=1e-27); points=1)
+        @test_throws "maxiter must be at least 1" tune_q(p, starts[1]; maxiter=0)
         @test_throws "N must be ≥ 1" simulate_clock(ClockModel(; tau0=1.0, q1=1e-22), 0)
     end
 
@@ -83,7 +84,7 @@ using Statistics
         err = prediction_error(kf, pf, [100, 1000]; burnin=8192)
         @test err[2] < 0.9 * prediction_error(kw, pf, [1000]; burnin=8192)[1]
         @test holdover_error(kf, [100.0, 1000.0]) ≈ err rtol=0.3
-        @test tune_q(pf, mf; points=3).model.fm_band == mf.fm_band
+        @test tune_q(pf, mf; maxiter=5).model.fm_band == mf.fm_band
         # A record of the model itself has flicker FM's ADEV, and the filter
         # follows its frequency, Markov states included.
         ms = ClockModel(; tau0=1.0, flicker_fm=1e-26)

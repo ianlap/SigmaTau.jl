@@ -225,11 +225,6 @@ end
 _with(m::ClockModel; R=m.R, q1=m.q1, q2=m.q2) =
     ClockModel(m.tau0, R, q1, q2, m.q3, m.drift, m.flicker_fm, m.fm_band, m.flicker_pm, m.pm_band)
 
-# The model with every noise level times s: the same filter gains and
-# predictions, and s times the covariance.
-_scaled(m::ClockModel, s::Real) =
-    ClockModel(m.tau0, s * m.R, s * m.q1, s * m.q2, s * m.q3, m.drift, s * m.flicker_fm, m.fm_band, s * m.flicker_pm, m.pm_band)
-
 _npoly(m::ClockModel) = m.drift ? 3 : 2
 _nstates(m::ClockModel) = _npoly(m) + length(_fm_taus(m)) + length(_pm_taus(m))
 

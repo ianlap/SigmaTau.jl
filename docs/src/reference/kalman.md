@@ -102,9 +102,9 @@ samples earlier.
 ## Tuning in place of states
 
 [`tune_q`](@ref) is a remedy that adds no states. It keeps a model of
-white and random-walk FM and searches their two levels for the smallest
-prediction errors at chosen horizons, starting from a fit without flicker
-terms.
+white and random-walk FM and searches their two levels for the largest
+likelihood of the innovations ([Tryon and Jones (1983), Eq. (5.1)](@cite tryon-1983-parameters)),
+starting from a fit without flicker terms.
 
 ```@example kalman
 m3 = clock_model(powerlaw_fit(p; alphas = [2, 0, -2]))
@@ -114,16 +114,14 @@ c, d = holdover(p, t.model; tau), holdover(p, m3; tau)
 [c.rms ./ a.rms  d.rms ./ a.rms]
 ```
 
-Tuning trades the short predictions for the long ones. The tuned levels
-are no longer those of the noise. `tune_q` sets their size so that the
-error claimed one sample ahead is the error made (`t.scale` is the factor
-it applied); farther ahead the covariance of the tuned filter, and with
-it [`holdover_error`](@ref), is not to be relied on. In simulation the
-predictions of tuned models were 5 to 24 % worse than those of models
-with flicker states, and the errors they claimed from 10 to 1000 s were
-1.2 to 2.8 times too small ([What the states buy](@ref)). `t.edge` says
-whether the best pair lies on the edge of the grid, where a larger
-`decades` is called for.
+The tuned levels give the innovations the variance the filter claims, so the
+error claimed one sample ahead is the error made (`t.converged` says
+that the search ended within tolerance, `t.cost` is -2 ln L). Farther ahead
+the covariance of the tuned filter, and with it [`holdover_error`](@ref),
+is not to be relied on, and the predictions are those of a model that lacks
+the flicker. In simulation they were 2 to 55 % worse than those of models
+with flicker states, and the errors the tuned models claimed at 1000 and
+10 000 s were too large, 2 to 8 times the errors made ([What the states buy](@ref)).
 
 ## Simulated clocks
 

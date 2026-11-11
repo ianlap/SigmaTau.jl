@@ -312,7 +312,7 @@ The first table gives the median RMS error of the prediction at 10, 100,
 | Model | Maser | Quartz |
 |:---|:---|:---|
 | fit without a flicker FM term | 1.01, 1.10, 1.36, 1.51 | 1.06, 1.26, 1.43, 1.27 |
-| the same, retuned | 1.05, 1.06, 1.09, 1.24 | 1.19, 1.07, 1.16, 1.14 |
+| the same, retuned | 1.02, 1.13, 1.41, 1.55 | 1.07, 1.29, 1.45, 1.28 |
 | default fit, flicker FM left out | 1.10, 1.15, 1.09, 1.22 | 1.25, 1.27, 1.40, 1.25 |
 | default fit, flicker FM kept | 1.00, 1.00, 1.00, 1.04 | 1.00, 1.00, 1.00, 1.00 |
 
@@ -322,7 +322,7 @@ itself claimed.
 | Model | Maser | Quartz |
 |:---|:---|:---|
 | fit without a flicker FM term | 1.08, 1.06, 0.58, 0.24 | 1.09, 0.71, 0.31, 0.14 |
-| the same, retuned | 1.2, 1.8, 1.9, 1.1 | 1.8, 2.8, 1.9, 1.0 |
+| the same, retuned | 1.07, 0.96, 0.49, 0.20 | 1.03, 0.63, 0.28, 0.13 |
 | default fit, flicker FM left out | 1.4, 2.4, 3.8, 2.7 | 9.1, 7.5, 3.4, 1.6 |
 | default fit, flicker FM kept | 1.04, 1.02, 1.02, 1.04 | 0.99, 1.00, 1.01, 0.99 |
 
@@ -332,12 +332,12 @@ left out, where it reaches 8 % at 1000 s and 20 % at 10 000 s.
 
 A fit without the term spreads the flicker over white and random-walk FM.
 Its predictions are up to 51 % worse, and at long times it claims 4 to 7
-times the error it makes. Retuning the two levels for prediction brings
-the long predictions closer, within 5 to 24 % of the states. Its claim is
-right one sample ahead, where [`tune_q`](@ref) sets the size of the
-levels, and 1.2 to 2.8 times too small from 10 to 1000 s. On both clocks
-the best pair of levels lay on the edge of the default grid in most
-records, which `tune_q` reports. Leaving a fitted flicker out
+times the error it makes. Retuning the two levels by maximum likelihood does not bring the long
+predictions closer: they are as far from the states as those of the fit it
+starts from, 2 to 55 % worse. Its claim
+is right one sample ahead, where [`tune_q`](@ref) sets the size of the
+levels, and too large beyond: 2 to 8 times the error it makes at 1000 and
+10 000 s. Leaving a fitted flicker out
 removes that noise from the model, and the filter claims several times
 less than the error it makes. In that row the long-time figures depend on
 how much random-walk FM each fit found: at 10 000 s on the maser the ratio

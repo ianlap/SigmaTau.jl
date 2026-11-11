@@ -597,46 +597,30 @@ def tune_q(
     data: PhaseData,
     m: ClockModel,
     *,
-    horizons: Sequence[int] = (10, 100, 1000),
-    decades: float = 2,
-    points: int = 9,
     burnin: int | None = None,
+    maxiter: int = 300,
 ) -> dict:
-    """Retune the white FM and random-walk FM levels of ``m`` for prediction on the
-    phase record ``data``.
+    """Retune the white FM and random-walk FM levels of ``m`` by maximum likelihood
+    on the phase record ``data``.
 
-    The filter is run for every pair of levels on a logarithmic grid of
-    ``points`` values that spans ``decades`` decades either side of ``m.q1``
-    and ``m.q2``, and the pair is kept whose predictions ``horizons`` samples
-    ahead have the smallest sum of the logarithms of their RMS errors. Every
-    level of that model is then multiplied by one factor, the mean square of
-    the normalized innovations of its filter past the burn-in, which is the
-    factor of largest likelihood (Tryon and Jones 1983, Eq. (5.1)).
-    ``burnin`` is the number of samples at the start left out of the error
-    and of the factor, a tenth of the record by default.
+    ``q1`` and ``q2`` are searched (Nelder-Mead on their logarithms, started
+    from those of ``m``) for the smallest -2 ln L of the innovations of the
+    filter (Tryon and Jones 1983, Eq. (5.1)), with the other levels held
+    fixed. ``burnin`` is the number of samples at the start left out of the
+    sum, a tenth of the record by default, and ``maxiter`` limits the
+    iterations of the search.
 
-    Returns a dict with ``model``, the tuned model; ``q1`` and ``q2``, the two
-    grid axes; ``cost``, with one row for each ``q1`` and one column for each
-    ``q2``; ``scale``, the factor on the levels; and ``edge``, whether the
-    best pair lies on the edge of the grid, where a larger ``decades`` is
-    called for.
+    Returns a dict with ``model``, the tuned model; ``cost``, -2 ln L at its
+    levels; ``converged``, whether the search ended within tolerance before
+    ``maxiter``; and ``evaluations``, the number of filter runs.
     """
     kw = {} if burnin is None else {"burnin": as_int(burnin, "burnin")}
-    r = jl.tune_q(
-        to_jl_data(data),
-        m._jl(),
-        horizons=to_jl_ints(horizons, "a horizon"),
-        decades=float(decades),
-        points=as_int(points, "points"),
-        **kw,
-    )
+    r = jl.tune_q(to_jl_data(data), m._jl(), maxiter=as_int(maxiter, "maxiter"), **kw)
     return {
         "model": _model_from_jl(r.model),
-        "q1": np_f64(r.q1),
-        "q2": np_f64(r.q2),
-        "cost": _mat(r.cost),
-        "scale": float(r.scale),
-        "edge": bool(r.edge),
+        "cost": float(r.cost),
+        "converged": bool(r.converged),
+        "evaluations": int(r.evaluations),
     }
 
 
