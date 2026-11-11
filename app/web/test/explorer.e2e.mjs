@@ -339,10 +339,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await chooser.setFiles({ name: "tiny.csv", mimeType: "text/csv", buffer: Buffer.from("0,1e-9\n1,3e-9\n2,2e-9\n") });
     await page.locator("#import-dialog [data-act=load]").click({ timeout: 5000 }).catch(() => {});   // (the dialog, unless settings were remembered)
     await settled();
+    const reachable = () => page.evaluate(() => [...document.querySelectorAll("[data-view]")].map((b) => { const r = b.getBoundingClientRect(); return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest("[data-view]") === b; }));
     await page.click("[data-view=drift]");
     await page.locator("#page [data-ref=empty]", { hasText: "No fit for this record" }).waitFor(SLOW);
-    assert.equal(await page.evaluate(() => { const b = document.querySelector("[data-view=phase]").getBoundingClientRect(); return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest("[data-view]")?.dataset.view; }), "phase");
-    await page.click("[data-view=phase]");
+    for (const view of ["drift", "hist", "acf", "phase"]) {   // whatever the view shows, the view buttons stay reachable
+      await page.click(`[data-view=${view}]`);
+      await settled();
+      assert.deepEqual(await reachable(), [true, true, true, true], view);
+    }
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // the core refuses a record and a fit of three samples
   });
 
@@ -355,7 +359,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("[data-ctl=go]");
     await page.locator("[data-act=analyze]:not([disabled])").waitFor(SLOW);
     const [download] = await Promise.all([page.waitForEvent("download"), page.click("[data-act=save]")]);
-    const saved = createHash("sha256").update(readFileSync(await download.path())).digest("hex");
+    const file = readFileSync(await download.path());
+    const saved = createHash("sha256").update(file).digest("hex");
+    const readings = file.toString().split("\n").filter((l) => l && !l.startsWith("#")).length;
     await page.click("[data-act=analyze]");
     await settled();
     const analyzed = await page.evaluate(async (url) => {
@@ -364,7 +370,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
       return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
     }, base + "js/state.js");
     assert.equal(analyzed, saved);
-    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // (a few seconds of readings are too short for some estimators)
+    // Analyze readings runs every loaded clock: the 422s are the records the earlier steps left (three samples, TOTDEV on gaps), not the Live record.
+    assert.equal(await page.evaluate(async (url) => (await import(url)).state.clocks.at(-1).record?.n, base + "js/state.js"), readings);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
   assert.deepEqual(errors, []);
