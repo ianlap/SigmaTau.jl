@@ -593,6 +593,13 @@ Clock models, the Kalman filter and timescales.
   that differ in their random-walk FM it read up to 2.6 times noisier than
   the scale at long τ. `TimescaleResult` has a new field `xhat` (Julia and
   Python).
+- The interval of bias-removed Thêo1 (`theo1`, and `theoh` beyond 20 % of
+  the record) carries the scatter of the bias ratio on FM noise: its EDF was
+  that of Thêo1 alone, and the 68.3 % interval held the true value in 15 to
+  62 % of simulated FM records; it now holds it in 63 to 84 %.
+  `calculate_edf` accepts `:theobr`. The EDF of Thêo1 is no longer taken
+  below 1, which gives `theo1` an interval on random-walk FM beyond 63 % of
+  the record. Deviations are unchanged.
 
 ### Security
 
