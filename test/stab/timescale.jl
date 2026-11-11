@@ -312,7 +312,7 @@ using Statistics
         # flicker folded into R.
         hp = [0.0, 2.2e-22, 2.2e-21]
         mp = [ClockModel(; tau0=1.0, q1=1e-24, q2=1e-30, flicker_pm=h) for h in hp]
-        fold = [clock_model(Dict(1 => h, 0 => 2e-24, -2 => 1e-30 / 2π^2); tau0=1.0) for h in hp]
+        fold = [clock_model(Dict(1 => h, 0 => 2e-24, -2 => 1e-30 / 2π^2); tau0=1.0, flicker=false) for h in hp]
         cp, _ = simulate_ensemble(mp, 16384; reference=0, rng=MersenneTwister(31))
         gp = timescale(cp; algorithm=:greenhall, models=mp)
         scale(r) = adev(timescale_phase(r), [16, 32, 64]; ci=false).dev

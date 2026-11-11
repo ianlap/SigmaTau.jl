@@ -128,7 +128,7 @@ estimate is carried ``τ`` ahead with no further readings and compared
 with the reading there.
 
 ```@example holdover
-m = clock_model(fit; flicker = true)
+m = clock_model(fit)
 k = holdover(p, m; tau = [16, 64, 256, 1024])
 ```
 
@@ -138,14 +138,13 @@ compared with. The two columns side by side test the model where it
 matters for holdover. An `rms` well above `claimed` says that the model
 holds too little noise at that ``τ``.
 
-A model made from a fit should keep the flicker FM that the fit finds,
-`clock_model(fit; flicker = true)`. Without it that noise is left out of
-the model, and in simulation the filter of a clock on its flicker floor
-claimed 1.4 to 8.7 times less than the error it made
-([What the states buy](@ref)). `sigmatau holdover --kalman` and the
-explorer fit the model to the first training stretch alone, so that the
-levels are not learned from the readings that the predictions are
-compared with, and keep the flicker.
+A model made from a fit keeps the flicker FM that the fit finds. With
+`flicker = false` that noise is left out of the model, and in simulation
+the filter of a clock on its flicker floor claimed 1.4 to 8.7 times less
+than the error it made ([What the states buy](@ref)).
+`sigmatau holdover --kalman` and the explorer fit the model to the first
+training stretch alone, so that the levels are not learned from the
+readings that the predictions are compared with.
 
 With the right model the filter's prediction is the conditional mean of
 the phase, which no predictor betters in mean square

@@ -138,25 +138,25 @@ def clock_model(
     *,
     tau0: float | None = None,
     drift: bool | None = None,
-    flicker: bool = False,
+    flicker: bool = True,
     tau_max: float | None = None,
 ) -> ClockModel:
     """The ``ClockModel`` with the white FM, random-walk FM and random-run FM
-    levels of a power-law model, and its PM as the reading noise ``R``: white PM,
-    with flicker PM folded in as the white PM of the same Allan variance where PM
-    hands over to FM, and flicker FM left out.
+    levels of a power-law model, and its white PM as the reading noise ``R``.
 
-    With ``flicker=True`` flicker FM and flicker PM are kept as Markov states
+    Flicker FM and flicker PM are kept as Markov states
     (``ClockModel.flicker_fm``, ``flicker_pm``) across the τ, up to ``tau_max``,
-    where each holds a quarter of the model's Allan variance, and ``R`` is the
-    white PM alone.
+    where each holds a quarter of the model's Allan variance. With
+    ``flicker=False`` flicker FM is left out, and flicker PM is folded into ``R``
+    as the white PM of the same Allan variance where PM hands over to FM; the
+    ``"stein"`` time scale needs such a model.
 
     ``fit`` is a ``PowerLawFit``, a ``NoiseFit`` or an ``{α: h_α}`` mapping (with
     ``tau0``).
     """
-    kw: dict[str, Any] = {} if drift is None else {"drift": bool(drift)}
-    if flicker:
-        kw["flicker"] = True
+    kw: dict[str, Any] = {"flicker": bool(flicker)}
+    if drift is not None:
+        kw["drift"] = bool(drift)
     if tau_max is not None:
         kw["tau_max"] = float(tau_max)
     if isinstance(fit, NoiseFit):

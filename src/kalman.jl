@@ -480,7 +480,7 @@ that predict best. The two differ when the record has noise that the model
 lacks, such as flicker FM. The error the tuned filter claims is then right
 at one sample and not beyond: in simulation it was wrong by a factor of up
 to 2.8 at longer holdover times ([What the states buy](@ref)). A model
-with flicker states, `clock_model(fit; flicker = true)`, carries that
+with flicker states, the default of [`clock_model`](@ref), carries that
 noise instead, and predicted better there.
 
 # Arguments
