@@ -84,6 +84,11 @@ using SigmaTau
         @test rt.tau == rm.tau
         @test isapprox(rt.dev, rm.dev .* (rm.tau ./ sqrt(3.0)); rtol=1e-14)
 
+        # The noise types it corrects the bias with are kept without the interval too.
+        @test !isempty(mtotdev(pd, ms; ci=false).noise_type)
+        @test ttotdev(pd, ms; ci=false).noise_type == mtotdev(pd, ms; ci=false).noise_type
+        @test isempty(rt.noise_type) && isempty(rm.noise_type)
+
         # CI / EDF / α flow through with the same τ/√3 scaling.
         rm_ci = mtotdev(pd, ms; ci=true, correct_bias=true)
         rt_ci = ttotdev(pd, ms; ci=true, correct_bias=true)
