@@ -644,6 +644,13 @@ Clock models, the Kalman filter and timescales.
   the largest starting variance of the other clocks and a starting frequency
   of zero, so a good clock that joined late had almost no weight for the
   rest of the record and one with a rate offset moved the scale's rate.
+- A clock whose first reading comes after the start of the record is started
+  against the scale, so the scale no longer depends on the reference the
+  readings were taken against: `:ewfa`, `:at1` and `:at2` take its frequency
+  against the scale over its own first stretch, and `:greenhall` and
+  `:jones_tryon` start it from a clock already in the scale, without a step.
+  A clock first read while no other clock is read no longer turns the
+  `:ewfa`, `:at1` and `:at2` scales to NaN.
 - `read_phase` and `read_frequency` take the unit of a time column from its
   name in the line that `header` skips, as `read_data` does, so a column
   named MJD is read in days at any step; `sigmatau timescale --value-cols`
