@@ -35,7 +35,7 @@ export function controls() {
       `<button type="button" data-ctl="dev" data-v="${id}" class="${S.dev === id ? "on" : ""}">${label}</button>`).join("")}</div></div>
     <div class="rule"></div>
     <button class="btn btn-primary run-btn" type="button" data-ctl="generate">Generate ${S.clocks.length > 1 ? `${S.clocks.length} clocks` : "the clock"}</button>
-    <p class="muted small">The curves are what the models predict, not a simulation. Generate simulates the clocks on the Data page${S.clocks.length > 1 ? " and forms their timescale on the Ensemble page" : ""}.</p>`;
+    <p class="muted small">The curves are what the models predict, not a simulation. Generate simulates the clocks on the Data page${S.clocks.length > 1 ? " and forms their time scale on the Ensemble page" : ""}.</p>`;
 }
 
 function setPositive(t, key, v, whole) {
@@ -92,7 +92,7 @@ function clocksHtml() {
           <label><span class="sr-only">${n.q}</span><input type="text" data-q="${n.id}" inputmode="decimal" placeholder="${n.q}" title="${n.q}"></label>
           <label><span class="sr-only">${n.h}</span><input type="text" data-h="${n.id}" inputmode="decimal" placeholder="${n.h}" title="${n.h}"></label>`).join("")}
       </div></div>`).join("")}
-    <p class="muted small synth-note">Each noise is given as the clock model's coefficient (S<sub>y</sub> to <i>q</i> as in the ClockModel docs) or as its power-law h<sub>α</sub>; typing one fills in the other. Flicker noises have no clock model and are not offered.</p>`;
+    <p class="muted small synth-note">Each noise is given as the clock model's coefficient (S<sub>y</sub> to <i>q</i> as in the ClockModel docs) or as its power-law h<sub>α</sub>; typing one fills in the other. Flicker noise is not offered here.</p>`;
 }
 
 // Put the numbers in the inputs, except the one being typed in.

@@ -1,6 +1,6 @@
 // Dynamic page: σ(t, τ) over sliding windows. One clock: a map (or a 3D
 // waterfall) and the selected cell. Several clocks: one map per clock side by
-// side on a shared colour scale, since maps cannot be overlaid. Maps are
+// side on a shared color scale, since maps cannot be overlaid. Maps are
 // computed by the core when this page needs them and recomputed when the
 // estimator, window or record changes; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
@@ -20,7 +20,7 @@ export function controls(inline = false) {
   if (inline) {
     return `${est}<label class="tool-field">Window <select data-ctl="frac">${FRACS.map((f) =>
       `<option value="${f}" ${f === d.frac ? "selected" : ""}>1/${f} of record</option>`).join("")}</select></label>
-      <span class="caption grow-right">Maps can't be overlaid, so each clock gets its own. Same colour scale throughout.</span>`;
+      <span class="caption grow-right">Maps can't be overlaid, so each clock gets its own. Same color scale throughout.</span>`;
   }
   const c = visibleClocks()[0];
   const n = c?.record?.n ?? 0;
@@ -33,7 +33,7 @@ export function controls(inline = false) {
     <div class="ctl-block"><label class="lbl">View</label>
       <div class="seg" role="group" aria-label="View"><button type="button" data-ctl="view" data-v="map" class="${d.view === "map" ? "on" : ""}">Map</button><button type="button" data-ctl="view" data-v="3d" class="${d.view === "3d" ? "on" : ""}">3D waterfall</button></div></div>
     <div class="rule"></div>
-    <p class="muted small">Changes here recompute this page right away. A stationary clock shows the same colours in every row; a drift or a step shows as a change down a column.</p>`;
+    <p class="muted small">Changes here recompute this page right away. A clock whose noise does not change shows the same colors in every row; a change during the record shows as a change down a column.</p>`;
 }
 
 export function onControl(e) {
@@ -54,7 +54,6 @@ export function mount(el, c) {
     <div class="col">
       <div class="toolbar" data-ref="toolbar"></div>
       <div class="dyn-area" data-ref="area"></div>
-      <div class="dyn-notes muted small" data-ref="notes"></div>
     </div>
     <div class="card side-card dyn-cell" data-ref="cell" hidden></div>`;
   root.addEventListener("click", (e) => {
@@ -120,7 +119,7 @@ function mapLayout(d, compact) {
     ...baseLayout(),
     margin: compact ? { l: 46, r: 8, t: 6, b: 42 } : { l: 70, r: 10, t: 10, b: 48 },
     xaxis: { ...linAxis(compact ? "τ (s)" : "Averaging time τ (s)"), tickvals: ticks, ticktext: ticks.map((j) => tauText(d.tau[j])), showgrid: false, mirror: false },
-    yaxis: { ...linAxis(compact ? "" : "Window centre t (s)"), autorange: "reversed", tickvals: d.t, ticktext: d.t.map(timeText), nticks: 6, showgrid: false, mirror: false },
+    yaxis: { ...linAxis(compact ? "" : "Window center t (s)"), autorange: "reversed", tickvals: d.t, ticktext: d.t.map(timeText), nticks: 6, showgrid: false, mirror: false },
     plot_bgcolor: css("--bg-card"),
     uirevision: `${d.dev}-${d.window}`,
   };
@@ -143,18 +142,16 @@ export function refresh() {
   if (several && !tb.contains(document.activeElement)) tb.innerHTML = controls(true);
   const area = root.querySelector("[data-ref=area]");
   const cell = root.querySelector("[data-ref=cell]");
-  const notes = root.querySelector("[data-ref=notes]");
   const clocks = visibleClocks().filter((c) => c.record);
 
   if (!clocks.length) {
-    cell.hidden = true; notes.textContent = "";
+    cell.hidden = true;
     area.innerHTML = `<div class="card plot-card"><div class="empty"><h2>No record yet</h2><p>Load or synthesize a record on the Data page.</p><button class="btn" data-act="load">Go to Data</button></div></div>`;
     return;
   }
   ensureMaps(clocks);
   const ready = clocks.filter((c) => c.dynamic?.key === dynamicKey(c) && !c.dynamic.error);
   const failed = clocks.filter((c) => c.dynamic?.key === dynamicKey(c) && c.dynamic.error);
-  notes.textContent = failed.map((c) => `${c.name}: ${c.dynamic.error}`).join(" · ");
   if (!Plotly) return;
 
   if (!several) {
@@ -202,7 +199,7 @@ export function refresh() {
     return;
   }
 
-  // Several clocks: one map each, shared colour scale.
+  // Several clocks: one map each, shared color scale.
   cell.hidden = true;
   const [zmin, zmax] = zRange(ready.map((c) => c.dynamic));
   const ids = clocks.map((c) => c.id).join(",");
@@ -228,7 +225,7 @@ export function refresh() {
     plot.style.visibility = ok ? "visible" : "hidden";
     if (ok) Plotly.react(plot, [heat(c, c.dynamic, zmin, zmax, false, true)], mapLayout(c.dynamic, true), { ...CONFIG, displayModeBar: false });
   }
-  // A colour bar on its own, shared by every map.
+  // A color bar on its own, shared by every map.
   if (ready.length) {
     Plotly.react(area.querySelector("[data-ref=scale]"), [{
       type: "heatmap", z: [[zmin, zmax]], zmin, zmax, colorscale: heatScale(), showscale: true, hoverinfo: "skip", opacity: 0,
@@ -311,7 +308,7 @@ function drawSlice(area, ready) {
   box.querySelector("[data-ref=slice-sub]").textContent = `${none}${NAME[state.dyn.dev]} in each window · dotted = whole record (${whole.toUpperCase()}, last run) · click a map column to change τ`;
   Plotly.react(box.querySelector("[data-ref=slice]"), traces, {
     ...baseLayout(), margin: { l: 70, r: 14, t: 8, b: 44 },
-    xaxis: linAxis("Window centre t (s)"), yaxis: { ...logAxis(`${NAME[state.dyn.dev]} at τ = ${num(tau, 4)} s`), dtick: undefined },
+    xaxis: linAxis("Window center t (s)"), yaxis: { ...logAxis(`${NAME[state.dyn.dev]} at τ = ${num(tau, 4)} s`), dtick: undefined },
     showlegend: true, legend: { ...baseLayout().legend, orientation: "h", x: 0, xanchor: "left", y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", borderwidth: 0 },
     shapes, uirevision: "slice",
   }, CONFIG);
@@ -363,7 +360,7 @@ function renderCell(box, c, d) {
   const wi = whole ? whole.tau.findIndex((t) => Math.abs(t - tau) <= 1e-9 * tau) : -1;
   box.innerHTML = `<div class="card-head"><h2>Selected cell</h2></div>
     <div class="cell-kv">
-      <div class="kv"><span>Window centre</span><span class="mono">${thousands(Math.round(d.t[pin.i]))} s</span></div>
+      <div class="kv"><span>Window center</span><span class="mono">${thousands(Math.round(d.t[pin.i]))} s</span></div>
       <div class="kv"><span>τ</span><span class="mono">${num(tau, 5)} s</span></div>
       <div class="kv"><span>${NAME[d.dev]}</span><span class="mono">${sci(d.map[pin.i][pin.j], 3)}</span></div>
       <div class="kv" title="${d.dev === "dhdev" ? "HDEV" : "ADEV"} of the whole record at this τ, from the last run"><span>Whole record</span><span class="mono">${wi >= 0 ? sci(whole.sigma[wi], 3) : "–"}</span></div>
@@ -371,6 +368,6 @@ function renderCell(box, c, d) {
 }
 
 export function hint() {
-  if (multi()) return "Rows = window centre time (s) · columns = τ · darker = less stable";
+  if (multi()) return "Rows = window center time (s) · columns = τ · stronger color = less stable";
   return state.dyn.view === "map" ? "Click a cell to pin it · switch to 3D waterfall to compare curve shapes" : "Drag to turn · scroll to zoom";
 }

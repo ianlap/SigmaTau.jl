@@ -44,7 +44,7 @@ open.
 | Part | Holds |
 |:-----|:------|
 | Tabs | The nine pages: [Data](data.md), [Synthesis](synthesis.md), [Stability](stability.md), [Spectrum](spectrum.md), [Dynamic](dynamic.md), [Holdover](holdover.md), [Steering](steering.md), [Ensemble](ensemble.md) and [Live](live.md) |
-| Record chip | The record in use: its name, the number of samples, the sample interval, the span and what was removed from it. With several clocks, their number and the samples in all. A click opens the Data page |
+| Record chip | The record in use: its name, the number of samples, the sample interval, the span and what was removed from it. With several clocks, their number and the samples in all. A click opens the Data page. A window 1100 px wide or narrower leaves the chip out |
 | **File** menu | The [exports](export.md): the plot, the results, a report, and saving and opening a session |
 | Theme button | Switches between the colors of the system, a light theme and a dark theme. The choice is remembered |
 | **?** | The [help](#The-help): a search through this manual and its sections on the page in view |

@@ -143,7 +143,7 @@ export function openImport(file, prev = null) {
         : !(tau0 > 0) ? "Enter the sample interval τ₀: this file has no time column."
         : st.factor.trim() && !factor ? "The scale factor is not a positive number." : "";
 
-      // One normalised line per clock column.
+      // One normalized line per clock column.
       const lines = st.values.map((c, k) => {
         const pts = thin(s.columns[c - 1] ?? [], 200).filter((p) => Number.isFinite(p[1]));
         if (pts.length < 2) return "";
@@ -155,7 +155,9 @@ export function openImport(file, prev = null) {
       const spark = lines ? `<svg viewBox="0 0 330 92" preserveAspectRatio="none" width="100%" height="100%">${lines}</svg>` : "";
 
       const gap = gaps
-        ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. They stay in place as gaps, which the gap-tolerant estimators skip; turn on <i>Fill gaps</i> on the Data page to fill them.</div>`
+        ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. ${st.kind === "phase"
+          ? "They stay in the record as gaps. <i>Fill gaps by reflection</i> on the Data page fills them, for the estimators that need a complete record."
+          : "A frequency record cannot be read with gaps, so <i>Fill gaps by reflection</i> is on for it on the Data page."}</div>`
         : "";
       const zeroCard = zeros
         ? `<div class="gap-card"><b>${thousands(zeros)} zero reading${zeros > 1 ? "s" : ""}</b>Stable32 marks a gap with 0${st.keepZeros ? `; ${zeros > 1 ? "they are" : "it is"} kept as ${zeros > 1 ? "readings" : "a reading"} here` : `, so ${zeros > 1 ? "they are" : "it is"} read as ${zeros > 1 ? "gaps" : "a gap"}`}.

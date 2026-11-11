@@ -1,7 +1,7 @@
 // Live page: readings from an instrument (or the simulator) streamed through
 // `sigmatau live`, with σ(τ) and the fractional frequency updating as they
 // arrive. The settings live in the side panel. The readings are kept here,
-// not in the app state, so polling redraws only this page; "Analyse" hands
+// not in the app state, so polling redraws only this page; "Analyze" hands
 // them to the other pages as a new clock, with confidence intervals and
 // every estimator.
 import { state, update } from "../state.js";
@@ -44,7 +44,7 @@ export function controls() {
       `<label class="check"><input type="checkbox" data-ctl="dev" data-v="${id}" ${L.devs.includes(id) ? "checked" : ""} ${dis}>${label}</label>`).join("")}</div></div>
     <button class="btn ${busy ? "" : "btn-primary"} live-go" type="button" data-ctl="go">${busy ? "Stop" : "Start"}</button>
     <div class="rule"></div>
-    <p class="muted small">σ(τ) updates with every reading, without intervals. Analyse the readings afterwards for confidence intervals, noise identification and every other estimator.</p>`;
+    <p class="muted small">σ(τ) updates with every reading, without intervals. Analyze the readings afterwards for confidence intervals, noise identification and every other estimator.</p>`;
 }
 
 export function onControl(e) {
@@ -154,7 +154,7 @@ export function mount(el, c) {
     </div>`;
   root.addEventListener("click", (e) => {
     const act = e.target.closest("[data-act]")?.dataset.act;
-    if (act === "analyse") analyse();
+    if (act === "analyze") analyze();
     if (act === "save") save();
   });
   loadPlotly().then((P) => { Plotly = P; draw(); }).catch(() => {});
@@ -185,7 +185,7 @@ function draw() {
     </div>
     <span class="grow"></span>
     <button class="btn" type="button" data-act="save" ${n ? "" : "disabled"}>Save readings</button>
-    <button class="btn btn-primary" type="button" data-act="analyse" ${n >= 16 && !run.running ? "" : "disabled"} title="Load the readings as a clock and run the full analysis">Analyse readings</button>
+    <button class="btn btn-primary" type="button" data-act="analyze" ${n >= 16 && !run.running ? "" : "disabled"} title="Load the readings as a clock and run the full analysis">Analyze readings</button>
     ${run.error ? `<div class="live-error">${h(run.error)}</div>` : ""}`;
   const empty = root.querySelector("[data-ref=empty]");
   const sigma = root.querySelector("[data-ref=sigma]");
@@ -227,7 +227,7 @@ function stamp() {
   return new Date(run.started).toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
 }
 
-async function analyse() {
+async function analyze() {
   const { phase, text } = record();
   await ctx.addRecord({
     name: `Live ${new Date(run.started).toLocaleTimeString()}`,
@@ -243,5 +243,5 @@ function save() {
 }
 
 export function hint() {
-  return run.running ? "Stop the measurement to analyse the readings" : "Start reads from the source in the panel";
+  return run.running ? "Stop the measurement to analyze the readings" : "Start reads from the source in the panel";
 }
