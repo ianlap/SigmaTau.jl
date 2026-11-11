@@ -55,7 +55,8 @@ def telecom_mask(mask: str, stat: str, tau: float | Sequence[float]) -> float | 
 
 @_map_errors
 def mask_check(r: StabilityResult, mask: str) -> MaskCheck:
-    """Compare an ``mtie`` or ``tdev`` result with a telecom mask, one of ``TELECOM_MASKS``.
+    """Compare ``r``, an ``mtie`` or ``tdev`` result, with the telecom ``mask``, one of
+    ``TELECOM_MASKS``.
 
     ``passed`` is true when every value is at or under its limit, and ``margin``
     is the smallest ratio of limit to value: a margin above 1 passes. Points

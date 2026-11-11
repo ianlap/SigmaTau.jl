@@ -57,9 +57,9 @@ def read_phase(
     detrend: str = "none",
     fillgaps: bool = False,
 ) -> PhaseData:
-    """Read a text file of numeric columns as a ``PhaseData`` record: one sample on
-    each line, in seconds, in column ``value_col``, with its time in column
-    ``time_col``. A file with a single column is read as the samples alone.
+    """Read the text file ``path``, of numeric columns, as a ``PhaseData`` record:
+    one sample on each line, in seconds, in column ``value_col``, with its time in
+    column ``time_col``. A file with a single column is read as the samples alone.
 
     Lines that begin with ``#`` at the head of the file are skipped, and the
     ``# tau0:`` and ``# start:`` lines that :func:`save` writes are read. The
@@ -99,9 +99,10 @@ def read_frequency(
     detrend: str = "none",
     fillgaps: bool = False,
 ) -> FrequencyData:
-    """Read a text file of numeric columns as a ``FrequencyData`` record of
-    fractional-frequency samples. The header, the time column and the keywords
-    are those of :func:`read_phase`."""
+    """Read the text file ``path``, of numeric columns, as a ``FrequencyData``
+    record of fractional-frequency samples. The header, the time column and the
+    keywords (``tau0``, ``time_col``, ``value_col``, ``header``, ``delim``,
+    ``scaling``, ``detrend`` and ``fillgaps``) are those of :func:`read_phase`."""
     return data_from_jl(
         jl.read_frequency(
             str(path),
@@ -124,8 +125,8 @@ def read_data(
     fillgaps: bool = False,
     keep_zeros: bool = False,
 ) -> PhaseData | FrequencyData:
-    """Read a measurement file and return its record, phase or frequency as the
-    file has it.
+    """Read the measurement file ``path`` and return its record, phase or
+    frequency as the file has it.
 
     ``format`` is one of the formats below, or ``"auto"`` to find it with
     :func:`detect_format`:
@@ -180,9 +181,9 @@ def read_data(
 
 @_map_errors
 def detect_format(path: str, *, delim: str | None = None) -> str:
-    """Name the format of a measurement file from its extension and its first 200
-    lines: ``"timelab"``, ``"stable32"``, ``"bipm_utc"``, ``"rinex_clk"``,
-    ``"counter"``, ``"table"`` or ``"columns"``.
+    """Name the format of the measurement file ``path`` from its extension and its
+    first 200 lines: ``"timelab"``, ``"stable32"``, ``"bipm_utc"``,
+    ``"rinex_clk"``, ``"counter"``, ``"table"`` or ``"columns"``.
 
     The tests are made in that order, and the first that holds decides.
     ``delim`` is the character at which the counter and table tests split a
@@ -197,7 +198,7 @@ def detect_format(path: str, *, delim: str | None = None) -> str:
 def detrend(
     data: PhaseData | FrequencyData, fit: DriftFit | None = None, *, method: str = "linear"
 ) -> PhaseData | FrequencyData:
-    """Copy of a record with a trend removed from its samples.
+    """Copy of the record ``data`` with a trend removed from its samples.
 
     ``method`` is ``"mean"``, ``"endpoint"`` (the line through the first and
     last samples), ``"linear"`` (a least-squares line), ``"quadratic"`` (a
@@ -217,8 +218,8 @@ def detrend(
 
 @_map_errors
 def fillgaps(data: PhaseData | FrequencyData, *, form: str = "auto") -> PhaseData | FrequencyData:
-    """Copy of a record with its missing samples (``nan``) filled by the reflection
-    method of Howe and Schlossberger (2022).
+    """Copy of the record ``data`` with its missing samples (``nan``) filled by the
+    reflection method of Howe and Schlossberger (2022).
 
     ``form`` is the series that is filled: ``"phase"``, ``"frequency"``, or
     ``"auto"`` to choose it from the noise of the record. The measured samples
@@ -236,8 +237,9 @@ def fillgaps(data: PhaseData | FrequencyData, *, form: str = "auto") -> PhaseDat
 
 @_map_errors
 def find_outliers(data: PhaseData | FrequencyData, *, n_sigma: float = 5.0) -> np.ndarray:
-    """Indices of the outlying samples of a record, counted from 0, by the median
-    absolute deviation test of SP1065 §10.11 and of Stable32's Check function.
+    """Indices of the outlying samples of the record ``data``, counted from 0, by
+    the median absolute deviation test of SP1065 §10.11 and of Stable32's Check
+    function.
 
     A frequency sample is an outlier when it lies more than ``n_sigma`` times
     MAD/0.6745 from the median. For a ``PhaseData`` record the test is made on
@@ -250,8 +252,8 @@ def find_outliers(data: PhaseData | FrequencyData, *, n_sigma: float = 5.0) -> n
 
 @_map_errors
 def summarize(data: PhaseData | FrequencyData) -> dict:
-    """A quick look at a record before analysis, as the explorer's Data page shows
-    it.
+    """A quick look at the record ``data`` before analysis, as the explorer's Data
+    page shows it.
 
     Keys: ``n`` (number of samples), ``tau0`` and ``span`` (n·τ₀), in seconds,
     ``gaps`` (number of ``nan`` samples), ``outliers`` (the indices that
@@ -271,8 +273,8 @@ def summarize(data: PhaseData | FrequencyData) -> dict:
 
 @_map_errors
 def sample_statistics(data: PhaseData | FrequencyData) -> dict:
-    """Basic statistics of a record's samples, those of Stable32's Statistics
-    function.
+    """Basic statistics of the samples of the record ``data``, those of Stable32's
+    Statistics function.
 
     Keys: ``n`` (samples measured), ``gaps`` (``nan`` samples), ``min``,
     ``max``, ``mean``, ``median`` and ``std`` (with n − 1) of the samples
@@ -292,8 +294,8 @@ def sample_statistics(data: PhaseData | FrequencyData) -> dict:
 
 @_map_errors
 def sample_histogram(data: PhaseData | FrequencyData, *, bins: int | None = None) -> dict:
-    """Histogram of a record's samples, as Stable32's Histogram function plots
-    it.
+    """Histogram of the samples of the record ``data``, as Stable32's Histogram
+    function plots it.
 
     The bins have equal widths and span the samples measured; ``bins=None``
     takes their number from Scott's rule, h = 3.49·s·n^(−1/3) (Scott 1979),
@@ -315,8 +317,8 @@ def sample_histogram(data: PhaseData | FrequencyData, *, bins: int | None = None
 
 @_map_errors
 def acf(data: PhaseData | FrequencyData, *, m: int = 1, lags: int | None = None) -> dict:
-    """Autocorrelation of a record at averaging factor ``m``, as Stable32's
-    Autocorrelation function plots it (SP1065 §5.5.3, Eq. 47).
+    """Autocorrelation of the record ``data`` at averaging factor ``m``, as
+    Stable32's Autocorrelation function plots it (SP1065 §5.5.3, Eq. 47).
 
     The series is the phase taken every m samples, or the frequency averaged
     over m samples without overlap. ``lags`` is the largest lag, by default
@@ -345,8 +347,8 @@ def acf(data: PhaseData | FrequencyData, *, m: int = 1, lags: int | None = None)
 def remove_outliers(
     data: PhaseData | FrequencyData, *, n_sigma: float = 5.0
 ) -> PhaseData | FrequencyData:
-    """Copy of a record with the outliers that :func:`find_outliers` finds at
-    ``n_sigma`` replaced by filled values.
+    """Copy of the record ``data`` with the outliers that :func:`find_outliers`
+    finds at ``n_sigma`` replaced by filled values.
 
     An isolated outlier takes the mean of its two neighbors, and a run of them
     is filled by reflection, as in :func:`fillgaps`. A ``PhaseData`` record is
@@ -367,8 +369,8 @@ def save(
     *,
     source_file: str = "",
 ) -> str:
-    """Write a record, a result or a suite to a text file and return ``path``.
-    :func:`load` reads the file back.
+    """Write ``x``, a record, a result or a suite, to the text file ``path`` and
+    return ``path``. :func:`load` reads the file back.
 
     A ``PhaseData`` or ``FrequencyData`` record is written as two columns, the
     sample time and the sample, after a comment header with its ``tau0`` and
@@ -395,8 +397,8 @@ def save(
 
 @_map_errors
 def load(path: str) -> StabilityResult | StabilitySuite | PhaseData | FrequencyData:
-    """Read a file written by :func:`save`. Its first line says what the file holds:
-    a result, a suite, or a phase or frequency record."""
+    """Read the file ``path``, written by :func:`save`. Its first line says what the
+    file holds: a result, a suite, or a phase or frequency record."""
     r = jl.load(str(path))
     if jl.isa(r, jl.StabilitySuite):
         return suite_from_jl(r)

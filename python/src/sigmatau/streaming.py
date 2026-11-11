@@ -41,13 +41,13 @@ class StreamingStability:
 
     @_map_errors
     def push(self, x: float) -> StreamingStability:
-        """Add one phase sample, in seconds, and return the accumulator."""
+        """Add one phase sample ``x``, in seconds, and return the accumulator."""
         _push(self._jl, float(x))
         return self
 
     @_map_errors
     def extend(self, xs: Sequence[float]) -> StreamingStability:
-        """Add a sequence of phase samples, in seconds, and return the accumulator."""
+        """Add the phase samples ``xs``, a sequence in seconds, and return the accumulator."""
         _append(self._jl, to_jl_f64(xs))
         return self
 

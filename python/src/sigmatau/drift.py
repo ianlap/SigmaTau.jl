@@ -14,7 +14,7 @@ DRIFT_METHODS = tuple(str(m) for m in jl.seval("SigmaTau.DRIFT_METHODS"))
 def drift_fit(
     data: PhaseData | FrequencyData, *, model: str = "linear", method: str = "frequency_fit"
 ) -> DriftFit:
-    """Fit of a frequency drift model to a record.
+    """Fit of a frequency drift model to the record ``data``.
 
     ``model`` is ``"linear"`` (a + b·t), ``"quadratic"`` (a + b·t + c·t²),
     ``"log"`` (a·ln(1 + b·t) + c, the stabilization of an oscillator) or

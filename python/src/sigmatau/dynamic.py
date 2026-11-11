@@ -39,8 +39,9 @@ def dadev(
     ``step`` samples (Galleani and Tavella 2009; IEEE Std 1139-2022, Eq. (A.40)).
 
     ``window`` defaults to the largest power of two up to an eighth of the
-    record, and at least 16, and ``step`` to half the window. A ``TauMode``
-    grid is resolved against the window length. The record must have no gaps.
+    record, and at least 16, and ``step`` to half the window. ``m`` holds the
+    averaging factors, as for :func:`adev`, and a ``TauMode`` grid is resolved
+    against the window length. The record ``data`` must have no gaps.
 
     The result holds one row per window and one column per τ, ``nan`` where the
     window is too short for the averaging factor. No confidence interval is
@@ -61,9 +62,9 @@ def dhdev(
     window, built as :func:`dadev` is (SP1065 §5.2.20).
 
     The third difference cancels linear frequency drift within each window, so
-    the map of a drifting clock shows its noise and not its drift. Arguments
-    and keywords are those of :func:`dadev`. No confidence interval is
-    reported.
+    the map of a drifting clock shows its noise and not its drift. ``data``,
+    ``m``, ``window`` and ``step`` are those of :func:`dadev`. No confidence
+    interval is reported.
     """
     return _run(jl.dhdev, data, m, window=window, step=step)
 

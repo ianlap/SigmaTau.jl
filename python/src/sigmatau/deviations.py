@@ -2,9 +2,10 @@
 
 Each takes a ``PhaseData`` or ``FrequencyData`` record and ``m``, a ``TauMode``
 grid (``Octave`` by default) or a sequence of averaging factors, and returns a
-``StabilityResult``. The docstring of each ends with the keywords that it
-shares with the others: ``ci`` and ``noise``, ``remove_drift`` in the Hadamard
-family, and ``correct_bias`` in the total estimators and ``theo1``.
+``StabilityResult``. The docstring of each ends with the arguments that it
+shares with the others: ``data`` and ``m``, ``ci`` and ``noise``,
+``remove_drift`` in the Hadamard family, and ``correct_bias`` in the total
+estimators and ``theo1``.
 
 ``mtie`` and ``tierms`` report no interval; they accept ``ci`` and
 ``confidence`` and ignore them.
@@ -24,9 +25,14 @@ from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult
 DEFAULT_CONFIDENCE = float(jl.DEFAULT_CONFIDENCE)
 
 
-# The keywords that the estimators share. `_estimator` adds to the docstring of
+# The arguments that the estimators share. `_estimator` adds to the docstring of
 # each estimator those that it takes.
-_KEYWORDS = {
+_SHARED = {
+    "data": "The record, a ``PhaseData`` or a ``FrequencyData``.",
+    "m": (
+        "The averaging factors: a ``TauMode`` grid, ``Octave`` by default, or a "
+        "sequence of integers."
+    ),
     "ci": (
         "Identify the noise type at each τ and report the equivalent degrees of "
         "freedom (EDF) and a χ² confidence interval at ``confidence``. ``False`` "
@@ -51,12 +57,12 @@ _KEYWORDS = {
 
 
 def _estimator(fn):
-    """Add to the docstring of an estimator the shared keywords that it takes."""
+    """Add to the docstring of an estimator the shared arguments that it takes."""
     if fn.__doc__:
         entries = [
-            f"``{name}``\n" + textwrap.indent(textwrap.fill(_KEYWORDS[name], 75), "    ")
+            f"``{name}``\n" + textwrap.indent(textwrap.fill(_SHARED[name], 75), "    ")
             for name in inspect.signature(fn).parameters
-            if name in _KEYWORDS
+            if name in _SHARED
         ]
         fn.__doc__ = inspect.cleandoc(fn.__doc__) + "\n\n" + "\n".join(entries)
     return fn
@@ -264,6 +270,7 @@ def mtie(
     """Maximum time interval error, in seconds: the largest peak-to-peak phase
     excursion within any window of m + 1 samples (ITU-T G.810; SP1065 §5.2.17).
 
+    ``data`` is the record and ``m`` the averaging factors, as for :func:`adev`.
     MTIE is a peak statistic and has no χ² interval. ``ci`` and ``confidence``
     are accepted, so that every estimator can be called alike, and ignored.
     """
@@ -280,8 +287,9 @@ def tierms(
     """RMS time interval error, in seconds: the rms phase change over τ
     (SP1065 §5.2.18; ITU-T G.810).
 
-    It includes any frequency offset in the record. Like ``mtie`` it has no χ²
-    interval, and ``ci`` and ``confidence`` are accepted and ignored.
+    ``data`` is the record and ``m`` the averaging factors, as for :func:`adev`.
+    The error includes any frequency offset in the record. Like ``mtie`` it has
+    no χ² interval, and ``ci`` and ``confidence`` are accepted and ignored.
     """
     return _run(jl.tierms, data, m, ci=ci, confidence=float(confidence))
 
