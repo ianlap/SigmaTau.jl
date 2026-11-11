@@ -112,11 +112,15 @@ try {
   await settled();
   await shot("synthesis");
 
-  // Ensemble, on its own four simulated clocks.
+  // Ensemble, on its own four simulated clocks: the scale, then the hat.
   await start("ensemble");
   await plotted("[data-ref=adev]");
   await settled();
   await shot("ensemble");
+  await page.click("[data-ctl=view][data-v=hat]");
+  await page.locator("#page [data-ref=title]", { hasText: "of each clock" }).waitFor(SLOW);
+  await settled();
+  await shot("ensemble-hat");
 
   // Live: the simulator, half a minute at ten readings a second.
   await go("live");

@@ -117,6 +117,14 @@ end
 run_deviation(d::Symbol, data, ms::Vector{Int}, o::Options, bias::Union{Bool,Symbol}, noise) =
     deviation(d, data, ms; ci=o.ci, confidence=o.confidence, correct_bias=bias, noise=noise)
 
+# --dead-time: the ADEV of the readings over √(B2·B3) for the stated noise,
+# as `adev(::FrequencyData; dead_time)` gives it.
+function dead_time_adev(data::PhaseData, ms::Vector{Int}, o::Options)
+    o.freq || throw(usage_error("--dead-time applies to frequency readings; phase samples have no dead time"))
+    noise = Symbol(o.noise)
+    return SigmaTau._dead_time_scaled(run_deviation(:adev, data, ms, o, false, noise), ms, o.dead_time, noise)
+end
+
 function analysis_results(o::Options, data::PhaseData)
     need_samples(data, 8, "the analysis")
     o.tau_min > o.tau_max && throw(usage_error("--tau-min is above --tau-max"))
@@ -128,8 +136,9 @@ function analysis_results(o::Options, data::PhaseData)
         ms = isempty(o.m) ? tau_values(mode, N, d) : o.m
         ms = Int[m for m in ms if !(m * data.tau0 < o.tau_min * (1 - 1e-9)) && !(m * data.tau0 > o.tau_max * (1 + 1e-9))]
         isempty(ms) && continue
-        push!(results, fit === nothing ? run_deviation(d, data, ms, o, correct_bias(o), Symbol(o.noise)) :
-                                         run_deviation(d, data, ms, o, correct_bias(o), fit))
+        push!(results, o.dead_time != 0 ? dead_time_adev(data, ms, o) :
+                       fit === nothing  ? run_deviation(d, data, ms, o, correct_bias(o), Symbol(o.noise)) :
+                                          run_deviation(d, data, ms, o, correct_bias(o), fit))
     end
     isempty(results) && !(isnan(o.tau_min) && isnan(o.tau_max)) &&
         throw(CLIError(EXIT_ANALYSIS, "no averaging time of the grid lies within --tau-min and --tau-max"))
@@ -162,6 +171,7 @@ function cmd_analyze(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt
     json_key(io, "confidence"); o.ci ? json_number(io, o.confidence) : print(io, "null")
     json_key(io, "bias_correction"); json_string(io, o.bias)
     json_key(io, "noise"); json_string(io, o.noise)
+    o.dead_time == 0 || (json_key(io, "dead_time"); json_number(io, o.dead_time))
     json_key(io, "deviations"); json_array(io, String[String(d) for d in o.devs])
     json_preprocessing(io, o)
     print(io, '}')
