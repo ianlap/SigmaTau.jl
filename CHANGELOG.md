@@ -266,6 +266,14 @@ Clock models, the Kalman filter and timescales.
   choice. Python's `ClockModel` mirrors `flicker_fm`, `fm_band`,
   `flicker_pm` and `pm_band`, and `clock_model` and `clock_models` take
   `flicker=True`.
+- Python: the keywords and call forms of the Julia functions that the
+  wrappers lacked. `dadev` and `dhdev` without `window`; `identify_noise`
+  with `b1`, `b1_length` and a `TauMode` grid; `read_data` with `delim` and
+  `keep_zeros`, and `detect_format` with `delim`; `powerlaw_fit` of a
+  `StabilityResult`; `powerlaw_sigma` and `powerlaw_psd` of a `ClockModel`
+  or a `NoiseFit`; `holdover` of a `NoiseFit`; `tune_q` with `burnin`;
+  `timescale` with `step_threshold`, `lmax` and `step_inflate`;
+  `clock_model` with `fm_band` and `pm_band`.
 
 ### Changed
 
@@ -702,6 +710,12 @@ Clock models, the Kalman filter and timescales.
 - Python: `clock_model` of a `PowerLawFit` uses Julia's default `tau_max`,
   the longest τ of a fit of a deviation. It had used 10⁶ τ₀, which with the
   flicker states on left the model with Markov states far past the record.
+- Python: `delim` of `read_phase` and `read_frequency` reaches Julia; every
+  call with it had raised `JuliaError`. `StreamingStability` raises
+  `ValueError` on a sample that is not finite. The docstrings are corrected
+  against the Julia ones, among them the sign of `timescale_phase`, what
+  `remove_outliers` does and the formats of `read_data`, and `help()` of an
+  estimator lists the keywords it shares with the others.
 
 ### Security
 
