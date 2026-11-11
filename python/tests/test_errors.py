@@ -41,6 +41,10 @@ def test_a_float_is_refused_where_julia_counts(small_phase):
         st.adev(small_phase, [2.7])
     with pytest.raises(TypeError, match="n must be an integer, got 16.5"):
         st.noise_gen(PhaseData, 16.5, 1.0, sigma1={0: 1e-12})
+    with pytest.raises(TypeError, match="lags must be an integer, got 4.5"):
+        st.acf(small_phase, lags=4.5)
+    with pytest.raises(TypeError, match="value_col must be an integer, got 2.0"):
+        st.read_phase("clock.csv", value_col=2.0)
     assert st.adev(small_phase, np.array([1, 2]), ci=False).tau.tolist() == [1.0, 2.0]
 
 
