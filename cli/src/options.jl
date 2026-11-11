@@ -35,7 +35,6 @@ const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const DRIFT_METHODS = [String(m) for m in SigmaTau.DRIFT_METHODS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
 const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
-const HAT_METHODS = ["hat", "groslambert", "klts"]
 const HAT_DEVS = [String(d) for d in SigmaTau._HAT_DEVIATIONS]
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 
@@ -101,7 +100,8 @@ const OPTS = [
     Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale", "hat"]),
     Opt("--pairs", "", String[], false, "the three --value-cols are the differences A−B, B−C and C−A, each measured on its own, not clocks read against one reference", ["hat"]),
     Opt("--no-reference", "", String[], false, "leave the reference out: the hat of the clocks' differences from one another alone (three or more clocks)", ["hat"]),
-    Opt("--method", "METHOD", HAT_METHODS, false, "hat (default): from the deviations of every pair; groslambert: ADEV from the covariance of the difference records, which keeps the noise of each --pairs record's instrument out; klts: groslambert with the interval of Lantz et al. (2019), for three clocks, given also where a clock is not resolved", ["hat"]),
+    Opt("--covariance", "", String[], false, "the Groslambert covariance of the difference records in place of the hat: ADEV, with the noise of each --pairs record's instrument kept out", ["hat"]),
+    Opt("--klts", "", String[], false, "--covariance with the interval of Lantz et al. (2019), for three clocks, given also where a clock is not resolved", ["hat"]),
     Opt("--algorithm", "ALG", TIMESCALES, false, "at1 (default, inverse-variance weights), at2 (at1 with a Kalman frequency update), ewfa (equal weights), or greenhall / jones_tryon / stein (Kalman scales on clock models fitted from the data; need 3+ clocks)", ["timescale"]),
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", STEPS, false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
@@ -214,7 +214,8 @@ mutable struct Options
     interval::Float64         # steer: seconds between steers; NaN = τ₀
     pairs::Bool               # hat: the columns are the pairwise differences
     reference::Bool           # hat: the reference counts as a clock
-    method::String            # hat: hat, groslambert or klts
+    covariance::Bool          # hat: the Groslambert covariance in place of the hat
+    klts::Bool                # hat: the covariance with the KLTS interval
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
@@ -224,7 +225,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
-                    NaN, false, Float64[], NaN, false, true, "hat")
+                    NaN, false, Float64[], NaN, false, true, false, false)
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 
@@ -421,7 +422,6 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--out";            o.out = v
     elseif name == "--with";           o.with = v
     elseif name == "--mask";           o.mask = check_choice(v, name, MASKS)
-    elseif name == "--method";         o.method = check_choice(v, name, HAT_METHODS)
     else throw(usage_error("option " * name * " takes no value"))
     end
     return o
@@ -446,6 +446,8 @@ function set_flag!(o::Options, name::String)
     elseif name == "--flicker";            o.flicker = true
     elseif name == "--pairs";              o.pairs = true
     elseif name == "--no-reference";       o.reference = false
+    elseif name == "--covariance";         o.covariance = true
+    elseif name == "--klts";               o.klts = true
     elseif name == "--quiet";              o.quiet = true
     elseif name == "--help";               o.help = true
     end

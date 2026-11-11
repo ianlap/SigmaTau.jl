@@ -724,17 +724,17 @@ hat_record(records::Matrix{PhaseData{Float64}}, i::Int, j::Int) =
     isassigned(records, i, j) ? records[i, j] : records[j, i]
 
 function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
-    covariance = o.method != "hat"
+    covariance = o.covariance || o.klts
     for d in o.devs
         String(d) in HAT_DEVS || throw(usage_error("hat separates " * join(HAT_DEVS, ", ") * "; got " * String(d)))
-        covariance && d !== :adev && throw(usage_error("--method " * o.method * " gives ADEV; leave --devs out"))
+        covariance && d !== :adev && throw(usage_error((o.klts ? "--klts" : "--covariance") * " gives ADEV; leave --devs out"))
     end
     records, names = hat_records(o)
     k = length(names)
-    o.method == "klts" && k != 3 && throw(usage_error("--method klts is for three clocks; these are " * string(k)))
+    o.klts && k != 3 && throw(usage_error("--klts is for three clocks; these are " * string(k)))
     N, τ₀ = length(records[1, 2].x), records[1, 2].tau0
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a hat needs at least 16 samples"))
-    o.method == "klts" && any(any(isnan, hat_record(records, i, j).x) for i in 1:k for j in i+1:k) &&
+    o.klts && any(any(isnan, hat_record(records, i, j).x) for i in 1:k for j in i+1:k) &&
         throw(CLIError(EXIT_ANALYSIS, "the KLTS interval needs records without gaps; fill them with --fillgaps"))
     mode = tau_mode(o.grid)
     pairs = Vector{StabilityResult}[]      # per deviation: every pair as measured, i < j
@@ -747,7 +747,7 @@ function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
         end
         push!(pairs, StabilityResult[measured[i, j] for i in 1:k for j in i+1:k])
         push!(clocks, !covariance ? ncornered_hat(measured) :
-                      groslambert(records, ms; confidence=o.confidence, interval=o.method == "klts" ? :klts : :chi2))
+                      groslambert(records, ms; confidence=o.confidence, interval=o.klts ? :klts : :chi2))
     end
     if o.format != "json"
         print(io, CSV_HAT); print(io, '\n')
@@ -762,7 +762,7 @@ function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     json_head(io, o, o.synth > 0 ? "synthetic" : o.input)
     json_key(io, "hat"); print(io, '{')
     json_key(io, "method", true); json_string(io, covariance ? "groslambert" : "hat")
-    json_key(io, "interval"); json_string(io, o.method == "klts" ? "klts" : "chi2")
+    json_key(io, "interval"); json_string(io, o.klts ? "klts" : "chi2")
     json_key(io, "layout"); json_string(io, o.pairs ? "pairs" : "reference")
     json_key(io, "tau0"); json_number(io, τ₀)
     json_key(io, "n"); print(io, N)
