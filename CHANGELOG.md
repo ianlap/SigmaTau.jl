@@ -675,6 +675,11 @@ Clock models, the Kalman filter and timescales.
   Before, `cross`, `steer`, `timescale` and `model` completed no options,
   and no shell completed the values of `--input-format`, `--bias`,
   `--noise`, `--mask`, `--algorithm` or `--steps`.
+- The compiled `sigmatau` requires Julia 1.13 to build. A build on Julia
+  1.12 compiled without a warning, but the total deviations and Thêo1 failed
+  in it with "failed (CompositeException)", because a program that 1.12
+  trims cannot start a task. The build now stops on 1.12, and an error
+  inside a threaded loop is reported by what the loop threw.
 
 ### Security
 
