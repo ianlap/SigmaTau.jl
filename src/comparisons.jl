@@ -162,7 +162,9 @@ the Kalman time scales of [`timescale`](@ref).
 
 Each clock's Allan deviation is separated from the others' by the
 Groslambert covariance of the clock differences ([`groslambert`](@ref)),
-in which the reference cancels. [`powerlaw_fit`](@ref) fits the components
+in which the reference cancels, with the pairs of the other clocks weighted
+by their noise (`weighted = true`), so that a quiet clock is read against
+the other quiet clocks. [`powerlaw_fit`](@ref) fits the components
 `alphas` to that curve, and [`clock_model`](@ref) turns the fit into a
 model. This takes three or more clocks.
 
@@ -215,7 +217,7 @@ function clock_models(cc::ClockComparisons; alphas=[2, 1, 0, -2], flicker::Bool=
     N = size(cc.x, 1)
     steps = unique([_start(view(cc.x, :, i:i))[2] for i in 1:k if any(isfinite, view(cc.x, :, i))])
     ms = sort!(unique!(reduce(vcat, [c .* _default_m_values(cld(N, c), :adev) for c in steps if N > 3c]; init=Int[])))
-    curves = groslambert(pair, ms)
+    curves = groslambert(pair, ms; weighted=true)
     for (name, r) in zip(cc.names, curves)
         n = count(>(0), r.dev)
         n >= length(alphas) || throw(ArgumentError(

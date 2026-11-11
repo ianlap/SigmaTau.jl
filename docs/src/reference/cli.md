@@ -527,7 +527,12 @@ sigmatau_json("timescale --synth 1024 --series 2 --format json"; only = "timesca
 `adev.clocks` that of each clock against the scale. `series` holds the
 scale and, for each clock, its weights at the times kept. With `--flicker`
 the object has a member `flicker`, whose arrays `fm` and `pm` give the
-number of Markov states in the model of each clock.
+number of Markov states in the model of each clock. For `greenhall`,
+`jones_tryon` and `stein`, `models` holds the model fitted to each clock.
+Where a fit leaves a clock without white FM and without flicker FM, the
+record does not resolve that clock, the scale gives it nearly all of the
+weight, and a message on stderr names it
+([Fitted models](ensemble.md#Fitted-models)).
 
 ## `hat`
 

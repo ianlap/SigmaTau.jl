@@ -172,6 +172,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
             write_file(o.out, bytes)
             o.quiet || (print(err, "sigmatau: wrote "); print(err, o.out); print(err, '\n'))
         end
+        o.quiet || isempty(o.note) || (print(err, "sigmatau: "); print(err, o.note); print(err, '\n'))
     catch e
         # A consumer that closed the pipe early (`sigmatau analyze … | head`) is not a failure.
         e isa Base.IOError && isempty(o.out) && return EXIT_OK

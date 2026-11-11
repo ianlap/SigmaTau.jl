@@ -170,6 +170,18 @@ end
     g4 = groslambert(Q, [1, 4])
     @test all(isapprox(g4[i].dev[1], adev(PhaseData(x[i], 1.0), [1]; ci=false).dev[1]; rtol=0.1) for i in 1:4)
     @test g4[1].deviation_type === :adev && length(g4[1].ci) == 2 && g4[1].confidence == DEFAULT_CONFIDENCE
+    # Weighted, each couple counts by the inverse of the product of its
+    # records' variances: one couple is the plain covariance, and a quiet
+    # clock beside two that are 100 times noisier is read against the other
+    # quiet ones (within 0.08 over 60 seeds; unweighted, no estimate in 37).
+    @test groslambert(d(1, 2), d(2, 3), d(3, 1), [1, 2, 4]; weighted=true)[1].dev == g3[1].dev
+    rz = Xoshiro(8)
+    z = [σ .* randn(rz, 2048) for σ in (1.0, 1.0, 1.0, 100.0, 100.0)]
+    W = Matrix{PhaseData}(undef, 5, 5)
+    for i in 1:4, j in i+1:5
+        W[i, j] = PhaseData(z[i] .- z[j], 1.0)
+    end
+    @test groslambert(W, [1]; weighted=true)[1].dev[1] ≈ adev(PhaseData(z[1], 1.0), [1]; ci=false).dev[1] rtol=0.15
     # Missing samples: a term that reads one is left out. One missing reading
     # of clock 1 costs each of its records three terms, so its own couples
     # lose three each and two of the three couples of another clock; records

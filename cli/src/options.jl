@@ -227,6 +227,7 @@ mutable struct Options
     reference::Bool           # hat: the reference counts as a clock
     covariance::Bool          # hat: the Groslambert covariance in place of the hat
     klts::Bool                # hat: the covariance with the KLTS interval
+    note::String              # a remark on the result, for stderr once the output is written
 end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
@@ -236,7 +237,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false,
-                    NaN, false, Float64[], NaN, "", false, 0, false, -1, false, true, false, false)
+                    NaN, false, Float64[], NaN, "", false, 0, false, -1, false, true, false, false, "")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
 

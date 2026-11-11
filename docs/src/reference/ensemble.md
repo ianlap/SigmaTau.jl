@@ -181,6 +181,29 @@ clocks like these, whose best weights are the same at every ``τ``, a record
 has to be long enough to show the slow noise of each clock before a Kalman
 scale matches AT1.
 
+With four clocks or more the fit weighs the pairs of the other clocks by
+their noise (`weighted = true` of [`groslambert`](@ref)), so that a quiet
+clock is read against the other quiet clocks. In simulation (three clocks
+beside three with ``10^5`` times their white FM, 20 000 samples, 60
+records) the fitted white FM of every clock was within 20 % of the truth,
+and `:greenhall` on the fitted models was within 1 % of the true models up
+to 100 s and 4 % behind at 1000 s. With equal weights the white FM of the
+quiet clocks came out between zero and 2500 times the truth, and
+`:greenhall` was 100 times less stable at 1000 s. With three clocks there
+is one pair and nothing to weigh: a clock much quieter than the other two
+is not resolved.
+
+A clock that the record does not resolve can come out of the fit without
+white FM. A Kalman scale then gives it nearly all of the weight and follows
+it. In simulation (four clocks, each with four times the white FM of the
+last) this happened in a quarter of the records of 200 samples and in 8 %
+of those of 1000, nearly always to the best clock, and in 3 % of the
+records of three clocks and 4000 samples. `:greenhall` and `:stein` were
+then 10 to 16 % less stable at ``τ_0`` than on the true models, and up to
+2.4 times at ``8τ_0`` on the 200-sample records. The command line and the
+explorer name such a clock; from the library, look at `q1` of the fitted
+models. `:at1` takes no model.
+
 The comparisons may have missing readings: the covariance leaves out the
 terms that read one, and clocks read at every tenth sample are fitted from
 the multiples of ten. In simulation (four clocks, 20 000 samples; a clock
