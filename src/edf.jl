@@ -55,6 +55,7 @@ they report.
   for white PM to random-walk FM, and the EDF of `:adev` at ``m = 1``.
 """
 function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Symbol}, m_values::Vector{Int}, taus::Vector{Float64}, N::Int, T::Float64)
+    _check_m(:calculate_edf, m_values)
     edfs = Vector{Float64}(undef, length(devs))
 
     for k in 1:length(devs)
@@ -653,8 +654,10 @@ statistic, computed in this package (see
     modified total variance to the modified Allan variance. The estimator
     reads low, so that ratio is below 1, and those values are not used.
 """
-bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int; published::Bool=false) =
-    [_total_bias(var_type, _alpha_from_noise(noises[k]), m_values[k], N, published) for k in eachindex(noises)]
+function bias_correction(noises::Vector{Symbol}, var_type::Symbol, m_values::Vector{Int}, N::Int; published::Bool=false)
+    _check_m(:bias_correction, m_values)
+    return [_total_bias(var_type, _alpha_from_noise(noises[k]), m_values[k], N, published) for k in eachindex(noises)]
+end
 
 """
     confidence_intervals(devs, edfs, confidence) → (lower, upper)

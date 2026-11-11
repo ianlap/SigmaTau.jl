@@ -36,8 +36,11 @@ using Test, Random, SigmaTau
     @testset "m below 1 and gaps an estimator cannot skip are errors" begin
         rejects(f, data, m) = try f(data, m); false catch e; e isa ArgumentError end
         fns = (adev, mdev, tdev, hdev, mhdev, htdev, totdev, mtotdev, ttotdev,
-               htotdev, mhtotdev, mtie, tierms, pdev, theo1, theoh, dadev, dhdev)
+               htotdev, mhtotdev, mtie, tierms, pdev, theo1, theoh, dadev, dhdev,
+               identify_noise)
         @test all(f -> rejects(f, pd, [0, 1]) && rejects(f, fd, [-1]), fns)
+        @test_throws ArgumentError calculate_edf(:adev, [1.0], [:WHFM], [0], [1.0], 100, 99.0)
+        @test_throws ArgumentError bias_correction([:WHFM], :totvar, [-1], 100)
         gapped = PhaseData([x[1:99]; NaN; x[101:end]], 1.0)
         @test all(f -> rejects(f, gapped, ms), (totdev, mtotdev, ttotdev, htotdev, mhtotdev,
                                                 pdev, theo1, theoh, dadev, dhdev))
