@@ -239,9 +239,14 @@ mktempdir() do dir
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,mtie", "--mask", "G8262_opt1")
         @test r.code == 0 && occursin("\"masks\":[{\"name\":\"G8262_opt1\"", r.out)
         @test occursin("\"checks\":[{\"deviation\":\"tdev\"", r.out) && occursin("{\"deviation\":\"mtie\"", r.out)
-        @test run_cli("analyze", pf, "--mask", "G8262_opt1").code != 0      # JSON only
+        @test occursin("\"source\":\"G.8262 (10/2024), Tables 1 and 3\"", r.out)
         @test run_cli("analyze", pf, "--format=json", "--mask", "G999").code != 0
-        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 9
+        @test count("\"title\":", run_cli("analyze", pf, "--format=json", "--mask", "all").out) == 16
+        # With CSV the verdict goes to stderr: X swings 4.7 ns, under the 25 ns of PRTC-B.
+        r = run_cli("analyze", pf, "--devs", "adev,mtie", "--mask", "G8272_PRTC_B")
+        @test r.code == 0 && startswith(r.out, "source,quantity,deviation") && occursin(r"^sigmatau: MTIE passes, [\d.]+× under G8272_PRTC_B\n$", r.err)
+        @test occursin("--devs names neither", run_cli("analyze", pf, "--devs", "adev", "--mask", "G811").err)
+        @test isempty(run_cli("analyze", pf, "--devs", "mtie", "--mask", "G8272_PRTC_B", "--quiet").err)
     end
 
     @testset "no CI: nulls in JSON, blanks in CSV, never NaN" begin

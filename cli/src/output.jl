@@ -255,14 +255,16 @@ end
 # its check of each MTIE / TDEV result.
 const MASK_TAUS = [10.0^(k / 20) for k in -20:120]
 
+mask_names(name::String) = name == "all" ? collect(Symbol, SigmaTau.TELECOM_MASKS) : [Symbol(name)]
+
 function json_masks(io::IO, name::String, results::Vector{StabilityResult})
-    names = name == "all" ? collect(Symbol, SigmaTau.TELECOM_MASKS) : [Symbol(name)]
     print(io, '[')
-    for (j, m) in enumerate(names)
+    for (j, m) in enumerate(mask_names(name))
         j > 1 && print(io, ',')
         print(io, '{')
         json_key(io, "name", true); json_string(io, String(m))
-        json_key(io, "title"); json_string(io, SigmaTau._MASKS[m][1])
+        json_key(io, "title"); json_string(io, SigmaTau._MASKS[m].title)
+        json_key(io, "source"); json_string(io, SigmaTau._MASKS[m].source)
         json_key(io, "tau"); json_array(io, MASK_TAUS)
         json_key(io, "mtie"); json_array(io, telecom_mask(m, :mtie, MASK_TAUS))
         json_key(io, "tdev"); json_array(io, telecom_mask(m, :tdev, MASK_TAUS))
@@ -282,6 +284,27 @@ function json_masks(io::IO, name::String, results::Vector{StabilityResult})
         print(io, "]}")
     end
     print(io, ']')
+    return nothing
+end
+
+# Beside the CSV: the verdict of each mask on each MTIE / TDEV result, one line each.
+function mask_verdicts(err::IO, name::String, results::Vector{StabilityResult})
+    checked = false
+    for m in mask_names(name), r in results
+        r.deviation_type in (:mtie, :tdev) || continue
+        checked = true
+        c = mask_check(r, m)
+        print(err, "sigmatau: "); print(err, r.deviation_type === :mtie ? "MTIE " : "TDEV ")
+        if isnan(c.margin)
+            print(err, "has no τ in the range of ")
+        elseif c.pass
+            print(err, "passes, "); print(err, round(c.margin; sigdigits=3)); print(err, "× under ")
+        else
+            print(err, "fails, "); print(err, round(1 / c.margin; sigdigits=3)); print(err, "× over ")
+        end
+        print(err, String(m)); print(err, '\n')
+    end
+    checked || print(err, "sigmatau: --mask checks MTIE and TDEV, and --devs names neither\n")
     return nothing
 end
 

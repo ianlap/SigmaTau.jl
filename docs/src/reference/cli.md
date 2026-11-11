@@ -110,7 +110,7 @@ The sample interval of a simulated record is `--tau0`, or 1 s.
 | `--format FMT` | `csv`, the default, or `json` |
 | `--out PATH` | write to a file. By default the output goes to standard output |
 | `--series N` | include samples of the record in the JSON output, about `N`, for a plot |
-| `--quiet` | no note on standard error that the file was written |
+| `--quiet` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
 
 A value that does not exist is an empty field in CSV and `null` in JSON,
 never the text `NaN`. `model` and `live` write JSON only, and `report`
@@ -188,14 +188,15 @@ source,quantity,deviation,tau,dev,ci_lower,ci_upper,edf,neff,noise_type
 
 `tau` is in seconds, and `neff` is the number of terms averaged.
 
-Four options add a member to the JSON output and need `--format json`:
+Four options add a member to the JSON output. The first three need
+`--format json`:
 
 | Option | Member |
 |:---|:---|
 | `--spectrum` | `spectrum`, as the `spectrum` command gives it. `--nperseg N` sets the segment length. For a record with gaps the member is `{"error": "…"}`, and the deviations are computed all the same |
 | `--fit` | `powerlaw`, the power-law model that [`powerlaw_fit`](@ref) fits to the modified Hadamard deviation of the record |
 | `--component NOISE:A:B` | `powerlaw`, built one noise type at a time with [`noise_fit`](@ref): `NOISE`, a name such as `WHFM` or a value of ``α``, is fitted between `A` and `B` seconds to what the components before it leave. Either end can be left open. Repeat the option for each component, in order |
-| `--mask NAME` | `masks`, the limits of an ITU-T wander mask with the check of each MTIE and TDEV result against them. `NAME` is one of the [`TELECOM_MASKS`](@ref) (`G811`, `G813_opt1`, `G813_opt2`, `G8262_opt1`, `G8262_opt2`, `G823_PRC`, `G823_SSU`, `G823_SEC`, `G823_PDH`), or `all` |
+| `--mask NAME` | `masks`, the limits of an ITU-T wander mask with the check of each MTIE and TDEV result against them. `NAME` is one of the [`TELECOM_MASKS`](@ref), such as `G811`, `G8262_opt1`, `G8272_PRTC_A`, `G8272_PRTC_B` or `G823_SSU`, or `all`. With CSV output the table stays as it is and each check is one line on standard error, such as `sigmatau: MTIE passes, 3.2× under G8272_PRTC_A`, unless `--quiet` is given |
 
 ```@example cliref
 sigmatau_json("analyze --synth 1024 --component WHFM::8 --component RWFM:32: --format json"; only = "powerlaw") # hide
@@ -216,9 +217,10 @@ fitted, `powerlaw` holds an `error` instead.
 sigmatau_json("analyze --synth 1024 --devs mtie,tdev --mask G811 --format json"; only = "masks") # hide
 ```
 
-`mtie` and `tdev` are the limits of the mask, in seconds, at the averaging
-times `tau`, from 0.1 s to ``10^6`` s, and `null` outside the range of the
-recommendation. Each entry of `checks` is one result against the mask, as
+`source` is the edition of the recommendation and the tables that the
+limits were read from. `mtie` and `tdev` are the limits of the mask, in
+seconds, at the averaging times `tau`, from 0.1 s to ``10^6`` s, and `null`
+outside the range of the recommendation. Each entry of `checks` is one result against the mask, as
 [`mask_check`](@ref) returns it.
 
 ## `check`
