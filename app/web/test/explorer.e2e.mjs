@@ -206,6 +206,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ℒ(f) 2 · MDEV"));
     const doc = JSON.parse(execFileSync(CLI, ["phasenoise", table, "--header", "1", "--carrier", "10e6", "--devs", "mdev", "--format", "json"]));
     assert.deepEqual([shown.x, shown.y], [doc.results[0].tau, doc.results[0].dev]);
+    assert.equal(await page.evaluate(() => document.querySelector("#page .js-plotly-plot").layout.xaxis.dtick), 2, "nine decades of τ, a label every other one");
+    await page.click("#page .chip:last-child [data-unpin]");
+    // A table of one decade gives one τ, drawn as a point.
+    writeFileSync(table, "1,-100\n10,-130\n");
+    await page.setInputFiles("#page [data-ref=pn-file]", table);
+    await page.waitForFunction(() => document.querySelectorAll("#page [data-unpin]").length === 2, null, SLOW);
+    const point = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ℒ(f) 3 · MDEV"));
+    assert.deepEqual([point.x.length, point.mode], [1, "markers"]);
     await page.click("#page .chip:last-child [data-unpin]");
   });
 
