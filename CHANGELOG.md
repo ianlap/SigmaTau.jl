@@ -448,6 +448,12 @@ Clock models, the Kalman filter and timescales.
   `Tau:` lines. `read_data(path; keep_zeros=true)`, CLI `--keep-zeros` and
   the explorer's *Keep zeros as readings* box keep them as readings for
   quantized records.
+- `clock_model` keeps the flicker FM and flicker PM of a fit as Markov
+  states by default (`flicker = true`). `clock_model(powerlaw_fit(p))` used
+  to leave the fitted flicker FM out, and its filter then claimed 1.2 to 8
+  times less error than it made on a clock with a flicker floor.
+  `flicker = false` gives the former model, which the `:stein` time scale
+  needs.
 
 ### Removed
 
