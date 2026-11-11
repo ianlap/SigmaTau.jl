@@ -100,7 +100,7 @@ for each clock:
 | **Weight** | The weight at the end of the record |
 | **Mean** | The mean weight over the second half of the record |
 | **RMS error** | The rms prediction error over the second half, in seconds |
-| **White FM q₁** | For a Kalman scale, the white FM of the model fitted to the clock |
+| **White FM** | For a Kalman scale, the white FM ``q_1`` of the model fitted to the clock |
 
 The Jones–Tryon scale has no weights: the plot of the weights is not shown,
 and the two weight columns are empty.
