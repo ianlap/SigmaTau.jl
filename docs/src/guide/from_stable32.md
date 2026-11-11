@@ -56,12 +56,14 @@ does the work of the Multiplier. The `Addend:`, `Multiplier:`,
 | Scale | `scaling=` on the readers, or arithmetic on the samples |
 | Fill | [`fillgaps`](@ref), by another method ([below](@ref stable32-differences)) |
 | Check | [`find_outliers`](@ref), by the same test, with five scaled median absolute deviations as the default. [`remove_outliers`](@ref) puts a filled value where Stable32 leaves a gap |
-| Statistics | [`summarize`](@ref) |
+| Statistics | [`sample_statistics`](@ref), and [`summarize`](@ref) for gaps, outliers and drift |
 | Drift | [`drift_fit`](@ref) for the fit, [`detrend`](@ref) for the removal |
 | Sigma | an estimator at one averaging factor, `adev(p, [16])` |
 | Run | an estimator, or [`stability`](@ref) for several |
 | Dynamic Stability | [`dadev`](@ref), [`dhdev`](@ref) |
 | Power | [`psd_y`](@ref), [`psd_x`](@ref), [`ssb_phase_noise`](@ref) |
+| Histogram | [`sample_histogram`](@ref) |
+| Autocorrelation | [`acf`](@ref). The lag scatter plot is not here |
 | Domain | [`powerlaw_sigma`](@ref), [`powerlaw_psd`](@ref) |
 | Noise | [`noise_gen`](@ref) |
 | 3-Cornered Hat | [`ncornered_hat`](@ref), for three clocks or more, and [`groslambert`](@ref) |
@@ -76,8 +78,7 @@ quadratic one. `detrend(p; method = :quadratic)` is its quadratic fit to
 phase data. The average of second differences, the three-point fit and the
 bisection fit are not here.
 
-Not in this package: the Filter, Histogram and Autocorrelation functions,
-the detection of frequency jumps, the dead-time corrections and the scaling
+Not in this package: the Filter function, the detection of frequency jumps, the dead-time corrections and the scaling
 of a result for one of two identical units. For the last, divide `r.dev` by
 ``\sqrt{2}``.
 
