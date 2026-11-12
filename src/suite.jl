@@ -13,9 +13,10 @@ function _stability(data, N::Int, kind::Symbol, tau0::Float64;
                     devs = DEFAULT_DEVIATIONS, m = Octave,
                     ci::Bool = true, confidence::Real = DEFAULT_CONFIDENCE,
                     correct_bias::Union{Bool,Symbol} = true, remove_drift::Bool = true,
-                    noise::_NoiseChoice = :auto)
+                    noise::_NoiseChoice = :auto, kw...)
+    isempty(kw) || throw(_suite_keyword_error(first(keys(kw))))
     results = StabilityResult[]
-    for sym in devs
+    for sym in (devs isa Union{Symbol,AbstractString} ? (devs,) : devs)
         name = Symbol(sym)
         ms = m isa TauMode ? _resolve_m(name, m, N) : collect(Int, m)
         push!(results, deviation(name, data, ms; ci, confidence, correct_bias, remove_drift, noise))
@@ -23,6 +24,11 @@ function _stability(data, N::Int, kind::Symbol, tau0::Float64;
     tau_mode = m isa TauMode ? Symbol(string(m)) : :explicit
     return StabilitySuite(results, kind, tau0, N, ci ? Float64(confidence) : NaN, tau_mode)
 end
+
+_suite_keyword_error(k::Symbol) = ArgumentError(k === :m_values ?
+    "stability: the averaging factors are the keyword m, a TauMode or an integer vector" :
+    "stability: no keyword $k; it takes devs, m, ci, confidence, correct_bias, remove_drift and noise, " *
+    "and the other keywords of an estimator go to that estimator's own function")
 
 """
     stability(data; devs=DEFAULT_DEVIATIONS, m=Octave, ci=true,
@@ -40,7 +46,7 @@ run through [`deviation`](@ref), and the results come back as a
 # Keywords
 
 - `devs`: the estimators to run, as symbols or strings from
-  [`estimators`](@ref).
+  [`estimators`](@ref); one name runs one estimator.
 - `m`: a [`TauMode`](@ref) grid, cut for each estimator at the largest
   averaging factor it supports, or an integer vector that every estimator
   takes as it stands. `theo1` reads such a vector as even Thêo1 factors (an

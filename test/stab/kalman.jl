@@ -121,4 +121,11 @@ using Statistics
     @test_throws ArgumentError kalman_filter(PhaseData(p.x, 2.0), m)
     @test_throws ArgumentError kalman_filter(p, m; x0=[0.0, 0.0, 0.0], P0=zeros(3, 3))
     @test_throws "no noise" kalman_filter(p, ClockModel(; tau0=1.0))
+    f = FrequencyData(p)            # the clock-model functions take phase, and say so
+    @test_throws "kalman_filter: takes a phase record" kalman_filter(f, m)
+    @test_throws "prediction_error: takes a phase record" prediction_error(kf, f, [1])
+    @test_throws "tune_q: takes a phase record" tune_q(f, m)
+    @test_throws "holdover: takes a phase record" holdover(f; train=20)
+    @test_throws "holdover: takes a phase record" holdover(f, m; train=20)
+    @test_throws "steer: takes a phase record" steer(f, m, steering_gains(30.0, 1.0))
 end

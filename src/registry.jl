@@ -47,7 +47,11 @@ for f in (_ESTIMATOR_NAMES..., :dadev, :dhdev)
     # Any integer vector (`adev(pd, 1:10)`), forwarded as a `Vector{Int}` copy.
     @eval $f(data::AbstractTimingData, m_values::AbstractVector{<:Integer}; kwargs...) =
         $f(data, collect(Int, m_values); kwargs...)
+    @eval $f(::AbstractTimingData, m::Integer; kwargs...) = throw(_one_m_error($(QuoteNode(f)), m))
 end
+
+_one_m_error(f::Symbol, m::Integer) = ArgumentError(
+    "$f: the averaging factors are a vector; pass [$m] for the one factor")
 
 # A `TauMode` grid, or none for octaves up to the estimator's largest m (the
 # :theo1 grid is rounded to even averaging factors in `tau_values`).
@@ -99,12 +103,12 @@ julia> [x.name for x in e if x.axis === :sigma_x]
 estimators() = collect(_ESTIMATORS)
 
 """
-    deviation(name::Symbol, data, m=Octave; ci=true, confidence=DEFAULT_CONFIDENCE,
+    deviation(name, data, m=Octave; ci=true, confidence=DEFAULT_CONFIDENCE,
               correct_bias=true, remove_drift=true, noise=:auto,
               dead_time=0) → StabilityResult
 
-Run the estimator called `name`, any name from [`estimators`](@ref), on a
-`PhaseData` or `FrequencyData` record. `deviation(:adev, data, m)` is
+Run the estimator called `name`, any name from [`estimators`](@ref) as a
+symbol or a string, on a `PhaseData` or `FrequencyData` record. `deviation(:adev, data, m)` is
 `adev(data, m)`; use it when the estimator is chosen at run time, from a
 menu or a command-line option.
 
@@ -135,6 +139,11 @@ deviation(name::Symbol, data::AbstractTimingData, m::TauMode = Octave; kwargs...
 
 deviation(name::Symbol, data::AbstractTimingData, m::AbstractVector{<:Integer}; kwargs...) =
     _deviation(name, data, collect(Int, m); kwargs...)
+
+deviation(name::AbstractString, data::AbstractTimingData, m...; kwargs...) =
+    deviation(Symbol(name), data, m...; kwargs...)
+
+deviation(name::Symbol, ::AbstractTimingData, m::Integer; kwargs...) = throw(_one_m_error(name, m))
 
 function _resolve_m(name::Symbol, m::TauMode, N::Int)
     name in (:dadev, :dhdev) && throw(_dynamic_error(name))
@@ -176,10 +185,10 @@ function _deviation(name::Symbol, data::AbstractTimingData, ms::Vector{Int};
 end
 
 """
-    tau_mode(s::AbstractString) → TauMode
+    tau_mode(s) → TauMode
 
-The [`TauMode`](@ref) named by `s`, as typed on a command line or chosen in
-a menu. Case and separators are ignored: `"half-octave"`, `"half_octave"`,
+The [`TauMode`](@ref) named by `s`, a string or a symbol, as typed on a
+command line or chosen in a menu. Case and separators are ignored: `"half-octave"`, `"half_octave"`,
 `"halfoctave"` and `"HalfOctave"` all give `HalfOctave`, and `"all"` or
 `"alltaus"` gives `AllTaus`. Any other name throws an `ArgumentError`.
 
@@ -203,6 +212,8 @@ function tau_mode(s::AbstractString)
     throw(ArgumentError("unknown τ grid \"$s\"; use octave, half-octave, " *
                         "quarter-octave, decade, half-decade or all"))
 end
+
+tau_mode(s::Symbol) = tau_mode(String(s))
 
 """
     summarize(data::PhaseData) → NamedTuple

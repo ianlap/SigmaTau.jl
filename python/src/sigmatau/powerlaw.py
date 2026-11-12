@@ -101,11 +101,11 @@ def powerlaw_fit(
 @_map_errors
 def powerlaw_sigma(
     h: PowerLawFit | NoiseFit | ClockModel | Mapping[int | str, float],
-    tau: Sequence[float],
+    tau: Sequence[float] | float,
     *,
     deviation: str = "adev",
     tau0: float | None = None,
-) -> np.ndarray:
+) -> np.ndarray | float:
     """Deviation σ(τ) that the power-law model ``h`` gives in an estimator, for a
     record sampled at ``tau0``.
 
@@ -118,7 +118,7 @@ def powerlaw_sigma(
     ``h`` is a ``PowerLawFit``, a ``NoiseFit``, a ``ClockModel``, or a mapping
     of h_α keyed by the integer α or by the noise type, as in
     ``{"WHFM": 2e-24}``. ``tau`` holds averaging times in seconds, each a whole
-    multiple of ``tau0``. ``deviation`` is ``"adev"``, ``"mdev"``, ``"hdev"`` or
+    multiple of ``tau0``; one τ as a number gives one deviation as a float. ``deviation`` is ``"adev"``, ``"mdev"``, ``"hdev"`` or
     ``"mhdev"``. A fit or a clock model carries its own ``tau0``; a mapping
     needs the keyword.
     """
@@ -129,7 +129,8 @@ def powerlaw_sigma(
         kwargs["tau0"] = float(tau0)
     elif not isinstance(h, (NoiseFit, ClockModel)):
         raise ValueError("powerlaw_sigma: pass `tau0`, the sample interval in seconds")
-    return np_f64(jl.powerlaw_sigma(_noise_model_to_jl(h), to_jl_f64(tau), **kwargs))
+    sigma = np_f64(jl.powerlaw_sigma(_noise_model_to_jl(h), to_jl_f64(np.atleast_1d(tau)), **kwargs))
+    return float(sigma[0]) if np.ndim(tau) == 0 else sigma
 
 
 @_map_errors

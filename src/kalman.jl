@@ -201,6 +201,12 @@ function kalman_filter(data::PhaseData, m::ClockModel;
     return KalmanResult(m, collect(t), X, Ps, ν, S, false, Xp, Pps)
 end
 
+# The clock-model functions follow the phase; a frequency record is refused by name.
+_needs_phase(f::AbstractString) = throw(ArgumentError(
+    "$f: takes a phase record; convert the frequency record first with PhaseData(y)"))
+
+kalman_filter(::FrequencyData, ::ClockModel; kw...) = _needs_phase("kalman_filter")
+
 """
     kalman_smooth(kf::KalmanResult) → KalmanResult
 
@@ -463,6 +469,8 @@ function prediction_error(kf::KalmanResult, data::PhaseData, horizons::AbstractV
     end
 end
 
+prediction_error(::KalmanResult, ::FrequencyData, ::AbstractVector{<:Integer}; kw...) = _needs_phase("prediction_error")
+
 """
     tune_q(data::PhaseData, m::ClockModel; burnin=length(data.x) ÷ 10,
            maxiter=300) → NamedTuple
@@ -535,6 +543,8 @@ function tune_q(data::PhaseData, m::ClockModel; burnin::Integer=length(data.x) �
     θ, c, converged, evaluations = _nelder_mead(cost, [log(m.q1), log(m.q2)]; maxiter)
     return (model=build(θ), cost=c, converged=converged, evaluations=evaluations)
 end
+
+tune_q(::FrequencyData, ::ClockModel; kw...) = _needs_phase("tune_q")
 
 # Nelder–Mead with the standard coefficients (reflect 1, expand 2, contract
 # ½, shrink ½), from `x0` and a step of `step` along each axis. It stops when

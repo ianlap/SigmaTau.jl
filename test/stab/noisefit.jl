@@ -28,6 +28,11 @@ using Random
     @test powerlaw_sigma(f, r.tau; deviation=:mhdev) ≈ r.dev rtol=0.1
     @test noise_residual(f) ≈ r.dev .^ 2 .- powerlaw_sigma(f, r.tau; deviation=:mhdev) .^ 2
     @test clock_model(f).q1 == f.components[2].h / 2
+    @test_throws "not 2.0 s" clock_model(f; tau0=2.0)
+    # The model covers the τ the fit saw: flicker states end at its longest τ.
+    fl = NoiseFit(r, :mhdev, [(alpha=0, h=1e-24, range=1:3), (alpha=-1, h=1e-26, range=10:14)])
+    hl = Dict(0 => 1e-24, -1 => 1e-26)
+    @test clock_model(fl).fm_band == clock_model(hl; tau0=1.0, tau_max=8192.0).fm_band != clock_model(hl; tau0=1.0).fm_band
 
     # Undo drops the last component and refits the rest.
     before = noise_residual(f)

@@ -115,6 +115,7 @@ def test_powerlaw_curves_of_a_model_and_a_noise_fit(jl):
     # White FM alone: σ_y(τ) = √(q₁/τ) and S_y = 2q₁.
     white = st.ClockModel(1.0, q1=1e-24)
     np.testing.assert_allclose(st.powerlaw_sigma(white, [1.0, 4.0]), [1e-12, 5e-13], rtol=1e-12)
+    assert st.powerlaw_sigma(white, 4.0) == pytest.approx(5e-13, rel=1e-12)  # one τ, one float
     np.testing.assert_allclose(st.powerlaw_psd(white, f), 2e-24, rtol=1e-12)
     # A noise fit is read as its components, at the sample interval of its result.
     nf = st.noise_fit(st.adev(st.noise_gen(PhaseData, 4096, 1.0, h={0: 1e-24}, rng=3)))

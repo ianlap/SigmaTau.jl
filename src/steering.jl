@@ -383,6 +383,8 @@ function steer(data::PhaseData, m::ClockModel, g::SteeringGains)
     return SteeringResult(g, steered, u, s, p̂, ŷ)
 end
 
+steer(::FrequencyData, ::ClockModel, ::SteeringGains) = _needs_phase("steer")
+
 """
     SteeringPrediction
 

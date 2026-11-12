@@ -290,6 +290,7 @@ end
 
 """
     powerlaw_sigma(h, tau; deviation=:adev, tau0) → Vector{Float64}
+    powerlaw_sigma(h, τ::Real; deviation=:adev, tau0) → Float64
 
 Deviation ``σ(τ)`` that the power-law model ``S_y(f) = \\sum_α h_α f^α``
 gives in an estimator, for a record sampled at `tau0`.
@@ -326,7 +327,8 @@ PM it is 19 % above at ``τ_0`` and still 4 % above at ``64τ_0``.
 - `h`: a [`PowerLawFit`](@ref), a [`NoiseFit`](@ref), a
   [`ClockModel`](@ref), or a `Dict` of ``h_α`` keyed by ``α`` or by noise
   type, as in [`noise_gen`](@ref).
-- `tau`: averaging times in seconds, each a whole multiple of `tau0`.
+- `tau`: averaging times in seconds, each a whole multiple of `tau0`; one
+  τ as a number gives one deviation.
 
 # Keywords
 
@@ -362,6 +364,8 @@ function powerlaw_sigma(h, tau::AbstractVector{<:Real}; deviation::Symbol=:adev,
         sqrt(sum(hα * _powerlaw_var(deviation, α, m, τ₀) for (α, hα) in hd))
     end
 end
+
+powerlaw_sigma(h, tau::Real; kw...) = only(powerlaw_sigma(h, [tau]; kw...))
 
 """
     powerlaw_psd(h, f; quantity=:Sy, f_carrier=nothing) → Vector{Float64}

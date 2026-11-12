@@ -75,7 +75,9 @@ the uniform sample interval `tau0`
 ([IEEE Std 1139-2022, 3.1](@cite ieee1139-2022-definitions)). Each sample
 is taken as the average over its interval, with no dead time. Every
 estimator accepts the record and integrates it to phase before the
-analysis. For averages with dead time between them, give [`adev`](@ref) the
+analysis. The clock-model functions ([`kalman_filter`](@ref),
+[`holdover`](@ref), [`steer`](@ref)) follow the phase and refuse it:
+convert it first with `PhaseData(f)`. For averages with dead time between them, give [`adev`](@ref) the
 averaging time as `tau0` and the gap as `dead_time`.
 
 Like [`PhaseData`](@ref), the record takes any real vector, marks a missing

@@ -49,6 +49,10 @@ using Random
         end
         f = powerlaw_fit(p)
         @test powerlaw_sigma(f, [1.0, 100.0]) ≈ adev(p, [1, 100]; ci=false).dev rtol=0.02
+        @test powerlaw_sigma(f, 100.0) == powerlaw_sigma(f, [100.0])[1]
+        # A fit carries its τ₀: the same value passes, another is refused.
+        @test clock_model(f; tau0=1.0).q1 == clock_model(f).q1
+        @test_throws "the fit was made at tau0 = 1.0 s, not 2.0 s" clock_model(f; tau0=2.0)
         @test powerlaw_fit(p, 4:4:256).h == powerlaw_fit(p, collect(4:4:256)).h
         @test powerlaw_fit(FrequencyData(diff(p.x), 1.0); deviation=:hdev, alphas=0:-1:-4).alphas == [0, -1, -2, -3, -4]
         # Gaps cost terms, not the record: a gap near the start leaves the fit
