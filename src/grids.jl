@@ -77,7 +77,7 @@ function _kernel_m_max(N::Int, kernel::Symbol)
         throw(ArgumentError("tau_values: unknown kernel symbol :$kernel"))
     end
     m_max < 1 && throw(ArgumentError(
-        "tau_values: N=$N is too short to support any m for :$kernel"))
+        "tau_values: a record of $N samples is too short for $kernel"))
     return m_max
 end
 

@@ -5,10 +5,15 @@
 # call forms (frequency data, a `TauMode` grid or none, any integer vector).
 
 # Every estimator builds its result through here so the record metadata
-# (τ₀, sample count, confidence level) rides along.
-_result(data::PhaseData, confidence::Real, dt::Symbol, tau, dev, noise, ci, edf, neff) =
-    StabilityResult(dt, tau, dev, noise, ci, edf, neff, data.tau0, length(data.x),
-                    isempty(ci) ? NaN : Float64(confidence))
+# (τ₀, sample count, confidence level) rides along. A τ without a deviation
+# reports no EDF and no noise type.
+function _result(data::PhaseData, confidence::Real, dt::Symbol, tau, dev, noise, ci, edf, neff)
+    none = isnan.(dev)
+    edf = isempty(edf) ? edf : ifelse.(none, NaN, edf)
+    noise = isempty(noise) ? noise : ifelse.(none, Symbol(""), noise)
+    return StabilityResult(dt, tau, dev, noise, ci, edf, neff, data.tau0, length(data.x),
+                           isempty(ci) ? NaN : Float64(confidence))
+end
 
 # Averaging factors count from 1; the kernels index with them unchecked.
 _check_m(est::Symbol, m_values::Vector{Int}) = all(>=(1), m_values) ||

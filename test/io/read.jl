@@ -133,6 +133,20 @@
             write(path, "0 1.0\n1 abc\n")
             @test_throws ArgumentError read_phase(path)
 
+            # An empty file, a gzip file and a file without τ₀ say so, under
+            # the name of the reader called.
+            path = joinpath(dir, "empty.txt")
+            write(path, "# no data\n")
+            @test_throws "read_phase: $path holds no samples" read_phase(path)
+            @test_throws "read_data: $path holds no samples" read_data(path)
+            path = joinpath(dir, "clock.txt.gz")
+            write(path, UInt8[0x1f, 0x8b, 0x08, 0x00])
+            @test_throws "read_frequency: $path is compressed with gzip" read_frequency(path)
+            @test_throws "detect_format: $path is compressed with gzip" detect_format(path)
+            path = joinpath(dir, "bare.txt")
+            write(path, "1.0\n2.0\n")
+            @test_throws "has no time column and no `# tau0:` header" read_phase(path)
+
             # A missing timestamp is a NaN sample in its slot.
             path = joinpath(dir, "gap.txt")
             write(path, "0 1.0\n1 2.0\n3 4.0\n")

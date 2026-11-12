@@ -88,13 +88,19 @@ holds one, and at runs of blanks otherwise.
 
 [`read_data`](@ref) says how each format is read.
 """
-detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing) =
-    _detect_format(path, delim === nothing ? '\0' : Char(delim))
+function detect_format(path::AbstractString; delim::Union{AbstractChar,Nothing}=nothing)
+    try
+        return _detect_format(path, delim === nothing ? '\0' : Char(delim))
+    catch e
+        e isa ArgumentError || rethrow()
+        throw(_reader_error(e, "detect_format"))
+    end
+end
 
 const _RINEX_CLK_HEAD = r"^\s*\d+\.\d+\s+C\b.*RINEX VERSION / TYPE"
 
 function _detect_format(path::AbstractString, delim::Char)
-    isfile(path) || throw(ArgumentError("detect_format: file not found: " * String(path)))
+    _check_file(path)
     lines = _head_lines(path, 200)
     any(l -> startswith(l, "TIC "), lines) &&
         any(l -> match(_TIMELAB_FIELD, l) !== nothing, lines) && return :timelab
@@ -129,11 +135,11 @@ function _detect_format(path::AbstractString, delim::Char)
 end
 
 # τ₀: the explicit value, else the header's, else the time column's step.
-function _resolve_tau0(tau0::Float64, header::Float64, t::Vector{Float64}, what::String)
+function _resolve_tau0(tau0::Float64, header::Float64, t::Vector{Float64}, what::String, which::String="")
     isnan(tau0) || return tau0
     isnan(header) || return header
     length(t) >= 2 && return _column_step(t)
-    throw(ArgumentError("read_data: " * what * " has no sample interval; pass tau0"))
+    throw(ArgumentError("read_data: " * what * " has no sample interval; pass tau0" * which))
 end
 
 function _read_timelab(path::AbstractString, tau0::Float64)
@@ -254,7 +260,7 @@ function _read_counter(path::AbstractString, tau0::Float64, nominal::Float64, hi
     length(v) >= 2 || throw(ArgumentError("read_data: fewer than 2 readings in " * String(path)))
     (length(t) == length(v) && !any(isnan, t)) || empty!(t)
     start = iso[] && !isempty(t) ? t[1] : NaN
-    t0 = _resolve_tau0(tau0, NaN, t, "this counter log (no timestamps; pass tau0 = the gate time)")
+    t0 = _resolve_tau0(tau0, NaN, t, "this counter log, without timestamps,", ", the gate time")
     finite = filter(isfinite, v)
     isempty(finite) && throw(ArgumentError("read_data: no finite counter readings in " * String(path)))
     # Time-interval readings (seconds) are phase; anything ≥ 1 is a frequency
@@ -462,7 +468,7 @@ end
 function _read_data(path::AbstractString, format::Symbol; tau0::Float64=NaN, column::Int=0,
                     column_name::String="", nominal::Float64=NaN, kind::Symbol=:auto,
                     scaling::Float64=1.0, delim::Char='\0', fillgaps::Bool=false, keep_zeros::Bool=false)
-    isfile(path) || throw(ArgumentError("read_data: file not found: " * String(path)))
+    _check_file(path)
     kind in (:auto, :phase, :frequency) ||
         throw(ArgumentError("read_data: kind must be :auto, :phase or :frequency, got :" * String(kind)))
     fmt = format === :auto ? _detect_format(path, delim) : format
@@ -639,7 +645,8 @@ function read_data(path::AbstractString; format::Symbol=:auto, tau0::Union{Real,
                    nominal::Union{Real,Nothing}=nothing, kind::Symbol=:auto,
                    scaling::Real=1.0, delim::Union{AbstractChar,Nothing}=nothing,
                    fillgaps::Bool=false, keep_zeros::Bool=false)
-    r = _read_data(path, format;
+    r = try
+        _read_data(path, format;
                    tau0=tau0 === nothing ? NaN : Float64(tau0),
                    column=column isa Integer ? Int(column) : 0,
                    column_name=column isa AbstractString ? String(column) : "",
@@ -647,6 +654,10 @@ function read_data(path::AbstractString; format::Symbol=:auto, tau0::Union{Real,
                    kind=kind, scaling=Float64(scaling),
                    delim=delim === nothing ? '\0' : Char(delim), fillgaps=fillgaps,
                    keep_zeros=keep_zeros)
+    catch e
+        e isa ArgumentError || rethrow()
+        throw(_reader_error(e, "read_data"))
+    end
     return r.phase ? PhaseData(r.v, r.tau0; source=String(path), start=r.start) :
                      FrequencyData(r.v, r.tau0; source=String(path), start=r.start)
 end

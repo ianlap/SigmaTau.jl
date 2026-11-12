@@ -20,7 +20,7 @@ end
 # and the names in the last skipped line that is not blank or `#`, split as
 # the data are (empty unless there is one name per column).
 function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing}, cols::Vector{Int})
-    isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
+    _check_file(path)
     d = delim === nothing ? '\0' : delim
     out = [Float64[] for _ in cols]
     ncols = -1
@@ -58,12 +58,31 @@ function _read_cols(path::AbstractString, header::Int, delim::Union{Char,Nothing
     finally
         close(l)
     end
+    ncols < 0 && throw(ArgumentError("read: " * String(path) * " holds no samples"))
     names = String[]
     if !isempty(head)
         _fields!(fields, head, 1:length(head), d)
         length(fields) == ncols && (names = String[_field_string(head, f) for f in fields])
     end
     return out, max(ncols, 0), names
+end
+
+# A file that exists and is not gzip-compressed (its first two bytes 1f 8b),
+# which would otherwise read as text with a bad entry.
+function _check_file(path::AbstractString)
+    isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
+    io = open(path)
+    magic = read(io, 2)
+    close(io)
+    magic == UInt8[0x1f, 0x8b] && throw(ArgumentError(
+        "read: " * String(path) * " is compressed with gzip; unpack it first, as gunzip does"))
+    return nothing
+end
+
+# The shared reading code says "read:"; the reader that was called names itself.
+function _reader_error(e::ArgumentError, name::String)
+    m = e.msg
+    return m isa String && startswith(m, "read: ") ? ArgumentError(name * m[5:end]) : e
 end
 
 # The field count of the first data line (0 for no data).
@@ -303,7 +322,7 @@ end
 function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int, value_col::Int,
                  header::Int, delim::Union{Char,Nothing}, scaling::Real, detrend::Symbol,
                  fillgaps::Bool, hint::Int)
-    isfile(path) || throw(ArgumentError("read: file not found: " * String(path)))
+    _check_file(path)
     nskip, header_tau0, start = _scan_comment_header(path)
     # A Stable32 header block is itself non-comment header lines, so an
     # explicit `header` that already covers it is not added on top.
@@ -332,7 +351,8 @@ function _ingest(path::AbstractString; tau0::Union{Real,Nothing}, time_col::Int,
     elseif length(t) > 1
         _column_step(t)
     else
-        throw(ArgumentError("read: tau0 must be supplied when no time column is present"))
+        throw(ArgumentError("read: " * String(path) * " has no time column and no `# tau0:` header, " *
+                            "so its sample interval is unknown; pass tau0"))
     end
     phase = _unnamed_phase(v, hint)
     v, _ = _gridded(t, v, fillgaps, phase)
@@ -467,8 +487,13 @@ p = read_phase("utc.csv"; header=1)               # a column named MJD, in days
 function read_phase(path::AbstractString; tau0::Union{Real,Nothing}=nothing, time_col::Int=1,
                     value_col::Int=2, header::Int=0, delim::Union{Char,Nothing}=nothing,
                     scaling::Real=1.0, detrend::Symbol=:none, fillgaps::Bool=false)
-    v, t0, start, _ = _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
-                              delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps, hint=1)
+    v, t0, start, _ = try
+        _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
+                delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps, hint=1)
+    catch e
+        e isa ArgumentError || rethrow()
+        throw(_reader_error(e, "read_phase"))
+    end
     return PhaseData(v, t0; source=String(path), start=start)
 end
 
@@ -490,7 +515,12 @@ y = read_frequency("ffe_ppb.txt"; scaling=1e-9)    # samples in parts per billio
 function read_frequency(path::AbstractString; tau0::Union{Real,Nothing}=nothing, time_col::Int=1,
                         value_col::Int=2, header::Int=0, delim::Union{Char,Nothing}=nothing,
                         scaling::Real=1.0, detrend::Symbol=:none, fillgaps::Bool=false)
-    v, t0, start, _ = _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
-                              delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps, hint=-1)
+    v, t0, start, _ = try
+        _ingest(path; tau0=tau0, time_col=time_col, value_col=value_col, header=header,
+                delim=delim, scaling=scaling, detrend=detrend, fillgaps=fillgaps, hint=-1)
+    catch e
+        e isa ArgumentError || rethrow()
+        throw(_reader_error(e, "read_frequency"))
+    end
     return FrequencyData(v, t0; source=String(path), start=start)
 end

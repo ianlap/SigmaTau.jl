@@ -204,7 +204,7 @@ function read_instrument(o::Options, fmt::Symbol)
                             fillgaps=o.fillgaps, keep_zeros=o.keep_zeros)
     catch e
         e isa ArgumentError || rethrow()
-        throw(CLIError(EXIT_INPUT, cli_wording(error_message(e))))
+        throw(CLIError(EXIT_INPUT, error_message(e)))
     end
     o.freq = !r.phase
     # A filled frequency sample leaves the phase sample after it unmeasured.
@@ -215,8 +215,3 @@ function read_instrument(o::Options, fmt::Symbol)
     r.phase && return PhaseData(v, r.tau0; source=o.input, start=r.start)
     return PhaseData(integrated(v, r.tau0), r.tau0; source=o.input, start=r.start)
 end
-
-# read_data's errors in the words of the command line, where the keyword
-# `column` is --column (a name) or --value-cols (numbers).
-cli_wording(m::String) =
-    replace(replace(replace(m, "pass column= one of" => "pass --column with one of"), "column=" => "column "), "pass tau0" => "pass --tau0")

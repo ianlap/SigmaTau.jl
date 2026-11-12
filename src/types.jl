@@ -220,11 +220,11 @@ struct StabilityResult
     tau::Vector{Float64}
     "Deviation at each τ: dimensionless for the σ_y estimators, in seconds for `tdev`, `htdev`, `ttotdev`, `mtie` and `tierms`."
     dev::Vector{Float64}
-    "Noise type at each τ, identified or stated: `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`, `:FWFM` or `:RRFM`."
+    "Noise type at each τ, identified or stated: `:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`, `:FWFM` or `:RRFM`; `Symbol(\"\")` where the deviation is `NaN`."
     noise_type::Vector{Symbol}
     "Confidence interval `(lo, hi)` at each τ."
     ci::Vector{@NamedTuple{lo::Float64, hi::Float64}}
-    "Equivalent degrees of freedom at each τ."
+    "Equivalent degrees of freedom at each τ; `NaN` where the deviation is `NaN`."
     edf::Vector{Float64}
     "Number of terms averaged at each τ; 0 where the deviation is `NaN`."
     neff::Vector{Int}

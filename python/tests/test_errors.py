@@ -70,3 +70,9 @@ def test_unknown_noise_type_names_the_key(small_phase):
 def test_delimiter_that_is_no_string(tmp_path):
     with pytest.raises(ValueError, match="one character"):
         st.read_phase(tmp_path / "x.csv", delim=1)
+
+
+def test_a_tau_without_a_deviation_has_no_edf_or_noise_type(small_phase):
+    r = st.mtotdev(small_phase, [1, 1000])
+    assert np.isnan(r.dev[1]) and np.isnan(r.edf[1]) and r.noise_type[1] == ""
+    assert np.isfinite(r.edf[0]) and r.noise_type[0] != ""

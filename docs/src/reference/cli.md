@@ -292,7 +292,7 @@ sigmatau_json("spectrum --synth 1024 --format json"; only = "spectrum") # hide
 | `--grid GRID` | grid of averaging factors within the window. By default `octave` |
 
 The result is that of [`dadev`](@ref) or [`dhdev`](@ref), which take a
-record without gaps. The CSV columns are `t,tau,dev`, with a row for each
+record without gaps: one with gaps is refused unless `--fillgaps` fills them. The CSV columns are `t,tau,dev`, with a row for each
 window and averaging time. `t` is the center of the window, in seconds from
 the first sample of the file.
 
