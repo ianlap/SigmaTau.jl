@@ -235,10 +235,14 @@ end
 
 function cmd_dynamic(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 16, "a dynamic deviation")
+    any(isnan, data.x) &&
+        throw(CLIError(EXIT_ANALYSIS, "a dynamic deviation needs a record without gaps; fill them with --fillgaps"))
     N = length(data.x)
     w = o.window > 0 ? min(o.window, N) : SigmaTau._default_window(N)
     st = o.step > 0 ? o.step : max(w ÷ 2, 1)
     hd = o.dev == "dhdev"
+    # The smallest window with one τ: N_w − 2m ≥ 2 (DADEV), N_w − 3m ≥ 2 (DHDEV).
+    w >= 4 + hd || throw(usage_error("--window must be $(4 + hd) or more for $(o.dev), got $w"))
     ms = tau_values(tau_mode(o.grid), w, hd ? :hdev : :adev)
     isempty(ms) && throw(CLIError(EXIT_ANALYSIS, "the window is too short for any τ"))
     r = hd ? dhdev(data, ms; window=w, step=st) : dadev(data, ms; window=w, step=st)

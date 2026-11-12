@@ -554,6 +554,9 @@ mktempdir() do dir
         r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
         @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
         @test run_cli("drift", ff, "--model", "cubic").code == 1
+        xg = copy(X); xg[100] = NaN
+        r = run_cli("drift", write_table(joinpath(dir, "driftgap.csv"), xg), "--method", "four_point")
+        @test r.code == 3 && occursin("drift fit: --method four_point needs a record without gaps; fill them with --fillgaps", r.err)
         # Four phase samples: three frequency steps fit a line but not a log.
         sf = write_table(joinpath(dir, "short.csv"), [0.0, 1.0, 3.0, 6.0] .* 1e-9)
         @test run_cli("drift", sf).code == 0
@@ -759,6 +762,11 @@ mktempdir() do dir
         @test parse(Float64, rows[1][3]) == ref.dev[1, 1]
         r = run_cli("dynamic", pf, "--dev", "dhdev", "--format", "json")
         @test occursin("\"deviation\":\"dhdev\",\"window\":32,", r.out)
+        r = run_cli("dynamic", pf, "--dev", "dhdev", "--window", "4")
+        @test r.code == 1 && occursin("--window must be 5 or more for dhdev, got 4", r.err)
+        xg = copy(X); xg[100] = NaN
+        r = run_cli("dynamic", write_table(joinpath(dir, "dyngap.csv"), xg))
+        @test r.code == 3 && occursin("a dynamic deviation needs a record without gaps; fill them with --fillgaps", r.err)
     end
 
     @testset "live" begin
