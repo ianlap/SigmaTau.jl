@@ -360,6 +360,8 @@ Clock models, the Kalman filter and timescales.
   model fitted to each clock, and a message on stderr names a clock whose
   fit has no white FM; the explorer's Ensemble page shows the fitted white
   FM.
+- `powerlaw_sigma(h, τ)` takes one τ as a number and returns a number
+  (Python: a float).
 
 ### Changed
 
@@ -603,6 +605,19 @@ Clock models, the Kalman filter and timescales.
   frequency; fit with `alphas = [2, 0, -2]` or keep the flicker.
   `sigmatau analyze --fit` writes `clock_model: null` for such a fit and
   keeps the rest.
+- `kalman_filter`, `prediction_error`, `tune_q`, `holdover` and `steer`
+  refuse a `FrequencyData` record with a message to convert it with
+  `PhaseData(y)`, where they gave a `MethodError` or asked for `tau0`. In
+  Python they raise a `TypeError` naming `data.to_phase()`.
+- `clock_model` of a `NoiseFit`, or of a `PowerLawFit` of a spectrum, places
+  the flicker states within the τ the fit saw (its longest τ, or 1/(2f) at
+  the spectrum's lowest frequency), not out to 10⁶ τ₀.
+  `clock_model(fit; tau0)` refuses a τ₀ that differs from the fit's, where
+  it used it silently.
+- `stability(data; devs = "adev")` runs one estimator, where a string was
+  split into letters. `deviation` takes the name as a string and `tau_mode`
+  as a symbol. A single averaging factor (`adev(p, 4)`), `m_values` or an
+  unknown keyword to `stability` gets a message that says what is meant.
 
 ### Removed
 
