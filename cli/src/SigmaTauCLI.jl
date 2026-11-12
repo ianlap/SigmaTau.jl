@@ -46,9 +46,30 @@ include("report.jl")
 include("live.jl")
 include("completion.jl")
 
+# The library's errors in the words of the command line: the name of a
+# library function the user did not call is dropped or said in words, and
+# keywords become the options that set them.
+const LIBRARY_PREFIXES = ("read: " => "", "read_data: " => "", "read_phase: " => "", "read_frequency: " => "",
+                          "detect_format: " => "", "powerlaw_fit: " => "noise fit: ", "tau_values: " => "",
+                          "simulate_ensemble: " => "", "InstrumentSource: " => "", "acf: " => "")
+const CLI_WORDS = ("pass column= one of" => "pass --column with one of", "column=" => "column ",
+                   "pass tau0" => "pass --tau0", "fill them with fillgaps first" => "fill them with --fillgaps",
+                   "pass fewer `alphas` or a longer record" => "use a longer record",
+                   "format=:table" => "--input-format table")
+function cli_wording(m::String)
+    for (p, w) in LIBRARY_PREFIXES
+        startswith(m, p) && (m = w * m[length(p)+1:end]; break)
+    end
+    for w in CLI_WORDS
+        m = replace(m, w)
+    end
+    return m
+end
+
 # The message for an exception that is not a CLIError. No showerror: it
-# dispatches on the exception type, which trimming cannot resolve.
-function error_message(err)
+# dispatches on the exception type, which trimming cannot resolve. Inlined, so
+# that a caller's untyped exception reaches no dynamic call.
+@inline function error_message(err)
     # A threaded loop wraps what its task threw; name that instead.
     if err isa CompositeException && !isempty(err.exceptions)
         err = err.exceptions[1]
@@ -57,11 +78,17 @@ function error_message(err)
     err isa CLIError && return err.msg
     if err isa ArgumentError
         m = err.msg
-        return m isa String ? m : "invalid argument"
+        return m isa String ? cli_wording(m) : "invalid argument"
     end
     err isa DomainError && return "domain error in the analysis"
     err isa BoundsError && return "index out of range in the analysis"
     return "failed (" * string(nameof(typeof(err))) * ")"
+end
+
+# What the system said, such as `opening file "x.csv": No such file or directory`.
+function system_message(e::SystemError)
+    p = e.prefix
+    return (p isa String ? p : "a system call") * ": " * Libc.strerror(e.errnum)
 end
 
 # Plain open/close: a do-block closure would box captured locals.
@@ -176,7 +203,8 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     catch e
         # A consumer that closed the pipe early (`sigmatau analyze … | head`) is not a failure.
         e isa Base.IOError && isempty(o.out) && return EXIT_OK
-        return report_error(out, err, o, EXIT_OUTPUT, "could not write the output: " * error_message(e))
+        return report_error(out, err, o, EXIT_OUTPUT, "could not write the output: " *
+                            (e isa SystemError ? system_message(e) : error_message(e)))
     end
     return EXIT_OK
 end

@@ -37,7 +37,7 @@ const ALGORITHM = { greenhall: "Greenhall", jones_tryon: "Jones–Tryon", stein:
 const SAID = [
   [/^--algorithm (\w+) fits a model per clock and needs three or more clocks/, (_, a) => `${ALGORITHM[a] ?? a} fits a model to each clock and needs three or more clocks.`],
   [/^(?:timescale: )?wmax below (1\/\d+) leaves weights that cannot sum to 1/, (_, k) => `The largest weight is below ${k}, so the weights of the clocks cannot sum to 1. Raise it to ${k} or more.`],
-  [/^(?:powerlaw_fit: )?(\d+) usable τ points for (\d+) components; pass fewer `alphas` or a longer record/, (_, n, k) => `The noise model has ${n} usable τ points for ${k} noise types: the record, or the stretch it is fitted to, is too short or has no readings.`],
+  [/^(?:noise fit: )?(\d+) usable τ points for (\d+) components; use a longer record/, (_, n, k) => `The noise model has ${n} usable τ points for ${k} noise types: the record, or the stretch it is fitted to, is too short or has no readings.`],
   [/^(?:steer: )?the steady state is worked out for a steer at every sample; the gains' interval is ([\d.e+-]+) s and tau0 is ([\d.e+-]+) s/, (_, g, t) => `The steady state is worked out for a steer at every sample, and this loop steers every ${num(g / t, 3)} samples.`],
 ];
 export function inWords(message) {

@@ -105,8 +105,7 @@ function acf_of(o::Options, rec)
         return acf(rec; m=m, lags=lags)
     catch err
         err isa ArgumentError || rethrow()
-        msg = replace(replace(error_message(err), "acf: " => ""), "fillgaps first" => "--fillgaps")
-        throw(CLIError(EXIT_ANALYSIS, replace(msg, "lags must" => "--lags must")))
+        throw(CLIError(EXIT_ANALYSIS, replace(error_message(err), "lags must" => "--lags must")))
     end
 end
 
@@ -718,6 +717,8 @@ function synth_ensemble(o::Options)
     else
         [ClockModel(; tau0, R, q1, q2, q3) for (R, q1, q2, q3) in o.models]
     end
+    length(ms) >= 2 || throw(usage_error("a time scale needs two or more clocks: --clocks 2 or more, " *
+                                         "or --noise-model once per clock"))
     cc, _ = simulate_ensemble(ms, o.synth, reference=0, rng=Random.Xoshiro(o.seed))
     return cc
 end

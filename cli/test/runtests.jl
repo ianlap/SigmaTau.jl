@@ -916,6 +916,8 @@ mktempdir() do dir
 
     @testset "usage errors -> exit 1" begin
         @test run_cli("analyze").code == 1
+        r = run_cli("timescale", "--synth", "4096", "--noise-model", "0:4e-24:0:0")
+        @test r.code == 1 && occursin("two or more clocks", r.err)
         r = run_cli("analyze", pf, "--devs", "bogus")
         @test r.code == 1
         @test occursin("bogus", r.err) && occursin("mhtotdev", r.err)
@@ -956,6 +958,14 @@ mktempdir() do dir
         bad = joinpath(dir, "bad.csv")
         write(bad, "0,abc\n1,def\n")
         @test run_cli("analyze", bad).code == 2
+        # In the words of the command line: an empty file, a gzip file, no τ₀.
+        ef = joinpath(dir, "empty.csv"); write(ef, "")
+        @test occursin("sigmatau: $ef holds no samples", run_cli("check", ef).err)
+        zf = joinpath(dir, "clock.txt.gz"); write(zf, UInt8[0x1f, 0x8b, 0x08, 0x00])
+        @test occursin("is compressed with gzip; unpack it first", run_cli("check", zf).err)
+        bf = joinpath(dir, "bare.txt"); write(bf, "1e-9\n2e-9\n3e-9\n")
+        r = run_cli("check", bf)
+        @test r.code == 2 && occursin("pass --tau0", r.err) && !occursin("read_phase", r.err)
     end
 
     @testset "analysis error -> exit 3" begin
@@ -987,6 +997,11 @@ mktempdir() do dir
         write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
         @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
         @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
+        # Too short for the noise fit, and rows past the record with no EDF or noise type.
+        r = run_cli("analyze", "--synth", "12", "--noise", "fit")
+        @test r.code == 3 && occursin("noise fit: 2 usable τ points for 5 components; use a longer record", r.err)
+        rows = csv_rows(run_cli("analyze", "--synth", "1024", "--m", "1,100000", "--devs", "totdev,mhtotdev,pdev").out)
+        @test all(f -> (f[4] == "100000.0") == (f[8] == "" && f[10] == ""), rows)
         # A Stable32 file without a sample interval asks for the option by its name.
         wf = joinpath(dir, "w.frd")
         write(wf, join(1e-12 .* sinpi.((1:32) ./ 7.3), "\n"))
@@ -998,7 +1013,7 @@ mktempdir() do dir
 
     @testset "output error -> exit 4" begin
         r = run_cli("analyze", pf, "--devs", "adev", "--out", joinpath(dir, "no", "sub", "out.csv"))
-        @test r.code == 4
+        @test r.code == 4 && occursin(joinpath(dir, "no", "sub", "out.csv"), r.err) && occursin("No such file", r.err)
     end
 
     @testset "broken pipe on stdout -> clean exit" begin

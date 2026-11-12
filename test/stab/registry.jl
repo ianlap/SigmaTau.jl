@@ -47,6 +47,12 @@ using Test, Random, SigmaTau
         @test_throws ArgumentError deviation(:dadev, pd)
     end
 
+    @testset "a τ without a deviation has no EDF and no noise type" begin
+        short = PhaseData(cumsum(randn(MersenneTwister(4), 64)) .* 1e-9, 1.0)
+        rs = [deviation(d, short, [10, 40, 100]) for d in (:adev, :pdev, :mtotdev, :htotdev, :mhtotdev, :theo1)]
+        @test all(r -> isequal(isnan.(r.edf), isnan.(r.dev)) && isequal(r.noise_type .== Symbol(""), isnan.(r.dev)), rs)
+    end
+
     @testset "stability runs through deviation()" begin
         s = stability(pd; devs = ["adev", :totdev], correct_bias = false)
         @test keys(s) == [:adev, :totdev]

@@ -7,7 +7,7 @@ const { inWords, startText } = await import("../ui/js/format.js");
 test("the core's refusals are said without flags and function names", () => {
   assert.equal(inWords("--algorithm greenhall fits a model per clock and needs three or more clocks"), "Greenhall fits a model to each clock and needs three or more clocks.");
   assert.match(inWords("timescale: wmax below 1/2 leaves weights that cannot sum to 1"), /^The largest weight is below 1\/2, .* Raise it to 1\/2 or more\.$/);
-  assert.match(inWords("powerlaw_fit: 0 usable τ points for 5 components; pass fewer `alphas` or a longer record"), /^The noise model has 0 usable τ points for 5 noise types: .*too short/);
+  assert.match(inWords("noise fit: 0 usable τ points for 5 components; use a longer record"), /^The noise model has 0 usable τ points for 5 noise types: .*too short/);
   assert.equal(inWords("steer: the steady state is worked out for a steer at every sample; the gains' interval is 8.0 s and tau0 is 1.0 s"),
     "The steady state is worked out for a steer at every sample, and this loop steers every 8 samples.");
   assert.equal(inWords("holdover: gaps leave no trial at tau = 256.0"), "gaps leave no trial at tau = 256.0");

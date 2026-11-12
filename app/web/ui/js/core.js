@@ -144,7 +144,7 @@ function view(doc) {
 
 // For a record with gaps the core names the command line's remedy. A clock's
 // request carries the preparation of the Data page, where the remedy is a box.
-const GAP_REMEDY = /fill them with (--fillgaps|fillgaps first)$/;
+const GAP_REMEDY = /fill them with --fillgaps$/;
 const remedy = (err) => {
   throw GAP_REMEDY.test(err.message) ? new Error(err.message.replace(GAP_REMEDY, "turn on Fill gaps by reflection on the Data page")) : err;
 };
