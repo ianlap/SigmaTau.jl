@@ -155,4 +155,5 @@ end
 
 _powerlaw_tau0(f::NoiseFit) = f.result.tau0
 _powerlaw_h(f::NoiseFit) = Dict(c.alpha => c.h for c in f.components)
-clock_model(f::NoiseFit; kw...) = clock_model(_powerlaw_h(f); tau0=f.result.tau0, kw...)
+clock_model(f::NoiseFit; tau0::Real=f.result.tau0, tau_max::Real=maximum(f.result.tau), kw...) =
+    clock_model(_powerlaw_h(f); tau0=_fit_tau0(f.result.tau0, tau0), tau_max, kw...)

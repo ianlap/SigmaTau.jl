@@ -175,11 +175,13 @@ def clock_model(
     either setting.
 
     ``fit`` is a ``PowerLawFit`` that has a sample interval, a ``NoiseFit``, or
-    a mapping of h_α keyed by α or by noise type, which needs ``tau0``.
-    ``drift`` says whether the model has a drift state, by default whether h₋₄
-    is positive. ``tau_max``, ``fm_band`` and ``pm_band`` are those of
-    ``ClockModel``; ``tau_max`` defaults to the longest τ of a ``PowerLawFit``
-    of a deviation, and to 10⁶ τ₀ otherwise.
+    a mapping of h_α keyed by α or by noise type, which needs ``tau0``. A fit
+    carries its own ``tau0``, and a different one is refused. ``drift`` says
+    whether the model has a drift state, by default whether h₋₄ is positive.
+    ``tau_max``, ``fm_band`` and ``pm_band`` are those of ``ClockModel``. From
+    a fit, ``tau_max`` defaults to the longest τ it saw: the longest τ of a
+    deviation curve, or 1/(2f) at the lowest frequency f of a spectrum; for a
+    mapping it is 10⁶ τ₀.
     """
     kw: dict[str, Any] = {"flicker": bool(flicker)}
     if drift is not None:
@@ -190,10 +192,10 @@ def clock_model(
         kw["fm_band"] = _band(fm_band)
     if pm_band is not None:
         kw["pm_band"] = _band(pm_band)
-    if isinstance(fit, NoiseFit):
-        return _model_from_jl(jl.clock_model(fit._jl, **kw))
     if tau0 is not None:
         kw["tau0"] = float(tau0)
+    if isinstance(fit, NoiseFit):
+        return _model_from_jl(jl.clock_model(fit._jl, **kw))
     if isinstance(fit, PowerLawFit) and np.isfinite(fit.tau0):
         # As Julia's own type, so that `tau_max` defaults to the longest τ of the fit.
         return _model_from_jl(jl.clock_model(powerlawfit_to_jl(fit), **kw))
@@ -301,6 +303,12 @@ def _noise_model_to_jl(h: Any) -> Any:
     return powerlaw_to_jl(h)
 
 
+def _phase_only(data: Any, name: str) -> None:
+    """Refuse a frequency record by name: the clock-model functions follow the phase."""
+    if isinstance(data, FrequencyData):
+        raise TypeError(f"{name}: the record must be PhaseData, as `data.to_phase()` gives")
+
+
 # ── Kalman filter ──────────────────────────────────────────────────────
 
 
@@ -358,6 +366,7 @@ def kalman_filter(
     with drift, with the covariance of that fit multiplied by ten, and with
     the Markov states at zero with their stationary variances.
     """
+    _phase_only(data, "kalman_filter")
     kw = {}
     if x0 is not None:
         kw["x0"] = to_jl_f64(x0)
@@ -492,8 +501,7 @@ def holdover(
     ``time_to_limit`` is then the holdover time at which the quantile at
     ``confidence`` reaches it.
     """
-    if isinstance(data, FrequencyData):
-        raise TypeError("holdover: the record must be PhaseData, as `data.to_phase()` gives")
+    _phase_only(data, "holdover")
     kw: dict[str, Any] = {"confidence": float(confidence)}
     if model is None:
         kw |= {"drift": bool(drift), "anchor": bool(anchor)}
@@ -582,6 +590,7 @@ def prediction_error(
     forward, and the reading it predicts is compared with the reading there, so
     the error holds the noise of that reading as well as the clock's. ``kf`` is
     the run of the filter over ``data``, not a smoothed one."""
+    _phase_only(data, "prediction_error")
     return np_f64(
         jl.prediction_error(
             kf._jl,
@@ -614,6 +623,7 @@ def tune_q(
     levels; ``converged``, whether the search ended within tolerance before
     ``maxiter``; and ``evaluations``, the number of filter runs.
     """
+    _phase_only(data, "tune_q")
     kw = {} if burnin is None else {"burnin": as_int(burnin, "burnin")}
     r = jl.tune_q(to_jl_data(data), m._jl(), maxiter=as_int(maxiter, "maxiter"), **kw)
     return {
@@ -798,6 +808,7 @@ def steer(
         )
     if gains is None or tau is not None or readings:
         raise TypeError("steer: pass (data, model, gains) or (model, gains, tau=...)")
+    _phase_only(data, "steer")
     r = jl.steer(to_jl_data(data), model._jl(), gains._jl())
     return SteeringResult(
         gains,

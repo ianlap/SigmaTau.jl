@@ -294,14 +294,16 @@ flicker without states, or a τ outside their band, does not show in it.
 
 # Keywords
 
-- `tau0`: sample interval in seconds; a fit carries its own.
+- `tau0`: sample interval in seconds. A fit carries its own, and a
+  different value is refused.
 - `drift`: whether the model has a drift state; by default, whether
   ``h_{-4}`` is positive.
 - `flicker`: keep flicker FM and flicker PM as Markov states; `false`
   leaves flicker FM out and folds flicker PM into `R`.
 - `tau_max`, `fm_band`, `pm_band`: passed to [`ClockModel`](@ref). From a
-  [`PowerLawFit`](@ref) of a deviation curve, `tau_max` defaults to its
-  longest τ.
+  fit, `tau_max` defaults to the longest τ it saw, so the flicker states
+  stay in its range: the longest τ of a deviation curve, or ``1/(2f)`` at
+  the lowest frequency ``f`` of a spectrum. From `h` it is ``10^6 τ_0``.
 
 # Examples
 
@@ -324,11 +326,19 @@ p = noise_gen(PhaseData, 65536, 1.0;
 m = clock_model(powerlaw_fit(p; alphas = [2, 1, 0, -1, -2]))
 ```
 """
-function clock_model(fit::PowerLawFit; tau_max::Real=fit.source in POWERLAW_DEVIATIONS ? maximum(fit.x) : 1e6 * fit.tau0, kw...)
+function clock_model(fit::PowerLawFit; tau0::Real=fit.tau0, tau_max::Real=_fit_tau_max(fit), kw...)
     isfinite(fit.tau0) || throw(ArgumentError(
         "clock_model: the fit has no sample interval; use clock_model(Dict(zip(fit.alphas, fit.h)); tau0)"))
-    return clock_model(_powerlaw_h(fit); tau0=fit.tau0, tau_max, kw...)
+    return clock_model(_powerlaw_h(fit); tau0=_fit_tau0(fit.tau0, tau0), tau_max, kw...)
 end
+
+# The longest τ the fit saw. A spectrum's lowest frequency f stands for
+# τ = 1/2f, as f = 1/2τ₀ does for τ₀.
+_fit_tau_max(fit::PowerLawFit) = fit.source in POWERLAW_DEVIATIONS ? maximum(fit.x) : 1 / (2 * minimum(fit.x))
+
+# The fit's own τ₀; a keyword that says otherwise is refused, not obeyed.
+_fit_tau0(τ₀::Float64, tau0::Real) = isapprox(tau0, τ₀; rtol=1e-9) ? τ₀ : throw(ArgumentError(
+    "clock_model: the fit was made at tau0 = $τ₀ s, not $tau0 s; leave tau0 out, or fit the record at that interval"))
 
 function clock_model(h::AbstractDict; tau0::Real, drift::Union{Bool,Nothing}=nothing, flicker::Bool=true, kw...)
     hd = _powerlaw_h(h)

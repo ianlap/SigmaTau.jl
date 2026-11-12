@@ -52,6 +52,13 @@ using Test, Random, SigmaTau
         @test keys(s) == [:adev, :totdev]
         @test s[:totdev].dev == totdev(pd; correct_bias = false).dev
         @test_throws ArgumentError stability(pd; devs = (:nope,))
+        # One name is a suite of one; near misses say what is meant.
+        @test keys(stability(pd; devs = "adev")) == keys(stability(pd; devs = :adev)) == [:adev]
+        @test deviation("adev", pd, [1, 2]).dev == adev(pd, [1, 2]).dev
+        @test_throws "pass [4] for the one factor" adev(pd, 4)
+        @test_throws "pass [4] for the one factor" deviation(:adev, pd, 4)
+        @test_throws "the averaging factors are the keyword m" stability(pd; m_values = [1, 2])
+        @test_throws "stability: no keyword overlapping" stability(pd; overlapping = false)
         s2 = stability(pd; devs = (:mhtotdev,), remove_drift = false)
         @test s2[:mhtotdev].dev == mhtotdev(pd; remove_drift = false).dev
         @test deviation(:mhtotdev, pd, [1, 2]; remove_drift = false).dev ==
@@ -68,6 +75,7 @@ using Test, Random, SigmaTau
         @test isempty([s for (s, m) in spellings if tau_mode(s) !== m])
         @test all(m -> tau_mode(string(m)) === m, instances(TauMode))
         @test_throws ArgumentError tau_mode("weekly")
+        @test tau_mode(:half_octave) === HalfOctave
     end
 
     @testset "summarize()" begin

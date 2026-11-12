@@ -53,7 +53,7 @@ def _fill_matrix(new, convert, matrix, name):
 def stability(
     data: PhaseData | FrequencyData,
     *,
-    devs: Sequence[str] = DEFAULT_DEVIATIONS,
+    devs: str | Sequence[str] = DEFAULT_DEVIATIONS,
     m: TauMode | Sequence[int] = Octave,
     ci: bool = True,
     confidence: float = DEFAULT_CONFIDENCE,
@@ -64,7 +64,8 @@ def stability(
     """Several deviations of the record ``data`` in a single call, as a
     ``StabilitySuite`` indexed by name.
 
-    ``devs`` names the estimators to run, from :func:`estimators`. The default
+    ``devs`` names the estimators to run, from :func:`estimators`; one name
+    runs one estimator. The default
     is ``DEFAULT_DEVIATIONS``, ``("adev", "mdev", "hdev", "mhdev")``. ``m`` is a
     ``TauMode`` grid, cut for each estimator at the largest averaging factor it
     supports, or a sequence of averaging factors that every estimator takes as
@@ -79,7 +80,7 @@ def stability(
     return suite_from_jl(
         jl.stability(
             to_jl_data(data),
-            devs=to_jl_syms(devs),
+            devs=to_jl_syms([devs] if isinstance(devs, str) else devs),
             m=resolve_m(m),
             ci=bool(ci),
             confidence=float(confidence),

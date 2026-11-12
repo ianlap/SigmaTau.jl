@@ -268,6 +268,8 @@ function holdover(data::PhaseData; train::Union{Real,Nothing}=nothing, grow::Uni
                           _limit(τ, q, limit)...)
 end
 
+holdover(::FrequencyData; kw...) = _needs_phase("holdover")
+
 """
     holdover(data::PhaseData, model::ClockModel; train, tau, limit=nothing,
              confidence=0.95) → HoldoverResult
@@ -363,6 +365,8 @@ function holdover(data::PhaseData, m::ClockModel; train::Union{Real,Nothing}=not
     return HoldoverResult(τ, rms, q, worst, μ, cnt, claimed, b * τ₀, 0, m.drift, false, Float64(confidence),
                           _limit(τ, q, limit)...)
 end
+
+holdover(::FrequencyData, ::ClockModel; kw...) = _needs_phase("holdover")
 
 # Weights on the phase samples 1 … n + h of the error `holdover` measures h
 # samples past a stretch of n: +1 at n + h, less the prediction's.

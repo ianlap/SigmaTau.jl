@@ -91,6 +91,9 @@ def test_clock_model_of_a_fit_matches_julia(jl):
     # A fit of spectrum points has no sample interval of its own.
     points = st.powerlaw_fit([1e-3, 1e-2, 1e-1], [3e-24, 2.1e-24, 2.01e-24], alphas=(0, -1))
     assert st.clock_model(points, tau0=1.0).q1 == pytest.approx(1e-24)
+    assert st.clock_model(fit, tau0=1.0) == m  # a fit's own τ₀ passes, another is refused
+    with pytest.raises(ValueError, match="not 2.0 s"):
+        st.clock_model(fit, tau0=2.0)
     with pytest.raises(ValueError):
         st.clock_model(points)
 
@@ -130,6 +133,11 @@ def test_kalman_filter_matches_julia(clock, jl):
     assert t["cost"] == float(direct.cost) and t["evaluations"] == int(direct.evaluations)
     assert t["model"].R == m.R and t["model"].q1 > 0 and t["converged"] == bool(direct.converged)
     assert st.tune_q(data, m, maxiter=40, burnin=500)["cost"] != t["cost"]
+    f = data.to_frequency()  # the clock-model functions take phase
+    for call in (lambda: st.kalman_filter(f, m), lambda: st.prediction_error(kf, f, [1]),
+                 lambda: st.tune_q(f, m), lambda: st.steer(f, m, st.steering_gains(30.0, 1.0))):
+        with pytest.raises(TypeError, match="to_phase"):
+            call()
 
 
 def test_holdover_matches_julia(clock, jl):

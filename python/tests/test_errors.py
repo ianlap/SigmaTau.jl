@@ -34,6 +34,7 @@ def test_suite_missing_key(small_phase):
     suite = st.stability(small_phase, m=[1, 2, 4])
     with pytest.raises(KeyError):
         suite["does_not_exist"]
+    assert list(st.stability(small_phase, devs="adev", m=[1, 2]).keys()) == ["adev"]  # one name
 
 
 def test_a_float_is_refused_where_julia_counts(small_phase):
