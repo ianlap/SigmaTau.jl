@@ -627,9 +627,9 @@ Clock models, the Kalman filter and timescales.
   column or `# tau0:` header has no sample interval; each names the reader
   that was called.
 - CLI errors name command-line options and not library keywords or functions
-  (`--tau0`, `--fillgaps`, `--column`, `--input-format`); an output file
-  that cannot be written is named with the reason; `timescale --synth` with
-  one clock is a usage error (exit 1).
+  (`--tau0`, `--fillgaps`, `--column`); an output file that cannot be
+  written is named with the reason; `timescale --synth` with one clock is a
+  usage error (exit 1).
 
 ### Removed
 
