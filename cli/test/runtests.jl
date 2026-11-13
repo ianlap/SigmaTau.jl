@@ -354,6 +354,7 @@ mktempdir() do dir
         r = run_cli("check", fx("rinex_clk_synth.clk"), "--column", "E02", "--format", "json")
         @test r.code == 0 && occursin("\"quantity\":\"phase\"", r.out) && occursin("\"tau0\":30.0", r.out)
         @test run_cli("check", fx("rinex_clk_synth.clk"), "--column", "G99").code == 2
+        @test occursin("not to a timelab file", run_cli("check", tim, "--column", "alpha").err)
         @test run_cli("analyze", tim, "--reference-col", "2").code == 1
         semi = joinpath(dir, "semi.txt")
         write(semi, "time;phase (ns)\n" * join(string.(0:63, ";", X[1:64] .* 1e9), "\n"))
@@ -481,6 +482,9 @@ mktempdir() do dir
         # Errors name the command line's flags, not read_data's keyword.
         r = run_cli("analyze", nf)
         @test r.code == 2 && occursin("pass --column with one of MJD, a (ns)", r.err) && !occursin("column=", r.err)
+        # A name picks no column of a file without names: refused, not ignored.
+        r = run_cli("analyze", pf, "--column", "alpha")
+        @test r.code == 1 && occursin("this file has no column names; pick it with --value-col, or give --input-format table", r.err)
         r = run_cli("timescale", nf, "--value-cols", "2,7")
         @test r.code == 2 && occursin("column 7 exceeds 4 columns", r.err)
     end
