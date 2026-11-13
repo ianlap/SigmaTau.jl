@@ -632,7 +632,7 @@ Clock models, the Kalman filter and timescales.
   usage error (exit 1).
 - `sigmatau dynamic --window` below 4 (5 with `--dev dhdev`) is a usage
   error (exit 1) that names the option; it was an analysis error (exit 3)
-  saying the record was too short for adev.
+  saying the record was too short for adev or hdev.
 
 ### Removed
 
