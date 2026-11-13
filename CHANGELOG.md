@@ -949,6 +949,9 @@ Clock models, the Kalman filter and timescales.
   is drawn as a point, where it drew nothing, and the τ axis labels every
   other decade or fewer once it spans more than six, where the labels
   collided in a narrow window.
+- `sigmatau --column NAME` on a file without column names (a plain column
+  file, TimeLab, Stable32, counter log or BIPM file) is a usage error (exit
+  1); it was ignored, and the default column was read.
 
 ### Security
 
