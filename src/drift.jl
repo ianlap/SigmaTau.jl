@@ -228,7 +228,7 @@ end
 function _drift_phase(x::Vector{Float64}, y::Vector{Float64}, tau0::Float64, method::Symbol)
     isempty(x) || return x
     all(isfinite, y) ||
-        throw(ArgumentError("drift_fit: method :$method on a frequency record needs one without gaps"))
+        throw(ArgumentError("drift_fit: method :$method on a frequency record needs one without gaps; fill them with fillgaps first"))
     return _freq_to_phase(FrequencyData(y, tau0)).x
 end
 
@@ -302,7 +302,7 @@ end
 # the phase, so the one through the end points is taken out first, which
 # keeps the sums small. The frequency line has the mean of the record.
 function _drift_four_point(x::Vector{Float64}, t::Vector{Float64}, y::Vector{Float64}, tau0::Float64)
-    all(isfinite, x) || throw(ArgumentError("drift_fit: method :four_point needs a record without gaps"))
+    all(isfinite, x) || throw(ArgumentError("drift_fit: method :four_point needs a record without gaps; fill them with fillgaps first"))
     N = length(x)
     n1 = max(1, round(Int, N / 10))
     r = n1 / N

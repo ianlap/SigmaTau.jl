@@ -236,7 +236,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     // The core refuses the map and names a command-line flag; the page names the box that sets it.
     const n = errors.length;
     await page.click("a[data-page=dynamic]");
-    await page.locator("#page.page-dynamic", { hasText: "cannot skip; turn on Fill gaps by reflection on the Data page" }).waitFor(SLOW);
+    await page.locator("#page.page-dynamic", { hasText: "without gaps; turn on Fill gaps by reflection on the Data page" }).waitFor(SLOW);
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 

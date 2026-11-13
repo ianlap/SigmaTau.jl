@@ -51,11 +51,11 @@ include("completion.jl")
 # keywords become the options that set them.
 const LIBRARY_PREFIXES = ("read: " => "", "read_data: " => "", "read_phase: " => "", "read_frequency: " => "",
                           "detect_format: " => "", "powerlaw_fit: " => "noise fit: ", "tau_values: " => "",
-                          "simulate_ensemble: " => "", "InstrumentSource: " => "", "acf: " => "")
+                          "simulate_ensemble: " => "", "InstrumentSource: " => "", "acf: " => "",
+                          "drift_fit: " => "drift fit: ")
 const CLI_WORDS = ("pass column= one of" => "pass --column with one of", "column=" => "column ",
                    "pass tau0" => "pass --tau0", "fill them with fillgaps first" => "fill them with --fillgaps",
-                   "pass fewer `alphas` or a longer record" => "use a longer record",
-                   "format=:table" => "--input-format table")
+                   "pass fewer `alphas` or a longer record" => "use a longer record", "method :" => "--method ")
 function cli_wording(m::String)
     for (p, w) in LIBRARY_PREFIXES
         startswith(m, p) && (m = w * m[length(p)+1:end]; break)

@@ -57,7 +57,7 @@ takes the options of this section.
 | `--header N` | number of lines to skip after the leading `#` lines, such as a line of column names |
 | `--delim CHAR` | character between the fields, `'\t'` for a tab. By default a comma where the first line of data has one, a tab where a table or a `.tsv` file has one, and blanks otherwise |
 | `--scaling X` | factor applied to the samples, `1e-9` for nanoseconds |
-| `--column NAME` | the column of a table with named columns, or the clock of a RINEX clock file, by name. By default the column that [`read_data`](@ref) picks from the names of a table, and the first clock of a RINEX clock file |
+| `--column NAME` | the column of a table with named columns, or the clock of a RINEX clock file, by name. By default the column that [`read_data`](@ref) picks from the names of a table, and the first clock of a RINEX clock file. Any other file is refused, as it has no names |
 | `--nominal HZ` | nominal frequency, for readings in hertz. By default their mean, rounded to four significant figures |
 | `--keep-zeros` | read the zeros of a Stable32 `.phd` or `.frd` file as samples. By default a zero there is a missing sample, as in Stable32, except the first and the last sample of a phase file |
 

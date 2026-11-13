@@ -125,6 +125,10 @@ function read_record(o::Options)
     o.synth > 0 && return synth_record(o)
     isfile(o.input) || throw(CLIError(EXIT_INPUT, "no such file: " * o.input))
     fmt = input_format(o)
+    isempty(o.column) || fmt === :table || fmt === :rinex_clk || throw(usage_error(fmt === :columns ?
+        "--column picks a column by name, and this file has no column names; pick it with --value-col, " *
+        "or give --input-format table if its first line names the columns" :
+        "--column applies to a table with named columns or a RINEX clock file, not to a " * String(fmt) * " file"))
     fmt === :columns || return read_instrument(o, fmt)
     data = read_column(o, o.value_col)
     o.reference_col > 0 || return data
