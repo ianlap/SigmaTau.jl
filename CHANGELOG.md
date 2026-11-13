@@ -618,6 +618,18 @@ Clock models, the Kalman filter and timescales.
   split into letters. `deviation` takes the name as a string and `tau_mode`
   as a symbol. A single averaging factor (`adev(p, 4)`), `m_values` or an
   unknown keyword to `stability` gets a message that says what is meant.
+- Where a deviation is `NaN` (a τ the record cannot reach), its EDF is `NaN`
+  and its noise type empty, in the library, the CLI and Python; `pdev`, the
+  total estimators and `theo1` reported an EDF from a formula outside its
+  range there.
+- Reader errors say what is wrong with the file: an empty file holds no
+  samples, a gzip file must be unpacked first, and a file without a time
+  column or `# tau0:` header has no sample interval; each names the reader
+  that was called.
+- CLI errors name command-line options and not library keywords or functions
+  (`--tau0`, `--fillgaps`, `--column`); an output file that cannot be
+  written is named with the reason; `timescale --synth` with one clock is a
+  usage error (exit 1).
 
 ### Removed
 
