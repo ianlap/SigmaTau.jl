@@ -4,8 +4,8 @@
 // line's own JSON, then visit Spectrum, Dynamic, Ensemble (a Kalman scale with
 // flicker states, then the hat against the command line), Live (simulated
 // source) and Help, come back to Stability for a pinned run and a telecom
-// mask, and run a record and a file of three clocks with gaps, with no page
-// errors.
+// mask, run a record and a file of three clocks with gaps, and generate four
+// clocks on Synthesis for their waterfalls, with no page errors.
 //
 //   SIGMATAU_CLI=cli/build/bin/sigmatau node --test app/web/test/explorer.e2e.mjs
 //
@@ -74,6 +74,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await plotted("#page .js-plotly-plot");
     await page.click("a[data-page=dynamic]");
     await plotted("#page [data-ref=map]");
+    await page.click('[data-ctl=view][data-v="3d"]');
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=map]").data[0].type === "surface");
+    await page.click("[data-ctl=view][data-v=map]");
   });
 
   await t.test("Holdover: the plotted RMS equals the command line's", async () => {
@@ -443,6 +446,32 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const [legend, area] = await page.evaluate(() => ["#page [data-ref=adev] .legend", "#page [data-ref=adev] .nsewdrag"].map((q) => document.querySelector(q).getBoundingClientRect().toJSON()));
     assert.ok(legend.bottom <= area.top + 1, "the legend sits above the plot area");
     await page.setViewportSize({ width: 1280, height: 800 });
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+  });
+
+  await t.test("Synthesis: a wheel brings the fourth clock into view in a small window; Dynamic draws each clock's waterfall", async () => {
+    await page.setViewportSize({ width: 960, height: 640 });
+    await page.goto(base + "#synthesis");
+    const n = errors.length;
+    while (await page.locator(".synth-clock").count() < 4) await page.click("[data-act=add]");
+    const card = await page.locator(".synth-clocks").boundingBox();
+    await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
+    await page.mouse.wheel(0, 2000);
+    await page.waitForFunction(() => {
+      const input = document.querySelector(".synth-clock:last-of-type [data-q]"), r = input.getBoundingClientRect();
+      return document.elementFromPoint(r.x + 5, r.y + 5) === input;
+    });
+    assert.equal(await page.evaluate(() => document.getElementById("page").scrollTop + document.scrollingElement.scrollTop), 0);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.click("[data-ctl=generate]");
+    await page.waitForFunction(() => location.hash === "#ensemble", null, SLOW);
+    await page.click("a[data-page=dynamic]");
+    await page.click('[data-ctl=view][data-v="3d"]');
+    await page.locator('[data-ctl=view][data-v="3d"].on').waitFor();
+    await page.waitForFunction(() => [...document.querySelectorAll("#page .dyn-card")]
+      .filter((c) => /^Sim \d$/.test(c.textContent.trim()) && c.querySelector(".plot").data?.[0]?.type === "surface").length === 4, null, SLOW);
+    await page.click("[data-ctl=view][data-v=map]");
+    // The 422s are the earlier steps' records that have no map (three samples, gaps), not the generated clocks.
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 

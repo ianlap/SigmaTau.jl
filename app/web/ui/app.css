@@ -443,7 +443,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .ens-warn { color: var(--warn); }
 
 /* Synthesis page */
-.synth-clocks { align-self: flex-start; min-width: 0; overflow: auto; }
+.synth-clocks { align-self: flex-start; max-height: 100%; min-width: 0; overflow-y: auto; }   /* many clocks scroll inside the card */
 .synth-clocks .card-row { padding: 14px 16px 8px; }
 .synth-clock { padding: 10px 16px 14px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 10px; }
 .synth-clock .clock-name { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-popover); color: var(--ink); font: inherit; padding: 0 8px; }

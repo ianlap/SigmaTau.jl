@@ -318,8 +318,8 @@ export const TOPICS = [
     ] },
     { id: "Several-clocks", level: 2, title: "Several clocks", html: [
       "<h2>Several clocks</h2>",
-      "<p>With several clocks, each has its own map, on one color scale, and the settings move to a bar above the maps. There is no 3D view and no selected cell.</p>",
-      "<p><b>Compare at τ</b>, below the maps, plots the deviation of every clock against the time of the window, at one averaging time. A dotted line gives the value of each clock over the whole record, from the last run. The menu of the card or a click on a column of a map changes the averaging time. A clock with another sample interval is shown at its nearest averaging time, within half an octave, which the legend then names.</p>",
+      "<p>With several clocks, each has its own map, on one color scale, and the settings move to a bar above the maps. <b>3D waterfall</b> there turns every map into its own surface, on the same scale, and a drag turns one at a time. There is no selected cell.</p>",
+      "<p><b>Compare at τ</b>, below the maps, plots the deviation of every clock against the time of the window, at one averaging time. A dotted line gives the value of each clock over the whole record, from the last run. The menu of the card or, in the Map view, a click on a column of a map changes the averaging time. A clock with another sample interval is shown at its nearest averaging time, within half an octave, which the legend then names.</p>",
     ] },
   ] },
   { id: "holdover", nav: "Holdover", web: "https://ianlap.github.io/SigmaTau.jl/dev/explorer/holdover/", sections: [
