@@ -633,6 +633,14 @@ Clock models, the Kalman filter and timescales.
 - `sigmatau dynamic --window` below 4 (5 with `--dev dhdev`) is a usage
   error (exit 1) that names the option; it was an analysis error (exit 3)
   saying the record was too short for adev or hdev.
+- Explorer: for simulated clocks the Ensemble plot draws each clock against
+  the reference, where it drew it against the scale, so that the scale
+  compares with its clocks; **Clocks against** chooses between the two
+  (Reference by default for simulated clocks, Scale for a file). For
+  simulated clocks the note gives the scale as a fraction of its most stable
+  clock beside what the best fixed weights give.
+  `sigmatau timescale --format json` has `adev.readings`, the Allan
+  deviation of each clock against the reference.
 
 ### Removed
 
@@ -955,6 +963,12 @@ Clock models, the Kalman filter and timescales.
 - `sigmatau --column NAME` on a file without column names (a plain column
   file, TimeLab, Stable32, counter log or BIPM file) is a usage error (exit
   1); it was ignored, and the default column was read.
+- Explorer: the Synthesis clock list scrolls inside its card, so every clock
+  stays reachable in a small window; with several clocks the Dynamic toolbar
+  offers the 3D waterfall, one surface per clock on the shared color scale;
+  the Dynamic and Spectrum toolbars show the button just clicked as on.
+- Explorer: in a window 1100 px wide or narrower, the Synthesis noise fields
+  show the whole value (a value such as 2.026e-31 was cut to 2.026e-3).
 
 ### Security
 
