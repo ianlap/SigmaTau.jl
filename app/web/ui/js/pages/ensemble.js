@@ -35,6 +35,12 @@ const ABOUT_HAT = {
 };
 // The pivot as the core takes it: 1-based, back to the first clock when out of range.
 const pivotOf = (n) => (state.ens.pivot <= n ? state.ens.pivot : 1);
+// What each clock's curve is taken against. Only the reference compares a
+// clock with the scale: a clock against the scale has its own share of the
+// scale taken out. Simulated clocks have an ideal reference, so that is the
+// default for them; a file's reference may be noisier than its clocks.
+const AGAINST = [["reference", "Reference"], ["scale", "Scale"]];
+const againstOf = (clocks) => state.ens.against ?? (clocks[0]?.source.type === "file" ? "scale" : "reference");
 // The file goes to the core as read, without the preparation of the Data page,
 // so the core's remedy for gaps (--fillgaps) has no counterpart on this page.
 const GAPS = [
@@ -147,6 +153,8 @@ export function controls() {
     ${CAPPED.has(E.algorithm) ? `<label class="opt"><span>Largest weight</span><input type="text" data-ctl="wmax" value="${h(String(E.wmax))}" inputmode="decimal"></label>` : ""}
     ${E.algorithm === "at2" ? `<label class="opt"><span>Frequency steps</span><select data-ctl="steps">${[["", "Off"], ["best", "Best"], ["real", "Real"]].map(([id, label]) =>
       `<option value="${id}" ${E.steps === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
+    <label class="opt" title="Each clock's curve: the clock as read against the reference, which compares with the scale, or the clock against the scale"><span>Clocks against</span><select data-ctl="against">${AGAINST.map(([id, label]) =>
+      `<option value="${id}" ${againstOf(clocks) === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>
     ${FLICKER.has(E.algorithm) ? `<label class="opt"><span>Flicker states</span><select data-ctl="flicker">${[["", "Off"], ["on", "On"]].map(([id, label]) =>
       `<option value="${id}" ${E.flicker === (id === "on") ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
     <div class="rule"></div>
@@ -174,6 +182,7 @@ export function onControl(e) {
   if (k === "steps") update((s) => { s.ens.steps = v; });
   if (k === "flicker") update((s) => { s.ens.flicker = v === "on"; });
   if (k === "pivot") update((s) => { s.ens.pivot = Number(v); });
+  if (k === "against") update((s) => { s.ens.against = v; });
   if (k === "wmax") {
     if (Number(v) > 0 && Number(v) <= 1) update((s) => { s.ens.wmax = Number(v); });
     else { t.value = state.ens.wmax; ctx.status("error", "The largest weight is a fraction between 0 and 1."); }
@@ -213,6 +222,16 @@ function ensure() {
 }
 
 const weight = (w) => (w === null ? "–" : num(w, 3));
+
+// Against an ideal reference: the scale beside its most stable clock at the
+// shortest τ, and what the best fixed weights would give independent clocks,
+// σ⁻² = Σ σᵢ⁻² (Weiss and Weissert (1991), Eq. (4) and Appendix A); 1/√N for N equal clocks.
+function gain(r) {
+  const own = r.adev.readings.map((dev) => dev[0]).filter((v) => v > 0), best = Math.min(...own);
+  if (!own.length || !(r.adev.scale[0] > 0)) return "";
+  const bound = 1 / Math.sqrt(own.reduce((sum, v) => sum + (best / v) ** 2, 0));
+  return `At τ = ${num(r.adev.tau[0], 4)} s the scale is ${num(r.adev.scale[0] / best, 2)} of its most stable clock; the best fixed weights for these clocks give ${num(bound, 2)}. `;
+}
 
 // Without a scale the plots are hidden, and its table and the line that describes it go.
 function showEmpty(text) {
@@ -272,7 +291,8 @@ export function refresh() {
   if (!r) return showEmpty(!state.core.ok ? "No analysis core. Start the explorer with serve.py." : hat ? "Separating the clocks…" : "Forming the time scale…");
   showEmpty("");
   if (hat) return refreshHat(r, req);
-  root.querySelector("[data-ref=title]").textContent = "ADEV of the scale and of each clock against it";
+  const against = againstOf(clocks), ideal = clocks[0]?.source.type !== "file";
+  root.querySelector("[data-ref=title]").textContent = `ADEV of the scale and of each clock against ${against === "scale" ? "it" : "the reference"}`;
   const names = r.clocks.map((n, i) => clocks[i]?.name ?? n);
   const color = (i) => seriesColor(clocks[i]?.slot ?? i);
   // Jones–Tryon has no weights: its plot goes and the ADEV plot takes the room.
@@ -292,14 +312,14 @@ export function refresh() {
     <div class="tbl${fitted ? " fitted" : ""}"><div class="tbl-row tbl-head"><span>Clock</span><span>Weight</span><span>Mean</span><span>RMS error</span>${fitted ? "<span>White FM</span>" : ""}</div>
     ${names.map((n, i) => `<div class="tbl-row tbl-body"><span class="ens-name"><span class="clock-dot" style="background:${color(i)}"></span>${h(n)}</span>
       <span>${weight(r.weight[i])}</span><span>${weight(r.weight_mean[i])}</span><span>${sci(r.error_rms[i], 2)} s</span>${fitted ? `<span>${sci(fitted[i].q1, 2)}</span>` : ""}</div>`).join("")}</div>
-    <p class="muted small ens-note">${unresolved}${flicker}${weighted ? "" : "The Jones–Tryon scale has no per-clock weights. "}Mean weight and RMS prediction error cover the second half of the record.</p>`;
+    <p class="muted small ens-note">${ideal ? gain(r) : ""}${unresolved}${flicker}${weighted ? "" : "The Jones–Tryon scale has no per-clock weights. "}Mean weight and RMS prediction error cover the second half of the record.</p>`;
   if (!Plotly) return;
   const scale = css("--accent");
   Plotly.react(root.querySelector("[data-ref=adev]"), [
     { x: r.adev.tau, y: r.adev.scale, name: "Time scale", mode: "lines+markers", line: { color: scale, width: 3 }, marker: { color: scale, size: 6 },
       hovertemplate: "<b>Time scale</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>" },
-    ...r.adev.clocks.map((dev, i) => ({ x: r.adev.tau, y: dev, name: names[i], mode: "lines", line: { color: color(i), width: 1.5, dash: "dot" },
-      hovertemplate: `<b>${h(names[i])}</b> − scale<br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
+    ...r.adev[against === "scale" ? "clocks" : "readings"].map((dev, i) => ({ x: r.adev.tau, y: dev, name: names[i], mode: "lines", line: { color: color(i), width: 1.5, dash: "dot" },
+      hovertemplate: `<b>${h(names[i])}</b>${against === "scale" ? " − scale" : ""}<br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
   ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis("σ<sub>y</sub>(τ)"), showlegend: false, uirevision: "ens" }, CONFIG);
   if (relaid) Plotly.Plots.resize(root.querySelector("[data-ref=adev]"));
   const s = r.series;
@@ -311,5 +331,5 @@ export function refresh() {
 
 export function hint() {
   return state.ens.view === "hat" ? "Solid = each clock, separated · dotted = the pairs as measured · bars = the confidence interval"
-    : "Solid = the scale against the reference · dotted = each clock against the scale";
+    : `Solid = the scale against the reference · dotted = each clock against the ${againstOf(fileClocks())}`;
 }

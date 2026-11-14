@@ -429,6 +429,8 @@ mktempdir() do dir
         @test r.code == 0
         @test occursin("\"algorithm\":\"ewfa\"", r.out) && occursin("\"weight\":[0.3333333333333333,", r.out)
         @test occursin("\"adev\":{\"tau\":[1.0,", r.out) && occursin("\"series\":{\"t\":[0.0,", r.out)
+        # adev.readings: each clock as read, which the scale compares with.
+        @test parse(Float64, match(r"\"readings\":\[\[([^,]+),", r.out)[1]) ≈ adev(cc[1], [1]; ci=false).dev[1]
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"at2\"", r.out)
         r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--steps", "real", "--format=json", "--series", "0")

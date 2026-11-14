@@ -820,17 +820,22 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     json_key(io, "weight"); json_array(io, r.weights[end, :])
     json_key(io, "weight_mean"); json_array(io, wmean)
     json_key(io, "error_rms"); json_array(io, rms)
-    # ADEV of the scale against the reference, and of each clock against the scale.
+    # ADEV of the scale against the reference, and of each clock against the
+    # scale and as read, against the reference. Only the readings compare with
+    # the scale: a clock against the scale has its own share of it taken out.
     json_key(io, "adev"); print(io, '{')
     s = adev(timescale_phase(r), ms; ci=false)
     json_key(io, "tau", true); json_array(io, s.tau)
     json_key(io, "scale"); json_array(io, s.dev)
-    json_key(io, "clocks"); print(io, '[')
-    for i in 1:k
-        i > 1 && print(io, ',')
-        json_array(io, adev(PhaseData(r.x[:, i], cc.tau0), ms; ci=false).dev)
+    for (key, x) in (("clocks", r.x), ("readings", cc.x))
+        json_key(io, key); print(io, '[')
+        for i in 1:k
+            i > 1 && print(io, ',')
+            json_array(io, adev(PhaseData(x[:, i], cc.tau0), ms; ci=false).dev)
+        end
+        print(io, ']')
     end
-    print(io, "]}")
+    print(io, '}')
     if o.series > 0
         idx = collect(1:max(1, cld(N, o.series)):N)
         json_key(io, "series"); print(io, '{')

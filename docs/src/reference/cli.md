@@ -526,8 +526,11 @@ fields are empty, and `null` for each clock in JSON.
 sigmatau_json("timescale --synth 1024 --series 2 --format json"; only = "timescale") # hide
 ```
 
-`adev.scale` is the Allan deviation of the scale against the reference, and
-`adev.clocks` that of each clock against the scale. `series` holds the
+`adev.scale` is the Allan deviation of the scale against the reference,
+`adev.clocks` that of each clock against the scale, and `adev.readings`
+that of each clock as read, against the reference. The readings compare
+with the scale; a clock against the scale has its own share of the scale
+taken out. `series` holds the
 scale and, for each clock, its weights at the times kept. With `--flicker`
 the object has a member `flicker`, whose arrays `fm` and `pm` give the
 number of Markov states in the model of each clock. For `greenhall`,
