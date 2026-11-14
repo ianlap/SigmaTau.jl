@@ -146,7 +146,11 @@ export function refresh() {
   const several = multi();
   const tb = root.querySelector("[data-ref=toolbar]");
   tb.hidden = !several;
-  if (several && !tb.contains(document.activeElement)) tb.innerHTML = controls(true);
+  if (several && !tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
+    const at = tb.contains(document.activeElement) ? document.activeElement.dataset : null;
+    tb.innerHTML = controls(true);
+    if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
+  }
   const isL = state.spec.phase === "L";
   root.querySelector("[data-ref=bottom-title]").innerHTML = isL ? `Phase noise ℒ(f) at ${carrierLabel(state.spec.carrier)}` : "Phase S<sub>x</sub>(f)";
   root.querySelector("[data-ref=bottom-units]").textContent = isL ? "dBc/Hz" : "s²/Hz";

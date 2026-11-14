@@ -1,8 +1,8 @@
 // Dynamic page: σ(t, τ) over sliding windows. One clock: a map (or a 3D
-// waterfall) and the selected cell. Several clocks: one map per clock side by
-// side on a shared color scale, since maps cannot be overlaid. Maps are
-// computed by the core when this page needs them and recomputed when the
-// estimator, window or record changes; no Run is needed.
+// waterfall) and the selected cell. Several clocks: one map (or waterfall) per
+// clock side by side on a shared color scale, since maps cannot be overlaid.
+// Maps are computed by the core when this page needs them and recomputed when
+// the estimator, window or record changes; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale } from "../plot.js";
@@ -17,8 +17,9 @@ export function controls(inline = false) {
   const d = state.dyn;
   const est = `<div class="seg" role="group" aria-label="Estimator">${Object.entries(NAME).map(([k, v]) =>
     `<button type="button" data-ctl="dev" data-v="${k}" class="${d.dev === k ? "on" : ""}">${v}</button>`).join("")}</div>`;
+  const view = `<div class="seg" role="group" aria-label="View"><button type="button" data-ctl="view" data-v="map" class="${d.view === "map" ? "on" : ""}">Map</button><button type="button" data-ctl="view" data-v="3d" class="${d.view === "3d" ? "on" : ""}">3D waterfall</button></div>`;
   if (inline) {
-    return `${est}<label class="tool-field">Window <select data-ctl="frac">${FRACS.map((f) =>
+    return `${est}${view}<label class="tool-field">Window <select data-ctl="frac">${FRACS.map((f) =>
       `<option value="${f}" ${f === d.frac ? "selected" : ""}>1/${f} of record</option>`).join("")}</select></label>
       <span class="caption grow-right">Maps can't be overlaid, so each clock gets its own. Same color scale throughout.</span>`;
   }
@@ -30,8 +31,7 @@ export function controls(inline = false) {
     <div class="ctl-block"><label class="lbl">Window length</label>
       <div class="pills">${FRACS.map((f) => `<button type="button" class="pill ${f === d.frac ? "on" : ""}" data-ctl="frac" data-v="${f}">1/${f}</button>`).join("")}</div>
       ${n ? `<div class="muted small">${thousands(w)} samples per window · ${2 * d.frac - 1} windows</div>` : ""}</div>
-    <div class="ctl-block"><label class="lbl">View</label>
-      <div class="seg" role="group" aria-label="View"><button type="button" data-ctl="view" data-v="map" class="${d.view === "map" ? "on" : ""}">Map</button><button type="button" data-ctl="view" data-v="3d" class="${d.view === "3d" ? "on" : ""}">3D waterfall</button></div></div>
+    <div class="ctl-block"><label class="lbl">View</label>${view}</div>
     <div class="rule"></div>
     <p class="muted small">Changes here recompute this page right away. A clock whose noise does not change shows the same colors in every row; a change during the record shows as a change down a column.</p>`;
 }
@@ -109,6 +109,26 @@ function heat(c, d, zmin, zmax, showscale, compact) {
   };
 }
 
+// The waterfall: log σ over (log τ, t) as a surface that a drag turns.
+function surface(c, d, zmin, zmax, compact) {
+  return {
+    type: "surface", x: d.tau.map(Math.log10), y: d.t, z: d.map.map((r) => r.map(log10)),
+    colorscale: heatScale(), cmin: zmin, cmax: zmax, showscale: false,
+    hovertemplate: `${compact ? `<b>${h(c.name)}</b><br>` : ""}τ = 10^%{x:.2f} s<br>t = %{y:.6g} s<br>log₁₀σ = %{z:.2f}<extra></extra>`,
+  };
+}
+
+function surfaceLayout(compact) {
+  return {
+    ...baseLayout(), margin: { l: 0, r: 0, t: 0, b: 0 },
+    scene: {
+      xaxis: sceneAxis(compact ? "log τ" : "log₁₀ τ (s)"), yaxis: sceneAxis("t (s)"), zaxis: sceneAxis(compact ? "log σ" : "log₁₀ σ"),
+      camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } },
+    },
+    uirevision: "3d",
+  };
+}
+
 const sceneAxis = (text) => ({ title: { text }, color: css("--ink-2"), gridcolor: css("--grid"), zerolinecolor: css("--line-strong"), linecolor: css("--line-strong") });
 
 function range(a, b) { const out = []; for (let k = a; k <= b; k++) out.push(k); return out; }
@@ -139,7 +159,11 @@ export function refresh() {
   const several = multi();
   const tb = root.querySelector("[data-ref=toolbar]");
   tb.hidden = !several;
-  if (several && !tb.contains(document.activeElement)) tb.innerHTML = controls(true);
+  if (several && !tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
+    const at = tb.contains(document.activeElement) ? document.activeElement.dataset : null;
+    tb.innerHTML = controls(true);
+    if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
+  }
   const area = root.querySelector("[data-ref=area]");
   const cell = root.querySelector("[data-ref=cell]");
   const clocks = visibleClocks().filter((c) => c.record);
@@ -174,18 +198,7 @@ export function refresh() {
     const [zmin, zmax] = zRange([d]);
     renderCell(cell, c, d); // lay the card out before Plotly sizes the map
     if (state.dyn.view === "3d") {
-      Plotly.react(plot, [{
-        type: "surface", x: d.tau.map(Math.log10), y: d.t, z: d.map.map((r) => r.map(log10)),
-        colorscale: heatScale(), cmin: zmin, cmax: zmax, showscale: false,
-        hovertemplate: "τ = 10^%{x:.2f} s<br>t = %{y:.6g} s<br>log₁₀σ = %{z:.2f}<extra></extra>",
-      }], {
-        ...baseLayout(), margin: { l: 0, r: 0, t: 0, b: 0 },
-        scene: {
-          xaxis: sceneAxis("log₁₀ τ (s)"), yaxis: sceneAxis("t (s)"), zaxis: sceneAxis("log₁₀ σ"),
-          camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } },
-        },
-        uirevision: "3d",
-      }, CONFIG);
+      Plotly.react(plot, [surface(c, d, zmin, zmax, false)], surfaceLayout(false), CONFIG);
     } else {
       const layout = mapLayout(d, false);
       const pin = state.dyn.cell;
@@ -223,7 +236,9 @@ export function refresh() {
     wait.hidden = ok;
     wait.innerHTML = ok ? "" : `<p>${c.dynamic?.error ? h(c.dynamic.error) : "Computing…"}</p>`;
     plot.style.visibility = ok ? "visible" : "hidden";
-    if (ok) Plotly.react(plot, [heat(c, c.dynamic, zmin, zmax, false, true)], mapLayout(c.dynamic, true), { ...CONFIG, displayModeBar: false });
+    if (!ok) continue;
+    if (state.dyn.view === "3d") Plotly.react(plot, [surface(c, c.dynamic, zmin, zmax, true)], surfaceLayout(true), { ...CONFIG, displayModeBar: false });
+    else Plotly.react(plot, [heat(c, c.dynamic, zmin, zmax, false, true)], mapLayout(c.dynamic, true), { ...CONFIG, displayModeBar: false });
   }
   // A color bar on its own, shared by every map.
   if (ready.length) {
@@ -302,10 +317,10 @@ function drawSlice(area, ready) {
   for (const c of ready) {
     const plot = area.querySelector(`.dyn-card[data-clock="${c.id}"] .plot`);
     const j = nearestTau(c.dynamic.tau, tau);
-    if (plot?.layout) Plotly.relayout(plot, { shapes: j < 0 ? [] : [{ type: "rect", xref: "x", yref: "paper", x0: j - 0.5, x1: j + 0.5, y0: 0, y1: 1, line: { color: css("--accent"), width: 2 } }] });
+    if (plot?.layout && state.dyn.view === "map") Plotly.relayout(plot, { shapes: j < 0 ? [] : [{ type: "rect", xref: "x", yref: "paper", x0: j - 0.5, x1: j + 0.5, y0: 0, y1: 1, line: { color: css("--accent"), width: 2 } }] });
   }
   const none = missing.length ? `No τ near ${num(tau, 4)} s for ${missing.join(", ")} · ` : "";
-  box.querySelector("[data-ref=slice-sub]").textContent = `${none}${NAME[state.dyn.dev]} in each window · dotted = whole record (${whole.toUpperCase()}, last run) · click a map column to change τ`;
+  box.querySelector("[data-ref=slice-sub]").textContent = `${none}${NAME[state.dyn.dev]} in each window · dotted = whole record (${whole.toUpperCase()}, last run)${state.dyn.view === "map" ? " · click a map column to change τ" : ""}`;
   Plotly.react(box.querySelector("[data-ref=slice]"), traces, {
     ...baseLayout(), margin: { l: 70, r: 14, t: 8, b: 44 },
     xaxis: linAxis("Window center t (s)"), yaxis: { ...logAxis(`${NAME[state.dyn.dev]} at τ = ${num(tau, 4)} s`), dtick: undefined },
@@ -321,6 +336,7 @@ function bindSliceClick(plot) {
   const tryBind = () => {
     if (!plot.on) return setTimeout(tryBind, 100);
     plot.on("plotly_click", (ev) => {
+      if (state.dyn.view !== "map") return;
       const j = ev.points?.[0]?.x;
       const id = Number(plot.closest("[data-clock]")?.dataset.clock);
       const c = state.clocks.find((k) => k.id === id);
@@ -368,6 +384,6 @@ function renderCell(box, c, d) {
 }
 
 export function hint() {
-  if (multi()) return "Rows = window center time (s) · columns = τ · stronger color = less stable";
+  if (multi()) return state.dyn.view === "map" ? "Rows = window center time (s) · columns = τ · stronger color = less stable" : "Drag a waterfall to turn it · scroll to zoom";
   return state.dyn.view === "map" ? "Click a cell to pin it · switch to 3D waterfall to compare curve shapes" : "Drag to turn · scroll to zoom";
 }

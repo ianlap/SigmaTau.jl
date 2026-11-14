@@ -54,12 +54,14 @@ window of samples, so its interval is that of [`adev`](@ref) or
 ## Several clocks
 
 With several clocks, each has its own map, on one color scale, and the
-settings move to a bar above the maps. There is no 3D view and no selected
-cell.
+settings move to a bar above the maps. **3D waterfall** there turns every
+map into its own surface, on the same scale, and a drag turns one at a time.
+There is no selected cell.
 
 **Compare at τ**, below the maps, plots the deviation of every clock
 against the time of the window, at one averaging time. A dotted line gives
 the value of each clock over the whole record, from the last run. The menu
-of the card or a click on a column of a map changes the averaging time. A
+of the card or, in the Map view, a click on a column of a map changes the
+averaging time. A
 clock with another sample interval is shown at its nearest averaging time,
 within half an octave, which the legend then names.
