@@ -131,6 +131,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
     assert.match(await page.locator("#page [data-ref=table]").innerText(), /White FM/);   // the fitted models
     await plotted("#page [data-ref=adev]");
+    // The dotted lines of simulated clocks are the clocks as read, which the
+    // scale compares with; "Scale" gives each clock against the scale.
+    const ts = JSON.parse(execFileSync(CLI, ["timescale", "--synth", "16384", "--seed", "42", "--algorithm", "greenhall", "--pivot", "1", "--flicker", "--format", "json"])).timescale;
+    const dotted = () => page.evaluate(() => document.querySelector("#page [data-ref=adev]").data[1].y);
+    assert.deepEqual(await dotted(), ts.adev.readings[0]);
+    assert.match(await page.locator("#page .ens-note").innerText(), /the scale is 0\.\d+ of its most stable clock/);
+    await page.selectOption("#side [data-ctl=against]", "scale");
+    assert.deepEqual(await dotted(), ts.adev.clocks[0]);
   });
 
   await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {

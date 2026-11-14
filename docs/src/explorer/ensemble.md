@@ -4,7 +4,7 @@ The Ensemble page works on a group of clocks that were measured against
 one reference, in two views. **Time scale** forms a time scale from them: a
 weighted combination of the clocks that is meant to be more stable than any
 one of them. It shows the stability of the scale, the stability of each
-clock against it and the weight of each clock. **N-cornered hat** separates
+clock beside it and the weight of each clock. **N-cornered hat** separates
 the stability of each clock from the comparisons, without a scale
 ([The N-cornered hat](ensemble.md#The-N-cornered-hat)).
 
@@ -50,6 +50,7 @@ These are the settings of the **Time scale** view.
 | **Largest weight** | AT1, AT2, Stein | The largest weight one clock may have, from ``1/k`` for ``k`` clocks to 1, which is no limit |
 | **Frequency steps** | AT2 | **Off**, **Best** or **Real**: whether the scale looks for frequency steps of a clock, and what it does on finding one |
 | **Flicker states** | Greenhall, Jones–Tryon | **Off** or **On**: whether the model of each clock keeps its flicker FM and flicker PM |
+| **Clocks against** | | **Reference** or **Scale**: what the curve of each clock is taken against ([What is shown](ensemble.md#What-is-shown)) |
 
 | Algorithm | Scale |
 |:----------|:------|
@@ -82,15 +83,40 @@ setting change. It needs no run.
 ## What is shown
 
 The upper plot gives the Allan deviation of the scale against the
-reference, as a solid line, and that of each clock against the scale, as
-dotted lines. The line above it names the algorithm, the number of samples,
-the sample interval and the reference, and says when flicker states are
-on.
+reference, as a solid line, and that of each clock, as dotted lines. The
+line above it names the algorithm, the number of samples, the sample
+interval and the reference, and says when flicker states are on.
 
 With simulated clocks the reference is ideal, and the solid line is the
 stability of the scale itself. With measured clocks it holds the noise of
 the reference as well, and it shows the scale only where the reference is
 the more stable of the two.
+
+**Clocks against** sets what a dotted line is:
+
+- **Reference**: the clock as it was read, against the reference. The
+  scale and the clocks are then against the same reference, and the scale
+  compares with its clocks. This is the choice for simulated clocks, whose
+  dotted lines are then the clocks themselves.
+- **Scale**: the clock against the scale. This is the choice for the
+  clocks of a file, whose reference may be less stable than they are.
+
+A clock against the scale is not the clock alone. The scale holds a share
+of the clock, its weight ``w``, and that share cancels in the difference.
+Where the weights are the inverse variances of independent clocks, the
+scale lies at ``\sqrt{w}`` of the clock and the clock against the scale at
+``\sqrt{1 - w}`` of it. The line of a clock with more than half of the
+weight therefore lies below the scale, though the scale is the more stable
+of the two.
+
+For simulated clocks the note under the table gives the scale as a
+fraction of its most stable clock at the shortest averaging time, beside
+the fraction that the best fixed weights would give. For independent
+clocks of deviations ``σ_i`` that is ``σ^{-2} = \sum_i σ_i^{-2}``
+([Weiss and Weissert (1991), Eq. (4) and Appendix A](@cite weiss-weissert-1991-at2)):
+``1/\sqrt{N}`` of a clock for ``N`` equal clocks, and nearer 1 the more
+the clocks differ. Four clocks that each have four times the noise
+variance of the one before give 0.87.
 
 **Weights** plots the weight of each clock against time. The table gives,
 for each clock:
