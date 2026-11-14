@@ -448,7 +448,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .synth-clock { padding: 10px 16px 14px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 10px; }
 .synth-clock .clock-name { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-popover); color: var(--ink); font: inherit; padding: 0 8px; }
 .noise-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; }
-.noise-grid input { width: 100%; min-width: 0; box-sizing: border-box; height: 28px; padding: 0 8px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-popover); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
+.noise-grid input { width: 100%; min-width: 0; box-sizing: border-box; height: 28px; padding: 0 6px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-popover); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); }
 .noise-name { font-size: 12px; color: var(--ink-2); }
 .synth-note { padding: 8px 16px 14px; }
+@media (max-width: 1100px) { .synth-clocks { width: 320px; } }   /* room for a value such as 2.026e-31 */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
