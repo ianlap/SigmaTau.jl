@@ -352,6 +352,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok((await page.locator("[data-ref=plot-hint]").boundingBox()).width >= 100, "the hint keeps 100 px");
   });
 
+  await t.test("Synthesis at 960 px: every noise value fits its field", async () => {
+    await page.click("a[data-page=synthesis]");
+    await page.waitForFunction(() => document.querySelector(".synth-clock [data-h=q2]")?.value);
+    const cut = await page.evaluate(() => [...document.querySelectorAll(".noise-grid input")].filter((i) => i.scrollWidth > i.clientWidth).map((i) => i.value));
+    assert.deepEqual(cut, []);
+    await page.click("a[data-page=data]");
+  });
+
   await t.test("Data: a file of named clocks is proposed whole; Holdover and Steering name the clock they cannot compute", async () => {
     // Clock a has no readings in its first 800 samples, so no stretch to learn a noise model from.
     const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
