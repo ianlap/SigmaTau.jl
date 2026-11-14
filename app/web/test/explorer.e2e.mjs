@@ -326,6 +326,8 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await chooser.setFiles({ name: "three.csv", mimeType: "text/csv", buffer: Buffer.from(rows.map((i) => [i, clock(i, 1), clock(i, 2), clock(i, 3)].join(",")).join("\n")) });
     for (const col of [3, 4]) await page.selectOption(`#import-dialog select[data-col="${col}"]`, "value");
     await page.click("#import-dialog [data-act=load]");
+    // All three clocks are read before Ensemble opens: with two of them it asks for a Greenhall scale, which the core refuses.
+    await page.waitForFunction(async (url) => (await import(url)).state.clocks.filter((c) => c.source.name === "three.csv" && c.record).length === 3, base + "js/state.js", SLOW);
     await settled();
     const scale = (alg) => page.waitForFunction((a) => new RegExp(`^${a}.* 1200 samples`).test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), alg, SLOW);
     await page.click("a[data-page=ensemble]");   // Greenhall, as the Ensemble step above left it
@@ -389,7 +391,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => { const n = document.querySelector("#page [data-ref=plot]")?.data?.map((d) => d.name) ?? []; return ["b", "c"].every((k) => n.some((x) => x.startsWith(`${k} phase (s)`))); }, null, SLOW);
     assert.ok(!(await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.some((d) => d.name.startsWith("a phase (s)")))));
     await page.click("a[data-page=steering]");
-    await page.locator("#page [data-ref=note]", { hasText: "a phase (s)" }).waitFor(SLOW);
+    await page.locator("#page [data-ref=note]", { hasText: "No steering replay for a phase (s)" }).waitFor(SLOW);   // Steering's own note, not Holdover's on its way out
     await plotted("#page [data-ref=plot]");
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
