@@ -641,6 +641,13 @@ Clock models, the Kalman filter and timescales.
   clock beside what the best fixed weights give.
   `sigmatau timescale --format json` has `adev.readings`, the Allan
   deviation of each clock against the reference.
+- `sigmatau timescale --synth` with `--algorithm greenhall`, `jones_tryon`
+  or `stein` runs the scale on the models the clocks were simulated from,
+  where it fitted a model to each simulated clock; `--fitted-models` fits
+  them as before, `--flicker` with `--synth` needs it (a usage error, exit
+  1, otherwise), and the JSON says which in `fitted`. Explorer: the Ensemble
+  page has **Models** (As simulated or Fitted) for a Kalman scale on
+  simulated clocks and offers **Flicker states** with fitted models only.
 
 ### Removed
 
@@ -969,6 +976,10 @@ Clock models, the Kalman filter and timescales.
   the Dynamic and Spectrum toolbars show the button just clicked as on.
 - Explorer: in a window 1100 px wide or narrower, the Synthesis noise fields
   show the whole value (a value such as 2.026e-31 was cut to 2.026e-3).
+- `timescale(...; algorithm=:jones_tryon)` raises an `ArgumentError` that
+  says the phase covariance has grown without bound, where it threw a
+  `SingularException` (long records of clocks with noiseless readings and
+  little white FM; Greenhall 2003, §4).
 
 ### Security
 
