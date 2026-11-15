@@ -112,6 +112,7 @@ const OPTS = [
     Opt("--pivot", "K", String[], false, "clock whose reading gives the greenhall, jones_tryon or stein scale, 1 to the number of clocks (default 1)", ["timescale"]),
     Opt("--steps", "MODE", STEPS, false, "at2 only: detect clock frequency steps; best recomputes the scale from the step, real keeps the values already issued and corrects forward", ["timescale"]),
     Opt("--flicker", "", String[], false, "greenhall and jones_tryon only: keep each clock's flicker FM and flicker PM as Markov states where the fit finds them, instead of folding flicker PM into the reading noise", ["timescale"]),
+    Opt("--fitted-models", "", String[], false, "with --synth, greenhall, jones_tryon and stein: fit the clock models from the simulated readings, as for a file, in place of the models the clocks were simulated from", ["timescale"]),
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record); for steer, the stretch the clock model is fitted to, with results from its end on", ["holdover", "steer"]),
     Opt("--grow", "K", String[], false, "in place of --train: a stretch K times each holdover time (2, or 3 with --fit-drift, is the test behind TDEV and HTDEV)", ["holdover"]),
@@ -222,6 +223,7 @@ mutable struct Options
     grow::Int                 # holdover: the stretch as a multiple of each holdover time; 0 = --train
     kalman::Bool              # holdover: a Kalman filter as the predictor
     flicker::Bool             # --flicker: flicker states in the Kalman scales' clock models
+    fitted::Bool              # --fitted-models: fit the models of simulated clocks, as for a file
     time_constant::Float64    # steer: NaN = not given
     integral::Bool            # steer: an integral gain
     cost::Vector{Float64}     # steer: --cost weights on phase, frequency and steer; empty = not given
@@ -248,7 +250,7 @@ Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", fa
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear", "frequency_fit",
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
-                    NaN, Float64[], false, true, NaN, 0, false, false,
+                    NaN, Float64[], false, true, NaN, 0, false, false, false,
                     NaN, false, Float64[], NaN, "", false, 0, false, -1, false, true, false, false, 0.0, NaN, "L", Float64[], "")
 
 quantity(o::Options) = o.freq ? "frequency" : "phase"
@@ -486,6 +488,7 @@ function set_flag!(o::Options, name::String)
     elseif name == "--kalman";             o.kalman = true
     elseif name == "--integral";           o.integral = true
     elseif name == "--flicker";            o.flicker = true
+    elseif name == "--fitted-models";      o.fitted = true
     elseif name == "--pairs";              o.pairs = true
     elseif name == "--no-reference";       o.reference = false
     elseif name == "--covariance";         o.covariance = true
@@ -576,6 +579,11 @@ function parse_args!(o::Options, args::Vector{String})
     if o.command == "timescale"
         0 < o.wmax <= 1 || throw(usage_error("--wmax must be above 0 and at most 1"))
         isempty(o.steps) || o.algorithm == "at2" || throw(usage_error("--steps needs --algorithm at2"))
+        kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
+        o.fitted && !(kalman && o.synth > 0) &&
+            throw(usage_error("--fitted-models goes with --synth and --algorithm greenhall, jones_tryon or stein: the models of a file's clocks are always fitted"))
+        o.flicker && o.synth > 0 && !o.fitted &&
+            throw(usage_error("--flicker fits flicker states: with --synth, add --fitted-models"))
     end
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))

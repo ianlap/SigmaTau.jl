@@ -501,15 +501,18 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 | `--steps MODE` | with `at2`, detect frequency steps of the clocks: `best` or `real` |
 | `--pivot K` | with `greenhall`, `jones_tryon` or `stein`, the clock at which the scale is read. By default 1 |
 | `--flicker` | with `greenhall` or `jones_tryon`, fit flicker FM as well, and keep the flicker FM and the flicker PM of each clock as [Markov states](../explanation/clock_model.md#Flicker-states) of its model. By default flicker FM is not fitted and flicker PM counts as noise of the readings |
+| `--fitted-models` | with `--synth` and `greenhall`, `jones_tryon` or `stein`, fit the model of each clock from the simulated readings, as for a file. By default simulated clocks take the models they were simulated from |
 
 Each column is read with the options of the record, and a clock takes
 part in the scale where it was read: the samples that `--fillgaps` puts in
 are left out again, so the option serves only to read a frequency file
 that has missing samples. With `--synth` the clocks are simulated: four of
 them, or those that `--clocks` or `--noise-model` describe. `greenhall`, `jones_tryon` and `stein` need three
-clocks or more, and fit a model to each with [`clock_models`](@ref), which
-leaves out the samples a missing reading touches. The record needs 16
-samples or more.
+clocks or more and a model of each. For a file they fit it with
+[`clock_models`](@ref), which leaves out the samples a missing reading
+touches. Simulated clocks take the models they were simulated from, or
+fitted ones with `--fitted-models`; `--flicker` belongs to the fit. The
+record needs 16 samples or more.
 
 The CSV output has a row for each clock:
 
@@ -534,7 +537,8 @@ taken out. `series` holds the
 scale and, for each clock, its weights at the times kept. With `--flicker`
 the object has a member `flicker`, whose arrays `fm` and `pm` give the
 number of Markov states in the model of each clock. For `greenhall`,
-`jones_tryon` and `stein`, `models` holds the model fitted to each clock.
+`jones_tryon` and `stein`, `models` holds the model of each clock and
+`fitted` says whether it was fitted.
 Where a fit leaves a clock without white FM and without flicker FM, the
 record does not resolve that clock, the scale gives it nearly all of the
 weight, and a message on stderr names it

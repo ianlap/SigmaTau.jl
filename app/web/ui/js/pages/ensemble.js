@@ -18,13 +18,15 @@ const KALMAN = new Set(["greenhall", "jones_tryon", "stein"]);
 const CAPPED = new Set(["at1", "at2", "stein"]);                // take --wmax
 const FLICKER = new Set(["greenhall", "jones_tryon"]);          // take --flicker
 const ABOUT_FLICKER = " Flicker states: on keeps each clock's flicker FM and flicker PM in its model as Markov states, across the τ where its fit finds them; off folds flicker PM into the reading noise and leaves flicker FM out.";
+const MODELS = [["", "As simulated"], ["fitted", "Fitted"]];
+const ABOUT_MODELS = { true: " The models are fitted from the comparisons, as for a file.", false: " The models are those the clocks were simulated from." };
 const ABOUT = {
   at1: "AT1 weighs each clock by the inverse of its prediction-error variance, learned as it runs.",
   at2: "AT2 keeps AT1's weights and follows each clock's frequency with a Kalman update. Frequency steps: best reruns the scale from a detected step; real keeps the values already issued and corrects from the step on.",
   ewfa: "EWFA weighs every clock the same.",
-  greenhall: "Greenhall's Kalman scale fits a model to each clock and reads the scale at the pivot clock. It needs three or more clocks.",
+  greenhall: "Greenhall's Kalman scale runs one filter over a model of each clock and reads the scale at the pivot clock. It needs three or more clocks.",
   jones_tryon: "The Jones–Tryon Kalman scale: Greenhall's filter without the covariance reduction, so it has no per-clock weights. It needs three or more clocks.",
-  stein: "Stein's Kalman scale (KAS-2) fits a model to each clock, filters each clock's difference from the pivot, and weighs each clock's phase, frequency and aging by the inverse of its noise. The weights shown are the phase weights. It needs three or more clocks.",
+  stein: "Stein's Kalman scale (KAS-2) takes a model of each clock, filters each clock's difference from the pivot, and weighs each clock's phase, frequency and aging by the inverse of its noise. The weights shown are the phase weights. It needs three or more clocks.",
 };
 const HAT_DEVS = ["adev", "mdev", "hdev", "mhdev", "pdev", "tdev", "htdev"];
 const HAT_METHODS = [["hat", "Hat"], ["groslambert", "Groslambert covariance"], ["klts", "Groslambert, KLTS interval"]];
@@ -41,6 +43,10 @@ const pivotOf = (n) => (state.ens.pivot <= n ? state.ens.pivot : 1);
 // default for them; a file's reference may be noisier than its clocks.
 const AGAINST = [["reference", "Reference"], ["scale", "Scale"]];
 const againstOf = (clocks) => state.ens.against ?? (clocks[0]?.source.type === "file" ? "scale" : "reference");
+// Whether a Kalman scale fits its models: always for a file, and for simulated
+// clocks when asked, in place of the models they were made from.
+const simulated = (clocks) => clocks[0]?.source.type !== "file";
+const fittedOf = (clocks) => !simulated(clocks) || state.ens.fitted;
 // The file goes to the core as read, without the preparation of the Data page,
 // so the core's remedy for gaps (--fillgaps) has no counterpart on this page.
 const GAPS = [
@@ -49,7 +55,10 @@ const GAPS = [
   [/^the frequency record is missing/, "Frequency columns with missing samples cannot be read."],
 ];
 const FEW = [/^hat needs three or more simulated/, "Simulated clocks have a perfect reference, which counts as no clock. Simulate three or more, on the Data or the Synthesis page."];
-const inWords = (message) => GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.")
+// Simulated clocks have no gaps: a fit that stops there met noise it has no term for.
+const UNFITTED = "The fit leaves one of these clocks too few averaging times. It has terms for white and flicker PM, white FM and random-walk FM, and none for random-run FM. With Models at As simulated the scale takes the models the clocks were made from.";
+const inWords = (message, sim) => (sim && GAPS[0][0].test(message) ? UNFITTED : null)
+  ?? GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.")
   ?? (FEW[0].test(message) ? FEW[1] : plain(message));
 
 export const ownsPanel = true;
@@ -116,7 +125,8 @@ function request() {
   const E = state.ens, clocks = fileClocks();
   const [a, file] = clockArgs("timescale", clocks);
   a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : []), ...(CAPPED.has(E.algorithm) ? ["--wmax", E.wmax] : []),
-    ...(E.algorithm === "at2" && E.steps ? ["--steps", E.steps] : []), ...(FLICKER.has(E.algorithm) && E.flicker ? ["--flicker"] : []), "--format", "json", "--series", 2000);
+    ...(E.algorithm === "at2" && E.steps ? ["--steps", E.steps] : []), ...(KALMAN.has(E.algorithm) && simulated(clocks) && E.fitted ? ["--fitted-models"] : []),
+    ...(FLICKER.has(E.algorithm) && E.flicker && fittedOf(clocks) ? ["--flicker"] : []), "--format", "json", "--series", 2000);
   return { clocks, body: { args: a.map(String), file } };
 }
 
@@ -155,7 +165,9 @@ export function controls() {
       `<option value="${id}" ${E.steps === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
     <label class="opt" title="Each clock's curve: the clock as read against the reference, which compares with the scale, or the clock against the scale"><span>Clocks against</span><select data-ctl="against">${AGAINST.map(([id, label]) =>
       `<option value="${id}" ${againstOf(clocks) === id ? "selected" : ""}>${label}</option>`).join("")}</select></label>
-    ${FLICKER.has(E.algorithm) ? `<label class="opt"><span>Flicker states</span><select data-ctl="flicker">${[["", "Off"], ["on", "On"]].map(([id, label]) =>
+    ${KALMAN.has(E.algorithm) && simulated(clocks) ? `<label class="opt"><span>Models</span><select data-ctl="models">${MODELS.map(([id, label]) =>
+      `<option value="${id}" ${E.fitted === (id === "fitted") ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
+    ${FLICKER.has(E.algorithm) && fittedOf(clocks) ? `<label class="opt"><span>Flicker states</span><select data-ctl="flicker">${[["", "Off"], ["on", "On"]].map(([id, label]) =>
       `<option value="${id}" ${E.flicker === (id === "on") ? "selected" : ""}>${label}</option>`).join("")}</select></label>` : ""}
     <div class="rule"></div>
     ${KALMAN.has(E.algorithm) && (clocks.length || 4) < 3 ? `<p class="small ens-warn">${ALGS.find(([id]) => id === E.algorithm)[1]} needs three or more clocks.</p>` : ""}
@@ -164,7 +176,7 @@ export function controls() {
         ? `${clocks.length} clocks simulated on the Data page, each against a perfect reference.`
         : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference.`)
       : "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."}</p>
-    <p class="muted small">${ABOUT[E.algorithm]}${FLICKER.has(E.algorithm) ? ABOUT_FLICKER : ""}</p>`;
+    <p class="muted small">${ABOUT[E.algorithm]}${KALMAN.has(E.algorithm) && simulated(clocks) ? ABOUT_MODELS[E.fitted] : ""}${FLICKER.has(E.algorithm) && fittedOf(clocks) ? ABOUT_FLICKER : ""}</p>`;
 }
 
 export function onControl(e) {
@@ -181,6 +193,7 @@ export function onControl(e) {
   if (k === "alg") update((s) => { s.ens.algorithm = v; });
   if (k === "steps") update((s) => { s.ens.steps = v; });
   if (k === "flicker") update((s) => { s.ens.flicker = v === "on"; });
+  if (k === "models") update((s) => { s.ens.fitted = v === "fitted"; });
   if (k === "pivot") update((s) => { s.ens.pivot = Number(v); });
   if (k === "against") update((s) => { s.ens.against = v; });
   if (k === "wmax") {
@@ -203,7 +216,7 @@ export function mount(el, c) {
 
 // Ask the core for the scale or the hat when it is missing or out of date.
 function ensure() {
-  const { body } = request();
+  const { body, clocks } = request();
   const key = JSON.stringify(body);
   if (state.ens.result?.key === key || state.ens.error?.key === key || inflight === key || !state.core.ok) return;
   inflightCtl?.abort();
@@ -217,7 +230,7 @@ function ensure() {
   }).catch((err) => {
     if (err.name === "AbortError" || inflight !== key) return;
     inflight = null;
-    update((s) => { s.ens.error = { key, message: inWords(err.message) }; s.ens.result = null; });
+    update((s) => { s.ens.error = { key, message: inWords(err.message, simulated(clocks)) }; s.ens.result = null; });
   });
 }
 
@@ -305,8 +318,8 @@ export function refresh() {
   const states = (i) => [[r.flicker.fm[i], "FM"], [r.flicker.pm[i], "PM"]].filter(([k]) => k).map(([k, kind]) => `${k} ${kind}`).join(" + ");
   const carried = r.flicker ? names.map((n, i) => [n, states(i)]).filter(([, s]) => s) : [];
   const flicker = !r.flicker ? "" : carried.length ? `Flicker states: ${carried.map(([n, s]) => `${h(n)} (${s})`).join(", ")}. ` : "No clock's fit has flicker that needs states. ";
-  // A Kalman scale shows the white FM fitted to each clock; a fit without any takes nearly all of the weight.
-  const fitted = r.models, bare = (fitted ?? []).flatMap((m, i) => (m.q1 === 0 && m.flicker_fm === 0 ? [names[i]] : []));
+  // A Kalman scale shows the white FM of each clock's model; a fit without any takes nearly all of the weight.
+  const fitted = r.models, bare = (r.fitted ? fitted : []).flatMap((m, i) => (m.q1 === 0 && m.flicker_fm === 0 ? [names[i]] : []));
   const unresolved = bare.length ? `The fit finds no white FM in ${bare.map(h).join(", ")}: the record does not resolve ${bare.length > 1 ? "them" : "it"}, and the scale follows ${bare.length > 1 ? "them" : "it"}. AT1 takes no model. ` : "";
   table.innerHTML = `<div class="card-row"><h2>Clocks</h2></div>
     <div class="tbl${fitted ? " fitted" : ""}"><div class="tbl-row tbl-head"><span>Clock</span><span>Weight</span><span>Mean</span><span>RMS error</span>${fitted ? "<span>White FM</span>" : ""}</div>

@@ -712,9 +712,10 @@ end
 
 # ── timescale ─────────────────────────────────────────────────────────────
 
-# White + random-walk FM clocks (four unless --clocks says otherwise), each a
-# factor of two above the last in level, read against a perfect reference.
-function synth_ensemble(o::Options)
+# The models of the simulated clocks: those of --noise-model, or white +
+# random-walk FM clocks (four unless --clocks says otherwise), each a factor
+# of two above the last in level.
+function synth_models(o::Options)
     tau0 = isnan(o.tau0) ? 1.0 : o.tau0
     ms = if isempty(o.models)
         [ClockModel(; tau0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:(o.clocks > 0 ? o.clocks : 4) - 1]
@@ -723,7 +724,12 @@ function synth_ensemble(o::Options)
     end
     length(ms) >= 2 || throw(usage_error("a time scale needs two or more clocks: --clocks 2 or more, " *
                                          "or --noise-model once per clock"))
-    cc, _ = simulate_ensemble(ms, o.synth, reference=0, rng=Random.Xoshiro(o.seed))
+    return ms
+end
+
+# The simulated clocks, read against a perfect reference.
+function synth_ensemble(o::Options)
+    cc, _ = simulate_ensemble(synth_models(o), o.synth, reference=0, rng=Random.Xoshiro(o.seed))
     return cc
 end
 
@@ -749,8 +755,10 @@ function read_ensemble(o::Options)
     return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
 end
 
-# The Kalman scales fit a model per clock (with --flicker, flicker states
-# included) and read the scale at --pivot. Returns the scale and the models.
+# The Kalman scales take a model per clock and read the scale at --pivot:
+# the models simulated clocks were made from, or, for a file and with
+# --fitted-models, those fitted from the readings (with --flicker, flicker
+# states included). Returns the scale and the models.
 function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     alg = Symbol(o.algorithm)
     o.flicker && !(alg === :greenhall || alg === :jones_tryon) && throw(usage_error("--flicker needs --algorithm greenhall or jones_tryon"))
@@ -761,7 +769,7 @@ function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     k = size(cc.x, 2)
     k >= 3 || throw(usage_error("--algorithm $(o.algorithm) fits a model per clock and needs three or more clocks"))
     1 <= o.pivot <= k || throw(usage_error("--pivot must be between 1 and $k"))
-    models = clock_models(cc; flicker=o.flicker)
+    models = o.synth > 0 && !o.fitted ? synth_models(o) : clock_models(cc; flicker=o.flicker)
     return timescale(cc; algorithm=alg, models, pivot=o.pivot, wmax=o.wmax), models
 end
 
@@ -772,7 +780,8 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
     r, models = run_timescale(cc, o, kalman)
     # A fitted model without white FM or flicker FM takes nearly all of the weight.
-    bare = String[cc.names[i] for i in eachindex(models) if models[i].q1 == 0 && models[i].flicker_fm == 0]
+    fitted = kalman && (o.synth == 0 || o.fitted)
+    bare = String[cc.names[i] for i in eachindex(models) if fitted && models[i].q1 == 0 && models[i].flicker_fm == 0]
     isempty(bare) || (o.note = "the fit finds no white FM in " * join(bare, ", ") *
                                ": the record does not resolve it, and the scale follows it; --algorithm at1 takes no model")
     late = max(1, N ÷ 2):N
@@ -809,7 +818,8 @@ function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
         print(io, '}')
     end
     json_key(io, "clocks"); json_array(io, cc.names)
-    if kalman      # the model fitted to each clock
+    if kalman      # the model of each clock, and whether it was fitted
+        json_key(io, "fitted"); json_bool(io, fitted)
         json_key(io, "models"); print(io, '[')
         for (i, m) in enumerate(models)
             i > 1 && print(io, ',')

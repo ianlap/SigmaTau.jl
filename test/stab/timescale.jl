@@ -261,6 +261,13 @@ using Statistics
         @test maximum(abs, jt.y .- rk.y) < 1e-3 * std(rk.y[late, 1])   # frequency estimates agree (Theorem 1)
         @test timescale_phase(timescale(cc; algorithm=:jones_tryon, models=ms, pivot=3)).x ≈ timescale_phase(jt).x atol=1e-12
         @test adev1(rk) < adev1(jt) < 1.6 * adev1(rk)             # the reduction quiets the scale at short τ
+        # Without the reduction the phase variances grow without bound (Greenhall
+        # 2003 §4): on noiseless readings of random-run FM the clock differences
+        # are lost in them near sample 3000, and the reduced filter runs on.
+        mr = fill(ClockModel(; tau0=1.0, q3=1e-32), 4)
+        cr, _ = simulate_ensemble(mr, 16384; reference=0, rng=Xoshiro(1))
+        @test_throws "grows without bound" timescale(cr; algorithm=:jones_tryon, models=mr)
+        @test timescale(cr; algorithm=:greenhall, models=mr).weights[end, :] ≈ fill(0.25, 4) atol=1e-3
         # Models with a drift state: the drift starts at zero (JT83 Fig. 1), as the
         # filter sees only the differences of the drifts. The scale stays that of
         # the models without one (within 8×10⁻¹⁰ s over 20 seeds); a drift fitted

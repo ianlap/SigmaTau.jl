@@ -49,7 +49,8 @@ These are the settings of the **Time scale** view.
 | **Pivot clock** | Greenhall, Jones–Tryon, Stein | The clock at which the scale is read |
 | **Largest weight** | AT1, AT2, Stein | The largest weight one clock may have, from ``1/k`` for ``k`` clocks to 1, which is no limit |
 | **Frequency steps** | AT2 | **Off**, **Best** or **Real**: whether the scale looks for frequency steps of a clock, and what it does on finding one |
-| **Flicker states** | Greenhall, Jones–Tryon | **Off** or **On**: whether the model of each clock keeps its flicker FM and flicker PM |
+| **Models** | Greenhall, Jones–Tryon, Stein, on simulated clocks | **As simulated** or **Fitted**: the models the clocks were made from, or models fitted from the comparisons as for a file |
+| **Flicker states** | Greenhall, Jones–Tryon, on fitted models | **Off** or **On**: whether the model of each clock keeps its flicker FM and flicker PM |
 | **Clocks against** | | **Reference** or **Scale**: what the curve of each clock is taken against ([What is shown](ensemble.md#What-is-shown)) |
 
 | Algorithm | Scale |
@@ -62,11 +63,24 @@ These are the settings of the **Time scale** view.
 | **Stein** | The scale of [Stein (2003)](@cite stein-2003-demystified), in the form that [Levine (2012)](@cite levine-2012-statistical-modeling) describes as KAS-2: a Kalman filter on the difference of each clock from the pivot, with weights for phase, frequency and aging. The weights shown are those of the phase |
 
 [`timescale`](@ref) describes each algorithm, its equations and where it
-departs from its source. The three Kalman scales need three or more clocks.
-They fit a model to each clock from the comparisons alone, as
-[`clock_models`](@ref) does.
+departs from its source. The three Kalman scales need three or more clocks
+and a model of each. For the clocks of a file they fit the models from the
+comparisons alone, as [`clock_models`](@ref) does.
 
-The model of a clock has white FM and random-walk FM, with the PM as the
+For simulated clocks **Models** chooses. **As simulated** takes the models
+the clocks were made from, and shows what the scale does when it knows its
+clocks. **Fitted** fits them as for a file, and shows what a record of
+that length lets the scale know. The two differ most at long averaging
+times, where the fit resolves the random-walk FM of the most stable clock
+least ([Fitted models](../reference/ensemble.md#Fitted-models)): of four
+simulated clocks, each with four times the noise of the one before,
+100 000 samples long, the Greenhall scale was at 0.87 of its most stable
+clock at every averaging time on the models as simulated, and on the
+fitted models at 0.87 up to 100 s, 0.93 at 1000 s and 1.03 at 3000 s
+(20 records). The fit has no term for random-run FM, and stops on clocks
+that have little else.
+
+The fitted model of a clock has white FM and random-walk FM, with the PM as the
 noise of its readings. With **Flicker states** off, flicker PM counts as
 noise of the readings too, and flicker FM is not fitted. With them on,
 flicker FM is fitted as well, and the model keeps the flicker FM and the
@@ -126,7 +140,7 @@ for each clock:
 | **Weight** | The weight at the end of the record |
 | **Mean** | The mean weight over the second half of the record |
 | **RMS error** | The rms prediction error over the second half, in seconds |
-| **White FM** | For a Kalman scale, the white FM ``q_1`` of the model fitted to the clock |
+| **White FM** | For a Kalman scale, the white FM ``q_1`` of the model of the clock |
 
 The Jones–Tryon scale has no weights: the plot of the weights is not shown,
 and the two weight columns are empty.

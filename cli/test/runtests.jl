@@ -458,11 +458,21 @@ mktempdir() do dir
         r = run_cli("timescale", "--synth", "2048", "--clocks", "6", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"clocks\":[\"clock 1\",\"clock 2\",\"clock 3\",\"clock 4\",\"clock 5\",\"clock 6\"]", r.out)
         @test length(csv_rows(run_cli("timescale", "--synth", "2048").out)) == 4
-        # A Kalman scale gives the fitted models, and names on stderr a clock
-        # whose fit has no white FM (200 samples do not resolve clock 2 here).
-        r = run_cli("timescale", "--synth", "200", "--algorithm", "stein", "--format=json", "--series", "0")
-        @test r.code == 0 && occursin("\"models\":[{\"R\":", r.out) && occursin("no white FM in clock 2", r.err)
-        @test isempty(run_cli("timescale", "--synth", "200", "--algorithm", "stein", "--quiet").err)
+        # A Kalman scale on simulated clocks takes the models they were made
+        # from. With --fitted-models it fits them as for a file, and names on
+        # stderr a clock whose fit has no white FM (200 samples do not resolve
+        # clock 2 here).
+        stein = ("timescale", "--synth", "200", "--algorithm", "stein", "--format=json", "--series", "0")
+        r = run_cli(stein...)
+        @test r.code == 0 && occursin("\"fitted\":false,\"models\":[{\"R\":0.0,\"q1\":1.0e-24,", r.out) && isempty(r.err)
+        r = run_cli(stein..., "--fitted-models")
+        @test r.code == 0 && occursin("\"fitted\":true,\"models\":[{\"R\":", r.out) && occursin("no white FM in clock 2", r.err)
+        @test isempty(run_cli(stein..., "--fitted-models", "--quiet").err)
+        # The fit belongs to simulated clocks under a Kalman scale, and --flicker to the fit.
+        @test run_cli("timescale", "--synth", "200", "--fitted-models").code == 1
+        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--fitted-models").code == 1
+        @test run_cli("timescale", "--synth", "200", "--algorithm", "greenhall", "--flicker").code == 1
+        @test run_cli("timescale", "--synth", "2048", "--algorithm", "greenhall", "--flicker", "--fitted-models").code == 0
         @test !occursin("\"models\"", run_cli("timescale", "--synth", "200", "--format=json").out)
         @test run_cli("timescale", tf).code == 1                       # no --value-cols
         @test run_cli("timescale", tf, "--value-cols", "2,2").code == 1
