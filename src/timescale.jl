@@ -519,7 +519,12 @@ and the paper's detection and correction of clock errors
 out of the measurement, as in §2 of the paper, which gives no rule for the
 scale. When the readings of a clock return after a gap, the scale takes a
 share of the clock's prediction error and steps. A clock first read after
-the start begins as in `:greenhall`.
+the start begins as in `:greenhall`. Without the reduction the phase
+variances of the filter grow without bound
+([Greenhall (2003), §4](@cite greenhall-2003-jones-tryon)). On a long
+record of clocks with noiseless readings and little white FM the
+differences of the clocks are lost in them, and the scale stops with an
+error.
 
 `:stein` is the scale of [Stein (2003)](@cite stein-2003-demystified), the
 KAS-2 algorithm that
@@ -561,6 +566,16 @@ pivot returns.
     long-term noise differs in kind, the scale can be less stable than its
     best clock. With two clocks the comparisons cannot tell which is the
     better, and the weights stay equal when one is read against the other.
+
+    Neither scale has a model for a drift that walks: the clocks of
+    [Weiss and Weissert (1991), §§1–2](@cite weiss-weissert-1991-at2) have
+    white FM and flicker or random-walk FM, and a drift that is entered and
+    not estimated. Among clocks of random-run FM the weights wander and can
+    settle on one clock. In simulation (four equal clocks of random-run FM,
+    16 384 samples, 20 records) the Hadamard deviation of the scale from 16
+    to 1024 s was 0.74 to 0.79 of that of a clock for `:at1` and 0.89 to
+    0.98 for `:at2`, where equal weights give 0.50; with `wmax = 0.3` it was
+    0.52 to 0.54 and 0.61 to 0.69.
 
 !!! note "Missing readings"
     No scale steps when a clock drops out. When the readings of a clock
@@ -963,7 +978,14 @@ function _reduced_kalman(cc::ClockComparisons, models::AbstractVector{ClockModel
             end
             z = cc.x[n, rest] .- cc.x[n, p]
             D = Symmetric(H * P * H' + R)
-            K = _rdiv_cov(P * H', Matrix(D))
+            K = try
+                _rdiv_cov(P * H', Matrix(D))
+            catch e
+                e isa SingularException && algorithm === :jones_tryon || rethrow()
+                # Greenhall 2003 §4: without the reduction the phase variances grow without bound.
+                throw(ArgumentError("timescale: the phase covariance of :jones_tryon grows without bound, and at sample $n " *
+                                    "the differences of the clocks are lost in it; :greenhall reduces it at every sample"))
+            end
             X̂ = X̂ + K * (z - H * X̂)
             P = P - K * H * P
             P = (P + P') ./ 2

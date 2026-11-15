@@ -126,6 +126,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   await t.test("Ensemble: a Kalman scale with flicker states", async () => {
     await page.click("a[data-page=ensemble]");
     await page.selectOption("#side [data-ctl=alg]", "greenhall");
+    // Simulated clocks run on the models they were made from; flicker states belong to fitted ones.
+    await page.waitForFunction(() => /White FM[\s\S]*1\.0e-24/.test(document.querySelector("#page [data-ref=table]")?.innerText ?? ""), null, SLOW);
+    assert.equal(await page.locator("#side [data-ctl=flicker]").count(), 0);
+    await page.selectOption("#side [data-ctl=models]", "fitted");
     await page.selectOption("#side [data-ctl=flicker]", "on");
     await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
     assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
@@ -133,7 +137,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await plotted("#page [data-ref=adev]");
     // The dotted lines of simulated clocks are the clocks as read, which the
     // scale compares with; "Scale" gives each clock against the scale.
-    const ts = JSON.parse(execFileSync(CLI, ["timescale", "--synth", "16384", "--seed", "42", "--algorithm", "greenhall", "--pivot", "1", "--flicker", "--format", "json"])).timescale;
+    const ts = JSON.parse(execFileSync(CLI, ["timescale", "--synth", "16384", "--seed", "42", "--algorithm", "greenhall", "--pivot", "1", "--fitted-models", "--flicker", "--format", "json"])).timescale;
     const dotted = () => page.evaluate(() => document.querySelector("#page [data-ref=adev]").data[1].y);
     assert.deepEqual(await dotted(), ts.adev.readings[0]);
     assert.match(await page.locator("#page .ens-note").innerText(), /the scale is 0\.\d+ of its most stable clock/);
