@@ -44,6 +44,13 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   page.on("console", (m) => m.type() === "error" && !/vendor\/plotly/.test(m.location().url) && errors.push(m.text()));
   const settled = () => page.waitForFunction(() => !/Reading|Running|Computing|Starting/.test(document.getElementById("status-text").textContent), null, SLOW);
   const plotted = (sel) => page.waitForFunction((s) => document.querySelector(s)?.data?.length > 0, sel, SLOW);
+  // A results entry of the File menu: its label, and the file it writes.
+  const exported = async (kind) => {
+    await page.click("#export-btn");
+    const entry = page.locator(`#export-menu [data-export=${kind}]`), label = await entry.innerText();
+    const [file] = await Promise.all([page.waitForEvent("download"), entry.click()]);
+    return { label, name: file.suggestedFilename(), text: readFileSync(await file.path(), "utf8") };
+  };
 
   await t.test("Data: a Stable32 file through the import dialog", async () => {
     await page.goto(base + "#data");
@@ -52,6 +59,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
     assert.match(await page.locator("#record-chip-text").innerText(), /stable32gen\.DAT.*8,?\s?192 samples/);
+    // The Data page has no results of its own to export.
+    await page.click("#export-btn");
+    assert.ok(await page.locator("#export-menu [data-export=tsv]").isDisabled());
+    await page.click("#export-btn");
   });
 
   await t.test("Stability: the plotted σ equal the command line's", async () => {
@@ -91,6 +102,11 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
     const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
     assert.deepEqual(rms, doc.holdover.rms);
+    // The File menu writes this page's table, not the Stability results.
+    const tsv = await exported("tsv");
+    assert.deepEqual([tsv.label, tsv.name], ["Holdover table as TSV", "sigmatau-holdover.tsv"]);
+    const [head, ...rows] = tsv.text.trim().split("\n").map((l) => l.split("\t"));
+    assert.deepEqual(rows.map((r) => Number(r[head.indexOf("rms_s")])), doc.holdover.rms);
     // A stretch of twice the holdover time: equal to √6·TDEV at τ₀.
     await page.click("[data-ctl=frac][data-v='0']");
     await page.waitForFunction(() => document.querySelector("#page .hold-card .cell-kv")?.innerText.includes("2τ"));
@@ -118,6 +134,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const doc = JSON.parse(execFileSync(CLI, [...args, "--time-constant", "64"])).steer;
     assert.deepEqual(await curve("Steered"), doc.steered);
     assert.deepEqual(await curve("Predicted (clock model)"), doc.predicted.adev);
+    const json = await exported("json");
+    assert.deepEqual([json.label, json.name], ["Steering table as JSON", "sigmatau-steering.json"]);
+    assert.deepEqual(JSON.parse(json.text)[0].steer.steered, doc.steered);
     // Gains from a cost: the loop card shows the command line's phase gain.
     await page.click('[data-ctl=from][data-v="cost"]');
     await page.waitForFunction(() => /Rings/.test(document.querySelector("#page .steer-card")?.innerText ?? ""), null, SLOW);
@@ -149,6 +168,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator("#page .ens-note").innerText(), /the scale is 0\.\d+ of its most stable clock/);
     await page.selectOption("#side [data-ctl=against]", "scale");
     assert.deepEqual(await dotted(), ts.adev.clocks[0]);
+    const tsv = await exported("tsv");
+    assert.equal(tsv.label, "Time scale table as TSV");
+    assert.match(tsv.text, /^clock\tagainst\ttau_s\tadev\tweight\tweight_mean\terror_rms_s\ntime scale\treference\t/);
   });
 
   await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
