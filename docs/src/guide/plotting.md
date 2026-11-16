@@ -52,9 +52,15 @@ q = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 3e-12), rng = Xoshiro(6))
 plot([adev(p), adev(q)]; label = ["clock A" "clock B"], legend = :bottomleft)
 ```
 
-`plot!(adev(q))` adds a curve to a figure that exists. The time deviations
-([`tdev`](@ref), [`htdev`](@ref), [`ttotdev`](@ref)) are in seconds, so
-give them axes of their own.
+`plot!(adev(q))` adds a curve to a figure that exists.
+
+The time deviations ([`tdev`](@ref), [`htdev`](@ref), [`ttotdev`](@ref))
+and the time errors ([`mtie`](@ref), [`tierms`](@ref)) are in seconds.
+Beside the σ_y estimators they get axes of their own:
+
+```@example plotting
+plot(stability(p; devs = (:adev, :mdev, :tdev)); legend = :bottomleft)
+```
 
 ## A reference line
 
