@@ -20,7 +20,7 @@ import { openHelpMenu } from "./helpmenu.js";
 import { buildReport } from "./report.js";
 import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly, css } from "./plot.js";
-import { thousands, num, duration, interval, escapeHtml as h } from "./format.js";
+import { thousands, num, duration, interval, share, FILL_TESTED, escapeHtml as h } from "./format.js";
 
 const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, steering, ensemble, live, help };
 const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "steering", "ensemble", "live"];
@@ -120,7 +120,7 @@ async function importFile(file, clock, prev) {
         kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         sourceInfo: settings.sourceInfo,
-        keep_zeros: settings.keep_zeros, fillgaps: fillNeeded(settings), remove_outliers: false, range: null, result: null,
+        keep_zeros: settings.keep_zeros, fillgaps: fillNeeded(settings), remove_outliers: false, range: null, dead_time: null, result: null,
       });
       touched.push(c);
     });
@@ -340,8 +340,8 @@ function renderChip() {
   if (!withRec.length) { text.innerHTML = "No record"; return; }
   if (withRec.length === 1 && !multi()) {
     const c = withRec[0], r = c.record;
-    const facts = [`${thousands(r.n)} samples`, `τ<sub>0</sub> ${interval(r.tau0)}`, duration(r.n * r.tau0),
-      fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
+    const facts = [`${thousands(r.n)} samples`, ...(r.check.filled ? [`${share(r.check.filled, r.n)} filled`] : []),
+      `τ<sub>0</sub> ${interval(r.tau0)}`, duration(r.n * r.tau0), fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
     text.innerHTML = `${h(c.source.type === "file" ? c.source.name : "synthetic record")} <span class="facts">${facts.join(" · ")}</span>`;
     return;
   }
@@ -355,6 +355,7 @@ function renderStatus() {
   const hintEl = document.getElementById("status-hint");
   let kind, msg;
   const anyRecord = state.clocks.some((c) => c.record);
+  const overFilled = state.clocks.find((c) => c.record && c.record.check.filled > FILL_TESTED * c.record.n);
   if (transient) [kind, msg] = [transient.kind, transient.text];
   else if (!state.core.ok) [kind, msg] = ["error", "No analysis core. Start the explorer with serve.py."];
   else if (state.run.state === "running") [kind, msg] = ["busy", `Running ${state.devs.map(label).join(", ")}…`];
@@ -362,9 +363,13 @@ function renderStatus() {
   else if (!anyRecord) [kind, msg] = state.clocks.some((c) => c.error) ? ["error", "No record could be read. The Data page says why."] : ["", "No record. Open a file on the Data page."];
   else if (state.run.stale) [kind, msg] = ["warn", state.run.stale === "record" ? "New record" : "Inputs changed"];
   else [kind, msg] = ["good", "Up to date"];
+  if (overFilled && !transient && (kind === "good" || kind === "warn")) {
+    kind = "warn";
+    msg += ` · gap filling made ${share(overFilled.record.check.filled, overFilled.record.n)} of ${overFilled.name}, past the 30 % it was tested for`;
+  }
   dot.className = `status-dot ${kind}`;
   text.textContent = msg;
-  hintEl.textContent = kind === "warn" && !transient ? "Run analysis (F5) to update Stability and Spectrum" : (page?.hint() ?? "");
+  hintEl.textContent = state.run.stale && kind === "warn" && !transient ? "Run analysis (F5) to update Stability and Spectrum" : (page?.hint() ?? "");
 }
 
 function render() {
@@ -390,7 +395,20 @@ const exportMenu = document.getElementById("export-menu");
 exportBtn.addEventListener("click", () => {
   exportMenu.hidden = !exportMenu.hidden;
   exportBtn.setAttribute("aria-expanded", String(!exportMenu.hidden));
+  if (!exportMenu.hidden) nameResults();
 });
+
+// The results entries say what they write: the table of the page in view.
+// A page with no results of its own (Data, Synthesis, Live, Help) has none.
+function nameResults() {
+  const r = page?.results?.();
+  for (const [kind, fmt] of [["tsv", "TSV"], ["json", "JSON"]]) {
+    const b = exportMenu.querySelector(`[data-export=${kind}]`);
+    b.textContent = `${r?.what ?? "Results"} as ${fmt}`;
+    b.disabled = !r;
+    b.title = r ? "" : "This page has no results of its own";
+  }
+}
 // A click outside a menu of the top bar closes it.
 document.addEventListener("click", (e) => {
   for (const wrap of document.querySelectorAll(".menu-wrap")) {
@@ -403,7 +421,6 @@ exportMenu.addEventListener("click", async (e) => {
   const kind = e.target.closest("[data-export]")?.dataset.export;
   if (!kind) return;
   exportMenu.hidden = true;
-  const analyzed = state.clocks.filter((c) => c.result);
   if (kind === "save-session") {
     if (!state.clocks.length) return ctx.status("warn", "There is nothing to save yet.");
     return saveFile("sigmatau-session.json", new Blob([sessionText()], { type: "application/json" }));
@@ -424,17 +441,12 @@ exportMenu.addEventListener("click", async (e) => {
     const blob = await plotImage(kind);
     if (!blob) return ctx.status("warn", "Nothing to export on this page yet.");
     saveFile(`sigmatau-${state.page}.${kind}`, blob);
-  } else if (!analyzed.length) {
-    ctx.status("warn", "Run the analysis first; there are no results to export.");
-  } else if (kind === "json") {
-    const out = analyzed.map((c) => ({ clock: c.name, ...c.result.doc }));
-    saveFile("sigmatau-results.json", new Blob([JSON.stringify(analyzed.length === 1 ? out[0] : out, null, 2)], { type: "application/json" }));
   } else {
-    const lines = ["clock\testimator\ttau_s\tsigma\tci_lo\tci_hi\tedf\tnoise\tneff"];
-    for (const c of analyzed) for (const r of c.result.results) r.tau.forEach((t, i) => {
-      lines.push([c.name, r.dev, t, r.sigma[i], r.ci_lo[i] ?? "", r.ci_hi[i] ?? "", r.edf[i] ?? "", r.noise[i] ?? "", r.neff[i] ?? ""].join("\t"));
-    });
-    saveFile("sigmatau-results.tsv", new Blob([lines.join("\n") + "\n"], { type: "text/tab-separated-values" }));
+    const r = page?.results?.();
+    if (!r) return;
+    if (!r.rows.length) return ctx.status("warn", r.none ?? "Nothing to export on this page yet.");
+    if (kind === "json") saveFile(`sigmatau-${r.file}.json`, new Blob([JSON.stringify(r.json, null, 2)], { type: "application/json" }));
+    else saveFile(`sigmatau-${r.file}.tsv`, new Blob([[r.columns, ...r.rows].map((row) => row.map((v) => v ?? "").join("\t")).join("\n") + "\n"], { type: "text/tab-separated-values" }));
   }
 });
 

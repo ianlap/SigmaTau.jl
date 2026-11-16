@@ -2,7 +2,7 @@
 // is time and which is the value, the record type, units and τ0, and returns
 // the reader settings for the core. openImport() resolves to null on cancel.
 import { sniff, guessRoles, clockLabels, unitNotes, clockStats, thin, parseFactor, scaleFields, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
-import { escapeHtml as h, thousands, duration, interval, num } from "./format.js";
+import { escapeHtml as h, thousands, duration, interval, num, share, FILL_TESTED } from "./format.js";
 import { seriesColor, hexAlpha } from "./plot.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
@@ -57,7 +57,8 @@ export function openImport(file, prev = null) {
     // A Stable32 file marks a gap with 0, except the end points of phase data.
     const zeros = s.format !== "stable32" ? 0 : st.values.reduce((a, c) => a + (s.columns[c - 1] ?? [])
       .filter((x, i, v) => x === 0 && !(st.kind === "phase" && (i === 0 || i === v.length - 1))).length, 0);
-    return { ts, tau0, per, gaps: sum("gaps"), missing: sum("missing"), zeros };
+    const slots = per.reduce((a, p) => a + (p.ts ? Math.round(p.ts.span / p.ts.tau0) + 1 : 0), 0);
+    return { ts, tau0, per, gaps: sum("gaps"), missing: sum("missing"), slots, zeros };
   };
   const colName = (c) => s.names[c - 1] || `column ${c}`;
   // What a clock is called when nothing is typed: its column name, or the file's name for a single clock.
@@ -100,7 +101,7 @@ export function openImport(file, prev = null) {
     const finish = (out) => { dlg.close(); resolve(out); };
 
     const render = () => {
-      const { ts, tau0, per, gaps, missing, zeros } = derived();
+      const { ts, tau0, per, gaps, missing, slots, zeros } = derived();
       const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
       if (!units.some(([f]) => f === st.scaling)) st.scaling = 1;
       const factor = parseFactor(st.factor);
@@ -157,9 +158,10 @@ export function openImport(file, prev = null) {
       const spark = lines ? `<svg viewBox="0 0 330 92" preserveAspectRatio="none" width="100%" height="100%">${lines}</svg>` : "";
 
       const gap = gaps
-        ? `<div class="gap-card"><b>${gaps} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}. ${st.kind === "phase"
+        ? `<div class="gap-card"><b>${thousands(gaps)} gap${gaps > 1 ? "s" : ""} in the ${s.clocks ? "clock epochs" : "time column"}</b>${thousands(missing)} missing sample${missing === 1 ? "" : "s"}, ${share(missing, slots)} of the span. ${st.kind === "phase"
           ? "They stay in the record as gaps. <i>Fill gaps by reflection</i> on the Data page fills them, for the estimators that need a complete record."
-          : "A frequency record cannot be read with gaps, so <i>Fill gaps by reflection</i> is on for it on the Data page."}</div>`
+          : `A frequency record cannot be read with gaps, so <i>Fill gaps by reflection</i> is on for it on the Data page${missing > FILL_TESTED * slots
+            ? `: the filler makes ${share(missing, slots)} of what is analyzed, more than the 30 % it was tested for, and the results describe it as much as the clock.` : "."}`}</div>`
         : "";
       const notes = unitNotes({ names: [file.name, ...st.values.map(colName)], kind: st.kind, scale: factor || st.scaling, columns: st.values.map((c) => s.columns[c - 1] ?? []) });
       const unitCard = notes.length

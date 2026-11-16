@@ -6,6 +6,18 @@ opens on this page.
 
 [![The Stability page with one clock](../assets/explorer/stability.png)](../assets/explorer/stability.png)
 
+## The readout
+
+Above the plot a line gives the answer first. With one clock it names the
+estimator of [the table](#The-table): its lowest value and the
+averaging time where it falls, its value at the shortest averaging time, and
+the noise types from short to long τ. When the lowest value is at the end of
+the τ range it says so, since the curve has not turned. With several clocks
+it names the most stable clock at the averaging time of
+[Compare at τ](#Several-clocks), for the first estimator, and how many
+times higher the next clock is. In a narrow window only the first two items
+stay.
+
 ## The plot
 
 **Frequency σy(τ)** and **Time σx(τ)** switch between the two kinds of

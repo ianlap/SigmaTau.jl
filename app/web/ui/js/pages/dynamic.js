@@ -5,7 +5,7 @@
 // the estimator, window or record changes; no Run is needed.
 import { state, update, visibleClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
-import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale } from "../plot.js";
+import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale, LINE_W } from "../plot.js";
 import { sci, num, thousands, timeAxisUnit, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
@@ -325,7 +325,7 @@ function drawSlice(area, ready) {
     const color = seriesColor(c.slot);
     traces.push({
       x: d.t.map((t) => t / tf), y: d.map.map((row) => row[j]), name: exact ? c.name : `${c.name} (τ = ${num(d.tau[j], 4)} s)`, mode: "lines+markers",
-      line: { color, width: 2 }, marker: { color, size: 5 },
+      line: { color, width: LINE_W }, marker: { color, size: 5 },
       hovertemplate: `<b>${h(c.name)}</b><br>t = %{x:.6g} ${tu}<br>${NAME[d.dev]} = %{y:.3e}<extra></extra>`,
     });
     const r = c.result?.results.find((x) => x.dev === whole);
@@ -402,6 +402,18 @@ function renderCell(box, c, d) {
       <div class="kv"><span>${NAME[d.dev]}</span><span class="mono">${sci(d.map[pin.i][pin.j], 3)}</span></div>
       <div class="kv" title="${d.dev === "dhdev" ? "HDEV" : "ADEV"} of the whole record at this τ, from the last run"><span>Whole record</span><span class="mono">${wi >= 0 ? sci(whole.sigma[wi], 3) : "–"}</span></div>
     </div>`;
+}
+
+// The File menu's results: each map shown, a row for each window and τ; the
+// JSON in the core's names.
+export function results() {
+  const maps = visibleClocks().filter((c) => c.record && c.dynamic?.key === dynamicKey(c) && !c.dynamic.error);
+  return {
+    what: "Dynamic maps", file: "dynamic",
+    columns: ["clock", "deviation", "t_s", "tau_s", "dev"],
+    rows: maps.flatMap(({ name, dynamic: d }) => d.t.flatMap((t, i) => d.tau.map((tau, j) => [name, d.dev, t, tau, d.map[i][j]]))),
+    json: maps.map(({ name, dynamic: d }) => ({ clock: name, dynamic: { deviation: d.dev, window: d.window, step: d.step, t: d.t, tau: d.tau, dev: d.map } })),
+  };
 }
 
 export function hint() {
