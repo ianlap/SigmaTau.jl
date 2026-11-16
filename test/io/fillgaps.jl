@@ -61,6 +61,35 @@
         @test all(isfinite, fillgaps(FrequencyData(y, 1.0); form=:phase).y)
     end
 
+    # A fill is the samples beside it reversed and inverted, plus the line
+    # that joins it and the parabola set aside as the trend: added to the
+    # samples in their order, it leaves no third difference.
+    bend(fill, source) = maximum(abs, diff(diff(diff(fill .+ reverse(source)))))
+
+    @testset "outward from the longest run: the gap after it from the left, the gap before it from the right" begin
+        x = randn(Xoshiro(2), 512)
+        d = copy(x); d[61:100] .= NaN; d[401:440] .= NaN          # runs of 60, 300 and 72
+        f = fillgaps(PhaseData(d, 1.0); form=:phase).x
+        @test bend(f[401:440], x[361:400]) < 1e-9
+        @test bend(f[61:100], x[101:140]) < 1e-9
+    end
+
+    @testset "the longest run may be the first, and a fill serves the next gap" begin
+        d = randn(Xoshiro(2), 305)
+        d[101:160] .= NaN; d[211:265] .= NaN                      # runs of 100, 50 and 40
+        f = fillgaps(PhaseData(d, 1.0); form=:phase).x
+        @test bend(f[101:160], d[41:100]) < 1e-9
+        @test bend(f[211:265], f[156:210]) < 1e-9                 # 5 filled samples and the run of 50
+    end
+
+    @testset "a gap longer than the runs beside it is returned to" begin
+        d = fill(NaN, 2000)
+        for run in (1:150, 601:640, 1101:1400, 1801:2000)         # gaps of 450, 460 and 400
+            d[run] = randn(Xoshiro(first(run)), length(run))
+        end
+        @test all(isfinite, fillgaps(PhaseData(d, 1.0); form=:phase).x)
+    end
+
     @testset "an unfillable layout throws instead of hanging" begin
         # Neither gap has enough data on either side to mirror.
         x = fill(NaN, 40); x[1:5] .= 1.0:5.0; x[30:32] .= 0.0

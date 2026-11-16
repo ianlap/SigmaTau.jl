@@ -402,6 +402,36 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
+  await t.test("Ensemble: two columns as two channels, with the command line's cross deviation once their gaps are filled", async () => {
+    const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
+    const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "three.csv");   // the file of the step above
+    writeFileSync(file, rows.map((i) => [i, clock(i, 1), clock(i, 2), clock(i, 3)].join(",")).join("\n"));
+    const n = errors.length;
+    await page.click("[data-ctl=view][data-v=cross]");
+    await page.locator("#page [data-ref=empty]", { hasText: "turn on Fill gaps by reflection on the Data page" }).waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+    await page.click("a[data-page=data]");
+    await page.click("input[data-field=fillgaps]");
+    await settled();
+    await page.click("a[data-page=ensemble]");
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]")?.data?.some((d) => d.name === "Cross"), null, SLOW);
+    const [shown, limit] = await page.evaluate(() => ["Cross", "Cross, upper limit"].map((n) => document.querySelector("#page [data-ref=adev]").data.find((d) => d.name === n).y));
+    const doc = JSON.parse(execFileSync(CLI, ["cross", file, "--value-cols", "2,3", "--fillgaps", "--format", "json"])).cross_adev;
+    // The deviation where the device is resolved, √(covariance + uncertainty) as the limit where it is not.
+    const resolved = doc.covar.map((v, i) => v > doc.uncertainty[i]);
+    assert.deepEqual(shown, doc.dev.map((v, i) => (resolved[i] ? v : null)));
+    assert.deepEqual(limit, doc.covar.map((v, i) => (resolved[i] || v + doc.uncertainty[i] <= 0 ? null : Math.sqrt(v + doc.uncertainty[i]))));
+    assert.equal(await page.evaluate(() => document.querySelector("#page [data-ref=weights]").data.length), 4, "cross-spectrum, its floor and each channel");
+    const m = errors.length;
+    await page.click("[data-ctl=view][data-v=hat]");   // as the step above left it, refused again
+    await page.locator("#page [data-ref=empty]", { hasText: "The KLTS interval needs a file without missing samples" }).waitFor(SLOW);
+    await page.click("a[data-page=data]");
+    await page.click("input[data-field=fillgaps]");
+    await settled();
+    assert.ok(errors.splice(m).every((e) => / 422 /.test(e)));
+  });
+
   await t.test("Data at 960 px: a long file name and the plot's header stay inside their cards", async () => {
     await page.setViewportSize({ width: 960, height: 800 });
     await page.click("a[data-page=data]");

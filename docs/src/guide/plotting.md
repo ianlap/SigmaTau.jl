@@ -116,6 +116,46 @@ heatmap(d.t, d.tau, log10.(d.dev'); yscale = :log10, xlabel = "time (s)",
         ylabel = "τ (s)", title = "log10 of the Allan deviation")
 ```
 
+## Models, holdover, steering and time scales
+
+A [`PowerLawFit`](@ref) plots the measured points, the model through them
+and, dashed, each noise type of the model alone:
+
+```@example plotting
+fit = powerlaw_fit(r)
+plot(fit; legend = :bottomleft)
+```
+
+A [`HoldoverResult`](@ref) plots the RMS time error, the error that a
+share of the trials stay within and the largest, against holdover time,
+with the limit asked for as a line. A [`HoldoverPrediction`](@ref) plots
+the error the noise model predicts and what each noise type adds to it:
+
+```@example plotting
+plot(holdover(p; train = 512, tau = [16, 64, 256, 1024], limit = 1e-9);
+     legend = :topleft)
+```
+
+A [`KalmanResult`](@ref) plots the phase and the frequency that the filter
+estimates, over time, each with a band of one standard deviation. The
+frequency includes the flicker states of the model:
+
+```@example plotting
+plot(kalman_filter(p, clock_model(fit)))
+```
+
+A [`TimescaleResult`](@ref) plots each clock against the scale and, for
+the algorithms that weigh the clocks, their weights. A
+[`SteeringResult`](@ref) plots the steered phase and the frequency
+correction over time, and a [`SteeringPrediction`](@ref) the Allan
+deviation of the steered clock.
+
+```@example plotting
+ms = [ClockModel(; tau0 = 1.0, q1 = q, q2 = 1e-6q) for q in (1e-24, 4e-24, 1.6e-23)]
+cc, _ = simulate_ensemble(ms, 4096; reference = 0, rng = Xoshiro(1))
+plot(timescale(cc; algorithm = :at1))
+```
+
 ## Tables
 
 A result prints as a table, one row for each averaging time:

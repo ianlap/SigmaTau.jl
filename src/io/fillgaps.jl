@@ -1,32 +1,48 @@
-# Gap filling by reflection, after Howe and Schlossberger (2022) and the
-# script their paper names as its algorithm (Champagne, Howe and
-# Schlossberger (2021), fillgaps.py). A gap of n samples takes the n samples
-# beside it, reversed and inverted, and a straight line is added so that the
-# low-pass-filtered fill meets the filtered data at both ends. The samples
-# come from the run before the gap, from the run after it when that one is
-# too short, and half from each side when neither is long enough. Gaps are
-# filled outward from the longest run of data, so a fill can serve the next
-# gap.
+# Gap filling by reflection: the method of Howe and Schlossberger (2022),
+# "Characterizing Frequency Stability Measurements Having Multiple Data
+# Gaps", Sec. III and Appendix. The paper states it in prose. Its numbered
+# form is that of the authors' preprint (Howe, Champagne and Schlossberger
+# (2021), "Time-series Imputation Algorithm", Sec. II-D), which adds step 1
+# and the passing over of step 5:
 #
-# The method leaves two things open, which `_fillgaps` sets from the record
+#   1. A gap of one sample takes the mean of its neighbors.
+#   2. The gap after the longest run of samples is filled first,
+#   3. then each gap in turn to the end of the record.
+#   4. The record is reversed and steps 2 and 3 are run again, which fills
+#      the gaps before the longest run from the data after them.
+#   5. A gap of n samples takes the n samples before it, reversed in time
+#      and inverted in sign; those after it where the run before is shorter
+#      than n; and half from each side where both are. Where neither run
+#      holds half, the gap is passed over and returned to after step 4, when
+#      a fill beside it may serve. A straight line is added to the fill, by
+#      the paper's Appendix: the difference of its ends is set to that of
+#      the low-pass-filtered data beside the gap, so that the filtered fill
+#      meets the filtered data at both ends.
+#
+# The filter is the paper's Eq. (3). Its constant is that of the authors'
+# script (Champagne, Howe and Schlossberger (2021), fillgaps.py), because
+# the f and T of the equation can be read in more than one way.
+#
+# The papers leave two things open, which `_fillgaps` sets from the record
 # (see `fillgaps`): the series that is filled, phase or frequency, and the
 # span the filter averages over. The trend of the series, a frequency offset
 # and drift, is taken out first and put back after: the filter pads a block
 # with its mirror image, which turns a slope into a triangle wave and pulls
 # the filtered end points off the data.
 #
-# Four details differ from the script on purpose. The script's filter gain
-# is one bin off in the mirrored half of the spectrum. Its line stops short
-# of the end offset. Where half the fill comes from each side it filters the
-# left half twice and adds a middle sample only for gaps of 4j + 1 samples.
-# And it filters whole runs for the levels beside a gap, where a window
-# serves here.
+# Five details differ from the script on purpose. It fills the gaps before
+# the longest run from the data before them, without the reversal of step 4.
+# Its filter gain is one bin off in the mirrored half of the spectrum. Its
+# line stops short of the end offset. Where half the fill comes from each
+# side it filters the left half twice and adds a middle sample only for gaps
+# of 4j + 1 samples. And it filters whole runs for the levels beside a gap,
+# where a window serves here.
 
-# The low-pass filter of the paper's Eq. (3) as the script has it. `x` is
-# padded with its mirror image on both sides, its spectrum is multiplied by
-# exp(−span·|k|/L) over the L bins of the padded block, and the middle third
-# is returned. It averages over about `span` samples; the script's constant
-# is 16.
+# The low-pass filter of Howe and Schlossberger (2022), Eq. (3), with the
+# script's constant. `x` is padded with its mirror image on both sides, its
+# spectrum is multiplied by exp(−span·|k|/L) over the L bins of the padded
+# block, and the middle third is returned. It averages over about `span`
+# samples; the script's constant is 16.
 function _howe_filter(x::AbstractVector{<:Real}, span::Int)
     n = length(x)
     n == 0 && return Float64[]
@@ -38,13 +54,20 @@ function _howe_filter(x::AbstractVector{<:Real}, span::Int)
     return real.(ifft(F))[n+1:2n]
 end
 
+# The length, up to `n`, of the run of samples that starts at `i`, beside a
+# gap, and reaches away from it (`dir` -1 leftward, +1 rightward).
+function _run_beside(x::Vector{Float64}, i::Int, dir::Int, n::Int)
+    k = 0
+    while k < n && 1 <= i + dir * k <= length(x) && !isnan(x[i + dir * k])
+        k += 1
+    end
+    return k
+end
+
 # The filtered value at `i`, the end of a run of samples, from up to `w`
 # samples of that run reaching away from the gap (`dir` -1 leftward, +1 rightward).
 function _edge_filtered(x::Vector{Float64}, i::Int, dir::Int, w::Int, span::Int)
-    j = i
-    while abs(j - i) + 1 < w && 1 <= j + dir <= length(x) && !isnan(x[j + dir])
-        j += dir
-    end
+    j = i + dir * (_run_beside(x, i, dir, w) - 1)
     f = _howe_filter(view(x, min(i, j):max(i, j)), span)
     return dir < 0 ? f[end] : f[1]
 end
@@ -100,208 +123,79 @@ function _fill_singletons!(x::Vector{Float64}, gaps::Vector{Tuple{Int,Int}})
     return gaps
 end
 
-"""
-    _choose_initial_gap(gaps) → Int
-
-1-based index into `gaps` of the gap immediately following the largest
-continuous data run between consecutive gaps. Returns `1` when there is
-only one gap.
-"""
-function _choose_initial_gap(gaps::Vector{Tuple{Int,Int}})
-    length(gaps) <= 1 && return 1
-    maxdiff = 0
-    pick    = 1
-    for k in 1:length(gaps) - 1
-        d = gaps[k + 1][1] - gaps[k][2]
-        if d > maxdiff
-            maxdiff = d
-            pick    = k + 1
-        end
-    end
-    return pick
-end
-
-# --- per-gap point selection ----------------------------------------------
-# Returns one of:
-#   :left, view-into-x:            sizegap points to the left of the gap
-#   :right, view-into-x:           sizegap points to the right
-#   :both, (left_view, right_view): half-sized chunks from each side
-#   :none, nothing:                 cannot fill (caller advances/retreats)
-#   :done, nothing:                 globally unfillable, caller stops
-function _check_right(x, gaps, curgap, sizegap, gap_num, gap_total)
-    rightlen = length(x) - curgap[2]
-    if rightlen >= sizegap
-        if gap_num == gap_total
-            return :right, view(x, curgap[2] + 1 : curgap[2] + sizegap)
-        else
-            g_next = gaps[gap_num + 1]
-            if g_next[1] - curgap[2] - 1 >= sizegap
-                return :right, view(x, curgap[2] + 1 : curgap[2] + sizegap)
-            end
-        end
-    end
-    return _check_both_sides(x, gaps, curgap, sizegap, gap_num, gap_total)
-end
-
-function _check_left(x, gaps, curgap, sizegap, gap_num, gap_total)
-    if gap_num > 1
-        g_prev = gaps[gap_num - 1]
-        if curgap[1] - g_prev[2] - 1 >= sizegap
-            return :left, view(x, curgap[1] - sizegap : curgap[1] - 1)
-        end
-    elseif curgap[1] > sizegap
-        return :left, view(x, curgap[1] - sizegap : curgap[1] - 1)
-    end
-    return _check_right(x, gaps, curgap, sizegap, gap_num, gap_total)
-end
-
-function _check_both_sides(x, gaps, curgap, sizegap, gap_num, gap_total)
-    half = fld(sizegap, 2)
-    half == 0 && return :none, nothing
-    if gap_num == 1
-        if gap_total == 1
-            if curgap[1] > half && curgap[2] <= length(x) - half
-                return :both,
-                       (view(x, curgap[1] - half : curgap[1] - 1),
-                        view(x, curgap[2] + 1   : curgap[2] + half))
-            end
-            return :done, nothing
-        else
-            g_next = gaps[gap_num + 1]
-            if curgap[1] > half && g_next[1] - curgap[2] - 1 >= half
-                return :both,
-                       (view(x, curgap[1] - half : curgap[1] - 1),
-                        view(x, curgap[2] + 1   : curgap[2] + half))
-            end
-            return :none, nothing
-        end
-    elseif gap_num == gap_total
-        g_prev = gaps[gap_num - 1]
-        if curgap[1] - g_prev[2] - 1 >= half && curgap[2] <= length(x) - half
-            return :both,
-                   (view(x, curgap[1] - half : curgap[1] - 1),
-                    view(x, curgap[2] + 1   : curgap[2] + half))
-        end
-        return :none, nothing
-    else
-        g_prev = gaps[gap_num - 1]
-        g_next = gaps[gap_num + 1]
-        if curgap[1] - g_prev[2] - 1 >= half && g_next[1] - curgap[2] - 1 >= half
-            return :both,
-                   (view(x, curgap[1] - half : curgap[1] - 1),
-                    view(x, curgap[2] + 1   : curgap[2] + half))
-        end
-        return :none, nothing
-    end
-end
-
-# --- per-gap fill driver ---------------------------------------------------
-# Returns (status, new_gap_num) where status is :ok, :advance, :done. The
-# filter averages over `span` samples. With `free` the level after the gap is
-# unknown (the phase of a frequency record): the fill joins the data before
-# it and the data after it are moved to meet the fill.
-function _fill_one_gap!(x::Vector{Float64},
-                        gaps::Vector{Tuple{Int,Int}},
-                        gap_num::Int,
-                        reverse::Bool, span::Int, free::Bool)
-    gap_total = length(gaps)
-    curgap    = gaps[gap_num]
-    sizegap   = curgap[2] - curgap[1] + 1
-
-    side, pts = if reverse
-        if curgap[2] > length(x) - sizegap
-            _check_left(x, gaps, curgap, sizegap, gap_num, gap_total)
-        else
-            _check_right(x, gaps, curgap, sizegap, gap_num, gap_total)
-        end
-    else
-        if curgap[1] <= sizegap
-            _check_right(x, gaps, curgap, sizegap, gap_num, gap_total)
-        else
-            _check_left(x, gaps, curgap, sizegap, gap_num, gap_total)
-        end
-    end
-
-    if side === :none
-        return reverse ? (:advance, gap_num - 1) : (:advance, gap_num + 1)
-    elseif side === :done
-        return :done, gap_num
-    end
-
-    # The reflected and inverted samples, inserted as they are.
-    fillvec = if side === :both
-        left_pts, right_pts = pts
-        left  = .-reverse_view(left_pts)
-        right = .-reverse_view(right_pts)
+# Step 5 of the procedure for the gap `a:b`, and whether it could be filled:
+# its n samples are the n before it reversed and inverted, those after it
+# where the run before is shorter than n, and half from each side where
+# both are. The filter averages over `span` samples. With `free` the level
+# after the gap is unknown (the phase of a frequency record): the fill joins
+# the data before it and the data after it are moved to meet the fill.
+function _reflect!(x::Vector{Float64}, a::Int, b::Int, span::Int, free::Bool)
+    n = b - a + 1
+    h = n ÷ 2
+    before, after = _run_beside(x, a - 1, -1, n), _run_beside(x, b + 1, 1, n)
+    fillvec = if before == n
+        -x[a-1:-1:a-n]
+    elseif after == n
+        -x[b+n:-1:b+1]
+    elseif 0 < h <= min(before, after)
+        left, right = -x[a-1:-1:a-h], -x[b+h:-1:b+1]
         right .+= _howe_filter(left, span)[end] - _howe_filter(right, span)[1]
-        isodd(sizegap) ? vcat(left, 0.5 * (left[end] + right[1]), right) : vcat(left, right)
+        isodd(n) ? [left; (left[end] + right[1]) / 2; right] : [left; right]
     else
-        .-reverse_view(pts)
+        return false
     end
 
     # The line that brings the filtered fill to the filtered data beside the
     # gap, read from a window of at least 64 samples. A gap at either end of
     # the record has data on one side only and is shifted to join that side.
     filtered = _howe_filter(fillvec, span)
-    w = max(sizegap, 64, span)
-    start_off = curgap[1] > 1         ? _edge_filtered(x, curgap[1] - 1, -1, w, span) - filtered[1]   : NaN
-    end_off   = curgap[2] < length(x) ? _edge_filtered(x, curgap[2] + 1, 1, w, span) - filtered[end] : NaN
+    w = max(n, 64, span)
+    start_off = a > 1         ? _edge_filtered(x, a - 1, -1, w, span) - filtered[1]   : NaN
+    end_off   = b < length(x) ? _edge_filtered(x, b + 1, 1, w, span) - filtered[end] : NaN
     if free && !isnan(start_off) && !isnan(end_off)
-        @views x[curgap[2]+1:end] .+= start_off - end_off
+        @views x[b+1:end] .+= start_off - end_off
         end_off = start_off
     end
     isnan(start_off) && (start_off = end_off)
     isnan(end_off)   && (end_off = start_off)
-    ramp = range(start_off, stop=end_off, length=sizegap)
-
-    @inbounds for (k, idx) in enumerate(curgap[1]:curgap[2])
-        x[idx] = fillvec[k] + ramp[k]
-    end
-
-    deleteat!(gaps, gap_num)
-    # Rightward sweep: the gap at gap_num+1 has just shifted into gap_num,
-    # so keep the index. Leftward sweep: actively step left.
-    new_gap_num = if reverse
-        gap_num - 1
-    else
-        gap_num > length(gaps) ? length(gaps) : gap_num
-    end
-    return :ok, new_gap_num
+    x[a:b] .= fillvec .+ range(start_off, stop=end_off, length=n)
+    return true
 end
 
-reverse_view(v) = collect(Iterators.reverse(v))
+# Steps 2 and 3 of the procedure: the gap after the longest run of samples,
+# then each gap in turn to the end of the record. A gap that cannot be
+# filled yet is passed over. Returns the number filled.
+function _sweep!(x::Vector{Float64}, span::Int, free::Bool)
+    gaps = _identify_gaps(x)
+    first_gap, longest, run_start = 0, 0, 1
+    for (k, (a, b)) in pairs(gaps)
+        a - run_start > longest && ((first_gap, longest) = (k, a - run_start))
+        run_start = b + 1
+    end
+    filled = 0
+    first_gap == 0 && return filled
+    for k in first_gap:length(gaps)
+        filled += _reflect!(x, gaps[k][1], gaps[k][2], span, free)
+    end
+    return filled
+end
 
 # The reflection fill of every gap (run of NaN) of `x`, with the filter span
-# and the `free` of `_fill_one_gap!`. Gaps of one sample are filled before it
-# (see `_fillgaps`). Throws when the gaps cannot be filled, as when both ends
-# of the record are missing and no run between them is long enough to
-# reflect.
+# and the `free` of `_reflect!`. Step 4 of the procedure reverses the record
+# and sweeps again, which fills the gaps before the longest run from the
+# data after them, and the two sweeps repeat while gaps remain. Gaps of one
+# sample are filled before it (see `_fillgaps`). Throws when the gaps cannot
+# be filled, as when both ends of the record are missing and no run between
+# them is long enough to reflect.
 function _howe_fill(x::Vector{Float64}, span::Int; free::Bool=false)
     xv = copy(x)
-    gaps = _identify_gaps(xv)
-    isempty(gaps) && return xv
-    unfillable() = error("fillgaps: gap topology cannot be filled (data record too short relative to gap span)")
-    gap_num = _choose_initial_gap(gaps)
-
-    # Outer loop: rightward sweep, then leftward sweep, repeat until empty.
-    while !isempty(gaps)
-        remaining = length(gaps)
-        while 1 <= gap_num <= length(gaps)
-            status, gap_num = _fill_one_gap!(xv, gaps, gap_num, false, span, free)
-            status === :done && unfillable()
-        end
-        isempty(gaps) && break
-
-        gap_num = min(gap_num, length(gaps))
-        while gap_num >= 1 && !isempty(gaps)
-            status, gap_num = _fill_one_gap!(xv, gaps, gap_num, true, span, free)
-            status === :done && unfillable()
-        end
-        isempty(gaps) && break
-
-        # A pass that filled nothing will never fill anything.
-        length(gaps) == remaining && unfillable()
-        gap_num = _choose_initial_gap(gaps)
+    while any(isnan, xv)
+        filled = _sweep!(xv, span, free)
+        reverse!(xv)
+        filled += _sweep!(xv, span, free)
+        reverse!(xv)
+        filled == 0 &&
+            error("fillgaps: gap topology cannot be filled (data record too short relative to gap span)")
     end
     return xv
 end
@@ -404,32 +298,44 @@ end
 """
     fillgaps(data; form=:auto) → PhaseData or FrequencyData
 
-Copy of a record with its missing samples (`NaN`) filled by the reflection
-method of [Howe and Schlossberger (2022)](@cite howe-2022-gap-imputation),
-after the script the paper gives for it
-([Champagne et al. (2021)](@cite champagne-2021-gap-filling-script)). The
-measured samples, the sample interval, the source and the start time are
-returned as they came, and a record without missing samples is returned as
-a copy. With `fillgaps=true`, [`read_data`](@ref), [`read_phase`](@ref) and
-[`read_frequency`](@ref) fill a record as they read it.
+Copy of a record with its missing samples (`NaN`) filled by reflection, the
+method of
+[Howe and Schlossberger (2022), Sec. III](@cite howe-2022-gap-imputation).
+The measured samples, the sample interval, the source and the start time
+are returned as they came, and a record without missing samples is returned
+as a copy. With `fillgaps=true`, [`read_data`](@ref), [`read_phase`](@ref)
+and [`read_frequency`](@ref) fill a record as they read it.
 
-A gap of ``n`` samples takes ``n`` of the samples beside it, reversed in
-time and inverted in sign, and a straight line is added so that the
-low-pass filtered fill meets the filtered data at both ends. Filling starts
-at the gap after the longest run of data between two gaps and proceeds to
-the right, then to the left, so a fill may rest on an earlier one. The
-samples come from the run just passed, from the run on the other side
-where that one is shorter than the gap, and half from each side where both
-are. A gap of one sample takes the mean of its neighbors. An
-`ErrorException` is thrown if the gaps are too long for the data between
-them.
+A gap of ``n`` samples takes the ``n`` samples before it, reversed in time
+and inverted in sign. A straight line is added so that the low-pass
+filtered fill meets the filtered data at both ends (the paper's Appendix;
+its Eq. (3) is the filter, with the constant of the authors' script,
+[Champagne et al. (2021)](@cite champagne-2021-gap-filling-script)). The
+gaps are taken in the paper's order, in the five steps of the authors'
+preprint
+([Howe et al. (2021), Sec. II-D](@cite howe-2021-imputation-algorithm)),
+which adds the first step and the passing over of the fifth:
+
+1. A gap of one sample takes the mean of its neighbors.
+2. The gap after the longest run of data is filled first,
+3. then each gap in turn to the end of the record, so a fill may rest on
+   an earlier one.
+4. The record is reversed and steps 2 and 3 are run again, which fills the
+   gaps before the longest run from the data after them.
+5. Where the run before a gap is shorter than the gap, the samples come
+   from the run after it, and half from each side where both are shorter.
+   Where neither holds half, the gap is passed over and returned to after
+   step 4.
+
+The steps repeat until no gap remains. An `ErrorException` is thrown when
+a repeat fills nothing: the gaps are too long for the data between them.
 
 The reflected samples carry the noise of the record only where the series
 that is filled lies between white noise and a random walk. In a smoother
 series, such as the phase of flicker or random-walk FM, the joins stand out
 of the noise. In a rougher one, such as the frequency of white or flicker
-PM, the error of the level at a join adds up across the gap. The paper
-prescribes neither the series nor the length of the filter, and this
+PM, the error of the level at a join adds up across the gap. The papers
+prescribe neither the series nor the length of the filter, and this
 package sets both from the record:
 
 - **Series.** `form=:auto` reads the two-sample deviation of the frequency
