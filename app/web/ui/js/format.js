@@ -5,6 +5,14 @@ export function sci(x, digits = 4) {
   return x.toExponential(digits - 1);
 }
 
+// 1.15 × 10<sup>−13</sup>: scientific notation to read at a glance.
+export function sciHtml(x, digits = 3) {
+  if (x === null || x === undefined || !Number.isFinite(x)) return "–";
+  if (x === 0) return "0";
+  const [m, e] = x.toExponential(digits - 1).split("e");
+  return Number(e) === 0 ? m : `${m.replace("-", "−")} × 10<sup>${Number(e).toString().replace("-", "−")}</sup>`;
+}
+
 export function num(x, digits = 4) {
   if (x === null || x === undefined || !Number.isFinite(x)) return "–";
   if (Math.abs(x) >= 1e5 || Math.abs(x) < 1e-3) return sci(x, digits);

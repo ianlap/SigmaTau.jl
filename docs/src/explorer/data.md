@@ -252,7 +252,7 @@ frequency, **Std dev (freq.)**, is the one to compare with
 scatter of the estimates.
 
 **Bins** sets the number of bins. Left empty it follows Scott's rule, with
-at most 1000. **Normal curve** draws, in crimson, the normal distribution
+at most 1000. **Normal curve** draws, over the bars, the normal distribution
 with the mean and the standard deviation of the samples, scaled to the
 expected count in each bin. Samples far from zero next to their spread, such
 as a frequency offset with little noise on it, are plotted less their mean,
