@@ -58,10 +58,10 @@ async function post(body, signal) {
 }
 
 // The flags that make a simulated record (or ensemble) of `src`: a
-// "--noise-model R:q1:q2:q3" per clock when it was made on the Synthesis page.
+// "--clock-model R:q1:q2:q3" per clock when it was made on the Synthesis page.
 export function synthArgs(src) {
   const a = ["--synth", src.n, "--seed", src.seed];
-  if (src.models) for (const m of src.models) a.push("--noise-model", m.join(":"));
+  if (src.models) for (const m of src.models) a.push("--clock-model", m.join(":"));
   else if (src.clocks > 1) a.push("--clocks", src.clocks);
   return a;
 }
@@ -72,7 +72,7 @@ function recordArgs(clock) {
   const synth = clock.source.type === "synth";
   const a = synth ? synthArgs(clock.source) : [];
   // One clock of a simulated ensemble: the core simulates them all and hands back this one.
-  if (synth && clock.source.clocks > 1) a.push("--clock", clock.source.index);
+  if (synth && clock.source.clocks > 1) a.push("--column", clock.source.index);
   const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
   // (a RINEX clock file has a grid per clock: the reader takes it from the epochs)
   if (clock.format !== "rinex_clk") opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
@@ -89,7 +89,7 @@ function recordArgs(clock) {
   } else if (!synth) recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
   if (clock.keep_zeros) a.push("--keep-zeros");
-  if (clock.fillgaps) a.push("--fillgaps");
+  if (clock.fillgaps) a.push("--fill-gaps");
   if (clock.remove_outliers) a.push("--remove-outliers");
   a.push("--format", "json");
   return a;
@@ -97,10 +97,10 @@ function recordArgs(clock) {
 
 function recordColumns(clock, a, opt) {
   if (clock.kind === "frequency") a.push("--freq");
-  opt("--time-col", clock.time_col);
-  opt("--value-col", clock.value_col);
+  opt("--time-column", clock.time_col);
+  opt("--column", clock.value_col);
   const ref = referenceColFor(clock);
-  if (ref) opt("--reference-col", ref);
+  if (ref) opt("--reference-column", ref);
   opt("--header", clock.header);
   opt("--scaling", clock.scaling);
 }
@@ -145,7 +145,7 @@ function view(doc) {
 
 // For a record with gaps the core names the command line's remedy. A clock's
 // request carries the preparation of the Data page, where the remedy is a box.
-const GAP_REMEDY = /fill them with --fillgaps$/;
+const GAP_REMEDY = /fill them with --fill-gaps$/;
 const remedy = (err) => {
   throw GAP_REMEDY.test(err.message) ? new Error(err.message.replace(GAP_REMEDY, "turn on Fill gaps by reflection on the Data page")) : err;
 };
@@ -194,7 +194,7 @@ export const driftMethod = () => (state.driftModel === "linear" ? state.driftMet
 
 // Fit a frequency drift model (linear, quadratic, log, diffusion) to one clock.
 export function drift(clock, signal) {
-  return run(request(clock, "drift", ["--model", state.driftModel, "--method", driftMethod(), "--series", 2000]), signal);
+  return run(request(clock, "drift", ["--drift-model", state.driftModel, "--method", driftMethod(), "--series", 2000]), signal);
 }
 
 // Settings that decide a clock's drift fit; a change means refit.
@@ -237,7 +237,7 @@ export function dynamic(clock, signal) {
   return run(request(clock, "dynamic", [
     ...rangeArgs(clock),
     "--grid", state.grid,
-    "--dev", state.dyn.dev,
+    "--devs", state.dyn.dev,
     "--window", Math.max(16, Math.floor(samples(clock) / state.dyn.frac)),
   ]), signal);
 }
@@ -349,7 +349,7 @@ export async function phaseNoise(file, carrier, signal) {
 
 // The σ(τ) that noise models predict (MDEV, ADEV and MHDEV per model), closed form.
 export async function modelPreview({ n, tau0, models }, signal) {
-  const args = ["model", "--synth", n, "--tau0", tau0, ...models.flatMap((m) => ["--noise-model", m.join(":")]), "--format", "json"];
+  const args = ["model", "--synth", n, "--tau0", tau0, ...models.flatMap((m) => ["--clock-model", m.join(":")]), "--format", "json"];
   const doc = await post({ args: args.map(String), file: null }, signal);
   if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
   return doc.model;

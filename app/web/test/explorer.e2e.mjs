@@ -421,7 +421,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("a[data-page=ensemble]");
     await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]")?.data?.some((d) => d.name === "Cross"), null, SLOW);
     const [shown, limit] = await page.evaluate(() => ["Cross", "Cross, upper limit"].map((n) => document.querySelector("#page [data-ref=adev]").data.find((d) => d.name === n).y));
-    const doc = JSON.parse(execFileSync(CLI, ["cross", file, "--value-cols", "2,3", "--fillgaps", "--format", "json"])).cross_adev;
+    const doc = JSON.parse(execFileSync(CLI, ["cross", file, "--column", "2,3", "--fill-gaps", "--format", "json"])).cross_adev;
     // The deviation where the device is resolved, √(covariance + uncertainty) as the limit where it is not.
     const resolved = doc.covar.map((v, i) => v > doc.uncertainty[i]);
     assert.deepEqual(shown, doc.dev.map((v, i) => (resolved[i] ? v : null)));

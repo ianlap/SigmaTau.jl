@@ -110,7 +110,7 @@ works through both.
 ```bash
 sigmatau cross a.dat --with b.dat                  # cross Allan deviation, CSV
 sigmatau cross a.dat --with b.dat --format json    # adds the cross-spectrum
-sigmatau cross ab.dat --value-cols 2,3             # both channels in one file
+sigmatau cross ab.dat --column 2,3             # both channels in one file
 ```
 
 `--with` names the second channel, which is read with the options of the

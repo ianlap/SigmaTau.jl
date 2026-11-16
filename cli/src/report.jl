@@ -169,7 +169,7 @@ function cmd_report(io::IO, o::Options, data::PhaseData, args::Vector{String})
     o.filled > 0 && print(io, "<dt>Filled</dt><dd>", o.filled, " (", share_text(o.filled, s.n), ")</dd>")
     print(io, "<dt>Outliers (5σ)</dt><dd>", length(s.outliers), "</dd>")
     print(io, "<dt>Drift / day</dt><dd>"); sci(io, Float64(s.drift_per_day), 3); print(io, "</dd>")
-    print(io, "<dt>Preprocessing</dt><dd>detrend ", o.detrend, ", remove drift ", o.remove_drift,
+    print(io, "<dt>Preprocessing</dt><dd>remove drift ", o.remove_drift,
           o.fillgaps ? ", gaps filled" : "", o.remove_outliers ? ", outliers removed" : "",
           o.reference_col > 0 ? ", minus column " * string(o.reference_col) : "")
     if !(isnan(o.range_start) && isnan(o.range_end))
