@@ -23,7 +23,7 @@ const COMMAND_HELP = [
 ]
 
 const SHELLS = ["bash", "zsh", "fish", "powershell"]
-const FORMATS = ["csv", "json"]
+const FORMATS = ["table", "csv", "json"]
 const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "table", "bipm_utc", "rinex_clk"]
 const DETRENDS = ["none", "mean", "endpoint", "linear"]
 const DRIFTS = ["none", "linear", "quadratic"]
@@ -145,7 +145,7 @@ const OPTS = [
     Opt("--fast", "", String[], false, "run the simulator flat out instead of one reading per τ₀", ["live"]),
     # Output
     Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
-    Opt("--format", "FMT", FORMATS, false, "csv (default) or json; for model, json alone", [TABULAR; "model"; "phasenoise"]),
+    Opt("--format", "FMT", FORMATS, false, "table (the default at a terminal: aligned, 4 significant digits), csv (the default in a pipe or with --out) or json; for model, json alone", [TABULAR; "model"; "phasenoise"]),
     Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", BATCH, "-o"),
     Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY, "-q"),
     Opt("--help", "", String[], false, "show this command's options", ANY),
@@ -248,7 +248,7 @@ end
 
 Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
-                    Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "csv", "", false, false,
+                    Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "", "", false, false,
                     "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear", "frequency_fit",
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
@@ -681,7 +681,8 @@ function print_help(io::IO)
         print(io, h, "\n")
     end
     print(io, "\nRun `sigmatau help COMMAND` for a command's options.\n")
-    print(io, "Output is CSV by default; --format json gives the versioned JSON schema.\n")
+    print(io, "Output is a table at a terminal and CSV in a pipe or with --out; --format json gives\n")
+    print(io, "the versioned JSON schema.\n")
     print(io, "Exit codes: 0 ok, 1 usage, 2 input, 3 analysis, 4 output.\n\n")
     print(io, "Examples:\n")
     print(io, "  sigmatau analyze clock.dat --tau0 1 --devs adev,mdev,tdev\n")

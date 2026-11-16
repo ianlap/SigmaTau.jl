@@ -56,6 +56,9 @@ using Test, Random, SigmaTau
         @test identify_noise(pd, ms; dmax=3) == identify_noise(x, ms; dmax=3)
         @test identify_noise(fd, ms) == identify_noise(cumsum([0.0; diff(x)]), ms)
         @test length(identify_noise(pd, Octave)) == length(adev(pd, Octave).tau)
+        # No averaging factors: the octave grid, as for adev(pd).
+        @test identify_noise(pd) == identify_noise(pd, Octave)
+        @test length(identify_noise(fd)) == length(adev(fd).tau)
     end
 
     @testset "stability forwards confidence and rejects dynamic devs" begin

@@ -195,6 +195,29 @@ function input_format(o::Options)
     return fmt
 end
 
+# The names on the line above the rows of a table; empty for any other file.
+function table_names(o::Options)
+    (o.synth > 0 || !isfile(o.input)) && return String[]
+    fmt = o.input_format == "auto" ? SigmaTau._detect_format(o.input, o.delim) : Symbol(o.input_format)
+    fmt === :table || return String[]
+    for line in SigmaTau._head_lines(o.input, 200)
+        s = strip(line)
+        (isempty(s) || startswith(s, '#')) && continue
+        return String[strip(f) for f in SigmaTau._split_fields(s, SigmaTau._delim_for(s, o.delim))]
+    end
+    return String[]
+end
+
+# timescale and hat read one clock per --value-cols column. Without them, a
+# table's columns are listed by number, to pick from.
+function require_value_cols(o::Options)
+    (o.command == "timescale" || o.command == "hat") && o.synth <= 0 && isempty(o.value_cols) && isfile(o.input) || return
+    names = table_names(o)
+    throw(usage_error(o.command * " needs --value-cols with two or more columns, or --synth" *
+                      (isempty(names) ? "" : "; the columns of this file are " *
+                       join((string(i, " ", n) for (i, n) in enumerate(names)), ", "))))
+end
+
 # TimeLab, Stable32 .phd/.frd, counter and named-column files: one clock per
 # file, read by SigmaTau's format readers, which set the record type. With
 # --value-cols (timescale) the clock of a table or RINEX clock file is the

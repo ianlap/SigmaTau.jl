@@ -23,9 +23,9 @@ function clockRows() {
     const ref = isReference(c);
     const against = !ref && state.reference !== null && referenceColFor(c) ? "vs reference" : "";
     const sub = ref ? "reference" : [c.source.type === "file" ? c.source.name : "synthetic", n ? `${thousands(n)} pts` : c.error ? "error" : "…", against].filter(Boolean).join(" · ");
-    return `<div class="row clock-row ${c.id === state.activeClock ? "active" : ""} ${c.visible ? "" : "hidden-clock"}" data-clock="${c.id}" role="button" tabindex="0">
-      <span class="row-main"><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>
-        <span class="clock-text"><b>${h(c.name)}</b><span>${h(sub)}</span></span></span>
+    return `<div class="row clock-row ${c.id === state.activeClock ? "active" : ""} ${c.visible ? "" : "hidden-clock"}" data-clock="${c.id}">
+      <button class="row-main" type="button" aria-current="${c.id === state.activeClock}"><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>
+        <span class="clock-text"><b>${h(c.name)}</b><span>${h(sub)}</span></span></button>
       <span class="row-btns">${ref ? `<span class="ref-tag" title="Reference clock">ref</span>` : `<button class="eye" type="button" data-eye="${c.id}" title="${c.visible ? "Hide" : "Show"} ${h(c.name)} on the plots" aria-pressed="${c.visible}">${c.visible ? "◉" : "○"}</button>`}
         <button class="row-x" type="button" data-remove-clock="${c.id}" title="Remove ${h(c.name)}${c.source.type === "synth" && c.source.clocks > 1 ? " (the other simulated clocks are simulated again)" : ""}">×</button></span>
     </div>`;
@@ -63,7 +63,7 @@ function options() {
   return `<div class="opts">
     <label class="opt"><span>τ grid</span><select class="wide" data-opt="grid">${GRIDS.map(([v, l]) => `<option value="${v}" ${v === state.grid ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <div class="opt"><label class="check"><input type="checkbox" data-opt="ci" ${state.ci ? "checked" : ""}>Confidence intervals</label>
-      <select class="narrow" data-opt="confidence" ${state.ci ? "" : "disabled"}>${CONFIDENCES.map(([v, l]) => `<option value="${v}" ${v === state.confidence ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <select class="narrow" data-opt="confidence" aria-label="Confidence level" ${state.ci ? "" : "disabled"}>${CONFIDENCES.map(([v, l]) => `<option value="${v}" ${v === state.confidence ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="opt" title="Leave out averaging times outside these limits (seconds); empty = no limit"><span>τ range (s)</span>
       <span class="tau-range"><input type="number" min="0" step="any" placeholder="min" data-opt="tauMin" value="${state.tauMin ?? ""}" aria-label="Smallest τ in seconds">
       <span class="muted">–</span><input type="number" min="0" step="any" placeholder="max" data-opt="tauMax" value="${state.tauMax ?? ""}" aria-label="Largest τ in seconds"></span></div>

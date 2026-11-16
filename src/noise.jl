@@ -10,6 +10,7 @@ const B1_MIN_POINTS = 6   # fewest averaged points the averaged-length B1 test i
     identify_noise(x, m_values; dmin=0, dmax=2, remove_drift=true,
                    b1_length=:averaged, b1=true) → Vector{Symbol}
     identify_noise(data, m_values; kwargs...) → Vector{Symbol}
+    identify_noise(data; kwargs...) → Vector{Symbol}
 
 Dominant power-law noise type of a record at each averaging factor: `:WHPM`,
 `:FLPM`, `:WHFM`, `:FLFM` or `:RWFM`, and with `dmax=3` also `:FWFM`
@@ -102,7 +103,7 @@ in 58 to 86 %.
 - `x`: phase samples, or `data`, a `PhaseData` or `FrequencyData` record
   (frequency is integrated to phase).
 - `m_values`: averaging factors. With a record, any integer vector or a
-  [`TauMode`](@ref).
+  [`TauMode`](@ref); without one, the octave grid, as for [`adev`](@ref).
 
 # Keywords
 

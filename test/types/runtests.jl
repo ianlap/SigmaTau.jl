@@ -54,10 +54,12 @@ const CIB = @NamedTuple{lo::Float64, hi::Float64}
                      StabilityResult(:adev, [1.0], [0.5], Symbol[], CIB[], Float64[], [10]))
         @test occursin("neff", sno) && !occursin("ci_lo", sno)
 
+        # A long result shows its first six and last five rows, the longest τ among them.
         long = StabilityResult(:adev, collect(1.0:20.0), fill(1e-10, 20),
                                Symbol[], CIB[], Float64[], fill(50, 20))
         sl = sprint(show, MIME"text/plain"(), long)
-        @test occursin("… 20 rows total", sl)
-        @test count(==('\n'), sl) == 13         # header + 11 rows + ellipsis
+        @test occursin("⋮  9 more rows", sl)
+        @test count(==('\n'), sl) == 13         # header + 11 rows + gap
+        @test occursin(r"\n +20 +1e-10", sl) && !occursin(r"\n +7 +1e-10", sl)
     end
 end
