@@ -11,7 +11,7 @@ import { ensemble, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, LINE_W } from "../plot.js";
 import { byId } from "../estimators.js";
 import { gridField, confidenceField, onSharedControl } from "../panel.js";
-import { sci, num, interval, timeAxisUnit, inWords as plain, escapeHtml as h } from "../format.js";
+import { sci, num, interval, timeAxisUnit, thousands, share, FILL_TESTED, inWords as plain, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 let inflight = null;           // key of the run in progress
@@ -60,10 +60,7 @@ const GAPS = [
 const FEW = [/^hat needs three or more simulated/, "Simulated clocks have a perfect reference, which counts as no clock. Simulate three or more, on the Data or the Synthesis page."];
 // Simulated clocks have no gaps: a fit that stops there met noise it has no term for.
 const UNFITTED = "The fit leaves one of these clocks too few averaging times. It has terms for white and flicker PM, white FM and random-walk FM, and none for random-run FM. With Models at As simulated the scale takes the models the clocks were made from.";
-// Two channels are read with the Data page's gap filling, which names the remedy.
-const CROSS_GAPS = [/^cross analysis needs records without gaps/, "The two channels need every sample: turn on Fill gaps by reflection on the Data page."];
 const inWords = (message, sim) => (sim && GAPS[0][0].test(message) ? UNFITTED : null)
-  ?? (CROSS_GAPS[0].test(message) ? CROSS_GAPS[1] : null)
   ?? GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.")
   ?? (FEW[0].test(message) ? FEW[1] : plain(message));
 
@@ -90,6 +87,21 @@ function fileClocks(all = false) {
   }
   const ens = [...sims.values()].find((g) => g.length === g[0].source.clocks);
   return ens ? ens.sort((a, b) => a.source.index - b.source.index) : [];
+}
+
+// A loaded file of two or more clocks that the page cannot read: the core
+// takes a scale's, a hat's or two channels' clocks as numbered columns, so a
+// table read by column name (dates in its time column), a RINEX clock file or
+// an instrument file is left out. Without other clocks the page says so in
+// place of simulating its own: the note that says why, or null.
+function unreadNote() {
+  if (fileClocks(true).length) return null;
+  const groups = new Map();
+  for (const c of state.clocks) if (c.source.type === "file" && c.format && c.record) groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
+  const c = [...groups.values()].find((g) => g.length >= 2)?.[0];
+  if (!c) return null;
+  const what = c.format === "table" ? "a table read by column name, with dates in its time column" : c.format === "rinex_clk" ? "a RINEX clock file" : "a file read by its instrument layout";
+  return `The clocks of ${h(c.source.name)}, ${what}, cannot be read here: this page takes its clocks as numbered columns beside a time in seconds or as an MJD. Load such a file, or simulate several clocks, on the Data page.`;
 }
 
 // The command, the flags that give it its clocks, and their file.
@@ -127,8 +139,10 @@ function hatRequest() {
 }
 
 // Two channels of one device: two columns of the page's file, read as the
-// Data page reads them, gaps filled where it fills them. Chosen in the
-// panel; by default the first two. `body` is null without a file.
+// Data page reads them. The cross estimates need every sample, so the gaps
+// of both are filled by reflection whatever the Data page does; the note
+// under the table says how many. Chosen in the panel; by default the first
+// two. `body` is null without a file.
 function crossRequest() {
   const clocks = fileClocks(true).filter((c) => c.source.type === "file");
   const pick = (id, k) => clocks.find((c) => c.id === id) ?? clocks[k];
@@ -136,12 +150,12 @@ function crossRequest() {
   const b = clocks.length < 2 ? null : pick(state.ens.cross.b === a.id ? null : state.ens.cross.b, a === clocks[1] ? 0 : 1);
   if (!b) return { clocks, a, b, body: null };
   const [args, file] = clockArgs("cross", [a, b]);
-  if (a.fillgaps || b.fillgaps) args.push("--fill-gaps");
-  args.push("--grid", state.grid, "--format", "json");
+  args.push("--fill-gaps", "--grid", state.grid, "--format", "json");
   return { clocks, a, b, body: { args: args.map(String), file } };
 }
 
 function request() {
+  if (unreadNote()) return { clocks: [], body: null };
   if (state.ens.view === "hat") return hatRequest();
   if (state.ens.view === "cross") return crossRequest();
   const E = state.ens, clocks = fileClocks();
@@ -167,7 +181,7 @@ function hatControls() {
     ${gridField("opt")}${confidenceField("opt")}
     <div class="rule"></div>
     <p class="muted small">${!clocks.length
-      ? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."
+      ? (unreadNote() ?? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page.")
       : !file ? `${clocks.length} clocks simulated on the Data page. Their reference is perfect and counts as no clock.`
       : pairs ? `The three columns of ${h(clocks[0].source.name)} as the differences A−B, B−C and C−A of clocks A, B and C, each measured on its own.`
       : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference${corners > clocks.length ? ", which is one more clock" : ""}.`}</p>
@@ -184,7 +198,7 @@ function crossControls() {
     ${gridField("opt")}
     <div class="rule"></div>
     <p class="muted small">${b ? `Two columns of ${h(a.source.name)}, each a measurement of one device: through two channels of an instrument, or against two references.`
-      : "Load a file that holds the two channels as two columns on the Data page."}</p>
+      : unreadNote() ?? "Load a file that holds the two channels as two columns on the Data page."}</p>
     <p class="muted small">The cross Allan deviation keeps the noise the two channels share, the device's, and averages toward zero the noise each has on its own. Its uncertainty follows the covariance model of Vernotte and Lantz (2019), with each channel's Allan EDF. The τ grid is shared with the Stability page.</p>`;
 }
 
@@ -213,7 +227,7 @@ export function controls() {
       ? (clocks[0].source.type === "synth"
         ? `${clocks.length} clocks simulated on the Data page, each against a perfect reference.`
         : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference.`)
-      : "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."}</p>
+      : (unreadNote() ?? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page.")}</p>
     <p class="muted small">${ABOUT[E.algorithm]}${KALMAN.has(E.algorithm) && simulated(clocks) ? ABOUT_MODELS[E.fitted] : ""}${FLICKER.has(E.algorithm) && fittedOf(clocks) ? ABOUT_FLICKER : ""}</p>`;
 }
 
@@ -343,18 +357,28 @@ function refreshHat(r, req) {
 // channel's own ADEV, and the cross-spectrum over its floor and each
 // channel's spectrum. Where the covariance is not positive, or not above its
 // uncertainty, the device is not resolved: ▽ marks √(covariance + uncertainty).
+// The samples of each channel that the cross estimates fill: the missing
+// samples of its record, or those the Data page already filled.
+function filledNote(n, a, b) {
+  const k = [a, b].map((c) => (c.record?.check?.gaps ?? 0) + (c.record?.check?.filled ?? 0));
+  if (!k[0] && !k[1]) return "";
+  const over = k.some((v) => v > FILL_TESTED * n);
+  const filled = [a, b].flatMap((c, i) => (k[i] ? [`${thousands(k[i])} sample${k[i] === 1 ? "" : "s"} of ${h(c.name)} (${share(k[i], n)})`] : []));
+  return `<p class="small ${over ? "ens-warn" : "muted"} ens-note">The gaps are filled by reflection, as the cross estimates need every sample: ${filled.join(" and ")}.${over ? " The filler was tested with up to 30 % of a record missing; past that the results describe the filler as much as the device." : ""}</p>`;
+}
+
 function refreshCross(r, { a, b }) {
   const x = r.adev, sp = r.spec, ca = seriesColor(a.slot), cb = seriesColor(b.slot), dev = css("--accent"), ink = css("--ink-2");
   const resolved = x.covar.filter((v, i) => v > x.uncertainty[i]).length;
   root.querySelector("[data-ref=title]").textContent = "Cross Allan deviation of the two channels";
-  root.querySelector("[data-ref=sub]").textContent = `${a.name} × ${b.name} · ${r.record.n} samples · τ₀ = ${num(r.record.tau0, 4)} s`;
+  root.querySelector("[data-ref=sub]").textContent = `${a.name} × ${b.name} · ${r.record.n} samples · τ₀ = ${interval(r.record.tau0)}`;
   const wcard = root.querySelector(".ens-weights"), relaid = wcard.hidden;
   wcard.hidden = false;
   root.querySelector("[data-ref=title2]").innerHTML = "Cross-spectrum S<sub>y</sub>(f)";
   const row = (i) => `<div class="tbl-row tbl-body"><span>${num(x.tau[i], 4)}</span><span>${x.covar[i] > 0 ? sci(x.dev[i], 3) : "–"}</span><span>${sci(x.dev_a[i], 3)}</span><span>${sci(x.dev_b[i], 3)}</span></div>`;
   root.querySelector("[data-ref=table]").innerHTML = `<div class="card-row"><h2>Per-τ results</h2></div>
     <div class="tbl cross-tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>Cross</span><span>A</span><span>B</span></div>${x.tau.map((_, i) => row(i)).join("")}</div>
-    <p class="muted small ens-note">The device is resolved at ${resolved} of ${x.tau.length} τ, where the covariance is above its uncertainty. Elsewhere the channels' own noise dominates. The cross-spectrum averages ${sp.nseg} segments of ${sp.nperseg} samples; its floor is the residual of the noise the channels do not share.</p>`;
+    ${filledNote(r.record.n, a, b)}<p class="muted small ens-note">The device is resolved at ${resolved} of ${x.tau.length} τ, where the covariance is above its uncertainty. Elsewhere the channels' own noise dominates. The cross-spectrum averages ${sp.nseg} segments of ${sp.nperseg} samples; its floor is the residual of the noise the channels do not share.</p>`;
   if (!Plotly) return;
   const sq = (v) => (v > 0 ? Math.sqrt(v) : null);
   const ok = x.covar.map((v, i) => v > x.uncertainty[i]);
@@ -390,6 +414,8 @@ export function refresh() {
   const hat = state.ens.view === "hat", cross = state.ens.view === "cross";
   const r = hat ? state.ens.result?.hat : cross ? state.ens.result?.cross : state.ens.result?.ts;
   const table = root.querySelector("[data-ref=table]");
+  const unread = unreadNote();
+  if (unread) return showEmpty(unread);
   if (cross && !req.body) return showEmpty("Two channels needs a file that holds them as two columns, such as the readings of one device against two references. Load one on the Data page.");
   if (state.ens.error) return showEmpty(h(state.ens.error.message));
   if (!r) return showEmpty(!state.core.ok ? "No analysis core. Start the explorer with serve.py." : hat ? "Separating the clocks…" : cross ? "Computing the cross estimates…" : "Forming the time scale…");
