@@ -83,6 +83,14 @@ Base.getindex(c::ClockComparisons, i::Integer) = PhaseData(c.x[:, i], c.tau0; so
 Base.getindex(c::ClockComparisons, i::Integer, j::Integer) =
     PhaseData(c.x[:, i] .- c.x[:, j], c.tau0; source=c.names[i] * " − " * c.names[j])
 
+# One line, for a tuple or a vector, where the default would print the matrix.
+function Base.show(io::IO, c::ClockComparisons)
+    n, k = size(c.x)
+    print(io, "ClockComparisons(", k, " clocks × ", n, " samples, τ₀ = ", c.tau0, " s")
+    isempty(c.reference) || print(io, ", against ", c.reference)
+    print(io, ")")
+end
+
 function Base.show(io::IO, ::MIME"text/plain", c::ClockComparisons)
     n, k = size(c.x)
     print(io, "ClockComparisons: ", k, " clocks × ", n, " samples at τ₀ = ", c.tau0, " s")

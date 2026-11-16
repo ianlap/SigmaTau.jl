@@ -283,36 +283,44 @@ function Base.show(io::IO, r::StabilityResult)
     end
 end
 
+# The rows a table shows: all of `n` up to 12, else the first six and the last
+# five, so that the longest τ stays in view.
+_table_rows(n::Int) = n <= 12 ? collect(1:n) : vcat(1:6, n-4:n)
+
+# Print a table, one line per entry of `shown` (row indices of `n` rows) and
+# `⋮` in the gap, which `cells(i)` fills with the strings of row `i`. Columns
+# right-align; column `left`, if it is the last, prints as is.
+function _print_table(io::IO, header::Vector{String}, n::Int, shown::Vector{Int}, cells; left::Int=0)
+    rows = map(cells, shown)
+    widths = map(length, header)
+    for row in rows, j in eachindex(widths)
+        widths[j] = max(widths[j], length(row[j]))
+    end
+    pad(s, j) = j == left ? s : lpad(s, widths[j])
+    line(row) = print(io, "\n  ", join((pad(row[j], j) for j in eachindex(header)), "  "))
+    line(header)
+    for (k, row) in enumerate(rows)
+        k > 1 && shown[k] > shown[k-1] + 1 && print(io, "\n  ⋮  ", n - length(shown), " more rows")
+        line(row)
+    end
+end
+
 # REPL display: the one-line summary, then a table with one row per τ. The
 # interval columns appear when the result carries them. A result longer than
-# 12 rows shows 11 and an ellipsis line.
+# 12 rows shows the first six and the last five.
 function Base.show(io::IO, ::MIME"text/plain", r::StabilityResult)
     show(io, r)
     n = length(r.tau)
     n == 0 && return
     has_ci = !isempty(r.edf)
-    maxrows = 12
-    nshow = n > maxrows ? maxrows - 1 : n
     header = has_ci ? ["tau", "dev", "neff", "ci_lo", "ci_hi", "edf", "noise"] :
                       ["tau", "dev", "neff"]
-    rows = map(1:nshow) do i
-        has_ci ?
-            [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i]),
-             _show4g(r.ci[i].lo), _show4g(r.ci[i].hi), _show4g(r.edf[i]),
-             isempty(r.noise_type) ? "" : string(r.noise_type[i])] :
-            [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i])]
-    end
-    widths = map(length, header)
-    for row in rows, j in eachindex(widths)
-        widths[j] = max(widths[j], length(row[j]))
-    end
-    # Numeric columns right-align; the trailing noise column prints as is.
-    pad(s, j) = (has_ci && j == length(header)) ? s : lpad(s, widths[j])
-    print(io, "\n  ", join((pad(header[j], j) for j in eachindex(header)), "  "))
-    for row in rows
-        print(io, "\n  ", join((pad(row[j], j) for j in eachindex(header)), "  "))
-    end
-    n > maxrows && print(io, "\n  … ", n, " rows total")
+    cells(i) = has_ci ?
+        [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i]),
+         _show4g(r.ci[i].lo), _show4g(r.ci[i].hi), _show4g(r.edf[i]),
+         isempty(r.noise_type) ? "" : string(r.noise_type[i])] :
+        [_show4g(r.tau[i]), _show4g(r.dev[i]), string(r.neff[i])]
+    _print_table(io, header, n, _table_rows(n), cells; left=has_ci ? length(header) : 0)
     return
 end
 
@@ -373,11 +381,13 @@ function Base.show(io::IO, ::MIME"text/plain", s::StabilitySuite)
     ci = isnan(s.confidence) ? "no CI" : "CI @ $(s.confidence)"
     print(io, "StabilitySuite: ", length(s), " deviation(s), ", s.data_kind,
               " data, N=", s.n, ", τ₀=", _show4g(s.tau0), " s, m=", s.tau_mode, ", ", ci)
-    for r in s.results
-        n = length(r.tau)
-        rng = n == 0 ? "" : "  τ∈[$(_show4g(r.tau[1])), $(_show4g(r.tau[end]))] s"
-        print(io, "\n  ", rpad(string(r.deviation_type), 9), lpad(n, 3), " pts", rng)
-    end
+    # One row per τ, one column per estimator; "-" where an estimator has no value.
+    taus = sort!(unique!(reduce(vcat, (r.tau for r in s.results); init=Float64[])))
+    isempty(taus) && return
+    header = vcat("tau", String[string(r.deviation_type) for r in s.results])
+    value(r, t) = (i = findfirst(==(t), r.tau); i === nothing ? "-" : _show4g(r.dev[i]))
+    cells(i) = vcat(_show4g(taus[i]), String[value(r, taus[i]) for r in s.results])
+    _print_table(io, header, length(taus), _table_rows(length(taus)), cells)
 end
 
 
