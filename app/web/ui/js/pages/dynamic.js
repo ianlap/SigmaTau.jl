@@ -7,39 +7,32 @@ import { state, update, visibleClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale, LINE_W } from "../plot.js";
 import { sci, num, thousands, timeAxisUnit, escapeHtml as h } from "../format.js";
+import { gridField, onSharedControl } from "../panel.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
 const FRACS = [4, 8, 16, 32];
 const NAME = { dadev: "DADEV", dhdev: "DHDEV" };
 
-export function controls(inline = false) {
+// The settings, in the toolbar above the map.
+export function controls() {
   const d = state.dyn;
   const est = `<div class="seg" role="group" aria-label="Estimator">${Object.entries(NAME).map(([k, v]) =>
     `<button type="button" data-ctl="dev" data-v="${k}" class="${d.dev === k ? "on" : ""}">${v}</button>`).join("")}</div>`;
   const view = `<div class="seg" role="group" aria-label="View"><button type="button" data-ctl="view" data-v="map" class="${d.view === "map" ? "on" : ""}">Map</button><button type="button" data-ctl="view" data-v="3d" class="${d.view === "3d" ? "on" : ""}">3D waterfall</button></div>`;
-  if (inline) {
-    return `${est}${view}<label class="tool-field">Window <select data-ctl="frac">${FRACS.map((f) =>
-      `<option value="${f}" ${f === d.frac ? "selected" : ""}>1/${f} of record</option>`).join("")}</select></label>
-      <span class="caption grow-right">Maps can't be overlaid, so each clock gets its own. Same color scale throughout.</span>`;
-  }
-  const c = visibleClocks()[0];
-  const n = c?.record?.n ?? 0;
-  const w = Math.max(16, Math.floor(n / d.frac));
-  return `<h2>Dynamic deviation</h2>
-    <div class="ctl-block"><label class="lbl">Estimator</label>${est}</div>
-    <div class="ctl-block"><label class="lbl">Window length</label>
-      <div class="pills">${FRACS.map((f) => `<button type="button" class="pill ${f === d.frac ? "on" : ""}" data-ctl="frac" data-v="${f}">1/${f}</button>`).join("")}</div>
-      ${n ? `<div class="muted small">${thousands(w)} samples per window · ${2 * d.frac - 1} windows</div>` : ""}</div>
-    <div class="ctl-block"><label class="lbl">View</label>${view}</div>
-    <div class="rule"></div>
-    <p class="muted small">Changes here recompute this page right away. A clock whose noise does not change shows the same colors in every row; a change during the record shows as a change down a column.</p>`;
+  const n = visibleClocks()[0]?.record?.n ?? 0;
+  const note = multi() ? "Maps can't be overlaid, so each clock gets its own. Same color scale throughout."
+    : n ? `${thousands(Math.max(16, Math.floor(n / d.frac)))} samples per window · ${2 * d.frac - 1} windows` : "";
+  return `${est}${view}<label class="tool-field">Window <select data-ctl="frac">${FRACS.map((f) =>
+    `<option value="${f}" ${f === d.frac ? "selected" : ""}>1/${f} of record</option>`).join("")}</select></label>${gridField()}
+    <span class="caption grow-right">${note}</span>`;
 }
 
 export function onControl(e) {
   const t = e.target.closest("[data-ctl]");
   if (!t) return;
   const k = t.dataset.ctl;
+  if (e.type === "change") onSharedControl(t);
   if (k === "dev" && e.type === "click") update((s) => { s.dyn.dev = t.dataset.v; s.dyn.cell = null; });
   if (k === "view" && e.type === "click") update((s) => { s.dyn.view = t.dataset.v; });
   if (k === "frac" && (e.type === "click" && t.dataset.v || e.type === "change" && t.tagName === "SELECT")) {
@@ -171,10 +164,9 @@ export function refresh() {
   if (!root) return;
   const several = multi();
   const tb = root.querySelector("[data-ref=toolbar]");
-  tb.hidden = !several;
-  if (several && !tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
+  if (!tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
     const at = tb.contains(document.activeElement) ? document.activeElement.dataset : null;
-    tb.innerHTML = controls(true);
+    tb.innerHTML = controls();
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
   const area = root.querySelector("[data-ref=area]");

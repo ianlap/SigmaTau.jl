@@ -13,14 +13,16 @@ time, so each holdover time has many trials. The test is that of
 
 ## Settings
 
+The settings sit in a bar above the plot.
+
 | Setting | Effect |
 |:--------|:-------|
-| **Training stretch** | **1/8**, **1/4** or **1/2** of the record, or **2τ**, a stretch twice as long as each holdover time. With the drift learned the last choice is **3τ**, three times as long. The line below gives the length |
-| **Predicted by** | **Least-squares fit**, or **Kalman filter** ([below](@ref explorer-holdover-kalman)) |
-| **Learned from the stretch** | **Frequency**, from a line, or **Frequency and drift**, from a parabola |
-| **Time error limit** | A time error in seconds, such as `1e-6`. The page then gives how long the clock stays within it. Empty for no limit |
-| **Share of trials** | 68.3 %, 90 %, 95 % or 99 %: the share of the trials whose error the dashed curve bounds |
-| **Start from the last reading** | On, the clock starts from the last reading of the stretch. Off, it starts from the value of the fit there, which averages white PM down, and on a clock with random-walk FM starts from the misfit of the line |
+| **Train on** | **1/8**, **1/4** or **1/2** of the record, or **2τ**, a stretch twice as long as each holdover time. With the drift learned the last choice is **3τ**, three times as long. The card gives the length |
+| **Fit** or **Kalman** | The prediction: a least-squares fit, or a Kalman filter ([below](@ref explorer-holdover-kalman)) |
+| **Frequency** or **+ drift** | What is learned from the stretch: the frequency, from a line, or the frequency and drift, from a parabola |
+| **Limit** | A time error in seconds, such as `1e-6`. The page then gives how long the clock stays within it. Empty for no limit |
+| **Trials** | 68.3 %, 90 %, 95 % or 99 %: the share of the trials whose error the dashed curve bounds |
+| **From last reading** | On, the clock starts from the last reading of the stretch. Off, it starts from the value of the fit there, which averages white PM down, and on a clock with random-walk FM starts from the misfit of the line |
 
 The holdover times are the octave multiples of the sample interval, up to
 the length of the training stretch and no further than half of what the
@@ -29,7 +31,7 @@ half the record for the trials.
 
 The page computes when it is shown and again when the record, its
 preparation, its analysis range or a setting changes. It needs no run, and
-the estimators of the panel have no part in it. The record needs 16
+the estimators of the Stability page have no part in it. The record needs 16
 samples or more. A trial is left out when missing samples take more than
 half of its training stretch, or the reading it starts from or is compared
 with.
@@ -130,8 +132,7 @@ the flicker FM `h₋₁` and the flicker PM `h₁` where the fit finds them.
 
 ## Several clocks
 
-With several clocks, the settings but the last move to a bar above the
-plot, and each clock has one color: its RMS as a solid line and the chosen
+With several clocks, each clock has one color: its RMS as a solid line and the chosen
 share of its trials as a dashed one. The worst trial, the prediction and
 the reference curve are not drawn. The card lists, for each clock, the
 time within the limit and the RMS at its longest holdover time. A clock

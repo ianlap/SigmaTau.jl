@@ -376,9 +376,16 @@ function renderStatus() {
 function render() {
   document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.page === state.page));
   document.getElementById("help-btn").classList.toggle("on", state.page === "help");
-  // One clock: Spectrum, Dynamic, Holdover and Steering put their settings in the panel. Several
-  // clocks: the panel keeps the clocks and the page shows a toolbar.
-  renderPanel(page?.controls && (!multi() || page.ownsPanel) ? page.controls() : null);
+  // The frame follows the page: Run where it feeds the page (Stability and Spectrum), the estimators and
+  // options on Stability, the page's own settings where it owns the panel; a page's other settings sit
+  // in its toolbar, whatever the number of clocks.
+  const runs = state.page === "stability" || state.page === "spectrum";
+  const panel = state.page !== "help" && renderPanel({ controls: page?.ownsPanel ? page.controls() : null, analysis: state.page === "stability", run: runs });
+  if (document.body.classList.contains("no-panel") === !!panel) {   // the page gains or loses the panel: the plots take the new width
+    document.body.classList.toggle("no-panel", !panel);
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+  }
+  document.body.classList.toggle("no-run", !runs);
   renderChip();
   page?.refresh();
   renderRail();

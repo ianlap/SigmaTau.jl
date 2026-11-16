@@ -37,14 +37,15 @@ segment's duration to ``1/(2τ_0)``.
 
 ## Settings
 
-The settings change what is shown, and they apply at once, without a run.
+The settings sit in a bar above the plots. They change what is shown, and
+they apply at once, without a run.
 
 | Setting | Effect |
 |:--------|:-------|
-| **Carrier frequency for ℒ(f)** | The carrier ``ν_0`` in hertz, 10 MHz at first. It takes a number such as `10e6` |
-| **Phase noise shown as** | **ℒ(f) dBc/Hz** or **Sx(f)** in the lower plot |
-| **Averaging** | **Log-binned** shows the mean of the density in ten bins per decade of frequency. **Welch, every bin** shows the estimate as computed |
-| **Show power-law slope guides** | Labels the stretches of ``S_y(f)`` whose slope is close to that of a power law |
+| **Carrier for ℒ(f)** | The carrier ``ν_0`` in hertz, 10 MHz at first. It takes a number such as `10e6` |
+| **ℒ(f) dBc/Hz** or **Sx(f)** | The phase noise in the lower plot |
+| Averaging | **Log-binned** shows the mean of the density in ten bins per decade of frequency. **Welch, every bin** shows the estimate as computed |
+| **Slope guides** | Labels the stretches of ``S_y(f)`` whose slope is close to that of a power law |
 
 The phase noise follows from the phase spectrum as
 ``ℒ(f) = \frac{1}{2}(2πν_0)^2 S_x(f)``, in decibels
@@ -79,7 +80,7 @@ the deviations.
 ## Several clocks
 
 With several clocks, the spectra are overlaid in the colors of the clocks,
-the settings move to a bar above the plots, and no slope guides are drawn.
+and no slope guides are drawn.
 
 ## Records with gaps
 

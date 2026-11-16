@@ -12,21 +12,24 @@ noise level, a burst or a disturbed stretch where it happens.
 
 ## Settings
 
+The settings sit in a bar above the maps.
+
 | Setting | Effect |
 |:--------|:-------|
 | **Estimator** | **DADEV**, the dynamic Allan deviation of [`dadev`](@ref), or **DHDEV**, the dynamic Hadamard deviation of [`dhdev`](@ref), which does not respond to linear frequency drift within a window |
-| **Window length** | A quarter, an eighth, a sixteenth or a thirty-second of the record, and 16 samples at least. The line below gives the samples in a window and the number of windows |
+| **Window** | A quarter, an eighth, a sixteenth or a thirty-second of the record, and 16 samples at least. With one clock, the bar gives the samples in a window and the number of windows |
 | **View** | **Map**, or **3D waterfall**, a surface that a drag turns |
+| **τ grid** | The grid of averaging times, the same as on the [Stability](panel.md#Options) page |
 
 The window moves by half its length, so a window of one eighth of the
-record gives 15 windows. The averaging times are those of the τ grid of the
-[side panel](panel.md#Options) that fit in one window. A shorter window
+record gives 15 windows. The averaging times are those of the τ grid that
+fit in one window. A shorter window
 follows changes more closely, reaches shorter averaging times only and
 scatters more, since each cell rests on the samples of one window.
 
 The page computes its maps when it is shown and again when the record, its
 preparation, its analysis range or a setting changes. It needs no run, and
-the estimators of the panel have no part in it. The record must have no
+the estimators of the Stability page have no part in it. The record must have no
 missing samples.
 
 ## The map
@@ -53,8 +56,7 @@ window of samples, so its interval is that of [`adev`](@ref) or
 
 ## Several clocks
 
-With several clocks, each has its own map, on one color scale, and the
-settings move to a bar above the maps. **3D waterfall** there turns every
+With several clocks, each has its own map, on one color scale. **3D waterfall** there turns every
 map into its own surface, on the same scale, and a drag turns one at a time.
 There is no selected cell.
 

@@ -102,8 +102,8 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .rail-run.running { animation: pulse 1s infinite; }
 .rail-run .stale-dot { position: absolute; top: 1px; right: 1px; width: 10px; height: 10px; border-radius: 5px; background: var(--warn-dot); border: 2px solid var(--bg-panel); }
 .rail-run-label { font-size: 10.5px; color: var(--muted); }
-body:not(.panel-hidden) :is(.rail-run, .rail-run-label) { display: none; }
-body.panel-hidden .side { display: none; }
+body:not(.panel-hidden):not(.no-panel) :is(.rail-run, .rail-run-label), body.no-run :is(.rail-run, .rail-run-label) { display: none; }
+body:is(.panel-hidden, .no-panel) .side, body.no-panel #rail-panel { display: none; }
 @media (max-width: 960px) {
   .topbar { gap: 8px; padding: 0 12px; }
   .brand { margin-right: 2px; }
