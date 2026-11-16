@@ -360,7 +360,7 @@ function renderStatus() {
   const hintEl = document.getElementById("status-hint");
   let kind, msg;
   const anyRecord = state.clocks.some((c) => c.record);
-  const overFilled = state.clocks.find((c) => c.record?.check?.filled > FILL_TESTED * c.record.n);
+  const overFilled = state.clocks.find((c) => c.record?.check && c.record.check.filled > FILL_TESTED * c.record.n);
   if (transient) [kind, msg] = [transient.kind, transient.text];
   else if (!state.core.ok) [kind, msg] = ["error", "No analysis core. Start the explorer with serve.py."];
   else if (state.run.state === "running") [kind, msg] = ["busy", `Running ${state.devs.map(label).join(", ")}…`];
