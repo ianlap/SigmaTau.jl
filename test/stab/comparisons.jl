@@ -11,6 +11,9 @@ using Statistics
     @test size(c) == (3, 2) && c.names == ["Cs", "Rb"]
     @test c[2].x[1:2] == [0.0, 0.5] && isnan(c[2].x[3])
     @test c[1, 2].x[2] == 0.5 && c[1, 2].source == "Cs − Rb"
+    # A tuple or a vector shows one line, not the matrix.
+    @test sprint(show, c) == "ClockComparisons(2 clocks × 3 samples, τ₀ = 1.0 s, against UTC(lab))"
+    @test !occursin("0.5", sprint(show, (c, 1)))
     @test_throws ArgumentError ClockComparisons([a, PhaseData([0.0, 1.0], 1.0)])
     @test_throws ArgumentError ClockComparisons([a, PhaseData(a.x, 2.0)])
     @test_throws ArgumentError ClockComparisons(ones(3, 2), 1.0; names=["x", "x"])

@@ -181,6 +181,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         end
     else
         data = try
+            require_value_cols(o)
             load_record(o)
         catch e
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))

@@ -733,10 +733,16 @@ function synth_ensemble(o::Options)
     return cc
 end
 
+# The clocks' names: those of the table's columns, else "column 2", "column 3", …
+function clock_names(o::Options)
+    names = table_names(o)
+    named = String[c <= length(names) ? names[c] : "column " * string(c) for c in o.value_cols]
+    return allunique(named) ? named : String["column " * string(c) for c in o.value_cols]
+end
+
 # Each --value-cols column read like FILE, with the same options, less the
 # readings that --fillgaps put in: a clock has no part in the scale there.
 function read_ensemble(o::Options)
-    isempty(o.value_cols) && throw(usage_error(o.command * " needs --value-cols with two or more columns, or --synth"))
     col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
     records = PhaseData{Float64}[]
     try
@@ -752,7 +758,7 @@ function read_ensemble(o::Options)
     end
     allequal(length(r.x) for r in records) && allequal(r.tau0 for r in records) ||
         throw(CLIError(EXIT_INPUT, "the clock columns differ in length or τ₀"))
-    return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
+    return ClockComparisons(records; names=clock_names(o))
 end
 
 # The Kalman scales take a model per clock and read the scale at --pivot:
