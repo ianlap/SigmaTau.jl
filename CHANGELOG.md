@@ -362,6 +362,12 @@ Clock models, the Kalman filter and timescales.
   FM.
 - `powerlaw_sigma(h, τ)` takes one τ as a number and returns a number
   (Python: a float).
+- `sigmatau check` says what the size and the names of a record suggest
+  about its units (a phase that moves by more than a second, a fractional
+  frequency above 1e-3, a file or `--column` name that says rad, ns, ps,
+  ppb, ppm or Hz while `--scaling` is 1), as `sigmatau: warning:` lines on
+  standard error and as `warnings` in the JSON; the explorer shows the same
+  note in the import dialog and on the Data page.
 
 ### Changed
 
@@ -657,6 +663,21 @@ Clock models, the Kalman filter and timescales.
   only the τ range of each estimator.
 - `identify_noise(record)` takes the octave grid, as `adev(record)` does,
   where it needed the averaging factors.
+- A plot of a suite or a vector of results that mixes the σ_y estimators
+  with TDEV, HTDEV, TTOTDEV, MTIE or TIE rms draws them on two axes side by
+  side, the second in seconds, where it drew both on one axis; a suite or
+  vector of the estimators in seconds alone has the axis title "Deviation
+  (s)", where it had "Deviation".
+- Explorer: a clock is named for its column without the unit and the word
+  phase or freq (`maser1` for `maser1 phase (s)`); the time axes, the record
+  chip and the sample interval read in days and years for long records
+  (`τ₀ 5 d · 28.7 yr`).
+- Explorer: a refusal of the Dynamic page is said once above the maps, and
+  the window-center labels of a map use one style.
+- `sigmatau` writes a table at a terminal (aligned, numbers to four
+  significant digits, a block per deviation or clock, the values every row
+  shares said once) and CSV, as before, in a pipe or with `--out`;
+  `--format table` and `--format csv` choose either one.
 
 ### Removed
 
@@ -995,6 +1016,10 @@ Clock models, the Kalman filter and timescales.
 - `clock_model` of a `noise_fit` with no components raises an
   `ArgumentError` that points to `add_component!` and `powerlaw_fit`, where
   it returned a model with every level zero.
+- Explorer: the Stability legend lists the estimators in the order of the
+  side panel with confidence bands on; the clock rows of the side panel hold
+  no nested controls, the confidence menu has a label, the page has a
+  heading and the F5 hint of the Run button reads at full contrast.
 
 ### Security
 
