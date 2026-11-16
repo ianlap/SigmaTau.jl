@@ -9,7 +9,7 @@
 import { state, update, visibleClocks, multi } from "../state.js";
 import { steer as fetchSteer, steerKey, steerDefault } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, timeUnit } from "../plot.js";
-import { sci, num, duration, modelText, inWords, escapeHtml as h } from "../format.js";
+import { sci, num, duration, timeAxisUnit, modelText, inWords, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
@@ -181,25 +181,26 @@ function sigmaPlot(ready, several) {
 function recordPlot(ready, several) {
   const all = ready.flatMap((c) => c.steer.series.steered).filter(Number.isFinite).map(Math.abs);
   const [f, u] = timeUnit(Math.max(...all) || 1);
+  const [tf, tu] = timeAxisUnit(Math.max(...ready.map((c) => c.steer.series.t.at(-1))));
   const traces = ready.map((c) => ({
-    x: c.steer.series.t, y: c.steer.series.steered.map((v) => v / f), name: several ? c.name : "Steered phase", mode: "lines",
+    x: c.steer.series.t.map((v) => v / tf), y: c.steer.series.steered.map((v) => v / f), name: several ? c.name : "Steered phase", mode: "lines",
     line: { color: several ? seriesColor(c.slot) : css("--s2"), width: 1.4 },
-    hovertemplate: `${several ? `<b>${h(c.name)}</b><br>` : ""}t = %{x:.6g} s<br>x = %{y:.5g} ${u}<extra></extra>`,
+    hovertemplate: `${several ? `<b>${h(c.name)}</b><br>` : ""}t = %{x:.6g} ${tu}<br>x = %{y:.5g} ${u}<extra></extra>`,
   }));
   const st = ready[0].steer;
   if (!several) traces.push({
-    x: st.series.t, y: st.series.correction, name: "Frequency correction", yaxis: "y2", mode: "lines", line: { color: css("--s4"), width: 1.2 },
-    hovertemplate: "t = %{x:.6g} s<br>correction = %{y:.4e}<extra></extra>",
+    x: st.series.t.map((v) => v / tf), y: st.series.correction, name: "Frequency correction", yaxis: "y2", mode: "lines", line: { color: css("--s4"), width: 1.2 },
+    hovertemplate: `t = %{x:.6g} ${tu}<br>correction = %{y:.4e}<extra></extra>`,
   });
   const muted = css("--muted");
   return [traces, {
     ...baseLayout(), margin: { l: 70, r: several ? 18 : 76, t: 10, b: 46 },
-    xaxis: linAxis("Time t (s)"), yaxis: { ...linAxis("Steered phase"), ticksuffix: ` ${u}` },
+    xaxis: linAxis(`Time t (${tu})`), yaxis: { ...linAxis("Steered phase"), ticksuffix: ` ${u}` },
     ...(several ? {} : { yaxis2: { ...linAxis("Frequency correction"), overlaying: "y", side: "right", showgrid: false, exponentformat: "e" } }),
     showlegend: !several, legend: { ...baseLayout().legend, x: 0.98, xanchor: "right", y: 0.02, yanchor: "bottom" },
     // Left of the line the model was fitted; the results count from it on.
-    shapes: several ? [] : [{ type: "line", xref: "x", yref: "paper", x0: st.train, x1: st.train, y0: 0, y1: 1, line: { color: muted, width: 1, dash: "dot" } }],
-    annotations: several ? [] : [{ xref: "x", x: st.train, xanchor: "left", yref: "paper", y: 0.99, yanchor: "top", showarrow: false, text: " results from here", font: { color: muted, size: 11.5 } }],
+    shapes: several ? [] : [{ type: "line", xref: "x", yref: "paper", x0: st.train / tf, x1: st.train / tf, y0: 0, y1: 1, line: { color: muted, width: 1, dash: "dot" } }],
+    annotations: several ? [] : [{ xref: "x", x: st.train / tf, xanchor: "left", yref: "paper", y: 0.99, yanchor: "top", showarrow: false, text: " results from here", font: { color: muted, size: 11.5 } }],
     uirevision: "steer-record",
   }];
 }
