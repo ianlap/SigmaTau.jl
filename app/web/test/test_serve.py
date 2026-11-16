@@ -167,7 +167,7 @@ class ServeTests(unittest.TestCase):
     def test_file_check(self):
         content = "# t x\n" + "".join(f"{i} {1e-9 * ((i * 31) % 17):.3e}\n" for i in range(1024))
         status, doc = self.post({
-            "args": ["check", "--time-col", "1", "--value-col", "2", "--detrend", "mean",
+            "args": ["check", "--time-column", "1", "--column", "2",
                      "--format", "json"],
             "file": {"name": "../../escape.txt", "content": content}})
         self.assertEqual(status, 200, doc)
@@ -183,7 +183,7 @@ class ServeTests(unittest.TestCase):
         self.assertEqual([r["deviation"] for r in doc["results"]], ["adev", "tdev"])
 
     def test_dynamic(self):
-        status, doc = self.post({"args": ["dynamic", "--synth", "4096", "--dev", "dhdev",
+        status, doc = self.post({"args": ["dynamic", "--synth", "4096", "--devs", "hdev",
                                           "--format", "json"]})
         self.assertEqual(status, 200, doc)
         self.assertIn("dynamic", doc)

@@ -48,7 +48,7 @@ const againstOf = (clocks) => state.ens.against ?? (clocks[0]?.source.type === "
 const simulated = (clocks) => clocks[0]?.source.type !== "file";
 const fittedOf = (clocks) => !simulated(clocks) || state.ens.fitted;
 // The file goes to the core as read, without the preparation of the Data page,
-// so the core's remedy for gaps (--fillgaps) has no counterpart on this page.
+// so the core's remedy for gaps (--fill-gaps) has no counterpart on this page.
 const GAPS = [
   [/^clock_models: .* usable τ points/, "Greenhall, Jones–Tryon and Stein fit a model to each clock, and this file leaves one of them too few samples at which it is read with two others. AT1, AT2 and EWFA form a scale from it."],
   [/^the KLTS interval needs/, "The KLTS interval needs a file without missing samples. The hat and the Groslambert covariance separate the clocks of this one."],
@@ -96,7 +96,7 @@ function clockArgs(command, clocks) {
   } else if (clocks.length) {
     const c = clocks[0];
     file = { name: c.source.name, content: c.source.content };
-    a.push("--value-cols", clocks.map((k) => k.value_col).join(","), "--time-col", c.time_col, "--header", c.header, "--scaling", c.scaling);
+    a.push("--column", clocks.map((k) => k.value_col).join(","), "--time-column", c.time_col, "--header", c.header, "--scaling", c.scaling);
     if (c.tau0) a.push("--tau0", c.tau0);
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);

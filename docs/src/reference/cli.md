@@ -30,9 +30,9 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | `holdover FILE` | the time error of the clock left to run on a frequency learned from the record, against holdover time |
 | `steer FILE` | the Allan deviation of the record steered to its reference in replay, beside that of the record and of the steady state that the clock model predicts |
 | `cross FILE --with FILE2` | the cross Allan deviation and cross-spectrum of two channels |
-| `timescale FILE --value-cols LIST` | a time scale from several clocks read against one reference |
-| `hat FILE --value-cols LIST` | the deviation of each of three or more clocks that are measured against one another |
-| `model --synth N --noise-model R:Q1:Q2:Q3` | the deviations that a clock model predicts |
+| `timescale FILE --column LIST` | a time scale from several clocks read against one reference |
+| `hat FILE --column LIST` | the deviation of each of three or more clocks that are measured against one another |
+| `model --synth N --clock-model R:Q1:Q2:Q3` | the deviations that a clock model predicts |
 | `phasenoise TABLE --carrier HZ` | the deviations that a table of the phase noise ``ℒ(f)``, or of another spectrum, gives over its band |
 | `report FILE` | the analysis of `analyze` as one HTML file |
 | `live SOURCE` | deviations kept up to date while readings arrive |
@@ -52,12 +52,12 @@ takes the options of this section.
 | `--input-format FMT` | layout of the file: `columns`, `stable32`, `timelab`, `counter`, `table`, `bipm_utc` or `rinex_clk`. By default `auto`, which detects it as [`read_data`](@ref) does |
 | `--phase`, `--freq` | the samples are phase in seconds, or fractional frequency. A file of columns is phase unless `--freq` is given. The other layouts tell which they hold, and either flag overrides them |
 | `--tau0 SECONDS` | sample interval. By default the one in the header of the file, else the step of the time column |
-| `--time-col N`, `--value-col N` | columns of the time and of the samples, counted from 1. By default 1 and 2. `--time-col 0` reads a file that has no time column |
-| `--reference-col N` | column to subtract from the value column, for clocks measured against one reference in one file. For files of columns only |
+| `--column COL` | the column of the clock: its number, counted from 1, or its name in a table whose first line names the columns. By default 2, and in a table the column that [`read_data`](@ref) picks from the names. In a RINEX clock file, the clock's name; by default the first clock. A name in a file without names is refused. `timescale` and `hat` take a list of two or more, `2,3,4` |
+| `--time-column COL` | column of the time, by number or name. By default 1. `--time-column 0` reads a file that has no time column |
+| `--reference-column COL` | column to subtract from the clock's, by number or name, for clocks measured against one reference in one file |
 | `--header N` | number of lines to skip after the leading `#` lines, such as a line of column names |
 | `--delim CHAR` | character between the fields, `'\t'` for a tab. By default a comma where the first line of data has one, a tab where a table or a `.tsv` file has one, and blanks otherwise |
 | `--scaling X` | factor applied to the samples, `1e-9` for nanoseconds |
-| `--column NAME` | the column of a table with named columns, or the clock of a RINEX clock file, by name. By default the column that [`read_data`](@ref) picks from the names of a table, and the first clock of a RINEX clock file. Any other file is refused, as it has no names |
 | `--nominal HZ` | nominal frequency, for readings in hertz. By default their mean, rounded to four significant figures |
 | `--keep-zeros` | read the zeros of a Stable32 `.phd` or `.frd` file as samples. By default a zero there is a missing sample, as in Stable32, except the first and the last sample of a phase file |
 
@@ -65,34 +65,32 @@ A file of columns is read as [`read_phase`](@ref) or
 [`read_frequency`](@ref) reads it: lines that begin with `#` are skipped,
 and a `# tau0:` line among them gives the sample interval. The other
 layouts are read as [`read_data`](@ref) reads them. A table whose first
-line names its columns is read by name, and a unit in the name of the
-column is applied, so `phase_ns` needs no `--scaling`. With `--time-col`,
-`--value-col` or `--header` given, such a table is read by position
-instead, and `--header 1` skips its line of names. The name of the time
+line names its columns is read by its own reader, whether `--column` gives
+a name or a number, and a unit in the name of the column is applied, so
+`phase_ns` needs no `--scaling`. With `--time-column`, `--reference-column`
+or `--header` given, such a table is read by position instead, without
+the units of its names, and its line of names is skipped. The name of the time
 column still sets its unit, so a column named `MJD` is in days either way.
 A file compressed with gzip (`.gz`) must be unpacked first.
 
 The program holds every record as phase. It integrates a frequency file of
 ``N`` samples to ``N + 1`` phase samples, and reports that number. A
-frequency file with missing samples must be filled with `--fillgaps`,
+frequency file with missing samples must be filled with `--fill-gaps`,
 whatever the analysis.
 
 ### Preparing
 
 | Option | Meaning |
 |:---|:---|
-| `--fillgaps` | fill the missing samples, as [`fillgaps`](@ref) does: the readings that the time column shows to be absent, and those written as `NaN` |
+| `--fill-gaps` | fill the missing samples, as [`fillgaps`](@ref) does: the readings that the time column shows to be absent, and those written as `NaN` |
 | `--range A:B` | keep seconds `A` to `B`, counted from the first sample. Either end can be left open: `3600:` or `:86400` |
-| `--detrend MODE` | remove `mean`, `endpoint` or `linear` from the samples as the file holds them, by the methods of [`detrend`](@ref). By default `none` |
 | `--remove-outliers` | replace the outliers and fill their places, as [`remove_outliers`](@ref) does |
 | `--remove-drift MODE` | fit a line (`linear`) or a parabola (`quadratic`) to the phase by least squares and remove it. By default `none` |
 
-The steps apply in the order of the table. `--detrend linear` removes a
-frequency offset from a phase file and a linear frequency drift from a
-frequency file. `--remove-drift` works on the phase whatever the file
-holds: `linear` removes a frequency offset, and `quadratic` an offset and a
+The steps apply in the order of the table. `--remove-drift` works on the
+phase whatever the file holds: `linear` removes a frequency offset, and `quadratic` an offset and a
 linear frequency drift. Its fit leaves out the missing samples and those
-that `--fillgaps` put in, and the JSON output reports what it removed.
+that `--fill-gaps` put in, and the JSON output reports what it removed.
 
 ### Simulated records
 
@@ -100,9 +98,9 @@ that `--fillgaps` put in, and the JSON output reports what it removed.
 |:---|:---|
 | `--synth N` | in place of `FILE`, a simulated record of `N` phase samples: white FM of ``10^{-12}`` at one sample interval, and a random walk of the frequency in steps of ``10^{-14}`` |
 | `--seed S` | seed of the simulation. By default 42 |
-| `--noise-model R:Q1:Q2:Q3` | simulate a clock of this [`ClockModel`](@ref) instead: the variance `R` of its white PM in s², and the diffusion coefficients of its white FM, random-walk FM and random-run FM. Given several times, it simulates several clocks |
+| `--clock-model R:Q1:Q2:Q3` | simulate a clock of this [`ClockModel`](@ref) instead: the variance `R` of its white PM in s², and the diffusion coefficients of its white FM, random-walk FM and random-run FM. Given several times, it simulates several clocks |
 | `--clocks K` | simulate `K` clocks, from 2 to 64, with white FM and random-walk FM, each a factor of 2 above the last in deviation |
-| `--clock I` | which of several simulated clocks the command reads. By default 1 |
+| `--column I` | which of several simulated clocks the command reads. By default 1 |
 
 The sample interval of a simulated record is `--tau0`, or 1 s.
 
@@ -174,7 +172,7 @@ sigmatau_json("analyze missing.dat --format json") # hide
 | `--no-ci` | no intervals or EDF, and no noise types but those that the bias factors of `totdev`, `mtotdev`, `ttotdev`, `htotdev` and `mhtotdev` rest on |
 | `--noise TYPE` | noise type behind the intervals and the bias factors: `auto` (the default, identified at each averaging time), `fit` (the dominant term at each averaging time of the model that [`powerlaw_fit`](@ref) fits to the record), or one of `WHPM`, `FLPM`, `WHFM`, `FLFM`, `RWFM`, `FWFM`, `RRFM` for every averaging time |
 | `--dead-time S` | for frequency readings with `S` seconds unmeasured between them: the Allan deviation divided by the bias functions, the `dead_time` keyword of [`adev`](@ref) ([Dead time](@ref)). It needs `--devs adev`, a `--noise` from `WHPM` to `RWFM`, and `--tau0`, the averaging time of one reading; the time column of such a file holds the period between readings. The JSON echoes it as `dead_time` |
-| `--bias MODE` | bias correction of the total deviations and Thêo1: `exact` (the default), `published`, `stable32` or `none`, for `correct_bias = true`, `:published`, `:stable32` and `false` ([Bias correction](../explanation/bias.md)). `--no-bias-correction` is `--bias none` |
+| `--bias MODE` | bias correction of the total deviations and Thêo1: `exact` (the default), `published`, `stable32` or `none`, for `correct_bias = true`, `:published`, `:stable32` and `false` ([Bias correction](../explanation/bias.md)). |
 
 The deviations are `adev`, `mdev`, `hdev`, `mhdev`, `pdev`, `totdev`,
 `mtotdev`, `htotdev`, `mhtotdev`, `theo1`, `theoh`, `tdev`, `htdev`,
@@ -286,13 +284,13 @@ sigmatau_json("spectrum --synth 1024 --format json"; only = "spectrum") # hide
 
 | Option | Meaning |
 |:---|:---|
-| `--dev NAME` | `dadev`, the default, or `dhdev` |
+| `--devs NAME` | `adev`, the default, or `hdev` |
 | `--window N` | length of the window, in samples. By default the largest power of two up to an eighth of the record, and at least 16 |
 | `--step N` | step of the window, in samples. By default half the window |
 | `--grid GRID` | grid of averaging factors within the window. By default `octave` |
 
 The result is that of [`dadev`](@ref) or [`dhdev`](@ref), which take a
-record without gaps: one with gaps is refused unless `--fillgaps` fills them. The CSV columns are `t,tau,dev`, with a row for each
+record without gaps: one with gaps is refused unless `--fill-gaps` fills them. The CSV columns are `t,tau,dev`, with a row for each
 window and averaging time. `t` is the center of the window, in seconds from
 the first sample of the file.
 
@@ -306,7 +304,7 @@ sigmatau_json("dynamic --synth 1024 --format json"; only = "dynamic") # hide
 
 | Option | Meaning |
 |:---|:---|
-| `--model MODEL` | `linear` (the default), `quadratic`, `log` or `diffusion` |
+| `--drift-model MODEL` | `linear` (the default), `quadratic`, `log` or `diffusion` |
 | `--method METHOD` | the estimator of the linear model: `frequency_fit` (the default), `phase_fit`, `bisection`, `second_difference` or `four_point` |
 
 The fit is that of [`drift_fit`](@ref), which defines the models, their
@@ -333,7 +331,7 @@ their times.
 |:---|:---|
 | `--train SECONDS` | length of the training stretch, on which the frequency is fitted. By default a quarter of the record |
 | `--grow K` | in place of `--train`, a training stretch `K` times as long as each holdover time. `K` is 2 or more, and 3 or more with `--fit-drift` |
-| `--tau LIST` | holdover times in seconds: `60,3600,14400`. By default the octave multiples of ``τ_0`` up to the training stretch, or to half of what the record has left after it where that is less. With `--grow` they are those that leave half the record for the trials, and with `--kalman` those up to half of what the record has left after the stretch |
+| `--times LIST` | holdover times in seconds: `60,3600,14400`. By default the octave multiples of ``τ_0`` up to the training stretch, or to half of what the record has left after it where that is less. With `--grow` they are those that leave half the record for the trials, and with `--kalman` those up to half of what the record has left after the stretch |
 | `--fit-drift` | fit a parabola to the stretch, which also carries the frequency drift on. By default a line |
 | `--no-anchor` | start each trial from the value of the fit at the end of the stretch. By default from the last reading |
 | `--kalman` | predict with a Kalman filter in place of the least-squares fit. It goes with none of `--grow`, `--no-anchor` and `--fit` |
@@ -349,7 +347,7 @@ With `--kalman` the training stretch needs 65 samples or more, which makes
 The CSV output has a row for each holdover time:
 
 ```@example cliref
-sigmatau("holdover clock.dat --train 512 --tau 16,64,256 --limit 2e-10") # hide
+sigmatau("holdover clock.dat --train 512 --times 16,64,256 --limit 2e-10") # hide
 ```
 
 `rms`, `quantile`, `worst` and `mean` are the statistics of the time error
@@ -361,7 +359,7 @@ holdover time, and empty when it does not reach it at the last. `claimed`
 is empty without `--kalman`.
 
 ```@example cliref
-sigmatau_json("holdover clock.dat --train 512 --tau 16,64,256 --limit 2e-10 --fit --format json"; only = "holdover") # hide
+sigmatau_json("holdover clock.dat --train 512 --times 16,64,256 --limit 2e-10 --fit --format json"; only = "holdover") # hide
 ```
 
 `drift` and `anchor` tell which fit and which start the test used. `grow`
@@ -400,7 +398,7 @@ averaging times at which each matters, up to the length of the record.
 With `--fit-drift` it also has a drift state.
 
 ```@example cliref
-sigmatau("holdover clock.dat --train 512 --tau 16,64,256 --kalman") # hide
+sigmatau("holdover clock.dat --train 512 --times 16,64,256 --kalman") # hide
 ```
 
 `claimed` is the standard deviation that the filter itself gives the error
@@ -495,7 +493,7 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 
 | Option | Meaning |
 |:---|:---|
-| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4`. In a table with named columns each is read by its number as `--column` reads one by its name, with the unit in its name, and is named by its column name in the output. Without the option, the error lists the columns by number |
+| `--column LIST` | columns of the clocks, two or more, each read against the same reference, by number or name: `2,3,4`. In a table with named columns each is read with the unit in its name and is named by its column name in the output. Without the option, the error lists the columns by number |
 | `--algorithm ALG` | `at1` (the default), `at2`, `ewfa`, `greenhall`, `jones_tryon` or `stein`, the algorithms of [`timescale`](@ref) |
 | `--wmax W` | with `at1`, `at2` or `stein`, the largest weight that one clock may take, from 1 over the number of clocks to 1. By default 1, which sets no limit |
 | `--steps MODE` | with `at2`, detect frequency steps of the clocks: `best` or `real` |
@@ -504,10 +502,10 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 | `--fitted-models` | with `--synth` and `greenhall`, `jones_tryon` or `stein`, fit the model of each clock from the simulated readings, as for a file. By default simulated clocks take the models they were simulated from |
 
 Each column is read with the options of the record, and a clock takes
-part in the scale where it was read: the samples that `--fillgaps` puts in
+part in the scale where it was read: the samples that `--fill-gaps` puts in
 are left out again, so the option serves only to read a frequency file
 that has missing samples. With `--synth` the clocks are simulated: four of
-them, or those that `--clocks` or `--noise-model` describe. `greenhall`, `jones_tryon` and `stein` need three
+them, or those that `--clocks` or `--clock-model` describe. `greenhall`, `jones_tryon` and `stein` need three
 clocks or more and a model of each. For a file they fit it with
 [`clock_models`](@ref), which leaves out the samples a missing reading
 touches. Simulated clocks take the models they were simulated from, or
@@ -548,7 +546,7 @@ weight, and a message on stderr names it
 
 | Option | Meaning |
 |:---|:---|
-| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference, as for `timescale` |
+| `--column LIST` | columns of the clocks, two or more, each read against the same reference, as for `timescale` |
 | `--pairs` | the three columns hold the differences A−B, B−C and C−A, each as it was measured, in place of clocks read against one reference |
 | `--no-reference` | leave the reference out, for three clocks or more |
 | `--covariance` | the Groslambert covariance in place of the hat |
@@ -604,12 +602,12 @@ pair, in the order of the lists above and in the form of a result of
 
 `model` simulates nothing and reads no file. It writes, as JSON, the
 modified Allan, Allan and modified Hadamard deviations that
-[`powerlaw_sigma`](@ref) gives for each `--noise-model`, at the octave
+[`powerlaw_sigma`](@ref) gives for each `--clock-model`, at the octave
 averaging times of a record of `--synth N` samples. Besides these two
 options it takes `--tau0`, by default 1 s, `--out` and `--quiet`:
 
 ```@example cliref
-sigmatau_json("model --synth 64 --noise-model 1e-22:1e-24:1e-30:0"; only = "model") # hide
+sigmatau_json("model --synth 64 --clock-model 1e-22:1e-24:1e-30:0"; only = "model") # hide
 ```
 
 With random-run FM in the model (`Q3` above zero), `mdev` and `adev` are
@@ -620,7 +618,7 @@ With random-run FM in the model (`Q3` above zero), `mdev` and `adev` are
 `phasenoise` reads no record. Its file is a table of a spectrum, the
 Fourier frequency in Hz in the first column and the spectrum in the
 second, and its result is the deviation that [`spectrum_sigma`](@ref)
-integrates from the table. `--header`, `--delim` and `--value-col` read
+integrates from the table. `--header`, `--delim` and `--column` read
 the table as they read a record, and `--format`, `--out` and `--quiet`
 are those of the other commands.
 

@@ -168,7 +168,6 @@ function json_acf(io::IO, o::Options, rec)
 end
 
 function json_preprocessing(io::IO, o::Options)
-    json_key(io, "detrend"); json_string(io, o.detrend)
     json_key(io, "remove_drift"); json_string(io, o.remove_drift)
     json_key(io, "fillgaps"); json_bool(io, o.fillgaps)
     json_key(io, "remove_outliers"); json_bool(io, o.remove_outliers)

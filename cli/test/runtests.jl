@@ -178,7 +178,7 @@ mktempdir() do dir
         @test parse.(Float64, getindex.(rows, 6)) == [c.lo for c in ref.ci]
         @test getindex.(rows, 10) == String.(ref.noise_type)
         ref = totdev(pd, [1, 3, 9]; correct_bias=false)
-        rows = csv_rows(run_cli("analyze", pf, "--devs", "totdev", "--m", "9,1,3", "--no-bias-correction").out)
+        rows = csv_rows(run_cli("analyze", pf, "--devs", "totdev", "--m", "9,1,3", "--bias", "none").out)
         @test parse.(Float64, getindex.(rows, 5)) == ref.dev
         for mode in (:published, :stable32)
             ref = htotdev(pd, [3, 9]; correct_bias=mode)
@@ -314,8 +314,8 @@ mktempdir() do dir
         open(vf, "w") do io
             foreach(v -> println(io, v), X)
         end
-        r = run_cli("analyze", vf, "--time-col", "0", "--value-col", "1", "--tau0", "1",
-                    "--scaling", "1e9", "--detrend", "mean", "--devs", "adev", "--no-ci")
+        r = run_cli("analyze", vf, "--time-column", "0", "--column", "1", "--tau0", "1",
+                    "--scaling", "1e9", "--devs", "adev", "--no-ci")
         @test r.code == 0
         sf = joinpath(dir, "semi.txt")
         open(sf, "w") do io
@@ -334,7 +334,7 @@ mktempdir() do dir
         @test parse.(Float64, getindex.(a, 5)) ≈ b.dev
         @test parse(Float64, a[1][4]) == 0.1                     # τ₀ from the header
         @test occursin("frequency", run_cli("analyze", fx("counter_53230a_freq.csv"), "--tau0", "1",
-                                            "--devs", "adev", "--no-ci", "--fillgaps").out)
+                                            "--devs", "adev", "--no-ci", "--fill-gaps").out)
         # A missing frequency reading (9.91E+37) must be filled, not integrated as NaN.
         @test run_cli("analyze", fx("counter_53230a_freq.csv"), "--tau0", "1").code == 2
         @test occursin("\"start\":\"2026-11-08T12:00:00Z\",\"gaps\":1",
@@ -355,7 +355,7 @@ mktempdir() do dir
         @test r.code == 0 && occursin("\"quantity\":\"phase\"", r.out) && occursin("\"tau0\":30.0", r.out)
         @test run_cli("check", fx("rinex_clk_synth.clk"), "--column", "G99").code == 2
         @test occursin("not to a timelab file", run_cli("check", tim, "--column", "alpha").err)
-        @test run_cli("analyze", tim, "--reference-col", "2").code == 1
+        @test run_cli("analyze", tim, "--reference-column", "2").code == 1
         semi = joinpath(dir, "semi.txt")
         write(semi, "time;phase (ns)\n" * join(string.(0:63, ";", X[1:64] .* 1e9), "\n"))
         d = csv_rows(run_cli("analyze", semi, "--input-format", "table", "--delim", ";",
@@ -393,11 +393,11 @@ mktempdir() do dir
                 println(io, i - 1, ",", v + 1e-9 * i, ",", 1e-9 * i)
             end
         end
-        a = csv_rows(run_cli("analyze", rf, "--reference-col", "3", "--devs", "adev", "--no-ci").out)
+        a = csv_rows(run_cli("analyze", rf, "--reference-column", "3", "--devs", "adev", "--no-ci").out)
         b = csv_rows(run_cli("analyze", pf, "--devs", "adev", "--no-ci").out)
         @test isapprox(parse.(Float64, getindex.(a, 5)), parse.(Float64, getindex.(b, 5)); rtol=1e-6)
-        @test run_cli("analyze", rf, "--reference-col", "9").code == 2
-        @test run_cli("analyze", rf, "--reference-col", "2").code == 1
+        @test run_cli("analyze", rf, "--reference-column", "9").code == 2
+        @test run_cli("analyze", rf, "--reference-column", "2").code == 1
     end
 
     @testset "timescale" begin
@@ -410,11 +410,11 @@ mktempdir() do dir
                 println(io, k - 1, ",", join(cc.x[k, :], ","))
             end
         end
-        rows = csv_rows(run_cli("timescale", tf, "--value-cols", "2,3,4").out)
+        rows = csv_rows(run_cli("timescale", tf, "--column", "2,3,4").out)
         @test getindex.(rows, 1) == ["column 2", "column 3", "column 4"]
         w = parse.(Float64, getindex.(rows, 3))
         @test sum(w) ≈ 1 && w[3] < w[1] / 2
-        # A reading that --fillgaps puts in is no reading: the clock that
+        # A reading that --fill-gaps puts in is no reading: the clock that
         # joins at sample 1001 has no part in the scale before it.
         lf = joinpath(dir, "late.csv")
         open(lf, "w") do io
@@ -422,37 +422,37 @@ mktempdir() do dir
                 println(io, k - 1, ",", join(k > 1000 ? cc.x[k, :] : [cc.x[k, 1:2]; NaN], ","))
             end
         end
-        late = ("timescale", lf, "--value-cols", "2,3,4", "--algorithm", "greenhall")
+        late = ("timescale", lf, "--column", "2,3,4", "--algorithm", "greenhall")
         r = run_cli(late...)
-        @test r.code == 0 && run_cli(late..., "--fillgaps").out == r.out
-        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "ewfa", "--format=json", "--series", "8")
+        @test r.code == 0 && run_cli(late..., "--fill-gaps").out == r.out
+        r = run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "ewfa", "--format=json", "--series", "8")
         @test r.code == 0
         @test occursin("\"algorithm\":\"ewfa\"", r.out) && occursin("\"weight\":[0.3333333333333333,", r.out)
         @test occursin("\"adev\":{\"tau\":[1.0,", r.out) && occursin("\"series\":{\"t\":[0.0,", r.out)
         # adev.readings: each clock as read, which the scale compares with.
         @test parse(Float64, match(r"\"readings\":\[\[([^,]+),", r.out)[1]) ≈ adev(cc[1], [1]; ci=false).dev[1]
-        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--format=json", "--series", "0")
+        r = run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "at2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"at2\"", r.out)
-        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "at2", "--steps", "real", "--format=json", "--series", "0")
+        r = run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "at2", "--steps", "real", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"steps\":\"real\"", r.out)
         for alg in ("at1", "greenhall", "stein")
-            @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", alg, "--steps", "best").code == 1
+            @test run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", alg, "--steps", "best").code == 1
         end
         for w in ("2", "0", "-1")
-            @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--wmax", w).code == 1
+            @test run_cli("timescale", tf, "--column", "2,3,4", "--wmax", w).code == 1
         end
         # The Kalman scales fit a model per clock; --pivot picks the clock they read at.
-        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "2", "--format=json", "--series", "0")
+        r = run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "greenhall", "--pivot", "2", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"greenhall\"", r.out) && occursin("\"pivot\":2", r.out)
-        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "jones_tryon", "--format=json", "--series", "0").code == 0
-        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
+        @test run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "jones_tryon", "--format=json", "--series", "0").code == 0
+        r = run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "stein", "--wmax", "0.5", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"algorithm\":\"stein\"", r.out)
-        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
+        @test run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "greenhall", "--pivot", "4").code != 0
         # --flicker fits flicker states per clock; these clocks have no flicker, so none.
-        r = run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "greenhall", "--flicker", "--format=json", "--series", "0")
+        r = run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "greenhall", "--flicker", "--format=json", "--series", "0")
         @test r.code == 0 && occursin("\"flicker\":{\"fm\":[0,0,0],\"pm\":[0,0,0]}", r.out)
-        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--flicker").code != 0
-        @test run_cli("timescale", tf, "--value-cols", "2,3", "--algorithm", "greenhall").code != 0
+        @test run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "stein", "--flicker").code != 0
+        @test run_cli("timescale", tf, "--column", "2,3", "--algorithm", "greenhall").code != 0
         @test run_cli("timescale", "--synth", "2048", "--format=json").code == 0
         # --clocks sets how many clocks are simulated (four by default).
         r = run_cli("timescale", "--synth", "2048", "--clocks", "6", "--format=json", "--series", "0")
@@ -470,13 +470,13 @@ mktempdir() do dir
         @test isempty(run_cli(stein..., "--fitted-models", "--quiet").err)
         # The fit belongs to simulated clocks under a Kalman scale, and --flicker to the fit.
         @test run_cli("timescale", "--synth", "200", "--fitted-models").code == 1
-        @test run_cli("timescale", tf, "--value-cols", "2,3,4", "--algorithm", "stein", "--fitted-models").code == 1
+        @test run_cli("timescale", tf, "--column", "2,3,4", "--algorithm", "stein", "--fitted-models").code == 1
         @test run_cli("timescale", "--synth", "200", "--algorithm", "greenhall", "--flicker").code == 1
         @test run_cli("timescale", "--synth", "2048", "--algorithm", "greenhall", "--flicker", "--fitted-models").code == 0
         @test !occursin("\"models\"", run_cli("timescale", "--synth", "200", "--format=json").out)
-        @test run_cli("timescale", tf).code == 1                       # no --value-cols
-        @test run_cli("timescale", tf, "--value-cols", "2,2").code == 1
-        @test run_cli("timescale", tf, "--value-cols", "2,9").code == 2
+        @test run_cli("timescale", tf).code == 1                       # no --column
+        @test run_cli("timescale", tf, "--column", "2,2").code == 1
+        @test run_cli("timescale", tf, "--column", "2,9").code == 2
         # A table with a line of names is read clock by clock, in the units
         # and on the MJD axis its names give; --header reads the same axis.
         nf = joinpath(dir, "named.csv")
@@ -487,26 +487,34 @@ mktempdir() do dir
             end
         end
         for extra in ((), ("--header", "1", "--scaling", "1e-9"))
-            r = run_cli("timescale", nf, "--value-cols", "2,3,4", extra..., "--format=json", "--series", "0")
+            r = run_cli("timescale", nf, "--column", "2,3,4", extra..., "--format=json", "--series", "0")
             @test r.code == 0 && occursin("\"tau0\":432000.0,\"n\":64,", r.out)
         end
-        @test run_cli("timescale", nf, "--value-cols", "2,3", "--column", "a (ns)").code == 1
+        # A column by number or by its name, alone or in a list.
+        @test run_cli("timescale", nf, "--column", "a (ns),b (ns),c (ns)").out == run_cli("timescale", nf, "--column", "2,3,4").out
+        @test run_cli("analyze", nf, "--column", "b (ns)").out == run_cli("analyze", nf, "--column", "3").out
+        r = run_cli("analyze", nf, "--column", "3", "--reference-column", "a (ns)", "--devs", "adev", "--m", "1")
+        @test r.code == 0 && r.out == run_cli("analyze", nf, "--column", "3", "--reference-column", "2", "--devs", "adev", "--m", "1").out
+        @test occursin("--reference-column z: no column of that name; the columns are 1 MJD, 2 a (ns)",
+                       run_cli("analyze", nf, "--column", "3", "--reference-column", "z").err)
+        @test occursin("reads one clock", run_cli("analyze", nf, "--column", "2,3").err)
+        @test occursin("unknown option --value-col", run_cli("analyze", nf, "--value-col", "2").err)
         # The clocks of a table go by the names on its first line, and without
-        # --value-cols the columns are listed by number.
-        @test getindex.(csv_rows(run_cli("timescale", nf, "--value-cols", "2,3,4").out), 1) == ["a (ns)", "b (ns)", "c (ns)"]
-        @test getindex.(csv_rows(run_cli("hat", nf, "--value-cols", "2,3,4", "--devs", "adev", "--m", "1").out), 1) ==
+        # --column the columns are listed by number.
+        @test getindex.(csv_rows(run_cli("timescale", nf, "--column", "2,3,4").out), 1) == ["a (ns)", "b (ns)", "c (ns)"]
+        @test getindex.(csv_rows(run_cli("hat", nf, "--column", "2,3,4", "--devs", "adev", "--m", "1").out), 1) ==
               ["a (ns)", "b (ns)", "c (ns)", "reference"]
         for cmd in ("timescale", "hat")
             r = run_cli(cmd, nf)
-            @test r.code == 1 && occursin("needs --value-cols", r.err) && occursin("the columns of this file are 1 MJD, 2 a (ns), 3 b (ns), 4 c (ns)", r.err)
+            @test r.code == 1 && occursin("needs --column", r.err) && occursin("the columns of this file are 1 MJD, 2 a (ns), 3 b (ns), 4 c (ns)", r.err)
         end
         # Errors name the command line's flags, not read_data's keyword.
         r = run_cli("analyze", nf)
         @test r.code == 2 && occursin("pass --column with one of MJD, a (ns)", r.err) && !occursin("column=", r.err)
         # A name picks no column of a file without names: refused, not ignored.
         r = run_cli("analyze", pf, "--column", "alpha")
-        @test r.code == 1 && occursin("this file has no column names; pick it with --value-col, or give --input-format table", r.err)
-        r = run_cli("timescale", nf, "--value-cols", "2,7")
+        @test r.code == 1 && occursin("--column alpha names a column, and this file has no column names; pick it by number, or give --input-format table", r.err)
+        r = run_cli("timescale", nf, "--column", "2,7")
         @test r.code == 2 && occursin("column 7 exceeds 4 columns", r.err)
     end
 
@@ -521,15 +529,15 @@ mktempdir() do dir
             end
         end
         dev(rows) = parse.(Float64, getindex.(rows, 4))
-        rows = csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--devs", "mdev", "--m", "1,4,16").out)
+        rows = csv_rows(run_cli("hat", hf, "--column", "2,3", "--devs", "mdev", "--m", "1,4,16").out)
         @test getindex.(rows, 1) == repeat(["column 2", "column 3", "reference"]; inner=3)
         lib = ncornered_hat(ClockComparisons(hcat(x[1] .- x[3], x[2] .- x[3]), 1.0), [1, 4, 16]; deviation=:mdev)
         @test dev(rows) ≈ reduce(vcat, r.dev for r in lib) && parse(Float64, rows[1][7]) ≈ lib[1].edf[1]
-        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--devs", "mdev", "--m", "1,4,16").out)) ≈ dev(rows)
+        @test dev(csv_rows(run_cli("hat", hf, "--column", "4,5,6", "--pairs", "--devs", "mdev", "--m", "1,4,16").out)) ≈ dev(rows)
         # The Groslambert covariance of records that close is the hat on ADEV.
-        adev_rows = csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16").out)
-        @test dev(csv_rows(run_cli("hat", hf, "--value-cols", "2,3", "--m", "1,4,16", "--covariance").out)) ≈ dev(adev_rows)
-        r = run_cli("hat", hf, "--value-cols", "4,5,6", "--pairs", "--klts", "--confidence", "0.95", "--m", "1,4", "--format=json")
+        adev_rows = csv_rows(run_cli("hat", hf, "--column", "2,3", "--m", "1,4,16").out)
+        @test dev(csv_rows(run_cli("hat", hf, "--column", "2,3", "--m", "1,4,16", "--covariance").out)) ≈ dev(adev_rows)
+        r = run_cli("hat", hf, "--column", "4,5,6", "--pairs", "--klts", "--confidence", "0.95", "--m", "1,4", "--format=json")
         @test r.code == 0 && occursin("\"method\":\"groslambert\",\"interval\":\"klts\",\"layout\":\"pairs\"", r.out)
         @test occursin("\"clocks\":[\"A\",\"B\",\"C\"],\"pairs\":[[1,2],[1,3],[2,3]]", r.out)
         # Pairs that do not close: B−C far noisier than the other two leaves
@@ -540,24 +548,24 @@ mktempdir() do dir
                 println(io, k - 1, ",", join((x[1][k], 9x[3][k], x[2][k]), ","))
             end
         end
-        rows = csv_rows(run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4").out)
+        rows = csv_rows(run_cli("hat", nf, "--column", "2,3,4", "--pairs", "--m", "1,4").out)
         @test all(isempty, getindex.(rows[1:2], 4)) && all(!isempty, getindex.(rows[3:6], 4))
-        @test occursin("\"points\":[{\"tau\":1.0,\"dev\":null,", run_cli("hat", nf, "--value-cols", "2,3,4", "--pairs", "--m", "1,4", "--format=json").out)
+        @test occursin("\"points\":[{\"tau\":1.0,\"dev\":null,", run_cli("hat", nf, "--column", "2,3,4", "--pairs", "--m", "1,4", "--format=json").out)
         # Missing readings: the hat and the covariance leave their terms out, KLTS refuses.
         gf = joinpath(dir, "gapped.csv")
         write(gf, replace(read(hf, String), r"^100,[^,]*,"m => "100,NaN,"))
-        gapped(method...) = run_cli("hat", gf, "--value-cols", "2,3", "--m", "1,4", method...)
+        gapped(method...) = run_cli("hat", gf, "--column", "2,3", "--m", "1,4", method...)
         for method in ((), ("--covariance",))
             @test dev(csv_rows(gapped(method...).out)) ≈ dev(adev_rows)[[1, 2, 4, 5, 7, 8]] rtol = 0.02
         end
-        @test gapped("--klts").code == 3 && occursin("--fillgaps", gapped("--klts").err)
+        @test gapped("--klts").code == 3 && occursin("--fill-gaps", gapped("--klts").err)
         # Simulated clocks have a perfect reference, which is no clock.
         @test unique(getindex.(csv_rows(run_cli("hat", "--synth", "512", "--m", "1").out), 1)) == ["clock 1", "clock 2", "clock 3", "clock 4"]
         @test run_cli("hat", "--synth", "512", "--clocks", "2").code == 1
-        @test run_cli("hat", hf, "--value-cols", "2,3", "--no-reference").code == 1     # two clocks
-        @test run_cli("hat", hf, "--value-cols", "2,3", "--pairs").code == 1            # two of three pairs
-        @test run_cli("hat", hf, "--value-cols", "2,3", "--devs", "totdev").code == 1
-        @test run_cli("hat", hf, "--value-cols", "2,3", "--covariance", "--devs", "mdev").code == 1
+        @test run_cli("hat", hf, "--column", "2,3", "--no-reference").code == 1     # two clocks
+        @test run_cli("hat", hf, "--column", "2,3", "--pairs").code == 1            # two of three pairs
+        @test run_cli("hat", hf, "--column", "2,3", "--devs", "totdev").code == 1
+        @test run_cli("hat", hf, "--column", "2,3", "--covariance", "--devs", "mdev").code == 1
         @test run_cli("hat", "--synth", "512", "--klts").code == 1            # four clocks
     end
 
@@ -575,17 +583,17 @@ mktempdir() do dir
         @test rows[1][4] == "bisection" && isempty(rows[1][12])
         r = run_cli("drift", ff, "--freq", "--method", "four_point", "--format", "json")
         @test r.code == 0 && occursin("\"method\":\"four_point\"", r.out) && occursin("\"drift_per_day_err\":null", r.out)
-        @test run_cli("drift", ff, "--method", "bisection", "--model", "log").code == 1
-        r = run_cli("drift", ff, "--freq", "--model", "log", "--format", "json", "--series", "50")
+        @test run_cli("drift", ff, "--method", "bisection", "--drift-model", "log").code == 1
+        r = run_cli("drift", ff, "--freq", "--drift-model", "log", "--format", "json", "--series", "50")
         @test r.code == 0 && occursin("\"model\":\"log\"", r.out) && occursin("\"fit\":[", r.out)
-        @test run_cli("drift", ff, "--model", "cubic").code == 1
+        @test run_cli("drift", ff, "--drift-model", "cubic").code == 1
         xg = copy(X); xg[100] = NaN
         r = run_cli("drift", write_table(joinpath(dir, "driftgap.csv"), xg), "--method", "four_point")
-        @test r.code == 3 && occursin("drift fit: --method four_point needs a record without gaps; fill them with --fillgaps", r.err)
+        @test r.code == 3 && occursin("drift fit: --method four_point needs a record without gaps; fill them with --fill-gaps", r.err)
         # Four phase samples: three frequency steps fit a line but not a log.
         sf = write_table(joinpath(dir, "short.csv"), [0.0, 1.0, 3.0, 6.0] .* 1e-9)
         @test run_cli("drift", sf).code == 0
-        @test run_cli("drift", sf, "--model", "log").code == 3
+        @test run_cli("drift", sf, "--drift-model", "log").code == 3
     end
 
     @testset "holdover" begin
@@ -593,7 +601,7 @@ mktempdir() do dir
         hf = write_table(joinpath(dir, "free.csv"), p.x)
         q = holdover(p; train=512, tau=[16, 64, 256]).quantile
         ref = holdover(p; train=512, tau=[16, 64, 256], limit=sqrt(q[2] * q[3]))
-        rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--tau", "256,16,64", "--limit", string(ref.limit)).out)
+        rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--times", "256,16,64", "--limit", string(ref.limit)).out)
         @test parse.(Float64, getindex.(rows, 3)) == ref.tau && parse.(Float64, getindex.(rows, 4)) ≈ ref.rms
         @test parse(Float64, rows[1][10]) ≈ ref.time_to_limit
         @test isempty(csv_rows(run_cli("holdover", hf).out)[1][9])                 # no limit: blank
@@ -602,9 +610,9 @@ mktempdir() do dir
         @test occursin("\"limit\":1.0,\"time_to_limit\":null,\"predicted\":{\"alphas\":[2,1,0,-1,-2]", r.out)
         # A stretch twice each holdover time, beside √6 TDEV at the same τ.
         g = holdover(p; grow=2, tau=[1, 16, 256])
-        rows = csv_rows(run_cli("holdover", hf, "--grow", "2", "--tau", "1,16,256").out)
+        rows = csv_rows(run_cli("holdover", hf, "--grow", "2", "--times", "1,16,256").out)
         @test parse.(Float64, getindex.(rows, 2)) == 2 .* g.tau && parse.(Float64, getindex.(rows, 4)) ≈ g.rms
-        r = run_cli("holdover", hf, "--grow", "2", "--tau", "1,16,256", "--fit", "--format", "json")
+        r = run_cli("holdover", hf, "--grow", "2", "--times", "1,16,256", "--fit", "--format", "json")
         @test occursin("\"train\":null,\"grow\":2,", r.out) && occursin("\"predicted\":{\"alphas\"", r.out)
         @test parse.(Float64, split(match(r"\"reference\":\[([^\]]*)\]", r.out)[1], ',')) ≈ sqrt(6) .* tdev(p, [1, 16, 256]; ci=false).dev
         @test run_cli("holdover", hf, "--grow", "2", "--train", "512").code == 1
@@ -612,21 +620,21 @@ mktempdir() do dir
         # A Kalman filter as the predictor, its model learned on the first stretch alone, flicker kept.
         kmodel(x) = clock_model(powerlaw_fit(PhaseData(x[1:512], 1.0)); flicker=true, tau_max=length(x))
         k = holdover(p, kmodel(p.x); train=512, tau=[16, 64, 256])
-        rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--tau", "16,64,256", "--kalman").out)
+        rows = csv_rows(run_cli("holdover", hf, "--train", "512", "--times", "16,64,256", "--kalman").out)
         @test parse.(Float64, getindex.(rows, 4)) ≈ k.rms && parse.(Float64, getindex.(rows, 11)) ≈ k.claimed
         r = run_cli("holdover", hf, "--train", "512", "--kalman", "--format", "json")
         @test r.code == 0 && occursin("\"claimed\":[", r.out) && occursin("\"model\":{\"R\":", r.out)
         @test parse(Float64, match(r"\"fit_tau_max\":([^,}]*)", r.out)[1]) == maximum(powerlaw_fit(PhaseData(p.x[1:512], 1.0)).x)
         ff = noise_gen(PhaseData, 4096, 1.0; h=Dict(-1 => 3e-25), rng=Random.Xoshiro(7))
-        r = run_cli("holdover", write_table(joinpath(dir, "flicker.csv"), ff.x), "--train", "512", "--tau", "1,16", "--kalman", "--format", "json")
+        r = run_cli("holdover", write_table(joinpath(dir, "flicker.csv"), ff.x), "--train", "512", "--times", "1,16", "--kalman", "--format", "json")
         @test parse.(Float64, split(match(r"\"claimed\":\[([^\]]*)\]", r.out)[1], ',')) ≈ holdover(ff, kmodel(ff.x); train=512, tau=[1, 16]).claimed
         @test parse(Float64, match(r"\"flicker_fm\":([^,}]*)", r.out)[1]) > 1e-26
         # The clock model needs a training stretch of 65 samples.
         fl = joinpath(dir, "flicker.csv")
         r = run_cli("holdover", fl, "--kalman", "--train", "64")
         @test r.code == 3 && occursin("65 samples or more; this one has 64", r.err)
-        @test run_cli("holdover", fl, "--kalman", "--train", "65", "--tau", "1,4").code == 0
-        @test run_cli("holdover", fl, "--kalman", "--tau", "1,4").code == 0   # a quarter of 4096
+        @test run_cli("holdover", fl, "--kalman", "--train", "65", "--times", "1,4").code == 0
+        @test run_cli("holdover", fl, "--kalman", "--times", "1,4").code == 0   # a quarter of 4096
         @test occursin("this one has 32", run_cli("holdover", write_table(joinpath(dir, "short.csv"), ff.x[1:128]), "--kalman").err)
         @test run_cli("holdover", hf, "--kalman", "--no-anchor").code == 1
         @test run_cli("holdover", hf, "--kalman", "--grow", "2").code == 1
@@ -694,7 +702,7 @@ mktempdir() do dir
         r = run_cli("check", gf, "--remove-drift", "linear", "--format", "json")
         @test r.code == 0
         @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]), 3e-11; rtol=0.1)
-        # With --fillgaps, the slots put back by the gap filler stay out of
+        # With --fill-gaps, the slots put back by the gap filler stay out of
         # the fit: it equals a least-squares fit over the measured rows only.
         tg = setdiff(0:length(X)-1, 120:179)
         xr = X[tg .+ 1] .+ 2e-12 .* tg .^ 2
@@ -702,7 +710,7 @@ mktempdir() do dir
         open(hf, "w") do io
             for (ti, v) in zip(tg, xr); println(io, ti, ",", v); end
         end
-        r = run_cli("check", hf, "--fillgaps", "--remove-drift", "quadratic", "--format", "json")
+        r = run_cli("check", hf, "--fill-gaps", "--remove-drift", "quadratic", "--format", "json")
         @test r.code == 0
         c = (tg .- (length(X) - 1) / 2)
         coef = [ones(length(c)) c c .^ 2] \ xr
@@ -712,7 +720,7 @@ mktempdir() do dir
         nf = joinpath(dir, "nan.txt")
         xn = X .+ 3e-11 .* (0:length(X)-1); xn[100:139] .= NaN
         write(nf, join(xn, "\n"))
-        r = run_cli("check", nf, "--tau0", "1", "--fillgaps", "--remove-drift", "linear", "--format", "json")
+        r = run_cli("check", nf, "--tau0", "1", "--fill-gaps", "--remove-drift", "linear", "--format", "json")
         ok = isfinite.(xn); c = (0:length(X)-1)[ok] .- (length(X) - 1) / 2
         @test isapprox(parse(Float64, match(r"\"removed_offset\":([^,}]+)", r.out)[1]),
                        ([ones(length(c)) c] \ xn[ok])[2]; rtol=1e-6)
@@ -785,13 +793,13 @@ mktempdir() do dir
         rows = csv_rows(run_cli("dynamic", pf, "--window", "64").out)
         @test length(rows) == length(ref.t) * length(ref.tau)
         @test parse(Float64, rows[1][3]) == ref.dev[1, 1]
-        r = run_cli("dynamic", pf, "--dev", "dhdev", "--format", "json")
+        r = run_cli("dynamic", pf, "--devs", "hdev", "--format", "json")
         @test occursin("\"deviation\":\"dhdev\",\"window\":32,", r.out)
-        r = run_cli("dynamic", pf, "--dev", "dhdev", "--window", "4")
+        r = run_cli("dynamic", pf, "--devs", "dhdev", "--window", "4")
         @test r.code == 1 && occursin("--window must be 5 or more for dhdev, got 4", r.err)
         xg = copy(X); xg[100] = NaN
         r = run_cli("dynamic", write_table(joinpath(dir, "dyngap.csv"), xg))
-        @test r.code == 3 && occursin("a dynamic deviation needs a record without gaps; fill them with --fillgaps", r.err)
+        @test r.code == 3 && occursin("a dynamic deviation needs a record without gaps; fill them with --fill-gaps", r.err)
     end
 
     @testset "live" begin
@@ -841,7 +849,7 @@ mktempdir() do dir
         @test run_cli("live").code == 1
         @test run_cli("live", "sim", "--freq").code == 1
         @test run_cli("live", "sim", "--devs", "totdev").code == 1
-        @test run_cli("live", "sim", "--fillgaps").code == 1
+        @test run_cli("live", "sim", "--fill-gaps").code == 1
         @test run_cli("live", "tcp://nowhere").code == 1
         r = run_cli("live", "tcp://127.0.0.1:" * port, "--count", "1")
         @test r.code == 2
@@ -862,8 +870,8 @@ mktempdir() do dir
         @test run_cli("analyze", pf, "--range", "1e9:").code == 3
         @test run_cli("analyze", pf, "--tau-min", "16", "--tau-max", "2").code == 1
         @test run_cli("analyze", pf, "--devs", "adev", "--tau-min", "1.5", "--tau-max", "1.9").code == 3
-        # The detrend is fitted to the range alone.
-        rows = csv_rows(run_cli("analyze", pf, "--range", "10:200", "--detrend", "linear", "--devs", "adev", "--no-ci").out)
+        # The drift is fitted to the range alone.
+        rows = csv_rows(run_cli("analyze", pf, "--range", "10:200", "--remove-drift", "linear", "--devs", "adev", "--no-ci").out)
         ref = adev(detrend(PhaseData(X[11:201], 1.0); method=:linear), tau_values(Octave, 191, :adev); ci=false)
         @test parse.(Float64, getindex.(rows, 5)) ≈ ref.dev rtol=1e-12
         # Dynamic window centers stay in the whole record's time.
@@ -901,55 +909,55 @@ mktempdir() do dir
         cc, _ = simulate_ensemble([ClockModel(; tau0=1.0, q1=1e-24 * 4.0^j, q2=1e-30 * 4.0^j) for j in 0:2], 512;
                                   reference=0, rng=Random.Xoshiro(9))
         for i in 1:3
-            r = run_cli("check", "--synth", "512", "--clocks", "3", "--clock", string(i), "--seed", "9", "--series", "512", "--format", "json")
+            r = run_cli("check", "--synth", "512", "--clocks", "3", "--column", string(i), "--seed", "9", "--series", "512", "--format", "json")
             @test r.code == 0
             m = match(r"\"series\":\{[^}]*?\"x\":\[([^\]]*)\]", r.out)
             @test m !== nothing
             @test parse.(Float64, split(m.captures[1], ','))[end] ≈ cc.x[end, i] rtol=1e-9
         end
-        a = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "1", "--devs", "adev").out
-        b = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "2", "--devs", "adev").out
+        a = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--column", "1", "--devs", "adev").out
+        b = run_cli("analyze", "--synth", "1024", "--clocks", "3", "--column", "2", "--devs", "adev").out
         @test a != b                                        # the clocks differ
-        @test run_cli("analyze", "--synth", "1024", "--clocks", "3", "--clock", "2", "--devs", "adev").out == b
-        @test run_cli("check", "--synth", "64", "--clocks", "3", "--clock", "4").code == 1      # no such clock
+        @test run_cli("analyze", "--synth", "1024", "--clocks", "3", "--column", "2", "--devs", "adev").out == b
+        @test run_cli("check", "--synth", "64", "--clocks", "3", "--column", "4").code == 1      # no such clock
         @test run_cli("check", "--synth", "64", "--clocks", "1").code == 1                      # needs two or more
-        @test run_cli("check", "--synth", "64", "--clock", "2").code == 1                       # needs --clocks
+        @test run_cli("check", "--synth", "64", "--column", "2").code == 1                       # needs --clocks
         @test run_cli("check", pf, "--clocks", "3").code == 1                                   # synthetic only
     end
 
     @testset "noise models" begin
         ms = [ClockModel(; tau0=1.0, R=1e-22, q1=1e-24, q2=1e-30), ClockModel(; tau0=1.0, q1=4e-24)]
         cc, _ = simulate_ensemble(ms, 512; reference=0, rng=Random.Xoshiro(9))
-        r = run_cli("check", "--synth", "512", "--seed", "9", "--noise-model", "1e-22:1e-24:1e-30:0", "--noise-model", "0:4e-24:0:0",
-                    "--clock", "2", "--series", "512", "--format", "json")
+        r = run_cli("check", "--synth", "512", "--seed", "9", "--clock-model", "1e-22:1e-24:1e-30:0", "--clock-model", "0:4e-24:0:0",
+                    "--column", "2", "--series", "512", "--format", "json")
         @test r.code == 0
         m = match(r"\"series\":\{[^}]*?\"x\":\[([^\]]*)\]", r.out)
         @test parse.(Float64, split(m.captures[1], ','))[end] ≈ cc.x[end, 2] rtol=1e-9
-        @test run_cli("check", "--synth", "256", "--noise-model", "1e-22:1e-24:0:0").code == 0       # one clock
+        @test run_cli("check", "--synth", "256", "--clock-model", "1e-22:1e-24:0:0").code == 0       # one clock
         # model: the closed form of the library
-        r = run_cli("model", "--synth", "4096", "--noise-model", "1e-22:1e-24:1e-30:0", "--noise-model", "0:0:0:1e-40", "--format", "json")
+        r = run_cli("model", "--synth", "4096", "--clock-model", "1e-22:1e-24:1e-30:0", "--clock-model", "0:0:0:1e-40", "--format", "json")
         @test r.code == 0
         tau = [1.0, 2.0, 4.0]
         @test occursin("\"mdev\":[" * join(string.(powerlaw_sigma(ms[1], tau; deviation=:mdev)), ",")[1:12], r.out)
         @test occursin("\"mdev\":null,\"adev\":null,\"mhdev\":[", r.out)                       # random-run FM: Hadamard only
         @test run_cli("model", "--synth", "64").code == 1                                         # needs a model
         @test run_cli("model", pf).code == 1                                                      # and reads no file
-        one = ["model", "--synth", "64", "--noise-model", "0:1e-24:0:0"]
-        @test occursin("does not apply", run_cli(one..., "--fillgaps").err)
+        one = ["model", "--synth", "64", "--clock-model", "0:1e-24:0:0"]
+        @test occursin("does not apply", run_cli(one..., "--fill-gaps").err)
         # JSON only: csv is refused, and the error names the source as a result does.
-        @test occursin("\"source\":\"model\",\"error\":\"model writes JSON only\",\"exit_code\":1", run_cli(one..., "--format", "csv", "--fillgaps").out)
+        @test occursin("\"source\":\"model\",\"error\":\"model writes JSON only\",\"exit_code\":1", run_cli(one..., "--format", "csv", "--fill-gaps").out)
         @test occursin("\"source\":\"model\",\"error\"", run_cli("model", pf).out)
         mp = joinpath(dir, "model.json")
         @test isempty(run_cli(one..., "--out", mp, "--quiet").out)
         @test read(mp, String) == run_cli(one...).out
-        @test run_cli("check", "--synth", "64", "--noise-model", "1:2:3").code == 1
-        @test run_cli("check", "--synth", "64", "--noise-model", "-1:0:0:0").code == 1
-        @test run_cli("check", "--synth", "64", "--clocks", "3", "--noise-model", "0:1e-24:0:0").code == 1
+        @test run_cli("check", "--synth", "64", "--clock-model", "1:2:3").code == 1
+        @test run_cli("check", "--synth", "64", "--clock-model", "-1:0:0:0").code == 1
+        @test run_cli("check", "--synth", "64", "--clocks", "3", "--clock-model", "0:1e-24:0:0").code == 1
     end
 
     @testset "usage errors -> exit 1" begin
         @test run_cli("analyze").code == 1
-        r = run_cli("timescale", "--synth", "4096", "--noise-model", "0:4e-24:0:0")
+        r = run_cli("timescale", "--synth", "4096", "--clock-model", "0:4e-24:0:0")
         @test r.code == 1 && occursin("two or more clocks", r.err)
         r = run_cli("analyze", pf, "--devs", "bogus")
         @test r.code == 1
@@ -966,8 +974,8 @@ mktempdir() do dir
         @test run_cli("analyze", pf, "--synth", "64").code == 1
         @test run_cli("analyze", pf, "--tau0").code == 1
         @test run_cli("analyze", pf, "--no-ci=yes").code == 1
-        @test run_cli("analyze", pf, "--time-col", "-1", "--tau0", "1").code == 1
-        @test run_cli("analyze", pf, "--value-col", "0").code == 1
+        @test run_cli("analyze", pf, "--time-column", "-1", "--tau0", "1").code == 1
+        @test run_cli("analyze", pf, "--column", "0").code == 1
         @test run_cli("analyze", pf, "--tau0", "Inf").code == 1
         @test run_cli("analyze", pf, "--tau0", "-1").code == 1
         @test run_cli("analyze", pf, "--scaling", "NaN").code == 1
@@ -1014,7 +1022,7 @@ mktempdir() do dir
         end
         r = run_cli("spectrum", gf)
         @test r.code == 3
-        @test occursin("--fillgaps", r.err)
+        @test occursin("--fill-gaps", r.err)
         # analyze still runs the gap-tolerant estimators and leaves the spectrum out
         r = run_cli("analyze", gf, "--devs", "adev", "--spectrum", "--format", "json")
         @test r.code == 0
@@ -1023,12 +1031,12 @@ mktempdir() do dir
         # A one-column frequency file with NaN readings is analyzed once filled.
         yf = joinpath(dir, "y.txt")
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
-        @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
-        @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
+        @test occursin("--fill-gaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
+        @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fill-gaps").code == 0
         # A zero in a Stable32 frequency file is a gap, unless it is kept as a reading.
         zf = joinpath(dir, "z.frd")
         write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
-        @test occursin("--fillgaps", run_cli("analyze", zf, "--tau0", "1").err)
+        @test occursin("--fill-gaps", run_cli("analyze", zf, "--tau0", "1").err)
         @test run_cli("analyze", zf, "--tau0", "1", "--devs", "adev", "--keep-zeros").code == 0
         # Too short for the noise fit, and rows past the record with no EDF or noise type.
         r = run_cli("analyze", "--synth", "12", "--noise", "fit")
@@ -1101,7 +1109,7 @@ mktempdir() do dir
                                 string(spectrum_sigma(f, L, [1e-5]; f_carrier=10e6).below[1]) * ",")
         # S_φ(f) in another column, a narrower band.
         write(joinpath(dir, "sphi.dat"), join(string.(f, " ", L, " ", 2 .* exp10.(L ./ 10)), "\n") * "\n")
-        r = run_cli("phasenoise", joinpath(dir, "sphi.dat"), "--density", "Sphi", "--value-col", "3", "--carrier", "10e6",
+        r = run_cli("phasenoise", joinpath(dir, "sphi.dat"), "--density", "Sphi", "--column", "3", "--carrier", "10e6",
                     "--band", "10:1e4", "--devs", "mhdev", "--tau", "0.01,1")
         @test occursin(",mhdev,1.0," * string(spectrum_sigma(f, L, tau; f_carrier=10e6, deviation=:mhdev, band=(10, 1e4)).dev[2])[1:12], r.out)
         @test run_cli(pn[1:4]...).code == 1                                   # ℒ(f) needs the carrier
@@ -1157,11 +1165,11 @@ mktempdir() do dir
                          ["check", pf, "--format", "json", "--histogram", "--acf", "--quantity", "frequency"],
                          ["spectrum", pf],
                          ["cross", pf, "--with", pf, "--format", "json"],
-                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "2,3", "--devs", "adev,mhdev", "--format", "json"],
-                         ["hat", joinpath(dir, "hat.csv"), "--value-cols", "4,5,6", "--pairs", "--klts", "--m", "1,8"],
+                         ["hat", joinpath(dir, "hat.csv"), "--column", "2,3", "--devs", "adev,mhdev", "--format", "json"],
+                         ["hat", joinpath(dir, "hat.csv"), "--column", "4,5,6", "--pairs", "--klts", "--m", "1,8"],
                          ["analyze", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "timelab.tim")],
                          ["check", joinpath(@__DIR__, "..", "..", "test", "fixtures", "formats", "gpsdo.csv"), "--format", "json"],
-                         ["dynamic", pf, "--dev", "dhdev"],
+                         ["dynamic", pf, "--devs", "dhdev"],
                          ["holdover", pf, "--train", "64", "--limit", "1e-9", "--fit", "--format", "json"],
                          ["holdover", pf, "--grow", "3", "--fit-drift", "--fit", "--format", "json"],
                          ["holdover", pf, "--train", "512", "--kalman", "--format", "json"],
@@ -1170,9 +1178,9 @@ mktempdir() do dir
                          ["steer", joinpath(dir, "steer.csv"), "--cost", "1:0:1e4", "--fit-drift"],
                          ["live", "sim", "--fast", "--count", "64", "--every", "32"],
                          ["analyze", pf, "--devs", "bogus", "--format", "json"],
-                         ["model", "--synth", "64", "--noise-model", "1e-22:1e-24:1e-30:0"],
+                         ["model", "--synth", "64", "--clock-model", "1e-22:1e-24:1e-30:0"],
                          ["phasenoise", joinpath(dir, "pn.csv"), "--header", "1", "--carrier", "10e6", "--devs", "adev,tdev,hdev,mhdev"],
-                         ["phasenoise", joinpath(dir, "sphi.dat"), "--density", "Sphi", "--value-col", "3", "--carrier", "10e6", "--format", "json"],
+                         ["phasenoise", joinpath(dir, "sphi.dat"), "--density", "Sphi", "--column", "3", "--carrier", "10e6", "--format", "json"],
                          ["phasenoise", joinpath(dir, "pn.csv"), "--carrier", "10e6", "--format", "json"],
                          ["completion", "bash"],
                          ["help"],
