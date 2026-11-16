@@ -340,7 +340,7 @@ button.row-main { flex: 1; align-self: stretch; padding: 0; border: 0; backgroun
 .page-ctl .seg { align-self: flex-start; }
 .carrier { width: 120px; height: 32px; font-family: var(--font-mono); }
 .tool-field { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
-.toolbar .caption.grow-right { margin-left: auto; }
+.toolbar .caption.grow-right { margin-left: auto; flex: 1 1 0; min-width: 130px; text-align: right; }
 .toolbar[hidden] { display: none; }
 .pills { display: flex; gap: 8px; }
 .pill { height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--bg-card); font: inherit; font-size: 12px; cursor: pointer; color: var(--ink); }
@@ -364,6 +364,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .steer-w { width: 96px; }
 .steer-bar { flex-wrap: wrap; }
 .steer-bar .steer-w { width: 64px; }
+.plot-card .card-row.steer-head { justify-content: flex-start; align-items: center; gap: 12px; }
+.steer-head [data-ref=sub] { margin-left: auto; text-align: right; }
+.steer-head label { white-space: nowrap; }
+@container (max-width: 760px) { .steer-head [data-ref=sub] { display: none; } .steer-head [data-ref=grid] { margin-left: auto; } }
 
 /* ── Spectrum ── */
 .spec-card { padding-top: 14px; }
