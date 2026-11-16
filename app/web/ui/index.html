@@ -13,15 +13,10 @@
     <div class="brand"><span class="brand-name">SigmaTau</span><span class="brand-sub">explorer</span></div>
     <h1 class="sr-only" id="page-title"></h1>
     <nav class="tabs" aria-label="Pages">
-      <a href="#data" data-page="data">Data</a>
-      <a href="#synthesis" data-page="synthesis">Synthesis</a>
-      <a href="#stability" data-page="stability">Stability</a>
-      <a href="#spectrum" data-page="spectrum">Spectrum</a>
-      <a href="#dynamic" data-page="dynamic">Dynamic</a>
-      <a href="#holdover" data-page="holdover">Holdover</a>
-      <a href="#steering" data-page="steering">Steering</a>
-      <a href="#ensemble" data-page="ensemble">Ensemble</a>
-      <a href="#live" data-page="live">Live</a>
+      <div class="tab-group" role="group" aria-label="The record"><a href="#data" data-page="data">Data</a><a href="#synthesis" data-page="synthesis">Synthesis</a><a href="#live" data-page="live">Live</a></div>
+      <div class="tab-group" role="group" aria-label="Analysis"><a href="#stability" data-page="stability">Stability</a><a href="#spectrum" data-page="spectrum">Spectrum</a><a href="#dynamic" data-page="dynamic">Dynamic</a></div>
+      <div class="tab-group" role="group" aria-label="Clock model"><a href="#holdover" data-page="holdover">Holdover</a><a href="#steering" data-page="steering">Steering</a></div>
+      <div class="tab-group" role="group" aria-label="Several clocks"><a href="#ensemble" data-page="ensemble">Ensemble</a></div>
     </nav>
     <span class="grow"></span>
     <button class="record-chip" id="record-chip" type="button" title="Show the record on the Data page">
