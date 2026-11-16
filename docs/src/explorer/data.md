@@ -140,7 +140,7 @@ start, since a frequency record cannot be read with samples missing.
 [`remove_outliers`](@ref) does. The missing samples of the record stay
 missing. **undo** brings the outliers back.
 
-## Dead time
+## Dead time between readings
 
 A counter that measures for part of each interval and waits for the rest
 leaves dead time between its readings, and the Allan deviation of such
