@@ -66,6 +66,10 @@ const inWords = (message, sim) => (sim && GAPS[0][0].test(message) ? UNFITTED : 
 
 export const ownsPanel = true;
 
+// Files whose clocks the core reads several at a time: plain columns, a table
+// read by column name and a RINEX clock file. The other formats hold one clock.
+const BY_COLUMN = new Set(["", "table", "rinex_clk"]);
+
 // The clocks of the page: the first loaded file with two or more phase or
 // frequency columns, else the first ensemble simulated on the Data page.
 // [] = the core simulates four. A scale leaves the reference clock out; a hat
@@ -73,7 +77,7 @@ export const ownsPanel = true;
 function fileClocks(all = false) {
   const groups = new Map();
   for (const c of state.clocks) {
-    if (c.source.type !== "file" || c.group === null || c.format || !c.record || (!all && isReference(c))) continue;
+    if (c.source.type !== "file" || c.group === null || !BY_COLUMN.has(c.format ?? "") || !c.record || (!all && isReference(c))) continue;
     groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
   }
   const file = [...groups.values()].find((g) => g.length >= 2);
@@ -89,21 +93,6 @@ function fileClocks(all = false) {
   return ens ? ens.sort((a, b) => a.source.index - b.source.index) : [];
 }
 
-// A loaded file of two or more clocks that the page cannot read: the core
-// takes a scale's, a hat's or two channels' clocks as numbered columns, so a
-// table read by column name (dates in its time column), a RINEX clock file or
-// an instrument file is left out. Without other clocks the page says so in
-// place of simulating its own: the note that says why, or null.
-function unreadNote() {
-  if (fileClocks(true).length) return null;
-  const groups = new Map();
-  for (const c of state.clocks) if (c.source.type === "file" && c.format && c.record) groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
-  const c = [...groups.values()].find((g) => g.length >= 2)?.[0];
-  if (!c) return null;
-  const what = c.format === "table" ? "a table read by column name, with dates in its time column" : c.format === "rinex_clk" ? "a RINEX clock file" : "a file read by its instrument layout";
-  return `The clocks of ${h(c.source.name)}, ${what}, cannot be read here: this page takes its clocks as numbered columns beside a time in seconds or as an MJD. Load such a file, or simulate several clocks, on the Data page.`;
-}
-
 // The command, the flags that give it its clocks, and their file.
 function clockArgs(command, clocks) {
   const a = [command];
@@ -114,9 +103,20 @@ function clockArgs(command, clocks) {
   } else if (clocks.length) {
     const c = clocks[0];
     file = { name: c.source.name, content: c.source.content };
-    a.push("--column", clocks.map((k) => k.value_col).join(","), "--time-column", c.time_col, "--header", c.header, "--scaling", c.scaling);
-    if (c.tau0) a.push("--tau0", c.tau0);
-    if (c.kind === "frequency") a.push("--freq");
+    if (c.format) {
+      // A table and a RINEX clock file by the names of their clocks, as a
+      // clock alone is read (a table's name with a comma by its number); the
+      // table's names give the units, and a RINEX file each clock's grid.
+      const names = clocks.map((k) => k.column_name);
+      const byName = c.format === "rinex_clk" || names.every((n) => n && !n.includes(","));
+      a.push("--input-format", c.format, "--column", (byName ? names : clocks.map((k) => k.value_col)).join(","));
+      if (c.format === "table") a.push(c.kind === "frequency" ? "--freq" : "--phase");
+      if (c.tau0 && c.format === "table") a.push("--tau0", c.tau0);
+    } else {
+      a.push("--column", clocks.map((k) => k.value_col).join(","), "--time-column", c.time_col, "--header", c.header, "--scaling", c.scaling);
+      if (c.tau0) a.push("--tau0", c.tau0);
+      if (c.kind === "frequency") a.push("--freq");
+    }
   } else a.push("--synth", 16384, "--seed", 42);
   return [a, file];
 }
@@ -154,10 +154,21 @@ function crossRequest() {
   return { clocks, a, b, body: { args: args.map(String), file } };
 }
 
+// A loaded file that gives a scale or a hat too few clocks: simulated clocks
+// do not stand in for them. The note that says so, or null.
+function fewNote(clocks) {
+  const file = clocks.length ? null : state.clocks.find((c) => c.source.type === "file" && c.record && !isReference(c));
+  if (!file) return null;
+  const n = state.clocks.filter((c) => c.group === file.group && c.record).length;
+  return `${h(file.source.name)} gives ${n === 1 ? "one clock" : `${n} clocks, one of them the reference`}, and a scale or a hat needs two or more${n === 1 ? "" : " besides it"}. ` +
+    "Pick more of its clocks with Import settings… on the Data page, or load a file of several clocks.";
+}
+
 function request() {
-  if (unreadNote()) return { clocks: [], body: null };
-  if (state.ens.view === "hat") return hatRequest();
   if (state.ens.view === "cross") return crossRequest();
+  const few = fewNote(state.ens.view === "hat" ? fileClocks(true) : fileClocks());
+  if (few) return { clocks: [], body: null, few };
+  if (state.ens.view === "hat") return hatRequest();
   const E = state.ens, clocks = fileClocks();
   const [a, file] = clockArgs("timescale", clocks);
   a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : []), ...(CAPPED.has(E.algorithm) ? ["--wmax", E.wmax] : []),
@@ -181,7 +192,7 @@ function hatControls() {
     ${gridField("opt")}${confidenceField("opt")}
     <div class="rule"></div>
     <p class="muted small">${!clocks.length
-      ? (unreadNote() ?? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page.")
+      ? fewNote(clocks) ?? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."
       : !file ? `${clocks.length} clocks simulated on the Data page. Their reference is perfect and counts as no clock.`
       : pairs ? `The three columns of ${h(clocks[0].source.name)} as the differences A−B, B−C and C−A of clocks A, B and C, each measured on its own.`
       : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference${corners > clocks.length ? ", which is one more clock" : ""}.`}</p>
@@ -198,7 +209,7 @@ function crossControls() {
     ${gridField("opt")}
     <div class="rule"></div>
     <p class="muted small">${b ? `Two columns of ${h(a.source.name)}, each a measurement of one device: through two channels of an instrument, or against two references.`
-      : unreadNote() ?? "Load a file that holds the two channels as two columns on the Data page."}</p>
+      : "Load a file that holds the two channels as two columns on the Data page."}</p>
     <p class="muted small">The cross Allan deviation keeps the noise the two channels share, the device's, and averages toward zero the noise each has on its own. Its uncertainty follows the covariance model of Vernotte and Lantz (2019), with each channel's Allan EDF. The τ grid is shared with the Stability page.</p>`;
 }
 
@@ -227,7 +238,7 @@ export function controls() {
       ? (clocks[0].source.type === "synth"
         ? `${clocks.length} clocks simulated on the Data page, each against a perfect reference.`
         : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference.`)
-      : (unreadNote() ?? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page.")}</p>
+      : fewNote(clocks) ?? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."}</p>
     <p class="muted small">${ABOUT[E.algorithm]}${KALMAN.has(E.algorithm) && simulated(clocks) ? ABOUT_MODELS[E.fitted] : ""}${FLICKER.has(E.algorithm) && fittedOf(clocks) ? ABOUT_FLICKER : ""}</p>`;
 }
 
@@ -414,8 +425,7 @@ export function refresh() {
   const hat = state.ens.view === "hat", cross = state.ens.view === "cross";
   const r = hat ? state.ens.result?.hat : cross ? state.ens.result?.cross : state.ens.result?.ts;
   const table = root.querySelector("[data-ref=table]");
-  const unread = unreadNote();
-  if (unread) return showEmpty(unread);
+  if (req.few) return showEmpty(req.few);
   if (cross && !req.body) return showEmpty("Two channels needs a file that holds them as two columns, such as the readings of one device against two references. Load one on the Data page.");
   if (state.ens.error) return showEmpty(h(state.ens.error.message));
   if (!r) return showEmpty(!state.core.ok ? "No analysis core. Start the explorer with serve.py." : hat ? "Separating the clocks…" : cross ? "Computing the cross estimates…" : "Forming the time scale…");

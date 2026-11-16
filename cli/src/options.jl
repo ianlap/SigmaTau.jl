@@ -67,7 +67,7 @@ const OPTS = [
     Opt("--phase", "", String[], false, "the values are phase in seconds (default)", READS),
     Opt("--freq", "", String[], false, "the values are fractional frequency", READS),
     Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns), bipm_utc (BIPM UTC-UTC(k)), rinex_clk (RINEX clock file; pick the clock with --column)", ALL),
-    Opt("--column", "COL", String[], false, "the clock's column: a 1-based number or the name in a table's first line (default 2, or in a table the column named phase / PPS / time error, else frequency); for timescale and hat, a comma list of two or more; the clock of a RINEX clock file (G08, ALGO00CAN); with --synth --clocks, the simulated clock to read, 1 to K (default 1)", [ALL; "phasenoise"]),
+    Opt("--column", "COL", String[], false, "the clock's column: a 1-based number or the name in a table's first line (default 2, or in a table the column named phase / PPS / time error, else frequency); for timescale and hat, a comma list of two or more, and for cross of two; the clock of a RINEX clock file (G08, ALGO00CAN), or a list of them; with --synth --clocks, the simulated clock to read, 1 to K (default 1)", [ALL; "phasenoise"]),
     Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean, or for live the first reading, to 4 significant figures)", READS),
     Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column; 1 for --synth, model and live)", CLOCK),
     Opt("--time-column", "COL", String[], false, "time column, by 1-based number or name; 0 = none (default 1)", ALL),
