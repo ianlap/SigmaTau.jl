@@ -106,6 +106,7 @@ from .types import (
     DriftFit,
     DynamicStabilityResult,
     FrequencyData,
+    HatResult,
     PhaseData,
     PowerLawFit,
     SpectralResult,
@@ -126,6 +127,7 @@ __all__ = [
     "PowerLawFit",
     "CrossSpectralResult",
     "CrossStabilityResult",
+    "HatResult",
     # tau grids
     "TauMode",
     "AllTaus",

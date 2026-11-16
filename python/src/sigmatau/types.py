@@ -201,6 +201,38 @@ class StabilitySuite:
 
 
 @dataclass(frozen=True)
+class HatResult:
+    """The deviation of each clock that ``ncornered_hat`` or ``groslambert``
+    separates, with the names of the clocks.
+
+    ``hat[1]`` is the second clock and ``hat["maser"]`` the clock of that name;
+    the result iterates over the clocks in order, so ``a, b, c = groslambert(ab,
+    bc, ca)`` unpacks three, and supports ``len``. ``method`` is ``"hat"`` or
+    ``"groslambert"``.
+    """
+
+    clocks: tuple[StabilityResult, ...]
+    names: tuple[str, ...]
+    method: str
+
+    def __len__(self) -> int:
+        return len(self.clocks)
+
+    def __iter__(self) -> Iterator[StabilityResult]:
+        return iter(self.clocks)
+
+    def __getitem__(self, key: int | str) -> StabilityResult:
+        if isinstance(key, str):
+            if key not in self.names:
+                raise KeyError(key)
+            return self.clocks[self.names.index(key)]
+        return self.clocks[key]
+
+    def __repr__(self) -> str:
+        return f"HatResult({self.method}, {len(self.clocks)} clocks: {', '.join(self.names)})"
+
+
+@dataclass(frozen=True)
 class SpectralResult:
     """Result of the spectral-density estimates ``psd_y``, ``psd_x`` and
     ``ssb_phase_noise``: the one-sided frequency grid ``freq`` in Hz, the
