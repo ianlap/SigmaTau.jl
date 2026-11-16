@@ -455,7 +455,7 @@ function Base.show(io::IO, ::MIME"text/plain", h::HoldoverPrediction)
     isnan(h.limit) || print(io, "\n  ", _show4g(h.limit), " s reached after ", _show4g(h.time_to_limit), " s")
     @printf(io, "\n  %10s  %10s  %10s", "tau", "sigma", "p" * _show4g(100h.confidence))
     for α in h.alphas
-        @printf(io, "  %10s", _nnls_symbol(α))
+        @printf(io, "  %10s", _noise_symbol(α))
     end
     for i in eachindex(h.tau)
         @printf(io, "\n  %10.4g  %10.4g  %10.4g", h.tau[i], h.sigma[i], h.quantile[i])
@@ -510,7 +510,7 @@ under a parabola.
 ```jldoctest
 julia> using SigmaTau
 
-julia> white = Dict(:WHFM => 2e-22);
+julia> white = Dict(:WFM => 2e-22);
 
 julia> h = holdover(white; tau0 = 1.0, train = 3600, tau = [900, 3600]);
 
@@ -523,7 +523,7 @@ julia> round.(h.sigma; sigdigits = 3)     # √(q₁τ(1 + 6τ/5T)), q₁ = h₀
 White FM and flicker FM side by side:
 
 ```julia
-h = holdover(Dict(:WHFM => 2e-22, :FLFM => 1e-27); tau0 = 1.0, train = 3600,
+h = holdover(Dict(:WFM => 2e-22, :FFM => 1e-27); tau0 = 1.0, train = 3600,
              limit = 1e-9)
 sqrt.(h.budget)       # one column per noise type
 h.time_to_limit       # seconds within 1 ns at 95 %

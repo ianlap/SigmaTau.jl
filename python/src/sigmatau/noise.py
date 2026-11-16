@@ -50,7 +50,7 @@ def identify_noise(
     b1: bool = True,
 ) -> np.ndarray:
     """Dominant power-law noise type of a record at each averaging factor:
-    ``"WHPM"``, ``"FLPM"``, ``"WHFM"``, ``"FLFM"`` or ``"RWFM"``, and with
+    ``"WPM"``, ``"FPM"``, ``"WFM"``, ``"FFM"`` or ``"RWFM"``, and with
     ``dmax=3`` also ``"FWFM"`` (flicker-walk FM) and ``"RRFM"`` (random-run FM).
 
     The test is the lag-1 autocorrelation of the phase decimated by m (Riley
@@ -163,7 +163,7 @@ def noise_gen(
     components are independent.
 
     Give ``sigma1`` or ``h``, not both, keyed by the integer α, from 2 (white
-    PM) to −4 (random-run FM), or by the label, as in ``{"WHFM": 1e-12}``.
+    PM) to −4 (random-run FM), or by the label, as in ``{"WFM": 1e-12}``.
     ``sigma1`` holds the Allan deviation σ_y(τ₀) of each component, which is
     rescaled so that its overlapping Allan deviation at τ₀ equals the request
     exactly, in every realization. ``h`` holds the coefficient h_α of each:

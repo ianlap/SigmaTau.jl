@@ -129,7 +129,7 @@ counterpart in Stable32.
 
 | Control of Run | SigmaTau |
 |:---|:---|
-| Alpha, Auto or a value | `noise = :auto`, or a noise type such as `:WHFM` |
+| Alpha, Auto or a value | `noise = :auto`, or a noise type such as `:WFM` |
 | Conf Factor | `confidence`, 0.683 by default |
 | No Drift | `detrend(p; method = :quadratic)` before the call, or `:linear` for a frequency record |
 | Octave | `Octave`, the default |
@@ -241,7 +241,7 @@ Stable32 prints 2.8694e-03 for this row, with the limits 2.4276e-03 and
 3.6939e-03 and ``α = 0``, white FM:
 
 ```@example s32
-totdev(p, [1024]; noise = :WHFM, correct_bias = :stable32)
+totdev(p, [1024]; noise = :WFM, correct_bias = :stable32)
 ```
 
 The deviation is Stable32's to the digits it prints, and the limits are

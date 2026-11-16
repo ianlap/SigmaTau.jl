@@ -39,14 +39,14 @@ using Test, Random, SigmaTau
                htotdev, mhtotdev, mtie, tierms, pdev, theo1, theoh, dadev, dhdev,
                identify_noise)
         @test all(f -> rejects(f, pd, [0, 1]) && rejects(f, fd, [-1]), fns)
-        @test_throws ArgumentError calculate_edf(:adev, [1.0], [:WHFM], [0], [1.0], 100, 99.0)
-        @test_throws ArgumentError bias_correction([:WHFM], :totvar, [-1], 100)
+        @test_throws ArgumentError calculate_edf(:adev, [1.0], [:WFM], [0], [1.0], 100, 99.0)
+        @test_throws ArgumentError bias_correction([:WFM], :totvar, [-1], 100)
         gapped = PhaseData([x[1:99]; NaN; x[101:end]], 1.0)
         @test all(f -> rejects(f, gapped, ms), (totdev, mtotdev, ttotdev, htotdev, mhtotdev,
                                                 pdev, theo1, theoh, dadev, dhdev))
         @test_throws "ttotdev:" ttotdev(gapped, ms)               # not the mtotdev it runs on
-        @test_throws "one entry each" calculate_edf(:adev, [1.0, 2.0], [:WHFM], [1, 2], [1.0, 2.0], 1024, 1023.0)
-        @test_throws "one entry each" bias_correction([:FLFM, :WHFM], :mtot, [1], 1024)
+        @test_throws "one entry each" calculate_edf(:adev, [1.0, 2.0], [:WFM], [1, 2], [1.0, 2.0], 1024, 1023.0)
+        @test_throws "one entry each" bias_correction([:FFM, :WFM], :mtot, [1], 1024)
     end
 
     @testset "identify_noise on a record" begin

@@ -31,7 +31,7 @@ end
 @testset "noise_id_nnls" begin
     N = 8192
     pure = (α, σ; seed = 20260807) -> noise_gen(PhaseData, N, 1.0; sigma1 = Dict(α => σ), rng = Xoshiro(seed + α))
-    cases = ((2, :WHPM, 1e-11), (0, :WHFM, 1e-12), (-2, :RWFM, 1e-14))
+    cases = ((2, :WPM, 1e-11), (0, :WFM, 1e-12), (-2, :RWFM, 1e-14))
 
     @testset "basis bookkeeping" begin
         # μ(α): modified family μ = −α−1; unmodified collapses both PM noises onto −2.
@@ -78,10 +78,10 @@ end
 
     @testset "two-component record" begin
         # WFM below the crossover, RWFM above it; the dominant α falls
-        # monotonically with τ (the octave at the crossover may read FLFM).
+        # monotonically with τ (the octave at the crossover may read FFM).
         p = noise_gen(PhaseData, N, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 1e-14), rng = Xoshiro(20260809))
         r = noise_id_nnls(p; deviation = :mhdev)
-        @test r.dominant[1] === :WHFM && r.dominant[end] === :RWFM
+        @test r.dominant[1] === :WFM && r.dominant[end] === :RWFM
         α_of = Dict(zip(r.noise_types, r.alphas))
         @test issorted([α_of[s] for s in r.dominant]; rev = true)
     end

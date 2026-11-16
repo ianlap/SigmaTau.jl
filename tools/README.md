@@ -8,7 +8,7 @@ The tests do not run them.
 `mhtot_models.jl` computes the exact bias and equivalent degrees of freedom
 of MHTOTDEV on Gaussian power-law noise and fits the EDF model. It is the
 source of `_MHTOT_B`, `_MHTOT_B_SMALL`, `_coeff_mhtot` and
-`_MHTOT_WHPM_EDF_SMALL` in `src/edf.jl`. No published table covers this
+`_MHTOT_WPM_EDF_SMALL` in `src/edf.jl`. No published table covers this
 estimator, and
 [MHTOTDEV bias and EDF](https://ianlap.github.io/SigmaTau.jl/dev/explanation/mhtotdev/)
 describes the method.

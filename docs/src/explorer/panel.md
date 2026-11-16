@@ -64,7 +64,7 @@ searches their names and descriptions:
 |:------|:-----------|
 | Allan family | ADEV, MDEV, HDEV, MHDEV, PDEV |
 | Total | TOTDEV, MTOTDEV, HTOTDEV, MHTOTDEV |
-| Thêo | THEO1, THEOH |
+| Thêo | Thêo1, ThêoH |
 | Time | TDEV, HTDEV, TTOTDEV, MTIE, TIE rms |
 
 The first three groups are fractional frequency deviations ``σ_y(τ)`` and

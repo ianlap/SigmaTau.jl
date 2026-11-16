@@ -14,11 +14,11 @@ using SigmaTau: _totdev_core, _adev_core, _htotdev_core, _hdev_core, bias_correc
     # White PM, and flicker PM as a sampled 1/f process: generalized covariance
     # −D(k)/2 with structure function D(k) = 2·Δ²[t² ln t](k).
     g(t) = t == 0 ? 0.0 : t^2 * log(abs(t))
-    Σ = Dict(:WHPM => Float64.((1:N) .== (1:N)'),
-             :FLPM => [-(g(i - j + 1) - 2g(i - j) + g(i - j - 1)) for i in 1:N, j in 1:N])
+    Σ = Dict(:WPM => Float64.((1:N) .== (1:N)'),
+             :FPM => [-(g(i - j + 1) - 2g(i - j) + g(i - j - 1)) for i in 1:N, j in 1:N])
     for (est, core, parent, var, ms) in ((:totdev, _totdev_core, _adev_core, :totvar, (16, 60)),
                                          (:htotdev, _htotdev_core, _hdev_core, :htot, (16, 40))),
-        m in ms, noise in (:WHPM, :FLPM)
+        m in ms, noise in (:WPM, :FPM)
         A = form(core, m) * Σ[noise]
         mean, edf = sum(A[i, i] for i in 1:N), sum(A[i, i] for i in 1:N)^2 / sum(A .* A')
         B = mean / sum(form(parent, m) .* Σ[noise])

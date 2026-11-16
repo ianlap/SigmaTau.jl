@@ -133,8 +133,8 @@ def bias_b1(n: float, r: float, mu: float | str) -> float:
     The averages are over τ and start every T = ``r``·τ, so that ``r`` > 1 is
     dead time, on noise whose Allan variance goes as τ^μ. ``n`` is an integer
     ≥ 2, or ``math.inf`` for the limit of a long record (infinite for μ ≥ 0).
-    ``mu`` is the exponent, from −2 to 2, or a noise type: ``"WHPM"`` and
-    ``"FLPM"`` (μ = −2), ``"WHFM"`` (−1), ``"FLFM"`` (0) or ``"RWFM"`` (1).
+    ``mu`` is the exponent, from −2 to 2, or a noise type: ``"WPM"`` and
+    ``"FPM"`` (μ = −2), ``"WFM"`` (−1), ``"FFM"`` (0) or ``"RWFM"`` (1).
     At μ = −2 the function is that of white PM.
     """
     return float(jl.bias_b1(_count(n), float(r), _mu(mu)))

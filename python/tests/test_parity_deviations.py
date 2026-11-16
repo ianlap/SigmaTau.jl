@@ -76,7 +76,7 @@ def test_htotdev_remove_drift_sets_the_noise_type_and_the_bias(phase8192):
     and the bias factor follows."""
     drifting = st.PhaseData(phase8192.x + 1e-5 * np.arange(len(phase8192.x)) ** 2, 1.0)
     default = st.htotdev(drifting, [1024])
-    assert default.noise_type[0] == "FLFM"
+    assert default.noise_type[0] == "FFM"
     assert default.dev[0] == pytest.approx(st.htotdev(phase8192, [1024]).dev[0], rel=1e-8)
     as_given = st.htotdev(drifting, [1024], remove_drift=False)
     assert as_given.noise_type[0] == "RWFM"
@@ -97,18 +97,19 @@ def test_correct_bias_takes_a_reference_name(phase8192):
 def test_noise_states_the_type_behind_the_edf(small_phase):
     """A stated noise type stands in for the identified one: one name, one per
     averaging factor, or a fitted model (flicker PM is this record's strongest
-    term at every τ)."""
+    term at every τ). An older name reads as the new one."""
     ms = [1, 4, 16]
     auto = st.adev(small_phase, ms)
     stated = st.adev(small_phase, ms, noise=list(auto.noise_type))
     np.testing.assert_array_equal(stated.edf, auto.edf)
-    flfm = st.adev(small_phase, ms, noise="FLFM")
-    assert list(flfm.noise_type) == ["FLFM"] * 3
-    assert flfm.edf[0] != auto.edf[0]
+    ffm = st.adev(small_phase, ms, noise="FFM")
+    assert list(ffm.noise_type) == ["FFM"] * 3
+    assert ffm.edf[0] != auto.edf[0]
     suite = st.stability(small_phase, m=ms, noise="FLFM")
-    np.testing.assert_array_equal(suite["adev"].edf, flfm.edf)
+    np.testing.assert_array_equal(suite["adev"].edf, ffm.edf)
+    assert list(suite["adev"].noise_type) == ["FFM"] * 3
     fitted = st.deviation("hdev", small_phase, ms, noise=st.powerlaw_fit(small_phase))
-    assert list(fitted.noise_type) == ["FLPM"] * 3
+    assert list(fitted.noise_type) == ["FPM"] * 3
     with pytest.raises(ValueError, match="noise"):
         st.adev(small_phase, ms, noise="PINK")
 

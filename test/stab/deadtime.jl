@@ -47,7 +47,7 @@ end
         @test sig4(bias_b3(2, 512, 32, 1.4)) == 0.8049
         # SP1065 Fig. 24: √B2 at r = 36 for flicker FM (printed 1.92, here
         # 1.915), random-walk FM and white PM.
-        @test all(isapprox.(sqrt.(bias_b2.(36, [:FLFM, :RWFM, :WHPM])), [1.92, 7.31, 0.82]; atol=0.006))
+        @test all(isapprox.(sqrt.(bias_b2.(36, [:FFM, :RWFM, :WPM])), [1.92, 7.31, 0.82]; atol=0.006))
     end
 
     @testset "identities of TN 1318 Table 1" begin
@@ -71,8 +71,8 @@ end
         @test bias_b3(2, 6, 3, 2) ≈ 1
         @test bias_b3(2, 6, 3, -1) ≈ 1
         # A noise type stands for its μ.
-        @test bias_b2(7, :FLFM) == bias_b2(7, 0) && bias_b3(2, 6, 3, :FLPM) == 6
-        @test bias_b1(9, 1, :WHFM) ≈ 1
+        @test bias_b2(7, :FFM) == bias_b2(7, 0) && bias_b3(2, 6, 3, :FPM) == 6
+        @test bias_b1(9, 1, :WFM) ≈ 1
     end
 
     @testset "accuracy" begin

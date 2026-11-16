@@ -85,8 +85,8 @@ using Random
 p = noise_gen(PhaseData, 8192, 1.0; rng = Xoshiro(5),
               sigma1 = Dict(2 => 2e-12, 0 => 1e-12, -2 => 3e-14))
 m = noise_fit(mhdev(p))
-add_component!(m, :WHPM, 1:2)      # white PM, fitted at the first two τ
-add_component!(m, :WHFM, 5:8)
+add_component!(m, :WPM, 1:2)       # white PM, fitted at the first two τ
+add_component!(m, :WFM, 5:8)
 ```
 
 [`noise_residual`](@ref) returns the variance that the model leaves at

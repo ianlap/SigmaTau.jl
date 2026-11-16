@@ -27,14 +27,14 @@ const FORMATS = ["table", "csv", "json"]
 const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "table", "bipm_utc", "rinex_clk"]
 const DRIFTS = ["none", "linear", "quadratic"]
 const BIASES = ["exact", "published", "stable32", "none"]
-const NOISES = ["auto", "fit", "WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const STEPS = ["best", "real"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const DRIFT_METHODS = [String(m) for m in SigmaTau.DRIFT_METHODS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
-const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
+const NOISE_NAMES = ["WPM", "FPM", "WFM", "FFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
+const NOISES = ["auto"; "fit"; NOISE_NAMES]
 const HAT_DEVS = [String(d) for d in SigmaTau._HAT_DEVIATIONS]
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 const QUANTITIES = ["phase", "frequency"]
@@ -89,11 +89,11 @@ const OPTS = [
     Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "hat", "report", "holdover"]),
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
-    Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
+    Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WPM, FPM, WFM, FFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
     Opt("--dead-time", "SECONDS", String[], false, "frequency readings with SECONDS unmeasured between them: divide the ADEV by the bias functions √(B2·B3). Needs --devs adev, --noise TYPE and --tau0, the averaging time of one reading", ["analyze"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only); with holdover, the error that model predicts and each noise type's share", ["analyze", "holdover"]),
-    Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
+    Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WPM, FPM, WFM, FFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
     Opt("--mask", "NAME", MASKS, false, "check MTIE and TDEV against an ITU-T wander mask, or all of them: G811, G8262_opt1, G8272_PRTC_A, G8272_PRTC_B, G823_SSU ..., all; JSON gains the limits and the checks, CSV a verdict on stderr", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
     Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE; or give both channels as --column A,B of FILE", ["cross"]),
@@ -347,11 +347,8 @@ function parse_component!(o::Options, s::String)
     length(parts) == 3 || throw(usage_error("--component expects NOISE:A:B, got \"" * s * "\""))
     name = String(parts[1])
     α = tryparse(Int, name)
-    if α === nothing
-        k = findfirst(==(uppercase(name)), NOISE_NAMES)
-        k === nothing && throw(usage_error("--component: unknown noise \"" * name * "\"; use " * join(NOISE_NAMES, ", ") * " or an α"))
-        α = 3 - k
-    end
+    α === nothing && (α = noise_alpha(uppercase(name)))
+    α === nothing && throw(usage_error("--component: unknown noise \"" * name * "\"; use " * join(NOISE_NAMES, ", ") * " or an α"))
     a = isempty(parts[2]) ? NaN : parse_float(String(parts[2]), "--component")
     b = isempty(parts[3]) ? NaN : parse_float(String(parts[3]), "--component")
     push!(o.components, (α, a, b))
@@ -377,6 +374,16 @@ function parse_range!(o::Options, s::String)
     !isnan(o.range_start) && !isnan(o.range_end) && o.range_end <= o.range_start &&
         throw(usage_error("--range end must be after its start"))
     return o
+end
+
+# α of a noise type by name, `nothing` for any other string. The older names,
+# such as WHFM for WFM, are accepted.
+noise_alpha(s::String) = get(SigmaTau._NOISE_ALPHA, Symbol(s), nothing)
+
+# --noise: auto, fit or a noise type; an older name is stored as the new one.
+function noise_choice(s::String)
+    α = noise_alpha(s)
+    return α === nothing ? check_choice(s, "--noise", NOISES) : NOISE_NAMES[3 - α]
 end
 
 function check_choice(s::String, flag::String, choices::Vector{String})
@@ -458,7 +465,7 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--scaling";        o.scaling = parse_float(v, name)
     elseif name == "--remove-drift";   o.remove_drift = check_choice(v, name, DRIFTS)
     elseif name == "--bias";           o.bias = check_choice(v, name, BIASES)
-    elseif name == "--noise";          o.noise = check_choice(v, name, NOISES)
+    elseif name == "--noise";          o.noise = noise_choice(v)
     elseif name == "--devs";           o.command == "dynamic" ? (o.dev = dynamic_dev(v)) : (o.devs = parse_devs(v))
     elseif name == "--grid";           tau_mode(v); o.grid = v
     elseif name == "--m";              o.m = parse_m(v)
@@ -641,8 +648,8 @@ function parse_args!(o::Options, args::Vector{String})
     o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
     if o.dead_time != 0
         o.devs == [:adev] || throw(usage_error("--dead-time corrects the Allan deviation alone; give --devs adev"))
-        o.noise in ("WHPM", "FLPM", "WHFM", "FLFM", "RWFM") ||
-            throw(usage_error("--dead-time needs the noise type: --noise WHPM, FLPM, WHFM, FLFM or RWFM"))
+        o.noise in ("WPM", "FPM", "WFM", "FFM", "RWFM") ||
+            throw(usage_error("--dead-time needs the noise type: --noise WPM, FPM, WFM, FFM or RWFM"))
         isnan(o.tau0) && throw(usage_error("--dead-time needs --tau0, the averaging time of one reading; a time column holds the period between readings"))
         isfinite(o.dead_time) && o.dead_time > -o.tau0 || throw(usage_error("--dead-time must be above −τ₀"))
         o.fillgaps && throw(usage_error("--dead-time needs a record without gaps, so it goes without --fill-gaps"))

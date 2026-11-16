@@ -17,10 +17,10 @@ factor in the package depends on.
 
 | Label | Noise | ``α`` | ADEV, HDEV | MDEV, MHDEV | TDEV, HTDEV |
 |:---|:---|---:|:---|:---|:---|
-| `:WHPM` | white PM | 2 | ``τ^{-1}`` | ``τ^{-3/2}`` | ``τ^{-1/2}`` |
-| `:FLPM` | flicker PM | 1 | ``τ^{-1}``, nearly | ``τ^{-1}`` | ``τ^{0}`` |
-| `:WHFM` | white FM | 0 | ``τ^{-1/2}`` | ``τ^{-1/2}`` | ``τ^{1/2}`` |
-| `:FLFM` | flicker FM | −1 | ``τ^{0}`` | ``τ^{0}`` | ``τ^{1}`` |
+| `:WPM` | white PM | 2 | ``τ^{-1}`` | ``τ^{-3/2}`` | ``τ^{-1/2}`` |
+| `:FPM` | flicker PM | 1 | ``τ^{-1}``, nearly | ``τ^{-1}`` | ``τ^{0}`` |
+| `:WFM` | white FM | 0 | ``τ^{-1/2}`` | ``τ^{-1/2}`` | ``τ^{1/2}`` |
+| `:FFM` | flicker FM | −1 | ``τ^{0}`` | ``τ^{0}`` | ``τ^{1}`` |
 | `:RWFM` | random-walk FM | −2 | ``τ^{1/2}`` | ``τ^{1/2}`` | ``τ^{3/2}`` |
 | `:FWFM` | flicker-walk FM | −3 | ``τ^{1}``, HDEV only | ``τ^{1}``, MHDEV only | ``τ^{2}``, HTDEV only |
 | `:RRFM` | random-run FM | −4 | ``τ^{3/2}``, HDEV only | ``τ^{3/2}``, MHDEV only | ``τ^{5/2}``, HTDEV only |
@@ -83,7 +83,7 @@ MHDEV, and so is exact from ``τ_0``. On flicker FM the sampled record lies
 hold at every ``τ``.
 
 ```@example noise
-h = Dict(:WHFM => 2e-24, :RWFM => 1e-30)       # S_y(f) = 2e-24 + 1e-30 f⁻²
+h = Dict(:WFM => 2e-24, :RWFM => 1e-30)        # S_y(f) = 2e-24 + 1e-30 f⁻²
 round.(powerlaw_sigma(h, [1.0, 100.0, 1e4]; tau0 = 1.0); sigdigits = 4)
 ```
 
@@ -200,7 +200,7 @@ that the deviation averages over.
 
 ```@example noise
 fit = powerlaw_fit(adev(noise_gen(PhaseData, 8192, 1.0; rng = Xoshiro(3),
-                                  sigma1 = Dict(:WHFM => 1e-12, :RWFM => 3e-14))))
+                                  sigma1 = Dict(:WFM => 1e-12, :RWFM => 3e-14))))
 round.(powerlaw_psd(fit, [1e-3, 1e-2, 0.1]; quantity = :L, f_carrier = 10e6);
        digits = 1)
 ```
@@ -226,7 +226,7 @@ A component can also be asked for by its Allan deviation at ``τ_0``, which
 is how most examples in this documentation are built:
 
 ```@example noise
-p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(:WHFM => 1e-12, :RWFM => 3e-14),
+p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(:WFM => 1e-12, :RWFM => 3e-14),
               rng = Xoshiro(1))
 adev(p, [1, 16, 256])
 ```

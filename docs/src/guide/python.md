@@ -37,7 +37,7 @@ p = st.noise_gen(st.PhaseData, 4096, 1.0, sigma1={0: 1e-12}, rng=42)
 r = st.adev(p)                    # octave spacing, noise type and intervals
 r.tau, r.dev, r.noise_type, r.ci_lower, r.ci_upper, r.edf
 
-r = st.adev(p, [1, 10, 100], confidence=0.95, noise="WHFM")
+r = st.adev(p, [1, 10, 100], confidence=0.95, noise="WFM")
 
 suite = st.stability(p, devs=("adev", "mdev", "hdev"))
 suite["mdev"].dev
@@ -57,7 +57,7 @@ follow from the languages:
 
 | Julia | Python |
 |:---|:---|
-| a symbol, `:WHFM`, `:stable32` | a string, `"WHFM"`, `"stable32"` |
+| a symbol, `:WFM`, `:stable32` | a string, `"WFM"`, `"stable32"` |
 | a named grid, `adev(p, Decade)` | `st.adev(p, st.Decade)` |
 | `r.ci`, a vector of `(lo, hi)` | `r.ci_lower`, `r.ci_upper`, two arrays |
 | `suite[:mdev]` | `suite["mdev"]` |
@@ -69,7 +69,7 @@ follow from the languages:
 | `Dict(0 => 1e-12)` | `{0: 1e-12}` |
 | `rng = Xoshiro(42)` | `rng=42`, which seeds the same generator |
 | `push!(s, x)`, `append!(s, xs)`, `snapshot(s)` on a [`StreamingStability`](@ref) | `s.push(x)`, `s.extend(xs)`, `s.snapshot()` |
-| `add_component!(fit, :WHFM, 1:6)`, `undo!(fit)`, `noise_residual(fit)` on a [`NoiseFit`](@ref) | `fit.add_component("WHFM", slice(0, 6))`, `fit.undo()`, `fit.residual()` |
+| `add_component!(fit, :WFM, 1:6)`, `undo!(fit)`, `noise_residual(fit)` on a [`NoiseFit`](@ref) | `fit.add_component("WFM", slice(0, 6))`, `fit.undo()`, `fit.residual()` |
 | `ClockComparisons(records)`, from one phase record per clock | `st.ClockComparisons.from_records(records)` |
 | an `ArgumentError` | a `ValueError` |
 | a `MethodError`, as for a float where an integer counts samples | a `TypeError` |
@@ -92,7 +92,7 @@ st.deviation("mhtotdev", p)                 # any estimator by name
 st.psd_y(p)                                 # spectrum of fractional frequency
 st.drift_fit(p).rate                        # frequency drift, per day
 st.mask_check(st.mtie(p), "G8262_opt1").passed
-st.bias_b2(36, "FLFM")                      # dead-time bias function B2(r, μ)
+st.bias_b2(36, "FFM")                       # dead-time bias function B2(r, μ)
 
 fit = st.powerlaw_fit(p)                    # power-law model of the noise
 model = st.clock_model(fit)                 # clock model with those levels

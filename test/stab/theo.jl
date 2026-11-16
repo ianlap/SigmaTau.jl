@@ -218,12 +218,12 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
         # Each bias mode takes the EDF of its own ratio, and ThêoH that of ThêoBR.
         N = 256; ms = [12, 128]
         p = noise_gen(PhaseData, N, 1.0; h = Dict(0 => 1.0), rng = Xoshiro(11))
-        edf(mode) = theo1(p, ms; noise = :WHFM, correct_bias = mode).edf
+        edf(mode) = theo1(p, ms; noise = :WFM, correct_bias = mode).edf
         @test edf(true) == edf(:stable32) == _theobr_edf.(0, ms, N) ==
-              calculate_edf(:theobr, [1.0, 1.0], [:WHFM, :WHFM], ms, 0.75 .* ms, N, N - 1.0)
+              calculate_edf(:theobr, [1.0, 1.0], [:WFM, :WFM], ms, 0.75 .* ms, N, N - 1.0)
         @test edf(:published) == _theobr_edf.(0, ms, N; howe = true)
         @test edf(false) == _theo1_edf.(0, ms, N)
-        @test theoh(p, [96]; noise = :WHFM).edf == [_theobr_edf(0, 128, N)]
+        @test theoh(p, [96]; noise = :WFM).edf == [_theobr_edf(0, 128, N)]
 
         # Measured on 2000 white FM records as 2·mean²/var of the corrected
         # variance. The model is on the low side: 21 other seed sets gave 1.01

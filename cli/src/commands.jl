@@ -449,7 +449,7 @@ function json_holdover_fit(io::IO, data::PhaseData, h::HoldoverResult)
     end
     print(io, '{')
     json_key(io, "alphas", true); json_array(io, p.alphas)
-    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._nnls_symbol(a)) for a in p.alphas])
+    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._noise_symbol(a)) for a in p.alphas])
     json_key(io, "sigma"); json_array(io, p.sigma)
     json_key(io, "quantile"); json_array(io, p.quantile)
     json_key(io, "budget"); print(io, '[')

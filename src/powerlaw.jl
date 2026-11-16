@@ -35,7 +35,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", f::PowerLawFit)
     print(io, "PowerLawFit to ", f.source, " (", length(f.x), " points)")
     for (α, h) in zip(f.alphas, f.h)
-        @printf(io, "\n  h%-3s %-5s %.4g", string(α), _nnls_symbol(α), h)
+        @printf(io, "\n  h%-3s %-5s %.4g", string(α), _noise_symbol(α), h)
     end
 end
 
@@ -343,7 +343,7 @@ White FM with random-walk FM, at 1 s, 100 s and 10⁴ s:
 ```jldoctest
 julia> using SigmaTau
 
-julia> h = Dict(:WHFM => 2e-24, :RWFM => 1e-30);
+julia> h = Dict(:WFM => 2e-24, :RWFM => 1e-30);
 
 julia> print(round.(powerlaw_sigma(h, [1.0, 100.0, 1e4]; tau0=1.0); sigdigits=4))
 [1.0e-12, 1.032e-13, 2.567e-13]
@@ -389,7 +389,7 @@ White FM with ``σ_y = 10^{-12}`` at 1 s, on a 10 MHz carrier:
 ```jldoctest
 julia> using SigmaTau
 
-julia> L = powerlaw_psd(Dict(:WHFM => 2e-24), [1.0, 10.0, 100.0];
+julia> L = powerlaw_psd(Dict(:WFM => 2e-24), [1.0, 10.0, 100.0];
                         quantity=:L, f_carrier=10e6);
 
 julia> print(round.(L; digits=2))

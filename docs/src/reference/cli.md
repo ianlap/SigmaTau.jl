@@ -175,8 +175,8 @@ sigmatau_json("analyze missing.dat --format json") # hide
 | `--tau-min S`, `--tau-max S` | leave out the averaging times below or above `S` seconds |
 | `--confidence P` | confidence level of the intervals. By default 0.683 |
 | `--no-ci` | no intervals or EDF, and no noise types but those that the bias factors of `totdev`, `mtotdev`, `ttotdev`, `htotdev` and `mhtotdev` rest on |
-| `--noise TYPE` | noise type behind the intervals and the bias factors: `auto` (the default, identified at each averaging time), `fit` (the dominant term at each averaging time of the model that [`powerlaw_fit`](@ref) fits to the record), or one of `WHPM`, `FLPM`, `WHFM`, `FLFM`, `RWFM`, `FWFM`, `RRFM` for every averaging time |
-| `--dead-time S` | for frequency readings with `S` seconds unmeasured between them: the Allan deviation divided by the bias functions, the `dead_time` keyword of [`adev`](@ref) ([Dead time](@ref)). It needs `--devs adev`, a `--noise` from `WHPM` to `RWFM`, and `--tau0`, the averaging time of one reading; the time column of such a file holds the period between readings. The JSON echoes it as `dead_time` |
+| `--noise TYPE` | noise type behind the intervals and the bias factors: `auto` (the default, identified at each averaging time), `fit` (the dominant term at each averaging time of the model that [`powerlaw_fit`](@ref) fits to the record), or one of `WPM`, `FPM`, `WFM`, `FFM`, `RWFM`, `FWFM`, `RRFM` for every averaging time |
+| `--dead-time S` | for frequency readings with `S` seconds unmeasured between them: the Allan deviation divided by the bias functions, the `dead_time` keyword of [`adev`](@ref) ([Dead time](@ref)). It needs `--devs adev`, a `--noise` from `WPM` to `RWFM`, and `--tau0`, the averaging time of one reading; the time column of such a file holds the period between readings. The JSON echoes it as `dead_time` |
 | `--bias MODE` | bias correction of the total deviations and Thêo1: `exact` (the default), `published`, `stable32` or `none`, for `correct_bias = true`, `:published`, `:stable32` and `false` ([Bias correction](../explanation/bias.md)). |
 
 The deviations are `adev`, `mdev`, `hdev`, `mhdev`, `pdev`, `totdev`,
@@ -202,11 +202,11 @@ Four options add a member to the JSON output. The first three need
 |:---|:---|
 | `--spectrum` | `spectrum`, as the `spectrum` command gives it. `--nperseg N` sets the segment length. For a record with gaps the member is `{"error": "…"}`, and the deviations are computed all the same |
 | `--fit` | `powerlaw`, the power-law model that [`powerlaw_fit`](@ref) fits to the modified Hadamard deviation of the record |
-| `--component NOISE:A:B` | `powerlaw`, built one noise type at a time with [`noise_fit`](@ref): `NOISE`, a name such as `WHFM` or a value of ``α``, is fitted between `A` and `B` seconds to what the components before it leave. Either end can be left open. Repeat the option for each component, in order |
+| `--component NOISE:A:B` | `powerlaw`, built one noise type at a time with [`noise_fit`](@ref): `NOISE`, a name such as `WFM` or a value of ``α``, is fitted between `A` and `B` seconds to what the components before it leave. Either end can be left open. Repeat the option for each component, in order |
 | `--mask NAME` | `masks`, the limits of an ITU-T wander mask with the check of each MTIE and TDEV result against them. `NAME` is one of the [`TELECOM_MASKS`](@ref), such as `G811`, `G8262_opt1`, `G8272_PRTC_A`, `G8272_PRTC_B` or `G823_SSU`, or `all`. With CSV output the table stays as it is and each check is one line on standard error, such as `sigmatau: MTIE passes, 3.2× under G8272_PRTC_A`, unless `--quiet` is given |
 
 ```@example cliref
-sigmatau_json("analyze --synth 1024 --component WHFM::8 --component RWFM:32: --format json"; only = "powerlaw") # hide
+sigmatau_json("analyze --synth 1024 --component WFM::8 --component RWFM:32: --format json"; only = "powerlaw") # hide
 ```
 
 `alphas`, `h` and `noise_types` are the model
