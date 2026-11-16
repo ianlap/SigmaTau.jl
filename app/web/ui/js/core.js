@@ -87,7 +87,7 @@ function recordArgs(clock) {
       opt("--column", clock.column_name);
       a.push(clock.kind === "frequency" ? "--freq" : "--phase");
     } else if (clock.format === "rinex_clk") opt("--column", clock.column_name);
-  } else recordColumns(clock, a, opt);
+  } else if (!synth) recordColumns(clock, a, opt);
   if (clock.drift && clock.drift !== "none") a.push("--remove-drift", clock.drift);
   if (clock.keep_zeros) a.push("--keep-zeros");
   if (clock.fillgaps) a.push("--fillgaps");
@@ -121,7 +121,7 @@ function view(doc) {
   const record = {
     n: r.n, tau0: r.tau0, kind: r.quantity, source: doc.source, series: r.series,
     check: {
-      samples: r.n, span_s: r.span_s, start: r.start || "", gaps: r.gaps, outliers: r.outliers,
+      samples: r.n, span_s: r.span_s, start: r.start || "", gaps: r.gaps, filled: r.filled ?? 0, outliers: r.outliers,
       outlier_t: r.outlier_t ?? [], outlier_x: r.outlier_x ?? [], drift_per_day: r.drift_per_day,
       removed_offset: r.removed_offset ?? null, removed_drift: r.removed_drift_per_day ?? null,
       warnings: doc.warnings ?? [],

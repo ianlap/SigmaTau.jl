@@ -30,6 +30,13 @@ export function thousands(n) {
   return n.toLocaleString("en-US").replace(/,/g, " ");
 }
 
+// The share k of n as text: "79 %", or "under 1 %" rather than "0 %".
+export const share = (k, n) => (100 * k < n ? "under 1 %" : `${Math.round((100 * k) / n)} %`);
+
+// Gap filling was tested with up to 30 % of a record missing (ADEV within a
+// few percent); past that the results describe the filler as much as the clock.
+export const FILL_TESTED = 0.3;
+
 // The unit a time is read in, from the longest time shown: seconds up to two
 // minutes, then minutes, hours, days (up to two years) and years.
 const YEAR = 365.25 * 86400;

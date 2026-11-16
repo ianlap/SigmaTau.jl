@@ -6,7 +6,7 @@ import { byId, label, gridName, noiseLabel, biasEntry, noiseChoice } from "./est
 import { loadPlotly, inLightTheme } from "./plot.js";
 import { analyzeCommand } from "./core.js";
 import { figure } from "./pages/stability.js";
-import { sci, num, thousands, duration, hertz, escapeHtml as h } from "./format.js";
+import { sci, num, thousands, duration, hertz, share, escapeHtml as h } from "./format.js";
 
 const AXIS_TITLE = { sigma_y: "Frequency stability σ<sub>y</sub>(τ)", sigma_x: "Time stability σ<sub>x</sub>(τ)" };
 const TABLE_TEXT = { L: "ℒ(f) (dBc/Hz)", Sphi: "S<sub>φ</sub>(f) (rad²/Hz)", Sx: "S<sub>x</sub>(f) (s²/Hz)", Sy: "S<sub>y</sub>(f) (1/Hz)" };
@@ -60,7 +60,7 @@ async function recordRows(clocks) {
         <td colspan="5">offsets ${hertz(t.f[0])} to ${hertz(t.f.at(-1))}${t.carrier ? `, carrier ${hertz(t.carrier)}` : ""}</td><td>integrated from ${hertz(t.band[0])} to ${hertz(t.band[1])}</td></tr>`);
       continue;
     }
-    const prep = [c.range ? `seconds ${num(c.range[0], 6)} to ${num(c.range[1], 6)}` : "", `drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, c.fillgaps ? "gaps filled" : "", c.remove_outliers ? "outliers removed" : "",
+    const prep = [c.range ? `seconds ${num(c.range[0], 6)} to ${num(c.range[1], 6)}` : "", `drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, k.filled ? `${thousands(k.filled)} samples filled (${share(k.filled, r.n)})` : "", c.remove_outliers ? "outliers removed" : "",
       ref && ref !== c && ref.group === c.group ? `minus ${h(ref.name)}` : ""].filter(Boolean).join(", ");
     rows.push(`<tr>${src}
       <td>${h(r.kind)}</td><td class="n">${thousands(r.n)}</td><td class="n">${num(r.tau0, 6)} s</td><td class="n">${duration(r.n * r.tau0)}</td>

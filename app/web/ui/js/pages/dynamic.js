@@ -404,6 +404,18 @@ function renderCell(box, c, d) {
     </div>`;
 }
 
+// The File menu's results: each map shown, a row for each window and τ; the
+// JSON in the core's names.
+export function results() {
+  const maps = visibleClocks().filter((c) => c.record && c.dynamic?.key === dynamicKey(c) && !c.dynamic.error);
+  return {
+    what: "Dynamic maps", file: "dynamic",
+    columns: ["clock", "deviation", "t_s", "tau_s", "dev"],
+    rows: maps.flatMap(({ name, dynamic: d }) => d.t.flatMap((t, i) => d.tau.map((tau, j) => [name, d.dev, t, tau, d.map[i][j]]))),
+    json: maps.map(({ name, dynamic: d }) => ({ clock: name, dynamic: { deviation: d.dev, window: d.window, step: d.step, t: d.t, tau: d.tau, dev: d.map } })),
+  };
+}
+
 export function hint() {
   if (multi()) return state.dyn.view === "map" ? "Rows = window center time · columns = τ · stronger color = less stable" : "Drag a waterfall to turn it · scroll to zoom";
   return state.dyn.view === "map" ? "Click a cell to pin it · switch to 3D waterfall to compare curve shapes" : "Drag to turn · scroll to zoom";
