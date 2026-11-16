@@ -76,6 +76,8 @@ end
         @test sprint(show, h) == "HatResult(ADEV of 3 clocks, N-cornered hat: maser, cesium, reference)"
         table = split(sprint(show, MIME"text/plain"(), h), '\n')
         @test length(table) == 4 && split(table[2]) == ["tau", "maser", "cesium", "reference"]
+        long = split(sprint(show, MIME"text/plain"(), ncornered_hat(cc, collect(1:20))), '\n')
+        @test length(long) == 14 && occursin("⋮  9 more rows", long[9])     # first six, last five
     end
 
     @testset "three white-FM clocks against the classic formula" begin

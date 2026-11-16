@@ -64,16 +64,14 @@ _hat_title(h::HatResult) =
 
 Base.show(io::IO, h::HatResult) = print(io, "HatResult(", _hat_title(h), ": ", join(h.names, ", "), ")")
 
-# REPL display: a row for each τ and a column for each clock.
+# REPL display: a row for each τ, as for a result, and a column for each clock.
 function Base.show(io::IO, ::MIME"text/plain", h::HatResult)
     print(io, _hat_title(h))
     isempty(h.clocks) && return
-    cols = [[["tau"; _show4g.(h.clocks[1].tau)]];
-            [[name; _show4g.(r.dev)] for (name, r) in zip(h.names, h.clocks)]]
-    widths = [maximum(length, c) for c in cols]
-    for i in eachindex(cols[1])
-        print(io, "\n  ", join((lpad(c[i], w) for (c, w) in zip(cols, widths)), "  "))
-    end
+    τ = h.clocks[1].tau
+    n = length(τ)
+    _print_table(io, ["tau"; h.names], n, _table_rows(n),
+                 i -> [_show4g(τ[i]); [_show4g(r.dev[i]) for r in h.clocks]])
 end
 
 # Measured pair (i, j) from a possibly part-filled matrix; the transposed
