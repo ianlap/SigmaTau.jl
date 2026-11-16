@@ -168,7 +168,9 @@ function cmd_report(io::IO, o::Options, data::PhaseData, args::Vector{String})
     print(io, "<dt>Samples</dt><dd>", s.n, "</dd>")
     print(io, "<dt>τ<sub>0</sub></dt><dd>"); plain(io, Float64(data.tau0), 6); print(io, " s</dd>")
     print(io, "<dt>Span</dt><dd>"); duration_text(io, Float64(s.span)); print(io, "</dd>")
-    print(io, "<dt>Gaps</dt><dd>", s.gaps, "</dd><dt>Outliers (5σ)</dt><dd>", length(s.outliers), "</dd>")
+    print(io, "<dt>Gaps</dt><dd>", s.gaps, "</dd>")
+    o.filled > 0 && print(io, "<dt>Filled</dt><dd>", o.filled, " (", share_text(o.filled, s.n), ")</dd>")
+    print(io, "<dt>Outliers (5σ)</dt><dd>", length(s.outliers), "</dd>")
     print(io, "<dt>Drift / day</dt><dd>"); sci(io, Float64(s.drift_per_day), 3); print(io, "</dd>")
     print(io, "<dt>Preprocessing</dt><dd>detrend ", o.detrend, ", remove drift ", o.remove_drift,
           o.fillgaps ? ", gaps filled" : "", o.remove_outliers ? ", outliers removed" : "",

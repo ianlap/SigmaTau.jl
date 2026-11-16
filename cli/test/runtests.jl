@@ -739,13 +739,13 @@ mktempdir() do dir
         r = run_cli("check", pf)
         @test r.code == 0
         lines = split(strip(r.out), '\n')
-        @test lines[1] == "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day," *
+        @test lines[1] == "source,quantity,n,tau0,span_s,gaps,filled,outliers,drift_per_day," *
                           "statistics_of,min,max,mean,median,std,std_y,adev,noise_type"
         row = split(lines[2], ',')
         st = sample_statistics(PhaseData(X, 1.0))
-        @test row[3] == "256" && row[9] == "phase"
-        @test parse.(Float64, row[10:16]) == [st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev]
-        @test row[17] == String(st.noise)
+        @test row[3] == "256" && row[7] == "0" && row[10] == "phase"
+        @test parse.(Float64, row[11:17]) == [st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev]
+        @test row[18] == String(st.noise)
         r = run_cli("check", pf, "--format", "json", "--series", "4000")
         @test r.code == 0
         @test occursin("\"command\":\"check\"", r.out)
@@ -1040,8 +1040,17 @@ mktempdir() do dir
         # A one-column frequency file with NaN readings is analyzed once filled.
         yf = joinpath(dir, "y.txt")
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
-        @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
-        @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
+        @test occursin("missing 1 samples (under 1 % of it); fill them with --fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
+        r = run_cli("check", yf, "--freq", "--tau0", "1", "--fillgaps", "--format", "json")
+        @test r.code == 0 && occursin("\"filled\":1,", r.out) && isempty(r.err)
+        # Two readings in five: the filler makes 60 % of the record, and stderr says so.
+        sf = joinpath(dir, "sparse.csv")
+        write(sf, join(("$i,$(1e-12 * sinpi(i / 7.3))" for i in 0:499 if i % 5 >= 3), "\n"))
+        @test occursin("missing 297 samples (60 % of it)", run_cli("check", sf, "--freq").err)
+        r = run_cli("check", sf, "--freq", "--fillgaps")
+        head, row = split(r.out, '\n')
+        @test r.code == 0 && split(head, ',')[7] == "filled" && split(row, ',')[7] == "297"
+        @test occursin("--fillgaps made 297 of the 498 samples (60 %), more than the 30 % it was tested for", r.err)
         # A zero in a Stable32 frequency file is a gap, unless it is kept as a reading.
         zf = joinpath(dir, "z.frd")
         write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))

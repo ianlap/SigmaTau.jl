@@ -20,7 +20,7 @@ import { openHelpMenu } from "./helpmenu.js";
 import { buildReport } from "./report.js";
 import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly, css } from "./plot.js";
-import { thousands, num, duration, interval, escapeHtml as h } from "./format.js";
+import { thousands, num, duration, interval, share, FILL_TESTED, escapeHtml as h } from "./format.js";
 
 const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, steering, ensemble, live, help };
 const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "steering", "ensemble", "live"];
@@ -340,8 +340,8 @@ function renderChip() {
   if (!withRec.length) { text.innerHTML = "No record"; return; }
   if (withRec.length === 1 && !multi()) {
     const c = withRec[0], r = c.record;
-    const facts = [`${thousands(r.n)} samples`, `τ<sub>0</sub> ${interval(r.tau0)}`, duration(r.n * r.tau0),
-      fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
+    const facts = [`${thousands(r.n)} samples`, ...(r.check.filled ? [`${share(r.check.filled, r.n)} filled`] : []),
+      `τ<sub>0</sub> ${interval(r.tau0)}`, duration(r.n * r.tau0), fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
     text.innerHTML = `${h(c.source.type === "file" ? c.source.name : "synthetic record")} <span class="facts">${facts.join(" · ")}</span>`;
     return;
   }
@@ -355,6 +355,7 @@ function renderStatus() {
   const hintEl = document.getElementById("status-hint");
   let kind, msg;
   const anyRecord = state.clocks.some((c) => c.record);
+  const overFilled = state.clocks.find((c) => c.record && c.record.check.filled > FILL_TESTED * c.record.n);
   if (transient) [kind, msg] = [transient.kind, transient.text];
   else if (!state.core.ok) [kind, msg] = ["error", "No analysis core. Start the explorer with serve.py."];
   else if (state.run.state === "running") [kind, msg] = ["busy", `Running ${state.devs.map(label).join(", ")}…`];
@@ -362,9 +363,13 @@ function renderStatus() {
   else if (!anyRecord) [kind, msg] = state.clocks.some((c) => c.error) ? ["error", "No record could be read. The Data page says why."] : ["", "No record. Open a file on the Data page."];
   else if (state.run.stale) [kind, msg] = ["warn", state.run.stale === "record" ? "New record" : "Inputs changed"];
   else [kind, msg] = ["good", "Up to date"];
+  if (overFilled && !transient && (kind === "good" || kind === "warn")) {
+    kind = "warn";
+    msg += ` · gap filling made ${share(overFilled.record.check.filled, overFilled.record.n)} of ${overFilled.name}, past the 30 % it was tested for`;
+  }
   dot.className = `status-dot ${kind}`;
   text.textContent = msg;
-  hintEl.textContent = kind === "warn" && !transient ? "Run analysis (F5) to update Stability and Spectrum" : (page?.hint() ?? "");
+  hintEl.textContent = state.run.stale && kind === "warn" && !transient ? "Run analysis (F5) to update Stability and Spectrum" : (page?.hint() ?? "");
 }
 
 function render() {

@@ -309,8 +309,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
-    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor(SLOW);   // the new record, not the last one
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples · under 1 % filled/ }).waitFor(SLOW);   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+    assert.match(await page.locator(".check-card").innerText(), /Filled\s+1 · under 1 %/);
   });
 
   await t.test("Data: Fill gaps turned off and on again; the next file starts without it", async () => {
@@ -327,6 +328,22 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await settled();
     await page.locator("#record-chip-text", { hasText: /p\.csv/ }).waitFor(SLOW);
     assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
+  });
+
+  await t.test("Data: a sparse frequency file says how much of it the filler made", async () => {
+    // Two readings in five: the filler makes 60 % of the record, past the 30 % it was tested for.
+    const rows = Array.from({ length: 500 }, (_, i) => i).filter((i) => i % 5 >= 3);
+    const text = "t (s),fractional frequency\n" + rows.map((i) => `${i},${(1e-12 * Math.sin(i / 3)).toExponential(6)}`).join("\n");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "sparse.csv", mimeType: "text/csv", buffer: Buffer.from(text) });
+    const gaps = page.locator("#import-dialog .gap-card", { hasText: "297 missing samples, 60 % of the span" });
+    await gaps.waitFor(SLOW);
+    assert.match(await gaps.innerText(), /makes 60 % of what is analyzed, more than the 30 %/);
+    await page.uncheck("#imp-remember");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /498 samples · 60 % filled/ }).waitFor(SLOW);
+    assert.match(await page.locator(".check-card").innerText(), /Filled\s+297 · 60 %/);
   });
 
   await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale, and its clocks are separated", async () => {
