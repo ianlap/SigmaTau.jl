@@ -8,7 +8,7 @@ clock beside it and the weight of each clock. **N-cornered hat** separates
 the stability of each clock from the comparisons, without a scale
 ([The N-cornered hat](ensemble.md#The-N-cornered-hat)). **Two channels**
 takes two columns as two measurements of one device and keeps what they
-share ([Two channels](ensemble.md#Two-channels)).
+share ([Two channels](ensemble.md#Two-channels-of-one-device)).
 
 [![The Ensemble page](../assets/explorer/ensemble.png)](../assets/explorer/ensemble.png)
 
@@ -203,7 +203,7 @@ often at long ``τ``. A negative variance has no deviation. The clock is not
 resolved at that averaging time and has no point there. With the KLTS
 interval a ▽ marks the upper limit that the records set on such a clock.
 
-## Two channels
+## Two channels of one device
 
 When one device is measured twice at the same time, through the two
 channels of an instrument or against two references, the two records share
