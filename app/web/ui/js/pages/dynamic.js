@@ -407,7 +407,7 @@ function renderCell(box, c, d) {
 // The File menu's results: each map shown, a row for each window and τ; the
 // JSON in the core's names.
 export function results() {
-  const maps = visibleClocks().filter((c) => c.record && c.dynamic?.key === dynamicKey(c) && !c.dynamic.error);
+  const maps = recordClocks().filter((c) => c.record && c.dynamic?.key === dynamicKey(c) && !c.dynamic.error);
   return {
     what: "Dynamic maps", file: "dynamic",
     columns: ["clock", "deviation", "t_s", "tau_s", "dev"],

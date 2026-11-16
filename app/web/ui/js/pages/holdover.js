@@ -237,7 +237,7 @@ export function refresh() {
 // The File menu's results: the table of each clock shown, in the core's columns,
 // with the reference and the predicted RMS of the plot.
 export function results() {
-  const ready = visibleClocks().filter((c) => c.record && c.holdover?.key === holdoverKey(c) && !c.holdover.error);
+  const ready = recordClocks().filter((c) => c.record && c.holdover?.key === holdoverKey(c) && !c.holdover.error);
   return {
     what: "Holdover table", file: "holdover",
     columns: ["clock", "train_s", "tau_s", "rms_s", "quantile_s", "worst_s", "mean_s", "trials", "limit_s", "time_to_limit_s", "claimed_s", "reference_s", "predicted_s"],

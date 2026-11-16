@@ -239,7 +239,7 @@ export function refresh() {
 
 // The File menu's results: the Allan deviations of each clock shown, in the core's columns.
 export function results() {
-  const ready = visibleClocks().filter((c) => c.record && c.steer?.key === steerKey(c) && !c.steer.error);
+  const ready = recordClocks().filter((c) => c.record && c.steer?.key === steerKey(c) && !c.steer.error);
   return {
     what: "Steering table", file: "steering",
     columns: ["clock", "tau_s", "free", "steered", "predicted"],
