@@ -108,7 +108,7 @@ fn request_to_args(req: &Map<String, Value>, workdir: &Path) -> Result<Vec<Strin
     if !COMMANDS.contains(&command.as_str()) {
         return Err(format!("unknown command {command:?}"));
     }
-    if args.iter().any(|a| a == "--out" || a.starts_with("--out=")) {
+    if args.iter().any(|a| a == "--out" || a == "-o" || a.starts_with("--out=")) {
         return Err("--out is not allowed here".into());
     }
     if let Some(file) = req.get("file").and_then(Value::as_object) {
@@ -255,7 +255,7 @@ fn live_start(app: AppHandle, args: Vec<String>, slot: State<'_, LiveSlot>) -> R
     if args.first().map(String::as_str) != Some("live") {
         return Err("a live request starts with the live command".into());
     }
-    if args.iter().any(|a| a == "--out" || a.starts_with("--out=")) {
+    if args.iter().any(|a| a == "--out" || a == "-o" || a.starts_with("--out=")) {
         return Err("--out is not allowed here".into());
     }
     stop_live(&slot);

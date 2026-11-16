@@ -1,35 +1,55 @@
-/* SigmaTau explorer theme: the approved design tokens (sand + Alabama
-   crimson, Okabe-Ito series, IBM Plex) and their dark counterpart,
-   Espresso. Every color and font the UI uses comes from here; app.css and
-   the plots only read these variables. js/theme.js sets data-theme. */
+/* SigmaTau explorer theme: the approved design tokens (sand, sharpened:
+   an espresso top bar, a near-white plot field, Alabama crimson for the one
+   action, Okabe-Ito series, Inter and JetBrains Mono) and their dark
+   counterpart, Espresso. Every color and font the UI uses comes from here;
+   app.css and the plots only read these variables. js/theme.js sets
+   data-theme. The fonts ship in fonts/ (SIL Open Font License 1.1), so the
+   desktop app needs no network. */
+@font-face { font-family: "Inter"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(fonts/inter-latin-wght-normal.woff2) format("woff2-variations"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Inter"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(fonts/inter-latin-ext-wght-normal.woff2) format("woff2-variations"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Inter"; font-style: normal; font-display: swap; font-weight: 100 900; src: url(fonts/inter-greek-wght-normal.woff2) format("woff2-variations"); unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-display: swap; font-weight: 100 800; src: url(fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2-variations"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-display: swap; font-weight: 100 800; src: url(fonts/jetbrains-mono-latin-ext-wght-normal.woff2) format("woff2-variations"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-display: swap; font-weight: 100 800; src: url(fonts/jetbrains-mono-greek-wght-normal.woff2) format("woff2-variations"); unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF; }
+
 :root {
   color-scheme: light;
 
   /* Surfaces */
-  --bg-window:   #e9e0cf;
-  --bg-panel:    #f1eadc;
-  --bg-card:     #f6f1e6;
-  --bg-popover:  #fbf8f2;
-  --line:        #d9cbb2;
-  --line-strong: #cdbd9f;
-  --line-soft:   #e0d4bf;
-  --grid:        #e6dbc6;
-  --table-head:  #ece2cf;
-  --table-zebra: #f1eadd;
+  --bg-window:   #e9e1d1;
+  --bg-panel:    #f3ede2;
+  --bg-card:     #fffdf9;   /* cards and the plot field */
+  --bg-popover:  #fffdf9;
+  --line:        #ddd2bf;
+  --line-strong: #c9bba1;
+  --line-soft:   #ebe3d5;
+  --grid:        #efe8dc;
+  --table-head:  #f5f0e7;
+  --table-zebra: #fbf8f3;
 
   /* Text */
-  --ink:   #2a2419;
-  --ink-2: #4a4232;
+  --ink:   #1f1b15;
+  --ink-2: #463e30;
   --muted: #655b48;
 
-  /* Accent and status */
-  --accent:       #9e1b32;
-  --accent-hover: #7a1426;
-  --accent-soft:  #f2ddd8;
+  /* Top bar: espresso in both themes, the frame's one dark edge */
+  --bar-bg:     #1f1b15;
+  --bar-raise:  #2a251e;
+  --bar-line:   #3d362b;
+  --bar-ink:    #ece4d4;
+  --bar-muted:  #bdb19c;
+  --tab-line:   #d23a52;
+
+  /* Selection is ink; crimson is kept for the one action (Run, a page's
+     primary button) and the current tab's line. */
+  --accent:       #1f1b15;
+  --accent-hover: #000000;
+  --accent-soft:  #efe6d6;
   --accent-fill:  #9e1b32;   /* filled buttons, under white text */
   --accent-fill-hover: #7a1426;
   --warn:         #9a5b00;
   --warn-soft:    #f6e7c8;
+  --warn-line:    #e3c88f;
   --warn-dot:     #e0a33a;
   --good:         #2c7a4b;
   --error:        #b3261e;
@@ -49,13 +69,13 @@
   --ci-alpha: 0.14;          /* CI band = series color at this opacity */
 
   /* Noise-type strip on the Stability plot, ordered by α (white PM … random-run FM) */
-  --noise-wpm:  #dde4ee;
-  --noise-fpm:  #dfe8dc;
-  --noise-wfm:  #ece3c9;
-  --noise-ffm:  #efd9c5;
-  --noise-rwfm: #ead0cf;
-  --noise-fwfm: #e6cfe0;
-  --noise-rrfm: #d9d1e8;
+  --noise-wpm:  #e5eaf2;
+  --noise-fpm:  #e6eee3;
+  --noise-wfm:  #f2ecda;
+  --noise-ffm:  #f4e6d9;
+  --noise-rwfm: #f1dfde;
+  --noise-fwfm: #efdfea;
+  --noise-rrfm: #e5dff0;
 
   /* Heatmap ramp, one scale shared across clocks */
   --heat-lo:  #eef1f8;
@@ -63,8 +83,8 @@
   --heat-hi:  #13213f;
 
   /* Type */
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --fs-xs: 11px;
   --fs-sm: 12.5px;
   --fs-md: 14px;
@@ -73,10 +93,11 @@
 
   /* Shape and layout */
   --radius-sm: 6px;
-  --radius-md: 10px;
+  --radius-md: 12px;
   --radius-pill: 999px;
   --shadow-pop: 0 12px 40px rgba(60, 45, 20, 0.22);
-  --focus-ring: 0 0 0 3px rgba(158, 27, 50, 0.3);
+  --shadow-card: 0 1px 2px rgba(40, 30, 10, 0.05), 0 4px 16px rgba(40, 30, 10, 0.04);
+  --focus-ring: 0 0 0 2px var(--bg-card), 0 0 0 4px #9e1b32;
   --backdrop: rgba(60, 45, 20, 0.28);
   --tint: rgba(43, 36, 24, 0.07);
   --header-h: 56px;
@@ -85,7 +106,8 @@
 }
 
 /* Espresso: the same warm family, dark. Text passes 4.5:1 and series lines
-   5.5:1 on the card; crimson is lifted for text, kept deep for fills. */
+   5.5:1 on the card; selection is light ink, crimson is lifted for the tab's
+   line and kept deep for fills. */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
@@ -104,13 +126,21 @@
   --ink-2: #c9bfac;
   --muted: #a39782;
 
-  --accent:       #ea6a7e;
-  --accent-hover: #f08a9a;
-  --accent-soft:  #3f1d24;
+  --bar-bg:     #15120e;
+  --bar-raise:  #221e18;
+  --bar-line:   #352e25;
+  --bar-ink:    #ece4d4;
+  --bar-muted:  #a39782;
+  --tab-line:   #e0485f;
+
+  --accent:       #ece4d4;
+  --accent-hover: #ffffff;
+  --accent-soft:  #3a332a;
   --accent-fill:  #b8243d;
   --accent-fill-hover: #9e1b32;
   --warn:         #e3a64a;
   --warn-soft:    #3d3020;
+  --warn-line:    #6b5430;
   --warn-dot:     #e3a64a;
   --good:         #5fb98a;
   --error:        #f07c72;
@@ -140,7 +170,8 @@
   --heat-hi:  #e8eefc;
 
   --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.5);
-  --focus-ring: 0 0 0 3px rgba(234, 106, 126, 0.45);
+  --shadow-card: none;
+  --focus-ring: 0 0 0 2px var(--bg-card), 0 0 0 4px #ea6a7e;
   --backdrop: rgba(0, 0, 0, 0.5);
   --tint: rgba(236, 228, 212, 0.05);
 }

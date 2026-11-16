@@ -6,7 +6,7 @@ import { state, update, activeClock, multi, markStale } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
 import { noiseLabel, noiseTitle } from "../estimators.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
-import { thousands, duration, timeAxisUnit, sci, startText, escapeHtml as h } from "../format.js";
+import { thousands, duration, timeAxisUnit, sci, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
 // Fitted to the phase and removed before every analysis. On phase a line is a
@@ -119,6 +119,14 @@ function gapRow(k) {
   return `<div class="kv" title="${tip}"><span>Gaps</span><span class="mono ${k.gaps ? "warnv" : ""}">${thousands(k.gaps)}</span></div>`;
 }
 
+// Samples that Fill gaps by reflection made: in the record, but never measured.
+function filledRow(k) {
+  if (!k.filled) return "";
+  const over = k.filled > FILL_TESTED * k.samples;
+  const tip = `Made by Fill gaps by reflection from the data beside each gap, not measured. The filler was tested with up to 30 % of a record missing${over ? "; past that the results describe the filler as much as the clock" : ""}`;
+  return `<div class="kv" title="${tip}"><span>Filled</span><span class="mono ${over ? "warnv" : ""}">${thousands(k.filled)} · ${share(k.filled, k.samples)}</span></div>`;
+}
+
 function checkCard(c) {
   const k = c?.record?.check;
   // A record the core refused (a frequency record with gaps, unfilled) keeps the box that fills it.
@@ -134,6 +142,7 @@ function checkCard(c) {
     <div class="kv"><span>Span</span><span class="mono">${duration(k.span_s)}</span></div>
     ${k.start ? `<div class="kv" title="UTC time of the first sample, from the file's timestamps"><span>Start</span><span class="mono">${startText(k.start)}</span></div>` : ""}
     ${gapRow(k)}
+    ${filledRow(k)}
     <div class="kv"><span>Points past 5σ</span>${out}</div>
     <div class="kv" title="Least-squares linear frequency drift of the record as analyzed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
     ${unitCard(k)}
@@ -184,8 +193,8 @@ export function refresh() {
     : view === "acf" ? `Autocorrelation of ${of}${removed}`
     : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
   root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
-  root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit in crimson · drag to zoom"
-    : view === "hist" ? (state.dist.normal ? "Normal curve in crimson" : "")
+  root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit as the smooth line · drag to zoom"
+    : view === "hist" ? (state.dist.normal ? "Normal curve over the bars" : "")
     : view === "acf" ? (c?.range ? "Of the analysis range" : "")
     : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
   root.querySelector("[data-ref=range]").innerHTML = view === "phase" ? rangeBar(c) : "";
