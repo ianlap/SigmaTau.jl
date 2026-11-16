@@ -6,7 +6,7 @@ import { state, update, activeClock, multi, markStale } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
 import { noiseLabel, noiseTitle } from "../estimators.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
-import { thousands, duration, sci, startText, escapeHtml as h } from "../format.js";
+import { thousands, duration, timeAxisUnit, sci, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
 // Fitted to the phase and removed before every analysis. On phase a line is a
@@ -44,6 +44,7 @@ const VIEWS = [
 
 const MAX_SIM_CLOCKS = 8;
 let root, plotEl, Plotly, ctx, relayoutBound = false;
+let axisUnit = 1;   // seconds per unit of the record plot's time axis
 const inflight = new Map();   // clock id (and view) → key of the request in flight
 
 export function mount(el, c) {
@@ -118,6 +119,14 @@ function gapRow(k) {
   return `<div class="kv" title="${tip}"><span>Gaps</span><span class="mono ${k.gaps ? "warnv" : ""}">${thousands(k.gaps)}</span></div>`;
 }
 
+// Samples that Fill gaps by reflection made: in the record, but never measured.
+function filledRow(k) {
+  if (!k.filled) return "";
+  const over = k.filled > FILL_TESTED * k.samples;
+  const tip = `Made by Fill gaps by reflection from the data beside each gap, not measured. The filler was tested with up to 30 % of a record missing${over ? "; past that the results describe the filler as much as the clock" : ""}`;
+  return `<div class="kv" title="${tip}"><span>Filled</span><span class="mono ${over ? "warnv" : ""}">${thousands(k.filled)} · ${share(k.filled, k.samples)}</span></div>`;
+}
+
 function checkCard(c) {
   const k = c?.record?.check;
   // A record the core refused (a frequency record with gaps, unfilled) keeps the box that fills it.
@@ -133,13 +142,20 @@ function checkCard(c) {
     <div class="kv"><span>Span</span><span class="mono">${duration(k.span_s)}</span></div>
     ${k.start ? `<div class="kv" title="UTC time of the first sample, from the file's timestamps"><span>Start</span><span class="mono">${startText(k.start)}</span></div>` : ""}
     ${gapRow(k)}
+    ${filledRow(k)}
     <div class="kv"><span>Points past 5σ</span>${out}</div>
     <div class="kv" title="Least-squares linear frequency drift of the record as analyzed"><span>${c.drift === "quadratic" ? "Drift left" : "Frequency drift"}</span><span class="mono">${drift}</span></div>
+    ${unitCard(k)}
     <div class="rule"></div>
     ${driftBlock(c, k)}
     ${fillBox(c)}
   </div>`;
 }
+
+// The core's remarks on the units of the readings ("sigmatau check" prints the same), without its flags.
+const unitCard = (k) => k.warnings?.length
+  ? `<div class="gap-card unit-card"><b>Check the unit</b>${k.warnings.map((m) => h(`${m.split(";")[0].replace(/^./, (x) => x.toUpperCase())}.`)).join(" ")} Import settings… sets the unit or a scale factor.</div>`
+  : "";
 
 const fillBox = (c) => `<label class="check" title="Fill the missing samples and NaN readings from the data beside each gap, reflected (Howe and Schlossberger)">
       <input type="checkbox" data-field="fillgaps" ${c.fillgaps ? "checked" : ""}>Fill gaps by reflection</label>`;
@@ -177,8 +193,8 @@ export function refresh() {
     : view === "acf" ? `Autocorrelation of ${of}${removed}`
     : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
   root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
-  root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit in crimson · drag to zoom"
-    : view === "hist" ? (state.dist.normal ? "Normal curve in crimson" : "")
+  root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit as the smooth line · drag to zoom"
+    : view === "hist" ? (state.dist.normal ? "Normal curve over the bars" : "")
     : view === "acf" ? (c?.range ? "Of the analysis range" : "")
     : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
   root.querySelector("[data-ref=range]").innerHTML = view === "phase" ? rangeBar(c) : "";
@@ -255,21 +271,23 @@ function drawDrift(c) {
   plotEl.style.visibility = "visible";
   if (!Plotly) return;
   const resid = state.driftResid;
+  const [tf, tu] = timeAxisUnit(s.t[s.t.length - 1]);
+  const t = tf === 1 ? s.t : s.t.map((v) => v / tf);
   const y = resid ? s.y.map((v, i) => (Number.isFinite(v) ? v - s.fit[i] : null)) : s.y.map((v) => (Number.isFinite(v) ? v : null));
   const traces = [{
-    x: s.t, y, mode: "lines", name: resid ? "residual" : "frequency",
+    x: t, y, mode: "lines", name: resid ? "residual" : "frequency",
     line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.2 },
-    hovertemplate: `t = %{x:.6g} s<br>${resid ? "y − fit" : "y"} = %{y:.5g}<extra></extra>`,
+    hovertemplate: `t = %{x:.6g} ${tu}<br>${resid ? "y − fit" : "y"} = %{y:.5g}<extra></extra>`,
   }];
   if (!resid) {
     traces.push({
-      x: s.t, y: s.fit, mode: "lines", name: `${state.driftModel} fit`,
+      x: t, y: s.fit, mode: "lines", name: `${state.driftModel} fit`,
       line: { color: css("--accent"), width: 2 },
-      hovertemplate: `t = %{x:.6g} s<br>fit = %{y:.5g}<extra></extra>`,
+      hovertemplate: `t = %{x:.6g} ${tu}<br>fit = %{y:.5g}<extra></extra>`,
     });
   }
   const yaxis = { ...linAxis(resid ? "y − fit" : "Fractional frequency y"), exponentformat: "e" };
-  Plotly.react(plotEl, traces, { ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis("Time t (s)"), yaxis, showlegend: false, uirevision: `${c.id}-drift` }, CONFIG);
+  Plotly.react(plotEl, traces, { ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis(`Time t (${tu})`), yaxis, showlegend: false, uirevision: `${c.id}-drift` }, CONFIG);
 }
 
 // Ask the core for the statistics with the histogram or the autocorrelation
@@ -425,23 +443,25 @@ function drawRecord(c) {
   const finite = s.x.filter(Number.isFinite);
   const maxAbs = Math.max(...finite.map(Math.abs), ...(k?.outlier_x ?? []).map(Math.abs));
   const [f, u] = timeUnit(maxAbs || 1);
+  const [tf, tu] = timeAxisUnit(s.t[s.t.length - 1]);
+  axisUnit = tf;
   const traces = [{
-    x: s.t, y: s.x.map((v) => (Number.isFinite(v) ? v / f : null)), mode: "lines", line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.4 },
-    hovertemplate: `t = %{x:.6g} s<br>x = %{y:.5g} ${u}<extra></extra>`, name: "phase",
+    x: tf === 1 ? s.t : s.t.map((v) => v / tf), y: s.x.map((v) => (Number.isFinite(v) ? v / f : null)), mode: "lines", line: { color: multi() ? seriesColor(c.slot) : css("--s1"), width: 1.4 },
+    hovertemplate: `t = %{x:.6g} ${tu}<br>x = %{y:.5g} ${u}<extra></extra>`, name: "phase",
   }];
   if (k?.outlier_t?.length && !c.remove_outliers) {
     traces.push({
-      x: k.outlier_t, y: k.outlier_x.map((v) => v / f), mode: "markers", name: "outliers",
+      x: k.outlier_t.map((v) => v / tf), y: k.outlier_x.map((v) => v / f), mode: "markers", name: "outliers",
       marker: { color: css("--outlier") || css("--s2"), size: 8 },
-      hovertemplate: `outlier<br>t = %{x:.6g} s<br>x = %{y:.5g} ${u}<extra></extra>`,
+      hovertemplate: `outlier<br>t = %{x:.6g} ${tu}<br>x = %{y:.5g} ${u}<extra></extra>`,
     });
   }
   const picking = state.dataDrag === "range";
   const yaxis = { ...linAxis(""), ticksuffix: ` ${u}`, fixedrange: picking };
-  const shapes = c.range ? [{ type: "rect", xref: "x", yref: "paper", x0: c.range[0], x1: c.range[1], y0: 0, y1: 1,
+  const shapes = c.range ? [{ type: "rect", xref: "x", yref: "paper", x0: c.range[0] / tf, x1: c.range[1] / tf, y0: 0, y1: 1,
     fillcolor: css("--accent-soft") || "rgba(158,27,50,0.12)", line: { width: 0 }, layer: "below" }] : [];
   Plotly.react(plotEl, traces, {
-    ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis("Time t (s)"), yaxis, shapes,
+    ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, xaxis: linAxis(`Time t (${tu})`), yaxis, shapes,
     dragmode: "zoom", uirevision: `${c.id}-${picking}`,
   }, { ...CONFIG, showTips: false });
   if (!relayoutBound) {
@@ -452,7 +472,7 @@ function drawRecord(c) {
       const a = ev["xaxis.range[0]"], b = ev["xaxis.range[1]"];
       if (state.dataDrag !== "range" || state.dataView === "drift" || !k?.record || a === undefined || b === undefined) return;
       const end = (k.record.n - 1) * k.record.tau0;
-      const t0 = Math.max(0, Math.min(a, b)), t1 = Math.min(end, Math.max(a, b));
+      const t0 = Math.max(0, Math.min(a, b) * axisUnit), t1 = Math.min(end, Math.max(a, b) * axisUnit);
       const snap = (t) => Math.round(t / k.record.tau0) * k.record.tau0;
       Plotly.relayout(plotEl, { "xaxis.autorange": true });
       if (snap(t1) - snap(t0) >= 16 * k.record.tau0) setRange(k, [snap(t0), snap(t1)]);

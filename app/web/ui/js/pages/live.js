@@ -6,7 +6,7 @@
 // every estimator.
 import { state, update } from "../state.js";
 import { liveStart, livePoll, liveStop } from "../core.js";
-import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor } from "../plot.js";
+import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, LINE_W } from "../plot.js";
 import { num, sci, thousands, duration, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
@@ -198,7 +198,7 @@ function draw() {
   root.querySelector("[data-ref=sub]").textContent = `${thousands(L.n)} readings · τ₀ = ${num(L.tau0, 4)} s`;
   Plotly.react(sigma, L.results.map((r, i) => ({
     x: L.tau, y: r.dev, name: r.deviation.toUpperCase(), mode: "lines+markers",
-    line: { color: seriesColor(i), width: 2 }, marker: { color: seriesColor(i), size: 6 },
+    line: { color: seriesColor(i), width: LINE_W }, marker: { color: seriesColor(i), size: 6 },
     customdata: r.neff, hovertemplate: `<b>${r.deviation.toUpperCase()}</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<br>%{customdata} terms<extra></extra>`,
   })), {
     ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis("σ(τ)"),

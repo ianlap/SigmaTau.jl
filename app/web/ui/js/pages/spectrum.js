@@ -191,6 +191,21 @@ export function refresh() {
   }, CONFIG);
 }
 
+// The File menu's results: the spectra of the clocks shown, with ℒ(f) when it is the view.
+export function results() {
+  const isL = state.spec.phase === "L";
+  const clocks = visibleClocks().filter((c) => c.result?.spectrum && !c.result.spectrum.error);
+  return {
+    what: "Spectra", file: "spectrum", none: "Run the analysis first; there are no spectra to export.",
+    columns: ["clock", "f_hz", "sy", "sx", ...(isL ? ["L_dbc_hz"] : [])],
+    rows: clocks.flatMap((c) => {
+      const sp = c.result.spectrum, L = isL ? toL(sp.sx) : [];
+      return sp.f.map((f, i) => [c.name, f, sp.sy[i], sp.sx[i], ...(isL ? [L[i]] : [])]);
+    }),
+    json: clocks.map((c) => ({ clock: c.name, ...(isL ? { carrier_hz: state.spec.carrier } : {}), spectrum: c.result.spectrum })),
+  };
+}
+
 export function hint() {
   return multi() ? "Color = clock · both plots share the frequency axis" : "Both plots share the frequency axis · drag either to zoom both";
 }

@@ -1,7 +1,7 @@
 # Command line
 
 `sigmatau` is the package as one compiled program. It reads a record from a
-file, runs one analysis and writes CSV or JSON. It needs no Julia and
+file, runs one analysis and writes a table, CSV or JSON. It needs no Julia and
 starts in a few tens of milliseconds. It is compiled from the code of the
 Julia functions, and the tests require its results to equal theirs within
 a relative difference of ``10^{-12}``. The
@@ -51,15 +51,27 @@ simulated record of `N` phase samples at 1 s, white FM with random-walk FM
 below it. It serves to try a command before there is a file:
 
 ```@example cli
-sigmatau("analyze --synth 4096 --devs adev,mdev --m 1,10,100") # hide
+sigmatau("analyze --synth 4096 --devs adev,mdev --m 1,10,100"; tty = true) # hide
 ```
 
-There is a row for each deviation and averaging time: the deviation, the
-limits of its confidence interval, the EDF, the number of terms averaged
-and the noise type identified. Without `--devs` the deviations are
-`adev,mdev,hdev,mhdev`, and without `--m` the averaging factors are the
-octave grid of each one. The program writes its numbers in full. The
-transcripts on this page cut them to four significant digits.
+There is a table for each deviation, with a row for each averaging time:
+the deviation, the limits of its confidence interval, the EDF, the number
+of terms averaged and the noise type identified. What is the same on every
+row, such as the source, is said once above. Without `--devs` the
+deviations are `adev,mdev,hdev,mhdev`, and without `--m` the averaging
+factors are the octave grid of each one.
+
+This table, with four significant digits, is what a terminal shows. In a
+pipe or a file (`--out`) the program writes CSV instead, one row for each
+deviation and averaging time, with the numbers in full:
+
+```@example cli
+sigmatau("analyze --synth 4096 --devs adev,mdev --m 1,10,100 --format csv") # hide
+```
+
+`--format table` and `--format csv` choose either one anywhere. The other
+transcripts on this page show the CSV, with the numbers cut to four
+significant digits.
 
 ## Your own file
 
@@ -84,7 +96,7 @@ from the file.
 whether the file was understood before any analysis:
 
 ```@example cli
-sigmatau("check clock.dat") # hide
+sigmatau("check clock.dat"; tty = true) # hide
 ```
 
 This file has 4096 samples at 1 s, of which the time column skips ten.
@@ -205,7 +217,7 @@ measurement, stops the run: a running estimate cannot leave a sample out.
 ## In scripts
 
 `--format json` gives every answer as one JSON object in a versioned schema,
-and `--out PATH` writes to a file:
+and `--out PATH` (or `-o PATH`) writes to a file:
 
 ```bash
 sigmatau analyze clock.dat --format json --out result.json

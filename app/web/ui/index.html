@@ -4,8 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SigmaTau explorer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="app.css">
   <script src="js/theme.js"></script>
@@ -13,6 +11,7 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-name">SigmaTau</span><span class="brand-sub">explorer</span></div>
+    <h1 class="sr-only" id="page-title"></h1>
     <nav class="tabs" aria-label="Pages">
       <a href="#data" data-page="data">Data</a>
       <a href="#synthesis" data-page="synthesis">Synthesis</a>
@@ -35,7 +34,7 @@
         <button role="menuitem" data-export="svg">Plot as SVG</button>
         <button role="menuitem" data-export="tsv">Results as TSV</button>
         <button role="menuitem" data-export="json">Results as JSON</button>
-        <button role="menuitem" data-export="report">Report (HTML, prints to PDF)</button>
+        <button role="menuitem" data-export="report">Stability report (HTML, prints to PDF)</button>
         <hr>
         <button role="menuitem" data-export="save-session">Save session…</button>
         <button role="menuitem" data-export="open-session">Open session…</button>
@@ -60,9 +59,9 @@
     <main class="page" id="page"></main>
   </div>
 
-  <footer class="statusbar" role="status" aria-live="polite">
+  <footer class="statusbar">
     <span class="status-dot" id="status-dot" aria-hidden="true"></span>
-    <span id="status-text">Starting…</span>
+    <span id="status-text" role="status" aria-live="polite">Starting…</span>
     <span class="status-hint" id="status-hint"></span>
   </footer>
 

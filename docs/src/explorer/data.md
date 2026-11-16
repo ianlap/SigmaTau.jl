@@ -56,7 +56,10 @@ The heading of each column is a menu:
 
 Every column marked **Clock** becomes a clock, all measured against the same
 reference at the same instants. A click on the name of a column adds it as
-a clock or drops it.
+a clock or drops it. A clock is named after its column without the unit and
+the word *phase* or *freq*: `maser1 phase (s)` gives `maser1`. The names
+stay as the file has them when removing those words would give two columns
+one name.
 
 | Setting | Meaning |
 |:--------|:--------|
@@ -68,7 +71,16 @@ a clock or drops it.
 | **Remember for files like this** | Reads the next file with the same extension, number of columns and column names without the dialog |
 
 When the time column skips readings, the dialog counts the gaps and the
-missing samples. They enter the record as missing samples.
+missing samples, and gives the share of the span they make. They enter the
+record as missing samples.
+
+The dialog also checks the unit. It says so when a phase record moves by
+more than a second, when a fractional frequency exceeds ``10^{-3}``, or when
+the name of the file or of a column says `rad`, `ns`, `ps`, `ppb`, `ppm` or
+`Hz` while the readings are taken as they are. Pick the unit or type a
+factor, and the note goes. The record check on the Data page repeats it for
+a record that was read without the dialog, and `sigmatau check` prints it
+on standard error.
 
 In a Stable32 file (`.phd`, `.frd`) a zero marks a missing sample, except
 the first and the last sample of a phase file. The dialog counts these
@@ -114,8 +126,14 @@ preparation changes. It describes the record as prepared.
 | **Span** | The number of samples times the sample interval |
 | **Start** | The time of the first sample in UTC, for a file with timestamps |
 | **Gaps** | The number of missing samples |
+| **Filled** | The number of samples that **Fill gaps by reflection** put in, and their share of the record. It is shown only when there are some |
 | **Points past 5σ** | The outliers that [`find_outliers`](@ref) finds: frequency samples more than five scaled median absolute deviations from the median. They are marked on the phase plot |
+| **Check the unit** | Appears only when the record looks to be in another unit than the one it is read in, as the import dialog's note does |
 | **Frequency drift** | The slope of a least-squares line through the fractional frequency, per day. It reads **Drift left** after a quadratic removal |
+
+The time axes of the plots read in seconds up to two minutes, then in
+minutes, hours, days and, past two years, years, and the record chip gives the
+sample interval and the span the same way: `τ₀ 5 d · 28.7 yr`.
 
 ## Preparing the record
 
@@ -135,6 +153,13 @@ it. The missing samples are the readings that the time column skips, those
 written as `NaN` and the zeros of a Stable32 file that are read as
 missing. For a frequency record that has any of them it is on from the
 start, since a frequency record cannot be read with samples missing.
+
+The filled samples were never measured. The record check counts them, and
+the record chip at the top gives their share. The filler was tested with
+up to 30 % of a record missing, where the ADEV it gives stays within a few
+percent of that of the full record. Past 30 % the share is marked, in the
+import dialog, the record check and the status bar, since the results then
+describe the filler as much as the clock.
 
 **remove**, beside the count of outliers, replaces them as
 [`remove_outliers`](@ref) does. The missing samples of the record stay
@@ -236,7 +261,7 @@ frequency, **Std dev (freq.)**, is the one to compare with
 scatter of the estimates.
 
 **Bins** sets the number of bins. Left empty it follows Scott's rule, with
-at most 1000. **Normal curve** draws, in crimson, the normal distribution
+at most 1000. **Normal curve** draws, over the bars, the normal distribution
 with the mean and the standard deviation of the samples, scaled to the
 expected count in each bin. Samples far from zero next to their spread, such
 as a frequency offset with little noise on it, are plotted less their mean,

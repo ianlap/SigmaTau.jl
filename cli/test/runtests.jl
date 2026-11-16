@@ -93,6 +93,7 @@ end
         @test run_cli("help", c).out == r.out
     end
     @test occursin("--devs", run_cli("analyze", "--help").out)
+    @test occursin("-o, --out PATH", run_cli("analyze", "--help").out) && occursin("-q, --quiet", run_cli("analyze", "--help").out)
     @test !occursin("--devs", run_cli("spectrum", "--help").out)
     @test occursin("--window", run_cli("dynamic", "--help").out)
     # A signature is set apart from its description, and σ keeps its case.
@@ -120,14 +121,42 @@ end
 @testset "unknown command or option" begin
     r = run_cli("frobnicate")
     @test r.code == 1
-    @test occursin("unknown command", r.err)
+    @test occursin("unknown command", r.err) && !occursin("did you mean", r.err)
+    r = run_cli("analize", "x")
+    @test r.code == 1 && occursin("unknown command analize; did you mean analyze?", r.err)
+    @test occursin("; did you mean completion?", run_cli("completon").err)
     @test run_cli("--bogus").code == 1
     r = run_cli("analyze", "--synth", "64", "--bogus")
     @test r.code == 1
-    @test occursin("unknown option --bogus", r.err)
+    @test occursin("unknown option --bogus", r.err) && !occursin("did you mean", r.err)
+    # Only the options of the command are offered; a short name is held to one edit.
+    r = run_cli("analyze", "--synth", "64", "--devz", "adev")
+    @test r.code == 1 && occursin("unknown option --devz; did you mean --devs?", r.err)
+    @test occursin("unknown option --ot; did you mean --out?", run_cli("analyze", "--synth", "64", "--ot", "x").err)
+    @test !occursin("did you mean", run_cli("analyze", "--synth", "64", "--oxx").err)
+    @test occursin("unknown option --windw\n", run_cli("check", "--synth", "64", "--windw", "9").err)
+    r = run_cli("help", "analize")
+    @test r.code == 1 && occursin("no help for \"analize\"; commands: ", r.err) && endswith(r.err, "; did you mean analyze?\n")
     r = run_cli("check", "--synth", "64", "--devs", "adev")
     @test r.code == 1
     @test occursin("does not apply", r.err)
+end
+
+@testset "check says what the units of a record look like" begin
+    mktempdir() do dir
+        rad = write_table(joinpath(dir, "yb-phase-rad.csv"), 40 .* cumsum(sinpi.((1:256) ./ 7.3)))
+        r = run_cli("check", rad)
+        @test r.code == 0 && occursin("the name says rad", r.err) && occursin("the phase moves by", r.err)
+        @test occursin("\"warnings\":[\"the name says rad", run_cli("check", rad, "--format", "json").out)
+        @test isempty(run_cli("check", rad, "--quiet").err)
+        @test isempty(run_cli("check", rad, "--scaling", "1e-3").err)       # stated: no remark
+        clean = write_table(joinpath(dir, "clean.csv"), X)
+        @test isempty(run_cli("check", clean).err)
+        @test occursin("\"warnings\":[]", run_cli("check", clean, "--format", "json").out)
+        hz = write_table(joinpath(dir, "osc_hz.csv"), 1 .+ 1e-3 .* sinpi.((1:256) ./ 7.3))
+        r = run_cli("check", hz, "--freq")
+        @test occursin("the name says hz", r.err) && occursin("the fractional frequency reaches", r.err)
+    end
 end
 
 @testset "completion" begin
@@ -499,6 +528,15 @@ mktempdir() do dir
             @test r.code == 0 && occursin("\"tau0\":432000.0,\"n\":64,", r.out)
         end
         @test run_cli("timescale", nf, "--value-cols", "2,3", "--column", "a (ns)").code == 1
+        # The clocks of a table go by the names on its first line, and without
+        # --value-cols the columns are listed by number.
+        @test getindex.(csv_rows(run_cli("timescale", nf, "--value-cols", "2,3,4").out), 1) == ["a (ns)", "b (ns)", "c (ns)"]
+        @test getindex.(csv_rows(run_cli("hat", nf, "--value-cols", "2,3,4", "--devs", "adev", "--m", "1").out), 1) ==
+              ["a (ns)", "b (ns)", "c (ns)", "reference"]
+        for cmd in ("timescale", "hat")
+            r = run_cli(cmd, nf)
+            @test r.code == 1 && occursin("needs --value-cols", r.err) && occursin("the columns of this file are 1 MJD, 2 a (ns), 3 b (ns), 4 c (ns)", r.err)
+        end
         # Errors name the command line's flags, not read_data's keyword.
         r = run_cli("analyze", nf)
         @test r.code == 2 && occursin("pass --column with one of MJD, a (ns)", r.err) && !occursin("column=", r.err)
@@ -721,13 +759,13 @@ mktempdir() do dir
         r = run_cli("check", pf)
         @test r.code == 0
         lines = split(strip(r.out), '\n')
-        @test lines[1] == "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day," *
+        @test lines[1] == "source,quantity,n,tau0,span_s,gaps,filled,outliers,drift_per_day," *
                           "statistics_of,min,max,mean,median,std,std_y,adev,noise_type"
         row = split(lines[2], ',')
         st = sample_statistics(PhaseData(X, 1.0))
-        @test row[3] == "256" && row[9] == "phase"
-        @test parse.(Float64, row[10:16]) == [st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev]
-        @test row[17] == String(st.noise)
+        @test row[3] == "256" && row[7] == "0" && row[10] == "phase"
+        @test parse.(Float64, row[11:17]) == [st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev]
+        @test row[18] == String(st.noise)
         r = run_cli("check", pf, "--format", "json", "--series", "4000")
         @test r.code == 0
         @test occursin("\"command\":\"check\"", r.out)
@@ -1022,8 +1060,17 @@ mktempdir() do dir
         # A one-column frequency file with NaN readings is analyzed once filled.
         yf = joinpath(dir, "y.txt")
         write(yf, join([i == 50 ? NaN : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
-        @test occursin("--fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
-        @test run_cli("analyze", yf, "--freq", "--tau0", "1", "--devs", "adev", "--fillgaps").code == 0
+        @test occursin("missing 1 samples (under 1 % of it); fill them with --fillgaps", run_cli("analyze", yf, "--freq", "--tau0", "1").err)
+        r = run_cli("check", yf, "--freq", "--tau0", "1", "--fillgaps", "--format", "json")
+        @test r.code == 0 && occursin("\"filled\":1,", r.out) && isempty(r.err)
+        # Two readings in five: the filler makes 60 % of the record, and stderr says so.
+        sf = joinpath(dir, "sparse.csv")
+        write(sf, join(("$i,$(1e-12 * sinpi(i / 7.3))" for i in 0:499 if i % 5 >= 3), "\n"))
+        @test occursin("missing 297 samples (60 % of it)", run_cli("check", sf, "--freq").err)
+        r = run_cli("check", sf, "--freq", "--fillgaps")
+        head, row = split(r.out, '\n')
+        @test r.code == 0 && split(head, ',')[7] == "filled" && split(row, ',')[7] == "297"
+        @test occursin("--fillgaps made 297 of the 498 samples (60 %), more than the 30 % it was tested for", r.err)
         # A zero in a Stable32 frequency file is a gap, unless it is kept as a reading.
         zf = joinpath(dir, "z.frd")
         write(zf, join([i == 50 ? 0.0 : 1e-12 * sinpi(i / 7.3) for i in 1:256], "\n"))
@@ -1077,6 +1124,33 @@ mktempdir() do dir
         @test occursin("wrote", r.err)
         @test read(op, String) == run_cli("analyze", pf, "--devs", "adev").out
         @test isempty(run_cli("analyze", pf, "--devs", "adev", "--out", op, "--quiet").err)
+        @test isempty(run_cli("analyze", pf, "--devs", "adev", "-o", op, "-q").err)
+        @test read(op, String) == run_cli("analyze", pf, "--devs", "adev").out
+    end
+
+    @testset "a table at a terminal, CSV elsewhere" begin
+        function at_tty(args...)
+            o = IOBuffer()
+            code = SigmaTauCLI.sigmatau(collect(String, args); out=o, err=IOBuffer(), tty=true)
+            return (code=code, out=String(take!(o)))
+        end
+        a = ["analyze", "--synth", "1024", "--devs", "adev,tdev", "--m", "1,8"]
+        t = at_tty(a...)
+        @test t.code == 0
+        @test occursin(r"^source +synthetic\nquantity +phase\n", t.out)       # one value on every row: said once
+        @test occursin("\n\nadev\ntau        dev   ci_lower", t.out)
+        @test occursin("\n\ntdev\ntau ", t.out) && !occursin(',', t.out)
+        @test occursin(r"\n  8  \d\.\d{3}e-1\d  ", t.out)
+        @test run_cli(a..., "--format", "table").out == t.out
+        @test at_tty(a..., "--format", "csv").out == run_cli(a...).out
+        op = joinpath(dir, "tty.csv")
+        @test at_tty(a..., "--out", op, "--quiet").code == 0 && read(op, String) == run_cli(a...).out
+        # One row: names and values, the empty ones left out.
+        d = at_tty("drift", "--synth", "1024").out
+        @test occursin(r"^model +linear$"m, d) && occursin(r"^n +1023$"m, d) && !occursin(r"^c "m, d)
+        @test SigmaTauCLI.table_cell.(["3204.04", "16384.0", "3.317110852079418e-10", "", "WHFM"]) ==
+              ["3204", "16384", "3.317e-10", "-", "WHFM"]
+        @test SigmaTauCLI.csv_fields("\"a,b\",\"say \"\"hi\"\"\",3") == ["a,b", "say \"hi\"", "3"]
     end
 
     @testset "phasenoise: σ(τ) from a table of ℒ(f)" begin

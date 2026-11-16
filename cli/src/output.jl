@@ -109,6 +109,7 @@ function json_record(io::IO, o::Options, data::PhaseData)
     json_key(io, "span_s"); json_number(io, Float64(s.span))
     json_key(io, "start"); json_string(io, isnan(data.start) ? "" : SigmaTau._iso_text(data.start))
     json_key(io, "gaps"); print(io, s.gaps)
+    json_key(io, "filled"); print(io, o.filled)
     json_key(io, "outliers"); print(io, length(s.outliers))
     keep = s.outliers[1:min(length(s.outliers), 500)]
     json_key(io, "outlier_t"); json_array(io, Float64[(i - 1) * tau0 for i in keep])
@@ -417,4 +418,117 @@ function csv_result(io::IO, source::String, q::String, r::StabilityResult)
         has_nt && print(io, String(r.noise_type[i]))
         print(io, '\n')
     end
+end
+
+# ── Tables for a person ───────────────────────────────────────────────────
+# `--format table`, the default at a terminal: the CSV a command wrote, laid
+# out for reading. Numbers to 4 significant digits (whole numbers as they
+# are), columns aligned, and each column that holds one value on every row
+# (the source, the quantity) said once above. A text column whose values
+# repeat (the deviation of `analyze`, the clock of `hat`) splits the rows
+# into blocks headed by its value. A single row is a list of names and values.
+
+# The fields of one CSV line, as csv_field quotes them.
+function csv_fields(line::AbstractString)
+    fields = String[]
+    buf = IOBuffer()
+    quoted = false
+    escaped = false        # the quote just read may open a doubled quote
+    for c in line
+        if escaped
+            escaped = false
+            c == '"' && (print(buf, '"'); continue)
+            quoted = false
+        end
+        if quoted
+            c == '"' ? (escaped = true) : print(buf, c)
+        elseif c == '"'
+            quoted = true
+        elseif c == ','
+            push!(fields, String(take!(buf)))
+        else
+            print(buf, c)
+        end
+    end
+    push!(fields, String(take!(buf)))
+    return fields
+end
+
+isnumeric_cell(s::String) = tryparse(Float64, s) !== nothing
+
+function table_cell(s::String)
+    isempty(s) && return "-"
+    tryparse(Int, s) === nothing || return s
+    x = tryparse(Float64, s)
+    x === nothing && return s
+    isinteger(x) && abs(x) < 1e7 && return string(Int(x))    # τ = 16384.0 reads 16384
+    t = @sprintf("%#.4g", x)
+    return endswith(t, '.') ? t[1:end-1] : t    # 3204. reads 3204
+end
+
+function aligned(io::IO, s::String, width::Int, right::Bool)
+    right || print(io, s)
+    for _ in 1:(width - textwidth(s))
+        print(io, ' ')
+    end
+    right && print(io, s)
+end
+
+# The column the blocks follow, 0 for none: the first text column that varies
+# and repeats. A function of its own, so that `g` is assigned once and the
+# closures that read it need no box, which trimming cannot see through.
+function block_column(rows::Vector{Vector{String}}, blank::Vector{Bool}, fixed::Vector{Bool}, numeric::Vector{Bool})
+    for j in eachindex(blank)
+        blank[j] || fixed[j] || numeric[j] || length(unique(r[j] for r in rows)) == length(rows) || return j
+    end
+    return 0
+end
+
+function write_table(io::IO, csv::String)
+    lines = filter!(!isempty, split(csv, '\n'))
+    isempty(lines) && return nothing
+    head = csv_fields(lines[1])
+    rows = [map(table_cell, csv_fields(l)) for l in lines[2:end]]
+    filter!(r -> length(r) == length(head), rows)
+    isempty(rows) && return nothing
+    if length(rows) == 1
+        w = maximum(textwidth, head) + 2
+        for j in eachindex(head)
+            rows[1][j] == "-" && continue
+            aligned(io, head[j], w, false); print(io, rows[1][j]); print(io, '\n')
+        end
+        return nothing
+    end
+    blank = [all(r -> r[j] == "-", rows) for j in eachindex(head)]
+    fixed = [!blank[j] && all(r -> r[j] == rows[1][j], rows) for j in eachindex(head)]
+    numeric = [all(r -> r[j] == "-" || isnumeric_cell(r[j]), rows) for j in eachindex(head)]
+    g = block_column(rows, blank, fixed, numeric)
+    if any(fixed)
+        w = maximum(textwidth(head[j]) for j in eachindex(head) if fixed[j]) + 2
+        for j in eachindex(head)
+            fixed[j] || continue
+            aligned(io, head[j], w, false); print(io, rows[1][j]); print(io, '\n')
+        end
+    end
+    cols = [j for j in eachindex(head) if !blank[j] && !fixed[j] && j != g]
+    isempty(cols) && return nothing
+    width = [max(textwidth(head[j]), maximum(r -> textwidth(r[j]), rows)) for j in cols]
+    numeric[cols[end]] || (width[end] = 0)    # no trailing blanks
+    for (i, r) in enumerate(rows)
+        if i == 1 || (g > 0 && r[g] != rows[i - 1][g])
+            (i > 1 || any(fixed)) && print(io, '\n')
+            g > 0 && (print(io, r[g]); print(io, '\n'))
+            for (k, j) in enumerate(cols)
+                k > 1 && print(io, "  ")
+                aligned(io, head[j], width[k], numeric[j])
+            end
+            print(io, '\n')
+        end
+        for (k, j) in enumerate(cols)
+            k > 1 && print(io, "  ")
+            aligned(io, r[j], width[k], numeric[j])
+        end
+        print(io, '\n')
+    end
+    return nothing
 end

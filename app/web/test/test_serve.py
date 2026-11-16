@@ -46,7 +46,7 @@ class RequestToArgsTests(unittest.TestCase):
 
     def test_rejects(self):
         for req in ({"args": []}, {"args": "analyze"}, {"args": ["rm"]},
-                    {"args": ["analyze", "--out", "/tmp/x"]}, {"args": ["analyze", "--out=/tmp/x"]},
+                    {"args": ["analyze", "--out", "/tmp/x"]}, {"args": ["analyze", "--out=/tmp/x"]}, {"args": ["analyze", "-o", "/tmp/x"]},
                     {"args": ["cross", "--with", "/etc/hostname"], "file": {"name": "a.txt", "content": "1\n"}},
                     {"args": ["analyze", 3]}, {"args": ["check", "/etc/hostname"], "file": None},
                     {"args": ["check", "/etc/hostname", "--column", "--synth"]}, {"args": ["check", "/etc/hostname", "--synth=0"]},
@@ -56,7 +56,7 @@ class RequestToArgsTests(unittest.TestCase):
                 serve.request_to_args(req, "/nonexistent")
 
     def test_live_rejects(self):
-        for args in (None, "live", [], ["analyze"], ["live", "sim", "--out", "x"], ["live", 3]):
+        for args in (None, "live", [], ["analyze"], ["live", "sim", "--out", "x"], ["live", "sim", "-o", "x"], ["live", 3]):
             with self.assertRaises(ValueError, msg=args):
                 serve.Live(["true"], args)
 

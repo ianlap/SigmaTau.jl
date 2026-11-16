@@ -46,13 +46,60 @@ function cmd_check(io::IO, o::Options, data::PhaseData, t_start::UInt64)
                                check_samples(io, o, data, data, t_start)
 end
 
+# What the size and the names of a record say about its units. Phase is read
+# as seconds and frequency as fractional: the usual slip is a record in
+# radians, nanoseconds, hertz or parts per billion that is read as it is.
+const UNIT_HINTS = ("rad" => "radians become seconds with --scaling 1/(2π·carrier in Hz)",
+                    "ns" => "--scaling 1e-9 reads nanoseconds", "ps" => "--scaling 1e-12 reads picoseconds",
+                    "ppb" => "--scaling 1e-9 reads parts per billion", "ppm" => "--scaling 1e-6 reads parts per million",
+                    "hz" => "readings in hertz need --scaling 1/(carrier in Hz)")
+
+function unit_warnings(o::Options, data::PhaseData)
+    w = String[]
+    if o.scaling == 1
+        words = String[]
+        word = Char[]
+        for c in lowercase(basename(o.input) * " " * o.column) * " "
+            if isletter(c)
+                push!(word, c)
+            else
+                isempty(word) || push!(words, String(word))
+                empty!(word)
+            end
+        end
+        for (name, hint) in UNIT_HINTS
+            name in words && push!(w, "the name says " * name * ", but the readings are read as " *
+                                      (o.freq ? "fractional frequency" : "seconds") * "; " * hint)
+        end
+    end
+    if o.freq
+        top = maximum(abs, filter(isfinite, FrequencyData(data).y); init=0.0)
+        top > 1e-3 && push!(w, "the fractional frequency reaches " * string(round(top; sigdigits=3)) *
+                               ", far above any clock's; check the units of the readings (--scaling)")
+    else
+        x = filter(isfinite, data.x)
+        span = isempty(x) ? 0.0 : maximum(x) - minimum(x)
+        span > 1 && push!(w, "the phase moves by " * string(round(span; sigdigits=3)) *
+                             " s over the record; check the units of the readings (--scaling 1e-9 for nanoseconds)")
+    end
+    return w
+end
+
 function check_samples(io::IO, o::Options, data::PhaseData, rec::Union{PhaseData,FrequencyData}, t_start::UInt64)
     src = source_name(o, data)
     st = sample_statistics(rec)
     what = rec isa FrequencyData ? "frequency" : "phase"
+    warnings = unit_warnings(o, data)
+    isempty(warnings) || (o.note = "warning: " * join(warnings, "\nsigmatau: warning: "))
     if o.format == "json"
         json_head(io, o, src)
         json_key(io, "record"); json_record(io, o, data)
+        json_key(io, "warnings"); print(io, '[')
+        for (k, m) in enumerate(warnings)
+            k > 1 && print(io, ',')
+            json_string(io, m)
+        end
+        print(io, ']')
         json_key(io, "analysis"); print(io, '{')
         json_key(io, "quantity", true); json_string(io, quantity(o))
         json_preprocessing(io, o); print(io, '}')
@@ -79,11 +126,11 @@ function check_samples(io::IO, o::Options, data::PhaseData, rec::Union{PhaseData
         return nothing
     end
     s = summarize(data)
-    print(io, "source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,")
+    print(io, "source,quantity,n,tau0,span_s,gaps,filled,outliers,drift_per_day,")
     print(io, "statistics_of,min,max,mean,median,std,std_y,adev,noise_type\n")
     csv_field(io, src); print(io, ','); print(io, quantity(o)); print(io, ',')
     print(io, s.n); print(io, ','); csv_number(io, Float64(s.tau0)); print(io, ',')
-    csv_number(io, Float64(s.span)); print(io, ','); print(io, s.gaps); print(io, ',')
+    csv_number(io, Float64(s.span)); print(io, ','); print(io, s.gaps); print(io, ','); print(io, o.filled); print(io, ',')
     print(io, length(s.outliers)); print(io, ','); csv_number(io, Float64(s.drift_per_day))
     print(io, ','); print(io, what)
     for v in (st.min, st.max, st.mean, st.median, st.std, st.std_y, st.adev)
@@ -735,10 +782,16 @@ function synth_ensemble(o::Options)
     return cc
 end
 
+# The clocks' names: those of the table's columns, else "column 2", "column 3", …
+function clock_names(o::Options)
+    names = table_names(o)
+    named = String[c <= length(names) ? names[c] : "column " * string(c) for c in o.value_cols]
+    return allunique(named) ? named : String["column " * string(c) for c in o.value_cols]
+end
+
 # Each --value-cols column read like FILE, with the same options, less the
 # readings that --fillgaps put in: a clock has no part in the scale there.
 function read_ensemble(o::Options)
-    isempty(o.value_cols) && throw(usage_error(o.command * " needs --value-cols with two or more columns, or --synth"))
     col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
     records = PhaseData{Float64}[]
     try
@@ -754,7 +807,7 @@ function read_ensemble(o::Options)
     end
     allequal(length(r.x) for r in records) && allequal(r.tau0 for r in records) ||
         throw(CLIError(EXIT_INPUT, "the clock columns differ in length or τ₀"))
-    return ClockComparisons(records; names=["column " * string(c) for c in o.value_cols])
+    return ClockComparisons(records; names=clock_names(o))
 end
 
 # The Kalman scales take a model per clock and read the scale at --pivot:

@@ -75,7 +75,8 @@ A file compressed with gzip (`.gz`) must be unpacked first.
 The program holds every record as phase. It integrates a frequency file of
 ``N`` samples to ``N + 1`` phase samples, and reports that number. A
 frequency file with missing samples must be filled with `--fillgaps`,
-whatever the analysis.
+whatever the analysis. When the filler puts in more than 30 % of the
+record, more than it was tested for, a line on stderr says so.
 
 ### Preparing
 
@@ -110,10 +111,10 @@ The sample interval of a simulated record is `--tau0`, or 1 s.
 
 | Option | Meaning |
 |:---|:---|
-| `--format FMT` | `csv`, the default, or `json` |
-| `--out PATH` | write to a file. By default the output goes to standard output |
+| `--format FMT` | `table`, the default at a terminal: the CSV laid out for reading, aligned, with numbers to four significant digits and each column that holds one value on every row said once above; `csv`, the default in a pipe or with `--out`; or `json` |
+| `--out PATH`, `-o PATH` | write to a file. By default the output goes to standard output |
 | `--series N` | include samples of the record in the JSON output, about `N`, for a plot |
-| `--quiet` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
+| `--quiet`, `-q` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
 
 A value that does not exist is an empty field in CSV and `null` in JSON,
 never the text `NaN`. `model` and `live` write JSON only, and `report`
@@ -140,6 +141,7 @@ reads a record gives it, except `timescale` and `hat`:
 | `n`, `tau0`, `span_s` | number of phase samples, sample interval, and their product, in seconds |
 | `start` | UTC time of the first sample, where the file gives one, else `""` |
 | `gaps` | number of missing samples |
+| `filled` | number of samples that `--fillgaps` put in |
 | `outliers`, `outlier_t`, `outlier_x` | number of outliers that [`find_outliers`](@ref) flags by default, and the time and phase of the first 500 |
 | `drift_per_day` | least-squares slope of the fractional frequency, per day |
 | `removed_offset`, `removed_drift_per_day` | the frequency offset and the drift that `--remove-drift` removed |
@@ -239,10 +241,18 @@ outside the range of the recommendation. Each entry of `checks` is one result ag
 | `--m M` | with `--acf`, the averaging factor, 1 by default |
 | `--lags K` | with `--acf`, the largest lag. By default half the series, and at most 1000 |
 
-The record needs three samples or more. The CSV output is one row:
+The record needs three samples or more. `check` also says what the size and
+the names of the record suggest about its units, since a phase of
+nanoseconds, radians or hertz read as it is gives numbers that look
+plausible: a phase that moves by more than a second, a fractional frequency
+above ``10^{-3}``, or a file or `--column` name that says `rad`, `ns`, `ps`,
+`ppb`, `ppm` or `Hz` while `--scaling` is 1. The CSV output prints each as a
+line `sigmatau: warning: …` on standard error, unless `--quiet` is given, and
+the JSON output lists them as `warnings`, an empty list when there are none.
+The CSV output is one row:
 
 ```text
-source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
+source,quantity,n,tau0,span_s,gaps,filled,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
 ```
 
 The columns up to `drift_per_day` are the members of `record` in the JSON
@@ -497,7 +507,7 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 
 | Option | Meaning |
 |:---|:---|
-| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4`. In a table with named columns each is read by its number as `--column` reads one by its name, with the unit in its name |
+| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4`. In a table with named columns each is read by its number as `--column` reads one by its name, with the unit in its name, and is named by its column name in the output. Without the option, the error lists the columns by number |
 | `--algorithm ALG` | `at1` (the default), `at2`, `ewfa`, `greenhall`, `jones_tryon` or `stein`, the algorithms of [`timescale`](@ref) |
 | `--wmax W` | with `at1`, `at2` or `stein`, the largest weight that one clock may take, from 1 over the number of clocks to 1. By default 1, which sets no limit |
 | `--steps MODE` | with `at2`, detect frequency steps of the clocks: `best` or `real` |
@@ -701,6 +711,8 @@ yet. The last line has `"done": true`. Without `--count`, a grid reaches
 | 3 | analysis: a record too short, or with gaps where the analysis takes none |
 | 4 | output: the file of `--out` cannot be written |
 
-An error prints one line that begins with `sigmatau:` on standard error. A
+An error prints one line that begins with `sigmatau:` on standard error.
+A misspelled command or option names the nearest one that fits, such as
+`sigmatau: unknown command analize; did you mean analyze?`. A
 reader that closes the pipe early, as in `sigmatau analyze clock.dat | head`,
 is not an error.

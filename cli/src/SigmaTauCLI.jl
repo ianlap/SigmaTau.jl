@@ -8,6 +8,7 @@
 # Everything stays type-stable for trimming: options are parsed into one
 # concrete struct, estimators are chosen through the library's registry (an
 # if-chain, not a Dict of functions), and JSON and CSV are written by hand.
+# At a terminal the CSV is laid out as a table (`write_table`).
 # All output is rendered into an IOBuffer first and written in one go.
 module SigmaTauCLI
 
@@ -19,6 +20,7 @@ VERSION < v"1.13" && Base.generating_output() &&
     error("SigmaTauCLI needs Julia 1.13 or later")
 
 using SigmaTau
+using Printf
 using Random
 
 # Baked in at compile time; pkgversion needs the source tree at run time.
@@ -112,15 +114,17 @@ function report_error(out::IO, err::IO, o::Options, code::Int, msg::String)
 end
 
 """
-    sigmatau(args; out, err) -> Int
+    sigmatau(args; out, err, tty=false) -> Int
 
 Run one `sigmatau` command and return its exit code (0 ok, 1 usage, 2 input,
 3 analysis, 4 output). Never calls `exit`, so it is safe to call from tests.
+`tty` says that `out` is a terminal: the output is then a table, unless
+`--format` or `--out` is given.
 """
-function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
+function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr, tty::Bool=false)::Int
     if isempty(args) || args[1] in ("help", "-h", "--help")
         if length(args) >= 2 && args[2] != "completion" && !(args[2] in COMMANDS)
-            print(err, "sigmatau: no help for \"", args[2], "\"; commands: ", join(COMMANDS, ", "), "\n")
+            print(err, "sigmatau: no help for \"", args[2], "\"; commands: ", join(COMMANDS, ", "), did_you_mean(args[2], subcommands()), "\n")
             return EXIT_USAGE
         end
         help_buf = IOBuffer()
@@ -136,7 +140,9 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         return run_completion(args, out, err)
     elseif !(cmd in COMMANDS)
         print(err, startswith(cmd, "-") ? "sigmatau: unknown option " : "sigmatau: unknown command ")
-        print(err, cmd); print(err, "\nRun 'sigmatau help' for usage.\n")
+        print(err, cmd)
+        startswith(cmd, "-") || print(err, did_you_mean(cmd, subcommands()))
+        print(err, "\nRun 'sigmatau help' for usage.\n")
         return EXIT_USAGE
     end
 
@@ -156,6 +162,8 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     catch e
         return report_error(out, err, o, EXIT_USAGE, error_message(e))
     end
+    # A person at a terminal reads a table; a pipe, a file or a script gets CSV.
+    isempty(o.format) && (o.format = tty && isempty(o.out) ? "table" : "csv")
     if o.help
         cmd_buf = IOBuffer()
         print_command_help(cmd_buf, cmd)
@@ -181,6 +189,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         end
     else
         data = try
+            require_value_cols(o)
             load_record(o)
         catch e
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))
@@ -192,6 +201,11 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         end
     end
     bytes = take!(buf)
+    if o.format == "table" && o.command != "report"
+        tab = IOBuffer()
+        write_table(tab, String(bytes))
+        bytes = take!(tab)
+    end
     try
         if isempty(o.out)
             write(out, bytes)
@@ -244,8 +258,9 @@ Base.flush(::FdOut) = nothing
 
 function (@main)(args::Vector{String})::Cint
     # Windows has no write(2) in the runtime: keep Core.stdout there.
-    Sys.iswindows() && return Cint(sigmatau(args; out=Core.stdout, err=Core.stderr))
-    return Cint(sigmatau(args; out=FdOut(Cint(1)), err=Core.stderr))
+    tty = ccall(:uv_guess_handle, Cint, (Cint,), 1) == Base.UV_TTY
+    Sys.iswindows() && return Cint(sigmatau(args; out=Core.stdout, err=Core.stderr, tty=tty))
+    return Cint(sigmatau(args; out=FdOut(Cint(1)), err=Core.stderr, tty=tty))
 end
 
 end # module

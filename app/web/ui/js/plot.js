@@ -35,6 +35,8 @@ export function inLightTheme(fn) {
 }
 
 export const seriesColor = (i) => css(`--s${(i % 8) + 1}`);
+// Width of a measured curve; models, guides and pins are drawn thinner.
+export const LINE_W = 2.5;
 export const DASHES = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot"];
 const DASH_SVG = ["", "5 3", "1.5 3", "5 3 1.5 3", "9 3", "9 3 1.5 3"];
 
@@ -69,6 +71,7 @@ export function baseLayout() {
     legend: {
       bgcolor: css("--bg-card"), bordercolor: css("--line"), borderwidth: 1,
       x: 0.98, xanchor: "right", y: 0.98, yanchor: "top", font: { size: 11.5 },
+      traceorder: "normal",   // a trace with a filled band would reverse the list
     },
     modebar: { bgcolor: "rgba(0,0,0,0)", color: css("--muted"), activecolor: css("--accent") },
     showlegend: false,
