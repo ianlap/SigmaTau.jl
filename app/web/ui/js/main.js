@@ -30,7 +30,7 @@ let page = null;
 let transient = null;      // { kind, text } shown in the status bar in place of the state, until it is over
 
 const ctx = {
-  run, addClock, openFile: openInto, reimport, useSynth, setRecord, addRecord, save: saveFile,
+  run, addClock, openFile: openInto, openSample, reimport, useSynth, setRecord, addRecord, save: saveFile,
   goData: () => go("data"),
   go,
   status: (kind, text) => { transient = { kind, text, gen: state.run.gen ?? 0, until: Date.now() + 8000 }; renderStatus(); },
@@ -131,6 +131,7 @@ async function importFile(file, clock, prev) {
   go("data");
   if (settings.remembered) ctx.status("good", `Read ${file.name} with the settings remembered for files like this. Import settings… changes them.`);
   await Promise.all(touched.map(loadClock));
+  return touched;
 }
 
 // Choose the reference clock (null = as measured). Clocks from the same file
@@ -148,6 +149,20 @@ async function setReference(id) {
 async function openInto(clock) {
   const f = await openFile();
   if (f) await importFile(f, clock ?? null);
+}
+
+// One of the real records in ui/samples, through the import dialog like a picked file.
+// Its clocks take the place of those loaded.
+async function openSample(name) {
+  const r = await fetch(`samples/${name}`).catch(() => null);
+  if (!r?.ok) { ctx.status("error", `The example ${name} could not be read.`); return; }
+  const touched = await importFile(await readFile(new File([await r.blob()], name)), state.clocks[0] ?? null);
+  if (!touched) return;
+  const keep = new Set(touched.map((c) => c.id));
+  update((s) => {
+    if (s.reference !== null && !keep.has(s.reference)) s.reference = null;
+    s.clocks = s.clocks.filter((c) => keep.has(c.id));
+  });
 }
 
 async function addClock() {
