@@ -2,8 +2,8 @@ module SigmaTauRecipesBaseExt
 
 using SigmaTau
 using SigmaTau: StabilityResult, StabilitySuite, SpectralResult,
-                DynamicStabilityResult, ci_lower, ci_upper, estimators, PowerLawFit,
-                HoldoverResult, HoldoverPrediction, SteeringResult,
+                DynamicStabilityResult, HatResult, ci_lower, ci_upper, estimators,
+                PowerLawFit, HoldoverResult, HoldoverPrediction, SteeringResult,
                 SteeringPrediction, TimescaleResult, KalmanResult, powerlaw_sigma
 using RecipesBase
 
@@ -63,6 +63,11 @@ end
 # Estimators in seconds: TDEV and the time errors.
 const _TIME = Set(e.name for e in estimators() if e.axis === :sigma_x)
 
+# Label of curve `i` of a collection: the clock's name for a hat, the
+# estimator otherwise.
+_curve_label(h::HatResult, i) = h.names[i]
+_curve_label(results, i) = uppercase(string(results[i].deviation_type))
+
 # A suite draws as the vector of its results.
 @recipe f(suite::StabilitySuite) = suite.results
 
@@ -91,7 +96,7 @@ const _TIME = Set(e.name for e in estimators() if e.axis === :sigma_x)
             if split
                 subplot := 1 + time[i]
             end
-            label --> uppercase(string(r.deviation_type))
+            label --> _curve_label(results, i)
             ylabel --> (time[i] ? "Deviation (s)" : "Deviation")
             yticks --> _decade_ticks(Iterators.flatten(_ordinate_values(q) for q in same_axis))
             r

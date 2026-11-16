@@ -38,3 +38,12 @@ def test_matrix_form_matches_three_argument(pairwise):
     assert len(from_matrix) == 3
     for a, b in zip(three, from_matrix, strict=True):
         np.testing.assert_array_equal(a.dev, b.dev)
+
+
+def test_clock_names(pairwise):
+    assert st.ncornered_hat(*pairwise).names == ("A", "B", "C")
+    hat = st.ncornered_hat(*pairwise, names=["a", "b", "c"])
+    assert hat.names == ("a", "b", "c") and hat.method == "hat"
+    assert hat["b"] is hat[1]
+    with pytest.raises(KeyError):
+        hat["d"]
