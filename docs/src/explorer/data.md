@@ -35,6 +35,18 @@ The explorer reads the files that [`read_data`](@ref) reads:
 
 A file compressed with gzip (`.gz`) is unpacked as it is opened.
 
+Below the buttons, **Or open a real record** offers three records shipped
+with the explorer. Each opens through the import dialog like a file, and
+its clocks take the place of those loaded:
+
+| Record | Clocks |
+|:-------|:-------|
+| **Five time scales** | UTCr − UTC(k) for NIST, USNO, PTB, OP and NICT, one value a day from 2013 (BIPM rapid UTC) |
+| **Two quartz oscillators in orbit** | The ultra-stable oscillators of the GRACE-FO satellites against GPS time, every 30 s for 5.8 days |
+| **GNSS and station clocks** | One day of 21 clocks against a hydrogen maser: Galileo, GPS and GLONASS satellites, and masers, caesium, rubidium and crystal clocks on the ground (GFZ) |
+
+Their sources, licences and citations are in `app/web/ui/samples/README.md`.
+
 ## The import dialog
 
 The dialog shows the top of the file and what the explorer proposes to read

@@ -42,6 +42,13 @@ const VIEWS = [
   ["acf", "Autocorrelation", "Autocorrelation of the samples, with the noise type it points to"],
 ];
 
+// Real records shipped with the explorer (ui/samples, sources and licences in its README).
+const SAMPLES = [
+  ["bipm-rapid-utc-5labs.csv", "Five time scales", "UTCr − UTC(k) for NIST, USNO, PTB, OP and NICT, daily from 2013 (BIPM, CC BY 4.0)"],
+  ["gracefo-uso-2026-10-16.csv", "Two quartz oscillators in orbit", "The ultra-stable oscillators of GRACE-FO C and D against GPS time, every 30 s for 5.8 days (NASA)"],
+  ["gfz-clocks-2026-10-01.clk.gz", "GNSS and station clocks", "One day of 21 clocks against a hydrogen maser: Galileo, GPS and GLONASS satellites, masers, Cs, Rb and crystals on the ground (GFZ, CC BY 4.0)"],
+];
+
 const MAX_SIM_CLOCKS = 8;
 let root, plotEl, Plotly, ctx, relayoutBound = false;
 let axisUnit = 1;   // seconds per unit of the record plot's time axis
@@ -88,6 +95,8 @@ function fileCard(c) {
       <div class="file-actions"><button class="btn" data-act="import">Import settings…</button><button class="btn" data-act="open">Open another file…</button>${addClockBtn()}</div>`
     : `<div class="file-actions"><button class="btn btn-primary" data-act="open">Open a file…</button>${addClockBtn()}</div>`}
     <div class="dropzone" data-ref="drop">Drop a data file anywhere in the window</div>
+    <p class="small muted">Or open a real record: ${SAMPLES.map(([f, label, tip]) =>
+      `<button class="link-btn" data-sample="${f}" title="${tip}">${label}</button>`).join(" · ")}</p>
     ${c?.error ? `<p class="error small">${h(c.error)}</p>` : ""}
   </div>`;
 }
@@ -519,6 +528,8 @@ function onClick(e) {
   if (m) { update((s) => { s.dataMode = m; }); return; }
   const act = e.target.closest("[data-act]")?.dataset.act;
   const c = activeClock();
+  const sample = e.target.closest("[data-sample]")?.dataset.sample;
+  if (sample) { ctx.openSample(sample); return; }
   if (act === "open") ctx.openFile(c);
   else if (act === "import") ctx.reimport(c);
   else if (act === "add-clock") ctx.addClock();

@@ -57,6 +57,9 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .brand-name { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
 .brand-sub { font-size: 11px; color: var(--bar-muted); }
 .tabs { display: flex; height: var(--header-h); align-items: stretch; }
+/* The tabs in four groups: the record, its analysis, the clock model, several clocks. */
+.tab-group { display: flex; align-items: stretch; }
+.tab-group + .tab-group::before { content: ""; align-self: center; width: 1px; height: 18px; margin-inline: 6px; background: var(--bar-line); }
 .tabs a { display: flex; align-items: center; padding: 3px clamp(7px, 1vw - 3px, 12px) 0; color: var(--bar-muted); text-decoration: none; border-bottom: 3px solid transparent; }
 .tabs a:hover { color: #fff; }
 .tabs a.on { color: #fff; font-weight: 600; border-bottom-color: var(--tab-line); }
@@ -102,13 +105,14 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .rail-run.running { animation: pulse 1s infinite; }
 .rail-run .stale-dot { position: absolute; top: 1px; right: 1px; width: 10px; height: 10px; border-radius: 5px; background: var(--warn-dot); border: 2px solid var(--bg-panel); }
 .rail-run-label { font-size: 10.5px; color: var(--muted); }
-body:not(.panel-hidden) :is(.rail-run, .rail-run-label) { display: none; }
-body.panel-hidden .side { display: none; }
+body:not(.panel-hidden):not(.no-panel) :is(.rail-run, .rail-run-label), body.no-run :is(.rail-run, .rail-run-label) { display: none; }
+body:is(.panel-hidden, .no-panel) .side, body.no-panel #rail-panel { display: none; }
 @media (max-width: 960px) {
   .topbar { gap: 8px; padding: 0 12px; }
   .brand { margin-right: 2px; }
   .brand-sub { display: none; }
   .tabs a { padding-inline: 5px; font-size: 12.5px; }
+  .tab-group + .tab-group::before { margin-inline: 3px; }
 }
 body.panel-over .side { display: flex; position: absolute; left: 64px; top: 0; bottom: 0; z-index: 20; box-shadow: var(--shadow-pop); }
 body:not(.wide) .page > .side-card:not(.synth-clocks) { display: none; }
