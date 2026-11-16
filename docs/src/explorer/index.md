@@ -45,13 +45,13 @@ open.
 | Part | Holds |
 |:-----|:------|
 | Tabs | The nine pages: [Data](data.md), [Synthesis](synthesis.md), [Stability](stability.md), [Spectrum](spectrum.md), [Dynamic](dynamic.md), [Holdover](holdover.md), [Steering](steering.md), [Ensemble](ensemble.md) and [Live](live.md) |
-| Record chip | The record in use: its name, the number of samples, the sample interval, the span and what was removed from it. With several clocks, their number and the samples in all. A click opens the Data page. A window 1100 px wide or narrower leaves the chip out |
+| Record chip | The record in use: its name, the number of samples, the share that gap filling made, if any, the sample interval, the span and what was removed from it. With several clocks, their number and the samples in all. A click opens the Data page. A window 1100 px wide or narrower leaves the chip out |
 | **File** menu | The [exports](export.md): the plot, the results, a report, and saving and opening a session |
 | Theme button | Switches between the colors of the system, a light theme and a dark theme. The choice is remembered |
 | **?** | The [help](#The-help): a search through this manual and its sections on the page in view |
 | Rail | Along the left edge: **Settings** opens the side panel, **Results** the card of results beside the plot in a window narrower than 1280 px, and **Run** runs the analysis while the panel is closed |
 | [Side panel](panel.md) | The clocks, the estimators and the options of the analysis, with the **Run analysis** button. On Synthesis, Ensemble and Live it holds the settings of that page. It starts folded into the rail, so the plot has the width |
-| Status bar | Whether the results on screen belong to the inputs on screen |
+| Status bar | Whether the results on screen belong to the inputs on screen, and whether gap filling made more of a record than it was tested for |
 
 ## When results are computed
 

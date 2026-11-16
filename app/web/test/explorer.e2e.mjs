@@ -48,6 +48,13 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   const plotted = (sel) => page.waitForFunction((s) => document.querySelector(s)?.data?.length > 0, sel, SLOW);
   // Below 1280 px the panel opens over the page from the rail.
   const openPanel = async () => { if (!(await page.isVisible("#side"))) await page.click("#rail-panel"); await page.locator("#side").waitFor(); };
+  // A results entry of the File menu: its label, and the file it writes.
+  const exported = async (kind) => {
+    await page.click("#export-btn");
+    const entry = page.locator(`#export-menu [data-export=${kind}]`), label = await entry.innerText();
+    const [file] = await Promise.all([page.waitForEvent("download"), entry.click()]);
+    return { label, name: file.suggestedFilename(), text: readFileSync(await file.path(), "utf8") };
+  };
 
   await t.test("Data: a Stable32 file through the import dialog", async () => {
     await page.goto(base + "#data");
@@ -56,6 +63,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
     assert.match(await page.locator("#record-chip-text").innerText(), /stable32gen\.DAT.*8,?\s?192 samples/);
+    // The Data page has no results of its own to export.
+    await page.click("#export-btn");
+    assert.ok(await page.locator("#export-menu [data-export=tsv]").isDisabled());
+    await page.click("#export-btn");
   });
 
   await t.test("Stability: the plotted σ equal the command line's", async () => {
@@ -95,6 +106,11 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
     const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
     assert.deepEqual(rms, doc.holdover.rms);
+    // The File menu writes this page's table, not the Stability results.
+    const tsv = await exported("tsv");
+    assert.deepEqual([tsv.label, tsv.name], ["Holdover table as TSV", "sigmatau-holdover.tsv"]);
+    const [head, ...rows] = tsv.text.trim().split("\n").map((l) => l.split("\t"));
+    assert.deepEqual(rows.map((r) => Number(r[head.indexOf("rms_s")])), doc.holdover.rms);
     // A stretch of twice the holdover time: equal to √6·TDEV at τ₀.
     await page.click("[data-ctl=frac][data-v='0']");
     await page.waitForFunction(() => document.querySelector("#page .hold-card .cell-kv")?.innerText.includes("2τ"));
@@ -122,6 +138,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const doc = JSON.parse(execFileSync(CLI, [...args, "--time-constant", "64"])).steer;
     assert.deepEqual(await curve("Steered"), doc.steered);
     assert.deepEqual(await curve("Predicted (clock model)"), doc.predicted.adev);
+    const json = await exported("json");
+    assert.deepEqual([json.label, json.name], ["Steering table as JSON", "sigmatau-steering.json"]);
+    assert.deepEqual(JSON.parse(json.text)[0].steer.steered, doc.steered);
     // Gains from a cost: the loop card shows the command line's phase gain.
     await page.click('[data-ctl=from][data-v="cost"]');
     await page.waitForFunction(() => /Rings/.test(document.querySelector("#page .steer-card")?.innerText ?? ""), null, SLOW);
@@ -153,6 +172,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator("#page .ens-note").innerText(), /the scale is 0\.\d+ of its most stable clock/);
     await page.selectOption("#side [data-ctl=against]", "scale");
     assert.deepEqual(await dotted(), ts.adev.clocks[0]);
+    const tsv = await exported("tsv");
+    assert.equal(tsv.label, "Time scale table as TSV");
+    assert.match(tsv.text, /^clock\tagainst\ttau_s\tadev\tweight\tweight_mean\terror_rms_s\ntime scale\treference\t/);
   });
 
   await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
@@ -313,8 +335,9 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.fill("#imp-tau0", "1");
     await page.getByRole("button", { name: "Load record" }).click();
     await settled();
-    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples/ }).waitFor(SLOW);   // the new record, not the last one
+    await page.locator("#record-chip-text", { hasText: /y\.txt.*51[23] samples · under 1 % filled/ }).waitFor(SLOW);   // the new record, not the last one
     assert.ok(await page.locator("input[data-field=fillgaps]").isChecked());
+    assert.match(await page.locator(".check-card").innerText(), /Filled\s+1 · under 1 %/);
   });
 
   await t.test("Data: Fill gaps turned off and on again; the next file starts without it", async () => {
@@ -331,6 +354,22 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await settled();
     await page.locator("#record-chip-text", { hasText: /p\.csv/ }).waitFor(SLOW);
     assert.ok(!(await page.locator("input[data-field=fillgaps]").isChecked()));
+  });
+
+  await t.test("Data: a sparse frequency file says how much of it the filler made", async () => {
+    // Two readings in five: the filler makes 60 % of the record, past the 30 % it was tested for.
+    const rows = Array.from({ length: 500 }, (_, i) => i).filter((i) => i % 5 >= 3);
+    const text = "t (s),fractional frequency\n" + rows.map((i) => `${i},${(1e-12 * Math.sin(i / 3)).toExponential(6)}`).join("\n");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "sparse.csv", mimeType: "text/csv", buffer: Buffer.from(text) });
+    const gaps = page.locator("#import-dialog .gap-card", { hasText: "297 missing samples, 60 % of the span" });
+    await gaps.waitFor(SLOW);
+    assert.match(await gaps.innerText(), /makes 60 % of what is analyzed, more than the 30 %/);
+    await page.uncheck("#imp-remember");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /498 samples · 60 % filled/ }).waitFor(SLOW);
+    assert.match(await page.locator(".check-card").innerText(), /Filled\s+297 · 60 %/);
   });
 
   await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale, and its clocks are separated", async () => {
