@@ -2,7 +2,7 @@
 // overlaid, both plots on one frequency axis. The core returns S_y and S_x
 // with each run; the carrier, phase-noise view, averaging and slope guides
 // are display settings applied here without a run.
-import { state, update, visibleClocks, multi } from "../state.js";
+import { state, update, visibleClocks, multi, deadTime } from "../state.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css } from "../plot.js";
 import { num, escapeHtml as h } from "../format.js";
 
@@ -159,9 +159,16 @@ export function refresh() {
   const analyzed = visibleClocks().filter((c) => c.result?.spectrum);
   const clocks = analyzed.filter((c) => !c.result.spectrum.error);
   const gapped = analyzed.filter((c) => c.result.spectrum.error).map((c) => h(c.name));
+  // Readings with dead time are analyzed without one.
+  const dead = visibleClocks().filter((c) => c.result && !c.result.spectrum && deadTime(c)).map((c) => h(c.name));
   const why = "A spectrum needs every sample: turn on <i>Fill gaps by reflection</i> on the Data page, or select a range without gaps.";
-  root.querySelector("[data-ref=note]").innerHTML = clocks.length && gapped.length ? `No spectrum for ${gapped.join(", ")}, which ${gapped.length > 1 ? "have" : "has"} gaps. ${why}` : "";
+  const deadWhy = "Readings with dead time have no spectrum here; clear the dead time on the Data page to see one.";
+  root.querySelector("[data-ref=note]").innerHTML = [
+    clocks.length && gapped.length ? `No spectrum for ${gapped.join(", ")}, which ${gapped.length > 1 ? "have" : "has"} gaps. ${why}` : "",
+    clocks.length && dead.length ? `No spectrum for ${dead.join(", ")}. ${deadWhy}` : "",
+  ].filter(Boolean).join(" ");
   if (!state.clocks.some((c) => c.record)) return showEmpty(`<h2>No record yet</h2><p>Load or synthesize a record on the Data page.</p><button class="btn" data-act="load">Go to Data</button>`);
+  if (!analyzed.length && dead.length) return showEmpty(`<h2>No spectrum: readings with dead time</h2><p>${deadWhy}</p><button class="btn" data-act="load">Go to Data</button>`);
   if (!analyzed.length) return showEmpty(`<h2>Not analyzed yet</h2><p>Run the analysis to compute the spectra.</p><button class="btn btn-primary" data-act="run">Run analysis</button>`);
   if (!clocks.length) return showEmpty(`<h2>No spectrum: the record has gaps</h2><p>${why}</p><button class="btn" data-act="load">Go to Data</button>`);
   showEmpty("");

@@ -179,7 +179,8 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .kv .mono { font-size: 12.5px; min-width: 90px; white-space: nowrap; }
 .kv .warnv { color: var(--warn); }
 .check-card .rule { margin: 10px 0; }
-.check-card .opt select { width: 150px; }
+.check-card .opt select, .check-card .opt input { width: 150px; }
+.dead-block { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .synth-card { flex: 1; padding: 22px 20px; display: flex; flex-direction: column; gap: 14px; }
 .synth-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 18px; }
 .synth-grid input { width: 100%; min-width: 0; box-sizing: border-box; }

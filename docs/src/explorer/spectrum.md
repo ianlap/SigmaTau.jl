@@ -89,3 +89,6 @@ record has gaps** in place of the plots. Beside other clocks, a line above
 the plots names the clock that has none. Fill the gaps on the
 [Data](data.md#Preparing-the-record) page, or choose an analysis range
 without them.
+
+A clock read with [dead time](data.md#Dead-time) has no spectrum either:
+the run gives its ADEV alone.
