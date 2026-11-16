@@ -166,9 +166,11 @@ _noise_name(α::Integer) = String(SigmaTau._NOISE_SYMBOLS[α + 5])
 _level(c) = (v = round(100c; digits=1); string(isinteger(v) ? Int(v) : v, " %"))
 
 # A power-law fit: the measured points, the model through them, and each
-# noise type of the model alone, dashed.
+# noise type of the model alone, dashed. A spectrum of a sampled record is
+# fitted as Σ h_α g^α with g = sin(πfτ₀)/(πτ₀), so its components are too.
 @recipe function f(fit::PowerLawFit)
     spectrum = fit.source in (:Sy, :Sx, :Sphi, :L)
+    g = isnan(fit.tau0) ? fit.x : sin.(π .* fit.x .* fit.tau0) ./ (π * fit.tau0)
     xscale --> :log10
     yscale --> :log10
     xlabel --> (spectrum ? "Frequency f (Hz)" : "Averaging Time τ (s)")
@@ -192,7 +194,7 @@ _level(c) = (v = round(100c; digits=1); string(isinteger(v) ? Int(v) : v, " %"))
         @series begin
             linestyle --> :dash
             label --> _noise_name(α)
-            fit.x, spectrum ? h .* fit.x .^ α :
+            fit.x, spectrum ? h .* g .^ α :
                 powerlaw_sigma(Dict(α => h), fit.x; deviation=fit.source, tau0=fit.tau0)
         end
     end
@@ -270,6 +272,8 @@ end
     layout --> (n, 1)
     link --> :x
     size --> (700, 220n + 60)
+    left_margin --> (5, :mm)        # room for the axis titles
+    bottom_margin --> (5, :mm)
     for (i, panel) in enumerate(p.panels), j in axes(panel.y, 2)
         @series begin
             subplot := i

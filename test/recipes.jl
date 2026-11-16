@@ -128,6 +128,8 @@ using RecipesBase
         fit = powerlaw_fit(adev(p); alphas=[0, -2])
         @test labels(apply(fit)) == ["measured", "fit", "WHFM", "RWFM"]
         @test apply(fit)[3].args[2] ≈ powerlaw_sigma(Dict(0 => fit.h[1]), fit.x; tau0=1.0)
+        sfit = powerlaw_fit(psd_y(p; nperseg=512); alphas=[2, 0, -2])
+        @test sum(s.args[2] for s in apply(sfit)[3:end]) ≈ sfit.fit             # the components add up to the fit
 
         h = holdover(p; train=256, tau=[16, 64, 256], limit=1e-9)
         @test labels(apply(h)) == ["RMS", "95 % of trials within", "worst", "limit"]   # no Kalman σ for a fit
@@ -145,11 +147,11 @@ using RecipesBase
         @test [s.plotattributes[:ylabel] for s in kf] == ["Phase (s)", "Frequency"]
         @test all(s -> length(s.plotattributes[:ribbon]) == 4096, kf)
 
-        cc, _ = simulate_ensemble([ClockModel(; tau0=1.0, q1=q) for q in (1e-24, 4e-24)], 512;
-                                  reference=0, rng=Xoshiro(2))
+        ms = [ClockModel(; tau0=1.0, q1=q) for q in (1e-24, 4e-24)]
+        cc, _ = simulate_ensemble(ms, 512; reference=0, rng=Xoshiro(2))
         at1 = panels(timescale(cc; algorithm=:at1))
         @test [s.plotattributes[:subplot] for s in at1] == [1, 1, 2, 2]
         @test labels(at1) == ["clock 1", "clock 2", "", ""]                 # one legend
-        @test length(panels(timescale(cc; algorithm=:jones_tryon, models=[ClockModel(; tau0=1.0, q1=q) for q in (1e-24, 4e-24)]))) == 2   # no weights
+        @test length(panels(timescale(cc; algorithm=:jones_tryon, models=ms))) == 2      # no weights
     end
 end
