@@ -97,5 +97,19 @@ using SigmaTau
         @test occursin("adev", pretty)
         @test occursin("hdev", pretty)
         @test occursin("\n", pretty)
+        # One row per τ with the deviations side by side, a dash where an
+        # estimator has no value at that τ.
+        @test occursin(r"tau +adev +hdev", pretty)
+        @test occursin(r"\n +1 +\d\.\d{3}e-\d+ +\d\.\d{3}e-\d+", pretty)
+        gappy = StabilitySuite([StabilityResult(:adev, [1.0, 2.0, 4.0], [3.0, 2.0, 1.0], Symbol[], SigmaTau._CIBound[], Float64[], [9, 8, 7]),
+                                StabilityResult(:tdev, [1.0, 2.0], [5.0, 6.0], Symbol[], SigmaTau._CIBound[], Float64[], [9, 8])],
+                               :phase, 1.0, 10, NaN, :explicit)
+        @test occursin(r"\n +4 +1 +-$", sprint(show, MIME("text/plain"), gappy))
+        # Past 12 rows the table keeps the first six and the last five.
+        taus = 2.0 .^ (0:15)
+        long = StabilitySuite([StabilityResult(:adev, taus, 1 ./ taus, Symbol[], SigmaTau._CIBound[], Float64[], fill(9, 16))],
+                              :phase, 1.0, 100, NaN, :explicit)
+        shown = sprint(show, MIME("text/plain"), long)
+        @test occursin("⋮  5 more rows", shown) && occursin(r"\n +3\.277e\+04 +", shown)
     end
 end

@@ -20,7 +20,7 @@ import { openHelpMenu } from "./helpmenu.js";
 import { buildReport } from "./report.js";
 import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly, css } from "./plot.js";
-import { thousands, num, duration, share, FILL_TESTED, escapeHtml as h } from "./format.js";
+import { thousands, num, duration, interval, share, FILL_TESTED, escapeHtml as h } from "./format.js";
 
 const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, steering, ensemble, live, help };
 const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "steering", "ensemble", "live"];
@@ -52,6 +52,7 @@ function go(to) {
     pageEl.replaceWith(fresh);
     pageEl = fresh;
     pageEl.className = `page page-${name}`;
+    document.getElementById("page-title").textContent = document.querySelector(`.tabs [data-page="${name}"]`)?.textContent ?? name;
     page.mount(pageEl, ctx);
     render();
   }
@@ -103,7 +104,7 @@ async function importFile(file, clock, prev) {
     settings.value_cols.forEach((col, k) => {
       let c = k === 0 ? clock : null;
       const given = settings.labels?.[k] ?? null;     // a name typed in the dialog
-      const colName = given ?? settings.names[k] ?? (settings.value_cols.length > 1 ? `${baseName(file.name)} col ${col}` : baseName(file.name));
+      const colName = given ?? settings.shortNames[k] ?? (settings.value_cols.length > 1 ? `${baseName(file.name)} col ${col}` : baseName(file.name));
       if (!c) {
         c = newClock({ name: colName, typedName: !!given });
         s.clocks.push(c);
@@ -171,7 +172,7 @@ async function reimport(c) {
     settings.value_cols.forEach((col, i) => {
       let k = keep.get(col);
       const given = settings.labels?.[i] ?? null;
-      if (!k) { k = newClock({ name: given ?? settings.names[i] ?? `${baseName(c.source.name)} col ${col}` }); s.clocks.push(k); }
+      if (!k) { k = newClock({ name: given ?? settings.shortNames[i] ?? `${baseName(c.source.name)} col ${col}` }); s.clocks.push(k); }
       else if (given) k.name = given;
       Object.assign(k, {
         group: c.group, kind: settings.kind, format: settings.format, tau0: settings.tau0, time_col: settings.time_col, timeUnit: settings.timeUnit,
@@ -340,7 +341,7 @@ function renderChip() {
   if (withRec.length === 1 && !multi()) {
     const c = withRec[0], r = c.record;
     const facts = [`${thousands(r.n)} samples`, ...(r.check.filled ? [`${share(r.check.filled, r.n)} filled`] : []),
-      `τ<sub>0</sub> ${num(r.tau0, 4)} s`, duration(r.n * r.tau0), fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
+      `τ<sub>0</sub> ${interval(r.tau0)}`, duration(r.n * r.tau0), fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
     text.innerHTML = `${h(c.source.type === "file" ? c.source.name : "synthetic record")} <span class="facts">${facts.join(" · ")}</span>`;
     return;
   }

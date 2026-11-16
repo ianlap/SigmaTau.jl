@@ -228,6 +228,20 @@ _with(m::ClockModel; R=m.R, q1=m.q1, q2=m.q2) =
 _npoly(m::ClockModel) = m.drift ? 3 : 2
 _nstates(m::ClockModel) = _npoly(m) + length(_fm_taus(m)) + length(_pm_taus(m))
 
+# One line in the keyword form, with the noise levels that are set; the line
+# builds the same model.
+function Base.show(io::IO, m::ClockModel)
+    print(io, "ClockModel(; tau0 = ", m.tau0)
+    for (name, v) in (("R", m.R), ("q1", m.q1), ("q2", m.q2), ("q3", m.q3),
+                      ("flicker_fm", m.flicker_fm), ("flicker_pm", m.flicker_pm))
+        v > 0 && print(io, ", ", name, " = ", v)
+    end
+    m.drift && m.q3 == 0 && print(io, ", drift = true")
+    m.flicker_fm > 0 && print(io, ", fm_band = ", m.fm_band)
+    m.flicker_pm > 0 && print(io, ", pm_band = ", m.pm_band)
+    print(io, ")")
+end
+
 function Base.show(io::IO, ::MIME"text/plain", m::ClockModel)
     print(io, _nstates(m), "-state ClockModel, τ₀ = ", m.tau0, " s")
     @printf(io, "\n  R  %.4g s²\n  q1 %.4g s\n  q2 %.4g 1/s", m.R, m.q1, m.q2)

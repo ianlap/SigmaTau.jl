@@ -1,8 +1,8 @@
 // The import dialog: shows the top of a file, lets the user say which column
 // is time and which is the value, the record type, units and τ0, and returns
 // the reader settings for the core. openImport() resolves to null on cancel.
-import { sniff, guessRoles, clockStats, thin, parseFactor, scaleFields, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
-import { escapeHtml as h, thousands, duration, num, share, FILL_TESTED } from "./format.js";
+import { sniff, guessRoles, clockLabels, unitNotes, clockStats, thin, parseFactor, scaleFields, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
+import { escapeHtml as h, thousands, duration, interval, num, share, FILL_TESTED } from "./format.js";
 import { seriesColor, hexAlpha } from "./plot.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
@@ -62,7 +62,8 @@ export function openImport(file, prev = null) {
   };
   const colName = (c) => s.names[c - 1] || `column ${c}`;
   // What a clock is called when nothing is typed: its column name, or the file's name for a single clock.
-  const defaultName = (c) => (st.values.length > 1 ? colName(c) : file.name.replace(/\.[^.]+$/, ""));
+  const defaultNames = () => (st.values.length > 1 ? clockLabels(st.values.map(colName)) : [file.name.replace(/\.[^.]+$/, "")]);
+  const defaultName = (c) => defaultNames()[Math.max(0, st.values.indexOf(c))];
   const settings = () => {
     const { tau0, gaps, zeros } = derived();
     const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
@@ -73,6 +74,7 @@ export function openImport(file, prev = null) {
       timeUnit: st.timeUnit,
       value_cols: [...st.values],
       names: st.values.map((c) => s.names[c - 1] || null),
+      shortNames: clockLabels(st.values.map((c) => s.names[c - 1] || "")).map((n) => n || null),
       labels: st.values.map((c) => (st.labels[c] ?? "").trim() || null),
       against: st.against.trim(),
       header: s.header,
@@ -84,7 +86,7 @@ export function openImport(file, prev = null) {
       blanks: st.values.reduce((a, c) => a + (s.columns[c - 1] ?? []).filter((x) => !Number.isFinite(x) || x === 9.91e37).length, 0)
         + (st.kind === "frequency" && !st.keepZeros ? zeros : 0),
       // (the clocks of a RINEX file differ in τ₀: the Data page gives each its own)
-      sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind}${s.clocks ? "" : ` · τ₀ ${num(tau0, 4)} s`}` +
+      sourceInfo: `${s.formatLabel ?? (s.stable32 ? "Stable32 file" : s.delimName.replace("-separated", ""))} · ${st.kind}${s.clocks ? "" : ` · τ₀ ${interval(tau0)}`}` +
         (s.comments + s.header ? ` · ${s.comments + s.header} header line${s.comments + s.header > 1 ? "s" : ""} read automatically` : ""),
       unitName: parseFactor(st.factor) ? `readings × ${num(parseFactor(st.factor), 4)}` : (units.find(([f]) => f === st.scaling) ?? units[0])[1],
       remembered: fromMemory && !prev,
@@ -161,6 +163,10 @@ export function openImport(file, prev = null) {
           : `A frequency record cannot be read with gaps, so <i>Fill gaps by reflection</i> is on for it on the Data page${missing > FILL_TESTED * slots
             ? `: the filler makes ${share(missing, slots)} of what is analyzed, more than the 30 % it was tested for, and the results describe it as much as the clock.` : "."}`}</div>`
         : "";
+      const notes = unitNotes({ names: [file.name, ...st.values.map(colName)], kind: st.kind, scale: factor || st.scaling, columns: st.values.map((c) => s.columns[c - 1] ?? []) });
+      const unitCard = notes.length
+        ? `<div class="gap-card"><b>Check the unit</b>${h(notes.join(" "))} Choose the unit or type a scale factor above.</div>`
+        : "";
       const zeroCard = zeros
         ? `<div class="gap-card"><b>${thousands(zeros)} zero reading${zeros > 1 ? "s" : ""}</b>Stable32 marks a gap with 0${st.keepZeros ? `; ${zeros > 1 ? "they are" : "it is"} kept as ${zeros > 1 ? "readings" : "a reading"} here` : `, so ${zeros > 1 ? "they are" : "it is"} read as ${zeros > 1 ? "gaps" : "a gap"}`}.
             <label class="check"><input type="checkbox" id="imp-keep-zeros" ${st.keepZeros ? "checked" : ""}>Keep zeros as readings (a quantized record)</label></div>`
@@ -203,7 +209,7 @@ export function openImport(file, prev = null) {
               <input type="text" id="imp-factor" class="wide-input" placeholder="or a factor, e.g. 1/(2*pi*5e14) for radians" value="${h(st.factor)}" aria-label="Scale factor" style="margin-top:6px">
               ${st.factor.trim() && !factor ? `<div class="muted small err" style="margin-top:4px">Not a positive number.</div>` : ""}</div>`}
             <div><label class="lbl">Sample interval τ<sub>0</sub></label>${tauLine}</div>
-            ${gap}${zeroCard}
+            ${unitCard}${gap}${zeroCard}
             <div><label class="lbl" for="imp-against">Measured against</label>
               <input type="text" id="imp-against" class="wide-input" placeholder="e.g. H-maser" value="${h(st.against)}">
               <div class="muted small" style="margin-top:6px">You can switch the reference to any clock later, in the Clocks list.</div></div>
