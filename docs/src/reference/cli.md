@@ -76,7 +76,8 @@ A file compressed with gzip (`.gz`) must be unpacked first.
 The program holds every record as phase. It integrates a frequency file of
 ``N`` samples to ``N + 1`` phase samples, and reports that number. A
 frequency file with missing samples must be filled with `--fill-gaps`,
-whatever the analysis.
+whatever the analysis. When the filler puts in more than 30 % of the
+record, more than it was tested for, a line on stderr says so.
 
 ### Preparing
 
@@ -109,9 +110,9 @@ The sample interval of a simulated record is `--tau0`, or 1 s.
 | Option | Meaning |
 |:---|:---|
 | `--format FMT` | `table`, the default at a terminal: the CSV laid out for reading, aligned, with numbers to four significant digits and each column that holds one value on every row said once above; `csv`, the default in a pipe or with `--out`; or `json` |
-| `--out PATH` | write to a file. By default the output goes to standard output |
+| `--out PATH`, `-o PATH` | write to a file. By default the output goes to standard output |
 | `--series N` | include samples of the record in the JSON output, about `N`, for a plot |
-| `--quiet` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
+| `--quiet`, `-q` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
 
 A value that does not exist is an empty field in CSV and `null` in JSON,
 never the text `NaN`. `model` and `live` write JSON only, and `report`
@@ -138,6 +139,7 @@ reads a record gives it, except `timescale` and `hat`:
 | `n`, `tau0`, `span_s` | number of phase samples, sample interval, and their product, in seconds |
 | `start` | UTC time of the first sample, where the file gives one, else `""` |
 | `gaps` | number of missing samples |
+| `filled` | number of samples that `--fill-gaps` put in |
 | `outliers`, `outlier_t`, `outlier_x` | number of outliers that [`find_outliers`](@ref) flags by default, and the time and phase of the first 500 |
 | `drift_per_day` | least-squares slope of the fractional frequency, per day |
 | `removed_offset`, `removed_drift_per_day` | the frequency offset and the drift that `--remove-drift` removed |
@@ -248,7 +250,7 @@ the JSON output lists them as `warnings`, an empty list when there are none.
 The CSV output is one row:
 
 ```text
-source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
+source,quantity,n,tau0,span_s,gaps,filled,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
 ```
 
 The columns up to `drift_per_day` are the members of `record` in the JSON
@@ -705,6 +707,8 @@ yet. The last line has `"done": true`. Without `--count`, a grid reaches
 | 3 | analysis: a record too short, or with gaps where the analysis takes none |
 | 4 | output: the file of `--out` cannot be written |
 
-An error prints one line that begins with `sigmatau:` on standard error. A
+An error prints one line that begins with `sigmatau:` on standard error.
+A misspelled command or option names the nearest one that fits, such as
+`sigmatau: unknown command analize; did you mean analyze?`. A
 reader that closes the pipe early, as in `sigmatau analyze clock.dat | head`,
 is not an error.

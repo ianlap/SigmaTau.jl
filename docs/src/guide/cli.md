@@ -217,7 +217,7 @@ measurement, stops the run: a running estimate cannot leave a sample out.
 ## In scripts
 
 `--format json` gives every answer as one JSON object in a versioned schema,
-and `--out PATH` writes to a file:
+and `--out PATH` (or `-o PATH`) writes to a file:
 
 ```bash
 sigmatau analyze clock.dat --format json --out result.json

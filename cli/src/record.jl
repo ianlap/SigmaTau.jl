@@ -25,13 +25,14 @@ end
 function load_record(o::Options; unfilled::Bool=false)
     ranged = !(isnan(o.range_start) && isnan(o.range_end))
     data = read_record(o)
-    keep = o.remove_drift == "none" && !unfilled ? trues(0) : measured_mask(o, length(data.x))
+    keep = o.remove_drift == "none" && !unfilled && !o.fillgaps ? trues(0) : measured_mask(o, length(data.x))
     if ranged
         idx = range_indices(o, data)
         start = isnan(data.start) ? NaN : data.start + (first(idx) - 1) * data.tau0
         data = PhaseData(data.x[idx], data.tau0; source=data.source, start=start)
         isempty(keep) || (keep = keep[idx])
     end
+    count_filled!(o, keep)
     # Phase records are cleaned in frequency space: a glitch is a phase step,
     # i.e. one bad frequency sample, which is gapped, filled and integrated back.
     o.remove_outliers && (data = remove_outliers(data))
@@ -135,13 +136,29 @@ function read_column(o::Options, value_col::Int)
     return read_phase_col(o, kw)
 end
 
+# The filler was checked with up to 30 % of a record missing (ADEV within a
+# few percent of the full record's); past that the results say as much about
+# the filler as about the clock, and stderr says so.
+const FILL_TESTED = 0.3
+
+share_text(k::Int, n::Int) = 100 * k < n ? "under 1 %" : string(round(Int, 100 * k / n)) * " %"
+
+function count_filled!(o::Options, keep::BitVector)
+    o.filled = count(!, keep)
+    n = length(keep)
+    o.filled > FILL_TESTED * n && isempty(o.note) &&
+        (o.note = "--fill-gaps made " * string(o.filled) * " of the " * string(n) * " samples (" * share_text(o.filled, n) *
+                  "), more than the 30 % it was tested for: the results describe the filler as much as the clock")
+    return o
+end
+
 # Same integration as SigmaTau's FrequencyData methods: N frequency samples
 # give N + 1 phase points starting at 0, so no sample is lost. A missing
 # frequency sample leaves every later phase unknown, so it must be filled.
 function integrated(y::Vector{Float64}, tau0::Float64)
     n = count(isnan, y)
-    n == 0 || throw(CLIError(EXIT_INPUT, "the frequency record is missing " * string(n) *
-                                         " samples; fill them with --fill-gaps"))
+    n == 0 || throw(CLIError(EXIT_INPUT, "the frequency record is missing " * string(n) * " samples (" *
+                                         share_text(n, length(y)) * " of it); fill them with --fill-gaps"))
     return [0.0; cumsum(y)] .* tau0
 end
 
