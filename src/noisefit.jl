@@ -40,8 +40,9 @@ end
 
 Start an interactive power-law fit on `r`, an ADEV, MDEV, HDEV or MHDEV
 result or one of their total forms (which are fitted with the parent's
-response). Add components with [`add_component!`](@ref) and take the last
-one back with [`undo!`](@ref).
+response). The fit starts with no components: add them with
+[`add_component!`](@ref) and take the last one back with [`undo!`](@ref).
+[`clock_model`](@ref) refuses a fit that has none.
 
 Each component's σ²(τ) is the exact response of a sampled record, as in
 [`powerlaw_fit`](@ref). Its level is the weighted mean of
@@ -155,5 +156,9 @@ end
 
 _powerlaw_tau0(f::NoiseFit) = f.result.tau0
 _powerlaw_h(f::NoiseFit) = Dict(c.alpha => c.h for c in f.components)
-clock_model(f::NoiseFit; tau0::Real=f.result.tau0, tau_max::Real=maximum(f.result.tau), kw...) =
-    clock_model(_powerlaw_h(f); tau0=_fit_tau0(f.result.tau0, tau0), tau_max, kw...)
+function clock_model(f::NoiseFit; tau0::Real=f.result.tau0, tau_max::Real=maximum(f.result.tau), kw...)
+    isempty(f.components) && throw(ArgumentError(
+        "clock_model: the noise fit has no components yet; add some with add_component!, " *
+        "or fit the record whole with powerlaw_fit"))
+    return clock_model(_powerlaw_h(f); tau0=_fit_tau0(f.result.tau0, tau0), tau_max, kw...)
+end
