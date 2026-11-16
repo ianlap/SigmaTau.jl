@@ -65,7 +65,7 @@ and random-walk FM (TN 375, Fig. 1).
 function _noise_mu(noise::Symbol)
     α = get(_NOISE_ALPHA, noise, -9)
     -2 <= α <= 2 || throw(ArgumentError(
-        "the dead-time bias functions cover :WHPM, :FLPM, :WHFM, :FLFM and :RWFM; got :$noise"))
+        "the dead-time bias functions cover :WPM, :FPM, :WFM, :FFM and :RWFM; got :$noise"))
     return Float64(max(-α - 1, -2))
 end
 
@@ -99,7 +99,7 @@ the ratio of the standard variance to the Allan variance that
 - `r`: the ratio ``T/τ > 0`` of the measurement period to the averaging
   time; ``r > 1`` is dead time, ``r < 1`` overlapping averages.
 - `μ`: the exponent of ``σ_y^2(τ) ∝ τ^μ``, any real number in ``-2 ≤ μ ≤ 2``,
-  or a noise type: `:WHPM` and `:FLPM` (``μ = -2``), `:WHFM` (−1), `:FLFM`
+  or a noise type: `:WPM` and `:FPM` (``μ = -2``), `:WFM` (−1), `:FFM`
   (0) or `:RWFM` (1). In terms of ``S_y(f) ∝ f^α``, ``μ = -α - 1`` for
   ``-3 < α ≤ 1``.
 
@@ -171,7 +171,7 @@ julia> using SigmaTau
 julia> bias_b2(36, :RWFM)            # 100 s measured once an hour
 53.5
 
-julia> round(sqrt(bias_b2(36, :FLFM)); digits=3)
+julia> round(sqrt(bias_b2(36, :FFM)); digits=3)
 1.915
 ```
 """
@@ -226,10 +226,10 @@ are integers, ``N ≥ 2`` and ``M ≥ 1``; `r` and `μ` are as in
 ```jldoctest
 julia> using SigmaTau
 
-julia> bias_b3(2, 8, 36, :WHPM)
+julia> bias_b3(2, 8, 36, :WPM)
 8.0
 
-julia> round(bias_b3(2, 4, 2, :FLFM); sigdigits=4)
+julia> round(bias_b3(2, 4, 2, :FFM); sigdigits=4)
 0.7052
 ```
 """

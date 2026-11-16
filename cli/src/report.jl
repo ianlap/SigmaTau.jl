@@ -133,14 +133,11 @@ function html_result_table(io::IO, r::StabilityResult, lab::String)
             print(io, "</td><td class=\"n\">"); sci(io, r.ci[i].hi, 3)
         end
         has_edf && (print(io, "</td><td class=\"n\">"); plain(io, r.edf[i], 4))
-        has_nt && (print(io, "</td><td>"); print(io, noise_short(r.noise_type[i])))
+        has_nt && (print(io, "</td><td>"); print(io, String(r.noise_type[i])))
         print(io, "</td><td class=\"n\">"); print(io, r.neff[i]); print(io, "</td></tr>")
     end
     print(io, "</tbody></table>")
 end
-
-noise_short(s::Symbol) = s === :WHPM ? "WPM" : s === :FLPM ? "FPM" : s === :WHFM ? "WFM" :
-                         s === :FLFM ? "FFM" : String(s)
 
 const REPORT_STYLE = """
 body{font:13px/1.5 system-ui,sans-serif;color:#1d1d1f;background:#fff;margin:32px auto;max-width:900px;padding:0 16px}

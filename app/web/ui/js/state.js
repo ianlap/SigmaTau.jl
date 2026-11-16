@@ -102,7 +102,7 @@ export function newClock(fields = {}) {
     acf: null,               // last statistics and autocorrelation, with their settings key
     components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
     dead_time: null,         // seconds unmeasured between frequency readings, or null = none
-    dead_noise: "WHFM",      // the noise type that the dead-time correction assumes
+    dead_noise: "WFM",       // the noise type that the dead-time correction assumes
     error: null,
     ...fields,
   };

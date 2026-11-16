@@ -22,6 +22,10 @@ function _write_result_table(io::IO, r::StabilityResult)
     end
 end
 
+# A saved noise type; one saved under an older name, such as WHFM, loads as
+# the new one.
+_load_noise(s::AbstractString) = (n = Symbol(s); haskey(_NOISE_ALPHA, n) ? _noise_symbol(n) : n)
+
 # Shared row parser: turn tab-delimited data rows back into a StabilityResult.
 # Accepts 7-column rows and the 6-column rows of v0.4 files (neff loads as 0).
 function _parse_result_rows(deviation_type::Symbol, has_ci::Bool,
@@ -51,7 +55,7 @@ function _parse_result_rows(deviation_type::Symbol, has_ci::Bool,
     has_ci || return StabilityResult(deviation_type, tau, dev,
                                      Symbol[], _CIBound[], Float64[], neff, tau0, n, NaN)
     return StabilityResult(deviation_type, tau, dev,
-                           all(isempty, noise_s) ? Symbol[] : Symbol.(noise_s), _zip_ci(ci_lo, ci_hi), edf_vec, neff,
+                           all(isempty, noise_s) ? Symbol[] : _load_noise.(noise_s), _zip_ci(ci_lo, ci_hi), edf_vec, neff,
                            tau0, n, confidence)
 end
 

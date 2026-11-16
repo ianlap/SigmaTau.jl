@@ -20,7 +20,7 @@ MS = [1, 2, 4]
 def test_identify_noise_white_fm():
     rec = st.noise_gen(PhaseData, 2048, 1.0, sigma1={0: 1e-12}, rng=7)
     noises = st.identify_noise(rec.x, MS)
-    assert noises[0] == "WHFM"
+    assert noises[0] == "WFM"
     assert all(str(n) for n in noises)
 
 
@@ -30,7 +30,7 @@ def test_identify_noise_accepts_records():
     # Frequency records are integrated to phase, not read as phase.
     y = np.diff(rec.x) / rec.tau0
     from_freq = st.identify_noise(FrequencyData(y, rec.tau0), MS)
-    assert from_freq[0] == "WHFM"
+    assert from_freq[0] == "WFM"
 
 
 def test_identify_noise_keywords_match_julia(jl):
@@ -67,13 +67,13 @@ def test_calculate_edf_and_ci_reproduce_adev(small_phase):
 
 
 def test_bias_correction_unknown_var_type_is_identity():
-    b = st.bias_correction(["WHFM"], "unknown", [1], 512)
+    b = st.bias_correction(["WFM"], "unknown", [1], 512)
     assert np.all(b == 1.0)
 
 
 def test_bias_correction_published_leaves_pm_alone():
-    assert st.bias_correction(["WHPM"], "htot", [16], 512)[0] > 1.3
-    assert st.bias_correction(["WHPM"], "htot", [16], 512, published=True)[0] == 1.0
+    assert st.bias_correction(["WPM"], "htot", [16], 512)[0] > 1.3
+    assert st.bias_correction(["WPM"], "htot", [16], 512, published=True)[0] == 1.0
 
 
 def test_bias_functions_match_the_published_tables():
@@ -82,14 +82,14 @@ def test_bias_functions_match_the_published_tables():
     assert st.bias_b1(math.inf, 2, 0.5) == math.inf
     assert round(st.bias_b2(64, 0.2), 3) == 6.834
     assert st.bias_b2(36, "RWFM") == pytest.approx(53.5)
-    assert round(st.bias_b3(2, 4, 2, "FLFM"), 4) == 0.7052
-    assert st.bias_b3(2, 8, 36, "WHPM") == 8.0
+    assert round(st.bias_b3(2, 4, 2, "FFM"), 4) == 0.7052
+    assert st.bias_b3(2, 8, 36, "WPM") == 8.0
     with pytest.raises(ValueError):
         st.bias_b2(2, 2.5)
     with pytest.raises(ValueError, match="N must be an integer"):
         st.bias_b1(8.5, 2, 0.2)
     with pytest.raises(TypeError, match="m must be an integer, got 4.0"):
-        st.bias_b3(2, 4.0, 2, "FLFM")
+        st.bias_b3(2, 4.0, 2, "FFM")
 
 
 def test_adev_dead_time_divides_by_b2_b3():

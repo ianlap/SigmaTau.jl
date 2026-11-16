@@ -19,8 +19,8 @@ export const ESTIMATORS = [
   { id: "mtotdev",  label: "MTOTDEV",  group: "total", axis: "sigma_y", family: "Total modified Allan",     note: "total modified Allan", slow: true },
   { id: "htotdev",  label: "HTOTDEV",  group: "total", axis: "sigma_y", family: "Total Hadamard",           note: "total Hadamard", slow: true },
   { id: "mhtotdev", label: "MHTOTDEV", group: "total", axis: "sigma_y", family: "Total modified Hadamard",  note: "total modified Hadamard", slow: true },
-  { id: "theo1",    label: "THEO1",    group: "theo",  axis: "sigma_y", family: "Thêo1",                    note: "Thêo1, bias-corrected", slow: true },
-  { id: "theoh",    label: "THEOH",    group: "theo",  axis: "sigma_y", family: "ThêoH",                    note: "Thêo1 joined to ADEV", slow: true },
+  { id: "theo1",    label: "Thêo1",    group: "theo",  axis: "sigma_y", family: "Thêo1",                    note: "Thêo1, bias-corrected", slow: true },
+  { id: "theoh",    label: "ThêoH",    group: "theo",  axis: "sigma_y", family: "ThêoH",                    note: "Thêo1 joined to ADEV", slow: true },
   { id: "tdev",     label: "TDEV",     group: "time",  axis: "sigma_x", family: "Time deviation",           note: "time deviation" },
   { id: "htdev",    label: "HTDEV",    group: "time",  axis: "sigma_x", family: "Hadamard time",            note: "Hadamard time deviation" },
   { id: "ttotdev",  label: "TTOTDEV",  group: "time",  axis: "sigma_x", family: "Total time",               note: "total time deviation", slow: true },
@@ -39,12 +39,9 @@ export const gridName = (g) => (GRIDS.find(([v]) => v === g) ?? [g, g])[1];
 
 export const CONFIDENCES = [[0.683, "68.3 %"], [0.9, "90 %"], [0.95, "95 %"], [0.99, "99 %"]];
 
-// SigmaTau's noise symbols shown the usual way, with the power-law exponent α
-// of S_y(f) ∝ f^α.
-const NOISE_NAMES = { WHPM: "WPM", FLPM: "FPM", WHFM: "WFM", FLFM: "FFM", RWFM: "RWFM", FWFM: "FWFM", RRFM: "RRFM" };
-export const NOISE_ALPHA = { WHPM: 2, FLPM: 1, WHFM: 0, FLFM: -1, RWFM: -2, FWFM: -3, RRFM: -4 };
-export const NOISE_LONG = { WHPM: "white phase", FLPM: "flicker phase", WHFM: "white frequency", FLFM: "flicker frequency", RWFM: "random-walk frequency", FWFM: "flicker-walk frequency", RRFM: "random-run frequency" };
-export const noiseLabel = (s) => NOISE_NAMES[String(s)] ?? String(s);
+// SigmaTau's noise types, with the power-law exponent α of S_y(f) ∝ f^α.
+export const NOISE_ALPHA = { WPM: 2, FPM: 1, WFM: 0, FFM: -1, RWFM: -2, FWFM: -3, RRFM: -4 };
+export const NOISE_LONG = { WPM: "white phase", FPM: "flicker phase", WFM: "white frequency", FFM: "flicker frequency", RWFM: "random-walk frequency", FWFM: "flicker-walk frequency", RRFM: "random-run frequency" };
 export const noiseAlpha = (s) => NOISE_ALPHA[String(s)];
 const alphaText = (a) => (a > 0 ? `+${a}` : a < 0 ? `−${-a}` : "0");
 export const noiseTitle = (s) => (s in NOISE_ALPHA ? `${NOISE_LONG[s]} noise, α = ${alphaText(NOISE_ALPHA[s])}` : String(s));
@@ -75,7 +72,7 @@ export const biasEntry = (b) => BIASES.find(([v]) => v === b) ?? BIASES[0];
 export const NOISES = [
   ["auto", "Identified at each τ"],
   ["fit", "From the fitted model"],
-  ...Object.keys(NOISE_ALPHA).map((k) => [k, `${NOISE_NAMES[k]}, ${NOISE_LONG[k]}`]),
+  ...Object.keys(NOISE_ALPHA).map((k) => [k, `${k}, ${NOISE_LONG[k]}`]),
 ];
 export const noiseChoice = (n) => (NOISES.find(([v]) => v === n) ?? NOISES[0])[1];
 

@@ -483,8 +483,8 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
 .ens-table .hat-tbl .tbl-row { grid-template-columns: minmax(0, 1.3fr) 1fr 1fr; }
 .ens-table .cross-tbl .tbl-row { grid-template-columns: 0.8fr 1fr 1fr 1fr; }
-.ens-view { align-self: stretch; display: flex; }
-.ens-view button { flex: 1 1 auto; padding: 0 6px; }
+.seg.ens-view { align-self: stretch; display: flex; min-width: 0; }
+.ens-view button { flex: 1 1 auto; min-width: 0; height: auto; min-height: 28px; padding: 2px 3px; white-space: normal; line-height: 1.2; }   /* three names in the panel's column; a narrower one wraps them */
 .ens-table .card-row { padding: 14px 16px 8px; }
 .ens-note { padding: 8px 16px 14px; }
 .ens-warn { color: var(--warn); }

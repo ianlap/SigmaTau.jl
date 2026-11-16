@@ -12,8 +12,8 @@ they report.
 
 - `method`: the estimator, one of the symbols below. Any other gives `NaN`.
 - `devs`: the deviations. Only their number is used.
-- `noises`: the noise type at each point (`:WHPM`, `:FLPM`, `:WHFM`,
-  `:FLFM`, `:RWFM`, `:FWFM` or `:RRFM`). Any other label counts as white FM.
+- `noises`: the noise type at each point (`:WPM`, `:FPM`, `:WFM`, `:FFM`,
+  `:RWFM`, `:FWFM` or `:RRFM`). Any other label counts as white FM.
 - `m_values`, `taus`: the averaging factor and averaging time of each point.
 - `N`, `T`: the number of phase samples and the record duration
   ``(N - 1)τ_0``.
@@ -116,7 +116,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
                 b, c, d, e = _coeff_mhtot(alpha)
                 s = tau / T
                 edfs[k] = b / s - c + d * s + e * s^3
-                alpha == 2 && m < 16 && (edfs[k] *= _MHTOT_WHPM_EDF_SMALL[m-1])
+                alpha == 2 && m < 16 && (edfs[k] *= _MHTOT_WPM_EDF_SMALL[m-1])
             end
         elseif method == :theo1
             edfs[k] = _theo1_edf(alpha, m, N)
@@ -132,16 +132,7 @@ function calculate_edf(method::Symbol, devs::Vector{Float64}, noises::Vector{Sym
     return edfs
 end
 
-function _alpha_from_noise(noise::Symbol)
-    if noise == :WHPM return 2 end
-    if noise == :FLPM return 1 end
-    if noise == :WHFM return 0 end
-    if noise == :FLFM return -1 end
-    if noise == :RWFM return -2 end
-    if noise == :FWFM return -3 end
-    if noise == :RRFM return -4 end
-    return 0
-end
+_alpha_from_noise(noise::Symbol) = get(_NOISE_ALPHA, noise, 0)
 
 # Greenhall and Riley (2003), "Uncertainty of stability variances based on
 # finite differences", §3: the EDF algorithm that Stable32 and allantools
@@ -406,16 +397,16 @@ _theo1_edf(alpha::Int, m::Int, N::Int) =
     m < 2 ? NaN : max(_theo1_edf_sp1065(alpha, 0.75 * m, Float64(N)), 1.0)
 
 function _theo1_edf_sp1065(alpha::Int, r::Float64, Nf::Float64)
-    if alpha == 2        # WHPM
+    if alpha == 2        # WPM
         return (0.86 * (Nf + 1.0) * (Nf - 4.0 * r / 3.0) / (Nf - r)) *
                (r / (r + 1.14))
-    elseif alpha == 1    # FLPM
+    elseif alpha == 1    # FPM
         return ((4.798 * Nf^2 - 6.374 * Nf * r + 12.387 * r) /
                 (sqrt(r + 36.6) * (Nf - r))) * (r / (r + 0.3))
-    elseif alpha == 0    # WHFM
+    elseif alpha == 0    # WFM
         return ((4.1 * Nf + 0.8) / r - (3.1 * Nf + 6.5) / Nf) *
                (r^1.5 / (r^1.5 + 5.2))
-    elseif alpha == -1   # FLFM
+    elseif alpha == -1   # FFM
         return ((2.0 * Nf^2 - 1.3 * Nf * r - 3.5 * r) / (Nf * r)) *
                (r^3 / (r^3 + 2.3))
     elseif alpha == -2   # RWFM
@@ -544,7 +535,7 @@ const _MHTOT_B_SMALL = (
 
 # Exact EDF of MHTOTVAR on white PM over the `_coeff_mhtot` model at
 # m = 2 … 15, where the model, fitted from m = 16, reads high.
-const _MHTOT_WHPM_EDF_SMALL = (0.654, 0.746, 0.878, 0.889, 0.941, 0.941, 0.968, 0.966, 0.982, 0.980, 0.991, 0.989, 0.997, 0.995)
+const _MHTOT_WPM_EDF_SMALL = (0.654, 0.746, 0.878, 0.889, 0.941, 0.941, 0.968, 0.966, 0.982, 0.980, 0.991, 0.989, 0.997, 0.995)
 
 # The total estimators on white and flicker PM, where nothing is published:
 # bias and EDF from the exact moments of each statistic
@@ -552,7 +543,7 @@ const _MHTOT_WHPM_EDF_SMALL = (0.654, 0.746, 0.878, 0.889, 0.941, 0.941, 0.968, 
 
 # N / EDF of the overlapping Allan variance on flicker PM for N ≫ m, in the
 # sampled-process model of Greenhall & Riley: a fit to their algorithm.
-_flpm_avar_g(m::Int) = (L = log(m); m / (0.789 + 0.276L + 0.204L^2))
+_fpm_avar_g(m::Int) = (L = log(m); m / (0.789 + 0.276L + 0.204L^2))
 
 # TOTVAR is AVAR plus the terms that reach the reflection. Each of those
 # carries an end sample at weight 2, so the two end samples add a variance
@@ -561,13 +552,13 @@ _flpm_avar_g(m::Int) = (L = log(m); m / (0.789 + 0.276L + 0.204L^2))
 function _totvar_pm_edf(alpha::Int, m::Int, N::Int)
     B2 = _total_bias(:totvar, alpha, m, N)^2
     alpha == 2 && return 72.0 * N^2 * B2 / (140N + 225m + 64.0 * m^2)
-    return B2 / (_flpm_avar_g(m) / N + 0.93 * (m / N)^2)
+    return B2 / (_fpm_avar_g(m) / N + 0.93 * (m / N)^2)
 end
 
 # TOTHVAR on PM: N/g interior terms, thinned as the 3m-sample windows come to
 # overlap (leveling at s = τ/T = s0) and again as the last windows run out.
 function _htot_pm_edf(alpha::Int, m::Int, N::Int)
-    g, c, s0, a, b = alpha == 2 ? (2.45, 2.0, 0.125, 1.0, 0.03) : (_flpm_avar_g(m), 2.5, 0.16, 0.6, 0.04)
+    g, c, s0, a, b = alpha == 2 ? (2.45, 2.0, 0.125, 1.0, 0.03) : (_fpm_avar_g(m), 2.5, 0.16, 0.6, 0.04)
     s = m / (N - 1)
     return _total_bias(:htot, alpha, m, N)^2 * (N / g) * (1 - a * exp(-(N - 3m) / (b * N))) / (1 + c * min(s, s0))
 end

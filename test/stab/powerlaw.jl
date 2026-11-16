@@ -23,7 +23,7 @@ using Random
     end
 
     @testset "spectra" begin
-        h = Dict(:WHPM => 1e-22, 0 => 1e-24, -2 => 1e-30)
+        h = Dict(:WPM => 1e-22, 0 => 1e-24, -2 => 1e-30)
         f = [1e-4, 1e-2, 1.0, 1e2]
         Sy = 1e-22 .* f .^ 2 .+ 1e-24 .+ 1e-30 ./ f .^ 2
         @test powerlaw_psd(h, f) ≈ Sy

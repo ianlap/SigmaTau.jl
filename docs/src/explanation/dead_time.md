@@ -36,7 +36,7 @@ estimates ``\sqrt{B_2(r, μ)\,B_3(2, M, r, μ)}`` times ``σ_y(Mτ_0)``. For
 ```@example deadtime
 using SigmaTau, Printf
 
-noises = [:WHPM, :WHFM, :FLFM, :RWFM]
+noises = [:WPM, :WFM, :FFM, :RWFM]
 println(rpad("M", 6), join(lpad.(noises, 8)))
 for M in (1, 4, 16, 64)
     println(rpad(M, 6), join(map(n -> @sprintf("%8.3f", sqrt(bias_b2(36, n) * bias_b3(2, M, 36, n))), noises)))
@@ -60,13 +60,13 @@ read for 16 s out of every 64 s:
 ```@example deadtime
 using Random
 
-y = noise_gen(FrequencyData, 2^17, 1.0; sigma1 = Dict(:FLFM => 1e-12),
+y = noise_gen(FrequencyData, 2^17, 1.0; sigma1 = Dict(:FFM => 1e-12),
               rng = MersenneTwister(7)).y
 readings = FrequencyData([sum(@view y[i:i+15]) / 16 for i in 1:64:length(y)-15], 16.0)
 
 ms = [1, 2, 4, 8, 16]
 uncorrected = adev(readings, ms; ci = false).dev
-corrected = adev(readings, ms; dead_time = 48, noise = :FLFM, ci = false).dev
+corrected = adev(readings, ms; dead_time = 48, noise = :FFM, ci = false).dev
 whole = adev(FrequencyData(y, 1.0), 16 .* ms; ci = false).dev
 println("   τ (s)   uncorrected     corrected  whole record")
 for i in eachindex(ms)
@@ -77,7 +77,7 @@ end
 The result is ``σ_y(τ)`` at ``τ = m\,τ_0``, the time measured, not at the
 ``m\,T_0`` that the readings span. On the command line the same correction
 is `sigmatau analyze --freq --devs adev --tau0 16 --dead-time 48 --noise
-FLFM`, where `--tau0` has to be given: the time column of such a file holds
+FFM`, where `--tau0` has to be given: the time column of such a file holds
 the period ``T_0``. In Python it is the `dead_time` keyword of `st.adev`.
 
 ## Where the correction holds

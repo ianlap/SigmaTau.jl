@@ -1,5 +1,5 @@
 # tools/mhtot_models.jl — exact bias and EDF of MHTOTDEV: the source of
-# `_MHTOT_B`, `_MHTOT_B_SMALL`, `_coeff_mhtot` and `_MHTOT_WHPM_EDF_SMALL` in
+# `_MHTOT_B`, `_MHTOT_B_SMALL`, `_coeff_mhtot` and `_MHTOT_WPM_EDF_SMALL` in
 # src/edf.jl. No random numbers.
 #
 #   julia -t auto tools/mhtot_models.jl        # about five minutes

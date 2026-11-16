@@ -105,13 +105,17 @@ Noise is modeled as a sum of power laws,
 
 | Label | Noise | ``α`` |
 |:---|:---|---:|
-| `:WHPM` | white phase modulation (PM) | 2 |
-| `:FLPM` | flicker PM | 1 |
-| `:WHFM` | white frequency modulation (FM) | 0 |
-| `:FLFM` | flicker FM | −1 |
+| `:WPM` | white phase modulation (PM) | 2 |
+| `:FPM` | flicker PM | 1 |
+| `:WFM` | white frequency modulation (FM) | 0 |
+| `:FFM` | flicker FM | −1 |
 | `:RWFM` | random-walk FM | −2 |
 | `:FWFM` | flicker-walk FM | −3 |
 | `:RRFM` | random-run FM | −4 |
+
+The older labels `:WHPM`, `:FLPM`, `:WHFM` and `:FLFM` are still accepted
+wherever a noise type is given, on the command line and in Python too, and
+read as `:WPM`, `:FPM`, `:WFM` and `:FFM`. Results carry the labels above.
 
 The Allan variance converges down to ``α = -2``. The last two labels exist
 for the Hadamard family, whose third difference converges down to

@@ -4,7 +4,7 @@
 // of the samples) or the autocorrelation of phase or frequency.
 import { state, update, activeClock, multi, markStale } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
-import { noiseLabel, noiseTitle, NOISE_LONG } from "../estimators.js";
+import { noiseTitle, NOISE_LONG } from "../estimators.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
 import { thousands, duration, timeAxisUnit, sci, num, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
 
@@ -155,7 +155,7 @@ function checkCard(c) {
 }
 
 // The noise types that the dead-time bias functions take.
-const DEAD_NOISES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM"];
+const DEAD_NOISES = ["WPM", "FPM", "WFM", "FFM", "RWFM"];
 
 // Frequency readings that each average over less than the interval between
 // them: the time unmeasured, and the noise type its correction assumes.
@@ -168,7 +168,7 @@ function deadBlock(c) {
     <label class="opt" title="Seconds between the end of one reading and the start of the next. The ADEV of the readings is divided by the bias functions √(B2·B3) for the noise type below"><span>Dead time (s)</span>
       <input type="number" step="any" data-field="dead_time" value="${t ?? ""}" placeholder="none" ${off ? "disabled" : ""}></label>
     <label class="opt" title="The bias functions depend on the noise type, which cannot be identified on readings with dead time"><span>Noise type</span>
-      <select data-field="dead_noise" ${off ? "disabled" : ""}>${DEAD_NOISES.map((n) => `<option value="${n}" title="${noiseTitle(n)}" ${n === c.dead_noise ? "selected" : ""}>${noiseLabel(n)}</option>`).join("")}</select></label>
+      <select data-field="dead_noise" ${off ? "disabled" : ""}>${DEAD_NOISES.map((n) => `<option value="${n}" title="${noiseTitle(n)}" ${n === c.dead_noise ? "selected" : ""}>${n}</option>`).join("")}</select></label>
     <div class="muted small">${note}</div>
   </div>`;
 }
@@ -348,13 +348,13 @@ function distReadings(got, what) {
       ["Std dev", sci(st.std, 4), "Standard deviation of the samples, with n − 1 in the denominator"],
       ...(st.quantity === "phase" ? [["Std dev (freq.)", sci(st.std_y, 4), "Standard deviation of the fractional frequency, the Std Dev of Stable32"]] : []),
       ["σ<sub>y</sub>(τ<sub>0</sub>)", sci(st.adev, 4), "Allan deviation at the sample interval"],
-      ["Noise", noiseLabel(st.noise_type), `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}</div>`;
+      ["Noise", st.noise_type, `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}</div>`;
   }
   const a = got.acf;
   return `<div aria-label="Autocorrelation">${[["τ", duration(a.tau), "m·τ₀"], ["Points", thousands(a.n), "Points in the series"],
     ["r<sub>1</sub>", a.r.length > 1 ? a.r[1].toFixed(3) : "–", "Autocorrelation at lag 1"],
     ["α", Number.isFinite(a.alpha) ? a.alpha.toFixed(2) : "–", "Lag-1 estimate of the power-law exponent (Riley and Greenhall); it needs a record of 30·m samples"],
-    ["Noise", noiseLabel(a.noise_type), `${noiseTitle(a.noise_type)}, identified at τ`]].map(kv).join("")}</div>`;
+    ["Noise", a.noise_type, `${noiseTitle(a.noise_type)}, identified at τ`]].map(kv).join("")}</div>`;
 }
 
 function distBar(c, what) {

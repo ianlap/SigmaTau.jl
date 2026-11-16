@@ -30,7 +30,7 @@ end
 Base.show(io::IO, ::MIME"text/plain", f::NoiseFit) = begin
     print(io, "NoiseFit to ", f.result.deviation_type, " (", length(f.components), " components)")
     for c in f.components
-        @printf(io, "\n  h%-3s %-5s %.4g  τ %.3g–%.3g s", string(c.alpha), _nnls_symbol(c.alpha),
+        @printf(io, "\n  h%-3s %-5s %.4g  τ %.3g–%.3g s", string(c.alpha), _noise_symbol(c.alpha),
                 c.h, f.result.tau[first(c.range)], f.result.tau[last(c.range)])
     end
 end
@@ -60,8 +60,8 @@ that was added after it.
 using SigmaTau
 p = noise_gen(PhaseData, 65536, 1.0; h = Dict(2 => 1e-22, 0 => 1e-24, -2 => 1e-30))
 f = noise_fit(mhdev(p))
-add_component!(f, :WHPM, 1:3)      # white PM on the first three τ
-add_component!(f, :WHFM, 4:9)
+add_component!(f, :WPM, 1:3)       # white PM on the first three τ
+add_component!(f, :WFM, 4:9)
 add_component!(f, :RWFM, 11:14)
 undo!(f)                           # take random-walk FM back out
 clock_model(f)
@@ -126,7 +126,7 @@ end
 """
     add_component!(f::NoiseFit, noise, range) → NoiseFit
 
-Add power law `noise` (an α, or a name such as `:WHFM`) to the model,
+Add power law `noise` (an α, or a name such as `:WFM`) to the model,
 fitted at τ indices `range`, and refit the levels already there. Points
 where the residual is not positive are skipped.
 """

@@ -204,7 +204,7 @@ at the longest averaging times of the table, for the records labeled
 flicker or random-walk FM. Stating the noise type removes both effects:
 
 ```julia
-htotdev(p; noise = :WHPM)
+htotdev(p; noise = :WPM)
 ```
 
 ## Other conventions

@@ -215,13 +215,16 @@ mktempdir() do dir
             @test parse.(Float64, getindex.(rows, 5)) == ref.dev
         end
         @test run_cli("analyze", pf, "--bias", "sp1065").code == 1
-        for (word, noise) in (("FLFM", :FLFM), ("fit", powerlaw_fit(pd)))
+        for (word, noise) in (("FFM", :FFM), ("fit", powerlaw_fit(pd)))
             ref = mtotdev(pd, [3, 9]; noise=noise)
             rows = csv_rows(run_cli("analyze", pf, "--devs", "mtotdev", "--m", "3,9", "--noise", word).out)
             @test parse.(Float64, getindex.(rows, 5)) == ref.dev
             @test parse.(Float64, getindex.(rows, 8)) == ref.edf
         end
         @test run_cli("analyze", pf, "--noise", "pink").code == 1
+        # An older name reads as the new one.
+        @test run_cli("analyze", pf, "--devs", "mtotdev", "--m", "3,9", "--noise", "FLFM").out ==
+              run_cli("analyze", pf, "--devs", "mtotdev", "--m", "3,9", "--noise", "FFM").out
     end
 
     @testset "frequency input" begin
@@ -235,16 +238,16 @@ mktempdir() do dir
         @test parse.(Float64, getindex.(csv_rows(r.out), 5)) ≈ ref.dev rtol=1e-12
         # --dead-time is the dead_time keyword of adev.
         dead = ("--freq", "--tau0", "1", "--devs", "adev", "--m", "1,2,4", "--dead-time", "3")
-        r = run_cli("analyze", ff, dead..., "--noise", "FLFM")
-        ref = adev(FrequencyData(diff(X), 1.0), [1, 2, 4]; dead_time=3, noise=:FLFM)
+        r = run_cli("analyze", ff, dead..., "--noise", "FFM")
+        ref = adev(FrequencyData(diff(X), 1.0), [1, 2, 4]; dead_time=3, noise=:FFM)
         @test parse.(Float64, getindex.(csv_rows(r.out), 5)) ≈ ref.dev rtol=1e-12
         @test parse.(Float64, getindex.(csv_rows(r.out), 7)) ≈ [c.hi for c in ref.ci] rtol=1e-12
-        @test occursin("\"dead_time\":3", run_cli("analyze", ff, dead..., "--noise", "FLFM", "--format", "json").out)
+        @test occursin("\"dead_time\":3", run_cli("analyze", ff, dead..., "--noise", "FFM", "--format", "json").out)
         @test run_cli("analyze", ff, dead...).code == 1                                   # noise not stated
-        @test run_cli("analyze", ff, dead[1:end-2]..., "--dead-time", "-1", "--noise", "FLFM").code == 1
-        @test run_cli("analyze", ff, "--freq", "--tau0", "1", "--dead-time", "3", "--noise", "FLFM").code == 1   # not adev alone
-        @test run_cli("analyze", ff, dead[1:1]..., dead[4:end]..., "--noise", "FLFM").code == 1                   # no --tau0
-        @test run_cli("analyze", pf, dead[2:end]..., "--noise", "FLFM").code == 1         # phase record
+        @test run_cli("analyze", ff, dead[1:end-2]..., "--dead-time", "-1", "--noise", "FFM").code == 1
+        @test run_cli("analyze", ff, "--freq", "--tau0", "1", "--dead-time", "3", "--noise", "FFM").code == 1    # not adev alone
+        @test run_cli("analyze", ff, dead[1:1]..., dead[4:end]..., "--noise", "FFM").code == 1                    # no --tau0
+        @test run_cli("analyze", pf, dead[2:end]..., "--noise", "FFM").code == 1          # phase record
     end
 
     @testset "analyze -> JSON" begin
@@ -257,6 +260,7 @@ mktempdir() do dir
             @test occursin(k, r.out)
         end
         @test !occursin("\"spectrum\"", r.out)
+        @test occursin("\"label\":\"Thêo1\"", run_cli("analyze", pf, "--devs", "theo1", "--format", "json").out)
         @test !occursin("\"series\"", r.out)
         r = run_cli("analyze", pf, "--format=json", "--spectrum", "--series", "10")
         @test r.code == 0
@@ -282,12 +286,13 @@ mktempdir() do dir
         r = run_cli("analyze", ff, "--format=json", "--devs", "mhdev", "--fit")
         @test r.code == 0 && occursin("\"curves\":[{\"deviation\":\"mhdev\"", r.out)
         @test occursin("\"clock_model\":null}", r.out)
-        r = run_cli("analyze", "--synth", "4096", "--format=json", "--devs", "mhdev", "--component", "WHFM::64", "--component", "-2:256:")
+        r = run_cli("analyze", "--synth", "4096", "--format=json", "--devs", "mhdev", "--component", "WFM::64", "--component", "-2:256:")
         @test r.code == 0
         @test occursin("\"alphas\":[0,-2],\"h\":[", r.out) && occursin("\"mode\":\"components\"", r.out)
         @test occursin("\"components\":[{\"alpha\":0,", r.out) && occursin("\"residual\":{\"tau\":[", r.out)
         @test occursin("\"clock_model\":{\"R\":0.0,\"q1\":", r.out) && occursin("\"q2\":", r.out)
-        @test occursin("\"error\":", run_cli("analyze", pf, "--format=json", "--component", "WHFM:1e9:").out)
+        @test occursin("\"error\":", run_cli("analyze", pf, "--format=json", "--component", "WFM:1e9:").out)
+        @test occursin("\"components\":[{\"alpha\":-1,", run_cli("analyze", pf, "--format=json", "--component", "FLFM::").out)
         @test run_cli("analyze", pf, "--format=json", "--component", "PINK:1:2").code == 1
         r = run_cli("analyze", pf, "--format=json", "--devs", "adev,tdev,mtie", "--mask", "G8262_opt1")
         @test r.code == 0 && occursin("\"masks\":[{\"name\":\"G8262_opt1\"", r.out)
@@ -1148,8 +1153,8 @@ mktempdir() do dir
         # One row: names and values, the empty ones left out.
         d = at_tty("drift", "--synth", "1024").out
         @test occursin(r"^model +linear$"m, d) && occursin(r"^n +1023$"m, d) && !occursin(r"^c "m, d)
-        @test SigmaTauCLI.table_cell.(["3204.04", "16384.0", "3.317110852079418e-10", "", "WHFM"]) ==
-              ["3204", "16384", "3.317e-10", "-", "WHFM"]
+        @test SigmaTauCLI.table_cell.(["3204.04", "16384.0", "3.317110852079418e-10", "", "WFM"]) ==
+              ["3204", "16384", "3.317e-10", "-", "WFM"]
         @test SigmaTauCLI.csv_fields("\"a,b\",\"say \"\"hi\"\"\",3") == ["a,b", "say \"hi\"", "3"]
     end
 
@@ -1223,7 +1228,7 @@ mktempdir() do dir
             end
             for args in (["analyze", pf, "--devs", "adev,mdev,tdev,totdev,theo1"],
                          ["analyze", pf, "--devs", "totdev,mtotdev,theo1", "--bias", "stable32"],
-                         ["analyze", pf, "--devs", "adev,htotdev,theoh", "--noise", "FLFM"],
+                         ["analyze", pf, "--devs", "adev,htotdev,theoh", "--noise", "FFM"],
                          ["analyze", pf, "--devs", "mdev,mhtotdev", "--noise", "fit"],
                          ["analyze", pf, "--format", "json", "--spectrum", "--series", "100"],
                          ["check", pf, "--format", "json"],

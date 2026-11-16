@@ -25,7 +25,7 @@ const CIB = @NamedTuple{lo::Float64, hi::Float64}
     end
 
     @testset "StabilityResult" begin
-        r = StabilityResult(:adev, [1.0, 2.0], [0.5, 0.4], [:WHFM, :WHFM],
+        r = StabilityResult(:adev, [1.0, 2.0], [0.5, 0.4], [:WFM, :WFM],
                             CIB[(lo=0.4, hi=0.6), (lo=0.3, hi=0.5)], [10.0, 5.0], [10, 8])
         @test (ci_lower(r), ci_upper(r)) == ([0.4, 0.3], [0.6, 0.5])
         r0 = StabilityResult(:adev, [1.0], [0.5], Symbol[], CIB[], Float64[], [10])
@@ -42,12 +42,12 @@ const CIB = @NamedTuple{lo::Float64, hi::Float64}
     @testset "text/plain table" begin
         # Aligned table rounded to %.4g for display; stored values keep full precision.
         r = StabilityResult(:adev, [1.0, 2.0], [3.14159265e-10, 2.71828182e-10],
-                            [:WHFM, :WHFM],
+                            [:WFM, :WFM],
                             CIB[(lo=2.5e-10, hi=4.2e-10), (lo=2.2e-10, hi=3.5e-10)],
                             [10.123456, 5.654321], [98, 96])
         s = sprint(show, MIME"text/plain"(), r)
         @test all(occursin(s), ("tau", "dev", "neff", "ci_lo", "ci_hi", "edf", "noise",
-                                "3.142e-10", "10.12", "WHFM", "98"))
+                                "3.142e-10", "10.12", "WFM", "98"))
         @test !occursin("3.14159265e-10", s)
 
         sno = sprint(show, MIME"text/plain"(),

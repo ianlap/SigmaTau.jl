@@ -30,7 +30,7 @@ whose noise is ten times larger in power:
 using SigmaTau, Random
 
 N = 65536
-wfm(h, seed) = noise_gen(FrequencyData, N, 1.0; h = Dict(:WHFM => h),
+wfm(h, seed) = noise_gen(FrequencyData, N, 1.0; h = Dict(:WFM => h),
                          rng = Xoshiro(seed)).y
 device, ref1, ref2 = wfm(1e-24, 2), wfm(1e-23, 3), wfm(1e-23, 4)
 a = FrequencyData(device .- ref1, 1.0)

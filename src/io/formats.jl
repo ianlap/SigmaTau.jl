@@ -51,8 +51,9 @@ const _SCPI_REAL = r"^[+-]\d\.\d+E[+-]\d+$"
 # measurement.
 _scpi_nan(v::Float64) = v == 9.91e37 ? NaN : v
 
-# The header of a BIPM UTC - UTC(k) file: "MJD  [UTC-UTC(NIST)]/ns  uA/ns  uB/ns  u/ns".
-const _BIPM_UTC_HEAD = r"^\s*MJD\s+\[UTC-UTC\(.+\)\]\s*/\s*ns"i
+# The header of a BIPM UTC - UTC(k) file, "MJD  [UTC-UTC(NIST)]/ns  uA/ns  uB/ns  u/ns",
+# or of a rapid UTC file, "# MJD  [UTCr-UTC(NIST)]/ns".
+const _BIPM_UTC_HEAD = r"^\s*#?\s*MJD\s+\[UTCr?-UTC\(.+\)\]\s*/\s*ns"i
 
 const _TIMELAB_FIELD = r"^(STR|DBL|S32|BLN|S64|U32) 0x[0-9A-Fa-f]+ \"([^\"]*)\"\s?(.*)$"
 
@@ -74,7 +75,7 @@ the table, and the first that holds decides.
 |:-------------|:-----------------------------------------------------------------------|
 | `:timelab`   | a `TIC` block after header fields such as `DBL 0x… "Sample Interval" 0.1` |
 | `:stable32`  | the extension `.phd` or `.frd`                                         |
-| `:bipm_utc`  | a heading `MJD  [UTC-UTC(k)]/ns` in the first five lines               |
+| `:bipm_utc`  | a heading `MJD  [UTC-UTC(k)]/ns` or `MJD  [UTCr-UTC(k)]/ns` in the first five lines |
 | `:rinex_clk` | a `RINEX VERSION / TYPE` line of type `C` in the first five lines      |
 | `:counter`   | one or two fields on every line, the last a reading such as `+1.00000000012345E+07` and the first, if any, a number or an ISO 8601 timestamp |
 | `:table`     | a line of column names above rows of numbers                           |
@@ -391,9 +392,10 @@ end
 
 # A BIPM UTC - UTC(k) file: rows of an integer MJD and the difference in ns,
 # then uncertainties and notes that vary from row to row ("+/-", a Circular T
-# tag), so only the first two fields count; the header, blank lines and the
-# DOS end-of-file mark are skipped. The record is phase in seconds on the MJD
-# axis (five days apart), a missing row a gap.
+# tag, a "# erroneous value" remark), so only the first two fields count; the
+# header, blank lines and the DOS end-of-file mark are skipped. The record is
+# phase in seconds on the MJD axis (five days apart, or one for rapid UTC), a
+# missing row a gap.
 function _read_bipm_utc(path::AbstractString, tau0::Float64, fillgaps::Bool)
     t = Float64[]; v = Float64[]
     io = open(path, "r")
@@ -534,8 +536,8 @@ its record, phase or frequency as the file has it. The format is found by
 - `:table`: columns under a line of names, as in a CSV export, described
   below.
 - `:bipm_utc`: a `UTC - UTC(k)` file of the BIPM, with one row every five
-  days that holds the MJD and the difference in nanoseconds. The record is
-  phase in seconds.
+  days that holds the MJD and the difference in nanoseconds, or a rapid UTC
+  file `UTCr - UTC(k)` with one row a day. The record is phase in seconds.
 - `:rinex_clk`: a RINEX clock file. The record is the clock bias, in
   seconds, of one satellite (`AS` records) or station (`AR` records),
   chosen by `column`. Exponents written with `D` are read. A compressed

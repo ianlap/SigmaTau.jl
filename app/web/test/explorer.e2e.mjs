@@ -179,6 +179,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
 
   await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
     await page.click("[data-ctl=view][data-v=hat]");
+    // The view switch spans the column of the controls around it, and no further.
+    await openPanel();
+    const [view, column] = await page.evaluate(() => [".ens-view", ".ens-view + .opt"].map((s) => document.querySelector(s).getBoundingClientRect()).map((r) => [r.left, r.right]));
+    assert.deepEqual(view.map(Math.round), column.map(Math.round));
     await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]").data?.some((d) => d.name === "Pairs, as measured"), null, SLOW);
     assert.equal(await page.locator("#page [data-ref=title]").innerText(), "ADEV of each clock");
     const shown = await page.evaluate(() => document.querySelector("#page [data-ref=adev]").data.filter((d) => /^clock \d$/.test(d.name)).map((d) => d.y));
@@ -383,14 +387,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.locator("#record-chip-text", { hasText: /counter\.csv.*τ0 10 s/ }).waitFor(SLOW);   // the new record, not the last one
     await page.fill("input[data-field=dead_time]", "6");
     await page.press("input[data-field=dead_time]", "Tab");
-    await page.selectOption("select[data-field=dead_noise]", "FLFM");
+    await page.selectOption("select[data-field=dead_noise]", "FFM");
     await page.locator(".dead-block", { hasText: "Readings average 4 s every 10 s" }).waitFor(SLOW);
     await page.click("a[data-page=stability]");
     await page.click(".run-btn");
     await settled();
     assert.match(await page.locator("#page [data-ref=caption]").innerText(), /ADEV alone, corrected for 6 s of dead time \(FFM\)/);
     const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ADEV"));
-    const doc = JSON.parse(execFileSync(CLI, ["analyze", file, "--freq", "--header", "1", "--tau0", "4", "--dead-time", "6", "--noise", "FLFM", "--devs", "adev", "--format", "json"]));
+    const doc = JSON.parse(execFileSync(CLI, ["analyze", file, "--freq", "--header", "1", "--tau0", "4", "--dead-time", "6", "--noise", "FFM", "--devs", "adev", "--format", "json"]));
     assert.deepEqual([shown.x, shown.y], [doc.results[0].points.map((p) => p.tau), doc.results[0].points.map((p) => p.dev)]);
     await page.click("a[data-page=spectrum]");
     await page.locator("#page [data-ref=empty]", { hasText: "readings with dead time" }).waitFor(SLOW);

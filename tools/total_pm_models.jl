@@ -14,7 +14,7 @@
 # residuals are printed.
 using LinearAlgebra, Printf
 
-const CONST = (kappa=0.93, c_flpm=4.75,
+const CONST = (kappa=0.93, c_fpm=4.75,
                htot=Dict(2 => (c=2.0, s0=0.125, a=1.0, b=0.03), 1 => (c=2.5, s0=0.16, a=0.6, b=0.04)))
 
 # F with Σ = FF' for n phase samples. White PM is the identity. Flicker PM is
@@ -127,10 +127,10 @@ cw = lsq(hcat(odd, -odd ./ ms, .!odd, -.!odd ./ ms), Bw)
 println("\nTOTHVAR bias")
 @printf("  white PM: B = %.4f − %.4f/m (odd m), %.4f − %.4f/m (even m): largest residual %.2f %%\n", cw...,
         worst(hcat(odd, -odd ./ ms, .!odd, -.!odd ./ ms) * cw, Bw))
-Lc = CONST.c_flpm .+ log.(ms)
+Lc = CONST.c_fpm .+ log.(ms)
 X = hcat(1 ./ Lc, log.(ms) ./ Lc, -odd ./ ms, -.!odd ./ ms)
 cf = lsq(X, Bf)
-@printf("  flicker PM: B = (%.3f + %.3f ln m)/(%.2f + ln m) − %.3f/m (odd m) or %.3f/m (even m)\n", cf[1], cf[2], CONST.c_flpm, cf[3], cf[4])
+@printf("  flicker PM: B = (%.3f + %.3f ln m)/(%.2f + ln m) − %.3f/m (odd m) or %.3f/m (even m)\n", cf[1], cf[2], CONST.c_fpm, cf[3], cf[4])
 @printf("    largest residual, m ≥ 16: %.1f %% (sampled), %.1f %% (Kasdin); m = 2: %+.1f %%, %+.1f %%\n",
         (worst((X*cf)[ms .>= 16], hb.(n, ms[ms .>= 16])) for n in (:sampled, :kasdin))..., (100 * ((X*cf)[1] / hb(n, 2) - 1) for n in (:sampled, :kasdin))...)
 

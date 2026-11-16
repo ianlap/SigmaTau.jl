@@ -71,11 +71,12 @@ function sizeKind(columns) {
   return readings.length && readings.every((c) => med(c) < 1e-11) ? "frequency" : null;
 }
 
-// A BIPM UTC - UTC(k) file ("MJD  [UTC-UTC(NIST)]/ns  uA/ns …"): an integer MJD and the
+// A BIPM UTC - UTC(k) file ("MJD  [UTC-UTC(NIST)]/ns  uA/ns …"), or a rapid UTC file
+// ("# MJD  [UTCr-UTC(NIST)]/ns", one row a day): an integer MJD and the
 // difference in ns per row, then uncertainty and note columns that vary by row, so the
 // generic column reader cannot take it; the core reads it by its layout (bipm_utc).
-const BIPM_HEAD = /^\s*MJD\s+\[UTC-UTC\((.+?)\s*\)\]\s*\/\s*ns/i;
-function sniffBipm(name, lines, lab) {
+const BIPM_HEAD = /^\s*#?\s*MJD\s+\[(UTCr?)-UTC\((.+?)\s*\)\]\s*\/\s*ns/i;
+function sniffBipm(name, lines, [, scale, lab]) {
   const rows = [], mjd = [], ns = [];
   for (const l of lines) {
     const f = l.trim().split(/\s+/);
@@ -86,9 +87,9 @@ function sniffBipm(name, lines, lab) {
   const head = lines.findIndex((l) => BIPM_HEAD.test(l));
   return {
     name, lines: lines.length, delimName: "whitespace-separated", comments: 0, header: 0, namesLine: 0,
-    names: ["MJD", `UTC-UTC(${lab}) (ns)`], top: [{ ln: head + 1, text: lines[head].trim() }], rows,
+    names: ["MJD", `${scale}-UTC(${lab}) (ns)`], top: [{ ln: head + 1, text: lines[head].trim() }], rows,
     nRows: mjd.length, nCols: 2, columns: [mjd, ns], bad: null, tau0Hint: null,
-    format: "bipm_utc", formatLabel: `BIPM UTC − UTC(${lab})`, kindHint: "phase", stable32: false,
+    format: "bipm_utc", formatLabel: `BIPM ${scale} − UTC(${lab})`, kindHint: "phase", stable32: false,
   };
 }
 
@@ -130,7 +131,7 @@ export function sniff(name, text) {
   if (lines.length && lines[lines.length - 1] === "") lines.pop();
   if (lines.slice(0, 5).some((l) => RINEX_HEAD.test(l))) return sniffRinex(name, lines);
   const bipm = lines.slice(0, 5).map((l) => BIPM_HEAD.exec(l)).find(Boolean);
-  if (bipm) return sniffBipm(name, lines, bipm[1]);
+  if (bipm) return sniffBipm(name, lines, bipm);
   const [split, delimName] = splitter(name, lines);
 
   let comments = 0;
@@ -201,7 +202,7 @@ export function sniff(name, text) {
 // The scale a column name states: "(ns)", "[ps]" for time, "ppb" for frequency.
 const NAME_UNITS = [[/[(\[]\s*ns\s*[)\]]/i, 1e-9], [/[(\[]\s*(?:us|µs|μs)\s*[)\]]/i, 1e-6], [/[(\[]\s*ms\s*[)\]]/i, 1e-3],
   [/[(\[]\s*ps\s*[)\]]/i, 1e-12], [/ppb/i, 1e-9], [/ppm/i, 1e-6], [/ppt/i, 1e-12]];
-const READING = /phase|freq|value|^[xy]$|UTC-UTC\(/i, FREQ_NAME = /freq|^y$/i;
+const READING = /phase|freq|value|^[xy]$|UTCr?-UTC\(/i, FREQ_NAME = /freq|^y$/i;
 const unitOf = (name) => (NAME_UNITS.find(([re]) => re.test(name)) ?? [null, 1])[1];
 
 // The name a clock gets from its column: the unit and the word for the kind of
@@ -231,7 +232,7 @@ export function guessRoles(s) {
   const nm = (c) => s.names[c - 1] ?? "";
   // A clock column that only drifts upward is increasing too, so names count:
   // a column named for a phase or frequency is never time.
-  const reading = (c) => /phase|freq|ratio|value|offset|clock|^[xy]$|UTC-UTC\(/i.test(nm(c));
+  const reading = (c) => /phase|freq|ratio|value|offset|clock|^[xy]$|UTCr?-UTC\(/i.test(nm(c));
   const timeLike = cand.filter((c) => !reading(c));
   // A column named like elapsed seconds wins; then the first increasing
   // column that is not MJD; then the first one, read in days when it is MJD.
