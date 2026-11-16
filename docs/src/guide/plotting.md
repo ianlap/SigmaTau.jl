@@ -62,6 +62,9 @@ Beside the σ_y estimators they get axes of their own:
 plot(stability(p; devs = (:adev, :mdev, :tdev)); legend = :bottomleft)
 ```
 
+Such a figure has two panels, so `plot!` cannot add a mix of the two kinds
+to a figure of one: draw them together, or give `plot!` one kind.
+
 ## A reference line
 
 The slope of a curve names the noise

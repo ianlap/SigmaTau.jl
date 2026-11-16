@@ -79,6 +79,8 @@ const _TIME = Set(e.name for e in estimators() if e.axis === :sigma_x)
     if split
         layout --> (1, 2)
         size --> (800, 360)
+        left_margin --> (5, :mm)        # room for the axis titles beside two panels
+        bottom_margin --> (5, :mm)
     end
     for (i, r) in enumerate(results)
         same_axis = results[time .== time[i]]

@@ -68,6 +68,7 @@ using RecipesBase
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), [r, tdev(pd, [1, 2, 4, 8]), r0])
         pa = [rdi.plotattributes for rdi in rd]
         @test pa[1][:layout] == (1, 2) && [p[:subplot] for p in pa] == [1, 2, 1]
+        @test pa[1][:left_margin] == pa[1][:bottom_margin] == (5, :mm)
         @test [p[:ylabel] for p in pa] == ["Deviation", "Deviation (s)", "Deviation"]
         @test pa[1][:yticks] == pa[3][:yticks]
     end
