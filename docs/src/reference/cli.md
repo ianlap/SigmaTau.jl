@@ -495,7 +495,7 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 
 | Option | Meaning |
 |:---|:---|
-| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4`. In a table with named columns each is read by its number as `--column` reads one by its name, with the unit in its name |
+| `--value-cols LIST` | columns of the clocks, two or more, each read against the same reference: `2,3,4`. In a table with named columns each is read by its number as `--column` reads one by its name, with the unit in its name, and is named by its column name in the output. Without the option, the error lists the columns by number |
 | `--algorithm ALG` | `at1` (the default), `at2`, `ewfa`, `greenhall`, `jones_tryon` or `stein`, the algorithms of [`timescale`](@ref) |
 | `--wmax W` | with `at1`, `at2` or `stein`, the largest weight that one clock may take, from 1 over the number of clocks to 1. By default 1, which sets no limit |
 | `--steps MODE` | with `at2`, detect frequency steps of the clocks: `best` or `real` |

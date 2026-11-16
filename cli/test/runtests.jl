@@ -491,6 +491,15 @@ mktempdir() do dir
             @test r.code == 0 && occursin("\"tau0\":432000.0,\"n\":64,", r.out)
         end
         @test run_cli("timescale", nf, "--value-cols", "2,3", "--column", "a (ns)").code == 1
+        # The clocks of a table go by the names on its first line, and without
+        # --value-cols the columns are listed by number.
+        @test getindex.(csv_rows(run_cli("timescale", nf, "--value-cols", "2,3,4").out), 1) == ["a (ns)", "b (ns)", "c (ns)"]
+        @test getindex.(csv_rows(run_cli("hat", nf, "--value-cols", "2,3,4", "--devs", "adev", "--m", "1").out), 1) ==
+              ["a (ns)", "b (ns)", "c (ns)", "reference"]
+        for cmd in ("timescale", "hat")
+            r = run_cli(cmd, nf)
+            @test r.code == 1 && occursin("needs --value-cols", r.err) && occursin("the columns of this file are 1 MJD, 2 a (ns), 3 b (ns), 4 c (ns)", r.err)
+        end
         # Errors name the command line's flags, not read_data's keyword.
         r = run_cli("analyze", nf)
         @test r.code == 2 && occursin("pass --column with one of MJD, a (ns)", r.err) && !occursin("column=", r.err)
