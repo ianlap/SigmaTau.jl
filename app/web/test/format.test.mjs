@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { inWords, startText, hertz } = await import("../ui/js/format.js");
+const { inWords, startText, duration, interval, timeAxisUnit, hertz } = await import("../ui/js/format.js");
 
 test("the core's refusals are said without flags and function names", () => {
   assert.equal(inWords("--algorithm greenhall fits a model per clock and needs three or more clocks"), "Greenhall fits a model to each clock and needs three or more clocks.");
@@ -19,6 +19,17 @@ test("a start time is rounded to the microsecond and keeps no float noise", () =
   assert.equal(startText("2022-03-08T23:59:59.9999996Z"), "2022-03-09 00:00:00Z");
   assert.equal(startText("2022-03-08T23:00:01Z"), "2022-03-08 23:00:01Z");
   assert.equal(startText("2022-03-08T23:00:01.5"), "2022-03-08 23:00:01.5");
+});
+
+test("a long record is told in days and years, a sample interval in seconds up to a day", () => {
+  assert.equal(duration(90), "90 s");
+  assert.equal(duration(900e6), "28.5 yr");
+  assert.equal(duration(10500 * 86400), "28.7 yr");
+  assert.equal(duration(400 * 86400), "400 d");
+  assert.equal(interval(0.1), "0.1 s");
+  assert.equal(interval(4.32e5), "5 d");
+  assert.deepEqual(timeAxisUnit(2.5e6), [86400, "d"]);
+  assert.deepEqual(timeAxisUnit(NaN), [1, "s"]);
 });
 
 test("a frequency is said in its unit", () => {

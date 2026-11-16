@@ -69,6 +69,7 @@ export function baseLayout() {
     legend: {
       bgcolor: css("--bg-card"), bordercolor: css("--line"), borderwidth: 1,
       x: 0.98, xanchor: "right", y: 0.98, yanchor: "top", font: { size: 11.5 },
+      traceorder: "normal",   // a trace with a filled band would reverse the list
     },
     modebar: { bgcolor: "rgba(0,0,0,0)", color: css("--muted"), activecolor: css("--accent") },
     showlegend: false,

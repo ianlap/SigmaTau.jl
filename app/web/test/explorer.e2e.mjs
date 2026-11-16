@@ -395,13 +395,13 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const n = errors.length;
     await page.click("a[data-page=holdover]");
     await page.click('[data-ctl=kalman][data-v="1"]');
-    const note = page.locator("#page [data-ref=note]", { hasText: "a phase (s)" });
+    const note = page.locator("#page [data-ref=note]", { hasText: "No holdover test for a:" });
     await note.waitFor(SLOW);
     assert.match(await note.innerText(), /noise model has 0 usable τ points/);
-    await page.waitForFunction(() => { const n = document.querySelector("#page [data-ref=plot]")?.data?.map((d) => d.name) ?? []; return ["b", "c"].every((k) => n.some((x) => x.startsWith(`${k} phase (s)`))); }, null, SLOW);
-    assert.ok(!(await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.some((d) => d.name.startsWith("a phase (s)")))));
+    await page.waitForFunction(() => { const n = document.querySelector("#page [data-ref=plot]")?.data?.map((d) => d.name) ?? []; return ["b", "c"].every((k) => n.some((x) => x.startsWith(`${k},`))); }, null, SLOW);
+    assert.ok(!(await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.some((d) => d.name.startsWith("a,")))));
     await page.click("a[data-page=steering]");
-    await page.locator("#page [data-ref=note]", { hasText: "No steering replay for a phase (s)" }).waitFor(SLOW);   // Steering's own note, not Holdover's on its way out
+    await page.locator("#page [data-ref=note]", { hasText: "No steering replay for a:" }).waitFor(SLOW);   // Steering's own note, not Holdover's on its way out
     await plotted("#page [data-ref=plot]");
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });

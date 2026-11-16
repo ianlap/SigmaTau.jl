@@ -110,7 +110,7 @@ The sample interval of a simulated record is `--tau0`, or 1 s.
 
 | Option | Meaning |
 |:---|:---|
-| `--format FMT` | `csv`, the default, or `json` |
+| `--format FMT` | `table`, the default at a terminal: the CSV laid out for reading, aligned, with numbers to four significant digits and each column that holds one value on every row said once above; `csv`, the default in a pipe or with `--out`; or `json` |
 | `--out PATH` | write to a file. By default the output goes to standard output |
 | `--series N` | include samples of the record in the JSON output, about `N`, for a plot |
 | `--quiet` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
@@ -239,7 +239,15 @@ outside the range of the recommendation. Each entry of `checks` is one result ag
 | `--m M` | with `--acf`, the averaging factor, 1 by default |
 | `--lags K` | with `--acf`, the largest lag. By default half the series, and at most 1000 |
 
-The record needs three samples or more. The CSV output is one row:
+The record needs three samples or more. `check` also says what the size and
+the names of the record suggest about its units, since a phase of
+nanoseconds, radians or hertz read as it is gives numbers that look
+plausible: a phase that moves by more than a second, a fractional frequency
+above ``10^{-3}``, or a file or `--column` name that says `rad`, `ns`, `ps`,
+`ppb`, `ppm` or `Hz` while `--scaling` is 1. The CSV output prints each as a
+line `sigmatau: warning: …` on standard error, unless `--quiet` is given, and
+the JSON output lists them as `warnings`, an empty list when there are none.
+The CSV output is one row:
 
 ```text
 source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type

@@ -3,6 +3,8 @@
 // extension, else runs of whitespace) so the preview shows the columns the
 // core will see; the real parse happens in the core.
 
+import { num } from "./format.js";
+
 const PREVIEW_ROWS = 9;
 
 function splitter(name, lines) {
@@ -222,6 +224,16 @@ const NAME_UNITS = [[/[(\[]\s*ns\s*[)\]]/i, 1e-9], [/[(\[]\s*(?:us|µs|μs)\s*[)
 const READING = /phase|freq|value|^[xy]$|UTC-UTC\(/i, FREQ_NAME = /freq|^y$/i;
 const unitOf = (name) => (NAME_UNITS.find(([re]) => re.test(name)) ?? [null, 1])[1];
 
+// The name a clock gets from its column: the unit and the word for the kind of
+// reading are taken off ("maser1 phase (s)" is maser1, "UTC-UTC(NIST) (ns)" is
+// UTC-UTC(NIST)), since the record already knows both. If that leaves two
+// columns with one name, or none, the headings stay as they are.
+const UNIT_TAIL = /\s*[(\[]\s*(?:[nuµμmpf]?s|Hz|pp[mbt]|1)\s*[)\]]$/i, KIND_TAIL = /\s+(?:phase|freq(?:uency)?)$/i;
+export function clockLabels(names) {
+  const short = names.map((n) => { const u = n.replace(UNIT_TAIL, ""); return u.replace(KIND_TAIL, "") || u; });
+  return short.every(Boolean) && new Set(short).size === short.length ? short : names;
+}
+
 // Guess which columns hold time and value: a strictly increasing first column
 // is time; the value is the next column that is not constant. `values` lists
 // every clock the names show: all columns named for a reading ("maser1 phase (s)",
@@ -377,6 +389,23 @@ export function parseFactor(text) {
   };
   const v = tok.length ? expr() : NaN;
   return i === tok.length && Number.isFinite(v) && v > 0 ? v : NaN;
+}
+
+// What the size and the names of the readings say about their unit, for the
+// dialog: the checks of `sigmatau check`. `scale` multiplies the readings;
+// `names` are the file's and the clocks' names; `columns` the clocks' readings.
+const UNIT_NAMES = ["rad", "ns", "ps", "ppb", "ppm", "hz"];
+export function unitNotes({ names, kind, scale, columns }) {
+  const notes = [];
+  if (scale === 1) {
+    const words = names.join(" ").toLowerCase().split(/[^a-z]+/);
+    for (const w of UNIT_NAMES) if (words.includes(w)) notes.push(`The name says ${w}, but the readings are taken as ${kind === "phase" ? "seconds" : "fractional frequency"}.`);
+  }
+  let lo = Infinity, hi = -Infinity;
+  for (const col of columns) for (const v of col) if (Number.isFinite(v) && Math.abs(v) !== 9.91e37) { lo = Math.min(lo, v * scale); hi = Math.max(hi, v * scale); }
+  if (kind === "phase" && hi - lo > 1) notes.push(`The phase moves by ${num(hi - lo, 3)} s over the record.`);
+  if (kind === "frequency" && Math.max(hi, -lo) > 1e-3) notes.push(`The fractional frequency reaches ${num(Math.max(hi, -lo), 3)}, far above any clock's.`);
+  return notes;
 }
 
 // Settings of a loaded clock hold one number for the scale. Back in the dialog

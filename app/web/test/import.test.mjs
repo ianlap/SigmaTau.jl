@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.window = {};
-const { sniff, guessRoles, clockStats, timeStats, parseFactor, scaleFields, densityOf } = await import("../ui/js/import.js");
+const { sniff, guessRoles, clockLabels, unitNotes, clockStats, timeStats, parseFactor, scaleFields, densityOf } = await import("../ui/js/import.js");
 
 const seq = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 const read = (name, lines) => { const s = sniff(name, lines.join("\n") + "\n"); return { s, g: guessRoles(s) }; };
@@ -130,4 +130,24 @@ test("a session saved with the on/off bias setting opens with its menu value", a
   const s = {};
   applySession(s, { settings: { bias: false } });
   assert.equal(s.bias, "none");
+});
+
+test("a clock is named for its column without the unit and the word for the reading", () => {
+  assert.deepEqual(clockLabels(["maser1 phase (s)", "maser2 phase (s)"]), ["maser1", "maser2"]);
+  assert.deepEqual(clockLabels(["UTC-UTC(NIST) (ns)", "UTC-UTC(PTB) (ns)"]), ["UTC-UTC(NIST)", "UTC-UTC(PTB)"]);
+  assert.deepEqual(clockLabels(["A freq", "B freq"]), ["A", "B"]);
+  assert.deepEqual(clockLabels(["phase (s)"]), ["phase"]);
+  assert.deepEqual(clockLabels(["x phase (s)", "x phase (ns)"]), ["x phase (s)", "x phase (ns)"]);   // names that would meet keep their headings
+});
+
+test("the unit notes follow the size of the readings and the words in the names", () => {
+  const walk = seq(100, (i) => 3 * i * Math.sin(i));
+  const rad = unitNotes({ names: ["nist-yb-phase-rad.csv", "phase"], kind: "phase", scale: 1, columns: [walk] });
+  assert.equal(rad.length, 2);
+  assert.match(rad[0], /says rad/);
+  assert.match(rad[1], /moves by .* s/);
+  assert.deepEqual(unitNotes({ names: ["nist-yb-phase-rad.csv"], kind: "phase", scale: 1e-3, columns: [walk] }), []);   // a stated scale is trusted
+  assert.deepEqual(unitNotes({ names: ["clean.csv", "UTC phase"], kind: "phase", scale: 1, columns: [seq(100, (i) => 1e-9 * i)] }), []);
+  assert.match(unitNotes({ names: ["osc.csv", "freq"], kind: "frequency", scale: 1, columns: [seq(100, () => 1.0001)] })[0], /fractional frequency reaches/);
+  assert.deepEqual(unitNotes({ names: ["ens.csv", "maser1 phase (s)"], kind: "phase", scale: 1, columns: [seq(100, (i) => 1e-9 * i)] }), []);   // "ens" is not "ns"
 });

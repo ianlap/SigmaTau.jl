@@ -59,7 +59,10 @@ The heading of each column is a menu:
 
 Every column marked **Clock** becomes a clock, all measured against the same
 reference at the same instants. A click on the name of a column adds it as
-a clock or drops it.
+a clock or drops it. A clock is named after its column without the unit and
+the word *phase* or *freq*: `maser1 phase (s)` gives `maser1`. The names
+stay as the file has them when removing those words would give two columns
+one name.
 
 | Setting | Meaning |
 |:--------|:--------|
@@ -72,6 +75,14 @@ a clock or drops it.
 
 When the time column skips readings, the dialog counts the gaps and the
 missing samples. They enter the record as missing samples.
+
+The dialog also checks the unit. It says so when a phase record moves by
+more than a second, when a fractional frequency exceeds ``10^{-3}``, or when
+the name of the file or of a column says `rad`, `ns`, `ps`, `ppb`, `ppm` or
+`Hz` while the readings are taken as they are. Pick the unit or type a
+factor, and the note goes. The record check on the Data page repeats it for
+a record that was read without the dialog, and `sigmatau check` prints it
+on standard error.
 
 In a Stable32 file (`.phd`, `.frd`) a zero marks a missing sample, except
 the first and the last sample of a phase file. The dialog counts these
@@ -118,7 +129,12 @@ preparation changes. It describes the record as prepared.
 | **Start** | The time of the first sample in UTC, for a file with timestamps |
 | **Gaps** | The number of missing samples |
 | **Points past 5σ** | The outliers that [`find_outliers`](@ref) finds: frequency samples more than five scaled median absolute deviations from the median. They are marked on the phase plot |
+| **Check the unit** | Appears only when the record looks to be in another unit than the one it is read in, as the import dialog's note does |
 | **Frequency drift** | The slope of a least-squares line through the fractional frequency, per day. It reads **Drift left** after a quadratic removal |
+
+The time axes of the plots read in seconds up to two minutes, then in
+minutes, hours, days and, past two years, years, and the record chip gives the
+sample interval and the span the same way: `τ₀ 5 d · 28.7 yr`.
 
 ## Preparing the record
 
