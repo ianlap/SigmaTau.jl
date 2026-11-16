@@ -35,6 +35,7 @@ from .types import (
     DriftFit,
     DynamicStabilityResult,
     FrequencyData,
+    HatResult,
     PhaseData,
     PowerLawFit,
     SpectralResult,
@@ -224,6 +225,14 @@ def result_from_jl(r: Any) -> StabilityResult:
         tau0=float(r.tau0),
         n=int(r.n),
         confidence=_confidence(r.confidence),
+    )
+
+
+def hat_from_jl(h: Any) -> HatResult:
+    return HatResult(
+        clocks=tuple(result_from_jl(r) for r in h.clocks),
+        names=tuple(str(n) for n in h.names),
+        method=str(h.method),
     )
 
 

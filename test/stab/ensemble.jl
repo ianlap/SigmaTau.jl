@@ -59,6 +59,27 @@ end
         @test_throws ArgumentError ncornered_hat(cc, ms; deviation=:totdev)
     end
 
+    @testset "clock names" begin
+        x = randn(Xoshiro(5), 256, 3)
+        cc = ClockComparisons(x[:, 1:2], 1.0; names=["maser", "cesium"])
+        h = ncornered_hat(cc, [1, 2])
+        @test h.names == ["maser", "cesium", "reference"] && h.method === :hat
+        @test h["cesium"] === h[2] && h isa AbstractVector{StabilityResult}
+        @test_throws KeyError h["rubidium"]
+        g = groslambert(ClockComparisons(x[:, 1:2], 1.0; reference="GPS"), [1, 2])
+        @test g.names == ["clock 1", "clock 2", "GPS"] && g.method === :groslambert
+        @test groslambert(ClockComparisons(x, 1.0), [1, 2]; reference=false).names == ["clock 1", "clock 2", "clock 3"]
+        r = [adev(PhaseData(c, 1.0), [1, 2]) for c in eachcol(x)]
+        @test ncornered_hat(r...).names == ["A", "B", "C"]
+        @test ncornered_hat(r...; names=["a", "b", "c"]).names == ["a", "b", "c"]
+        @test_throws ArgumentError ncornered_hat(r...; names=["a"])
+        @test sprint(show, h) == "HatResult(ADEV of 3 clocks, N-cornered hat: maser, cesium, reference)"
+        table = split(sprint(show, MIME"text/plain"(), h), '\n')
+        @test length(table) == 4 && split(table[2]) == ["tau", "maser", "cesium", "reference"]
+        long = split(sprint(show, MIME"text/plain"(), ncornered_hat(cc, collect(1:20))), '\n')
+        @test length(long) == 14 && occursin("⋮  9 more rows", long[9])     # first six, last five
+    end
+
     @testset "three white-FM clocks against the classic formula" begin
         N = 8192
         ms = unique(round.(Int, exp10.(range(0, log10(N ÷ 128); length = 12))))

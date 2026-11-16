@@ -181,8 +181,10 @@ def test_groslambert_forms(jl):
         np.testing.assert_array_equal(a.dev, b.dev)
         np.testing.assert_array_equal(a.ci_lower, b.ci_lower)
     matrix = [[None, d[0], None], [None, None, d[1]], [d[2], None, None]]
-    for a, b in zip(g, st.groslambert(matrix, m=ms), strict=True):
+    from_matrix = st.groslambert(matrix, m=ms)
+    for a, b in zip(g, from_matrix, strict=True):
         np.testing.assert_array_equal(a.dev, b.dev)
+    assert g.names == ("A", "B", "C") and from_matrix.names == ("clock 1", "clock 2", "clock 3")
     assert st.groslambert(*d, m=ms, confidence=0.95)[0].confidence == 0.95
     assert np.array_equal(st.groslambert(*d, m=ms, weighted=True)[0].dev, g[0].dev)   # one pair: nothing to weigh
     k = st.groslambert(*d, m=ms, interval="klts")

@@ -12,17 +12,24 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ._convert import (
+    hat_from_jl,
     resolve_m,
-    result_from_jl,
     result_to_jl,
     suite_from_jl,
     to_jl_data,
     to_jl_syms,
 )
-from ._julia import _map_errors, jl
+from ._julia import VecStr, _map_errors, jl
 from .deviations import DEFAULT_CONFIDENCE, _bias, _noise
 from .grids import Octave, TauMode
-from .types import FrequencyData, PhaseData, PowerLawFit, StabilityResult, StabilitySuite
+from .types import (
+    FrequencyData,
+    HatResult,
+    PhaseData,
+    PowerLawFit,
+    StabilityResult,
+    StabilitySuite,
+)
 
 DEFAULT_DEVIATIONS = tuple(str(s) for s in jl.DEFAULT_DEVIATIONS)
 
@@ -31,6 +38,11 @@ DEFAULT_DEVIATIONS = tuple(str(s) for s in jl.DEFAULT_DEVIATIONS)
 _new_result_matrix = jl.seval("n -> Matrix{StabilityResult}(undef, n, n)")
 _new_data_matrix = jl.seval("n -> Matrix{AbstractTimingData}(undef, n, n)")
 _assign_result = jl.seval("(M, r, i, j) -> (M[i, j] = r; nothing)")
+
+
+def _names(names):
+    """The ``names`` keyword for Julia, or none to keep its default."""
+    return {} if names is None else {"names": VecStr([str(n) for n in names])}
 
 
 def _fill_matrix(new, convert, matrix, name):
@@ -94,7 +106,8 @@ def stability(
 @_map_errors
 def ncornered_hat(
     *results: StabilityResult | Sequence[Sequence[StabilityResult | None]],
-) -> list[StabilityResult]:
+    names: Sequence[str] | None = None,
+) -> HatResult:
     """Deviation of each of N ≥ 3 clocks from the deviations measured between every
     pair of them: the three-cornered hat of Gray and Allan (1974) and its
     extension to N clocks (SP1065 §10.14).
@@ -112,23 +125,23 @@ def ncornered_hat(
     one estimator on one τ grid, and the estimator must be one whose variance
     adds for independent clocks, such as ``adev``, ``mdev`` or ``hdev``.
 
+    ``names`` gives one name per clock: ``"A"``, ``"B"``, ``"C"`` for three
+    results and ``"clock 1"``, ``"clock 2"``, … for a matrix by default. The
+    result is a ``HatResult``, one ``StabilityResult`` per clock with its name.
+
     The estimate can be negative for a clock much more stable than the others,
     for clocks that are correlated and where few terms are averaged; ``dev``
     is ``nan`` there. The EDF and the interval are filled when every input has
     an EDF (Vernotte and Lantz 2019, Appendix B). The interval is too narrow
     for a clock that is no longer resolved under the others.
     """
+    kwargs = _names(names)
     if len(results) == 3:
-        separated = jl.ncornered_hat(
-            result_to_jl(results[0]),
-            result_to_jl(results[1]),
-            result_to_jl(results[2]),
-        )
-        return [result_from_jl(r) for r in separated]
+        return hat_from_jl(jl.ncornered_hat(*(result_to_jl(r) for r in results), **kwargs))
 
     if len(results) == 1:
         jl_matrix = _fill_matrix(_new_result_matrix, result_to_jl, results[0], "ncornered_hat")
-        return [result_from_jl(r) for r in jl.ncornered_hat(jl_matrix)]
+        return hat_from_jl(jl.ncornered_hat(jl_matrix, **kwargs))
 
     raise TypeError(
         "ncornered_hat: pass three pairwise results (r_ab, r_bc, r_ca) "
@@ -143,7 +156,8 @@ def groslambert(
     confidence: float = DEFAULT_CONFIDENCE,
     interval: str = "chi2",
     weighted: bool = False,
-) -> list[StabilityResult]:
+    names: Sequence[str] | None = None,
+) -> HatResult:
     """Allan deviation of each of N ≥ 3 clocks from the difference records between
     them, by the Groslambert covariance: the cross Allan variance of two records
     that share the clock (Vernotte, Calosso and Rubiola 2016, after Groslambert
@@ -164,8 +178,10 @@ def groslambert(
     of the covariance. Like the hat, the estimate can be negative for a clock
     much more stable than the others; ``dev`` is ``nan`` there.
 
-    ``m`` is a ``TauMode`` grid or a sequence of averaging factors. Each result
-    is an ``"adev"`` ``StabilityResult`` without noise types.
+    ``m`` is a ``TauMode`` grid or a sequence of averaging factors. The result
+    is a ``HatResult``: an ``"adev"`` ``StabilityResult`` per clock, without
+    noise types, with the names of the clocks, given by ``names`` as for
+    :func:`ncornered_hat`.
 
     ``interval="chi2"`` gives the χ² interval at ``confidence`` on the EDF of
     the estimate, from the variance model of Vernotte and Lantz (2019,
@@ -182,20 +198,15 @@ def groslambert(
         "confidence": float(confidence),
         "interval": jl.Symbol(interval),
         "weighted": bool(weighted),
+        **_names(names),
     }
     if len(records) == 3:
-        separated = jl.groslambert(
-            to_jl_data(records[0]),
-            to_jl_data(records[1]),
-            to_jl_data(records[2]),
-            resolve_m(m),
-            **kwargs,
-        )
-        return [result_from_jl(r) for r in separated]
+        separated = jl.groslambert(*(to_jl_data(r) for r in records), resolve_m(m), **kwargs)
+        return hat_from_jl(separated)
 
     if len(records) == 1:
         jl_matrix = _fill_matrix(_new_data_matrix, to_jl_data, records[0], "groslambert")
-        return [result_from_jl(r) for r in jl.groslambert(jl_matrix, resolve_m(m), **kwargs)]
+        return hat_from_jl(jl.groslambert(jl_matrix, resolve_m(m), **kwargs))
 
     raise TypeError(
         "groslambert: pass three difference records (x_ab, x_bc, x_ca) "

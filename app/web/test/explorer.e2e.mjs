@@ -38,12 +38,16 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   const browser = await chromium.launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
+  // The steps use the panel's own controls: pinned, it stays beside the page from 1280 px up.
+  await page.addInitScript(() => localStorage.setItem("sigmatau-panel", "pinned"));
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   // The vendored Plotly, which falls back to the CDN when ui/vendor is empty, may 404.
   page.on("console", (m) => m.type() === "error" && !/vendor\/plotly/.test(m.location().url) && errors.push(m.text()));
   const settled = () => page.waitForFunction(() => !/Reading|Running|Computing|Starting/.test(document.getElementById("status-text").textContent), null, SLOW);
   const plotted = (sel) => page.waitForFunction((s) => document.querySelector(s)?.data?.length > 0, sel, SLOW);
+  // Below 1280 px the panel opens over the page from the rail.
+  const openPanel = async () => { if (!(await page.isVisible("#side"))) await page.click("#rail-panel"); await page.locator("#side").waitFor(); };
   // A results entry of the File menu: its label, and the file it writes.
   const exported = async (kind) => {
     await page.click("#export-btn");
@@ -396,6 +400,36 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
+  await t.test("Ensemble: two columns as two channels, with the command line's cross deviation once their gaps are filled", async () => {
+    const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
+    const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "three.csv");   // the file of the step above
+    writeFileSync(file, rows.map((i) => [i, clock(i, 1), clock(i, 2), clock(i, 3)].join(",")).join("\n"));
+    const n = errors.length;
+    await page.click("[data-ctl=view][data-v=cross]");
+    await page.locator("#page [data-ref=empty]", { hasText: "turn on Fill gaps by reflection on the Data page" }).waitFor(SLOW);
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+    await page.click("a[data-page=data]");
+    await page.click("input[data-field=fillgaps]");
+    await settled();
+    await page.click("a[data-page=ensemble]");
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]")?.data?.some((d) => d.name === "Cross"), null, SLOW);
+    const [shown, limit] = await page.evaluate(() => ["Cross", "Cross, upper limit"].map((n) => document.querySelector("#page [data-ref=adev]").data.find((d) => d.name === n).y));
+    const doc = JSON.parse(execFileSync(CLI, ["cross", file, "--value-cols", "2,3", "--fillgaps", "--format", "json"])).cross_adev;
+    // The deviation where the device is resolved, √(covariance + uncertainty) as the limit where it is not.
+    const resolved = doc.covar.map((v, i) => v > doc.uncertainty[i]);
+    assert.deepEqual(shown, doc.dev.map((v, i) => (resolved[i] ? v : null)));
+    assert.deepEqual(limit, doc.covar.map((v, i) => (resolved[i] || v + doc.uncertainty[i] <= 0 ? null : Math.sqrt(v + doc.uncertainty[i]))));
+    assert.equal(await page.evaluate(() => document.querySelector("#page [data-ref=weights]").data.length), 4, "cross-spectrum, its floor and each channel");
+    const m = errors.length;
+    await page.click("[data-ctl=view][data-v=hat]");   // as the step above left it, refused again
+    await page.locator("#page [data-ref=empty]", { hasText: "The KLTS interval needs a file without missing samples" }).waitFor(SLOW);
+    await page.click("a[data-page=data]");
+    await page.click("input[data-field=fillgaps]");
+    await settled();
+    assert.ok(errors.splice(m).every((e) => / 422 /.test(e)));
+  });
+
   await t.test("Data at 960 px: a long file name and the plot's header stay inside their cards", async () => {
     await page.setViewportSize({ width: 960, height: 800 });
     await page.click("a[data-page=data]");
@@ -404,6 +438,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     // three clocks, read with the settings remembered from three.csv
     await chooser.setFiles({ name: "three_clocks_with_a_long_name.csv", mimeType: "text/csv", buffer: Buffer.from(Array.from({ length: 600 }, (_, i) => row(i)).join("\n")) });
     await settled();
+    await openPanel();
     await page.locator("#side .clock-row .clock-text").last().click();   // a clock named after the file
     assert.match(await page.locator("[data-ref=plot-title]").innerText(), /three_clocks_with_a_long_name col 4$/);
     const outside = await page.evaluate(() => [...document.querySelectorAll("#page .card")].flatMap((card) => {
@@ -465,6 +500,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
 
   await t.test("Live: the readings analyzed are the file that Save readings writes", async () => {
     await page.click("a[data-page=live]");
+    await openPanel();
     const n = errors.length;
     await page.click("[data-ctl=go]");
     await plotted("#page [data-ref=sigma]");
@@ -506,6 +542,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
       assert.ok(h >= 250, `${view}: the plot is ${h} px high`);
     }
     await page.click("a[data-page=ensemble]");
+    await openPanel();
     await page.click("[data-ctl=view][data-v=hat]");
     await page.selectOption("#side [data-ctl=method]", "hat");   // (an earlier step left KLTS, which a file with gaps refuses)
     await page.waitForFunction(() => document.querySelector("#page [data-ref=sub]")?.textContent.startsWith("Hat · "), null, SLOW);
@@ -540,6 +577,36 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("[data-ctl=view][data-v=map]");
     // The 422s are the earlier steps' records that have no map (three samples, gaps), not the generated clocks.
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+  });
+
+  await t.test("Plot first: in a 960 px window the panel and the results open over the page, and the rail runs", async () => {
+    await page.setViewportSize({ width: 960, height: 720 });
+    await page.click("a[data-page=stability]");
+    await settled();
+    assert.equal(await page.isVisible("#side"), false);
+    await page.click("#rail-panel");
+    await page.locator("#side .run-btn").waitFor();
+    // Esc closes a dialog opened from the panel and leaves the panel; a second Esc closes the panel and
+    // gives the focus back to the rail.
+    await page.click("#side [data-act=pick]");
+    await page.locator("dialog[open]").waitFor();
+    await page.keyboard.press("Escape");
+    await page.locator("dialog[open]").waitFor({ state: "detached" });
+    assert.equal(await page.isVisible("#side"), true);
+    await page.focus("#side .run-btn");
+    await page.keyboard.press("Escape");
+    await page.locator("#side").waitFor({ state: "hidden" });
+    assert.equal(await page.evaluate(() => document.activeElement.id), "rail-panel");
+    const n = errors.length;
+    await page.click("#rail-run");
+    await settled();
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // the records earlier steps left that the core refuses
+    await page.click("#rail-results");
+    const card = page.locator(".page > .side-card");
+    await card.waitFor();
+    await page.locator(".topbar .brand").click();      // a click elsewhere closes it
+    await card.waitFor({ state: "hidden" });
+    await page.setViewportSize({ width: 1280, height: 800 });
   });
 
   assert.deepEqual(errors, []);

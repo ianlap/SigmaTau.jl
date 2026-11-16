@@ -1,12 +1,14 @@
 # Ensemble
 
 The Ensemble page works on a group of clocks that were measured against
-one reference, in two views. **Time scale** forms a time scale from them: a
+one reference, in three views. **Time scale** forms a time scale from them: a
 weighted combination of the clocks that is meant to be more stable than any
 one of them. It shows the stability of the scale, the stability of each
 clock beside it and the weight of each clock. **N-cornered hat** separates
 the stability of each clock from the comparisons, without a scale
-([The N-cornered hat](ensemble.md#The-N-cornered-hat)).
+([The N-cornered hat](ensemble.md#The-N-cornered-hat)). **Two channels**
+takes two columns as two measurements of one device and keeps what they
+share ([Two channels](ensemble.md#Two-channels-of-one-device)).
 
 [![The Ensemble page](../assets/explorer/ensemble.png)](../assets/explorer/ensemble.png)
 
@@ -200,3 +202,35 @@ clocks whose noise is correlated, and where the samples are few, most
 often at long ``τ``. A negative variance has no deviation. The clock is not
 resolved at that averaging time and has no point there. With the KLTS
 interval a ▽ marks the upper limit that the records set on such a clock.
+
+## Two channels of one device
+
+When one device is measured twice at the same time, through the two
+channels of an instrument or against two references, the two records share
+the device and nothing else. The **Two channels** view takes two columns of
+the page's file as those records and gives the estimates of
+[Two-channel measurements](../guide/cross.md): the cross Allan deviation
+([`cross_adev`](@ref)) and the cross-spectrum ([`cross_psd_y`](@ref)).
+Simulated clocks are not offered here.
+
+| Setting | Effect |
+|:--------|:-------|
+| **Channel A**, **Channel B** | The two columns, by default the first two clocks of the file |
+
+The grid of averaging times is that of the
+[side panel](panel.md#Options) on the Stability page. The two channels are
+read as the [Data](data.md#Preparing-the-record) page reads them, and need
+every sample: where either has **Fill gaps by reflection** on, the gaps of
+both are filled.
+
+The upper plot gives the cross deviation as a solid line, with bars from
+``\sqrt{σ_{ab}^2 - u}`` to ``\sqrt{σ_{ab}^2 + u}`` for the standard
+uncertainty ``u`` of the cross variance
+([Vernotte and Lantz (2019)](@cite vernotte-2019-tch-gcov-uncertainty)),
+over the Allan deviation of each channel alone, dotted. Where the cross
+variance is not above its uncertainty the device is not resolved under the
+noise of the channels, and a ▽ marks ``\sqrt{σ_{ab}^2 + u}``. The lower
+plot gives the real part of the cross-spectrum ``S_y(f)``, where it is
+positive, over the floor that the noise the channels do not share leaves
+after averaging, dashed, and the spectrum of each channel. The table gives
+the three deviations at each averaging time.

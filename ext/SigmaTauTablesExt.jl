@@ -49,6 +49,15 @@ struct SuiteRows
     suite::SigmaTau.StabilitySuite
 end
 
+# A hat's rows: the clock's name, then the columns of a result.
+const HAT_NAMES = (:clock, RESULT_NAMES...)
+const HAT_SCHEMA = Tables.Schema(HAT_NAMES, (String, RESULT_TYPES...))
+const HAT_ROW = NamedTuple{HAT_NAMES, Tuple{String, fieldtypes(RESULT_ROW)...}}
+
+struct HatRows
+    hat::SigmaTau.HatResult
+end
+
 Tables.istable(::Type{SigmaTau.StabilityResult}) = true
 Tables.rowaccess(::Type{SigmaTau.StabilityResult}) = true
 Tables.rows(result::SigmaTau.StabilityResult) = ResultRows(result)
@@ -61,6 +70,12 @@ Tables.rows(suite::SigmaTau.StabilitySuite) = SuiteRows(suite)
 Tables.schema(::SigmaTau.StabilitySuite) = RESULT_SCHEMA
 Tables.schema(::SuiteRows) = RESULT_SCHEMA
 
+Tables.istable(::Type{SigmaTau.HatResult}) = true
+Tables.rowaccess(::Type{SigmaTau.HatResult}) = true
+Tables.rows(hat::SigmaTau.HatResult) = HatRows(hat)
+Tables.schema(::SigmaTau.HatResult) = HAT_SCHEMA
+Tables.schema(::HatRows) = HAT_SCHEMA
+
 Base.IteratorSize(::Type{ResultRows}) = Base.HasLength()
 Base.length(rows::ResultRows) = length(rows.result.tau)
 Base.eltype(::Type{ResultRows}) = RESULT_ROW
@@ -68,6 +83,10 @@ Base.eltype(::Type{ResultRows}) = RESULT_ROW
 Base.IteratorSize(::Type{SuiteRows}) = Base.HasLength()
 Base.length(rows::SuiteRows) = sum(result -> length(result.tau), rows.suite.results; init=0)
 Base.eltype(::Type{SuiteRows}) = RESULT_ROW
+
+Base.IteratorSize(::Type{HatRows}) = Base.HasLength()
+Base.length(rows::HatRows) = sum(result -> length(result.tau), rows.hat.clocks; init=0)
+Base.eltype(::Type{HatRows}) = HAT_ROW
 
 @inline _maybe(values::Vector, i::Int) = i <= length(values) ? values[i] : missing
 
@@ -90,17 +109,30 @@ function Base.iterate(rows::ResultRows, state::Int = 1)
     return _row(rows.result, state), state + 1
 end
 
-function Base.iterate(rows::SuiteRows, state::Tuple{Int,Int} = (1, 1))
-    result_i, row_i = state
-    while result_i <= length(rows.suite.results)
-        result = rows.suite.results[result_i]
-        if row_i <= length(result.tau)
-            return _row(result, row_i), (result_i, row_i + 1)
-        end
+# Row `row_i` of result `result_i` in a sequence of results, or the next
+# row there is; `nothing` past the last.
+function _next(results, (result_i, row_i)::Tuple{Int,Int})
+    while result_i <= length(results)
+        row_i <= length(results[result_i].tau) && return result_i, row_i
         result_i += 1
         row_i = 1
     end
     return nothing
+end
+
+function Base.iterate(rows::SuiteRows, state::Tuple{Int,Int} = (1, 1))
+    at = _next(rows.suite.results, state)
+    at === nothing && return nothing
+    result_i, row_i = at
+    return _row(rows.suite.results[result_i], row_i), (result_i, row_i + 1)
+end
+
+function Base.iterate(rows::HatRows, state::Tuple{Int,Int} = (1, 1))
+    at = _next(rows.hat.clocks, state)
+    at === nothing && return nothing
+    clock_i, row_i = at
+    row = HAT_ROW((rows.hat.names[clock_i], _row(rows.hat.clocks[clock_i], row_i)...))
+    return row, (clock_i, row_i + 1)
 end
 
 end

@@ -71,6 +71,9 @@ using RecipesBase
         @test pa[1][:left_margin] == pa[1][:bottom_margin] == (5, :mm)
         @test [p[:ylabel] for p in pa] == ["Deviation", "Deviation (s)", "Deviation"]
         @test pa[1][:yticks] == pa[3][:yticks]
+        # The clocks of a hat take their names.
+        h = ncornered_hat(ClockComparisons(randn(512, 2), 1.0; names=["a", "b"]), [1, 2, 4])
+        @test [s.plotattributes[:label] for s in RecipesBase.apply_recipe(Dict{Symbol,Any}(), h)] == ["a", "b", "reference"]
     end
 
     @testset "dynamic deviation: 3-D waterfall" begin
