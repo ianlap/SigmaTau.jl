@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { inWords, startText, duration, interval, timeAxisUnit, sciHtml } = await import("../ui/js/format.js");
+const { inWords, startText, duration, interval, timeAxisUnit, sciHtml, hertz } = await import("../ui/js/format.js");
 
 test("the core's refusals are said without flags and function names", () => {
   assert.equal(inWords("--algorithm greenhall fits a model per clock and needs three or more clocks"), "Greenhall fits a model to each clock and needs three or more clocks.");
@@ -37,4 +37,8 @@ test("a long record is told in days and years, a sample interval in seconds up t
   assert.equal(interval(4.32e5), "5 d");
   assert.deepEqual(timeAxisUnit(2.5e6), [86400, "d"]);
   assert.deepEqual(timeAxisUnit(NaN), [1, "s"]);
+});
+
+test("a frequency is said in its unit", () => {
+  assert.deepEqual([10e6, 1e5, 2.5e9, 1, 0.01, 0].map(hertz), ["10 MHz", "100 kHz", "2.5 GHz", "1 Hz", "0.01 Hz", "–"]);
 });

@@ -4,9 +4,7 @@
 import { state, update, visibleClocks, multi, markStale } from "../state.js";
 import { byId, label, gridName, CONFIDENCES, noiseTitle, noiseSlope, BIAS_CORRECTED, biasEntry } from "../estimators.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css, LINE_W } from "../plot.js";
-import { sci, sciHtml, num, escapeHtml as h } from "../format.js";
-import { phaseNoise } from "../core.js";
-import { carrierLabel } from "./spectrum.js";
+import { sci, sciHtml, num, hertz, escapeHtml as h } from "../format.js";
 
 // ITU-T wander masks the core checks (sigmatau --mask), by its names: the
 // wander a clock generates, then the limits of a network at an interface.
@@ -38,7 +36,6 @@ export function mount(el, ctx) {
           `<button type="button" data-axis="${k}">${v}</button>`).join("")}</div>
         <span class="caption" data-ref="caption"></span>
         <span class="pin-list" data-ref="pins"></span>
-        <input type="file" data-ref="pn-file" hidden>
         <span class="toggles">
           <label class="check" title="Noise type identified at each τ (lag-1 autocorrelation), with the power-law slope it implies"><input type="checkbox" data-tog="noiseId">Noise ID</label>
           <label class="check" title="Draw the confidence intervals as a shaded band instead of error bars"><input type="checkbox" data-tog="band">CI band</label>
@@ -59,7 +56,6 @@ export function mount(el, ctx) {
     if (e.target.closest("[data-act=load]")) ctx.goData();
     if (e.target.closest("[data-act=run]")) ctx.run();
     if (e.target.closest("[data-act=pin]")) pinRun();
-    if (e.target.closest("[data-act=pn]")) root.querySelector("[data-ref=pn-file]").click();
     const act = e.target.closest("[data-fit]")?.dataset.fit;
     if (act) editModel(act, ctx);
     const un = e.target.closest("[data-unpin]")?.dataset.unpin;
@@ -69,11 +65,6 @@ export function mount(el, ctx) {
     const tog = e.target.dataset.tog;
     if (tog) { update((s) => { s[tog] = e.target.checked; }); return; }
     const r = e.target.dataset.ref;
-    if (r === "pn-file") {
-      const file = e.target.files[0];
-      e.target.value = "";             // the same file can be chosen again
-      if (file) pinPhaseNoise(file, ctx);
-    }
     if (r === "table-dev") update((s) => { s.tableDev = e.target.value; });
     if (r === "cmp-tau") update((s) => { s.compareTau = Number(e.target.value); });
     if (r === "mask") update((s) => { s.mask = e.target.value; });
@@ -156,6 +147,8 @@ function pinTraces(devs) {
 // What a run was, from the core's own record of it (the settings may have
 // changed since): shown on its pin.
 function runSummary(c) {
+  const t = c.record?.table;
+  if (t) return `${c.result.results.map((r) => label(r.dev)).join(", ")} · table integrated from ${hertz(t.band[0])} to ${hertz(t.band[1])}`;
   const a = c.result.doc.analysis ?? {};
   const parts = [(a.deviations ?? []).map(label).join(", "), a.tau_mode === "m" ? "explicit m" : `${gridName(a.tau_mode ?? "").toLowerCase()} τ`];
   const [r0, r1] = a.range ?? [null, null];
@@ -178,40 +171,18 @@ export function pinRun() {
   return true;
 }
 
-// A phase-noise table as a pin: the σ(τ) that its ℒ(f) gives over the band
-// of the table, at the carrier of the Spectrum page, beside the deviations
-// of the record.
-async function pinPhaseNoise(file, ctx) {
-  const hz = (f) => carrierLabel(f);
-  try {
-    const carrier = state.spec.carrier;
-    const doc = await phaseNoise({ name: file.name, content: await file.text() }, carrier);
-    const [f1, fh] = doc.spectrum.band;
-    const of = (dev) => doc.results.find((r) => r.deviation === dev);
-    const tau = of("adev").tau, last = tau.length - 1;
-    const title = [
-      `${file.name}: ℒ(f) at ${doc.spectrum.n} offsets from ${hz(f1)} to ${hz(fh)}, carrier ${hz(carrier)}`,
-      `σ(τ) of the noise inside that band, for τ from ${num(tau[0], 3)} s to ${num(tau[last], 3)} s`,
-      `At ${num(tau[last], 3)} s the noise below ${hz(f1)} would add ${num(100 * of("adev").below[last], 2)} % to the Allan variance`,
-      ...(of("adev").above[0] === null ? [`ADEV and HDEV depend on the measurement bandwidth here: they hold for ${hz(fh)}`] : []),
-    ].join("\n");
-    update((s) => {
-      const n = (s.pinCount = (s.pinCount ?? 0) + 1);
-      s.pins.push({
-        id: n, label: `ℒ(f) ${n}`, title,
-        clocks: [{ name: file.name, slot: s.clocks.length, results: doc.results.map((r) => ({ dev: r.deviation, tau: r.tau, sigma: r.dev })) }],
-      });
-    });
-    ctx.status("good", `σ(τ) from ${file.name} is on the plot as ℒ(f) ${state.pinCount}, for a carrier of ${hz(carrier)} (set on the Spectrum page).`);
-  } catch (err) {
-    ctx.status("error", `${file.name}: ${err.message}`);
-  }
+// A deviation from a table of phase noise holds for the noise inside its band. What
+// the spectrum would add, carried on past either end, as a share of its variance.
+function tableTip(r, i, fh) {
+  const pct = (v) => `${num(100 * v, 2)} %`;
+  return `From the noise inside the band. Carried on below it, the spectrum would add ${r.below[i] === null ? "without limit" : pct(r.below[i])} to the variance; ` +
+    (r.above[i] === null ? `above it, without limit: this deviation rises with the measurement bandwidth and holds for ${hertz(fh)}` : `above it, ${pct(r.above[i])}`);
 }
 
 function renderPins() {
   const el = root.querySelector("[data-ref=pins]");
   const has = visibleClocks().some((c) => c.result);
-  el.innerHTML = `<button class="btn btn-sm" data-act="pin" ${has ? "" : "disabled"} title="Keep these results on the plot to compare with the next run">Pin run</button><button class="btn btn-sm" data-act="pn" ${has ? "" : "disabled"} title="Draw the σ(τ) that a table of phase noise gives: a file of offset frequency in Hz and ℒ(f) in dBc/Hz, at the carrier of the Spectrum page">Phase noise…</button>${state.pins.map((p) =>
+  el.innerHTML = `<button class="btn btn-sm" data-act="pin" ${has ? "" : "disabled"} title="Keep these results on the plot to compare with the next run">Pin run</button>${state.pins.map((p) =>
     `<span class="chip" title="${h(p.title)}">${h(p.label)}<button class="link-btn" data-unpin="${p.id}" aria-label="Remove ${h(p.label)}">×</button></span>`).join("")}`;
 }
 
@@ -461,7 +432,8 @@ function renderTable(clocks, devs) {
   if (!devs.includes(state.tableDev)) state.tableDev = devs[0];
   const r = resultOf(c, state.tableDev);
   const rows = (r?.tau ?? []).map((t, i) => {
-    const tip = r.ci_lo.length ? `${sci(r.ci_lo[i], 4)} … ${sci(r.ci_hi[i], 4)} (${(state.confidence * 100).toFixed(1)} %), n_eff ${r.neff[i] ?? "–"}` : `n_eff ${r.neff[i] ?? "–"}`;
+    const tip = r.below ? tableTip(r, i, c.record.table.band[1])
+      : r.ci_lo.length ? `${sci(r.ci_lo[i], 4)} … ${sci(r.ci_hi[i], 4)} (${(state.confidence * 100).toFixed(1)} %), n_eff ${r.neff[i] ?? "–"}` : `n_eff ${r.neff[i] ?? "–"}`;
     return `<div class="tbl-row tbl-body" title="${tip}"><span>${num(t, 5)}</span><span>${sci(r.sigma[i])}</span><span>${r.edf.length ? num(r.edf[i], 4) : "–"}</span>${r.noise[i] ? `<span class="badge" title="${noiseTitle(r.noise[i])}">${r.noise[i]}</span>` : "<span></span>"}</div>`;
   }).join("");
   box.className = "card side-card per-tau";

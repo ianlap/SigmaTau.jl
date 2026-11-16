@@ -2,7 +2,7 @@
 // is time and which is the value, the record type, units and τ0, and returns
 // the reader settings for the core. openImport() resolves to null on cancel.
 import { sniff, guessRoles, clockLabels, unitNotes, clockStats, thin, parseFactor, scaleFields, PHASE_UNITS, FREQ_UNITS, TIME_UNITS } from "./import.js";
-import { escapeHtml as h, thousands, duration, interval, num, share, FILL_TESTED } from "./format.js";
+import { escapeHtml as h, thousands, duration, interval, num, hertz, share, FILL_TESTED } from "./format.js";
 import { seriesColor, hexAlpha } from "./plot.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
@@ -16,13 +16,17 @@ function remembered(s) {
 function remember(s, st) {
   try {
     if (!st.remember) { localStorage.removeItem(formatKey(s)); return; }
-    localStorage.setItem(formatKey(s), JSON.stringify({ kind: st.kind, time_col: st.time, timeUnit: st.timeUnit, value_cols: st.values, scaling: st.scaling, factor: st.factor, tau0: st.tau0In, against: st.against, keep_zeros: st.keepZeros }));
+    localStorage.setItem(formatKey(s), JSON.stringify({ kind: st.kind, time_col: st.time, timeUnit: st.timeUnit, value_cols: st.values, scaling: st.scaling, factor: st.factor, tau0: st.tau0In, against: st.against, keep_zeros: st.keepZeros,
+      density: st.density, carrier: st.carrierIn }));
   } catch { /* storage off: nothing to remember */ }
 }
 
 // `prev`: settings of the clocks being re-imported (Import settings…); it
 // always shows the dialog. Otherwise settings remembered for files like this
 // one load the file without asking.
+// The spectral densities a table of phase noise may hold, as the core's --density names them.
+export const DENSITIES = [["L", "ℒ(f) in dBc/Hz"], ["Sphi", "S_φ(f) in rad²/Hz"], ["Sx", "S_x(f) in s²/Hz"], ["Sy", "S_y(f) in 1/Hz"]];
+
 export function openImport(file, prev = null) {
   const dlg = document.getElementById("import-dialog");
   const s = sniff(file.name, file.text);
@@ -41,6 +45,9 @@ export function openImport(file, prev = null) {
     ...scaleFields(kind0, p?.scaling ?? guess.scaling ?? 1, p?.factor ?? ""),  // factor: a typed scale, which replaces the unit choice
     remember: true,
     labels: { ...(prev?.clockNames ?? {}) },   // column → the name typed for its clock
+    // A phase-noise table: the density its second column holds and the carrier in Hz, as typed.
+    density: p?.density ?? s.density ?? "L",
+    carrierIn: p?.carrier ? String(p.carrier) : "",
   };
   if (!st.values.length) st.values = [guess.value];
   st.values = st.values.filter((c) => c !== st.time);
@@ -64,7 +71,24 @@ export function openImport(file, prev = null) {
   // What a clock is called when nothing is typed: its column name, or the file's name for a single clock.
   const defaultNames = () => (st.values.length > 1 ? clockLabels(st.values.map(colName)) : [file.name.replace(/\.[^.]+$/, "")]);
   const defaultName = (c) => defaultNames()[Math.max(0, st.values.indexOf(c))];
+  const carrier = () => Number(st.carrierIn.replace(/\s/g, ""));
+  const needsCarrier = () => st.density === "L" || st.density === "Sphi";
+  // A table: rising offsets in column 1, and the carrier where the density needs it.
+  const tableError = () => {
+    const f = s.columns[0] ?? [], c = st.values[0];
+    if (c === 1 || !(f[0] > 0) || !f.every((x, i) => i === 0 || x > f[i - 1])) return "The first column must hold the offset frequencies in Hz, rising, and another column the spectrum.";
+    return needsCarrier() && !(carrier() > 0) ? "Enter the carrier frequency: ℒ(f) and S_φ(f) need it." : "";
+  };
+  const tableSettings = () => ({
+    kind: "spectrum", format: null, time_col: 1, timeUnit: 1, value_cols: [st.values[0]],
+    names: [s.names[st.values[0] - 1] || null], shortNames: [null], labels: [(st.labels[st.values[0]] ?? "").trim() || null],
+    against: "", header: s.header, scaling: 1, tau0: null, gaps: 0, keep_zeros: false, blanks: 0,
+    density: st.density, carrier: needsCarrier() ? carrier() : null,
+    sourceInfo: `${s.delimName.replace("-separated", "")} · phase-noise table, ${DENSITIES.find(([d]) => d === st.density)[1]}${needsCarrier() ? ` · carrier ${hertz(carrier())}` : ""}`,
+    unitName: "", remembered: fromMemory && !prev,
+  });
   const settings = () => {
+    if (st.kind === "spectrum") return tableSettings();
     const { tau0, gaps, zeros } = derived();
     const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
     return {
@@ -95,12 +119,13 @@ export function openImport(file, prev = null) {
 
   // Remembered format: load straight away when the file still makes sense
   // and no Stable32 zero would silently become a gap.
-  if (fromMemory && !prev && s.nCols && !s.bad && derived().tau0 > 0 && (!derived().zeros || st.keepZeros)) return Promise.resolve(settings());
+  if (fromMemory && !prev && s.nCols && !s.bad && (st.kind === "spectrum" ? !tableError() : derived().tau0 > 0 && (!derived().zeros || st.keepZeros))) return Promise.resolve(settings());
 
   return new Promise((resolve) => {
     const finish = (out) => { dlg.close(); resolve(out); };
 
     const render = () => {
+      if (st.kind === "spectrum") return renderTable();
       const { ts, tau0, per, gaps, missing, slots, zeros } = derived();
       const units = st.kind === "phase" ? PHASE_UNITS : FREQ_UNITS;
       if (!units.some(([f]) => f === st.scaling)) st.scaling = 1;
@@ -202,8 +227,7 @@ export function openImport(file, prev = null) {
               <div class="muted small" style="margin-top:6px">Units come from the column name, such as (ns) or ppb.</div></div>`
             : s.format ? `<div><label class="lbl">Record type</label>
               <div class="muted small">${h(s.formatLabel)}: read as ${st.kind === "phase" ? "phase in seconds" : "fractional frequency"}${s.format === "counter" && st.kind === "frequency" ? " against the nominal frequency (the mean reading to 4 significant figures)" : ""}.</div></div>`
-            : `<div><label class="lbl">Record type</label>
-              <div class="seg" role="group"><button type="button" data-kind="phase" class="${st.kind === "phase" ? "on" : ""}">Phase (time error)</button><button type="button" data-kind="frequency" class="${st.kind === "frequency" ? "on" : ""}">Fractional frequency</button></div></div>
+            : `<div><label class="lbl">Record type</label>${kindSeg()}</div>
             <div><label class="lbl" for="imp-units">${st.kind === "phase" ? "Phase units" : "Frequency units"}</label>
               <select id="imp-units">${units.map(([f, l]) => `<option value="${f}" ${f === st.scaling ? "selected" : ""}>${l}</option>`).join("")}</select>
               <input type="text" id="imp-factor" class="wide-input" placeholder="or a factor, e.g. 1/(2*pi*5e14) for radians" value="${h(st.factor)}" aria-label="Scale factor" style="margin-top:6px">
@@ -224,6 +248,60 @@ export function openImport(file, prev = null) {
           <span class="summary">${err ? `<span class="err">${h(err)}</span>` : h(summary)}</span>
           <button class="btn" type="button" data-act="cancel">Cancel</button>
           <button class="btn btn-primary" type="button" data-act="load" ${err ? "disabled" : ""}>${several ? `Load ${st.values.length} clocks` : "Load record"}</button>
+        </div>`;
+    };
+
+    // The record types of a file of plain columns; two or more columns may hold a table of phase noise.
+    const kindSeg = () => `<div class="seg kind-seg" role="group">${[["phase", "Phase (time error)"], ["frequency", "Fractional frequency"], ...(s.nCols >= 2 ? [["spectrum", "Phase noise"]] : [])]
+      .map(([k, l]) => `<button type="button" data-kind="${k}" class="${st.kind === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
+
+    // A table of phase noise: offsets in column 1, the spectrum in the column picked.
+    const renderTable = () => {
+      if (st.values[0] === 1 || !st.values.length) st.values = [2];
+      st.values = st.values.slice(0, 1);
+      const v = st.values[0], f = s.columns[0] ?? [], err = s.bad ? `Line ${s.bad} is not numeric. The core will refuse the file.` : tableError();
+      const pills = Array.from({ length: s.nCols }, (_, i) => i + 1).map((c) => c === 1
+        ? `<select class="time" data-col="1" aria-label="Column 1 holds" disabled><option>Offset f (Hz)</option></select>`
+        : `<select class="${c === v ? "value" : ""}" data-col="${c}" aria-label="Column ${c} holds" ${c === v ? `style="background:${seriesColor(0)};border-color:${seriesColor(0)}"` : ""}>
+            <option value="ignore" ${c === v ? "" : "selected"}>Ignore ▾</option><option value="value" ${c === v ? "selected" : ""}>Spectrum: ${h(colName(c))} ▾</option></select>`).join("");
+      const cell = (c, x) => `<td class="${c === 1 ? "time" : c === v ? "value" : ""}">${h(x ?? "")}</td>`;
+      const rows = s.rows.map(({ ln, f: r }) => `<tr><td class="ln">${ln}</td>${Array.from({ length: s.nCols }, (_, i) => cell(i + 1, r[i])).join("")}</tr>`).join("");
+      const names = s.namesLine ? `<tr class="names"><td class="ln">${s.namesLine}</td>${s.names.map((n, i) => cell(i + 1, n)).join("")}</tr>` : "";
+      const pts = (s.columns[v - 1] ?? []).map((y, i) => [Math.log10(f[i]), y]).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+      const ys = pts.map((p) => p[1]), xs = pts.map((p) => p[0]);
+      const [y0, y1, x0, x1] = [Math.min(...ys), Math.max(...ys), Math.min(...xs), Math.max(...xs)];
+      const spark = pts.length > 1 ? `<svg viewBox="0 0 330 92" preserveAspectRatio="none" width="100%" height="100%"><polyline fill="none" stroke="${seriesColor(0)}" stroke-width="1.6" vector-effect="non-scaling-stroke" points="${pts.map(([x, y]) =>
+        `${(12 + ((x - x0) / (x1 - x0 || 1)) * 306).toFixed(1)},${(y1 > y0 ? 80 - ((y - y0) / (y1 - y0)) * 64 : 48).toFixed(1)}`).join(" ")}"/></svg>` : "";
+      dlg.innerHTML = `
+        <div class="imp-head">${FILE_ICON}
+          <div><b>Import ${h(s.name)}</b><span class="muted small">${thousands(s.lines)} lines · ${s.delimName}</span></div>
+          <span class="grow"></span><span>Click a column heading to choose what it holds</span>
+        </div>
+        <div class="imp-body">
+          <div class="imp-main">
+            <div class="roles" style="grid-template-columns: repeat(${s.nCols}, minmax(0, 1fr))">${pills}</div>
+            <div class="preview"><table><colgroup><col style="width:44px">${"<col>".repeat(s.nCols)}</colgroup>${names}${rows}
+              ${s.nRows > s.rows.length ? `<tr><td class="more" colspan="${s.nCols + 1}">… ${thousands(s.nRows - s.rows.length)} more rows</td></tr>` : ""}</table></div>
+            <div class="imp-notes">${s.namesLine ? `<span>Column names from line ${s.namesLine}</span>` : ""}</div>
+          </div>
+          <div class="imp-side">
+            <div><label class="lbl">Record type</label>${kindSeg()}
+              <div class="muted small" style="margin-top:6px">A table of a spectrum, read by the offset frequency. Stability gives the σ(τ) it integrates to; Spectrum draws it.</div></div>
+            <div><label class="lbl" for="imp-density">The column holds</label>
+              <select id="imp-density">${DENSITIES.map(([d, l]) => `<option value="${d}" ${d === st.density ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+            ${needsCarrier() ? `<div><label class="lbl" for="imp-carrier">Carrier frequency ν<sub>0</sub></label>
+              <div class="tau-line"><input type="text" id="imp-carrier" inputmode="decimal" placeholder="e.g. 10e6" value="${h(st.carrierIn)}"> <span class="muted small">Hz</span></div></div>` : ""}
+            <div><label class="lbl">Clock name</label>
+              <div class="name-list"><label class="name-row"><span class="clock-dot" style="background:${seriesColor(0)}"></span>
+                <input type="text" data-name="${v}" placeholder="${h(file.name.replace(/\.[^.]+$/, ""))}" value="${h(st.labels[v] ?? "")}" aria-label="Name of the clock"></label></div></div>
+            <div><label class="lbl">Preview of ${h(colName(v))}</label><div class="mini-plot">${spark}</div></div>
+            <label class="check"><input type="checkbox" id="imp-remember" ${st.remember ? "checked" : ""}>Remember for files like this</label>
+          </div>
+        </div>
+        <div class="imp-foot">
+          <span class="summary">${err ? `<span class="err">${h(err)}</span>` : h(`${thousands(f.length)} offsets from ${num(f[0], 4)} Hz to ${num(f[f.length - 1], 4)} Hz`)}</span>
+          <button class="btn" type="button" data-act="cancel">Cancel</button>
+          <button class="btn btn-primary" type="button" data-act="load" ${err ? "disabled" : ""}>Load table</button>
         </div>`;
     };
 
@@ -248,7 +326,10 @@ export function openImport(file, prev = null) {
     };
     dlg.onchange = (e) => {
       const t = e.target;
-      if (t.dataset.col) {
+      if (t.dataset.col && st.kind === "spectrum") {
+        if (t.value === "value") st.values = [Number(t.dataset.col)];
+        render();
+      } else if (t.dataset.col) {
         const c = Number(t.dataset.col), v = t.value;
         if (v === "value") { if (!st.values.includes(c)) st.values.push(c); if (st.time === c) st.time = 0; }
         else if (v.startsWith("time:")) {
@@ -264,6 +345,8 @@ export function openImport(file, prev = null) {
       } else if (t.id === "imp-units") { st.scaling = Number(t.value); st.factor = ""; render(); }
       else if (t.id === "imp-factor") { st.factor = t.value; render(); }
       else if (t.id === "imp-remember") st.remember = t.checked;
+      else if (t.id === "imp-density") { st.density = t.value; render(); }
+
       else if (t.id === "imp-keep-zeros") { st.keepZeros = t.checked; render(); }
     };
     dlg.oninput = (e) => {
@@ -272,6 +355,13 @@ export function openImport(file, prev = null) {
       if (e.target.id === "imp-find") {
         const q = e.target.value.trim().toLowerCase();
         for (const r of dlg.querySelectorAll("tr[data-find]")) r.hidden = !r.dataset.find.includes(q);
+        return;
+      }
+      if (e.target.id === "imp-carrier") {   // the field keeps its focus: only the foot changes
+        st.carrierIn = e.target.value;
+        const err = tableError();
+        dlg.querySelector("[data-act=load]").disabled = !!err;
+        dlg.querySelector(".imp-foot .summary").innerHTML = err ? `<span class="err">${h(err)}</span>` : "";
         return;
       }
       if (e.target.id === "imp-tau0") {

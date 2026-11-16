@@ -1,12 +1,13 @@
 // Data page: load a file (with the import dialog) or synthesize a record,
 // the record check, and the phase plot with outliers in orange, the
 // frequency with a fitted drift model, or the histogram (with the statistics
-// of the samples) or the autocorrelation of phase or frequency.
-import { state, update, activeClock, multi, markStale } from "../state.js";
+// of the samples) or the autocorrelation of phase or frequency. A table of
+// phase noise is drawn as it is written, with the band its σ(τ) integrates.
+import { state, update, activeClock, multi, markStale, isTable } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
 import { noiseTitle } from "../estimators.js";
-import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
-import { thousands, duration, timeAxisUnit, sci, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
+import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
+import { thousands, duration, timeAxisUnit, sci, num, hertz, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
 // Fitted to the phase and removed before every analysis. On phase a line is a
@@ -77,6 +78,8 @@ export function mount(el, c) {
   relayoutBound = false;
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
+  // A table's carrier and band keep what is typed while the page redraws; leaving the field catches up.
+  root.addEventListener("focusout", (e) => { if (TYPED.has(e.target.dataset?.field)) setTimeout(refresh); });
   // The drift view's toolbar takes height from the plot; follow its size.
   // offsetParent is null once the page has moved on (Plotly rejects a hidden plot).
   new ResizeObserver(() => { if (Plotly && plotEl.data && plotEl.offsetParent) Plotly.Plots.resize(plotEl); }).observe(plotEl);
@@ -137,6 +140,7 @@ function filledRow(k) {
 }
 
 function checkCard(c) {
+  if (c && isTable(c)) return tableCard(c);
   const k = c?.record?.check;
   // A record the core refused (a frequency record with gaps, unfilled) keeps the box that fills it.
   if (!k) return `<div class="card check-card"><h2>Record check</h2><p class="muted small">${c?.error ? "The core could not read this record." : c ? "Reading…" : "No record yet."}</p>${c?.error ? fillBox(c) : ""}</div>`;
@@ -188,11 +192,14 @@ export function refresh() {
   const mode = state.dataMode;
   root.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   root.querySelector("[data-ref=caption]").innerHTML = mode === "file"
-    ? "Phase or frequency records: text columns, Stable32, TimeLab, counter logs, BIPM UTC − UTC(k) and RINEX clock files"
+    ? "Phase or frequency records: text columns, Stable32, TimeLab, counter logs, BIPM UTC − UTC(k) and RINEX clock files; tables of phase noise"
     : "A test record with known noise, for trying estimators";
-  const focus = document.activeElement?.dataset?.field === "name";
-  if (!focus) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
-  else root.querySelector(".check-card").outerHTML = checkCard(c);
+  const field = document.activeElement?.dataset?.field;
+  if (field === "name") root.querySelector(".check-card").outerHTML = checkCard(c);
+  else if (!TYPED.has(field)) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
+  const table = c && isTable(c);
+  root.querySelector("[data-ref=view]").hidden = table;
+  if (table) return refreshTable(c);
   const view = state.dataView;
   root.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const removed = c?.drift && c.drift !== "none" ? `, ${c.drift} drift removed` : "";
@@ -424,6 +431,69 @@ function drawAcf(c) {
 
 // The analysis range: drag across the plot in "Select range" mode. The check
 // above and this plot keep the whole record; the runs use the range.
+// ── A table of phase noise ──
+const TYPED = new Set(["carrier", "band-lo", "band-hi"]);
+const DENSITY_TEXT = { L: ["ℒ(f)", "dBc/Hz"], Sphi: ["S<sub>φ</sub>(f)", "rad²/Hz"], Sx: ["S<sub>x</sub>(f)", "s²/Hz"], Sy: ["S<sub>y</sub>(f)", "1/Hz"] };
+
+function tableCard(c) {
+  const t = c.record?.table;
+  const whole = c.band ? ` · <button class="link-btn" data-act="whole-table">whole table</button>` : "";
+  if (!t) return `<div class="card check-card"><h2>Table check</h2><p class="muted small">${c.error ? `The core could not read this table.${whole}` : "Reading…"}</p></div>`;
+  const [q, u] = DENSITY_TEXT[t.density];
+  const f0 = t.f[0], f1 = t.f.at(-1);
+  const input = (field, label, value, tip, placeholder = "") => `<label class="opt" title="${tip}"><span>${label}</span>
+      <input type="number" data-field="${field}" min="0" step="any" value="${value ?? ""}" placeholder="${placeholder}"></label>`;
+  return `<div class="card check-card">
+    <h2>Table check</h2>
+    <div class="kv"><span>Points</span><span class="mono">${thousands(t.f.length)}</span></div>
+    <div class="kv"><span>Offsets</span><span class="mono">${hertz(f0)} – ${hertz(f1)}</span></div>
+    <div class="kv"><span>Holds</span><span class="mono">${q} in ${u}</span></div>
+    <div class="rule"></div>
+    <div class="table-block">
+      ${t.density === "L" || t.density === "Sphi" ? input("carrier", "Carrier (Hz)", c.carrier, "The carrier frequency ν₀ the table was measured at: S_x = S_φ/(2πν₀)²") : ""}
+      ${input("band-lo", "Band from (Hz)", c.band?.[0], "Lowest offset of the integral; empty for the table's first", num(f0, 4))}
+      ${input("band-hi", "Band to (Hz)", c.band?.[1], "Highest offset of the integral; empty for the table's last", num(f1, 4))}
+      <div class="muted small">σ(τ) integrates the table from ${hertz(t.band[0])} to ${hertz(t.band[1])}${whole}</div>
+    </div>
+  </div>`;
+}
+
+function refreshTable(c) {
+  const t = c.record?.table;
+  const title = t ? `Phase noise ${DENSITY_TEXT[t.density][0]}` : "Phase noise";
+  root.querySelector("[data-ref=plot-title]").innerHTML = multi() ? `${title} · ${h(c.name)}` : title;
+  root.querySelector("[data-ref=plot-hint]").textContent = c.band ? "Outside the band in grey · drag to zoom" : "Drag to zoom";
+  root.querySelector("[data-ref=range]").innerHTML = "";
+  root.querySelector("[data-ref=drift-bar]").hidden = true;
+  root.querySelector("[data-ref=aside]").hidden = true;
+  const empty = root.querySelector("[data-ref=empty]");
+  empty.hidden = !!t;
+  plotEl.style.visibility = t ? "visible" : "hidden";
+  if (!t) { empty.innerHTML = `<p>${c.error ? h(c.error) : "Reading the table…"}</p>`; return; }
+  if (!Plotly) return;
+  const dB = t.density === "L", [, u] = DENSITY_TEXT[t.density];
+  const color = multi() ? seriesColor(c.slot) : css("--s1");
+  const [lo, hi] = t.band;
+  // The part inside the band, its edges interpolated on the log-frequency axis (log-log off ℒ).
+  const at = (x) => {
+    const j = Math.max(1, t.f.findIndex((g) => g >= x));
+    const a = Math.log(t.f[j - 1]), w = (Math.log(x) - a) / (Math.log(t.f[j]) - a);
+    const [p, q] = [t.value[j - 1], t.value[j]];
+    return dB ? p + w * (q - p) : Math.exp(Math.log(p) + w * (Math.log(q) - Math.log(p)));
+  };
+  const inside = t.f.map((g, i) => [g, t.value[i]]).filter(([g]) => g > lo && g < hi);
+  const band = [[lo, at(lo)], ...inside, [hi, at(hi)]];
+  const hover = `f = %{x:.4g} Hz<br>%{y:${dB ? ".1f" : ".3e"}} ${u}<extra></extra>`;
+  const traces = [
+    { x: t.f, y: t.value, mode: "lines+markers", name: "table", line: { color: css("--muted"), width: 1.2 }, marker: { color: css("--muted"), size: 5 }, hovertemplate: hover },
+    { x: band.map((p) => p[0]), y: band.map((p) => p[1]), mode: "lines", name: "band", line: { color, width: 2 }, hoverinfo: "skip" },
+  ];
+  Plotly.react(plotEl, traces, {
+    ...baseLayout(), margin: { l: 70, r: 18, t: 10, b: 46 }, showlegend: false, xaxis: logAxis("Offset frequency f (Hz)"),
+    yaxis: dB ? { ...linAxis(""), ticksuffix: " dB" } : logAxis(""), dragmode: "zoom", uirevision: `${c.id}-table`,
+  }, { ...CONFIG, showTips: false });
+}
+
 function rangeBar(c) {
   if (!c?.record) return "";
   const r = c.range;
@@ -479,7 +549,7 @@ function drawRecord(c) {
     plotEl.on("plotly_relayout", (ev) => {
       const k = activeClock();
       const a = ev["xaxis.range[0]"], b = ev["xaxis.range[1]"];
-      if (state.dataDrag !== "range" || state.dataView === "drift" || !k?.record || a === undefined || b === undefined) return;
+      if (state.dataDrag !== "range" || state.dataView === "drift" || !k?.record || isTable(k) || a === undefined || b === undefined) return;
       const end = (k.record.n - 1) * k.record.tau0;
       const t0 = Math.max(0, Math.min(a, b) * axisUnit), t1 = Math.min(end, Math.max(a, b) * axisUnit);
       const snap = (t) => Math.round(t / k.record.tau0) * k.record.tau0;
@@ -513,6 +583,7 @@ function onClick(e) {
   else if (act === "remove-outliers") ctx.setRecord(c, { remove_outliers: true });
   else if (act === "keep-outliers") ctx.setRecord(c, { remove_outliers: false });
   else if (act === "clear-range") setRange(c, null);
+  else if (act === "whole-table") ctx.setRecord(c, { band: null, result: null });
   else if (act === "synth") {
     const v = (k) => Number(root.querySelector(`[data-synth=${k}]`).value);
     const n = Math.round(v("n")), tau0 = v("tau0"), seed = Math.round(v("seed")), clocks = Math.round(v("clocks"));
@@ -540,9 +611,33 @@ function onChange(e) {
   if (!c || !f) return;
   if (f === "name") { const v = e.target.value.trim() || c.name; update(() => { c.name = v; c.typedName = true; }); }
   else if (f === "fillgaps") ctx.setRecord(c, { fillgaps: e.target.checked });
+  else if (f === "carrier") setCarrier(c, Number(e.target.value));
+  else if (f === "band-lo" || f === "band-hi") setBand(c);
+}
+
+// The carrier of a table of ℒ or S_φ: its σ(τ) and the ℒ the Spectrum page draws follow it.
+function setCarrier(c, v) {
+  if (!(v > 0)) { ctx.status("error", "The carrier must be a frequency above 0 Hz, e.g. 10e6."); return; }
+  update((s) => Object.assign(s.spec, { carrier: v, carrierText: String(v) }));
+  ctx.setRecord(c, { carrier: v, result: null, sourceInfo: c.sourceInfo.replace(/carrier .*$/, `carrier ${hertz(v)}`) });
+}
+
+// The band of a table's integral, inside the table; empty fields are its ends.
+function setBand(c) {
+  const t = c.record?.table;
+  if (!t) return;
+  const val = (k) => { const v = root.querySelector(`[data-field=band-${k}]`).value; return v === "" ? null : Number(v); };
+  const f0 = t.f[0], f1 = t.f.at(-1), lo = val("lo") ?? f0, hi = val("hi") ?? f1;
+  if (!(f0 <= lo && lo < hi && hi <= f1)) {
+    ctx.status("error", `The band must lie inside the table, ${hertz(f0)} to ${hertz(f1)}, from a lower to a higher offset.`);
+    return;
+  }
+  ctx.setRecord(c, { band: lo === f0 && hi === f1 ? null : [lo, hi], result: null });
 }
 
 export function hint() {
+  const c = activeClock();
+  if (c && isTable(c)) return "A table of phase noise: set its carrier and band in the check card · drag on the plot to zoom";
   return state.dataDrag === "range"
     ? "Drag across the plot to choose the part of the record to analyze"
     : "Drop a file anywhere in the window · drag on the plot to zoom · double-click to reset";
