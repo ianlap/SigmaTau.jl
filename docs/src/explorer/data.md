@@ -30,7 +30,7 @@ The explorer reads the files that [`read_data`](@ref) reads:
   (`+9.999999999E+06`): frequencies in hertz become fractional frequency,
   and time intervals become phase;
 - tables with named columns and ISO 8601 timestamps;
-- the BIPM files of UTC − UTC(k);
+- the BIPM files of UTC − UTC(k) and of rapid UTC, UTCr − UTC(k);
 - RINEX clock files (`.clk`), from which the clocks are chosen in a list.
 
 A file compressed with gzip (`.gz`) is unpacked as it is opened.

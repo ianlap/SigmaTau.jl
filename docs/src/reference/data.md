@@ -8,7 +8,7 @@ through them on a file.
 | File | Read with |
 |:-----|:----------|
 | Columns of numbers, with or without a time column | [`read_phase`](@ref), [`read_frequency`](@ref) |
-| Stable32 and TimeLab files, counter readings, tables with named columns, BIPM files of UTC − UTC(k), RINEX clock files | [`read_data`](@ref), which finds the format |
+| Stable32 and TimeLab files, counter readings, tables with named columns, BIPM files of UTC − UTC(k) and UTCr − UTC(k), RINEX clock files | [`read_data`](@ref), which finds the format |
 | A file that [`save`](@ref) wrote | [`load`](@ref) |
 
 The command line and the explorer read the same files

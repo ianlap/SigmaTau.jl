@@ -37,6 +37,13 @@ fmt(f) = joinpath(FMT, f)
         q = read_data(fmt("bipm_utc_lab.txt"); fillgaps=true)
         @test !any(isnan, q.x) && length(q) == 60
         @test start_time(p) == DateTime(1998, 1, 1)               # MJD 50814
+        # Rapid UTC: a "#" heading for UTCr, one row a day, a remark after one value.
+        r = tempname()
+        write(r, "# MJD  [UTCr-UTC(LAB)]/ns\n" * join((string(60000 + k, "  ", 0.1k) for k in 0:9), "\n") *
+                 "  # -2.2  # erroneous value published on week 1818\n\n# notes\n")
+        @test detect_format(r) === :bipm_utc
+        u = read_data(r)
+        @test u.tau0 == 86400.0 && length(u) == 10 && u.x ≈ 1e-10 .* (0:9)
     end
 
     @testset "RINEX clock" begin
