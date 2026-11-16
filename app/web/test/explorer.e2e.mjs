@@ -67,6 +67,12 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
       assert.deepEqual(shown[r.deviation].tau, r.points.map((p) => p.tau), r.deviation);
       assert.deepEqual(shown[r.deviation].dev, r.points.map((p) => p.dev), r.deviation);
     }
+    // The readout leads with the lowest plotted σ of the table's estimator (ADEV) and where it falls.
+    const { tau, dev } = shown.adev, i = dev.indexOf(Math.min(...dev.filter((v) => v > 0)));
+    const [m, e] = dev[i].toExponential(2).split("e");
+    const items = await page.locator("#page .readout > div").allInnerTexts();
+    assert.equal(items[0], `${i === dev.length - 1 ? "Lowest ADEV, at the longest τ" : i === 0 ? "Lowest ADEV, at the shortest τ" : "ADEV floor"}\n${m} × 10${Number(e).toString().replace("-", "−")}`);
+    if (i > 0 && i < dev.length - 1) assert.equal(items[1], `at τ\n${tau[i]}s`);
   });
 
   await t.test("Spectrum and Dynamic draw their plots", async () => {
