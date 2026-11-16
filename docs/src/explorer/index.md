@@ -29,10 +29,11 @@ open.
 2. **Check it.** The record check lists the samples, the span, the gaps, the
    points past 5σ and the frequency drift, beside a plot of the phase.
    Drift removal, gap filling and outlier removal are set there.
-3. **Choose the estimators.** **+ Add estimator** in the
-   [side panel](panel.md) opens the list. The τ grid, the confidence level,
+3. **Choose the estimators.** **Settings** on the rail opens the
+   [side panel](panel.md), where **+ Add estimator** opens the list. The τ grid, the confidence level,
    the bias correction and the noise type are under **Options**.
-4. **Run the analysis** with **Run analysis** or F5.
+4. **Run the analysis** with **Run** on the rail, **Run analysis** in the
+   panel or F5.
 5. **Read the results** on the [Stability](stability.md),
    [Spectrum](spectrum.md), [Dynamic](dynamic.md),
    [Holdover](holdover.md) and [Steering](steering.md) pages.
@@ -48,7 +49,8 @@ open.
 | **File** menu | The [exports](export.md): the plot, the results, a report, and saving and opening a session |
 | Theme button | Switches between the colors of the system, a light theme and a dark theme. The choice is remembered |
 | **?** | The [help](#The-help): a search through this manual and its sections on the page in view |
-| [Side panel](panel.md) | The clocks, the estimators and the options of the analysis, with the **Run analysis** button. On Synthesis, Ensemble and Live it holds the settings of that page |
+| Rail | Along the left edge: **Settings** opens the side panel, **Results** the card of results beside the plot in a window narrower than 1280 px, and **Run** runs the analysis while the panel is closed |
+| [Side panel](panel.md) | The clocks, the estimators and the options of the analysis, with the **Run analysis** button. On Synthesis, Ensemble and Live it holds the settings of that page. It starts folded into the rail, so the plot has the width |
 | Status bar | Whether the results on screen belong to the inputs on screen |
 
 ## When results are computed

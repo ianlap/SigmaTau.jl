@@ -55,6 +55,20 @@
   </header>
 
   <div class="body">
+    <nav class="rail" id="rail" aria-label="Panels">
+      <button class="rail-btn" id="rail-panel" type="button" aria-controls="side" aria-expanded="true">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 14h14" stroke="currentColor" stroke-width="1.6"/><circle cx="7" cy="6" r="2" fill="var(--bg-panel)" stroke="currentColor" stroke-width="1.6"/><circle cx="13" cy="14" r="2" fill="var(--bg-panel)" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span>Settings</span></button>
+      <button class="rail-btn" id="rail-results" type="button" aria-expanded="false" title="The results beside the plot" hidden>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 8h14M8 8v8" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span>Results</span></button>
+      <span class="grow"></span>
+      <button class="rail-run" id="rail-run" type="button" aria-label="Run analysis">
+        <svg class="i-run" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5l9 5.5-9 5.5z" fill="currentColor"/></svg>
+        <svg class="i-stop" viewBox="0 0 20 20" aria-hidden="true"><rect x="5.5" y="5.5" width="9" height="9" rx="1.5" fill="currentColor"/></svg>
+        <span class="stale-dot" aria-hidden="true" hidden></span></button>
+      <span class="rail-run-label" aria-hidden="true">Run</span>
+    </nav>
     <aside class="side" id="side" aria-label="Clocks, estimators and options"></aside>
     <main class="page" id="page"></main>
   </div>
