@@ -6,7 +6,7 @@
 import { state, update, visibleClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale } from "../plot.js";
-import { sci, num, thousands, escapeHtml as h } from "../format.js";
+import { sci, num, thousands, timeAxisUnit, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
@@ -86,9 +86,19 @@ function ensureMaps(clocks) {
 
 const log10 = (v) => (v > 0 ? Math.log10(v) : NaN);
 const tauText = (t) => (t >= 1e4 ? `${num(t / 1000, 3)}k` : num(t, 4));
-const timeText = (t) => (t >= 1e4 ? `${thousands(Math.round(t / 1000))}k` : thousands(Math.round(t)));
+const capital = (m) => m.charAt(0).toUpperCase() + m.slice(1);
+
+// The unit of the window-center axis, from the latest window of the maps shown.
+const timeUnitOf = (maps) => timeAxisUnit(Math.max(...maps.map((d) => d.t.at(-1))));
+// The labels of the window centers in one style: "9 216" beside "10k" reads as two kinds of number.
+function timeLabels(ts, f) {
+  const v = ts.map((t) => t / f);
+  if (f > 1) return v.map((x) => num(x, 3));
+  return Math.max(...v) >= 1e4 ? v.map((x) => `${num(x / 1000, 3)}k`) : v.map((x) => thousands(Math.round(x)));
+}
 
 function heat(c, d, zmin, zmax, showscale, compact) {
+  const [f, u] = timeUnitOf([d]);
   return {
     type: "heatmap",
     z: d.map.map((row) => row.map(log10)),
@@ -104,25 +114,27 @@ function heat(c, d, zmin, zmax, showscale, compact) {
       ticktext: range(Math.ceil(zmin), Math.floor(zmax)).map((k) => `10<sup>${k}</sup>`),
       tickfont: { size: 10.5, color: css("--muted") },
     } : undefined,
-    customdata: d.map.map((row, i) => row.map((v, j) => [d.tau[j], sci(v, 3), d.t[i]])),
-    hovertemplate: `${compact ? `<b>${h(c.name)}</b><br>` : ""}t = %{customdata[2]:.6g} s<br>τ = %{customdata[0]:.4g} s<br>${NAME[d.dev]} = %{customdata[1]}<extra></extra>`,
+    customdata: d.map.map((row, i) => row.map((v, j) => [d.tau[j], sci(v, 3), d.t[i] / f])),
+    hovertemplate: `${compact ? `<b>${h(c.name)}</b><br>` : ""}t = %{customdata[2]:.6g} ${u}<br>τ = %{customdata[0]:.4g} s<br>${NAME[d.dev]} = %{customdata[1]}<extra></extra>`,
   };
 }
 
 // The waterfall: log σ over (log τ, t) as a surface that a drag turns.
 function surface(c, d, zmin, zmax, compact) {
+  const [f, u] = timeUnitOf([d]);
   return {
-    type: "surface", x: d.tau.map(Math.log10), y: d.t, z: d.map.map((r) => r.map(log10)),
+    type: "surface", x: d.tau.map(Math.log10), y: d.t.map((t) => t / f), z: d.map.map((r) => r.map(log10)),
     colorscale: heatScale(), cmin: zmin, cmax: zmax, showscale: false,
-    hovertemplate: `${compact ? `<b>${h(c.name)}</b><br>` : ""}τ = 10^%{x:.2f} s<br>t = %{y:.6g} s<br>log₁₀σ = %{z:.2f}<extra></extra>`,
+    hovertemplate: `${compact ? `<b>${h(c.name)}</b><br>` : ""}τ = 10^%{x:.2f} s<br>t = %{y:.6g} ${u}<br>log₁₀σ = %{z:.2f}<extra></extra>`,
   };
 }
 
-function surfaceLayout(compact) {
+function surfaceLayout(compact, d) {
+  const [, u] = timeUnitOf([d]);
   return {
     ...baseLayout(), margin: { l: 0, r: 0, t: 0, b: 0 },
     scene: {
-      xaxis: sceneAxis(compact ? "log τ" : "log₁₀ τ (s)"), yaxis: sceneAxis("t (s)"), zaxis: sceneAxis(compact ? "log σ" : "log₁₀ σ"),
+      xaxis: sceneAxis(compact ? "log τ" : "log₁₀ τ (s)"), yaxis: sceneAxis(`t (${u})`), zaxis: sceneAxis(compact ? "log σ" : "log₁₀ σ"),
       camera: { eye: { x: 1.6, y: -1.6, z: 0.9 } },
     },
     uirevision: "3d",
@@ -134,12 +146,13 @@ const sceneAxis = (text) => ({ title: { text }, color: css("--ink-2"), gridcolor
 function range(a, b) { const out = []; for (let k = a; k <= b; k++) out.push(k); return out; }
 
 function mapLayout(d, compact) {
+  const [f, u] = timeUnitOf([d]);
   const ticks = d.tau.map((_, j) => j).filter((j) => j % Math.max(1, Math.ceil(d.tau.length / 6)) === 0);
   return {
     ...baseLayout(),
     margin: compact ? { l: 46, r: 8, t: 6, b: 42 } : { l: 70, r: 10, t: 10, b: 48 },
     xaxis: { ...linAxis(compact ? "τ (s)" : "Averaging time τ (s)"), tickvals: ticks, ticktext: ticks.map((j) => tauText(d.tau[j])), showgrid: false, mirror: false },
-    yaxis: { ...linAxis(compact ? "" : "Window center t (s)"), autorange: "reversed", tickvals: d.t, ticktext: d.t.map(timeText), nticks: 6, showgrid: false, mirror: false },
+    yaxis: { ...linAxis(compact ? "" : `Window center t (${u})`), autorange: "reversed", tickvals: d.t, ticktext: timeLabels(d.t, f), nticks: 6, showgrid: false, mirror: false },
     plot_bgcolor: css("--bg-card"),
     uirevision: `${d.dev}-${d.window}`,
   };
@@ -192,13 +205,13 @@ export function refresh() {
     const wait = card.querySelector("[data-ref=wait]");
     const plot = card.querySelector("[data-ref=map]");
     wait.hidden = !!d;
-    wait.innerHTML = d ? "" : `<p>${failed.length ? h(c.dynamic.error) : "Computing the map…"}</p>`;
+    wait.innerHTML = d ? "" : `<p>${failed.length ? h(capital(c.dynamic.error)) : "Computing the map…"}</p>`;
     plot.style.visibility = d ? "visible" : "hidden";
     if (!d) { cell.hidden = true; return; }
     const [zmin, zmax] = zRange([d]);
     renderCell(cell, c, d); // lay the card out before Plotly sizes the map
     if (state.dyn.view === "3d") {
-      Plotly.react(plot, [surface(c, d, zmin, zmax, false)], surfaceLayout(false), CONFIG);
+      Plotly.react(plot, [surface(c, d, zmin, zmax, false)], surfaceLayout(false, d), CONFIG);
     } else {
       const layout = mapLayout(d, false);
       const pin = state.dyn.cell;
@@ -218,7 +231,7 @@ export function refresh() {
   const ids = clocks.map((c) => c.id).join(",");
   if (area.dataset.ids !== ids) {
     area.dataset.ids = ids;
-    area.innerHTML = `<div class="dyn-multi"><div class="dyn-row"><div class="dyn-grid" style="--n:${clocks.length}">${clocks.map((c) => `
+    area.innerHTML = `<div class="dyn-multi"><p class="dyn-note muted small" data-ref="dyn-note" hidden></p><div class="dyn-row"><div class="dyn-grid" style="--n:${clocks.length}">${clocks.map((c) => `
       <div class="card dyn-card" data-clock="${c.id}"><h3><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>${h(c.name)}</h3>
         <div class="plot"></div><div class="empty" hidden></div></div>`).join("")}</div>
       <div class="dyn-scale"><div class="plot" data-ref="scale"></div></div></div>
@@ -234,12 +247,18 @@ export function refresh() {
     const plot = box.querySelector(".plot"), wait = box.querySelector(".empty");
     const ok = ready.includes(c);
     wait.hidden = ok;
-    wait.innerHTML = ok ? "" : `<p>${c.dynamic?.error ? h(c.dynamic.error) : "Computing…"}</p>`;
+    wait.innerHTML = ok ? "" : `<p>${c.dynamic?.error ? "No map for this clock." : "Computing…"}</p>`;
     plot.style.visibility = ok ? "visible" : "hidden";
     if (!ok) continue;
-    if (state.dyn.view === "3d") Plotly.react(plot, [surface(c, c.dynamic, zmin, zmax, true)], surfaceLayout(true), { ...CONFIG, displayModeBar: false });
+    if (state.dyn.view === "3d") Plotly.react(plot, [surface(c, c.dynamic, zmin, zmax, true)], surfaceLayout(true, c.dynamic), { ...CONFIG, displayModeBar: false });
     else Plotly.react(plot, [heat(c, c.dynamic, zmin, zmax, false, true)], mapLayout(c.dynamic, true), { ...CONFIG, displayModeBar: false });
   }
+  // One line for a refusal, named for the clocks it concerns when not all of them.
+  const note = area.querySelector("[data-ref=dyn-note]");
+  const why = new Map();
+  for (const c of failed) why.set(c.dynamic.error, [...(why.get(c.dynamic.error) ?? []), c.name]);
+  note.hidden = !why.size;
+  note.innerHTML = [...why].map(([m, names]) => `${names.length < clocks.length ? `${h(names.join(", "))}: ` : ""}${h(capital(m))}`).join("<br>");
   // A color bar on its own, shared by every map.
   if (ready.length) {
     Plotly.react(area.querySelector("[data-ref=scale]"), [{
@@ -295,6 +314,7 @@ function drawSlice(area, ready) {
   const traces = [];
   const shapes = [];
   const missing = [];
+  const [tf, tu] = timeUnitOf(ready.map((c) => c.dynamic));
   for (const c of ready) {
     const d = c.dynamic;
     // Clocks with another τ₀ have no exact match: take the nearest τ within
@@ -304,9 +324,9 @@ function drawSlice(area, ready) {
     const exact = sameTau(d.tau[j], tau);
     const color = seriesColor(c.slot);
     traces.push({
-      x: d.t, y: d.map.map((row) => row[j]), name: exact ? c.name : `${c.name} (τ = ${num(d.tau[j], 4)} s)`, mode: "lines+markers",
+      x: d.t.map((t) => t / tf), y: d.map.map((row) => row[j]), name: exact ? c.name : `${c.name} (τ = ${num(d.tau[j], 4)} s)`, mode: "lines+markers",
       line: { color, width: 2 }, marker: { color, size: 5 },
-      hovertemplate: `<b>${h(c.name)}</b><br>t = %{x:.6g} s<br>${NAME[d.dev]} = %{y:.3e}<extra></extra>`,
+      hovertemplate: `<b>${h(c.name)}</b><br>t = %{x:.6g} ${tu}<br>${NAME[d.dev]} = %{y:.3e}<extra></extra>`,
     });
     const r = c.result?.results.find((x) => x.dev === whole);
     const i = r ? r.tau.findIndex((t) => sameTau(t, d.tau[j])) : -1;
@@ -323,7 +343,7 @@ function drawSlice(area, ready) {
   box.querySelector("[data-ref=slice-sub]").textContent = `${none}${NAME[state.dyn.dev]} in each window · dotted = whole record (${whole.toUpperCase()}, last run)${state.dyn.view === "map" ? " · click a map column to change τ" : ""}`;
   Plotly.react(box.querySelector("[data-ref=slice]"), traces, {
     ...baseLayout(), margin: { l: 70, r: 14, t: 8, b: 44 },
-    xaxis: linAxis("Window center t (s)"), yaxis: { ...logAxis(`${NAME[state.dyn.dev]} at τ = ${num(tau, 4)} s`), dtick: undefined },
+    xaxis: linAxis(`Window center t (${tu})`), yaxis: { ...logAxis(`${NAME[state.dyn.dev]} at τ = ${num(tau, 4)} s`), dtick: undefined },
     showlegend: true, legend: { ...baseLayout().legend, orientation: "h", x: 0, xanchor: "left", y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", borderwidth: 0 },
     shapes, uirevision: "slice",
   }, CONFIG);
@@ -372,11 +392,12 @@ function renderCell(box, c, d) {
     return;
   }
   const tau = d.tau[pin.j];
+  const [f, u] = timeUnitOf([d]);
   const whole = c.result?.results.find((r) => r.dev === (d.dev === "dhdev" ? "hdev" : "adev"));
   const wi = whole ? whole.tau.findIndex((t) => Math.abs(t - tau) <= 1e-9 * tau) : -1;
   box.innerHTML = `<div class="card-head"><h2>Selected cell</h2></div>
     <div class="cell-kv">
-      <div class="kv"><span>Window center</span><span class="mono">${thousands(Math.round(d.t[pin.i]))} s</span></div>
+      <div class="kv"><span>Window center</span><span class="mono">${f === 1 ? thousands(Math.round(d.t[pin.i])) : num(d.t[pin.i] / f, 4)} ${u}</span></div>
       <div class="kv"><span>τ</span><span class="mono">${num(tau, 5)} s</span></div>
       <div class="kv"><span>${NAME[d.dev]}</span><span class="mono">${sci(d.map[pin.i][pin.j], 3)}</span></div>
       <div class="kv" title="${d.dev === "dhdev" ? "HDEV" : "ADEV"} of the whole record at this τ, from the last run"><span>Whole record</span><span class="mono">${wi >= 0 ? sci(whole.sigma[wi], 3) : "–"}</span></div>
@@ -384,6 +405,6 @@ function renderCell(box, c, d) {
 }
 
 export function hint() {
-  if (multi()) return state.dyn.view === "map" ? "Rows = window center time (s) · columns = τ · stronger color = less stable" : "Drag a waterfall to turn it · scroll to zoom";
+  if (multi()) return state.dyn.view === "map" ? "Rows = window center time · columns = τ · stronger color = less stable" : "Drag a waterfall to turn it · scroll to zoom";
   return state.dyn.view === "map" ? "Click a cell to pin it · switch to 3D waterfall to compare curve shapes" : "Drag to turn · scroll to zoom";
 }

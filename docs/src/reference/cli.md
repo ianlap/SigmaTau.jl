@@ -237,7 +237,15 @@ outside the range of the recommendation. Each entry of `checks` is one result ag
 | `--m M` | with `--acf`, the averaging factor, 1 by default |
 | `--lags K` | with `--acf`, the largest lag. By default half the series, and at most 1000 |
 
-The record needs three samples or more. The CSV output is one row:
+The record needs three samples or more. `check` also says what the size and
+the names of the record suggest about its units, since a phase of
+nanoseconds, radians or hertz read as it is gives numbers that look
+plausible: a phase that moves by more than a second, a fractional frequency
+above ``10^{-3}``, or a file or `--column` name that says `rad`, `ns`, `ps`,
+`ppb`, `ppm` or `Hz` while `--scaling` is 1. The CSV output prints each as a
+line `sigmatau: warning: …` on standard error, unless `--quiet` is given, and
+the JSON output lists them as `warnings`, an empty list when there are none.
+The CSV output is one row:
 
 ```text
 source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
