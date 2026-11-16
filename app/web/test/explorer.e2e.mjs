@@ -179,6 +179,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
 
   await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
     await page.click("[data-ctl=view][data-v=hat]");
+    // The view switch spans the column of the controls around it, and no further.
+    await openPanel();
+    const [view, column] = await page.evaluate(() => [".ens-view", ".ens-view + .opt"].map((s) => document.querySelector(s).getBoundingClientRect()).map((r) => [r.left, r.right]));
+    assert.deepEqual(view.map(Math.round), column.map(Math.round));
     await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]").data?.some((d) => d.name === "Pairs, as measured"), null, SLOW);
     assert.equal(await page.locator("#page [data-ref=title]").innerText(), "ADEV of each clock");
     const shown = await page.evaluate(() => document.querySelector("#page [data-ref=adev]").data.filter((d) => /^clock \d$/.test(d.name)).map((d) => d.y));
