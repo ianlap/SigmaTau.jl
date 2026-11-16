@@ -3,6 +3,7 @@
 import { state, update, subscribe, newClock, activeClock, multi, referenceClock, isReference, isTable } from "./state.js";
 import { health, load, analyze } from "./core.js";
 import { initPanel, renderPanel } from "./panel.js";
+import { initLayout, renderRail } from "./layout.js";
 import { openImport } from "./importer.js";
 import * as stability from "./pages/stability.js";
 import * as data from "./pages/data.js";
@@ -385,6 +386,7 @@ function render() {
   renderPanel(page?.controls && (!multi() || page.ownsPanel) ? page.controls() : null);
   renderChip();
   page?.refresh();
+  renderRail();
   renderStatus();
 }
 // A notice gives way to the first change after 8 s. An error stays until the inputs of the analysis change
@@ -529,6 +531,7 @@ document.addEventListener("drop", async (e) => {
 // ── Start ──
 webLinks((message) => ctx.status("error", message));
 initPanel({ run, cancel: cancelRun, addClock, selectClock, setReference, removeClock });
+initLayout({ run });
 go(route() || "stability");
 (async () => {
   const hc = await health();

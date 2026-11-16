@@ -44,16 +44,21 @@ nothing #hide
 #
 # ([SP1065 §10.14, Eqs. (68) and (69)](@cite riley-2008-sp1065)).
 # [`ncornered_hat`](@ref) takes the results for A−B, B−C and C−A and returns
-# those of the clocks A, B and C:
+# those of the clocks A, B and C, named and shown as a table:
 
 m = 2 .^ (0:10)
 τ = m .* τ₀
 
-hat = ncornered_hat(adev(ab, m), adev(bc, m), adev(ca, m))
+hat = ncornered_hat(adev(ab, m), adev(bc, m), adev(ca, m);
+                    names = ["clock A", "clock B", "clock C"])
+
+# Each clock is a [`StabilityResult`](@ref) of its own, `hat[1]` or
+# `hat["clock A"]`, with its interval. The plot labels each curve with its
+# clock:
 
 using Plots
 
-plot(hat; label = ["clock A" "clock B" "clock C"], legend = :bottomleft)
+plot(hat; legend = :bottomleft)
 plot!(τ, σ₁' ./ sqrt.(τ); ls = :dash, color = :gray, label = ["true" "" ""])
 
 # The three curves follow the noise put into the three clocks. The results
