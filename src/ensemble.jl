@@ -2,6 +2,80 @@
 # the Groslambert covariance separate the pairwise measurements into one
 # deviation per clock, with a confidence interval.
 
+"""
+    HatResult
+
+The deviation of each clock that [`ncornered_hat`](@ref) or
+[`groslambert`](@ref) separates, with the names of the clocks.
+
+A `HatResult` is a vector of [`StabilityResult`](@ref), one per clock in the
+order of `names`: `h[2]` is the second clock, `h["maser"]` the clock of
+that name, and `a, b, c = groslambert(ab, bc, ca)` unpacks three. It
+displays as a table of the deviations with a column for each clock, plots
+a curve for each clock labelled with its name, and is a table in the sense
+of `Tables.jl` whose first column is `clock`. The interval of a clock shows
+with its own result, `h[i]`.
+
+# Fields
+
+$(TYPEDFIELDS)
+
+# Examples
+
+```jldoctest
+julia> using SigmaTau
+
+julia> cc = ClockComparisons(randn(256, 2), 1.0; names = ["maser", "cesium"]);
+
+julia> h = ncornered_hat(cc, [1, 2, 4]);
+
+julia> print(h.names)
+["maser", "cesium", "reference"]
+
+julia> h["cesium"] === h[2]
+true
+```
+"""
+struct HatResult <: AbstractVector{StabilityResult}
+    "Name of each clock."
+    names::Vector{String}
+    "Deviation of each clock, all on one τ grid."
+    clocks::Vector{StabilityResult}
+    "How the clocks were separated: `:hat` or `:groslambert`."
+    method::Symbol
+    function HatResult(names::AbstractVector{<:AbstractString}, clocks::Vector{StabilityResult}, method::Symbol)
+        length(names) == length(clocks) || throw(ArgumentError(
+            "$(length(names)) clock names for $(length(clocks)) clocks"))
+        return new(String.(names), clocks, method)
+    end
+end
+
+Base.size(h::HatResult) = size(h.clocks)
+Base.getindex(h::HatResult, i::Int) = h.clocks[i]
+function Base.getindex(h::HatResult, name::AbstractString)
+    i = findfirst(==(name), h.names)
+    i === nothing && throw(KeyError(name))
+    return h.clocks[i]
+end
+
+_hat_title(h::HatResult) =
+    string(isempty(h.clocks) ? "" : uppercase(string(h.clocks[1].deviation_type)), " of ",
+           length(h.clocks), " clocks, ", h.method === :hat ? "N-cornered hat" : "Groslambert covariance")
+
+Base.show(io::IO, h::HatResult) = print(io, "HatResult(", _hat_title(h), ": ", join(h.names, ", "), ")")
+
+# REPL display: a row for each τ and a column for each clock.
+function Base.show(io::IO, ::MIME"text/plain", h::HatResult)
+    print(io, _hat_title(h))
+    isempty(h.clocks) && return
+    cols = [[["tau"; _show4g.(h.clocks[1].tau)]];
+            [[name; _show4g.(r.dev)] for (name, r) in zip(h.names, h.clocks)]]
+    widths = [maximum(length, c) for c in cols]
+    for i in eachindex(cols[1])
+        print(io, "\n  ", join((lpad(c[i], w) for (c, w) in zip(cols, widths)), "  "))
+    end
+end
+
 # Measured pair (i, j) from a possibly part-filled matrix; the transposed
 # entry stands in for it (s²(x_i − x_j) = s²(x_j − x_i)).
 function _nch_pair(pairwise::AbstractMatrix{StabilityResult}, i::Int, j::Int)
@@ -11,10 +85,10 @@ function _nch_pair(pairwise::AbstractMatrix{StabilityResult}, i::Int, j::Int)
 end
 
 """
-    ncornered_hat(pairwise::AbstractMatrix{StabilityResult}) → Vector{StabilityResult}
-    ncornered_hat(r_ab, r_bc, r_ca) → Vector{StabilityResult}
+    ncornered_hat(pairwise::AbstractMatrix{StabilityResult}; names) → HatResult
+    ncornered_hat(r_ab, r_bc, r_ca; names=["A", "B", "C"]) → HatResult
     ncornered_hat(cc::ClockComparisons, m_values=Octave; deviation=:adev, reference=true,
-                  confidence=DEFAULT_CONFIDENCE) → Vector{StabilityResult}
+                  confidence=DEFAULT_CONFIDENCE) → HatResult
 
 Deviation of each of ``N ≥ 3`` clocks from the deviations measured between
 every pair of them: the three-cornered hat of
@@ -62,6 +136,11 @@ measured a pair counts as noise of its two clocks.
 
 # Keywords
 
+- `names`: with `pairwise` or three results, one name per clock;
+  `"clock 1"`, `"clock 2"`, … for a matrix and `"A"`, `"B"`, `"C"` for
+  three results. With `cc` the names are those of `cc`, and the reference
+  is named by `cc.reference`, or `"reference"` where that is empty.
+
 These go with `cc`.
 
 - `deviation=:adev`: the estimator, one of `:adev`, `:mdev`, `:hdev`,
@@ -73,7 +152,8 @@ These go with `cc`.
 
 # Returns
 
-One [`StabilityResult`](@ref) per clock, of the estimator of the inputs.
+A [`HatResult`](@ref): one [`StabilityResult`](@ref) per clock, of the
+estimator of the inputs, with the names of the clocks.
 
 - `edf` and `ci` are filled when every input has an EDF, at the confidence
   level of the inputs. The variance of ``\\hat σ_i^2`` follows from that of
@@ -113,11 +193,15 @@ julia> using SigmaTau
 
 julia> cc = ClockComparisons(randn(256, 2), 1.0);
 
-julia> length(ncornered_hat(cc, [1, 2, 4]; deviation = :mdev))
-3
+julia> ncornered_hat(cc, [1, 2, 4]; deviation = :mdev).names
+3-element Vector{String}:
+ "clock 1"
+ "clock 2"
+ "reference"
 ```
 """
-function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
+function ncornered_hat(pairwise::AbstractMatrix{StabilityResult};
+                       names::AbstractVector{<:AbstractString}=["clock $i" for i in axes(pairwise, 1)])
     n_clocks, n_cols = size(pairwise)
     n_clocks == n_cols || throw(ArgumentError(
         "ncornered_hat: pairwise matrix must be square, got $(n_clocks)×$(n_cols)"))
@@ -161,7 +245,7 @@ function ncornered_hat(pairwise::AbstractMatrix{StabilityResult})
                                      with_ci ? _sep_chi2_ci(dev, edf, confidence) : _CIBound[], edf,
                                      copy(neff_min), ref.tau0, ref.n, with_ci ? confidence : NaN)
     end
-    return results
+    return HatResult(names, results, :hat)
 end
 
 # Equivalent EDF of clock i's variance at τ index k, 2σ̂⁴/Var(σ̂²). Var(σ̂²)
@@ -186,12 +270,13 @@ end
 
 # Three-cornered hat from A−B, B−C, C−A; C−A fills pairwise[1, 3] since
 # orientation is irrelevant.
-function ncornered_hat(r_ab::StabilityResult, r_bc::StabilityResult, r_ca::StabilityResult)
+function ncornered_hat(r_ab::StabilityResult, r_bc::StabilityResult, r_ca::StabilityResult;
+                       names::AbstractVector{<:AbstractString}=["A", "B", "C"])
     pairwise = Matrix{StabilityResult}(undef, 3, 3)
     pairwise[1, 2] = r_ab
     pairwise[2, 3] = r_bc
     pairwise[1, 3] = r_ca
-    return ncornered_hat(pairwise)
+    return ncornered_hat(pairwise; names)
 end
 
 # Estimators a hat can separate: quadratic in the record with no factor that
@@ -215,6 +300,11 @@ function _hat_records(cc::ClockComparisons, reference::Bool, name::String)
     return records
 end
 
+# Names of the clocks of `_hat_records(cc, …)`: those of `cc`, and the
+# reference's when it was added as the last clock.
+_hat_names(cc::ClockComparisons, records) =
+    size(records, 1) > length(cc.names) ? [cc.names; isempty(cc.reference) ? "reference" : cc.reference] : cc.names
+
 function ncornered_hat(cc::ClockComparisons, m_values::Vector{Int}; deviation::Symbol=:adev,
                        reference::Bool=true, confidence::Real=DEFAULT_CONFIDENCE)
     deviation in _HAT_DEVIATIONS || throw(ArgumentError(
@@ -225,7 +315,7 @@ function ncornered_hat(cc::ClockComparisons, m_values::Vector{Int}; deviation::S
     for i in axes(records, 1), j in (i + 1):size(records, 2)
         pairwise[i, j] = SigmaTau.deviation(deviation, records[i, j], m_values; confidence=c)
     end
-    return ncornered_hat(pairwise)
+    return ncornered_hat(pairwise; names=_hat_names(cc, records))
 end
 
 ncornered_hat(cc::ClockComparisons, taus::TauMode=Octave; deviation::Symbol=:adev, kw...) =
@@ -233,11 +323,12 @@ ncornered_hat(cc::ClockComparisons, taus::TauMode=Octave; deviation::Symbol=:ade
 
 """
     groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values=Octave;
-                confidence=DEFAULT_CONFIDENCE, interval=:chi2, weighted=false)
-        → Vector{StabilityResult}
-    groslambert(x_ab, x_bc, x_ca, m_values=Octave; kwargs...) → Vector{StabilityResult}
+                confidence=DEFAULT_CONFIDENCE, interval=:chi2, weighted=false,
+                names) → HatResult
+    groslambert(x_ab, x_bc, x_ca, m_values=Octave; names=["A", "B", "C"],
+                kwargs...) → HatResult
     groslambert(cc::ClockComparisons, m_values=Octave; reference=true,
-                kwargs...) → Vector{StabilityResult}
+                kwargs...) → HatResult
 
 Allan deviation of each of ``N ≥ 3`` clocks from the difference records
 between them, by the Groslambert covariance: the cross Allan variance of
@@ -320,11 +411,12 @@ resolved clock stayed within 2 % of that without gaps up to ``80τ_0``.
   `:klts`.
 - `weighted=false`: weigh the pairs of the other clocks by the inverse of
   the product of their records' Allan variances.
+- `names`: one name per clock, as for [`ncornered_hat`](@ref).
 
 # Returns
 
-One [`StabilityResult`](@ref) of type `:adev` per clock, without noise
-types. `neff` is the number of terms averaged for each pair ``(j, k)``.
+A [`HatResult`](@ref): one [`StabilityResult`](@ref) of type `:adev` per
+clock, without noise types, with the names of the clocks. `neff` is the number of terms averaged for each pair ``(j, k)``.
 `edf` is the equivalent
 ``2\\hat σ_i^4/\\mathrm{Var}(\\hat σ_i^2)``. The variance of the estimate is
 that of a mean of products of Gaussian second differences
@@ -375,7 +467,8 @@ a, b, c = groslambert(ab, bc, ca; interval=:klts, confidence=0.95)
 ```
 """
 function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::Vector{Int};
-                     confidence::Real=DEFAULT_CONFIDENCE, interval::Symbol=:chi2, weighted::Bool=false)
+                     confidence::Real=DEFAULT_CONFIDENCE, interval::Symbol=:chi2, weighted::Bool=false,
+                     names::AbstractVector{<:AbstractString}=["clock $i" for i in axes(pairwise, 1)])
     n_clocks = size(pairwise, 1)
     size(pairwise, 2) == n_clocks ||
         throw(ArgumentError("groslambert: pairwise matrix must be square"))
@@ -444,7 +537,7 @@ function groslambert(pairwise::AbstractMatrix{<:AbstractTimingData}, m_values::V
         results[i] = StabilityResult(:adev, m_values .* τ₀, dev, Symbol[], ci, edf,
                                      terms, τ₀, N, c)
     end
-    return results
+    return HatResult(names, results, :groslambert)
 end
 
 # Equivalent EDF of clock i's Groslambert covariance at τ index q, the mean
@@ -521,13 +614,16 @@ end
 
 # Three clocks from A−B, B−C, C−A; C−A fills pairwise[3, 1].
 function groslambert(x_ab::AbstractTimingData, x_bc::AbstractTimingData,
-                     x_ca::AbstractTimingData, args...; kw...)
+                     x_ca::AbstractTimingData, args...;
+                     names::AbstractVector{<:AbstractString}=["A", "B", "C"], kw...)
     pairwise = Matrix{AbstractTimingData}(undef, 3, 3)
     pairwise[1, 2] = x_ab
     pairwise[2, 3] = x_bc
     pairwise[3, 1] = x_ca
-    return groslambert(pairwise, args...; kw...)
+    return groslambert(pairwise, args...; names, kw...)
 end
 
-groslambert(cc::ClockComparisons, args...; reference::Bool=true, kw...) =
-    groslambert(_hat_records(cc, reference, "groslambert"), args...; kw...)
+function groslambert(cc::ClockComparisons, args...; reference::Bool=true, kw...)
+    records = _hat_records(cc, reference, "groslambert")
+    return groslambert(records, args...; names=_hat_names(cc, records), kw...)
+end

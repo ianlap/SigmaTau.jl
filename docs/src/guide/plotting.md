@@ -52,6 +52,8 @@ q = noise_gen(PhaseData, 8192, 1.0; sigma1 = Dict(0 => 3e-12), rng = Xoshiro(6))
 plot([adev(p), adev(q)]; label = ["clock A" "clock B"], legend = :bottomleft)
 ```
 
+The clocks that [`ncornered_hat`](@ref) and [`groslambert`](@ref) separate
+come as a [`HatResult`](@ref), whose curves take the names of the clocks.
 `plot!(adev(q))` adds a curve to a figure that exists. The time deviations
 ([`tdev`](@ref), [`htdev`](@ref), [`ttotdev`](@ref)) are in seconds, so
 give them axes of their own.
@@ -117,7 +119,8 @@ adev(p, [1, 10, 100, 1000])
 
 A result or a suite is also a table in the sense of `Tables.jl`, with the
 columns `deviation_type`, `tau`, `dev`, `noise_type`, `ci_lower`,
-`ci_upper`, `edf` and `neff`. Any package that reads such tables takes one
+`ci_upper`, `edf` and `neff`, and so is a [`HatResult`](@ref), with a
+`clock` column in front. Any package that reads such tables takes one
 directly:
 
 ```julia

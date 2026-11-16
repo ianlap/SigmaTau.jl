@@ -91,7 +91,7 @@ export totdev, mtotdev, ttotdev, htotdev, mhtotdev
 export mtie, tierms, pdev
 export TELECOM_MASKS, telecom_mask, mask_check
 export dadev, dhdev
-export ncornered_hat, groslambert
+export ncornered_hat, groslambert, HatResult
 export drift_fit, DriftFit
 export powerlaw_fit, PowerLawFit, powerlaw_sigma, powerlaw_psd
 export ClockModel, clock_model, state_transition, process_noise

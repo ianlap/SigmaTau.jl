@@ -63,6 +63,9 @@ using RecipesBase
         r0 = adev(pd, [1, 2, 4, 8]; ci=false)
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), [r, r0])
         @test length(rd) == 2
+        # The clocks of a hat take their names.
+        h = ncornered_hat(ClockComparisons(randn(512, 2), 1.0; names=["a", "b"]), [1, 2, 4])
+        @test [s.plotattributes[:label] for s in RecipesBase.apply_recipe(Dict{Symbol,Any}(), h)] == ["a", "b", "reference"]
     end
 
     @testset "dynamic deviation: 3-D waterfall" begin

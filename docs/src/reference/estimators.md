@@ -111,13 +111,15 @@ dhdev
 ## Three-cornered hat
 
 [`ncornered_hat`](@ref) and [`groslambert`](@ref) separate the deviations
-of three or more clocks that are measured against each other. The tutorial
+of three or more clocks that are measured against each other, and return
+them as a [`HatResult`](@ref) with the names of the clocks. The tutorial
 [Three clocks and the three-cornered hat](../tutorials/03_three_cornered_hat.md)
 works through both.
 
 ```@docs
 ncornered_hat
 groslambert
+HatResult
 ```
 
 ## Two channels

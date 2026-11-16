@@ -1,7 +1,7 @@
 module SigmaTauRecipesBaseExt
 
 using SigmaTau: StabilityResult, StabilitySuite, SpectralResult,
-                DynamicStabilityResult, ci_lower, ci_upper
+                DynamicStabilityResult, HatResult, ci_lower, ci_upper
 using RecipesBase
 
 # Tick positions at integer powers of 10 spanning the positive finite values
@@ -78,6 +78,11 @@ end
     end
 end
 
+# Label of curve `i` of a collection: the clock's name for a hat, the
+# estimator otherwise.
+_curve_label(h::HatResult, i) = h.names[i]
+_curve_label(results, i) = uppercase(string(results[i].deviation_type))
+
 # Overlay an arbitrary collection of results (e.g. compare clocks).
 @recipe function f(results::AbstractVector{StabilityResult})
     xscale --> :log10
@@ -89,9 +94,9 @@ end
     minorgrid --> true
     gridalpha --> 0.2
     minorgridalpha --> 0.05
-    for r in results
+    for (i, r) in enumerate(results)
         @series begin
-            label --> uppercase(string(r.deviation_type))
+            label --> _curve_label(results, i)
             r
         end
     end
