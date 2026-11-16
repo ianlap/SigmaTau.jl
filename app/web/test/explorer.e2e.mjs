@@ -615,5 +615,13 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.setViewportSize({ width: 1280, height: 800 });
   });
 
+  await t.test("The keys 1 to 9 follow the tabs", async () => {
+    await page.click("a[data-page=stability]");
+    await page.keyboard.press("3");
+    await page.waitForFunction(() => location.hash === "#live");
+    await page.keyboard.press("4");
+    await page.waitForFunction(() => location.hash === "#stability");
+  });
+
   assert.deepEqual(errors, []);
 });

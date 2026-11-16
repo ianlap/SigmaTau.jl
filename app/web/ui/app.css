@@ -320,10 +320,10 @@ button.row-main { flex: 1; align-self: stretch; padding: 0; border: 0; backgroun
 .status-hint { color: var(--muted); }
 @keyframes pulse { 50% { opacity: 0.3; } }
 
+@media (max-width: 1140px) { .record-chip { display: none; } }   /* below it the grouped tabs leave the chip too little room */
 @media (max-width: 1100px) {
   .side-card { width: 300px; }
   .check-card { width: 340px; }
-  .record-chip { display: none; }
   .cmp .tbl-row { padding-inline: 12px; grid-template-columns: minmax(0, 1.2fr) repeat(var(--ncols, 2), minmax(0, 1fr)); }
   .ens-table .fitted .tbl-row { padding-inline: 12px; }
 }
