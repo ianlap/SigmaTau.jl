@@ -1,16 +1,16 @@
 # Exports, sessions and reports
 
-The **File** menu saves the plots on screen, the numbers of the last run, a
-report of the analysis and the whole session. In a browser each file is a
+The **File** menu saves the plots on screen, the numbers of the page in
+view, a report of the analysis and the whole session. In a browser each file is a
 download. The desktop app asks where to save it.
 
 | Entry | File | Holds |
 |:------|:-----|:------|
 | **Plot as PNG** | `sigmatau-<page>.png` | The plots of the page, at twice their size on screen |
 | **Plot as SVG** | `sigmatau-<page>.svg` | The same plots as vector graphics |
-| **Results as TSV** | `sigmatau-results.tsv` | The deviations of the last run, one line for each averaging time |
-| **Results as JSON** | `sigmatau-results.json` | Everything the last run returned |
-| **Report (HTML, prints to PDF)** | `sigmatau-report.html` | The analysis as one page that can be printed |
+| **… as TSV** | `sigmatau-<table>.tsv` | The numbers of the page in view, as a table ([Results](#Results)) |
+| **… as JSON** | `sigmatau-<table>.json` | Everything the analysis core returned for them |
+| **Stability report (HTML, prints to PDF)** | `sigmatau-report.html` | The analysis of the Stability page as one page that can be printed |
 | **Save session…** | `sigmatau-session.json` | The clocks, their files and the settings |
 | **Open session…** | | Opens a saved session |
 
@@ -27,8 +27,22 @@ that appears on hovering over a plot saves that plot alone as a PNG.
 
 ## Results
 
+The two results entries name what they write, which follows the page in
+view. Data, Synthesis, Live and Help have no results of their own, and the
+entries are greyed out there.
+
+| Page | Entry | File | One line for each |
+|:-----|:------|:-----|:------------------|
+| Stability | **Stability results** | `sigmatau-results` | clock, estimator and averaging time |
+| Spectrum | **Spectra** | `sigmatau-spectrum` | clock and Fourier frequency |
+| Dynamic | **Dynamic maps** | `sigmatau-dynamic` | clock, window and averaging time |
+| Holdover | **Holdover table** | `sigmatau-holdover` | clock and holdover time |
+| Steering | **Steering table** | `sigmatau-steering` | clock and averaging time |
+| Ensemble, Time scale | **Time scale table** | `sigmatau-timescale` | averaging time of the scale, then clock and averaging time |
+| Ensemble, N-cornered hat | **Hat results** | `sigmatau-hat` | clock, estimator and averaging time |
+
 The TSV file is a table for a spreadsheet or a script, with tabs between
-the columns:
+the columns. Those of Stability:
 
 | Column | Holds |
 |:-------|:------|
@@ -44,9 +58,27 @@ the columns:
 The JSON file is the output of [`sigmatau analyze`](../reference/cli.md#JSON)
 for each clock, with the name of the clock added: the record check, the
 settings of the run, the deviations, the spectra, the noise model and the
-mask checks. With several clocks it is a list.
+mask checks. With several clocks it is a list. Both files hold every clock
+with results, hidden clocks included.
 
-Both files hold every clock with results, hidden clocks included.
+The tables of the other pages hold the clocks the page shows, with the
+columns of the command line's CSV output for the same command
+([Command-line reference](../reference/cli.md)), units in the names of the
+columns:
+
+| Table | Columns |
+|:------|:--------|
+| Spectra | `clock`, `f_hz`, `sy`, `sx`, and `L_dbc_hz` when the lower plot shows ℒ(f) |
+| Dynamic maps | `clock`, `deviation`, `t_s` (the center of the window), `tau_s`, `dev` |
+| Holdover table | `clock`, `train_s`, `tau_s`, `rms_s`, `quantile_s`, `worst_s`, `mean_s`, `trials`, `limit_s`, `time_to_limit_s`, `claimed_s`, and the `reference_s` and `predicted_s` curves of the plot |
+| Steering table | `clock`, `tau_s`, `free`, `steered`, `predicted` |
+| Time scale table | `clock`, `against`, `tau_s`, `adev`, `weight`, `weight_mean`, `error_rms_s`: the scale against the reference, then each clock against the scale or the reference as plotted |
+| Hat results | `clock`, `estimator`, `tau_s`, `sigma`, `ci_lo`, `ci_hi`, `edf`, `neff`, for each clock separated |
+
+Their JSON files hold the output of `holdover`, `steer`, `dynamic`,
+`timescale` or `hat` that the page drew, with the clocks named as on the
+page. A table not computed yet, or computed for other settings, is not
+written: the page computes it once it is in view.
 
 ## The report
 

@@ -389,7 +389,20 @@ const exportMenu = document.getElementById("export-menu");
 exportBtn.addEventListener("click", () => {
   exportMenu.hidden = !exportMenu.hidden;
   exportBtn.setAttribute("aria-expanded", String(!exportMenu.hidden));
+  if (!exportMenu.hidden) nameResults();
 });
+
+// The results entries say what they write: the table of the page in view.
+// A page with no results of its own (Data, Synthesis, Live, Help) has none.
+function nameResults() {
+  const r = page?.results?.();
+  for (const [kind, fmt] of [["tsv", "TSV"], ["json", "JSON"]]) {
+    const b = exportMenu.querySelector(`[data-export=${kind}]`);
+    b.textContent = `${r?.what ?? "Results"} as ${fmt}`;
+    b.disabled = !r;
+    b.title = r ? "" : "This page has no results of its own";
+  }
+}
 // A click outside a menu of the top bar closes it.
 document.addEventListener("click", (e) => {
   for (const wrap of document.querySelectorAll(".menu-wrap")) {
@@ -402,7 +415,6 @@ exportMenu.addEventListener("click", async (e) => {
   const kind = e.target.closest("[data-export]")?.dataset.export;
   if (!kind) return;
   exportMenu.hidden = true;
-  const analyzed = state.clocks.filter((c) => c.result);
   if (kind === "save-session") {
     if (!state.clocks.length) return ctx.status("warn", "There is nothing to save yet.");
     return saveFile("sigmatau-session.json", new Blob([sessionText()], { type: "application/json" }));
@@ -423,17 +435,12 @@ exportMenu.addEventListener("click", async (e) => {
     const blob = await plotImage(kind);
     if (!blob) return ctx.status("warn", "Nothing to export on this page yet.");
     saveFile(`sigmatau-${state.page}.${kind}`, blob);
-  } else if (!analyzed.length) {
-    ctx.status("warn", "Run the analysis first; there are no results to export.");
-  } else if (kind === "json") {
-    const out = analyzed.map((c) => ({ clock: c.name, ...c.result.doc }));
-    saveFile("sigmatau-results.json", new Blob([JSON.stringify(analyzed.length === 1 ? out[0] : out, null, 2)], { type: "application/json" }));
   } else {
-    const lines = ["clock\testimator\ttau_s\tsigma\tci_lo\tci_hi\tedf\tnoise\tneff"];
-    for (const c of analyzed) for (const r of c.result.results) r.tau.forEach((t, i) => {
-      lines.push([c.name, r.dev, t, r.sigma[i], r.ci_lo[i] ?? "", r.ci_hi[i] ?? "", r.edf[i] ?? "", r.noise[i] ?? "", r.neff[i] ?? ""].join("\t"));
-    });
-    saveFile("sigmatau-results.tsv", new Blob([lines.join("\n") + "\n"], { type: "text/tab-separated-values" }));
+    const r = page?.results?.();
+    if (!r) return;
+    if (!r.rows.length) return ctx.status("warn", r.none ?? "Nothing to export on this page yet.");
+    if (kind === "json") saveFile(`sigmatau-${r.file}.json`, new Blob([JSON.stringify(r.json, null, 2)], { type: "application/json" }));
+    else saveFile(`sigmatau-${r.file}.tsv`, new Blob([[r.columns, ...r.rows].map((row) => row.map((v) => v ?? "").join("\t")).join("\n") + "\n"], { type: "text/tab-separated-values" }));
   }
 });
 

@@ -525,6 +525,18 @@ function renderCompare(box, clocks, devs) {
     <div class="card-foot" style="margin-top:0;border-top:0">Bold marks the most stable clock at this τ. Click the plot to move τ.${devs.length > 3 ? ` Showing the first three ${state.axis === "sigma_y" ? "σ<sub>y</sub>" : "σ<sub>x</sub>"} estimators.` : ""}</div>`;
 }
 
+// The File menu's results: the deviations of the last run, of every clock with results.
+export function results() {
+  const clocks = state.clocks.filter((c) => c.result);
+  const docs = clocks.map((c) => ({ clock: c.name, ...c.result.doc }));
+  return {
+    what: "Stability results", file: "results", none: "Run the analysis first; there are no results to export.",
+    columns: ["clock", "estimator", "tau_s", "sigma", "ci_lo", "ci_hi", "edf", "noise", "neff"],
+    rows: clocks.flatMap((c) => c.result.results.flatMap((r) => r.tau.map((t, i) => [c.name, r.dev, t, r.sigma[i], r.ci_lo[i], r.ci_hi[i], r.edf[i], r.noise[i], r.neff[i]]))),
+    json: docs.length === 1 ? docs[0] : docs,
+  };
+}
+
 export function hint() {
   if (multi()) {
     const devs = devsOnAxis();

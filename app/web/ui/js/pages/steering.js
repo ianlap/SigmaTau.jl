@@ -236,6 +236,17 @@ export function refresh() {
   Plotly.react(root.querySelector("[data-ref=plot]"), ...(record ? recordPlot : sigmaPlot)(ready, several), CONFIG);
 }
 
+// The File menu's results: the Allan deviations of each clock shown, in the core's columns.
+export function results() {
+  const ready = visibleClocks().filter((c) => c.record && c.steer?.key === steerKey(c) && !c.steer.error);
+  return {
+    what: "Steering table", file: "steering",
+    columns: ["clock", "tau_s", "free", "steered", "predicted"],
+    rows: ready.flatMap(({ name, steer: s }) => s.tau.map((t, i) => [name, t, s.free[i], s.steered[i], s.predicted?.adev?.[i]])),
+    json: ready.map(({ name, steer: { key, ...s } }) => ({ clock: name, steer: s })),
+  };
+}
+
 export function plotElement() { return root?.querySelector("[data-ref=plot]") ?? null; }
 export function hint() {
   if (state.steer.view === "record") return multi() ? "Color = clock · the steered phase over the whole record" : "Steered phase, with the frequency correction in force on the right axis";

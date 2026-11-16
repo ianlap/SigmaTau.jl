@@ -255,12 +255,17 @@ function showEmpty(text) {
   if (text) for (const ref of ["table", "sub"]) root.querySelector(`[data-ref=${ref}]`).innerHTML = "";
 }
 
+// The core names the file's clocks of a hat by column and its reference
+// "reference"; the page names them as the clock list does.
+const hatNames = (r, { clocks, pairs }) => r.clocks.map((n, i) => (pairs ? n : clocks[i]?.name ?? (n === "reference" ? clocks[0]?.against || "Reference" : n)));
+const scaleNames = (r, { clocks }) => r.clocks.map((n, i) => clocks[i]?.name ?? n);
+
 // The hat: each clock's σ(τ) with its interval, over the pairs as measured.
-function refreshHat(r, { clocks, pairs }) {
+function refreshHat(r, req) {
+  const { clocks, pairs } = req;
   const e = byId[r.results[0].deviation], res = r.results[0];
   const col = (c, k) => c.points.map((p) => p[k]);
-  // The core names the file's clocks by column and its reference "reference".
-  const names = r.clocks.map((n, i) => (pairs ? n : clocks[i]?.name ?? (n === "reference" ? clocks[0]?.against || "Reference" : n)));
+  const names = hatNames(r, req);
   const color = (i) => (pairs || clocks[i] ? seriesColor(pairs ? i : clocks[i].slot) : clocks.length ? css("--ink-2") : seriesColor(i));
   const sigma = e.axis === "sigma_x" ? "σ<sub>x</sub>(τ) (s)" : "σ<sub>y</sub>(τ)";
   root.querySelector("[data-ref=title]").textContent = `${e.label} of each clock`;
@@ -306,7 +311,7 @@ export function refresh() {
   if (hat) return refreshHat(r, req);
   const against = againstOf(clocks), ideal = clocks[0]?.source.type !== "file";
   root.querySelector("[data-ref=title]").textContent = `ADEV of the scale and of each clock against ${against === "scale" ? "it" : "the reference"}`;
-  const names = r.clocks.map((n, i) => clocks[i]?.name ?? n);
+  const names = scaleNames(r, req);
   const color = (i) => seriesColor(clocks[i]?.slot ?? i);
   // Jones–Tryon has no weights: its plot goes and the ADEV plot takes the room.
   const weighted = r.weight.some((w) => w !== null);
@@ -340,6 +345,28 @@ export function refresh() {
     x: s.t, y: w, name: names[i], mode: "lines", line: { color: color(i), width: 1.5 },
     hovertemplate: `<b>${h(names[i])}</b><br>t = %{x:.6g} s<br>w = %{y:.3f}<extra></extra>` })) : [],
   { ...baseLayout(), margin: { l: 62, r: 14, t: 8, b: 44 }, xaxis: linAxis("Time (s)"), yaxis: { ...linAxis("Weight"), range: [0, 1] }, showlegend: false, uirevision: "ens-w" }, CONFIG);
+}
+
+// The File menu's results, of the view shown: the hat's σ(τ) of each clock
+// separated, or the scale's ADEV and each clock's against the scale or the
+// reference as plotted, with the clock's weights. The JSON is the core's, with
+// the clocks named as on the page.
+export function results() {
+  const req = request(), r = state.ens.result, hat = state.ens.view === "hat";
+  const doc = r?.key === JSON.stringify(req.body) ? (hat ? r.hat : r.ts) : null;
+  const base = hat
+    ? { what: "Hat results", file: "hat", columns: ["clock", "estimator", "tau_s", "sigma", "ci_lo", "ci_hi", "edf", "neff"] }
+    : { what: "Time scale table", file: "timescale", columns: ["clock", "against", "tau_s", "adev", "weight", "weight_mean", "error_rms_s"] };
+  if (!doc) return { ...base, rows: [], json: null };
+  if (hat) {
+    const names = hatNames(doc, req);
+    return { ...base, json: { ...doc, clocks: names },
+      rows: doc.results.flatMap((res) => res.clocks.flatMap((c, i) => c.points.map((p) => [names[i], res.deviation, p.tau, p.dev, p.ci_lower, p.ci_upper, p.edf, p.neff]))) };
+  }
+  const names = scaleNames(doc, req), a = doc.adev, against = againstOf(req.clocks), dev = against === "scale" ? a.clocks : a.readings;
+  return { ...base, json: { ...doc, clocks: names },
+    rows: [...a.tau.map((t, j) => ["time scale", "reference", t, a.scale[j]]),
+      ...names.flatMap((n, i) => a.tau.map((t, j) => [n, against, t, dev[i][j], doc.weight[i], doc.weight_mean[i], doc.error_rms[i]]))] };
 }
 
 export function hint() {
