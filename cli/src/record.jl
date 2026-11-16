@@ -238,11 +238,16 @@ function set_columns!(o::Options)
     isempty(o.columns) && isempty(o.time_column) && isempty(o.reference_column) && return
     isfile(o.input) || return             # reading says so
     line, names = table_head(o)
-    if length(o.columns) == 1 && !several && isempty(o.time_column) && isempty(o.reference_column)
-        c = o.columns[1]
-        tryparse(Int, c) === nothing && (o.column = c; return)
-        o.value_col = column_number(c, "--column", names, 1)
-        o.columns_set = isempty(names)
+    # A table is read by its own reader, which takes each column's unit from
+    # its name; --header asks for its rows as plain columns instead.
+    table = !isempty(names) && !o.columns_set
+    table && !(isempty(o.time_column) && isempty(o.reference_column)) &&
+        throw(usage_error((isempty(o.time_column) ? "--reference-column" : "--time-column") *
+                          " applies to plain columns, and this file is a table read by the names of its columns;" *
+                          " add --header " * string(line) * " to read its rows as plain columns, in the units of the numbers"))
+    if length(o.columns) == 1 && !several && isempty(o.time_column) && isempty(o.reference_column) &&
+       tryparse(Int, o.columns[1]) === nothing
+        o.column = o.columns[1]           # a table's column or a RINEX clock, by name
         return
     end
     if !isempty(o.time_column)
@@ -251,15 +256,11 @@ function set_columns!(o::Options)
     end
     isempty(o.reference_column) || (o.reference_col = column_number(o.reference_column, "--reference-column", names, 1))
     cols = Int[column_number(c, "--column", names, 1) for c in o.columns]
-    # Read by number as plain columns, a table skips its line of names.
-    o.columns_set && o.header == 0 && (o.header = line)
     isempty(cols) && return
     o.value_col = cols[1]
-    several || (o.columns_set = true; o.header == 0 && (o.header = line); return)
+    several || return
     length(cols) >= 2 && allunique(cols) || throw(usage_error("--column needs two or more different columns"))
     o.value_cols = cols
-    # cross reads its two channels one at a time, each as a single --column.
-    o.command == "cross" && (o.columns_set = true; o.header == 0 && (o.header = line))
     return
 end
 

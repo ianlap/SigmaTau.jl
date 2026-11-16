@@ -98,8 +98,7 @@ function recordArgs(clock) {
 function recordColumns(clock, a, opt) {
   if (clock.kind === "frequency") a.push("--freq");
   opt("--time-column", clock.time_col);
-  // (with --synth, --column picks a simulated clock, set above)
-  if (clock.source.type !== "synth") opt("--column", clock.value_col);
+  opt("--column", clock.value_col);
   const ref = referenceColFor(clock);
   if (ref) opt("--reference-column", ref);
   opt("--header", clock.header);

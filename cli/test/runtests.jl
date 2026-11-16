@@ -533,12 +533,29 @@ mktempdir() do dir
         # A column by number or by its name, alone or in a list.
         @test run_cli("timescale", nf, "--column", "a (ns),b (ns),c (ns)").out == run_cli("timescale", nf, "--column", "2,3,4").out
         @test run_cli("analyze", nf, "--column", "b (ns)").out == run_cli("analyze", nf, "--column", "3").out
-        r = run_cli("analyze", nf, "--column", "3", "--reference-column", "a (ns)", "--devs", "adev", "--m", "1")
-        @test r.code == 0 && r.out == run_cli("analyze", nf, "--column", "3", "--reference-column", "2", "--devs", "adev", "--m", "1").out
+        # In the units the names give, as the rows read in seconds; a time or
+        # reference column belongs to plain columns, which --header asks for.
+        function dev(args...)
+            out = run_cli(args..., "--m", "1,4").out
+            k = findfirst(==("dev"), split(first(split(out, '\n')), ','))
+            return parse.(Float64, filter(!isempty, getindex.(csv_rows(out), k)))
+        end
+        plain = ("--header", "1", "--scaling", "1e-9")
+        @test dev("analyze", nf, "--column", "3", "--devs", "adev") ≈ dev("analyze", nf, "--column", "3", plain..., "--devs", "adev") ≈
+              dev("analyze", nf, "--column", "3", "--time-column", "1", plain..., "--devs", "adev")
+        @test dev("cross", nf, "--column", "b (ns),c (ns)") ≈ dev("cross", nf, "--column", "3,4", plain...)
+        @test dev("hat", nf, "--column", "2,3,4", "--devs", "adev") ≈ dev("hat", nf, "--column", "2,3,4", "--time-column", "1", plain..., "--devs", "adev")
+        for opt in ("--time-column", "--reference-column")
+            @test occursin(opt * " applies to plain columns", run_cli("analyze", nf, "--column", "3", opt, "1").err)
+        end
+        @test run_cli("timescale", nf, "--column", "2,3,4", "--time-column", "1").code == 1
+        r = run_cli("analyze", nf, "--column", "3", "--reference-column", "a (ns)", plain..., "--devs", "adev", "--m", "1")
+        @test r.code == 0 && r.out == run_cli("analyze", nf, "--column", "3", "--reference-column", "2", plain..., "--devs", "adev", "--m", "1").out
         @test occursin("--reference-column z: no column of that name; the columns are 1 MJD, 2 a (ns)",
-                       run_cli("analyze", nf, "--column", "3", "--reference-column", "z").err)
+                       run_cli("analyze", nf, "--column", "3", "--reference-column", "z", plain...).err)
         @test occursin("reads one clock", run_cli("analyze", nf, "--column", "2,3").err)
-        @test occursin("unknown option --value-col", run_cli("analyze", nf, "--value-col", "2").err)
+        @test occursin("unknown option --value-col; it is now --column", run_cli("analyze", nf, "--value-col", "2").err)
+        @test occursin("unknown option --time-col; it is now --time-column", run_cli("analyze", nf, "--time-col", "1").err)
         # The clocks of a table go by the names on its first line, and without
         # --column the columns are listed by number.
         @test getindex.(csv_rows(run_cli("timescale", nf, "--column", "2,3,4").out), 1) == ["a (ns)", "b (ns)", "c (ns)"]

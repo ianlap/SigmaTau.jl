@@ -67,10 +67,13 @@ and a `# tau0:` line among them gives the sample interval. The other
 layouts are read as [`read_data`](@ref) reads them. A table whose first
 line names its columns is read by its own reader, whether `--column` gives
 a name or a number, and a unit in the name of the column is applied, so
-`phase_ns` needs no `--scaling`. With `--time-column`, `--reference-column`
-or `--header` given, such a table is read by position instead, without
-the units of its names, and its line of names is skipped. The name of the time
-column still sets its unit, so a column named `MJD` is in days either way.
+`phase_ns` needs no `--scaling`. With `--header` given, such a table is
+read by position instead, as plain columns: the first `--header` lines are
+skipped, the units of its names are not applied, and `--scaling` gives the
+unit. `--time-column` and `--reference-column` belong to plain columns, so
+on a table they need `--header`; without it they are refused. The name of
+the time column still sets its unit, so a column named `MJD` is in days
+either way.
 A file compressed with gzip (`.gz`) must be unpacked first.
 
 The program holds every record as phase. It integrates a frequency file of

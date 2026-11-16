@@ -286,9 +286,19 @@ function edit_distance(a::String, b::String)::Int
     return prev[length(y)+1]
 end
 
+# Options renamed in 0.7, gone without aliases: the name now, for the hint.
+const RENAMED = ["--value-col" => "--column", "--value-cols" => "--column", "--clock" => "--column",
+                 "--time-col" => "--time-column", "--reference-col" => "--reference-column",
+                 "--model" => "--drift-model", "--noise-model" => "--clock-model", "--dev" => "--devs",
+                 "--detrend" => "--remove-drift", "--no-bias-correction" => "--bias none"]
+
 # "; did you mean X?" for the nearest of `names` (the first of equals), or "".
+# A renamed option gets its new name instead.
 # Close is 2 edits, 1 for a short name; leading dashes do not count.
 function did_you_mean(name::String, names::Vector{String})::String
+    for (old, new) in RENAMED
+        old == name && return "; it is now " * new
+    end
     bare = String(lstrip(==('-'), name))
     best = ""
     best_d = length(bare) <= 4 ? 2 : 3
