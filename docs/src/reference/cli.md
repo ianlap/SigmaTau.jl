@@ -110,7 +110,7 @@ The sample interval of a simulated record is `--tau0`, or 1 s.
 
 | Option | Meaning |
 |:---|:---|
-| `--format FMT` | `csv`, the default, or `json` |
+| `--format FMT` | `table`, the default at a terminal: the CSV laid out for reading, aligned, with numbers to four significant digits and each column that holds one value on every row said once above; `csv`, the default in a pipe or with `--out`; or `json` |
 | `--out PATH` | write to a file. By default the output goes to standard output |
 | `--series N` | include samples of the record in the JSON output, about `N`, for a plot |
 | `--quiet` | no note on standard error that the file was written, and no verdict of `--mask` beside the CSV |
