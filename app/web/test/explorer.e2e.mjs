@@ -38,12 +38,16 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   const browser = await chromium.launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
+  // The steps use the panel's own controls: pinned, it stays beside the page from 1280 px up.
+  await page.addInitScript(() => localStorage.setItem("sigmatau-panel", "pinned"));
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   // The vendored Plotly, which falls back to the CDN when ui/vendor is empty, may 404.
   page.on("console", (m) => m.type() === "error" && !/vendor\/plotly/.test(m.location().url) && errors.push(m.text()));
   const settled = () => page.waitForFunction(() => !/Reading|Running|Computing|Starting/.test(document.getElementById("status-text").textContent), null, SLOW);
   const plotted = (sel) => page.waitForFunction((s) => document.querySelector(s)?.data?.length > 0, sel, SLOW);
+  // Below 1280 px the panel opens over the page from the rail.
+  const openPanel = async () => { if (!(await page.isVisible("#side"))) await page.click("#rail-panel"); await page.locator("#side").waitFor(); };
   // A results entry of the File menu: its label, and the file it writes.
   const exported = async (kind) => {
     await page.click("#export-btn");
@@ -434,6 +438,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     // three clocks, read with the settings remembered from three.csv
     await chooser.setFiles({ name: "three_clocks_with_a_long_name.csv", mimeType: "text/csv", buffer: Buffer.from(Array.from({ length: 600 }, (_, i) => row(i)).join("\n")) });
     await settled();
+    await openPanel();
     await page.locator("#side .clock-row .clock-text").last().click();   // a clock named after the file
     assert.match(await page.locator("[data-ref=plot-title]").innerText(), /three_clocks_with_a_long_name col 4$/);
     const outside = await page.evaluate(() => [...document.querySelectorAll("#page .card")].flatMap((card) => {
@@ -495,6 +500,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
 
   await t.test("Live: the readings analyzed are the file that Save readings writes", async () => {
     await page.click("a[data-page=live]");
+    await openPanel();
     const n = errors.length;
     await page.click("[data-ctl=go]");
     await plotted("#page [data-ref=sigma]");
@@ -536,6 +542,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
       assert.ok(h >= 250, `${view}: the plot is ${h} px high`);
     }
     await page.click("a[data-page=ensemble]");
+    await openPanel();
     await page.click("[data-ctl=view][data-v=hat]");
     await page.selectOption("#side [data-ctl=method]", "hat");   // (an earlier step left KLTS, which a file with gaps refuses)
     await page.waitForFunction(() => document.querySelector("#page [data-ref=sub]")?.textContent.startsWith("Hat · "), null, SLOW);
@@ -570,6 +577,36 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("[data-ctl=view][data-v=map]");
     // The 422s are the earlier steps' records that have no map (three samples, gaps), not the generated clocks.
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
+  });
+
+  await t.test("Plot first: in a 960 px window the panel and the results open over the page, and the rail runs", async () => {
+    await page.setViewportSize({ width: 960, height: 720 });
+    await page.click("a[data-page=stability]");
+    await settled();
+    assert.equal(await page.isVisible("#side"), false);
+    await page.click("#rail-panel");
+    await page.locator("#side .run-btn").waitFor();
+    // Esc closes a dialog opened from the panel and leaves the panel; a second Esc closes the panel and
+    // gives the focus back to the rail.
+    await page.click("#side [data-act=pick]");
+    await page.locator("dialog[open]").waitFor();
+    await page.keyboard.press("Escape");
+    await page.locator("dialog[open]").waitFor({ state: "detached" });
+    assert.equal(await page.isVisible("#side"), true);
+    await page.focus("#side .run-btn");
+    await page.keyboard.press("Escape");
+    await page.locator("#side").waitFor({ state: "hidden" });
+    assert.equal(await page.evaluate(() => document.activeElement.id), "rail-panel");
+    const n = errors.length;
+    await page.click("#rail-run");
+    await settled();
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));   // the records earlier steps left that the core refuses
+    await page.click("#rail-results");
+    const card = page.locator(".page > .side-card");
+    await card.waitFor();
+    await page.locator(".topbar .brand").click();      // a click elsewhere closes it
+    await card.waitFor({ state: "hidden" });
+    await page.setViewportSize({ width: 1280, height: 800 });
   });
 
   assert.deepEqual(errors, []);
