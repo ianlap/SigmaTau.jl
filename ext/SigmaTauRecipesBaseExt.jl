@@ -1,7 +1,7 @@
 module SigmaTauRecipesBaseExt
 
 using SigmaTau: StabilityResult, StabilitySuite, SpectralResult,
-                DynamicStabilityResult, HatResult, ci_lower, ci_upper
+                DynamicStabilityResult, HatResult, ci_lower, ci_upper, estimators
 using RecipesBase
 
 # Tick positions at integer powers of 10 spanning the positive finite values
@@ -57,46 +57,45 @@ _ordinate_values(r::StabilityResult) = Iterators.flatten((r.dev, ci_lower(r), ci
     return res.tau, res.dev
 end
 
-# Overlay every result in a suite on one set of axes (compare deviations).
-# Decade ticks span the union of the per-result ranges, set here so all
-# series share one axis policy.
-@recipe function f(suite::StabilitySuite)
-    xscale --> :log10
-    yscale --> :log10
-    xlabel --> "Averaging Time τ (s)"
-    ylabel --> "Deviation"
-    xticks --> _decade_ticks(Iterators.flatten(r.tau for r in suite.results))
-    yticks --> _decade_ticks(Iterators.flatten(_ordinate_values(r) for r in suite.results))
-    minorgrid --> true
-    gridalpha --> 0.2
-    minorgridalpha --> 0.05
-    for r in suite.results
-        @series begin
-            label --> uppercase(string(r.deviation_type))
-            r
-        end
-    end
-end
+# Estimators in seconds: TDEV and the time errors.
+const _TIME = Set(e.name for e in estimators() if e.axis === :sigma_x)
 
 # Label of curve `i` of a collection: the clock's name for a hat, the
 # estimator otherwise.
 _curve_label(h::HatResult, i) = h.names[i]
 _curve_label(results, i) = uppercase(string(results[i].deviation_type))
 
-# Overlay an arbitrary collection of results (e.g. compare clocks).
+# A suite draws as the vector of its results.
+@recipe f(suite::StabilitySuite) = suite.results
+
+# Overlay several results (e.g. to compare clocks): the σ_y estimators on one
+# pair of axes and those in seconds on a second beside it, each with decade
+# ticks spanning its own curves.
 @recipe function f(results::AbstractVector{StabilityResult})
     xscale --> :log10
     yscale --> :log10
     xlabel --> "Averaging Time τ (s)"
-    ylabel --> "Deviation"
     xticks --> _decade_ticks(Iterators.flatten(r.tau for r in results))
-    yticks --> _decade_ticks(Iterators.flatten(_ordinate_values(r) for r in results))
     minorgrid --> true
     gridalpha --> 0.2
     minorgridalpha --> 0.05
+    time = [r.deviation_type in _TIME for r in results]
+    split = any(time) && !all(time)
+    if split
+        layout --> (1, 2)
+        size --> (800, 360)
+        left_margin --> (5, :mm)        # room for the axis titles beside two panels
+        bottom_margin --> (5, :mm)
+    end
     for (i, r) in enumerate(results)
+        same_axis = results[time .== time[i]]
         @series begin
+            if split
+                subplot := 1 + time[i]
+            end
             label --> _curve_label(results, i)
+            ylabel --> (time[i] ? "Deviation (s)" : "Deviation")
+            yticks --> _decade_ticks(Iterators.flatten(_ordinate_values(q) for q in same_axis))
             r
         end
     end

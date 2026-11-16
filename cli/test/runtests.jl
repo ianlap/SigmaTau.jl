@@ -130,6 +130,23 @@ end
     @test occursin("does not apply", r.err)
 end
 
+@testset "check says what the units of a record look like" begin
+    mktempdir() do dir
+        rad = write_table(joinpath(dir, "yb-phase-rad.csv"), 40 .* cumsum(sinpi.((1:256) ./ 7.3)))
+        r = run_cli("check", rad)
+        @test r.code == 0 && occursin("the name says rad", r.err) && occursin("the phase moves by", r.err)
+        @test occursin("\"warnings\":[\"the name says rad", run_cli("check", rad, "--format", "json").out)
+        @test isempty(run_cli("check", rad, "--quiet").err)
+        @test isempty(run_cli("check", rad, "--scaling", "1e-3").err)       # stated: no remark
+        clean = write_table(joinpath(dir, "clean.csv"), X)
+        @test isempty(run_cli("check", clean).err)
+        @test occursin("\"warnings\":[]", run_cli("check", clean, "--format", "json").out)
+        hz = write_table(joinpath(dir, "osc_hz.csv"), 1 .+ 1e-3 .* sinpi.((1:256) ./ 7.3))
+        r = run_cli("check", hz, "--freq")
+        @test occursin("the name says hz", r.err) && occursin("the fractional frequency reaches", r.err)
+    end
+end
+
 @testset "completion" begin
     # Every command offers its options, and every option with fixed values offers them.
     queries = [["sigmatau", ""], ["sigmatau", "completion", ""]]

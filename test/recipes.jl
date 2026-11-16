@@ -52,17 +52,25 @@ using RecipesBase
 
     @testset "suite overlay: one series per result" begin
         s = stability(pd; devs=(:adev, :hdev, :mdev), m=Octave, ci=false)
-        rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), s)
+        @test only(RecipesBase.apply_recipe(Dict{Symbol,Any}(), s)).args == (s.results,)
+        rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), s.results)
         @test length(rd) == 3
-        # Decade ticks are set once at the suite level, shared by every series.
-        @test all(haskey(rdi.plotattributes, :xticks) for rdi in rd)
-        @test all(rdi.plotattributes[:minorgrid] === true for rdi in rd)
+        # Decade ticks are set once for the axes, shared by every series.
+        @test allequal(rdi.plotattributes[:yticks] for rdi in rd)
+        @test all(rdi.plotattributes[:minorgrid] === true && !haskey(rdi.plotattributes, :subplot) for rdi in rd)
     end
 
     @testset "vector-of-results overlay" begin
         r0 = adev(pd, [1, 2, 4, 8]; ci=false)
         rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), [r, r0])
         @test length(rd) == 2
+        # σ_y and the deviations in seconds get axes of their own.
+        rd = RecipesBase.apply_recipe(Dict{Symbol,Any}(), [r, tdev(pd, [1, 2, 4, 8]), r0])
+        pa = [rdi.plotattributes for rdi in rd]
+        @test pa[1][:layout] == (1, 2) && [p[:subplot] for p in pa] == [1, 2, 1]
+        @test pa[1][:left_margin] == pa[1][:bottom_margin] == (5, :mm)
+        @test [p[:ylabel] for p in pa] == ["Deviation", "Deviation (s)", "Deviation"]
+        @test pa[1][:yticks] == pa[3][:yticks]
         # The clocks of a hat take their names.
         h = ncornered_hat(ClockComparisons(randn(512, 2), 1.0; names=["a", "b"]), [1, 2, 4])
         @test [s.plotattributes[:label] for s in RecipesBase.apply_recipe(Dict{Symbol,Any}(), h)] == ["a", "b", "reference"]
