@@ -517,8 +517,17 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.equal(await page.isVisible("#side"), false);
     await page.click("#rail-panel");
     await page.locator("#side .run-btn").waitFor();
+    // Esc closes a dialog opened from the panel and leaves the panel; a second Esc closes the panel and
+    // gives the focus back to the rail.
+    await page.click("#side [data-act=pick]");
+    await page.locator("dialog[open]").waitFor();
+    await page.keyboard.press("Escape");
+    await page.locator("dialog[open]").waitFor({ state: "detached" });
+    assert.equal(await page.isVisible("#side"), true);
+    await page.focus("#side .run-btn");
     await page.keyboard.press("Escape");
     await page.locator("#side").waitFor({ state: "hidden" });
+    assert.equal(await page.evaluate(() => document.activeElement.id), "rail-panel");
     const n = errors.length;
     await page.click("#rail-run");
     await settled();

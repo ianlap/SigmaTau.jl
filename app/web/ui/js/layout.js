@@ -29,7 +29,7 @@ export function initLayout({ run }) {
   btnRun.addEventListener("click", () => { closeOver(); run(); });
   WIDE.addEventListener("change", () => { panelOpen = resultsOpen = false; apply(); });
   // An open overlay closes with Esc or a click elsewhere (a dialog it opened excepted).
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && (panelOpen || resultsOpen) && state.run.state !== "running") closeOver(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && (panelOpen || resultsOpen) && state.run.state !== "running" && !document.querySelector("dialog[open]")) closeOver(); });
   document.addEventListener("pointerdown", (e) => {
     if (!(panelOpen || resultsOpen) || e.target.closest("#side, #rail, dialog, .page > .side-card")) return;
     closeOver();
@@ -37,10 +37,13 @@ export function initLayout({ run }) {
   apply();
 }
 
+// The focus, if it was inside, goes back to the rail button that opened it.
 function closeOver() {
   if (!panelOpen && !resultsOpen) return;
+  const back = document.activeElement?.closest("#side, .page > .side-card") && (panelOpen ? btnPanel : btnResults);
   panelOpen = resultsOpen = false;
   apply();
+  back?.focus();
 }
 
 function apply() {
@@ -66,5 +69,4 @@ export function renderRail() {
   btnRun.querySelector(".stale-dot").hidden = running || !(state.run.stale && state.clocks.some((c) => c.record));
   btnResults.hidden = WIDE.matches || !document.querySelector(".page > .side-card:not([hidden]):not(.synth-clocks)");
   if (btnResults.hidden && resultsOpen) { resultsOpen = false; document.body.classList.remove("results-over"); }
-  rail.dataset.page = state.page;
 }
