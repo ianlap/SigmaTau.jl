@@ -1284,3 +1284,4 @@ end
 
 identify_noise(data::AbstractTimingData, taus::TauMode; kwargs...) =
     identify_noise(data, tau_values(taus, length(data), :adev); kwargs...)
+identify_noise(data::AbstractTimingData; kwargs...) = identify_noise(data, Octave; kwargs...)

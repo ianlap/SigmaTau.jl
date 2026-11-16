@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { inWords, startText, sciHtml } = await import("../ui/js/format.js");
+const { inWords, startText, duration, interval, timeAxisUnit, sciHtml } = await import("../ui/js/format.js");
 
 test("the core's refusals are said without flags and function names", () => {
   assert.equal(inWords("--algorithm greenhall fits a model per clock and needs three or more clocks"), "Greenhall fits a model to each clock and needs three or more clocks.");
@@ -26,4 +26,15 @@ test("the readout writes a power of ten with a true minus sign", () => {
   assert.equal(sciHtml(-9.996e4), "−1.00 × 10<sup>5</sup>");
   assert.equal(sciHtml(3.2), "3.20");
   assert.equal(sciHtml(NaN), "–");
+});
+
+test("a long record is told in days and years, a sample interval in seconds up to a day", () => {
+  assert.equal(duration(90), "90 s");
+  assert.equal(duration(900e6), "28.5 yr");
+  assert.equal(duration(10500 * 86400), "28.7 yr");
+  assert.equal(duration(400 * 86400), "400 d");
+  assert.equal(interval(0.1), "0.1 s");
+  assert.equal(interval(4.32e5), "5 d");
+  assert.deepEqual(timeAxisUnit(2.5e6), [86400, "d"]);
+  assert.deepEqual(timeAxisUnit(NaN), [1, "s"]);
 });

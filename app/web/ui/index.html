@@ -11,6 +11,7 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-name">SigmaTau</span><span class="brand-sub">explorer</span></div>
+    <h1 class="sr-only" id="page-title"></h1>
     <nav class="tabs" aria-label="Pages">
       <a href="#data" data-page="data">Data</a>
       <a href="#synthesis" data-page="synthesis">Synthesis</a>
@@ -58,9 +59,9 @@
     <main class="page" id="page"></main>
   </div>
 
-  <footer class="statusbar" role="status" aria-live="polite">
+  <footer class="statusbar">
     <span class="status-dot" id="status-dot" aria-hidden="true"></span>
-    <span id="status-text">Starting…</span>
+    <span id="status-text" role="status" aria-live="polite">Starting…</span>
     <span class="status-hint" id="status-hint"></span>
   </footer>
 

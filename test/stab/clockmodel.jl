@@ -133,6 +133,16 @@ using LinearAlgebra
         @test_throws ArgumentError ClockModel(; tau0=1.0, flicker_fm=hf, fm_band=(0.5, 100.0))
     end
 
+    @testset "one-line show" begin
+        # The line is the keyword form and builds the model back.
+        for m in (ClockModel(; tau0=2.0, R=1e-20, q1=1e-22),
+                  ClockModel(; tau0=1.0, q1=5e-25, q3=1e-40, flicker_fm=1.6e-26, flicker_pm=1e-22),
+                  ClockModel(1.0, 0.0, 1e-24, 0.0, 0.0, true, 1e-26, (0.0, 0.0), 0.0, (0.0, 0.0)))
+            @test eval(Meta.parse(sprint(show, m))) == m
+        end
+        @test sprint(show, ClockModel(; tau0=1.0, q1=1e-24)) == "ClockModel(; tau0 = 1.0, q1 = 1.0e-24)"
+    end
+
     @testset "bad input" begin
         @test_throws ArgumentError ClockModel(; tau0=0.0)
         @test_throws ArgumentError ClockModel(; tau0=1.0, q1=-1.0)

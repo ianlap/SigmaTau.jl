@@ -49,6 +49,7 @@
   --accent-fill-hover: #7a1426;
   --warn:         #9a5b00;
   --warn-soft:    #f6e7c8;
+  --warn-line:    #e3c88f;
   --warn-dot:     #e0a33a;
   --good:         #2c7a4b;
   --error:        #b3261e;
@@ -96,7 +97,7 @@
   --radius-pill: 999px;
   --shadow-pop: 0 12px 40px rgba(60, 45, 20, 0.22);
   --shadow-card: 0 1px 2px rgba(40, 30, 10, 0.05), 0 4px 16px rgba(40, 30, 10, 0.04);
-  --focus-ring: 0 0 0 3px rgba(158, 27, 50, 0.3);
+  --focus-ring: 0 0 0 2px var(--bg-card), 0 0 0 4px #9e1b32;
   --backdrop: rgba(60, 45, 20, 0.28);
   --tint: rgba(43, 36, 24, 0.07);
   --header-h: 56px;
@@ -139,6 +140,7 @@
   --accent-fill-hover: #9e1b32;
   --warn:         #e3a64a;
   --warn-soft:    #3d3020;
+  --warn-line:    #6b5430;
   --warn-dot:     #e3a64a;
   --good:         #5fb98a;
   --error:        #f07c72;
@@ -169,7 +171,7 @@
 
   --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.5);
   --shadow-card: none;
-  --focus-ring: 0 0 0 3px rgba(234, 106, 126, 0.45);
+  --focus-ring: 0 0 0 2px var(--bg-card), 0 0 0 4px #ea6a7e;
   --backdrop: rgba(0, 0, 0, 0.5);
   --tint: rgba(236, 228, 212, 0.05);
 }

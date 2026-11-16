@@ -23,13 +23,23 @@ export function thousands(n) {
   return n.toLocaleString("en-US").replace(/,/g, " ");
 }
 
+// The unit a time is read in, from the longest time shown: seconds up to two
+// minutes, then minutes, hours, days (up to two years) and years.
+const YEAR = 365.25 * 86400;
+const TIME_STEPS = [[1, "s", 120], [60, "min", 7200], [3600, "h", 3 * 86400], [86400, "d", 2 * YEAR], [YEAR, "yr", Infinity]];
+export function timeAxisUnit(maxSeconds) {
+  const [f, u] = TIME_STEPS.find(([, , to]) => Math.abs(maxSeconds) < to) ?? TIME_STEPS[0];
+  return [f, u];
+}
+
 export function duration(s) {
   if (!Number.isFinite(s)) return "–";
-  if (s < 120) return `${num(s, 3)} s`;
-  if (s < 2 * 3600) return `${num(s / 60, 3)} min`;
-  if (s < 3 * 86400) return `${num(s / 3600, 3)} h`;
-  return `${num(s / 86400, 3)} d`;
+  const [f, u] = timeAxisUnit(s);
+  return `${num(s / f, 3)} ${u}`;
 }
+
+// A sample interval: seconds up to a day, then as a duration ("5 d").
+export const interval = (s) => (s < 86400 ? `${num(s, 4)} s` : duration(s));
 
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
