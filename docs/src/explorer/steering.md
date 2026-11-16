@@ -12,7 +12,8 @@ describes.
 
 ## Settings
 
-The settings sit in a bar above the plot.
+The settings of the loop sit in a bar above the plot, and those of the plot
+in its heading: **σ(τ)** or **Record**, and with σ(τ) the τ grid.
 
 | Setting | Effect |
 |:--------|:-------|
@@ -23,8 +24,8 @@ The settings sit in a bar above the plot.
 | **Steer every** | A steer at every sample, or at every 2 to 64 samples. The gains are worked out for that interval |
 | **Model from** | **1/8**, **1/4** or **1/2** of the record, the first stretch, to which the clock model of the filter is fitted. Its length shows when the pointer rests on it |
 | **Drift** | The model also holds a frequency drift, which the loop steers out ahead |
-| **τ grid** | The grid of averaging times, the same as on the [Stability](panel.md#Options) page |
-| **σ(τ)** or **Record** | The plot ([below](@ref explorer-steering-plot)) |
+| **σ(τ)** or **Record** | In the plot's heading: the plot ([below](@ref explorer-steering-plot)) |
+| **τ grid** | In the plot's heading, with σ(τ): the grid of averaging times, the same as on the [Stability](panel.md#Options) page |
 
 The [clock model](../explanation/clock_model.md) is fitted to the first
 stretch alone and keeps the flicker FM and the flicker PM that the fit

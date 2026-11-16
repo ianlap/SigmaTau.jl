@@ -606,6 +606,14 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.setViewportSize({ width: 1280, height: 800 });
   });
 
+  await t.test("The keys 1 to 9 follow the tabs", async () => {
+    await page.click("a[data-page=stability]");
+    await page.keyboard.press("3");
+    await page.waitForFunction(() => location.hash === "#live");
+    await page.keyboard.press("4");
+    await page.waitForFunction(() => location.hash === "#stability");
+  });
+
   await t.test("Ensemble: a table with dates holds clocks the page cannot read, and it says so in place of simulating", async () => {
     await page.goto(base + "#data");
     await page.reload();   // only the default record, no clocks of earlier steps
