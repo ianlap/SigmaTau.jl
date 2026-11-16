@@ -24,7 +24,7 @@ import { loadPlotly, css } from "./plot.js";
 import { thousands, num, duration, interval, share, FILL_TESTED, escapeHtml as h } from "./format.js";
 
 const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, steering, ensemble, live, help };
-const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "steering", "ensemble", "live"];
+const ORDER = [...document.querySelectorAll(".tabs a")].map((a) => a.dataset.page);   // the keys 1 to 9 follow the tabs
 let pageEl = document.getElementById("page");
 let page = null;
 let transient = null;      // { kind, text } shown in the status bar in place of the state, until it is over
