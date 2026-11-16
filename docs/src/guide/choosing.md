@@ -74,7 +74,7 @@ before its bias is removed:
 ```@example choosing
 using SigmaTau, Random
 p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(0 => 1e-12), rng = Xoshiro(1))
-edf(est, m; kw...) = round.(est(p, m; noise = :WHFM, kw...).edf; digits = 1)
+edf(est, m; kw...) = round.(est(p, m; noise = :WFM, kw...).edf; digits = 1)
 
 (adev = edf(adev, [128, 512, 1024]), totdev = edf(totdev, [128, 512, 1024]),
  theo1 = edf(theo1, [170, 682, 1366]),

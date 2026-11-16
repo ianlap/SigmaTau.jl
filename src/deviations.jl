@@ -39,8 +39,8 @@ _kernel_amin(kernel::Symbol) = kernel === :adev || kernel === :mdev ? -2 : -4
 # A stated noise type in `kernel`; one redder than the kernel covers counts as
 # its reddest, as in identification.
 function _stated_noise(n::Symbol, kernel::Symbol)
-    n in _NOISE_SYMBOLS || throw(ArgumentError(
-        "noise must be :auto, a noise type (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM, :FWFM, :RRFM), " *
+    haskey(_NOISE_ALPHA, n) || throw(ArgumentError(
+        "noise must be :auto, a noise type (:WPM, :FPM, :WFM, :FFM, :RWFM, :FWFM, :RRFM), " *
         "a vector of them or a PowerLawFit; got :$n"))
     return _NOISE_SYMBOLS[max(_NOISE_ALPHA[n], _kernel_amin(kernel)) + 5]
 end
@@ -134,7 +134,7 @@ and fewer degrees of freedom.
   a record without gaps.
 - `noise=:auto`: the power-law noise type that sets the EDF. `:auto`
   identifies it at each ``τ`` with [`identify_noise`](@ref). A symbol
-  (`:WHPM`, `:FLPM`, `:WHFM`, `:FLFM`, `:RWFM`, `:FWFM` or `:RRFM`) states one
+  (`:WPM`, `:FPM`, `:WFM`, `:FFM`, `:RWFM`, `:FWFM` or `:RRFM`) states one
   type for every ``τ``, a vector states one per averaging factor, and a
   [`PowerLawFit`](@ref) gives its strongest component at each ``τ``. A type
   redder than the estimator converges for counts as the reddest it does.
@@ -1140,7 +1140,7 @@ function theoh(data::PhaseData, m_values::Vector{Int}; ci::Bool=true, noise::_No
 
     # Per-segment noise ID and EDF: ADEV EDF below the crossover, ThêoBR
     # EDF above, merged back into request order.
-    noises = noise === :auto ? fill(:WHFM, n_pts) : _stated_noises(noise, :adev, taus, tau0)
+    noises = noise === :auto ? fill(:WFM, n_pts) : _stated_noises(noise, :adev, taus, tau0)
     edfs = fill(NaN, n_pts)
     if !isempty(adev_idx)
         noise === :auto && (noises[adev_idx] = identify_noise(x, adev_ms, dmin=0, dmax=2))

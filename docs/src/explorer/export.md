@@ -52,7 +52,7 @@ the columns. Those of Stability:
 | `sigma` | The deviation |
 | `ci_lo`, `ci_hi` | The limits of the confidence interval. Empty without intervals |
 | `edf` | The equivalent degrees of freedom |
-| `noise` | The noise type under its name in the package, such as `WHFM` |
+| `noise` | The noise type, such as `WFM` |
 | `neff` | The number of terms in the estimate |
 
 The JSON file is the output of [`sigmatau analyze`](../reference/cli.md#JSON)

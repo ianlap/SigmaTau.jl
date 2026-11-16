@@ -25,7 +25,7 @@ Allan variance for [`totdev`](@ref), the modified Allan variance for
 ```@example bias
 using SigmaTau, Printf
 
-five = [:WHPM, :FLPM, :WHFM, :FLFM, :RWFM]
+five = [:WPM, :FPM, :WFM, :FFM, :RWFM]
 seven = [five; :FWFM; :RRFM]
 function row(name, kind, m, noises)
     B = bias_correction(noises, kind, fill(m, length(noises)), 1025)

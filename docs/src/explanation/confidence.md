@@ -32,7 +32,7 @@ The default level is 68.3 %, the one-sigma level usual on stability plots.
 ```@example conf
 using SigmaTau, Random
 
-p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(:WHFM => 1e-12), rng = Xoshiro(1))
+p = noise_gen(PhaseData, 4096, 1.0; sigma1 = Dict(:WFM => 1e-12), rng = Xoshiro(1))
 adev(p, [1, 16, 256, 1024]; confidence = 0.95)
 ```
 
@@ -64,10 +64,10 @@ using Plots
 plt = plot(xscale = :log10, yscale = :log10, xlabel = "τ (s)", ylabel = "EDF",
            legend = :bottomleft, size = (640, 380))
 for (est, name) in ((adev, "ADEV"), (mdev, "MDEV"), (totdev, "TOTDEV"), (theo1, "Thêo1"))
-    r = est(p; noise = :WHFM)
+    r = est(p; noise = :WFM)
     plot!(plt, r.tau, r.edf; label = name, marker = :circle, markersize = 3)
 end
-r = theo1(p; noise = :WHFM, correct_bias = false)
+r = theo1(p; noise = :WFM, correct_bias = false)
 plot!(plt, r.tau, r.edf; label = "Thêo1, bias not removed", linestyle = :dash)
 plt
 ```

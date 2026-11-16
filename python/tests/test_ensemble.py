@@ -18,7 +18,7 @@ def clock():
 
 
 def test_clock_model_matches_julia(jl):
-    m = st.clock_model({"WHPM": 8e-22, 0: 2e-24, -2: 1e-30}, tau0=1.0)
+    m = st.clock_model({"WPM": 8e-22, 0: 2e-24, -2: 1e-30}, tau0=1.0)
     direct = jl.clock_model(_convert.to_jl_dict_int_f64({2: 8e-22, 0: 2e-24, -2: 1e-30}), tau0=1.0)
     assert (m.R, m.q1, m.q2, m.drift) == (
         float(direct.R),
@@ -100,7 +100,7 @@ def test_clock_model_of_a_fit_matches_julia(jl):
 
 def test_noise_fit_builds_and_undoes(jl):
     r = st.adev(st.noise_gen(st.PhaseData, 4096, 1.0, h={0: 1e-24}, rng=3))
-    f = st.noise_fit(r).add_component("WHFM", slice(0, 6))
+    f = st.noise_fit(r).add_component("WFM", slice(0, 6))
     ((alpha, h, lo, hi),) = f.components
     assert (alpha, lo, hi) == (0, r.tau[0], r.tau[5]) and h == pytest.approx(1e-24, rel=0.2)
     assert st.clock_model(f).q1 == pytest.approx(h / 2)
@@ -112,7 +112,7 @@ def test_noise_fit_builds_and_undoes(jl):
     assert f.residual().shape == r.tau.shape
     assert f.undo().components == []
     with pytest.raises(ValueError):
-        f.add_component("WHFM", slice(3, 3))
+        f.add_component("WFM", slice(3, 3))
 
 
 def test_kalman_filter_matches_julia(clock, jl):
@@ -183,7 +183,7 @@ def test_holdover_prediction_matches_julia(clock, jl):
     np.testing.assert_allclose(p.budget.sum(axis=1), p.sigma**2)
     np.testing.assert_allclose(
         st.holdover(
-            {"WHPM": 8 * np.pi**2 * m.R, 0: 2 * m.q1, -2: m.q2 / (2 * np.pi**2)},
+            {"WPM": 8 * np.pi**2 * m.R, 0: 2 * m.q1, -2: m.q2 / (2 * np.pi**2)},
             tau0=1.0,
             train=200,
             tau=[10, 100],

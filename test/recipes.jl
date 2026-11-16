@@ -137,7 +137,7 @@ using RecipesBase
         panels(x) = (rd = only(apply(x)); apply(only(rd.args), rd.plotattributes))
 
         fit = powerlaw_fit(adev(p); alphas=[0, -2])
-        @test labels(apply(fit)) == ["measured", "fit", "WHFM", "RWFM"]
+        @test labels(apply(fit)) == ["measured", "fit", "WFM", "RWFM"]
         @test apply(fit)[3].args[2] ≈ powerlaw_sigma(Dict(0 => fit.h[1]), fit.x; tau0=1.0)
         sfit = powerlaw_fit(psd_y(p; nperseg=512); alphas=[2, 0, -2])
         @test sum(s.args[2] for s in apply(sfit)[3:end]) ≈ sfit.fit             # the components add up to the fit
@@ -146,7 +146,7 @@ using RecipesBase
         @test labels(apply(h)) == ["RMS", "95 % of trials within", "worst", "limit"]   # no Kalman σ for a fit
         @test last(apply(h)).plotattributes[:seriestype] === :hline
         hp = holdover(Dict(:WHFM => 2e-22, :RWFM => 1e-28); tau0=1.0, train=256, tau=[16, 64])
-        @test labels(apply(hp)) == ["σ", "95 % within", "WHFM", "RWFM"]
+        @test labels(apply(hp)) == ["σ", "95 % within", "WFM", "RWFM"]
 
         m = clock_model(fit)
         g = steering_gains(300.0, 1.0)
