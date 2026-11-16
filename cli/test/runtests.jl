@@ -1071,6 +1071,31 @@ mktempdir() do dir
         @test isempty(run_cli("analyze", pf, "--devs", "adev", "--out", op, "--quiet").err)
     end
 
+    @testset "a table at a terminal, CSV elsewhere" begin
+        function at_tty(args...)
+            o = IOBuffer()
+            code = SigmaTauCLI.sigmatau(collect(String, args); out=o, err=IOBuffer(), tty=true)
+            return (code=code, out=String(take!(o)))
+        end
+        a = ["analyze", "--synth", "1024", "--devs", "adev,tdev", "--m", "1,8"]
+        t = at_tty(a...)
+        @test t.code == 0
+        @test occursin(r"^source +synthetic\nquantity +phase\n", t.out)       # one value on every row: said once
+        @test occursin("\n\nadev\ntau        dev   ci_lower", t.out)
+        @test occursin("\n\ntdev\ntau ", t.out) && !occursin(',', t.out)
+        @test occursin(r"\n  8  \d\.\d{3}e-1\d  ", t.out)
+        @test run_cli(a..., "--format", "table").out == t.out
+        @test at_tty(a..., "--format", "csv").out == run_cli(a...).out
+        op = joinpath(dir, "tty.csv")
+        @test at_tty(a..., "--out", op, "--quiet").code == 0 && read(op, String) == run_cli(a...).out
+        # One row: names and values, the empty ones left out.
+        d = at_tty("drift", "--synth", "1024").out
+        @test occursin(r"^model +linear$"m, d) && occursin(r"^n +1023$"m, d) && !occursin(r"^c "m, d)
+        @test SigmaTauCLI.table_cell.(["3204.04", "16384.0", "3.317110852079418e-10", "", "WHFM"]) ==
+              ["3204", "16384", "3.317e-10", "-", "WHFM"]
+        @test SigmaTauCLI.csv_fields("\"a,b\",\"say \"\"hi\"\"\",3") == ["a,b", "say \"hi\"", "3"]
+    end
+
     @testset "phasenoise: σ(τ) from a table of ℒ(f)" begin
         f, L, tau = [1.0, 10, 100, 1e3, 1e4, 1e5], [-100.0, -130, -150, -160, -165, -165], [0.01, 1.0]
         write(joinpath(dir, "pn.csv"), "offset,L\n" * join(string.(f, ",", L), "\n") * "\n")
