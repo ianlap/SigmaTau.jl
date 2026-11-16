@@ -17,12 +17,16 @@ share ([Two channels](ensemble.md#Two-channels-of-one-device)).
 The page takes its clocks from the first of these that it finds:
 
 1. the clock columns of one loaded file of plain columns, two or more,
-   read at the same instants against the same reference;
+   read at the same instants against the same reference, beside a time in
+   seconds or as an MJD;
 2. clocks simulated together on the [Data](data.md#Simulated-records) or
    [Synthesis](synthesis.md) page;
 3. four simulated clocks of its own, of 16384 samples at 1 s.
 
-A note in the side panel says which clocks are in use. A clock chosen as
+A note in the side panel says which clocks are in use. A table read by
+column name with dates in its time column, a RINEX clock file or an
+instrument file holds clocks that the page cannot read: with such a file
+loaded, and no clocks simulated, the page says so and forms nothing. A clock chosen as
 the **Reference** in the list of clocks is left out of the scale, and so is
 a clock removed with ×. A hidden clock stays in. The hat keeps the clock
 chosen as the **Reference**: it works on the difference of every pair of
@@ -220,9 +224,11 @@ Simulated clocks are not offered here.
 | **τ grid** | The grid of averaging times of the [Stability](panel.md#Options) page; a change holds there too |
 
 The two channels are
-read as the [Data](data.md#Preparing-the-record) page reads them, and need
-every sample: where either has **Fill gaps by reflection** on, the gaps of
-both are filled.
+read as the [Data](data.md#Preparing-the-record) page reads them. The cross
+estimates need every sample, so the gaps of both are filled by reflection,
+whatever the Data page's setting, and a note under the table says how many
+samples of each were filled. Past 30 % of a record it warns, as the Data
+page does.
 
 The upper plot gives the cross deviation as a solid line, with bars from
 ``\sqrt{σ_{ab}^2 - u}`` to ``\sqrt{σ_{ab}^2 + u}`` for the standard
