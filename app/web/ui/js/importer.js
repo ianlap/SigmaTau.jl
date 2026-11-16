@@ -80,7 +80,7 @@ export function openImport(file, prev = null) {
   };
   const tableSettings = () => ({
     kind: "spectrum", format: null, time_col: 1, timeUnit: 1, value_cols: [st.values[0]],
-    names: [s.names[st.values[0] - 1] || null], labels: [(st.labels[st.values[0]] ?? "").trim() || null],
+    names: [s.names[st.values[0] - 1] || null], shortNames: [null], labels: [(st.labels[st.values[0]] ?? "").trim() || null],
     against: "", header: s.header, scaling: 1, tau0: null, gaps: 0, keep_zeros: false, blanks: 0,
     density: st.density, carrier: needsCarrier() ? carrier() : null,
     sourceInfo: `${s.delimName.replace("-separated", "")} · phase-noise table, ${DENSITIES.find(([d]) => d === st.density)[1]}${needsCarrier() ? ` · carrier ${hertz(carrier())}` : ""}`,
