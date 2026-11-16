@@ -75,7 +75,8 @@ A file compressed with gzip (`.gz`) must be unpacked first.
 The program holds every record as phase. It integrates a frequency file of
 ``N`` samples to ``N + 1`` phase samples, and reports that number. A
 frequency file with missing samples must be filled with `--fillgaps`,
-whatever the analysis.
+whatever the analysis. When the filler puts in more than 30 % of the
+record, more than it was tested for, a line on stderr says so.
 
 ### Preparing
 
@@ -140,6 +141,7 @@ reads a record gives it, except `timescale` and `hat`:
 | `n`, `tau0`, `span_s` | number of phase samples, sample interval, and their product, in seconds |
 | `start` | UTC time of the first sample, where the file gives one, else `""` |
 | `gaps` | number of missing samples |
+| `filled` | number of samples that `--fillgaps` put in |
 | `outliers`, `outlier_t`, `outlier_x` | number of outliers that [`find_outliers`](@ref) flags by default, and the time and phase of the first 500 |
 | `drift_per_day` | least-squares slope of the fractional frequency, per day |
 | `removed_offset`, `removed_drift_per_day` | the frequency offset and the drift that `--remove-drift` removed |
@@ -242,7 +244,7 @@ outside the range of the recommendation. Each entry of `checks` is one result ag
 The record needs three samples or more. The CSV output is one row:
 
 ```text
-source,quantity,n,tau0,span_s,gaps,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
+source,quantity,n,tau0,span_s,gaps,filled,outliers,drift_per_day,statistics_of,min,max,mean,median,std,std_y,adev,noise_type
 ```
 
 The columns up to `drift_per_day` are the members of `record` in the JSON

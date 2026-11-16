@@ -68,7 +68,8 @@ a clock or drops it.
 | **Remember for files like this** | Reads the next file with the same extension, number of columns and column names without the dialog |
 
 When the time column skips readings, the dialog counts the gaps and the
-missing samples. They enter the record as missing samples.
+missing samples, and gives the share of the span they make. They enter the
+record as missing samples.
 
 In a Stable32 file (`.phd`, `.frd`) a zero marks a missing sample, except
 the first and the last sample of a phase file. The dialog counts these
@@ -114,6 +115,7 @@ preparation changes. It describes the record as prepared.
 | **Span** | The number of samples times the sample interval |
 | **Start** | The time of the first sample in UTC, for a file with timestamps |
 | **Gaps** | The number of missing samples |
+| **Filled** | The number of samples that **Fill gaps by reflection** put in, and their share of the record. It is shown only when there are some |
 | **Points past 5σ** | The outliers that [`find_outliers`](@ref) finds: frequency samples more than five scaled median absolute deviations from the median. They are marked on the phase plot |
 | **Frequency drift** | The slope of a least-squares line through the fractional frequency, per day. It reads **Drift left** after a quadratic removal |
 
@@ -135,6 +137,13 @@ it. The missing samples are the readings that the time column skips, those
 written as `NaN` and the zeros of a Stable32 file that are read as
 missing. For a frequency record that has any of them it is on from the
 start, since a frequency record cannot be read with samples missing.
+
+The filled samples were never measured. The record check counts them, and
+the record chip at the top gives their share. The filler was tested with
+up to 30 % of a record missing, where the ADEV it gives stays within a few
+percent of that of the full record. Past 30 % the share is marked, in the
+import dialog, the record check and the status bar, since the results then
+describe the filler as much as the clock.
 
 **remove**, beside the count of outliers, replaces them as
 [`remove_outliers`](@ref) does. The missing samples of the record stay
