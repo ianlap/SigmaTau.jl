@@ -70,16 +70,16 @@ function resultTable(c, r) {
 }
 
 const STYLE = `
-  body { font: 13px/1.5 "IBM Plex Sans", system-ui, sans-serif; color: #1d1d1f; background: #fff; margin: 32px auto; max-width: 900px; padding: 0 16px; }
+  body { font: 13px/1.5 Inter, system-ui, sans-serif; color: #1d1d1f; background: #fff; margin: 32px auto; max-width: 900px; padding: 0 16px; }
   h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
   .meta { color: #666; margin: 0 0 16px; }
   table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 12px; }
   th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
   thead th { border-bottom: 1px solid #bbb; font-weight: 600; }
-  td.n { text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+  td.n { text-align: right; font-family: "JetBrains Mono", ui-monospace, monospace; white-space: nowrap; }
   caption { text-align: left; font-weight: 600; padding: 4px 0; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 0; } dt { color: #666; } dd { margin: 0; }
-  code, pre { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; }
+  code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; }
   .hash { color: #666; word-break: break-all; }
   pre { background: #f6f6f6; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; }
   figure { margin: 12px 0; } figure img { width: 100%; height: auto; border: 1px solid #eee; } figcaption { color: #666; font-size: 12px; }

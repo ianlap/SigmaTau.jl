@@ -4,7 +4,7 @@
 // the power-law h_α; the two follow each other.
 import { state, update } from "../state.js";
 import { modelPreview } from "../core.js";
-import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor } from "../plot.js";
+import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, LINE_W } from "../plot.js";
 import { escapeHtml as h } from "../format.js";
 
 const MAX_CLOCKS = 8;
@@ -180,7 +180,7 @@ export function refresh() {
   root.querySelector("[data-ref=sub]").textContent = `${label} · ${doc.n} samples · τ₀ = ${doc.tau0} s${missing ? ` · random-run FM has no ${label}` : ""}`;
   if (!Plotly) return;
   Plotly.react(root.querySelector("[data-ref=plot]"), lines.map(({ i, y }) => ({
-    x: doc.tau, y, name: S.clocks[i].name, mode: "lines+markers", line: { color: seriesColor(i), width: 2 }, marker: { color: seriesColor(i), size: 5 },
+    x: doc.tau, y, name: S.clocks[i].name, mode: "lines+markers", line: { color: seriesColor(i), width: LINE_W }, marker: { color: seriesColor(i), size: 5 },
     hovertemplate: `<b>${h(S.clocks[i].name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
   { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis(`${label}, σ<sub>y</sub>(τ)`), showlegend: true, uirevision: "synth" }, CONFIG);
 }

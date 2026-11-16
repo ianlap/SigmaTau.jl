@@ -184,8 +184,8 @@ export function refresh() {
     : view === "acf" ? `Autocorrelation of ${of}${removed}`
     : removed ? `Phase residual x(t)${removed}` : "Phase x(t)";
   root.querySelector("[data-ref=plot-title]").textContent = multi() && c ? `${title} · ${c.name}` : title;
-  root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit in crimson · drag to zoom"
-    : view === "hist" ? (state.dist.normal ? "Normal curve in crimson" : "")
+  root.querySelector("[data-ref=plot-hint]").textContent = view === "drift" ? "Fit as the smooth line · drag to zoom"
+    : view === "hist" ? (state.dist.normal ? "Normal curve over the bars" : "")
     : view === "acf" ? (c?.range ? "Of the analysis range" : "")
     : c?.range ? "" : state.dataDrag === "range" ? "Outliers in orange · drag across to set the range" : "Outliers in orange · drag to zoom";
   root.querySelector("[data-ref=range]").innerHTML = view === "phase" ? rangeBar(c) : "";
