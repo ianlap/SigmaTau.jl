@@ -9,7 +9,7 @@ subcommands() = String[c for (c, _, _) in COMMAND_HELP]
 # Values offered after an option; --devs takes a comma list of them.
 completion_values(op::Opt) = op.long == "--devs" ? estimator_names() : op.choices
 valued_options() = [op for op in OPTS if !isempty(completion_values(op))]
-free_options() = String[op.long for op in OPTS if !isempty(op.metavar) && isempty(completion_values(op))]
+free_options() = String[n for op in OPTS if !isempty(op.metavar) && isempty(completion_values(op)) for n in (op.long, op.short) if !isempty(n)]
 
 spaced(v::Vector{String}) = join(v, " ")
 
@@ -122,6 +122,7 @@ function fish_script()
     """)
     for op in OPTS
         print(io, "complete -c sigmatau -n '__fish_seen_subcommand_from ", spaced(op.cmds), "' -l ", op.long[3:end])
+        isempty(op.short) || print(io, " -s ", op.short[2:end])
         if op.long == "--devs"
             print(io, " -x -a '(__fish_complete_list , __sigmatau_devs)'")
         elseif !isempty(op.choices)

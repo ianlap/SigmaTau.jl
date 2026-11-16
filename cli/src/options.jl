@@ -49,7 +49,9 @@ struct Opt
     path::Bool               # value is a file path (completion offers files)
     help::String
     cmds::Vector{String}     # commands that accept it
+    short::String            # one-letter alias such as "-o", or ""
 end
+Opt(long, metavar, choices, path, help, cmds) = Opt(long, metavar, choices, path, help, cmds, "")
 
 const ANY = COMMANDS
 const BATCH = filter(!=("live"), COMMANDS)    # one result per call, to stdout or --out
@@ -144,8 +146,8 @@ const OPTS = [
     # Output
     Opt("--series", "N", String[], false, "include up to N record points in the JSON (default 0)", TABULAR),
     Opt("--format", "FMT", FORMATS, false, "table (the default at a terminal: aligned, 4 significant digits), csv (the default in a pipe or with --out) or json; for model, json alone", [TABULAR; "model"; "phasenoise"]),
-    Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", BATCH),
-    Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY),
+    Opt("--out", "PATH", String[], true, "write to PATH instead of stdout", BATCH, "-o"),
+    Opt("--quiet", "", String[], false, "no informational messages on stderr", ANY, "-q"),
     Opt("--help", "", String[], false, "show this command's options", ANY),
 ]
 
@@ -264,6 +266,43 @@ function find_opt(name::String)
         op.long == name && return op
     end
     return nothing
+end
+
+# The short alias of an option as its long name; anything else unchanged.
+function long_form(a::String)
+    for op in OPTS
+        !isempty(op.short) && op.short == a && return op.long
+    end
+    return a
+end
+
+# Edit distance between two names, by plain loops (no dynamic dispatch, for --trim).
+function edit_distance(a::String, b::String)::Int
+    x = collect(a); y = collect(b)
+    prev = collect(0:length(y)); cur = zeros(Int, length(y) + 1)
+    for i in eachindex(x)
+        cur[1] = i
+        for j in eachindex(y)
+            cur[j+1] = min(prev[j+1] + 1, cur[j] + 1, prev[j] + (x[i] == y[j] ? 0 : 1))
+        end
+        prev, cur = cur, prev
+    end
+    return prev[length(y)+1]
+end
+
+# "; did you mean X?" for the nearest of `names` (the first of equals), or "".
+# Close is 2 edits, 1 for a short name; leading dashes do not count.
+function did_you_mean(name::String, names::Vector{String})::String
+    bare = String(lstrip(==('-'), name))
+    best = ""
+    best_d = length(bare) <= 4 ? 2 : 3
+    for n in names
+        d = edit_distance(bare, String(lstrip(==('-'), n)))
+        if d < best_d
+            best = n; best_d = d
+        end
+    end
+    return isempty(best) ? "" : "; did you mean " * best * "?"
 end
 
 function parse_int(s::String, flag::String)
@@ -504,14 +543,14 @@ function parse_args!(o::Options, args::Vector{String})
     i = 2
     n = length(args)
     while i <= n
-        a = args[i]
+        a = long_form(args[i])
         if a == "-h"
             o.help = true
         elseif startswith(a, "--")
             eq = findfirst(==('='), a)
             name = eq === nothing ? a : a[1:prevind(a, eq)]
             op = find_opt(name)
-            op === nothing && throw(usage_error("unknown option " * name))
+            op === nothing && throw(usage_error("unknown option " * name * did_you_mean(name, String[op.long for op in OPTS if o.command in op.cmds])))
             o.command in op.cmds || throw(usage_error(name * " does not apply to `" * o.command * "`"))
             if isempty(op.metavar)
                 eq === nothing || throw(usage_error("option " * name * " takes no value"))
@@ -689,7 +728,7 @@ function print_command_help(io::IO, cmd::String)
     end
     sigs = String[]
     for op in OPTS
-        cmd in op.cmds && push!(sigs, isempty(op.metavar) ? op.long : op.long * " " * op.metavar)
+        cmd in op.cmds && push!(sigs, (isempty(op.short) ? "" : op.short * ", ") * (isempty(op.metavar) ? op.long : op.long * " " * op.metavar))
     end
     w = maximum(length, sigs) + 2
     k = 0

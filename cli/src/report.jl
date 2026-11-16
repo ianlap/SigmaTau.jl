@@ -207,7 +207,7 @@ function cmd_report(io::IO, o::Options, data::PhaseData, args::Vector{String})
     end
     print(io, "<h2>Reproduce</h2><pre>sigmatau")
     for i in eachindex(args)
-        (args[i] == "--out" || (i > 1 && args[i-1] == "--out")) && continue
+        (args[i] in ("--out", "-o") || (i > 1 && args[i-1] in ("--out", "-o"))) && continue
         print(io, ' '); html_escape(io, shell_quote(args[i]))
     end
     print(io, "</pre>\n</body></html>\n")
