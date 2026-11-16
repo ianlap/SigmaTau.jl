@@ -5,7 +5,7 @@
 // phase noise is drawn as it is written, with the band its σ(τ) integrates.
 import { state, update, activeClock, multi, markStale, isTable } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
-import { noiseLabel, noiseTitle } from "../estimators.js";
+import { noiseTitle } from "../estimators.js";
 import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
 import { thousands, duration, timeAxisUnit, sci, num, hertz, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
 
@@ -41,6 +41,13 @@ const VIEWS = [
   ["drift", "Frequency drift", "Fit a frequency drift model"],
   ["hist", "Histogram", "Histogram of the samples, with a normal curve and their statistics"],
   ["acf", "Autocorrelation", "Autocorrelation of the samples, with the noise type it points to"],
+];
+
+// Real records shipped with the explorer (ui/samples, sources and licences in its README).
+const SAMPLES = [
+  ["bipm-rapid-utc-5labs.csv", "Five time scales", "UTCr − UTC(k) for NIST, USNO, PTB, OP and NICT, daily from 2013 (BIPM, CC BY 4.0)"],
+  ["gracefo-uso-2026-10-16.csv", "Two quartz oscillators in orbit", "The ultra-stable oscillators of GRACE-FO C and D against GPS time, every 30 s for 5.8 days (NASA)"],
+  ["gfz-clocks-2026-10-01.clk.gz", "GNSS and station clocks", "One day of 21 clocks against a hydrogen maser: Galileo, GPS and GLONASS satellites, masers, Cs, Rb and crystals on the ground (GFZ, CC BY 4.0)"],
 ];
 
 const MAX_SIM_CLOCKS = 8;
@@ -90,6 +97,8 @@ function fileCard(c) {
       <div class="file-actions"><button class="btn" data-act="import">Import settings…</button><button class="btn" data-act="open">Open another file…</button>${addClockBtn()}</div>`
     : `<div class="file-actions"><button class="btn btn-primary" data-act="open">Open a file…</button>${addClockBtn()}</div>`}
     <div class="dropzone" data-ref="drop">Drop a data file anywhere in the window</div>
+    <p class="small muted">Or open a real record: ${SAMPLES.map(([f, label, tip]) =>
+      `<button class="link-btn" data-sample="${f}" title="${tip}">${label}</button>`).join(" · ")}</p>
     ${c?.error ? `<p class="error small">${h(c.error)}</p>` : ""}
   </div>`;
 }
@@ -332,13 +341,13 @@ function distReadings(got, what) {
       ["Std dev", sci(st.std, 4), "Standard deviation of the samples, with n − 1 in the denominator"],
       ...(st.quantity === "phase" ? [["Std dev (freq.)", sci(st.std_y, 4), "Standard deviation of the fractional frequency, the Std Dev of Stable32"]] : []),
       ["σ<sub>y</sub>(τ<sub>0</sub>)", sci(st.adev, 4), "Allan deviation at the sample interval"],
-      ["Noise", noiseLabel(st.noise_type), `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}</div>`;
+      ["Noise", st.noise_type, `${noiseTitle(st.noise_type)}, identified at the sample interval`]].map(kv).join("")}</div>`;
   }
   const a = got.acf;
   return `<div aria-label="Autocorrelation">${[["τ", duration(a.tau), "m·τ₀"], ["Points", thousands(a.n), "Points in the series"],
     ["r<sub>1</sub>", a.r.length > 1 ? a.r[1].toFixed(3) : "–", "Autocorrelation at lag 1"],
     ["α", Number.isFinite(a.alpha) ? a.alpha.toFixed(2) : "–", "Lag-1 estimate of the power-law exponent (Riley and Greenhall); it needs a record of 30·m samples"],
-    ["Noise", noiseLabel(a.noise_type), `${noiseTitle(a.noise_type)}, identified at τ`]].map(kv).join("")}</div>`;
+    ["Noise", a.noise_type, `${noiseTitle(a.noise_type)}, identified at τ`]].map(kv).join("")}</div>`;
 }
 
 function distBar(c, what) {
@@ -566,6 +575,8 @@ function onClick(e) {
   if (m) { update((s) => { s.dataMode = m; }); return; }
   const act = e.target.closest("[data-act]")?.dataset.act;
   const c = activeClock();
+  const sample = e.target.closest("[data-sample]")?.dataset.sample;
+  if (sample) { ctx.openSample(sample); return; }
   if (act === "open") ctx.openFile(c);
   else if (act === "import") ctx.reimport(c);
   else if (act === "add-clock") ctx.addClock();

@@ -248,7 +248,7 @@ end
 function spectra(o::Options, data::PhaseData)
     need_samples(data, 16, "the spectrum")
     any(isnan, data.x) &&
-        throw(CLIError(EXIT_ANALYSIS, "the spectrum needs a record without gaps; fill them with --fillgaps"))
+        throw(CLIError(EXIT_ANALYSIS, "the spectrum needs a record without gaps; fill them with --fill-gaps"))
     N = length(data.x)
     # One segment length for both spectra, from the phase record's length (the
     # library's own default for psd_y counts the N − 1 frequency samples), cut
@@ -283,7 +283,7 @@ end
 function cmd_dynamic(io::IO, o::Options, data::PhaseData, t_start::UInt64)
     need_samples(data, 16, "a dynamic deviation")
     any(isnan, data.x) &&
-        throw(CLIError(EXIT_ANALYSIS, "a dynamic deviation needs a record without gaps; fill them with --fillgaps"))
+        throw(CLIError(EXIT_ANALYSIS, "a dynamic deviation needs a record without gaps; fill them with --fill-gaps"))
     N = length(data.x)
     w = o.window > 0 ? min(o.window, N) : SigmaTau._default_window(N)
     st = o.step > 0 ? o.step : max(w ÷ 2, 1)
@@ -316,8 +316,7 @@ end
 
 # ── cross ─────────────────────────────────────────────────────────────────
 
-# The second channel, read like the first.
-# The second channel: FILE2 read like FILE, or the second of --value-cols.
+# The second channel: FILE2 read like FILE, or the second --column of FILE.
 function second_channel(o::Options)
     # The primary record's settings and drift fit stay as they were.
     first, col, measured, offset, drift = o.input, o.value_col, o.measured, o.removed_offset, o.removed_drift
@@ -339,7 +338,7 @@ function cmd_cross(io::IO, o::Options, a::PhaseData, t_start::UInt64)
     length(a.x) == length(b.x) && a.tau0 == b.tau0 ||
         throw(CLIError(EXIT_INPUT, "the two channels differ in length or τ₀"))
     (any(isnan, a.x) || any(isnan, b.x)) &&
-        throw(CLIError(EXIT_ANALYSIS, "cross analysis needs records without gaps; fill them with --fillgaps"))
+        throw(CLIError(EXIT_ANALYSIS, "cross analysis needs records without gaps; fill them with --fill-gaps"))
     N = length(a.x)
     ms = isempty(o.m) ? tau_values(tau_mode(o.grid), N, :adev) : o.m
     r = cross_adev(a, b, ms)
@@ -450,7 +449,7 @@ function json_holdover_fit(io::IO, data::PhaseData, h::HoldoverResult)
     end
     print(io, '{')
     json_key(io, "alphas", true); json_array(io, p.alphas)
-    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._nnls_symbol(a)) for a in p.alphas])
+    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._noise_symbol(a)) for a in p.alphas])
     json_key(io, "sigma"); json_array(io, p.sigma)
     json_key(io, "quantile"); json_array(io, p.quantile)
     json_key(io, "budget"); print(io, '[')
@@ -550,7 +549,7 @@ end
 
 # ── model ─────────────────────────────────────────────────────────────────
 
-# σ(τ) the --noise-model clocks predict (MDEV, ADEV, MHDEV) at the τ of an N = --synth record.
+# σ(τ) the --clock-model clocks predict (MDEV, ADEV, MHDEV) at the τ of an N = --synth record.
 function run_model(io::IO, o::Options)
     tau0 = isnan(o.tau0) ? 1.0 : o.tau0
     ms = tau_values(tau_mode(o.grid), o.synth, :mdev)
@@ -580,7 +579,7 @@ end
 
 const CSV_PHASENOISE = "source,deviation,tau,dev,below,above"
 
-# The frequency column and the --value-col column of the spectrum table.
+# The frequency column and the --column column of the spectrum table.
 function read_spectrum(o::Options)
     isfile(o.input) || throw(CLIError(EXIT_INPUT, "no such file: " * o.input))
     cols = try
@@ -763,7 +762,7 @@ end
 
 # ── timescale ─────────────────────────────────────────────────────────────
 
-# The models of the simulated clocks: those of --noise-model, or white +
+# The models of the simulated clocks: those of --clock-model, or white +
 # random-walk FM clocks (four unless --clocks says otherwise), each a factor
 # of two above the last in level.
 function synth_models(o::Options)
@@ -774,7 +773,7 @@ function synth_models(o::Options)
         [ClockModel(; tau0, R, q1, q2, q3) for (R, q1, q2, q3) in o.models]
     end
     length(ms) >= 2 || throw(usage_error("a time scale needs two or more clocks: --clocks 2 or more, " *
-                                         "or --noise-model once per clock"))
+                                         "or --clock-model once per clock"))
     return ms
 end
 
@@ -791,8 +790,8 @@ function clock_names(o::Options)
     return allunique(named) ? named : String["column " * string(c) for c in o.value_cols]
 end
 
-# Each --value-cols column read like FILE, with the same options, less the
-# readings that --fillgaps put in: a clock has no part in the scale there.
+# Each --column column read like FILE, with the same options, less the
+# readings that --fill-gaps put in: a clock has no part in the scale there.
 function read_ensemble(o::Options)
     col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
     records = PhaseData{Float64}[]
@@ -960,7 +959,7 @@ function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
     N, τ₀ = length(records[1, 2].x), records[1, 2].tau0
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a hat needs at least 16 samples"))
     o.klts && any(any(isnan, hat_record(records, i, j).x) for i in 1:k for j in i+1:k) &&
-        throw(CLIError(EXIT_ANALYSIS, "the KLTS interval needs records without gaps; fill them with --fillgaps"))
+        throw(CLIError(EXIT_ANALYSIS, "the KLTS interval needs records without gaps; fill them with --fill-gaps"))
     mode = tau_mode(o.grid)
     pairs = Vector{StabilityResult}[]      # per deviation: every pair as measured, i < j
     clocks = Vector{StabilityResult}[]     # per deviation: every clock, separated

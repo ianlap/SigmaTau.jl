@@ -3,7 +3,7 @@
 #
 # Stable32 prints 4-5 significant figures, so the floor is rtol = 1e-4. It
 # reports MTOTDEV uncorrected but bias-corrects TOTDEV (B = 1 − a·τ/T) and
-# HTOTDEV (1/√(1+a)), so the raw kernels differ from it at the FLFM/RWFM rows
+# HTOTDEV (1/√(1+a)), so the raw kernels differ from it at the FFM/RWFM rows
 # by exactly those factors; `totdev` corrected for Stable32's noise type
 # matches every row at 1e-4.
 # allantools reports every estimator raw and is matched at 1e-11 (the CSV is
@@ -40,7 +40,7 @@ using SigmaTau
     # Non-overlapped ADEV / HDEV: Stable32's counts, and its intervals from the
     # stride-1 EDF at Stable32's noise type.
     csv = split.(readlines(joinpath(dir, "stable32out", "stable32_data_full.csv"))[2:end], ',')
-    αsym = Dict(2 => :WHPM, 1 => :FLPM, 0 => :WHFM, -1 => :FLFM, -2 => :RWFM)
+    αsym = Dict(2 => :WPM, 1 => :FPM, 0 => :WFM, -1 => :FFM, -2 => :RWFM)
     for (k, d, est) in (("Allan", 2, adev), ("Hadamard", 3, hdev))
         s32 = filter(r -> r[1] == k, csv)
         ms = [parse(Int, r[2]) for r in s32]
@@ -57,7 +57,7 @@ using SigmaTau
     ms = [parse(Int, r[2]) for r in oa]
     ours = identify_noise(x, ms; remove_drift=false, b1_length=:record)
     @test ms[ours .!= [αsym[parse(Int, r[5])] for r in oa]] == [256]
-    @test ours[ms .== 256] == [:FLPM]
+    @test ours[ms .== 256] == [:FPM]
     # From τ = 1024 Stable32 reads white FM, where σ(τ) runs flat and then
     # rises and SigmaTau reads flicker FM and random-walk FM.
     tot = filter(r -> r[1] == "Total", csv)
@@ -66,7 +66,7 @@ using SigmaTau
     @test length(tot) >= 10
     @test all(isapprox.(totdev(pd, ms; ci=false, correct_bias=false).dev ./ sqrt.(B),
                         parse.(Float64, getindex.(tot, 7)); rtol=1e-4))
-    @test totdev(pd, [1024, 2048, 4096]).noise_type == [:FLFM, :RWFM, :RWFM]
+    @test totdev(pd, [1024, 2048, 4096]).noise_type == [:FFM, :RWFM, :RWFM]
 
     # correct_bias=:stable32 is Stable32's bias convention for each estimator:
     # its σ on the nine rows where the two programs read the same noise type.

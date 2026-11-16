@@ -1,5 +1,5 @@
-// The side panel: clocks (when there are several), estimators, options and
-// the Run button. One clock: color = estimator. Several: color = clock and
+// The side panel: clocks (when there are several), then what the page uses:
+// its own settings, or the estimators, options and the Run button. One clock: color = estimator. Several: color = clock and
 // line style = estimator.
 import { state, update, markStale, multi, isReference, referenceColFor } from "./state.js";
 import { byId, GRIDS, CONFIDENCES, BIASES, NOISES, gridName } from "./estimators.js";
@@ -72,9 +72,10 @@ function options() {
   </div>`;
 }
 
-// `pageControls`: settings HTML of the current page, shown instead of the
-// estimators and options (one clock on Spectrum, Dynamic, Holdover or Steering).
-export function renderPanel(pageControls = null) {
+// What the page uses: its own settings (`controls`, on the pages that own the
+// panel), the estimators and options (`analysis`) and Run (`run`). The clocks
+// show whenever there are several. Returns false when nothing is left to show.
+export function renderPanel({ controls = null, analysis = false, run: runs = false } = {}) {
   const side = document.getElementById("side");
   const several = multi();
   const nDev = state.devs.length;
@@ -83,6 +84,7 @@ export function renderPanel(pageControls = null) {
   const focused = side.contains(document.activeElement) ? document.activeElement.dataset.opt : null;
   const stale = run.stale && state.clocks.some((c) => c.record);
   const running = run.state === "running";
+  if (!several && !controls && !analysis) { side.innerHTML = ""; return false; }
   const runLabel = running ? "Cancel"
     : run.stale === "record" && state.clocks.some((c) => c.result) ? "New record, run analysis" : "Run analysis";
 
@@ -95,8 +97,8 @@ export function renderPanel(pageControls = null) {
       <div class="rows">${clockRows()}</div>
       ${referenceSelect()}
       <button class="btn-dashed" type="button" data-act="add-clock">+ Add clock</button>
-      <div class="rule"></div>` : ""}
-      ${pageControls ? `<div class="page-ctl">${pageControls}</div>` : `
+      ${controls || analysis ? `<div class="rule"></div>` : ""}` : ""}
+      ${controls ? `<div class="page-ctl">${controls}</div>` : !analysis ? "" : `
       <div class="side-head"><h2>Estimators</h2><span class="note">${several ? "line style = estimator" : `${nDev} selected`}</span></div>
       <div class="rows">${estimatorRows(several)}</div>
       <button class="btn-dashed" type="button" data-act="pick">+ Add estimator</button>
@@ -107,15 +109,27 @@ export function renderPanel(pageControls = null) {
         ${state.optionsOpen ? options() : ""}`
       : `<h2>Options</h2>${options()}`}`}
     </div>
-    <div class="side-foot">
+    ${runs ? `<div class="side-foot">
       <button class="run-btn ${running ? "cancel" : ""}" type="button" data-act="run" ${running || (state.clocks.length && nDev) ? "" : "disabled"}
         title="${running ? "Stop the analysis (F5 or Esc)" : "Run the analysis (F5)"}">
         ${stale && !running ? `<span class="stale-dot" aria-hidden="true"></span>` : ""}${runLabel}<kbd>${running ? "Esc" : "F5"}</kbd></button>
       <div class="run-note">${h(run.note || "")}</div>
-    </div>`;
+    </div>` : ""}`;
   const ns = side.querySelector(".side-scroll");
   if (ns) ns.scrollTop = top;
   if (focused) side.querySelector(`[data-opt="${focused}"]`)?.focus();
+  return true;
+}
+
+// The τ grid and confidence level belong to every page that uses them: the
+// pages without the options show them among their own settings.
+const choice = (ctl, list, value, label, cls, title) => `<label class="${cls}" title="${title}"><span>${label}</span><select data-ctl="${ctl}">${list.map(([v, l]) =>
+  `<option value="${v}" ${v === value ? "selected" : ""}>${l}</option>`).join("")}</select></label>`;
+export const gridField = (cls = "tool-field") => choice("grid", GRIDS, state.grid, "τ grid", cls, "The τ grid, shared with the Stability page");
+export const confidenceField = (cls = "tool-field") => choice("ci-level", CONFIDENCES, state.confidence, "Confidence", cls, "The confidence level, shared with the Stability page");
+export function onSharedControl(t) {
+  if (t.dataset.ctl === "grid") update((s) => { s.grid = t.value; markStale(s, "inputs"); });
+  if (t.dataset.ctl === "ci-level") update((s) => { s.confidence = Number(t.value); markStale(s, "inputs"); });
 }
 
 function onClick(e) {

@@ -49,7 +49,7 @@ _SHARED = {
     ),
     "noise": (
         'The noise type that sets the EDF and the bias factor. ``"auto"`` identifies '
-        'it at each τ. A name such as ``"WHFM"`` states one type for every τ, a '
+        'it at each τ. A name such as ``"WFM"`` states one type for every τ, a '
         "sequence one per averaging factor, and a ``PowerLawFit`` gives its "
         "strongest term at each τ."
     ),

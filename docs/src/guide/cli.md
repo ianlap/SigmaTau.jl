@@ -79,8 +79,8 @@ significant digits.
 sigmatau analyze clock.dat                   # time in column 1, phase in column 2
 sigmatau analyze clock.dat --tau0 0.1        # the sample interval, stated
 sigmatau analyze freq.txt --freq             # fractional frequency
-sigmatau analyze log.txt --value-col 3 --scaling 1e-9        # column 3, in ns
-sigmatau analyze bare.txt --time-col 0 --value-col 1 --tau0 1    # no time column
+sigmatau analyze log.txt --column 3 --scaling 1e-9           # column 3, in ns
+sigmatau analyze bare.txt --time-column 0 --column 1 --tau0 1   # no time column
 sigmatau analyze trace.tim                   # a TimeLab file
 sigmatau analyze gnss.clk --column G08       # one clock of a RINEX clock file
 ```
@@ -107,11 +107,11 @@ The steps of [Gaps, outliers and drift](preparing.md) are options of every
 command:
 
 ```bash
-sigmatau analyze clock.dat --fillgaps                  # fill the missing samples
+sigmatau analyze clock.dat --fill-gaps                 # fill the missing samples
 sigmatau analyze clock.dat --remove-outliers           # replace the outliers
 sigmatau analyze clock.dat --remove-drift quadratic    # remove offset and linear drift
 sigmatau analyze clock.dat --range 3600:86400          # seconds 3600 to 86400 only
-sigmatau analyze clocks.dat --value-col 3 --reference-col 2   # column 3 less column 2
+sigmatau analyze clocks.dat --column 3 --reference-column 2   # column 3 less column 2
 ```
 
 The Allan and Hadamard families, MTIE and TIE rms skip gaps in a phase
@@ -122,16 +122,16 @@ sigmatau("analyze clock.dat --devs adev,totdev --m 1,100") # hide
 ```
 
 ```@example cli
-sigmatau("analyze clock.dat --devs adev,totdev --m 1,100 --fillgaps") # hide
+sigmatau("analyze clock.dat --devs adev,totdev --m 1,100 --fill-gaps") # hide
 ```
 
 `--remove-drift quadratic` fits a parabola to the phase by least squares
 and removes it, which takes out a frequency offset and a linear frequency
 drift. `linear` removes the offset alone. The fit leaves out the samples
-that `--fillgaps` put in.
+that `--fill-gaps` put in.
 
 A frequency file is integrated to phase as it is read, so one with missing
-samples needs `--fillgaps` for every command.
+samples needs `--fill-gaps` for every command.
 
 ## Deviations, averaging times and intervals
 
@@ -141,11 +141,11 @@ sigmatau analyze clock.dat --grid quarter-octave       # a finer grid
 sigmatau analyze clock.dat --m 1,2,5,10,20,50,100      # the averaging factors
 sigmatau analyze clock.dat --tau-min 10 --tau-max 1000 # part of the grid
 sigmatau analyze clock.dat --confidence 0.95           # 95 % intervals
-sigmatau analyze clock.dat --noise WHFM                # the noise type, stated
+sigmatau analyze clock.dat --noise WFM                 # the noise type, stated
 sigmatau analyze clock.dat --bias stable32             # Stable32's bias convention
 sigmatau analyze clock.dat --no-ci                     # deviations alone
 sigmatau analyze counter.csv --freq --tau0 100 --dead-time 3500 \
-         --devs adev --noise FLFM                      # 100 s readings, one an hour
+         --devs adev --noise FFM                       # 100 s readings, one an hour
 ```
 
 `--noise` and `--bias` are the keywords `noise` and `correct_bias` of the
@@ -160,14 +160,14 @@ unless `--confidence` says otherwise. `--dead-time` is the `dead_time` of
 
 ```bash
 sigmatau spectrum clock.dat --nperseg 4096             # S_y(f) and S_x(f)
-sigmatau dynamic clock.dat --dev dhdev --window 4096   # deviation in a sliding window
-sigmatau drift ocxo.dat --freq --model log             # a model of frequency drift
+sigmatau dynamic clock.dat --devs hdev --window 4096   # deviation in a sliding window
+sigmatau drift ocxo.dat --freq --drift-model log       # a model of frequency drift
 sigmatau drift clock.dat --method bisection            # a linear drift by the three-point fit
 sigmatau holdover gpsdo.dat --train 86400 --limit 1e-6 # time error without a reference
 sigmatau steer maser.dat --time-constant 86400         # the record steered to its reference
 sigmatau cross a.dat --with b.dat                      # one device, two channels
-sigmatau timescale clocks.dat --value-cols 2,3,4       # a time scale from three clocks
-sigmatau hat clocks.dat --value-cols 2,3               # each clock by the three-cornered hat
+sigmatau timescale clocks.dat --column 2,3,4           # a time scale from three clocks
+sigmatau hat clocks.dat --column 2,3                   # each clock by the three-cornered hat
 sigmatau report clock.dat --out clock.html             # an HTML report
 sigmatau phasenoise ocxo.txt --carrier 10e6            # σ(τ) from a table of ℒ(f)
 ```

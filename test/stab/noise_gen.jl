@@ -29,9 +29,10 @@ end
 @testset "noise_gen levels and keys" begin
     p = noise_gen(PhaseData, 4096, 2.0; sigma1=Dict(:RRFM => 3e-13), rng=Xoshiro(1))
     @test adev(p, [1]; ci=false).dev[1] ≈ 3e-13 rtol=1e-12
-    a = noise_gen(FrequencyData, 512, 1.0; h=Dict(:FLFM => 1e-26), rng=Xoshiro(2))
+    a = noise_gen(FrequencyData, 512, 1.0; h=Dict(:FFM => 1e-26), rng=Xoshiro(2))
     b = noise_gen(FrequencyData, 512, 1.0; h=Dict(-1 => 1e-26), rng=Xoshiro(2))
     @test a.y == b.y
+    @test noise_gen(FrequencyData, 512, 1.0; h=Dict(:FLFM => 1e-26), rng=Xoshiro(2)).y == b.y   # an older name
     @test_throws ArgumentError noise_gen(PhaseData, 64, 1.0; h=Dict(-5 => 1.0))
     @test_throws ArgumentError noise_gen(PhaseData, 64, 1.0; h=Dict(:PINK => 1.0))
 end
@@ -134,7 +135,7 @@ end
         @test a.x != c.x
         # The components draw in order of α, so how the keys are written does not change the record.
         h3 = (2 => 8π^2 * 1e-24, 0 => 2e-24, -1 => 1e-26, -2 => 1e-30)
-        n3 = (:WHPM => h3[1][2], :WHFM => h3[2][2], :FLFM => h3[3][2], :RWFM => h3[4][2])
+        n3 = (:WPM => h3[1][2], :WFM => h3[2][2], :FFM => h3[3][2], :RWFM => h3[4][2])
         r3 = noise_gen(PhaseData, 1024, 1.0; h = Dict(h3), rng = Xoshiro(1)).x
         @test r3 == noise_gen(PhaseData, 1024, 1.0; h = Dict(reverse(h3)), rng = Xoshiro(1)).x
         @test r3 == noise_gen(PhaseData, 1024, 1.0; h = Dict(n3), rng = Xoshiro(1)).x

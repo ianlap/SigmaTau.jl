@@ -2,9 +2,17 @@
 
 The side panel holds what an analysis is made of: the clocks, the
 estimators and the options, with the **Run analysis** button below them.
-The Data, Stability, Spectrum, Dynamic, Holdover and Steering pages share
-it. The Synthesis, Ensemble and Live pages show their own settings in its
-place.
+It follows the page. The [Stability](stability.md) page shows it all; the
+[Spectrum](spectrum.md) page, which a run also computes, the clocks and
+**Run analysis**; the [Data](data.md), [Dynamic](dynamic.md),
+[Holdover](holdover.md) and [Steering](steering.md) pages the clocks
+alone, since they compute themselves. With one clock those pages have no
+panel. The [Synthesis](synthesis.md), [Ensemble](ensemble.md) and
+[Live](live.md) pages show their own settings in it. The settings of the
+Spectrum, Dynamic, Holdover and Steering pages sit in a bar above their
+plots, whatever the number of clocks. Dynamic, Steering and the
+N-cornered hat and Two channels views of Ensemble show the τ grid among
+their settings too: it is one grid, shared with Stability.
 
 The panel starts folded into the rail at the left edge, so the plot has
 the width of the window. **Settings** on the rail opens it. From 1280 px
@@ -12,12 +20,8 @@ wide, **Settings** pins it beside the page and folds it away again, and the
 explorer remembers which. In a narrower window it opens over the page and
 closes with Esc or a click elsewhere, and the card of results beside the
 plot (the per-τ table, for one) opens the same way from **Results**. While
-the panel is closed, **Run** on the rail runs the analysis.
-
-With one clock, the Spectrum, Dynamic, Holdover and Steering pages put
-their settings in the panel too, in place of the estimators and options.
-With several clocks the panel keeps its content, and those four pages show
-their settings in a bar above the plots.
+the panel is closed, **Run** on the rail runs the analysis on the
+Stability and Spectrum pages.
 
 ## Clocks
 
@@ -64,7 +68,7 @@ searches their names and descriptions:
 |:------|:-----------|
 | Allan family | ADEV, MDEV, HDEV, MHDEV, PDEV |
 | Total | TOTDEV, MTOTDEV, HTOTDEV, MHTOTDEV |
-| Thêo | THEO1, THEOH |
+| Thêo | Thêo1, ThêoH |
 | Time | TDEV, HTDEV, TTOTDEV, MTIE, TIE rms |
 
 The first three groups are fractional frequency deviations ``σ_y(τ)`` and

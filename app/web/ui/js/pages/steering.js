@@ -10,6 +10,7 @@ import { state, update, recordClocks, multi } from "../state.js";
 import { steer as fetchSteer, steerKey, steerDefault } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, timeUnit, LINE_W } from "../plot.js";
 import { sci, num, duration, timeAxisUnit, modelText, inWords, escapeHtml as h } from "../format.js";
+import { gridField, onSharedControl } from "../panel.js";
 
 let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
@@ -17,42 +18,30 @@ const FRACS = [8, 4, 2];
 const EVERY = [1, 2, 4, 8, 16, 32, 64];
 const WEIGHTS = ["phase²", "frequency²", "steer²"];
 
-export function controls(inline = false) {
+// The settings, in the toolbar above the plot.
+export function controls() {
   const o = state.steer, c = recordClocks()[0], rec = c?.record;
   const from = `<div class="seg" role="group" aria-label="Gains from">
       <button type="button" data-ctl="from" data-v="time" class="${o.from === "time" ? "on" : ""}" title="A critically damped loop with this time constant: gains by pole placement">Time constant</button>
       <button type="button" data-ctl="from" data-v="cost" class="${o.from === "cost" ? "on" : ""}" title="The gains that minimize a weighted sum of phase², frequency² and steer² (LQG)">Cost</button></div>`;
   const T = `<input type="text" data-ctl="T" value="${h(o.TText)}" placeholder="${rec ? num(steerDefault(c), 4) : "auto"}" inputmode="decimal" aria-label="Loop time constant in seconds" class="carrier">`;
-  const integral = `<label class="check" title="A third gain, on the running sum of the phase: it removes the phase offset a frequency drift leaves, at the cost of more noise"><input type="checkbox" data-ctl="integral" ${o.integral ? "checked" : ""}>Integral${inline ? "" : " gain"}</label>`;
-  const cost = WEIGHTS.map((w, i) => `<label class="${inline ? "tool-field" : "opt"}"><span>${w}</span><input type="text" data-ctl="cost" data-i="${i}" value="${h(o.cost[i])}" inputmode="decimal" aria-label="Weight on ${w}" class="carrier steer-w"></label>`).join("");
+  const integral = `<label class="check" title="A third gain, on the running sum of the phase: it removes the phase offset a frequency drift leaves, at the cost of more noise"><input type="checkbox" data-ctl="integral" ${o.integral ? "checked" : ""}>Integral</label>`;
+  const cost = WEIGHTS.map((w, i) => `<label class="tool-field"><span>${w}</span><input type="text" data-ctl="cost" data-i="${i}" value="${h(o.cost[i])}" inputmode="decimal" aria-label="Weight on ${w}" class="carrier steer-w"></label>`).join("");
   const every = `<select data-ctl="every" aria-label="Samples between steers">${EVERY.map((k) => `<option value="${k}" ${k === o.every ? "selected" : ""}>${k === 1 ? "sample" : `${k} samples`}</option>`).join("")}</select>`;
-  const frac = inline
-    ? `<select data-ctl="frac" aria-label="Share of the record the clock model is fitted to">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""}>1/${f}</option>`).join("")}</select>`
-    : `<div class="pills">${FRACS.map((f) => `<button type="button" class="pill ${f === o.frac ? "on" : ""}" data-ctl="frac" data-v="${f}">1/${f}</button>`).join("")}</div>`;
-  const drift = `<label class="check" title="The model carries a frequency drift, and the loop steers it out ahead"><input type="checkbox" data-ctl="drift" ${o.drift ? "checked" : ""}>Drift${inline ? "" : " state"}</label>`;
+  const frac = `<select data-ctl="frac" aria-label="Share of the record the clock model is fitted to">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""}>1/${f}</option>`).join("")}</select>`;
+  const drift = `<label class="check" title="The model carries a frequency drift, and the loop steers it out ahead"><input type="checkbox" data-ctl="drift" ${o.drift ? "checked" : ""}>Drift</label>`;
   const view = `<div class="seg" role="group" aria-label="Plot">
       <button type="button" data-ctl="view" data-v="sigma" class="${o.view === "sigma" ? "on" : ""}">σ(τ)</button>
       <button type="button" data-ctl="view" data-v="record" class="${o.view === "record" ? "on" : ""}">Record</button></div>`;
   const gains = o.from === "time" ? `<label class="tool-field">T ${T} s</label>${integral}` : cost;
-  if (inline) return `${from}${gains}<label class="tool-field">Steer&nbsp;every ${every}</label><label class="tool-field">Model&nbsp;from ${frac}</label>${drift}${view}`;
-  return `<h2>Steering</h2>
-    <div class="ctl-block"><label class="lbl">Gains from</label>${from}</div>
-    ${o.from === "time"
-      ? `<div class="ctl-block"><label class="lbl">Time constant</label><div class="tau-line">${T}<span class="muted">s</span></div></div>${integral}`
-      : `<div class="ctl-block"><label class="lbl">Weights on</label>${cost}</div>`}
-    <label class="opt"><span>Steer every</span>${every}</label>
-    <div class="ctl-block"><label class="lbl">Clock model from the first</label>${frac}
-      ${rec ? `<div class="muted small">${duration(Math.floor(rec.n / o.frac) * rec.tau0)} of the record; the results count from its end</div>` : ""}</div>
-    ${drift}
-    <div class="ctl-block"><label class="lbl">Plot</label>${view}</div>
-    <div class="rule"></div>
-    <p class="muted small">Changes here recompute this page right away. The record is the clock running free against its reference; the loop is replayed on it.</p>`;
+  return `${from}${gains}<label class="tool-field">Steer&nbsp;every ${every}</label><label class="tool-field" title="${rec ? `${duration(Math.floor(rec.n / o.frac) * rec.tau0)} of the record; the results count from its end` : "The clock model is fitted to this first share of the record"}">Model&nbsp;from ${frac}</label>${drift}${gridField()}${view}`;
 }
 
 export function onControl(e) {
   const t = e.target.closest("[data-ctl]");
   if (!t) return;
   const k = t.dataset.ctl, click = e.type === "click", change = e.type === "change";
+  if (change) onSharedControl(t);
   if ((k === "from" || k === "view") && click) update((s) => { s.steer[k] = t.dataset.v; });
   if (k === "frac" && (click && t.dataset.v || change && t.tagName === "SELECT")) update((s) => { s.steer.frac = Number(t.dataset.v ?? t.value); });
   if (k === "every" && change) update((s) => { s.steer.every = Number(t.value); });
@@ -209,10 +198,9 @@ export function refresh() {
   if (!root) return;
   const several = multi(), record = state.steer.view === "record";
   const tb = root.querySelector("[data-ref=toolbar]");
-  tb.hidden = !several;
-  if (several && !tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
+  if (!tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
     const at = tb.contains(document.activeElement) ? document.activeElement.dataset : null;
-    tb.innerHTML = controls(true);
+    tb.innerHTML = controls();
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
   root.querySelector("[data-ref=title]").textContent = record ? "Steered phase" : "Stability, free-running and steered";

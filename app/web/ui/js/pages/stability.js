@@ -2,7 +2,7 @@
 // "Compare at τ" (several clocks, overlaid). Mounted once per visit;
 // refresh() redraws from state.
 import { state, update, visibleClocks, multi, markStale } from "../state.js";
-import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope, BIAS_CORRECTED, biasEntry } from "../estimators.js";
+import { byId, label, gridName, CONFIDENCES, noiseTitle, noiseSlope, BIAS_CORRECTED, biasEntry } from "../estimators.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css, LINE_W } from "../plot.js";
 import { sci, sciHtml, num, hertz, escapeHtml as h } from "../format.js";
 
@@ -91,7 +91,7 @@ export function refresh() {
   const conf = state.ci ? `${(CONFIDENCES.find(([v]) => v === state.confidence) ?? [0, state.confidence])[1]} confidence · ` : "";
   const biased = state.devs.some((d) => BIAS_CORRECTED.has(d));
   const bias = biased ? ` · ${biasEntry(state.bias)[2]}` : "";
-  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}${state.noise === "auto" ? "" : ` · noise ${state.noise === "fit" ? "from the fit" : noiseLabel(state.noise)}`}`;
+  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}${state.noise === "auto" ? "" : ` · noise ${state.noise === "fit" ? "from the fit" : state.noise}`}`;
   const maskSel = root.querySelector("[data-ref=mask]");
   maskSel.value = state.mask;
   maskSel.hidden = state.axis !== "sigma_x";
@@ -210,7 +210,7 @@ function traces(clocks, devs) {
           array: r.ci_hi.map((v, i) => (v ?? NaN) - r.sigma[i]),
           arrayminus: r.sigma.map((v, i) => v - (r.ci_lo[i] ?? NaN)),
         } : undefined,
-        customdata: r.tau.map((_, i) => [r.edf[i], noiseLabel(r.noise[i] ?? "")]),
+        customdata: r.tau.map((_, i) => [r.edf[i], r.noise[i] ?? ""]),
         hovertemplate: `<b>${h(name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.4e}${r.edf.length ? "<br>EDF %{customdata[0]:.4g} · %{customdata[1]}" : ""}<extra></extra>`,
       });
       // While the model is built by hand: the MHDEV its components leave.
@@ -306,7 +306,7 @@ function draw(clocks, devs) {
 // τ, as runs of equal type. With one clock, dashed guides show the slope each
 // run implies for the estimator the strip comes from.
 
-const NOISE_VAR = { WHPM: "--noise-wpm", FLPM: "--noise-fpm", WHFM: "--noise-wfm", FLFM: "--noise-ffm", RWFM: "--noise-rwfm", FWFM: "--noise-fwfm", RRFM: "--noise-rrfm" };
+const NOISE_VAR = { WPM: "--noise-wpm", FPM: "--noise-fpm", WFM: "--noise-wfm", FFM: "--noise-ffm", RWFM: "--noise-rwfm", FWFM: "--noise-fwfm", RRFM: "--noise-rrfm" };
 const STRIP_PX = 18, STRIP_GAP = 3;
 
 // The first selected σ_y estimator with noise types: the strip's source.
@@ -350,7 +350,7 @@ function noiseOverlay(layout, tr, clocks, devs) {
       });
       layout.annotations.push({
         xref: "x", yref: "paper", x: Math.log10(Math.sqrt(u.lo * u.hi)), y: 1, yanchor: "middle", yshift: (p0 + p1) / 2, showarrow: false,
-        text: noiseLabel(u.noise), font: { size: 10.5, color: ink }, hovertext: `${several ? `${c.name}: ` : ""}${noiseTitle(u.noise)}`,
+        text: u.noise, font: { size: 10.5, color: ink }, hovertext: `${several ? `${c.name}: ` : ""}${noiseTitle(u.noise)}`,
       });
       if (!several) {
         // Faint run boundaries through the plot.
@@ -410,7 +410,7 @@ function renderReadout(clocks, devs, show) {
     if (ok.length) {
       const i = ok.reduce((a, b) => (r.sigma[b] < r.sigma[a] ? b : a));
       const edge = i === ok[ok.length - 1] ? ", at the longest τ" : i === ok[0] ? ", at the shortest τ" : "";
-      const runs = noiseRuns(r).map((u) => noiseLabel(u.noise)).filter((n, k, a) => n !== a[k - 1]);
+      const runs = noiseRuns(r).map((u) => u.noise).filter((n, k, a) => n !== a[k - 1]);
       html = item(edge ? `Lowest ${label(d)}${edge}` : `${label(d)} floor`, `${sciHtml(r.sigma[i])}${unit}`, "big") +
         (edge ? "" : item("at τ", `${num(r.tau[i], 4)}<span class="u">s</span>`)) +
         (i === ok[0] ? "" : item(`at τ = ${num(r.tau[ok[0]], 4)} s`, `${sciHtml(r.sigma[ok[0]])}${unit}`, "mid", "more")) +
@@ -434,7 +434,7 @@ function renderTable(clocks, devs) {
   const rows = (r?.tau ?? []).map((t, i) => {
     const tip = r.below ? tableTip(r, i, c.record.table.band[1])
       : r.ci_lo.length ? `${sci(r.ci_lo[i], 4)} … ${sci(r.ci_hi[i], 4)} (${(state.confidence * 100).toFixed(1)} %), n_eff ${r.neff[i] ?? "–"}` : `n_eff ${r.neff[i] ?? "–"}`;
-    return `<div class="tbl-row tbl-body" title="${tip}"><span>${num(t, 5)}</span><span>${sci(r.sigma[i])}</span><span>${r.edf.length ? num(r.edf[i], 4) : "–"}</span>${r.noise[i] ? `<span class="badge" title="${noiseTitle(r.noise[i])}">${noiseLabel(r.noise[i])}</span>` : "<span></span>"}</div>`;
+    return `<div class="tbl-row tbl-body" title="${tip}"><span>${num(t, 5)}</span><span>${sci(r.sigma[i])}</span><span>${r.edf.length ? num(r.edf[i], 4) : "–"}</span>${r.noise[i] ? `<span class="badge" title="${noiseTitle(r.noise[i])}">${r.noise[i]}</span>` : "<span></span>"}</div>`;
   }).join("");
   box.className = "card side-card per-tau";
   box.innerHTML = `
@@ -450,7 +450,7 @@ function renderTable(clocks, devs) {
 // round τ, the numbers a datasheet quotes. Edit builds it by hand instead,
 // one noise type over a τ span at a time, each fitted to what the ones
 // before it leave.
-const NOISES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"];
+const NOISES = ["WPM", "FPM", "WFM", "FFM", "RWFM", "FWFM", "RRFM"];
 
 function modelBox(c) {
   const p = c.result?.powerlaw;
@@ -463,7 +463,7 @@ function modelBox(c) {
   const comps = p.alphas.map((a, i) => [a, p.h[i], p.noise_types[i]]).filter(([, v]) => v > 0);
   const at = p.sigma_at;
   return `<div class="model-box">${head}
-    <div class="model-grid">${comps.map(([a, v, n]) => `<span class="badge" title="${noiseTitle(n)}">${noiseLabel(n)}</span><span>h<sub>${a}</sub></span><span>${sci(v, 3)}</span>`).join("")}</div>
+    <div class="model-grid">${comps.map(([a, v, n]) => `<span class="badge" title="${noiseTitle(n)}">${n}</span><span>h<sub>${a}</sub></span><span>${sci(v, 3)}</span>`).join("")}</div>
     ${editor}
     ${at.tau.length ? `<h3>ADEV from the model</h3>
     <div class="model-grid">${at.tau.map((t, i) => `<span>τ = ${t >= 86400 ? `${num(t / 86400, 3)} d` : `${num(t, 4)} s`}</span><span></span><span>${sci(at.adev[i], 3)}</span>`).join("")}</div>` : ""}
@@ -474,10 +474,10 @@ function modelEditor(c) {
   const span = (k) => `${k.from ?? "start"} – ${k.to ?? "end"} s`;
   const used = new Set(c.components.map((k) => k.noise));
   return `<div class="model-edit">
-    ${c.components.length ? `<ol class="model-steps">${c.components.map((k) => `<li><span class="badge">${noiseLabel(k.noise)}</span> ${span(k)}</li>`).join("")}</ol>`
+    ${c.components.length ? `<ol class="model-steps">${c.components.map((k) => `<li><span class="badge">${k.noise}</span> ${span(k)}</li>`).join("")}</ol>`
       : `<p class="muted">Pick the noise that dominates a stretch of MHDEV and fit its level there. The dashed line is what is left for the next one.</p>`}
     <div class="model-add">
-      <select data-ref="fit-noise" aria-label="Noise type">${NOISES.filter((n) => !used.has(n)).map((n) => `<option value="${n}" title="${noiseTitle(n)}">${noiseLabel(n)}</option>`).join("")}</select>
+      <select data-ref="fit-noise" aria-label="Noise type">${NOISES.filter((n) => !used.has(n)).map((n) => `<option value="${n}" title="${noiseTitle(n)}">${n}</option>`).join("")}</select>
       <input data-ref="fit-from" inputmode="decimal" placeholder="from τ" aria-label="From τ in seconds">
       <input data-ref="fit-to" inputmode="decimal" placeholder="to τ" aria-label="To τ in seconds"><span class="muted">s</span>
       <button type="button" class="btn btn-sm" data-fit="add">Add</button>

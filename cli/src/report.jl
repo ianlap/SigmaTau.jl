@@ -133,14 +133,11 @@ function html_result_table(io::IO, r::StabilityResult, lab::String)
             print(io, "</td><td class=\"n\">"); sci(io, r.ci[i].hi, 3)
         end
         has_edf && (print(io, "</td><td class=\"n\">"); plain(io, r.edf[i], 4))
-        has_nt && (print(io, "</td><td>"); print(io, noise_short(r.noise_type[i])))
+        has_nt && (print(io, "</td><td>"); print(io, String(r.noise_type[i])))
         print(io, "</td><td class=\"n\">"); print(io, r.neff[i]); print(io, "</td></tr>")
     end
     print(io, "</tbody></table>")
 end
-
-noise_short(s::Symbol) = s === :WHPM ? "WPM" : s === :FLPM ? "FPM" : s === :WHFM ? "WFM" :
-                         s === :FLFM ? "FFM" : String(s)
 
 const REPORT_STYLE = """
 body{font:13px/1.5 system-ui,sans-serif;color:#1d1d1f;background:#fff;margin:32px auto;max-width:900px;padding:0 16px}
@@ -172,7 +169,7 @@ function cmd_report(io::IO, o::Options, data::PhaseData, args::Vector{String})
     o.filled > 0 && print(io, "<dt>Filled</dt><dd>", o.filled, " (", share_text(o.filled, s.n), ")</dd>")
     print(io, "<dt>Outliers (5σ)</dt><dd>", length(s.outliers), "</dd>")
     print(io, "<dt>Drift / day</dt><dd>"); sci(io, Float64(s.drift_per_day), 3); print(io, "</dd>")
-    print(io, "<dt>Preprocessing</dt><dd>detrend ", o.detrend, ", remove drift ", o.remove_drift,
+    print(io, "<dt>Preprocessing</dt><dd>remove drift ", o.remove_drift,
           o.fillgaps ? ", gaps filled" : "", o.remove_outliers ? ", outliers removed" : "",
           o.reference_col > 0 ? ", minus column " * string(o.reference_col) : "")
     if !(isnan(o.range_start) && isnan(o.range_end))

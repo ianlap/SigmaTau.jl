@@ -169,7 +169,6 @@ function json_acf(io::IO, o::Options, rec)
 end
 
 function json_preprocessing(io::IO, o::Options)
-    json_key(io, "detrend"); json_string(io, o.detrend)
     json_key(io, "remove_drift"); json_string(io, o.remove_drift)
     json_key(io, "fillgaps"); json_bool(io, o.fillgaps)
     json_key(io, "remove_outliers"); json_bool(io, o.remove_outliers)
@@ -238,7 +237,7 @@ function json_powerlaw(io::IO, o::Options, data::PhaseData, results::Vector{Stab
     json_key(io, "deviation", true); json_string(io, "mhdev")
     json_key(io, "alphas"); json_array(io, αs)
     json_key(io, "h"); json_array(io, Float64[h[α] for α in αs])
-    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._nnls_symbol(a)) for a in αs])
+    json_key(io, "noise_types"); json_array(io, String[String(SigmaTau._noise_symbol(a)) for a in αs])
     json_key(io, "mode"); json_string(io, hand ? "components" : "fit")
     if hand
         f = nf[1]

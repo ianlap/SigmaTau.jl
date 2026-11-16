@@ -247,7 +247,7 @@ class NoiseFit:
 
     @_map_errors
     def add_component(self, noise: int | str, tau_index: slice | Sequence[int]) -> NoiseFit:
-        """Add the power law ``noise``, an α or a name such as ``"WHFM"``, fitted at
+        """Add the power law ``noise``, an α or a name such as ``"WFM"``, fitted at
         the τ indices ``tau_index``, and refit the levels already there.
 
         ``tau_index`` counts from 0: a slice such as ``slice(0, 6)``, or a

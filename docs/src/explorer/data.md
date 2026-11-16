@@ -30,13 +30,25 @@ The explorer reads the files that [`read_data`](@ref) reads:
   (`+9.999999999E+06`): frequencies in hertz become fractional frequency,
   and time intervals become phase;
 - tables with named columns and ISO 8601 timestamps;
-- the BIPM files of UTC − UTC(k);
+- the BIPM files of UTC − UTC(k) and of rapid UTC, UTCr − UTC(k);
 - RINEX clock files (`.clk`), from which the clocks are chosen in a list;
 - tables of phase noise, the offset frequency beside ``ℒ(f)``,
   ``S_φ(f)``, ``S_x(f)`` or ``S_y(f)``, which open as a
   [table of phase noise](#A-table-of-phase-noise).
 
 A file compressed with gzip (`.gz`) is unpacked as it is opened.
+
+Below the buttons, **Or open a real record** offers three records shipped
+with the explorer. Each opens through the import dialog like a file, and
+its clocks take the place of those loaded:
+
+| Record | Clocks |
+|:-------|:-------|
+| **Five time scales** | UTCr − UTC(k) for NIST, USNO, PTB, OP and NICT, one value a day from 2013 (BIPM rapid UTC) |
+| **Two quartz oscillators in orbit** | The ultra-stable oscillators of the GRACE-FO satellites against GPS time, every 30 s for 5.8 days |
+| **GNSS and station clocks** | One day of 21 clocks against a hydrogen maser: Galileo, GPS and GLONASS satellites, and masers, caesium, rubidium and crystal clocks on the ground (GFZ) |
+
+Their sources, licences and citations are in `app/web/ui/samples/README.md`.
 
 ## The import dialog
 

@@ -15,41 +15,27 @@ let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
 const FRACS = [8, 4, 2, 0];
 const LEVELS = [[0.683, "68.3 %"], [0.9, "90 %"], [0.95, "95 %"], [0.99, "99 %"]];
-const NOISE = { WHPM: "white PM", FLPM: "flicker PM", WHFM: "white FM", FLFM: "flicker FM", RWFM: "random-walk FM" };
+const NOISE = { WPM: "white PM", FPM: "flicker PM", WFM: "white FM", FFM: "flicker FM", RWFM: "random-walk FM" };
 const pct = (p) => `${num(100 * p, 3)} %`;
 // The stretch as the control names it: a share of the record, or (0) as many
 // holdover times as the fit has terms.
 const stretch = (f, drift) => (f ? `1/${f}` : `${drift ? 3 : 2}τ`);
 const reference = (drift) => (drift ? "√20·HTDEV" : "√6·TDEV");
 
-export function controls(inline = false) {
+// The settings, in the toolbar above the plot.
+export function controls() {
   const o = state.hold;
-  const train = inline
-    ? `<select data-ctl="frac" aria-label="Training stretch, as a share of the record or of the holdover time">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""} ${!f && o.kalman ? "disabled" : ""}>${stretch(f, o.drift)}</option>`).join("")}</select>`
-    : `<div class="pills">${FRACS.map((f) => `<button type="button" class="pill ${f === o.frac ? "on" : ""}" data-ctl="frac" data-v="${f}" ${!f && o.kalman ? `disabled title="A Kalman filter trains on a share of the record"` : ""}>${stretch(f, o.drift)}</button>`).join("")}</div>`;
+  const train = `<select data-ctl="frac" aria-label="Training stretch, as a share of the record or of the holdover time">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""} ${!f && o.kalman ? "disabled" : ""}>${stretch(f, o.drift)}</option>`).join("")}</select>`;
   const by = `<div class="seg" role="group" aria-label="Predicted by">
-      <button type="button" data-ctl="kalman" data-v="0" class="${o.kalman ? "" : "on"}" title="A least-squares line or parabola through the training stretch">${inline ? "Fit" : "Least-squares fit"}</button>
-      <button type="button" data-ctl="kalman" data-v="1" class="${o.kalman ? "on" : ""}" title="A Kalman filter that has read the record up to each start; its clock model is fitted to the first training stretch alone">${inline ? "Kalman" : "Kalman filter"}</button></div>`;
+      <button type="button" data-ctl="kalman" data-v="0" class="${o.kalman ? "" : "on"}" title="A least-squares line or parabola through the training stretch">Fit</button>
+      <button type="button" data-ctl="kalman" data-v="1" class="${o.kalman ? "on" : ""}" title="A Kalman filter that has read the record up to each start; its clock model is fitted to the first training stretch alone">Kalman</button></div>`;
   const fit = `<div class="seg" role="group" aria-label="Learned from the stretch">
       <button type="button" data-ctl="drift" data-v="0" class="${o.drift ? "" : "on"}">Frequency</button>
-      <button type="button" data-ctl="drift" data-v="1" class="${o.drift ? "on" : ""}">${inline ? "+ drift" : "Frequency and drift"}</button></div>`;
+      <button type="button" data-ctl="drift" data-v="1" class="${o.drift ? "on" : ""}" title="Frequency and drift">+ drift</button></div>`;
   const limit = `<input type="text" data-ctl="limit" value="${h(o.limitText)}" placeholder="none" inputmode="decimal" aria-label="Time error limit in seconds" class="carrier">`;
   const level = `<select data-ctl="confidence" aria-label="Share of trials">${LEVELS.map(([v, l]) => `<option value="${v}" ${v === o.confidence ? "selected" : ""}>${l}</option>`).join("")}</select>`;
-  if (inline) {
-    return `<label class="tool-field">Train&nbsp;on ${train}</label>${by}${fit}<label class="tool-field">Limit ${limit} s</label><label class="tool-field">Trials ${level}</label>`;
-  }
-  const c = recordClocks()[0];
-  const n = c?.record?.n ?? 0;
-  return `<h2>Holdover</h2>
-    <div class="ctl-block"><label class="lbl">Training stretch</label>${train}
-      ${n ? `<div class="muted small">${o.frac ? `${duration(Math.floor(n / o.frac) * c.record.tau0)} of the record` : `${o.drift ? "three times" : "twice"} each holdover time, the test behind ${o.drift ? "HTDEV" : "TDEV"}`}, moved along the record one sample at a time</div>` : ""}</div>
-    <div class="ctl-block"><label class="lbl">Predicted by</label>${by}</div>
-    <div class="ctl-block"><label class="lbl">Learned from the stretch</label>${fit}</div>
-    <div class="ctl-block"><label class="lbl">Time error limit</label><div class="tau-line">${limit}<span class="muted">s</span></div></div>
-    <label class="opt"><span>Share of trials</span>${level}</label>
-    <label class="check" ${o.kalman ? `title="The filter starts from its own estimate"` : ""}><input type="checkbox" data-ctl="anchor" ${o.anchor && !o.kalman ? "checked" : ""} ${o.kalman ? "disabled" : ""}>Start from the last reading</label>
-    <div class="rule"></div>
-    <p class="muted small">Changes here recompute this page right away. The dashed curve is the error that this share of the trials stayed within; the limit is reached where it crosses.</p>`;
+  const anchor = `<label class="check" title="${o.kalman ? "The filter starts from its own estimate" : "Each prediction starts from the last reading of its stretch"}"><input type="checkbox" data-ctl="anchor" ${o.anchor && !o.kalman ? "checked" : ""} ${o.kalman ? "disabled" : ""}>From last reading</label>`;
+  return `<label class="tool-field" title="The stretch each prediction learns from, moved along the record one sample at a time">Train&nbsp;on ${train}</label>${by}${fit}${anchor}<label class="tool-field">Limit ${limit} s</label><label class="tool-field">Trials ${level}</label>`;
 }
 
 export function onControl(e) {
@@ -158,10 +144,9 @@ export function refresh() {
   if (!root) return;
   const several = multi();
   const tb = root.querySelector("[data-ref=toolbar]");
-  tb.hidden = !several;
-  if (several && !tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
+  if (!tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
     const at = tb.contains(document.activeElement) ? document.activeElement.dataset : null;
-    tb.innerHTML = controls(true);
+    tb.innerHTML = controls();
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
   const side = root.querySelector("[data-ref=side]");

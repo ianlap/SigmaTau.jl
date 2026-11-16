@@ -4,7 +4,8 @@ using SigmaTau
 using SigmaTau: StabilityResult, StabilitySuite, SpectralResult,
                 DynamicStabilityResult, HatResult, ci_lower, ci_upper, estimators,
                 PowerLawFit, HoldoverResult, HoldoverPrediction, SteeringResult,
-                SteeringPrediction, TimescaleResult, KalmanResult, powerlaw_sigma
+                SteeringPrediction, TimescaleResult, KalmanResult, powerlaw_sigma,
+                _estimator_label
 using RecipesBase
 
 # Tick positions at integer powers of 10 spanning the positive finite values
@@ -35,8 +36,8 @@ _ordinate_values(r::StabilityResult) = Iterators.flatten((r.dev, ci_lower(r), ci
     xscale --> :log10
     yscale --> :log10
     xlabel --> "Averaging Time τ (s)"
-    ylabel --> uppercase(string(res.deviation_type))
-    label  --> uppercase(string(res.deviation_type))
+    ylabel --> _estimator_label(res.deviation_type)
+    label  --> _estimator_label(res.deviation_type)
     seriestype := :path
     markershape --> :circle
     markersize  --> 3
@@ -66,7 +67,7 @@ const _TIME = Set(e.name for e in estimators() if e.axis === :sigma_x)
 # Label of curve `i` of a collection: the clock's name for a hat, the
 # estimator otherwise.
 _curve_label(h::HatResult, i) = h.names[i]
-_curve_label(results, i) = uppercase(string(results[i].deviation_type))
+_curve_label(results, i) = _estimator_label(results[i].deviation_type)
 
 # A suite draws as the vector of its results.
 @recipe f(suite::StabilitySuite) = suite.results
@@ -111,7 +112,7 @@ end
 # `1e<k>` form. Non-positive and NaN cells (windows that cannot support the
 # averaging factor) map to NaN and terminate the curve.
 @recipe function f(res::DynamicStabilityResult)
-    title --> uppercase(string(res.deviation_type))
+    title --> _estimator_label(res.deviation_type)
     z = map(v -> (isfinite(v) && v > 0) ? log10(v) : NaN, res.dev)
     logτ = log10.(res.tau)
     kx = floor(Int, minimum(logτ)):ceil(Int, maximum(logτ))
@@ -178,7 +179,7 @@ _level(c) = (v = round(100c; digits=1); string(isinteger(v) ? Int(v) : v, " %"))
     xscale --> :log10
     yscale --> :log10
     xlabel --> (spectrum ? "Frequency f (Hz)" : "Averaging Time τ (s)")
-    ylabel --> (spectrum ? "S_y(f) (1/Hz)" : uppercase(string(fit.source)))
+    ylabel --> (spectrum ? "S_y(f) (1/Hz)" : _estimator_label(fit.source))
     xticks --> _decade_ticks(fit.x)
     yticks --> _decade_ticks(Iterators.flatten((fit.y, fit.fit)))
     minorgrid --> true

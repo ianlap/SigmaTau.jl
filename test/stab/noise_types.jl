@@ -13,7 +13,7 @@ using SigmaTau
 
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
-        # type (WPM α=2, FLPM α=1, WHFM α=0, FLFM α=-1, RWFM α=-2). Synthesis
+        # type (WPM α=2, FPM α=1, WFM α=0, FFM α=-1, RWFM α=-2). Synthesis
         # is via `noise_gen`.
         ms = [1, 2, 4, 8, 16]
         bad = []
@@ -42,8 +42,8 @@ using SigmaTau
             (mtotdev(p, [1, 16]; ci=false, correct_bias=false).dev ./ mdev(p, [1, 16]; ci=false).dev) .^ 2
         end
         B(noise) = bias_correction([noise], :mtot, [16], 4096)[1]
-        @test [B(:WHFM), B(:RWFM)] ≈ [0.771, 0.679]
-        @test ratio(0)  ≈ [0.5, B(:WHFM)] rtol = 0.05
+        @test [B(:WFM), B(:RWFM)] ≈ [0.771, 0.679]
+        @test ratio(0)  ≈ [0.5, B(:WFM)] rtol = 0.05
         @test ratio(-2) ≈ [0.5, B(:RWFM)] rtol = 0.05
     end
 
@@ -62,9 +62,9 @@ using SigmaTau
 
     @testset "MTOTDEV EDF (Howe & Peppler 2001, Table 2)" begin
         edf(est, noise, m) = SigmaTau.calculate_edf(est, [1.0], [noise], [m], [Float64(m)], 4097, 4096.0)[1]
-        @test edf(:mtotdev, :WHPM, 64) ≈ 64 / (0.559 + 1.004 / 64)
+        @test edf(:mtotdev, :WPM, 64) ≈ 64 / (0.559 + 1.004 / 64)
         @test edf(:mtotdev, :RWFM, 1024) ≈ 4 / (1.276 + 3.149 / 4)
-        @test edf(:mtotdev, :WHFM, 8) == edf(:mdev, :WHFM, 8)       # below 16τ0
+        @test edf(:mtotdev, :WFM, 8) == edf(:mdev, :WFM, 8)         # below 16τ0
     end
 
     @testset "TTOTDEV = MTOTDEV · τ/√3 identity" begin
@@ -219,7 +219,7 @@ using SigmaTau
         @test all(isapprox.(_mhdev_core(x, ms, tau0), exact(LK.mhdev_var); rtol=1e-10))
     end
 
-    @testset "TOTDEV/HTOTDEV EDF fallback for WPM/FLPM" begin
+    @testset "TOTDEV/HTOTDEV EDF fallback for WPM/FPM" begin
         # _coeff_totvar returns (NaN, NaN) for α=2,1 (SP1065 Table 9 only
         # covers α∈{0,-1,-2}). The fallback dispatches to the ADEV-style
         # EDF formula so calculate_edf produces a finite EDF for every
@@ -229,16 +229,16 @@ using SigmaTau
         N_eq        = 4096
         T_eq        = (N_eq - 1) * 1.0
         # α=2 (WPM)
-        noises_wpm = fill(:WHPM, length(m_values_eq))
+        noises_wpm = fill(:WPM, length(m_values_eq))
         edfs = SigmaTau.calculate_edf(:totdev, ones(length(m_values_eq)),
                                                noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
         @test all(isfinite, edfs)
         @test all(>(0.0), edfs)
 
-        # α=1 (FLPM)
-        noises_flpm = fill(:FLPM, length(m_values_eq))
+        # α=1 (FPM)
+        noises_fpm = fill(:FPM, length(m_values_eq))
         edfs = SigmaTau.calculate_edf(:totdev, ones(length(m_values_eq)),
-                                               noises_flpm, m_values_eq, taus_eq, N_eq, T_eq)
+                                               noises_fpm, m_values_eq, taus_eq, N_eq, T_eq)
         @test all(isfinite, edfs)
 
         # htotdev gets the HDEV-style fallback at α=2,1 too.

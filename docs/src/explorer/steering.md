@@ -12,16 +12,19 @@ describes.
 
 ## Settings
 
+The settings sit in a bar above the plot.
+
 | Setting | Effect |
 |:--------|:-------|
 | **Gains from** | **Time constant**, the gains of a critically damped loop with that time constant, by pole placement, or **Cost**, the gains that minimize a weighted sum of phase², frequency² and steer² |
-| **Time constant** | In seconds. Empty, it is 1/128 of the record, the value that the field shows in gray |
-| **Integral gain** | A third gain, on the running sum of the estimated phase |
-| **Weights on** | With **Cost**, the weights on **phase²**, **frequency²** and **steer²**. Those on phase² and steer² are above 0. A larger weight on steer² gives a slower loop with smaller steers |
+| **T** | The time constant, in seconds. Empty, it is 1/128 of the record, the value that the field shows in gray |
+| **Integral** | A third gain, on the running sum of the estimated phase |
+| **phase²**, **frequency²**, **steer²** | With **Cost**, the weights on **phase²**, **frequency²** and **steer²**. Those on phase² and steer² are above 0. A larger weight on steer² gives a slower loop with smaller steers |
 | **Steer every** | A steer at every sample, or at every 2 to 64 samples. The gains are worked out for that interval |
-| **Clock model from the first** | **1/8**, **1/4** or **1/2** of the record, the stretch to which the clock model of the filter is fitted. The line below gives its length |
-| **Drift state** | The model also holds a frequency drift, which the loop steers out ahead |
-| **Plot** | **σ(τ)** or **Record** ([below](@ref explorer-steering-plot)) |
+| **Model from** | **1/8**, **1/4** or **1/2** of the record, the first stretch, to which the clock model of the filter is fitted. Its length shows when the pointer rests on it |
+| **Drift** | The model also holds a frequency drift, which the loop steers out ahead |
+| **τ grid** | The grid of averaging times, the same as on the [Stability](panel.md#Options) page |
+| **σ(τ)** or **Record** | The plot ([below](@ref explorer-steering-plot)) |
 
 The [clock model](../explanation/clock_model.md) is fitted to the first
 stretch alone and keeps the flicker FM and the flicker PM that the fit
@@ -32,7 +35,7 @@ that its model was learned from.
 
 The page computes when it is shown and again when the record, its
 preparation, its analysis range or a setting changes. It needs no run. Of
-the side panel it takes the τ grid alone. The stretch that the clock model
+the Stability settings it takes the τ grid alone. The stretch that the clock model
 is fitted to needs 65 samples or more, and the loop 16 after it: the record
 needs 520 samples with the first 1/8, 260 with the first 1/4 and 130 with
 the first 1/2.
@@ -82,8 +85,7 @@ deviations at each averaging time.
 
 ## Several clocks
 
-With several clocks, the settings move to a bar above the plot, and each
-clock has one color. With **σ(τ)** its steered deviation is a solid line
+With several clocks, each clock has one color. With **σ(τ)** its steered deviation is a solid line
 and its free-running one a dashed line, and the prediction is not drawn.
 With **Record** the plot gives the steered phase of each clock. The card
 lists the RMS of the steered phase and of the steers of each clock. A clock

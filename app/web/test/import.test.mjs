@@ -93,6 +93,13 @@ test("a BIPM UTC - UTC(k) file is recognized by its header despite the '+/-' col
   assert.deepEqual([guessRoles(s).time, guessRoles(s).value, guessRoles(s).timeUnit, guessRoles(s).scaling], [1, 2, 86400, 1e-9]);
 });
 
+test("a BIPM rapid UTC file is recognized by its '#' heading despite a remark", () => {
+  const rows = seq(10, (i) => `${60000 + i}       ${i}.5${i === 4 ? "    # -22.2   # erroneous value" : ""}`);
+  const s = sniff("utcr-lab", ["# MJD  [UTCr-UTC(LAB)]/ns", ...rows, "", "# notes"].join("\n"));
+  assert.deepEqual([s.format, s.formatLabel, s.nRows, s.names[1], s.bad], ["bipm_utc", "BIPM UTCr − UTC(LAB)", 10, "UTCr-UTC(LAB) (ns)", null]);
+  assert.deepEqual([guessRoles(s).time, guessRoles(s).value, guessRoles(s).timeUnit, guessRoles(s).scaling], [1, 2, 86400, 1e-9]);
+});
+
 test("a RINEX clock file lists its clocks and takes the clock's own epochs", () => {
   const rec = (kind, n, min, sec, x) => `${kind} ${n} 2025 08 17 00 ${String(min).padStart(2, "0")} ${String(sec).padStart(2, "0")}.000000  2   ${x}E-07  2.5E-11`;
   const lines = ["     3.04                 C                    M                   RINEX VERSION / TYPE", "                                                            END OF HEADER"];

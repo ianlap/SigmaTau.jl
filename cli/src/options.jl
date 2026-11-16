@@ -7,13 +7,13 @@ const COMMAND_HELP = [
     ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift and the statistics of its samples), with their histogram and autocorrelation on request"),
     ("spectrum",   "FILE", "Welch power spectral densities S_y(f) and S_x(f)"),
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
-    ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum (or both channels in FILE: --value-cols A,B)"),
+    ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum (or both channels in FILE: --column A,B)"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
     ("holdover",   "FILE", "holdover test: the time error after a training stretch against holdover time, and the time to reach a limit"),
     ("steer",      "FILE", "steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts"),
-    ("timescale",  "FILE --value-cols LIST", "form a timescale from several clocks read against one reference: weights and stability"),
-    ("hat",        "FILE --value-cols LIST", "the stability of each of three or more clocks measured against one another: N-cornered hat or Groslambert covariance"),
-    ("model",      "--synth N --noise-model R:Q1:Q2:Q3", "the σ(τ) that a clock noise model predicts (MDEV, ADEV and MHDEV), without a simulation"),
+    ("timescale",  "FILE --column LIST", "form a timescale from several clocks read against one reference: weights and stability"),
+    ("hat",        "FILE --column LIST", "the stability of each of three or more clocks measured against one another: N-cornered hat or Groslambert covariance"),
+    ("model",      "--synth N --clock-model R:Q1:Q2:Q3", "the σ(τ) that a clock noise model predicts (MDEV, ADEV and MHDEV), without a simulation"),
     ("phasenoise", "TABLE --carrier HZ", "the σ(τ) that a table of the phase noise ℒ(f), or of another spectrum, gives over its band"),
     ("live",       "SOURCE", "running σ(τ) from an instrument or the simulator, as JSON lines"),
     ("report",     "FILE", "self-contained HTML report: record, σ(τ) plots and tables (prints to PDF)"),
@@ -25,17 +25,16 @@ const COMMAND_HELP = [
 const SHELLS = ["bash", "zsh", "fish", "powershell"]
 const FORMATS = ["table", "csv", "json"]
 const INPUT_LAYOUTS = ["auto", "columns", "stable32", "timelab", "counter", "table", "bipm_utc", "rinex_clk"]
-const DETRENDS = ["none", "mean", "endpoint", "linear"]
 const DRIFTS = ["none", "linear", "quadratic"]
 const BIASES = ["exact", "published", "stable32", "none"]
-const NOISES = ["auto", "fit", "WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]
 const GRIDS = ["octave", "half-octave", "quarter-octave", "decade", "half-decade", "all"]
 const DYNAMIC_DEVS = ["dadev", "dhdev"]
 const STEPS = ["best", "real"]
 const DRIFT_MODELS = [String(m) for m in SigmaTau.DRIFT_MODELS]
 const DRIFT_METHODS = [String(m) for m in SigmaTau.DRIFT_METHODS]
 const TIMESCALES = ["at1", "at2", "ewfa", "greenhall", "jones_tryon", "stein"]
-const NOISE_NAMES = ["WHPM", "FLPM", "WHFM", "FLFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
+const NOISE_NAMES = ["WPM", "FPM", "WFM", "FFM", "RWFM", "FWFM", "RRFM"]   # α = 2 … −4
+const NOISES = ["auto"; "fit"; NOISE_NAMES]
 const HAT_DEVS = [String(d) for d in SigmaTau._HAT_DEVIATIONS]
 const MASKS = [[String(m) for m in SigmaTau.TELECOM_MASKS]; "all"]
 const QUANTITIES = ["phase", "frequency"]
@@ -63,29 +62,26 @@ const OPTS = [
     # The record
     Opt("--synth", "N", String[], false, "use a synthetic N-sample record (white + random-walk FM) instead of FILE; for model, the length of the record whose averaging times it takes", filter(!=("live"), CLOCK)),
     Opt("--seed", "S", String[], false, "random seed for --synth and the live simulator (default 42)", READS),
-    Opt("--clocks", "K", String[], false, "with --synth: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2; the analysis reads clock --clock, timescale uses all K (default 4)", ALL),
-    Opt("--noise-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", filter(!=("live"), CLOCK)),
-    Opt("--clock", "I", String[], false, "with --synth --clocks: the simulated clock to read, 1 to K (default 1)", ALL),
+    Opt("--clocks", "K", String[], false, "with --synth: simulate K clocks (2 to 64) against a perfect reference, each noisier than the last by a factor of 2; the analysis reads clock --column, timescale uses all K (default 4)", ALL),
+    Opt("--clock-model", "R:Q1:Q2:Q3", String[], false, "with --synth: one clock's noise, white PM variance R (s²) and diffusion q1, q2, q3 (white FM, random-walk FM, random-run FM); repeat per clock, which sets the number of clocks. `model` predicts its σ(τ)", filter(!=("live"), CLOCK)),
     Opt("--phase", "", String[], false, "the values are phase in seconds (default)", READS),
     Opt("--freq", "", String[], false, "the values are fractional frequency", READS),
     Opt("--input-format", "FMT", INPUT_LAYOUTS, false, "file layout: auto (default), columns, stable32 (.phd/.frd), timelab (.tim), counter (SCPI readings), table (named columns), bipm_utc (BIPM UTC-UTC(k)), rinex_clk (RINEX clock file; pick the clock with --column)", ALL),
-    Opt("--column", "NAME", String[], false, "clock column of a table file, or the clock of a RINEX clock file (G08, ALGO00CAN), by name (default: the column named phase / PPS / time error, else frequency)", ALL),
+    Opt("--column", "COL", String[], false, "the clock's column: a 1-based number or the name in a table's first line (default 2, or in a table the column named phase / PPS / time error, else frequency); for timescale and hat, a comma list of two or more; the clock of a RINEX clock file (G08, ALGO00CAN); with --synth --clocks, the simulated clock to read, 1 to K (default 1)", [ALL; "phasenoise"]),
     Opt("--nominal", "HZ", String[], false, "nominal frequency for readings in Hz (default: their mean, or for live the first reading, to 4 significant figures)", READS),
     Opt("--tau0", "SECONDS", String[], false, "sample interval τ₀ in seconds (default: from the file header or time column; 1 for --synth, model and live)", CLOCK),
-    Opt("--time-col", "N", String[], false, "1-based time column, 0 = none (default 1)", ALL),
-    Opt("--value-col", "N", String[], false, "1-based value column (default 2)", [ALL; "phasenoise"]),
-    Opt("--reference-col", "N", String[], false, "subtract this column from the value column (clocks measured against one reference)", ALL),
+    Opt("--time-column", "COL", String[], false, "time column, by 1-based number or name; 0 = none (default 1)", ALL),
+    Opt("--reference-column", "COL", String[], false, "subtract this column, by number or name, from the clock's (clocks measured against one reference)", ALL),
     Opt("--header", "N", String[], false, "header lines to skip; '#' lines and a Stable32 header are skipped anyway", [ALL; "phasenoise"]),
     Opt("--delim", "CHAR", String[], false, "field delimiter (default: a comma where the first data line has one, a tab in a table or .tsv file, else blanks; '\\t' for tab)", [ALL; "phasenoise"]),
     Opt("--scaling", "X", String[], false, "multiply the values by X (1e-9 for nanoseconds)", ALL),
-    Opt("--detrend", "MODE", DETRENDS, false, "remove none, mean, endpoint or linear drift (default none)", ALL),
     Opt("--remove-drift", "MODE", DRIFTS, false, "fit and remove from the phase: none (default), linear (frequency offset) or quadratic (offset and linear frequency drift)", ALL),
-    Opt("--fillgaps", "", String[], false, "put the record on an even time grid and fill gaps and NaN readings", ALL),
+    Opt("--fill-gaps", "", String[], false, "put the record on an even time grid and fill gaps and NaN readings", ALL),
     Opt("--keep-zeros", "", String[], false, "read the zeros of a Stable32 .phd/.frd file as readings, not gaps (quantized data)", ALL),
     Opt("--remove-outliers", "", String[], false, "replace 5σ outliers in frequency and fill them", ALL),
     Opt("--range", "A:B", String[], false, "analyze only seconds A to B from the first sample (either may be empty: 3600: or :86400)", ALL),
     # Analysis
-    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev; for hat, adev); see below", ["analyze", "hat", "report", "live", "phasenoise"]),
+    Opt("--devs", "LIST", String[], false, "comma list of deviations (default adev,mdev,hdev,mhdev; for hat, adev); see below. For dynamic, one of adev (default) and hdev", ["analyze", "dynamic", "hat", "report", "live", "phasenoise"]),
     Opt("--grid", "GRID", GRIDS, false, "τ grid: octave (default), half-octave, quarter-octave, decade, half-decade, all", ["analyze", "dynamic", "cross", "steer", "hat", "report", "live"]),
     Opt("--m", "LIST", String[], false, "explicit averaging factors m (τ = m·τ₀), e.g. 1,2,4,10; replaces --grid. For check --acf, the one averaging factor of the autocorrelation (default 1)", ["analyze", "check", "cross", "steer", "hat", "report", "live"]),
     Opt("--tau-min", "SECONDS", String[], false, "leave out averaging times below SECONDS", ["analyze", "report"]),
@@ -93,20 +89,17 @@ const OPTS = [
     Opt("--confidence", "P", String[], false, "confidence level of the intervals (default 0.683); for holdover, the share of trials the quantile covers (default 0.95)", ["analyze", "hat", "report", "holdover"]),
     Opt("--no-ci", "", String[], false, "skip confidence intervals, EDF and noise identification", ["analyze", "report"]),
     Opt("--bias", "MODE", BIASES, false, "bias correction of the total estimators and Thêo1: exact (default), published (the published tables only), stable32 (what Stable32 applies to each) or none", ["analyze", "report"]),
-    Opt("--no-bias-correction", "", String[], false, "the same as --bias none", ["analyze", "report"]),
-    Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
+    Opt("--noise", "TYPE", NOISES, false, "noise type behind the intervals and bias factors: auto (identified at each τ, the default), fit (the strongest term of the power-law model fitted to MHDEV) or one of WPM, FPM, WFM, FFM, RWFM, FWFM, RRFM for every τ", ["analyze", "report"]),
     Opt("--dead-time", "SECONDS", String[], false, "frequency readings with SECONDS unmeasured between them: divide the ADEV by the bias functions √(B2·B3). Needs --devs adev, --noise TYPE and --tau0, the averaging time of one reading", ["analyze"]),
     Opt("--spectrum", "", String[], false, "also return the spectrum (JSON only)", ["analyze"]),
     Opt("--fit", "", String[], false, "also return the power-law noise model fitted to MHDEV (JSON only); with holdover, the error that model predicts and each noise type's share", ["analyze", "holdover"]),
-    Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
+    Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WPM, FPM, WFM, FFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
     Opt("--mask", "NAME", MASKS, false, "check MTIE and TDEV against an ITU-T wander mask, or all of them: G811, G8262_opt1, G8272_PRTC_A, G8272_PRTC_B, G823_SSU ..., all; JSON gains the limits and the checks, CSV a verdict on stderr", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
-    Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE; or give both channels as --value-cols A,B of FILE", ["cross"]),
-    Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
+    Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE; or give both channels as --column A,B of FILE", ["cross"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
-    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks); for cross, the two channels A,B of FILE", ["timescale", "hat", "cross"]),
-    Opt("--pairs", "", String[], false, "the three --value-cols are the differences A−B, B−C and C−A, each measured on its own, not clocks read against one reference", ["hat"]),
+    Opt("--pairs", "", String[], false, "the three --column are the differences A−B, B−C and C−A, each measured on its own, not clocks read against one reference", ["hat"]),
     Opt("--no-reference", "", String[], false, "leave the reference out: the hat of the clocks' differences from one another alone (three or more clocks)", ["hat"]),
     Opt("--covariance", "", String[], false, "the Groslambert covariance of the difference records in place of the hat: ADEV, with the noise of each --pairs record's instrument kept out", ["hat"]),
     Opt("--klts", "", String[], false, "--covariance with the interval of Lantz et al. (2019), for three clocks, given also where a clock is not resolved", ["hat"]),
@@ -118,7 +111,8 @@ const OPTS = [
     Opt("--wmax", "W", String[], false, "largest weight one clock may take, 0 to 1 (default 1, no cap)", ["timescale"]),
     Opt("--train", "SECONDS", String[], false, "training stretch the frequency is learned on (default: a quarter of the record); for steer, the stretch the clock model is fitted to, with results from its end on", ["holdover", "steer"]),
     Opt("--grow", "K", String[], false, "in place of --train: a stretch K times each holdover time (2, or 3 with --fit-drift, is the test behind TDEV and HTDEV)", ["holdover"]),
-    Opt("--tau", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch); for phasenoise, the averaging times (default: 1, 2 and 5 in each decade from 1/f_h to 0.1/f₁, for a band from f₁ to f_h)", ["holdover", "phasenoise"]),
+    Opt("--times", "LIST", String[], false, "holdover times in seconds, e.g. 60,3600,14400 (default: the octave multiples of τ₀ up to the training stretch)", ["holdover"]),
+    Opt("--tau", "LIST", String[], false, "the averaging times in seconds (default: 1, 2 and 5 in each decade from 1/f_h to 0.1/f₁, for a band from f₁ to f_h)", ["phasenoise"]),
     Opt("--fit-drift", "", String[], false, "fit a parabola to the stretch, so the frequency drift is learned and carried on (default: a line); for steer, a drift state in the clock model, steered out", ["holdover", "steer"]),
     Opt("--no-anchor", "", String[], false, "start from the fit's value at the end of the stretch, not from the last reading", ["holdover"]),
     Opt("--kalman", "", String[], false, "predict with a Kalman filter in place of the least-squares fit; its clock model is fitted to the first training stretch alone, and `claimed` is the error the filter itself expects", ["holdover"]),
@@ -132,8 +126,8 @@ const OPTS = [
     Opt("--bins", "N", String[], false, "number of histogram bins (default: Scott's rule, at most 1000)", ["check"]),
     Opt("--acf", "", String[], false, "the autocorrelation of the samples at averaging factor --m; with CSV, its lags in place of the summary", ["check"]),
     Opt("--lags", "K", String[], false, "largest autocorrelation lag (default: half the series, at most 1000)", ["check"]),
-    Opt("--model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
-    Opt("--method", "METHOD", DRIFT_METHODS, false, "estimator of the linear model: frequency_fit (default, a least-squares line through the frequency), phase_fit (a least-squares parabola through the phase), bisection (the three-point fit), second_difference (mean second difference of the phase) or four_point", ["drift"]),
+    Opt("--drift-model", "MODEL", DRIFT_MODELS, false, "linear (default), quadratic, log (a·ln(1+b·t)+c) or diffusion (a+b·√(t+c))", ["drift"]),
+    Opt("--method", "METHOD", DRIFT_METHODS, false, "estimator of the linear drift model: frequency_fit (default, a least-squares line through the frequency), phase_fit (a least-squares parabola through the phase), bisection (the three-point fit), second_difference (mean second difference of the phase) or four_point", ["drift"]),
     Opt("--carrier", "HZ", String[], false, "carrier frequency ν₀ in Hz, which ℒ(f) and S_φ(f) need", ["phasenoise"]),
     Opt("--density", "S", DENSITIES, false, "the spectral density that the table holds: L (default, ℒ(f) in dBc/Hz), Sphi (S_φ(f) in rad²/Hz), Sx (S_x(f) in s²/Hz) or Sy (S_y(f) in 1/Hz)", ["phasenoise"]),
     Opt("--band", "A:B", String[], false, "integrate from A to B hertz only, inside the table (default: the whole table)", ["phasenoise"]),
@@ -164,7 +158,6 @@ mutable struct Options
     header::Int
     delim::Char            # '\0' = from the extension
     scaling::Float64
-    detrend::String
     fillgaps::Bool
     keep_zeros::Bool
     remove_outliers::Bool
@@ -189,9 +182,12 @@ mutable struct Options
     removed_offset::Float64   # fitted and removed by --remove-drift; NaN = none
     removed_drift::Float64    # per day
     input_format::String
-    column::String            # "" = by name
+    column::String            # a clock picked by name; "" = by number
+    columns::Vector{String}   # --column as given: numbers or names
+    time_column::String       # --time-column as given; "" = not given
+    reference_column::String  # --reference-column as given; "" = none
     nominal::Float64          # NaN = from the readings
-    columns_set::Bool         # --time-col, --value-col or --header given
+    columns_set::Bool         # a time or clock column by number, or --header, given
     measured::BitVector       # phase samples the format readers did not fill; empty = all
     with::String              # cross: the second channel's file
     phase_given::Bool         # --phase given (else instrument readers pick the kind)
@@ -207,13 +203,13 @@ mutable struct Options
     tau_min::Float64          # NaN = no limit
     tau_max::Float64
     fit::Bool                 # --fit: power-law model in the JSON
-    value_cols::Vector{Int}   # timescale: one value column per clock
+    value_cols::Vector{Int}   # timescale and hat: one value column per clock
     algorithm::String
     wmax::Float64
     components::Vector{Tuple{Int,Float64,Float64}}   # --component: α, τ from, τ to (NaN = open)
     clocks::Int               # --clocks: simulated clocks; 0 = not given
-    clock::Int                # --clock: which simulated clock to read
-    models::Vector{NTuple{4,Float64}}   # --noise-model: R, q1, q2, q3 per simulated clock
+    clock::Int                # which simulated clock to read (--column with --synth)
+    models::Vector{NTuple{4,Float64}}   # --clock-model: R, q1, q2, q3 per simulated clock
     mask::String              # --mask: ITU-T mask checked in the JSON; "" = none
     pivot::Int                # --pivot: clock the Kalman timescales read at (1-based)
     steps::String             # --steps: at2 frequency-step detection, "" = off
@@ -244,13 +240,13 @@ mutable struct Options
     density::String           # phasenoise: the spectral density that the table holds
     band::Vector{Float64}     # phasenoise: --band limits in Hz; empty = the whole table
     note::String              # a remark on the result, for stderr once the output is written
-    filled::Int               # samples --fillgaps put in
+    filled::Int               # samples --fill-gaps put in
 end
 
-Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, "none", false, false, false,
+Options() = Options("", "", 0, 42, false, NaN, 1, 2, 0, 0, '\0', 1.0, false, false, false,
                     collect(Symbol, DEFAULT_DEVIATIONS), "octave", Int[], true,
                     Float64(DEFAULT_CONFIDENCE), "exact", "auto", false, 0, "dadev", 0, 0, 0, "", "", false, false,
-                    "none", NaN, NaN, "auto", "", NaN, false, falses(0), "", false, "linear", "frequency_fit",
+                    "none", NaN, NaN, "auto", "", String[], "", "", NaN, false, falses(0), "", false, "linear", "frequency_fit",
                     false, "\0", 1, 0, false, NaN, NaN, NaN, NaN, false, Int[], "at1", 1.0,
                     Tuple{Int,Float64,Float64}[], 0, 1, NTuple{4,Float64}[], "", 1, "",
                     NaN, Float64[], false, true, NaN, 0, false, false, false,
@@ -290,9 +286,19 @@ function edit_distance(a::String, b::String)::Int
     return prev[length(y)+1]
 end
 
+# Options renamed in 0.7, gone without aliases: the name now, for the hint.
+const RENAMED = ["--value-col" => "--column", "--value-cols" => "--column", "--clock" => "--column",
+                 "--time-col" => "--time-column", "--reference-col" => "--reference-column",
+                 "--model" => "--drift-model", "--noise-model" => "--clock-model", "--dev" => "--devs",
+                 "--detrend" => "--remove-drift", "--no-bias-correction" => "--bias none"]
+
 # "; did you mean X?" for the nearest of `names` (the first of equals), or "".
+# A renamed option gets its new name instead.
 # Close is 2 edits, 1 for a short name; leading dashes do not count.
 function did_you_mean(name::String, names::Vector{String})::String
+    for (old, new) in RENAMED
+        old == name && return "; it is now " * new
+    end
     bare = String(lstrip(==('-'), name))
     best = ""
     best_d = length(bare) <= 4 ? 2 : 3
@@ -320,9 +326,9 @@ end
 # "R:Q1:Q2:Q3", all finite and not negative.
 function parse_noise_model!(o::Options, s::String)
     parts = split(s, ':')
-    length(parts) == 4 || throw(usage_error("--noise-model expects R:Q1:Q2:Q3, got \"" * s * "\""))
-    v = Float64[parse_float(String(p), "--noise-model") for p in parts]
-    all(>=(0), v) || throw(usage_error("--noise-model levels must not be negative"))
+    length(parts) == 4 || throw(usage_error("--clock-model expects R:Q1:Q2:Q3, got \"" * s * "\""))
+    v = Float64[parse_float(String(p), "--clock-model") for p in parts]
+    all(>=(0), v) || throw(usage_error("--clock-model levels must not be negative"))
     push!(o.models, (v[1], v[2], v[3], v[4]))
 end
 
@@ -341,11 +347,8 @@ function parse_component!(o::Options, s::String)
     length(parts) == 3 || throw(usage_error("--component expects NOISE:A:B, got \"" * s * "\""))
     name = String(parts[1])
     α = tryparse(Int, name)
-    if α === nothing
-        k = findfirst(==(uppercase(name)), NOISE_NAMES)
-        k === nothing && throw(usage_error("--component: unknown noise \"" * name * "\"; use " * join(NOISE_NAMES, ", ") * " or an α"))
-        α = 3 - k
-    end
+    α === nothing && (α = noise_alpha(uppercase(name)))
+    α === nothing && throw(usage_error("--component: unknown noise \"" * name * "\"; use " * join(NOISE_NAMES, ", ") * " or an α"))
     a = isempty(parts[2]) ? NaN : parse_float(String(parts[2]), "--component")
     b = isempty(parts[3]) ? NaN : parse_float(String(parts[3]), "--component")
     push!(o.components, (α, a, b))
@@ -373,6 +376,16 @@ function parse_range!(o::Options, s::String)
     return o
 end
 
+# α of a noise type by name, `nothing` for any other string. The older names,
+# such as WHFM for WFM, are accepted.
+noise_alpha(s::String) = get(SigmaTau._NOISE_ALPHA, Symbol(s), nothing)
+
+# --noise: auto, fit or a noise type; an older name is stored as the new one.
+function noise_choice(s::String)
+    α = noise_alpha(s)
+    return α === nothing ? check_choice(s, "--noise", NOISES) : NOISE_NAMES[3 - α]
+end
+
 function check_choice(s::String, flag::String, choices::Vector{String})
     s in choices || throw(usage_error(flag * " must be one of " * join(choices, ", ") * ", got \"" * s * "\""))
     return s
@@ -389,7 +402,7 @@ function parse_devs(s::String)
         t = String(strip(tok))
         isempty(t) && continue
         if t in DYNAMIC_DEVS
-            throw(usage_error(t * " is a dynamic deviation; use `sigmatau dynamic --dev " * t * "`"))
+            throw(usage_error(t * " is a dynamic deviation; use `sigmatau dynamic --devs " * t[2:end] * "`"))
         end
         t in names || throw(usage_error("unknown deviation \"" * t * "\"; valid: " * join(names, ", ")))
         push!(devs, Symbol(t))
@@ -399,15 +412,11 @@ function parse_devs(s::String)
 end
 
 # "2,3,5": value columns in the order given.
-function parse_cols(s::String)
-    cols = Int[]
-    for tok in split(s, ',')
-        v = tryparse(Int, strip(tok))
-        (v === nothing || v < 1) && throw(usage_error("--value-cols expects column numbers, got \"" * s * "\""))
-        push!(cols, v)
-    end
-    length(cols) >= 2 && allunique(cols) || throw(usage_error("--value-cols needs two or more different columns"))
-    return cols
+# dynamic --devs: the one deviation its windows take, as dadev or dhdev.
+function dynamic_dev(s::String)
+    s in ("adev", "dadev") && return "dadev"
+    s in ("hdev", "dhdev") && return "dhdev"
+    throw(usage_error("dynamic --devs takes one of adev and hdev, got \"" * s * "\""))
 end
 
 function parse_m(s::String)
@@ -424,11 +433,11 @@ function parse_m(s::String)
 end
 
 # "60,3600,14400": holdover times in seconds, rising.
-function parse_taus(s::String)
+function parse_taus(s::String, flag::String)
     taus = Float64[]
     for tok in split(s, ',')
-        v = parse_float(String(strip(tok)), "--tau")
-        v > 0 || throw(usage_error("--tau expects positive times in seconds"))
+        v = parse_float(String(strip(tok)), flag)
+        v > 0 || throw(usage_error(flag * " expects positive times in seconds"))
         push!(taus, v)
     end
     return sort!(unique!(taus))
@@ -444,23 +453,20 @@ function set_option!(o::Options, name::String, v::String)
     if name == "--synth";              o.synth = parse_int(v, name)
     elseif name == "--seed";           o.seed = parse_int(v, name)
     elseif name == "--clocks";         o.clocks = parse_int(v, name)
-    elseif name == "--clock";          o.clock = parse_int(v, name)
-    elseif name == "--noise-model";    parse_noise_model!(o, v)
+    elseif name == "--clock-model";    parse_noise_model!(o, v)
     elseif name == "--tau0";           o.tau0 = parse_float(v, name)
     elseif name == "--input-format";   o.input_format = check_choice(v, name, INPUT_LAYOUTS)
-    elseif name == "--column";         o.column = v
+    elseif name == "--column";         o.columns = String[strip(c) for c in split(v, ',')]
     elseif name == "--nominal";        o.nominal = parse_float(v, name)
-    elseif name == "--time-col";       o.time_col = parse_int(v, name); o.columns_set = true
-    elseif name == "--value-col";      o.value_col = parse_int(v, name); o.columns_set = true
-    elseif name == "--reference-col";  o.reference_col = parse_int(v, name)
+    elseif name == "--time-column";    o.time_column = v
+    elseif name == "--reference-column"; o.reference_column = v
     elseif name == "--header";         o.header = parse_int(v, name); o.columns_set = true
     elseif name == "--delim";          o.delim = parse_delim(v)
     elseif name == "--scaling";        o.scaling = parse_float(v, name)
-    elseif name == "--detrend";        o.detrend = check_choice(v, name, DETRENDS)
     elseif name == "--remove-drift";   o.remove_drift = check_choice(v, name, DRIFTS)
     elseif name == "--bias";           o.bias = check_choice(v, name, BIASES)
-    elseif name == "--noise";          o.noise = check_choice(v, name, NOISES)
-    elseif name == "--devs";           o.devs = parse_devs(v)
+    elseif name == "--noise";          o.noise = noise_choice(v)
+    elseif name == "--devs";           o.command == "dynamic" ? (o.dev = dynamic_dev(v)) : (o.devs = parse_devs(v))
     elseif name == "--grid";           tau_mode(v); o.grid = v
     elseif name == "--m";              o.m = parse_m(v)
     elseif name == "--confidence";     o.confidence = parse_float(v, name)
@@ -469,17 +475,16 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--tau-min";        o.tau_min = parse_float(v, name)
     elseif name == "--tau-max";        o.tau_max = parse_float(v, name)
     elseif name == "--nperseg";        o.nperseg = parse_int(v, name)
-    elseif name == "--dev";            o.dev = check_choice(v, name, DYNAMIC_DEVS)
     elseif name == "--window";         o.window = parse_int(v, name)
     elseif name == "--step";           o.step = parse_int(v, name)
-    elseif name == "--model";          o.model = check_choice(v, name, DRIFT_MODELS)
+    elseif name == "--drift-model";    o.model = check_choice(v, name, DRIFT_MODELS)
     elseif name == "--quantity";       o.quantity = check_choice(v, name, QUANTITIES)
     elseif name == "--bins";           o.bins = parse_int(v, name); o.bins >= 1 || throw(usage_error("--bins must be 1 or more"))
     elseif name == "--lags";           o.lags = parse_int(v, name); o.lags >= 0 || throw(usage_error("--lags must be 0 or more"))
     elseif name == "--method";         o.method = check_choice(v, name, DRIFT_METHODS)
     elseif name == "--train";          o.train = parse_float(v, name)
     elseif name == "--grow";           o.grow = parse_int(v, name)
-    elseif name == "--tau";            o.taus = parse_taus(v)
+    elseif name == "--times" || name == "--tau"; o.taus = parse_taus(v, name)
     elseif name == "--limit";          o.limit = parse_float(v, name)
     elseif name == "--time-constant";  o.time_constant = parse_float(v, name)
     elseif name == "--cost";           o.cost = parse_cost(v)
@@ -487,7 +492,6 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--carrier";        o.carrier = parse_float(v, name)
     elseif name == "--density";        o.density = check_choice(v, name, DENSITIES)
     elseif name == "--band";           o.band = parse_band(v)
-    elseif name == "--value-cols";     o.value_cols = parse_cols(v)
     elseif name == "--algorithm";      o.algorithm = check_choice(v, name, TIMESCALES)
     elseif name == "--wmax";           o.wmax = parse_float(v, name)
     elseif name == "--pivot";          o.pivot = parse_int(v, name)
@@ -512,11 +516,10 @@ end
 function set_flag!(o::Options, name::String)
     if name == "--phase";                  o.freq = false; o.phase_given = true
     elseif name == "--freq";               o.freq = true
-    elseif name == "--fillgaps";           o.fillgaps = true
+    elseif name == "--fill-gaps";          o.fillgaps = true
     elseif name == "--keep-zeros";         o.keep_zeros = true
     elseif name == "--remove-outliers";    o.remove_outliers = true
     elseif name == "--no-ci";              o.ci = false
-    elseif name == "--no-bias-correction"; o.bias = "none"
     elseif name == "--spectrum";           o.spectrum = true
     elseif name == "--hz";                 o.hz = true
     elseif name == "--fast";               o.fast = true
@@ -571,6 +574,7 @@ function parse_args!(o::Options, args::Vector{String})
         i += 1
     end
     o.help && return o
+    set_columns!(o)
     ("--phase" in args && "--freq" in args) && throw(usage_error("give only one of --phase and --freq"))
     if o.command == "live"
         isempty(o.input) && throw(usage_error("live: give a SOURCE: sim, tcp://HOST:PORT or a device path"))
@@ -579,7 +583,7 @@ function parse_args!(o::Options, args::Vector{String})
         o.count >= 0 || throw(usage_error("--count must be 0 or more"))
     elseif o.command == "model"
         isempty(o.input) && o.synth > 0 && !isempty(o.models) ||
-            throw(usage_error("model: give --synth N and a clock with --noise-model R:Q1:Q2:Q3, and no FILE"))
+            throw(usage_error("model: give --synth N and a clock with --clock-model R:Q1:Q2:Q3, and no FILE"))
     elseif o.command == "phasenoise"
         isempty(o.input) && throw(usage_error("phasenoise: give the TABLE of the spectrum (see `sigmatau help phasenoise`)"))
         o.density in ("L", "Sphi") && isnan(o.carrier) && throw(usage_error("phasenoise: ℒ(f) and S_φ(f) need the carrier frequency, --carrier HZ"))
@@ -590,23 +594,20 @@ function parse_args!(o::Options, args::Vector{String})
     end
     !isempty(o.input) && o.synth > 0 && throw(usage_error("give either a FILE or --synth, not both"))
     if o.synth <= 0
-        (o.clocks != 0 || o.clock != 1 || !isempty(o.models)) && throw(usage_error("--clocks, --clock and --noise-model go with --synth"))
+        (o.clocks != 0 || !isempty(o.models)) && throw(usage_error("--clocks and --clock-model go with --synth"))
     else
         nm = length(o.models)
-        nm <= 64 || throw(usage_error("--noise-model: at most 64 clocks"))
-        nm > 0 && o.clocks != 0 && o.clocks != nm && throw(usage_error("--clocks is " * string(o.clocks) * " but " * string(nm) * " --noise-model were given"))
+        nm <= 64 || throw(usage_error("--clock-model: at most 64 clocks"))
+        nm > 0 && o.clocks != 0 && o.clocks != nm && throw(usage_error("--clocks is " * string(o.clocks) * " but " * string(nm) * " --clock-model were given"))
         nm == 0 && o.clocks != 0 && !(2 <= o.clocks <= 64) && throw(usage_error("--clocks must be between 2 and 64"))
-        1 <= o.clock <= max(o.clocks, nm, 1) || throw(usage_error("--clock must be between 1 and the number of clocks"))
-        o.clocks == 0 && nm == 0 && o.clock != 1 && throw(usage_error("--clock needs --clocks"))
+        1 <= o.clock <= max(o.clocks, nm, 1) || throw(usage_error("--column must be between 1 and the number of simulated clocks"))
+        o.clocks == 0 && nm == 0 && o.clock != 1 && throw(usage_error("--column with --synth picks one of several clocks: add --clocks"))
     end
-    if o.command == "cross"
-        (isempty(o.with) == isempty(o.value_cols) || o.synth > 0) &&
-            throw(usage_error("cross: give FILE and the second channel with --with FILE2, or both channels as --value-cols A,B"))
-        isempty(o.value_cols) || length(o.value_cols) == 2 || throw(usage_error("cross takes two --value-cols, one per channel"))
-    end
+    o.command == "cross" && (isempty(o.with) == isempty(o.value_cols) || o.synth > 0) &&
+        throw(usage_error("cross: give FILE and the second channel with --with FILE2, or both channels as --column A,B"))
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
     o.method == "frequency_fit" || o.model == "linear" ||
-        throw(usage_error("--method " * o.method * " estimates a linear drift and goes with --model linear"))
+        throw(usage_error("--method " * o.method * " estimates a linear drift and goes with --drift-model linear"))
     (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
         throw(usage_error("--train and --limit must be positive"))
     o.grow == 0 || isnan(o.train) && o.grow > 1 + o.fit_drift ||
@@ -631,14 +632,7 @@ function parse_args!(o::Options, args::Vector{String})
     o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
     o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))
-    o.reference_col >= 0 || throw(usage_error("--reference-col must be 1 or more"))
-    o.time_col >= 0 || throw(usage_error("--time-col must be 0 (no time column) or more"))
-    o.value_col >= 1 || throw(usage_error("--value-col must be 1 or more"))
     o.header >= 0 || throw(usage_error("--header must be 0 or more"))
-    if !isempty(o.value_cols)
-        isempty(o.column) || throw(usage_error("--column names one clock; give the clocks of a timescale with --value-cols"))
-        o.value_col = o.value_cols[1]
-    end
     isnan(o.tau0) || o.tau0 > 0 || throw(usage_error("--tau0 must be positive"))
     isnan(o.nominal) || o.nominal > 0 || throw(usage_error("--nominal must be positive"))
     o.scaling != 0 || throw(usage_error("--scaling must not be 0"))
@@ -654,11 +648,11 @@ function parse_args!(o::Options, args::Vector{String})
     o.fit && o.format != "json" && throw(usage_error("--fit and --component add to the JSON output; use --format json"))
     if o.dead_time != 0
         o.devs == [:adev] || throw(usage_error("--dead-time corrects the Allan deviation alone; give --devs adev"))
-        o.noise in ("WHPM", "FLPM", "WHFM", "FLFM", "RWFM") ||
-            throw(usage_error("--dead-time needs the noise type: --noise WHPM, FLPM, WHFM, FLFM or RWFM"))
+        o.noise in ("WPM", "FPM", "WFM", "FFM", "RWFM") ||
+            throw(usage_error("--dead-time needs the noise type: --noise WPM, FPM, WFM, FFM or RWFM"))
         isnan(o.tau0) && throw(usage_error("--dead-time needs --tau0, the averaging time of one reading; a time column holds the period between readings"))
         isfinite(o.dead_time) && o.dead_time > -o.tau0 || throw(usage_error("--dead-time must be above −τ₀"))
-        o.fillgaps && throw(usage_error("--dead-time needs a record without gaps, so it goes without --fillgaps"))
+        o.fillgaps && throw(usage_error("--dead-time needs a record without gaps, so it goes without --fill-gaps"))
     end
     return o
 end
@@ -691,14 +685,14 @@ function print_help(io::IO)
     print(io, "Examples:\n")
     print(io, "  sigmatau analyze clock.dat --tau0 1 --devs adev,mdev,tdev\n")
     print(io, "  sigmatau analyze freq.txt --freq --m 1,10,100 --format json --out result.json\n")
-    print(io, "  sigmatau check clock.dat --time-col 1 --value-col 3 --fillgaps\n")
+    print(io, "  sigmatau check clock.dat --time-column 1 --column 3 --fill-gaps\n")
     print(io, "  sigmatau analyze trace.tim                      # TimeLab, τ₀ from the header\n")
     print(io, "  sigmatau spectrum --synth 65536\n")
-    print(io, "  sigmatau dynamic clock.dat --dev dhdev --window 4096\n")
-    print(io, "  sigmatau drift ocxo.dat --freq --model log\n")
-    print(io, "  sigmatau holdover gpsdo.dat --train 86400 --tau 3600,14400,86400 --limit 1e-6\n")
+    print(io, "  sigmatau dynamic clock.dat --devs hdev --window 4096\n")
+    print(io, "  sigmatau drift ocxo.dat --freq --drift-model log\n")
+    print(io, "  sigmatau holdover gpsdo.dat --train 86400 --times 3600,14400,86400 --limit 1e-6\n")
     print(io, "  sigmatau steer maser.dat --time-constant 86400 --format json\n")
-    print(io, "  sigmatau hat clocks.dat --value-cols 2,3 --devs adev,hdev\n")
+    print(io, "  sigmatau hat clocks.dat --column 2,3,4 --devs adev,hdev\n")
     print(io, "  sigmatau phasenoise ocxo.csv --carrier 10e6 --devs adev,mdev\n")
     print(io, "  sigmatau live tcp://192.168.1.20:5025 --hz --nominal 10e6 --tau0 1\n")
     print(io, "  sigmatau report clock.dat --devs adev,tdev --out report.html\n")

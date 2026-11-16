@@ -9,7 +9,7 @@ using SigmaTau: _mhtotdev_core, _mhdev_core, bias_correction, calculate_edf
 @testset "MHTOTDEV bias and EDF models are the kernel's exact moments" begin
     N = 129    # τ = 32 τ0 is T/4, the reach limit
     sq(core, x, m) = core(x, [m], 1.0)[1]^2
-    for (noise, sums) in ((:WHFM, 1), (:RRFM, 3)), m in (16, 32)
+    for (noise, sums) in ((:WFM, 1), (:RRFM, 3)), m in (16, 32)
         # Columns: the phase response to one white sample, summed `sums` times.
         F = collect.(eachcol(foldl((A, _) -> cumsum(A, dims=1), 1:sums; init=Float64.((1:N) .== (1:N)'))))
         s = sq.(_mhtotdev_core, F, m)

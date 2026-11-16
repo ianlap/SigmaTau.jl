@@ -2,7 +2,7 @@
 // SVG figures inline) that prints to PDF from any browser. It records what
 // was analyzed and how, so the numbers can be traced and reproduced.
 import { state, visibleClocks, referenceClock } from "./state.js";
-import { byId, label, gridName, noiseLabel, biasEntry, noiseChoice } from "./estimators.js";
+import { byId, label, gridName, biasEntry, noiseChoice } from "./estimators.js";
 import { loadPlotly, inLightTheme } from "./plot.js";
 import { analyzeCommand } from "./core.js";
 import { figure } from "./pages/stability.js";
@@ -71,7 +71,7 @@ async function recordRows(clocks) {
 
 function resultTable(c, r) {
   const ci = r.ci_lo.length === r.tau.length;
-  const rows = r.tau.map((t, i) => `<tr><td class="n">${num(t, 5)}</td><td class="n">${sci(r.sigma[i], 4)}</td>${ci ? `<td class="n">${sci(r.ci_lo[i], 3)}</td><td class="n">${sci(r.ci_hi[i], 3)}</td>` : ""}${r.edf.length ? `<td class="n">${num(r.edf[i], 4)}</td>` : ""}${r.noise.length ? `<td>${h(noiseLabel(r.noise[i] ?? ""))}</td>` : ""}<td class="n">${r.neff[i] ?? ""}</td></tr>`).join("");
+  const rows = r.tau.map((t, i) => `<tr><td class="n">${num(t, 5)}</td><td class="n">${sci(r.sigma[i], 4)}</td>${ci ? `<td class="n">${sci(r.ci_lo[i], 3)}</td><td class="n">${sci(r.ci_hi[i], 3)}</td>` : ""}${r.edf.length ? `<td class="n">${num(r.edf[i], 4)}</td>` : ""}${r.noise.length ? `<td>${h(r.noise[i] ?? "")}</td>` : ""}<td class="n">${r.neff[i] ?? ""}</td></tr>`).join("");
   return `<table class="results"><caption>${h(c.name)} · ${h(label(r.dev))}</caption>
     <thead><tr><th>τ (s)</th><th>σ</th>${ci ? "<th>CI low</th><th>CI high</th>" : ""}${r.edf.length ? "<th>EDF</th>" : ""}${r.noise.length ? "<th>Noise</th>" : ""}<th>Terms</th></tr></thead>
     <tbody>${rows}</tbody></table>`;

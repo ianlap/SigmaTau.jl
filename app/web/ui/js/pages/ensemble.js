@@ -10,6 +10,7 @@ import { state, update, isReference, isTable } from "../state.js";
 import { ensemble, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, LINE_W } from "../plot.js";
 import { byId } from "../estimators.js";
+import { gridField, confidenceField, onSharedControl } from "../panel.js";
 import { sci, num, interval, timeAxisUnit, inWords as plain, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
@@ -50,7 +51,7 @@ const againstOf = (clocks) => state.ens.against ?? (clocks[0]?.source.type === "
 const simulated = (clocks) => clocks[0]?.source.type !== "file";
 const fittedOf = (clocks) => !simulated(clocks) || state.ens.fitted;
 // The file goes to the core as read, without the preparation of the Data page,
-// so the core's remedy for gaps (--fillgaps) has no counterpart on this page.
+// so the core's remedy for gaps (--fill-gaps) has no counterpart on this page.
 const GAPS = [
   [/^clock_models: .* usable τ points/, "Greenhall, Jones–Tryon and Stein fit a model to each clock, and this file leaves one of them too few samples at which it is read with two others. AT1, AT2 and EWFA form a scale from it."],
   [/^the KLTS interval needs/, "The KLTS interval needs a file without missing samples. The hat and the Groslambert covariance separate the clocks of this one."],
@@ -101,7 +102,7 @@ function clockArgs(command, clocks) {
   } else if (clocks.length) {
     const c = clocks[0];
     file = { name: c.source.name, content: c.source.content };
-    a.push("--value-cols", clocks.map((k) => k.value_col).join(","), "--time-col", c.time_col, "--header", c.header, "--scaling", c.scaling);
+    a.push("--column", clocks.map((k) => k.value_col).join(","), "--time-column", c.time_col, "--header", c.header, "--scaling", c.scaling);
     if (c.tau0) a.push("--tau0", c.tau0);
     if (c.kind === "frequency") a.push("--freq");
   } else a.push("--synth", 16384, "--seed", 42);
@@ -135,7 +136,7 @@ function crossRequest() {
   const b = clocks.length < 2 ? null : pick(state.ens.cross.b === a.id ? null : state.ens.cross.b, a === clocks[1] ? 0 : 1);
   if (!b) return { clocks, a, b, body: null };
   const [args, file] = clockArgs("cross", [a, b]);
-  if (a.fillgaps || b.fillgaps) args.push("--fillgaps");
+  if (a.fillgaps || b.fillgaps) args.push("--fill-gaps");
   args.push("--grid", state.grid, "--format", "json");
   return { clocks, a, b, body: { args: args.map(String), file } };
 }
@@ -163,13 +164,14 @@ function hatControls() {
     <label class="opt"><span>Deviation</span>${method === "hat" ? select("hat-dev", HAT_DEVS.map((d) => [d, byId[d].label]), H.dev) : `<select disabled><option>ADEV</option></select>`}</label>
     ${file && clocks.length === 3 ? `<label class="opt"><span>Columns hold</span>${select("pairs", [["", "Clocks"], ["on", "Pairs"]], pairs ? "on" : "")}</label>` : ""}
     ${file && clocks.length >= 3 && !pairs ? `<label class="check" title="The clocks are read against the file's reference, which is then one more clock of the hat"><input type="checkbox" data-ctl="reference" ${H.reference ? "checked" : ""}>The reference counts as a clock</label>` : ""}
+    ${gridField("opt")}${confidenceField("opt")}
     <div class="rule"></div>
     <p class="muted small">${!clocks.length
       ? "No file with several clocks is loaded and none simulated, so four simulated clocks are used. Load a file with one column per clock, or simulate several clocks, on the Data page."
       : !file ? `${clocks.length} clocks simulated on the Data page. Their reference is perfect and counts as no clock.`
       : pairs ? `The three columns of ${h(clocks[0].source.name)} as the differences A−B, B−C and C−A of clocks A, B and C, each measured on its own.`
       : `${clocks.length} clocks from ${h(clocks[0].source.name)}, each read against the same reference${corners > clocks.length ? ", which is one more clock" : ""}.`}</p>
-    <p class="muted small">${ABOUT_HAT[method]} Grid and confidence level are those of the Stability page.</p>`;
+    <p class="muted small">${ABOUT_HAT[method]} The τ grid and confidence level are shared with the Stability page.</p>`;
 }
 
 function crossControls() {
@@ -179,10 +181,11 @@ function crossControls() {
   return `${views()}
     ${b ? `<label class="opt"><span>Channel A</span>${channel("cross-a", a, b)}</label>
     <label class="opt"><span>Channel B</span>${channel("cross-b", b, a)}</label>` : ""}
+    ${gridField("opt")}
     <div class="rule"></div>
     <p class="muted small">${b ? `Two columns of ${h(a.source.name)}, each a measurement of one device: through two channels of an instrument, or against two references.`
       : "Load a file that holds the two channels as two columns on the Data page."}</p>
-    <p class="muted small">The cross Allan deviation keeps the noise the two channels share, the device's, and averages toward zero the noise each has on its own. Its uncertainty follows the covariance model of Vernotte and Lantz (2019), with each channel's Allan EDF. The τ grid is that of the Stability page.</p>`;
+    <p class="muted small">The cross Allan deviation keeps the noise the two channels share, the device's, and averages toward zero the noise each has on its own. Its uncertainty follows the covariance model of Vernotte and Lantz (2019), with each channel's Allan EDF. The τ grid is shared with the Stability page.</p>`;
 }
 
 export function controls() {
@@ -220,6 +223,7 @@ export function onControl(e) {
   const k = t.dataset.ctl;
   if (k === "view" && e.type === "click") update((s) => { s.ens.view = t.dataset.v; });
   if (e.type !== "change") return;
+  onSharedControl(t);
   if (k === "reference") update((s) => { s.ens.hat.reference = t.checked; });
   const v = t.value.trim();
   if (k === "method") update((s) => { s.ens.hat.method = v; });

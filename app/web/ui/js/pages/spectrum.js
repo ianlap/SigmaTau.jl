@@ -11,25 +11,16 @@ let root, ctx, Plotly, top, bottom, syncing = false;
 const SLOPES = { "-2": "random-walk FM", "-1": "flicker FM", "0": "white FM", "1": "flicker PM", "2": "white PM" };
 const SUP = { "-2": "⁻²", "-1": "⁻¹", "0": "⁰", "1": "¹", "2": "²" };
 
-// The settings, as panel content (one clock) or a toolbar (several clocks).
-export function controls(inline = false) {
+// The settings, in the toolbar above the plots.
+export function controls() {
   const sp = state.spec;
   const carrier = `<input type="text" data-ctl="carrier" value="${h(sp.carrierText)}" inputmode="decimal" aria-label="Carrier frequency in Hz" class="carrier">`;
   const phase = `<div class="seg" role="group" aria-label="Phase noise shown as">
       <button type="button" data-ctl="phase" data-v="L" class="${sp.phase === "L" ? "on" : ""}">ℒ(f) dBc/Hz</button>
       <button type="button" data-ctl="phase" data-v="Sx" class="${sp.phase === "Sx" ? "on" : ""}">S<sub>x</sub>(f)</button></div>`;
   const avg = `<select data-ctl="avg" aria-label="Averaging"><option value="log" ${sp.avg === "log" ? "selected" : ""}>Log-binned</option><option value="raw" ${sp.avg === "raw" ? "selected" : ""}>Welch, every bin</option></select>`;
-  const guides = `<label class="check"><input type="checkbox" data-ctl="guides" ${sp.guides ? "checked" : ""}>Show power-law slope guides</label>`;
-  if (inline) {
-    return `<label class="tool-field">Carrier for ℒ(f) ${carrier} Hz</label>${phase}${avg}`;
-  }
-  return `<h2>Spectrum</h2>
-    <div class="ctl-block"><label class="lbl">Carrier frequency for ℒ(f)</label><div class="tau-line">${carrier}<span class="muted">Hz</span></div></div>
-    <div class="ctl-block"><label class="lbl">Phase noise shown as</label>${phase}</div>
-    <label class="opt"><span>Averaging</span>${avg}</label>
-    ${guides}
-    <div class="rule"></div>
-    <p class="muted small">Spectrum settings apply as soon as you change them. The estimator choice on the Stability page doesn't affect this page.</p>`;
+  const guides = `<label class="check" title="Power-law slope guides on both plots (one clock)"><input type="checkbox" data-ctl="guides" ${sp.guides ? "checked" : ""}>Slope guides</label>`;
+  return `<label class="tool-field">Carrier for ℒ(f) ${carrier} Hz</label>${phase}${avg}${multi() ? "" : guides}`;
 }
 
 export function onControl(e) {
@@ -138,10 +129,9 @@ export function refresh() {
   if (!root) return;
   const several = multi();
   const tb = root.querySelector("[data-ref=toolbar]");
-  tb.hidden = !several;
-  if (several && !tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
+  if (!tb.querySelector("input:focus, select:focus")) {   // a field in use keeps its text
     const at = tb.contains(document.activeElement) ? document.activeElement.dataset : null;
-    tb.innerHTML = controls(true);
+    tb.innerHTML = controls();
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
   const isL = state.spec.phase === "L";

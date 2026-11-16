@@ -103,6 +103,8 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   await t.test("Holdover: the plotted RMS equals the command line's", async () => {
     await page.click("a[data-page=holdover]");
     await plotted("#page [data-ref=plot]");
+    // The frame follows the page: with one clock Holdover's settings are all in its toolbar, and there is no panel or Run.
+    assert.deepEqual(await page.evaluate(() => ["#side", "#rail", ".run-btn"].map((q) => !!document.querySelector(q)?.checkVisibility())), [false, false, false]);
     const rms = await page.evaluate(() => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === "RMS").y);
     const doc = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--format", "json"]));
     assert.deepEqual(rms, doc.holdover.rms);
@@ -112,7 +114,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     const [head, ...rows] = tsv.text.trim().split("\n").map((l) => l.split("\t"));
     assert.deepEqual(rows.map((r) => Number(r[head.indexOf("rms_s")])), doc.holdover.rms);
     // A stretch of twice the holdover time: equal to √6·TDEV at τ₀.
-    await page.click("[data-ctl=frac][data-v='0']");
+    await page.selectOption("#page .toolbar [data-ctl=frac]", "0");
     await page.waitForFunction(() => document.querySelector("#page .hold-card .cell-kv")?.innerText.includes("2τ"));
     const at0 = await page.evaluate(() => ["RMS", "√6·TDEV"].map((n) => document.querySelector("#page [data-ref=plot]").data.find((d) => d.name === n).y[0]));
     const grown = JSON.parse(execFileSync(CLI, ["holdover", FIXTURE, "--grow", "2", "--format", "json"])).holdover;
@@ -179,6 +181,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
 
   await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
     await page.click("[data-ctl=view][data-v=hat]");
+    // The view switch spans the column of the controls around it, and no further.
+    await openPanel();
+    const [view, column] = await page.evaluate(() => [".ens-view", ".ens-view + .opt"].map((s) => document.querySelector(s).getBoundingClientRect()).map((r) => [r.left, r.right]));
+    assert.deepEqual(view.map(Math.round), column.map(Math.round));
     await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]").data?.some((d) => d.name === "Pairs, as measured"), null, SLOW);
     assert.equal(await page.locator("#page [data-ref=title]").innerText(), "ADEV of each clock");
     const shown = await page.evaluate(() => document.querySelector("#page [data-ref=adev]").data.filter((d) => /^clock \d$/.test(d.name)).map((d) => d.y));
@@ -421,7 +427,7 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("a[data-page=ensemble]");
     await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]")?.data?.some((d) => d.name === "Cross"), null, SLOW);
     const [shown, limit] = await page.evaluate(() => ["Cross", "Cross, upper limit"].map((n) => document.querySelector("#page [data-ref=adev]").data.find((d) => d.name === n).y));
-    const doc = JSON.parse(execFileSync(CLI, ["cross", file, "--value-cols", "2,3", "--fillgaps", "--format", "json"])).cross_adev;
+    const doc = JSON.parse(execFileSync(CLI, ["cross", file, "--column", "2,3", "--fill-gaps", "--format", "json"])).cross_adev;
     // The deviation where the device is resolved, √(covariance + uncertainty) as the limit where it is not.
     const resolved = doc.covar.map((v, i) => v > doc.uncertainty[i]);
     assert.deepEqual(shown, doc.dev.map((v, i) => (resolved[i] ? v : null)));

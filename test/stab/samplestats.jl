@@ -13,7 +13,7 @@ using Test, Random, Statistics, SigmaTau
         @test (s.mean, s.median, s.std) == (mean(y), median(y), std(y))
         @test s.std_y == s.std
         @test s.adev ≈ adev(fd, [1]; ci = false).dev[1]
-        @test s.noise === :WHFM
+        @test s.noise === :WFM
         # The phase of the same record: its own samples, the same σ_y(τ₀).
         p = sample_statistics(pd)
         @test p.n == 4097 && p.max == maximum(pd.x)
@@ -51,7 +51,7 @@ using Test, Random, Statistics, SigmaTau
         c(z, k) = sum((z[1:end-k] .- mean(z)) .* (z[1+k:end] .- mean(z)))
         @test a.lag == 0:2048 && a.n == 4096
         @test a.r[1:20] ≈ [c(y, k) / c(y, 0) for k in 0:19]
-        @test abs(a.alpha) < 0.2 && a.noise === :WHFM
+        @test abs(a.alpha) < 0.2 && a.noise === :WFM
         # m: frequency averaged without overlap, phase taken every m samples.
         a8 = acf(fd; m = 8, lags = 5)
         z = vec(mean(reshape(y, 8, :); dims = 1))
