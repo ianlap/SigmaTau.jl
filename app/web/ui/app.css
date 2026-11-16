@@ -437,7 +437,9 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .ens-table .fitted .tbl-row { grid-template-columns: minmax(0, 1fr) 46px 46px 70px 50px; }
 .ens-name { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); min-width: 0; }
 .ens-table .hat-tbl .tbl-row { grid-template-columns: minmax(0, 1.3fr) 1fr 1fr; }
-.ens-view { align-self: flex-start; }
+.ens-table .cross-tbl .tbl-row { grid-template-columns: 0.8fr 1fr 1fr 1fr; }
+.ens-view { align-self: stretch; display: flex; }
+.ens-view button { flex: 1 1 auto; padding: 0 6px; }
 .ens-table .card-row { padding: 14px 16px 8px; }
 .ens-note { padding: 8px 16px 14px; }
 .ens-warn { color: var(--warn); }

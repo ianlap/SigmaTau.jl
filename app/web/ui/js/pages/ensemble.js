@@ -1,8 +1,10 @@
 // Ensemble page: several clocks read against one reference. One view forms a
-// time scale from them (AT1, AT2, EWFA or a Kalman scale); the other separates
+// time scale from them (AT1, AT2, EWFA or a Kalman scale); another separates
 // the stability of each clock by an N-cornered hat or the Groslambert
-// covariance. The clocks are the value columns of one loaded file; without
-// such a file the core simulates four. Either is computed when this page
+// covariance; the third takes two columns as two channels measuring one
+// device, for the cross Allan deviation and the cross-spectrum. The clocks
+// are the value columns of one loaded file; without such a file the core
+// simulates four (not for two channels). Each is computed when this page
 // needs it and recomputed when the settings or the clocks change.
 import { state, update, isReference } from "../state.js";
 import { ensemble, synthArgs } from "../core.js";
@@ -57,7 +59,10 @@ const GAPS = [
 const FEW = [/^hat needs three or more simulated/, "Simulated clocks have a perfect reference, which counts as no clock. Simulate three or more, on the Data or the Synthesis page."];
 // Simulated clocks have no gaps: a fit that stops there met noise it has no term for.
 const UNFITTED = "The fit leaves one of these clocks too few averaging times. It has terms for white and flicker PM, white FM and random-walk FM, and none for random-run FM. With Models at As simulated the scale takes the models the clocks were made from.";
+// Two channels are read with the Data page's gap filling, which names the remedy.
+const CROSS_GAPS = [/^cross analysis needs records without gaps/, "The two channels need every sample: turn on Fill gaps by reflection on the Data page."];
 const inWords = (message, sim) => (sim && GAPS[0][0].test(message) ? UNFITTED : null)
+  ?? (CROSS_GAPS[0].test(message) ? CROSS_GAPS[1] : null)
   ?? GAPS.find(([re]) => re.test(message))?.[1].concat(" The gap filling of the Data page does not apply here.")
   ?? (FEW[0].test(message) ? FEW[1] : plain(message));
 
@@ -120,8 +125,24 @@ function hatRequest() {
   return { clocks, file: !!file, pairs, reference, corners, method, body: { args: a.map(String), file } };
 }
 
+// Two channels of one device: two columns of the page's file, read as the
+// Data page reads them, gaps filled where it fills them. Chosen in the
+// panel; by default the first two. `body` is null without a file.
+function crossRequest() {
+  const clocks = fileClocks(true).filter((c) => c.source.type === "file");
+  const pick = (id, k) => clocks.find((c) => c.id === id) ?? clocks[k];
+  const a = pick(state.ens.cross.a, 0);
+  const b = clocks.length < 2 ? null : pick(state.ens.cross.b === a.id ? null : state.ens.cross.b, a === clocks[1] ? 0 : 1);
+  if (!b) return { clocks, a, b, body: null };
+  const [args, file] = clockArgs("cross", [a, b]);
+  if (a.fillgaps || b.fillgaps) args.push("--fillgaps");
+  args.push("--grid", state.grid, "--format", "json");
+  return { clocks, a, b, body: { args: args.map(String), file } };
+}
+
 function request() {
   if (state.ens.view === "hat") return hatRequest();
+  if (state.ens.view === "cross") return crossRequest();
   const E = state.ens, clocks = fileClocks();
   const [a, file] = clockArgs("timescale", clocks);
   a.push("--algorithm", E.algorithm, ...(KALMAN.has(E.algorithm) ? ["--pivot", pivotOf(clocks.length || 4)] : []), ...(CAPPED.has(E.algorithm) ? ["--wmax", E.wmax] : []),
@@ -130,7 +151,7 @@ function request() {
   return { clocks, body: { args: a.map(String), file } };
 }
 
-const views = () => `<div class="seg ens-view" role="group" aria-label="Analysis">${[["scale", "Time scale"], ["hat", "N-cornered hat"]].map(([id, label]) =>
+const views = () => `<div class="seg ens-view" role="group" aria-label="Analysis">${[["scale", "Time scale"], ["hat", "N-cornered hat"], ["cross", "Two channels"]].map(([id, label]) =>
   `<button type="button" data-ctl="view" data-v="${id}" class="${state.ens.view === id ? "on" : ""}">${label}</button>`).join("")}</div>`;
 
 function hatControls() {
@@ -151,8 +172,22 @@ function hatControls() {
     <p class="muted small">${ABOUT_HAT[method]} Grid and confidence level are those of the Stability page.</p>`;
 }
 
+function crossControls() {
+  const { clocks, a, b } = crossRequest();
+  const channel = (ctl, pick, other) => `<select data-ctl="${ctl}">${clocks.map((c) =>
+    `<option value="${c.id}" ${c === pick ? "selected" : ""} ${c === other ? "disabled" : ""}>${h(c.name)}</option>`).join("")}</select>`;
+  return `${views()}
+    ${b ? `<label class="opt"><span>Channel A</span>${channel("cross-a", a, b)}</label>
+    <label class="opt"><span>Channel B</span>${channel("cross-b", b, a)}</label>` : ""}
+    <div class="rule"></div>
+    <p class="muted small">${b ? `Two columns of ${h(a.source.name)}, each a measurement of one device: through two channels of an instrument, or against two references.`
+      : "Load a file that holds the two channels as two columns on the Data page."}</p>
+    <p class="muted small">The cross Allan deviation keeps the noise the two channels share, the device's, and averages toward zero the noise each has on its own. Its uncertainty follows the covariance model of Vernotte and Lantz (2019), with each channel's Allan EDF. The τ grid is that of the Stability page.</p>`;
+}
+
 export function controls() {
   if (state.ens.view === "hat") return hatControls();
+  if (state.ens.view === "cross") return crossControls();
   const E = state.ens, clocks = fileClocks();
   return `${views()}
     <label class="opt"><span>Algorithm</span><select data-ctl="alg">${ALGS.map(([id, label]) =>
@@ -190,6 +225,7 @@ export function onControl(e) {
   if (k === "method") update((s) => { s.ens.hat.method = v; });
   if (k === "hat-dev") update((s) => { s.ens.hat.dev = v; });
   if (k === "pairs") update((s) => { s.ens.hat.pairs = v === "on"; });
+  if (k === "cross-a" || k === "cross-b") update((s) => { s.ens.cross[k.slice(-1)] = Number(v); });
   if (k === "alg") update((s) => { s.ens.algorithm = v; });
   if (k === "steps") update((s) => { s.ens.steps = v; });
   if (k === "flicker") update((s) => { s.ens.flicker = v === "on"; });
@@ -208,7 +244,7 @@ export function mount(el, c) {
     <div class="col">
       <div class="card plot-card"><div class="card-row"><h2 data-ref="title"></h2><span class="muted small" data-ref="sub"></span></div>
         <div class="plot" data-ref="adev"></div><div class="empty" data-ref="empty" hidden></div></div>
-      <div class="card plot-card ens-weights"><div class="card-row"><h2>Weights</h2></div><div class="plot" data-ref="weights"></div></div>
+      <div class="card plot-card ens-weights"><div class="card-row"><h2 data-ref="title2">Weights</h2></div><div class="plot" data-ref="weights"></div></div>
     </div>
     <div class="card side-card ens-table" data-ref="table"></div>`;
   loadPlotly().then((P) => { Plotly = P; refresh(); }).catch(() => {});
@@ -217,6 +253,7 @@ export function mount(el, c) {
 // Ask the core for the scale or the hat when it is missing or out of date.
 function ensure() {
   const { body, clocks } = request();
+  if (!body) return;
   const key = JSON.stringify(body);
   if (state.ens.result?.key === key || state.ens.error?.key === key || inflight === key || !state.core.ok) return;
   inflightCtl?.abort();
@@ -226,7 +263,7 @@ function ensure() {
   ensemble(body, ctl.signal).then((doc) => {
     if (inflight !== key) return;
     inflight = null;
-    update((s) => { s.ens.result = { key, ts: doc.timescale, hat: doc.hat }; });
+    update((s) => { s.ens.result = { key, ts: doc.timescale, hat: doc.hat, cross: doc.cross_adev && { adev: doc.cross_adev, spec: doc.cross_spectrum, record: doc.record } }; });
   }).catch((err) => {
     if (err.name === "AbortError" || inflight !== key) return;
     inflight = null;
@@ -293,17 +330,64 @@ function refreshHat(r, { clocks, pairs }) {
   Plotly.Plots.resize(root.querySelector("[data-ref=adev]"));
 }
 
+// Two channels: the cross Allan deviation with its uncertainty over each
+// channel's own ADEV, and the cross-spectrum over its floor and each
+// channel's spectrum. Where the covariance is not positive, or not above its
+// uncertainty, the device is not resolved: ▽ marks √(covariance + uncertainty).
+function refreshCross(r, { a, b }) {
+  const x = r.adev, sp = r.spec, ca = seriesColor(a.slot), cb = seriesColor(b.slot), dev = css("--accent"), ink = css("--ink-2");
+  const resolved = x.covar.filter((v, i) => v > x.uncertainty[i]).length;
+  root.querySelector("[data-ref=title]").textContent = "Cross Allan deviation of the two channels";
+  root.querySelector("[data-ref=sub]").textContent = `${a.name} × ${b.name} · ${r.record.n} samples · τ₀ = ${num(r.record.tau0, 4)} s`;
+  const wcard = root.querySelector(".ens-weights"), relaid = wcard.hidden;
+  wcard.hidden = false;
+  root.querySelector("[data-ref=title2]").innerHTML = "Cross-spectrum S<sub>y</sub>(f)";
+  const row = (i) => `<div class="tbl-row tbl-body"><span>${num(x.tau[i], 4)}</span><span>${x.covar[i] > 0 ? sci(x.dev[i], 3) : "–"}</span><span>${sci(x.dev_a[i], 3)}</span><span>${sci(x.dev_b[i], 3)}</span></div>`;
+  root.querySelector("[data-ref=table]").innerHTML = `<div class="card-row"><h2>Per-τ results</h2></div>
+    <div class="tbl cross-tbl"><div class="tbl-row tbl-head"><span>τ (s)</span><span>Cross</span><span>A</span><span>B</span></div>${x.tau.map((_, i) => row(i)).join("")}</div>
+    <p class="muted small ens-note">The device is resolved at ${resolved} of ${x.tau.length} τ, where the covariance is above its uncertainty. Elsewhere the channels' own noise dominates. The cross-spectrum averages ${sp.nseg} segments of ${sp.nperseg} samples; its floor is the residual of the noise the channels do not share.</p>`;
+  if (!Plotly) return;
+  const sq = (v) => (v > 0 ? Math.sqrt(v) : null);
+  const ok = x.covar.map((v, i) => v > x.uncertainty[i]);
+  const hover = (name) => `<b>${h(name)}</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>`;
+  Plotly.react(root.querySelector("[data-ref=adev]"), [
+    { x: x.tau, y: x.dev_a, name: a.name, mode: "lines", line: { color: ca, width: 1.5, dash: "dot" }, hovertemplate: hover(`${a.name} alone`) },
+    { x: x.tau, y: x.dev_b, name: b.name, mode: "lines", line: { color: cb, width: 1.5, dash: "dot" }, hovertemplate: hover(`${b.name} alone`) },
+    { x: x.tau, y: x.dev.map((v, i) => (ok[i] ? v : null)), name: "Cross", mode: "lines+markers", line: { color: dev, width: 2.5 }, marker: { color: dev, size: 6 },
+      error_y: { type: "data", symmetric: false, thickness: 1, width: 3,
+        array: x.covar.map((v, i) => (ok[i] ? sq(v + x.uncertainty[i]) - x.dev[i] : 0)),
+        arrayminus: x.covar.map((v, i) => (ok[i] ? x.dev[i] - sq(v - x.uncertainty[i]) : 0)) },
+      hovertemplate: hover("Cross") },
+    { x: x.tau, y: x.covar.map((v, i) => (ok[i] ? null : sq(v + x.uncertainty[i]))), name: "Cross, upper limit", showlegend: false, mode: "markers",
+      marker: { color: dev, size: 9, symbol: "triangle-down-open" }, hovertemplate: "<b>Cross</b>, not resolved<br>τ = %{x:.4g} s<br>σ < %{y:.3e}<extra></extra>" },
+  ], { ...baseLayout(), xaxis: logAxis("Averaging time τ (s)"), yaxis: logAxis("σ<sub>y</sub>(τ)"), showlegend: true,
+    legend: { ...baseLayout().legend, orientation: "h", x: 0, xanchor: "left", y: 1.02, yanchor: "bottom", bgcolor: "rgba(0,0,0,0)", borderwidth: 0 },
+    margin: { l: 62, r: 14, t: 40, b: 48 }, uirevision: "cross" }, CONFIG);
+  const shover = (name) => `<b>${h(name)}</b><br>f = %{x:.4g} Hz<br>S = %{y:.3e} /Hz<extra></extra>`;
+  Plotly.react(root.querySelector("[data-ref=weights]"), [
+    { x: sp.f, y: sp.sy_a, name: a.name, mode: "lines", line: { color: ca, width: 1 }, opacity: 0.6, hovertemplate: shover(`${a.name} alone`) },
+    { x: sp.f, y: sp.sy_b, name: b.name, mode: "lines", line: { color: cb, width: 1 }, opacity: 0.6, hovertemplate: shover(`${b.name} alone`) },
+    { x: sp.f, y: sp.floor, name: "Floor", mode: "lines", line: { color: ink, width: 1, dash: "dash" }, hovertemplate: shover("Floor") },
+    // The real part of the cross-spectrum; below zero it has no point on a log axis.
+    { x: sp.f, y: sp.sy.map((v) => (v > 0 ? v : null)), name: "Cross", mode: "lines", line: { color: dev, width: 1.5 }, hovertemplate: shover("Cross") },
+  ], { ...baseLayout(), margin: { l: 62, r: 14, t: 8, b: 44 }, xaxis: logAxis("Fourier frequency f (Hz)"), yaxis: logAxis("S<sub>y</sub>(f) (1/Hz)"), showlegend: false, uirevision: "cross-s" }, CONFIG);
+  if (relaid) for (const p of root.querySelectorAll(".plot")) Plotly.Plots.resize(p);
+}
+
 export function refresh() {
   if (!root) return;
   ensure();
   const req = request(), { clocks } = req;
-  const hat = state.ens.view === "hat";
-  const r = hat ? state.ens.result?.hat : state.ens.result?.ts;
+  const hat = state.ens.view === "hat", cross = state.ens.view === "cross";
+  const r = hat ? state.ens.result?.hat : cross ? state.ens.result?.cross : state.ens.result?.ts;
   const table = root.querySelector("[data-ref=table]");
+  if (cross && !req.body) return showEmpty("Two channels needs a file that holds them as two columns, such as the readings of one device against two references. Load one on the Data page.");
   if (state.ens.error) return showEmpty(h(state.ens.error.message));
-  if (!r) return showEmpty(!state.core.ok ? "No analysis core. Start the explorer with serve.py." : hat ? "Separating the clocks…" : "Forming the time scale…");
+  if (!r) return showEmpty(!state.core.ok ? "No analysis core. Start the explorer with serve.py." : hat ? "Separating the clocks…" : cross ? "Computing the cross estimates…" : "Forming the time scale…");
   showEmpty("");
   if (hat) return refreshHat(r, req);
+  if (cross) return refreshCross(r, req);
+  root.querySelector("[data-ref=title2]").textContent = "Weights";
   const against = againstOf(clocks), ideal = clocks[0]?.source.type !== "file";
   root.querySelector("[data-ref=title]").textContent = `ADEV of the scale and of each clock against ${against === "scale" ? "it" : "the reference"}`;
   const names = r.clocks.map((n, i) => clocks[i]?.name ?? n);
@@ -343,6 +427,7 @@ export function refresh() {
 }
 
 export function hint() {
+  if (state.ens.view === "cross") return "Solid = the cross deviation, bars = its uncertainty, ▽ = upper limit · dotted = each channel alone";
   return state.ens.view === "hat" ? "Solid = each clock, separated · dotted = the pairs as measured · bars = the confidence interval"
     : `Solid = the scale against the reference · dotted = each clock against the ${againstOf(fileClocks())}`;
 }

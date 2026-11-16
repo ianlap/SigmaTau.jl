@@ -93,7 +93,7 @@ fn core_command(core: &Path) -> Command {
     cmd
 }
 
-const COMMANDS: [&str; 11] = ["check", "analyze", "spectrum", "dynamic", "drift", "holdover", "steer", "timescale", "hat", "model", "phasenoise"];
+const COMMANDS: [&str; 12] = ["check", "analyze", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "hat", "model", "phasenoise"];
 
 /// Check a request `{args: [command, flags...], file: {name, content} | null}`
 /// (the same rules as serve.py) and return the sigmatau arguments, with the
@@ -110,6 +110,10 @@ fn request_to_args(req: &Map<String, Value>, workdir: &Path) -> Result<Vec<Strin
     }
     if args.iter().any(|a| a == "--out" || a.starts_with("--out=")) {
         return Err("--out is not allowed here".into());
+    }
+    // A second file is a path on this machine too: two channels come as two columns of the file.
+    if args.iter().any(|a| a == "--with" || a.starts_with("--with=")) {
+        return Err("--with is not allowed here".into());
     }
     if let Some(file) = req.get("file").and_then(Value::as_object) {
         let name = file.get("name").and_then(Value::as_str).unwrap_or("record.txt");

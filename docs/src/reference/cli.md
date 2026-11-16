@@ -29,7 +29,7 @@ include(joinpath(pkgdir(SigmaTau), "docs", "transcripts.jl"))
 | `drift FILE` | the fit of a frequency drift model |
 | `holdover FILE` | the time error of the clock left to run on a frequency learned from the record, against holdover time |
 | `steer FILE` | the Allan deviation of the record steered to its reference in replay, beside that of the record and of the steady state that the clock model predicts |
-| `cross FILE --with FILE2` | the cross Allan deviation and cross-spectrum of two channels |
+| `cross FILE --with FILE2` | the cross Allan deviation and cross-spectrum of two channels, also as `--value-cols A,B` of one file |
 | `timescale FILE --value-cols LIST` | a time scale from several clocks read against one reference |
 | `hat FILE --value-cols LIST` | the deviation of each of three or more clocks that are measured against one another |
 | `model --synth N --noise-model R:Q1:Q2:Q3` | the deviations that a clock model predicts |
@@ -472,6 +472,7 @@ whole record.
 | Option | Meaning |
 |:---|:---|
 | `--with FILE2` | the second channel, read with the same options as `FILE` |
+| `--value-cols A,B` | in place of `--with`: the two channels as two columns of `FILE`, each read as `--value-col` reads one |
 | `--grid GRID`, `--m LIST` | averaging factors, as for `analyze` |
 | `--nperseg N` | length of the segments of the cross-spectrum, as for `spectrum` |
 
@@ -484,7 +485,8 @@ averaging time:
 tau,covar,dev,uncertainty,dev_a,dev_b,neff
 ```
 
-The JSON output holds `with`, the name of the second file, the same result
+The JSON output holds `with`, the name of the second file (or
+`value_cols`, the two columns), the same result
 as `cross_adev`, and the result of [`cross_psd_y`](@ref):
 
 ```@example cliref

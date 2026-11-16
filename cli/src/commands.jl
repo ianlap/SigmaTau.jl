@@ -270,17 +270,19 @@ end
 # ── cross ─────────────────────────────────────────────────────────────────
 
 # The second channel, read like the first.
+# The second channel: FILE2 read like FILE, or the second of --value-cols.
 function second_channel(o::Options)
     # The primary record's settings and drift fit stay as they were.
-    first, measured, offset, drift = o.input, o.measured, o.removed_offset, o.removed_drift
-    o.input, o.measured = o.with, falses(0)
+    first, col, measured, offset, drift = o.input, o.value_col, o.measured, o.removed_offset, o.removed_drift
+    isempty(o.with) ? (o.value_col = o.value_cols[2]) : (o.input = o.with)
+    o.measured = falses(0)
     try
         return load_record(o)
     catch e
         e isa CLIError && rethrow()
-        throw(CLIError(EXIT_INPUT, "--with " * o.with * ": " * error_message(e)))
+        throw(CLIError(EXIT_INPUT, (isempty(o.with) ? "column " * string(o.value_col) : "--with " * o.with) * ": " * error_message(e)))
     finally
-        o.input, o.measured, o.removed_offset, o.removed_drift = first, measured, offset, drift
+        o.input, o.value_col, o.measured, o.removed_offset, o.removed_drift = first, col, measured, offset, drift
     end
 end
 
@@ -310,7 +312,7 @@ function cmd_cross(io::IO, o::Options, a::PhaseData, t_start::UInt64)
         return nothing
     end
     json_head(io, o, o.input)
-    json_key(io, "with"); json_string(io, o.with)
+    isempty(o.with) ? (json_key(io, "value_cols"); json_array(io, o.value_cols)) : (json_key(io, "with"); json_string(io, o.with))
     json_key(io, "record"); json_record(io, o, a)
     json_key(io, "cross_adev"); print(io, '{')
     json_key(io, "tau", true); json_array(io, r.tau)
