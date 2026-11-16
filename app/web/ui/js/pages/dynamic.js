@@ -5,7 +5,7 @@
 // the estimator, window or record changes; no Run is needed.
 import { state, update, recordClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
-import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale } from "../plot.js";
+import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale, LINE_W } from "../plot.js";
 import { sci, num, thousands, timeAxisUnit, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
@@ -325,7 +325,7 @@ function drawSlice(area, ready) {
     const color = seriesColor(c.slot);
     traces.push({
       x: d.t.map((t) => t / tf), y: d.map.map((row) => row[j]), name: exact ? c.name : `${c.name} (τ = ${num(d.tau[j], 4)} s)`, mode: "lines+markers",
-      line: { color, width: 2 }, marker: { color, size: 5 },
+      line: { color, width: LINE_W }, marker: { color, size: 5 },
       hovertemplate: `<b>${h(c.name)}</b><br>t = %{x:.6g} ${tu}<br>${NAME[d.dev]} = %{y:.3e}<extra></extra>`,
     });
     const r = c.result?.results.find((x) => x.dev === whole);

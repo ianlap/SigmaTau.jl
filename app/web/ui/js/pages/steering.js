@@ -8,7 +8,7 @@
 // cost. Computed when this page needs it; no Run is needed.
 import { state, update, recordClocks, multi } from "../state.js";
 import { steer as fetchSteer, steerKey, steerDefault } from "../core.js";
-import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, timeUnit } from "../plot.js";
+import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, timeUnit, LINE_W } from "../plot.js";
 import { sci, num, duration, timeAxisUnit, modelText, inWords, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly;
@@ -154,7 +154,7 @@ function sigmaPlot(ready, several) {
   for (const c of ready) {
     const st = c.steer, who = several ? `<b>${h(c.name)}</b><br>` : "";
     const line = (name, y, color, dash) => traces.push({
-      x: st.tau, y, name: several ? `${c.name}, ${name}` : name, mode: "lines+markers", line: { color, dash, width: 2 }, marker: { color, size: 5 },
+      x: st.tau, y, name: several ? `${c.name}, ${name}` : name, mode: "lines+markers", line: { color, dash, width: LINE_W }, marker: { color, size: 5 },
       hovertemplate: `${who}${name}<br>τ = %{x:.4g} s<br>σ<sub>y</sub> = %{y:.3e}<extra></extra>`,
     });
     line("Free-running", st.free, several ? seriesColor(c.slot) : css("--s1"), several ? "dash" : "solid");

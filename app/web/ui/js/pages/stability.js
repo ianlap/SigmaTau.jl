@@ -3,8 +3,8 @@
 // refresh() redraws from state.
 import { state, update, visibleClocks, multi, markStale } from "../state.js";
 import { byId, label, gridName, CONFIDENCES, noiseLabel, noiseTitle, noiseSlope, BIAS_CORRECTED, biasEntry } from "../estimators.js";
-import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css } from "../plot.js";
-import { sci, num, hertz, escapeHtml as h } from "../format.js";
+import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css, LINE_W } from "../plot.js";
+import { sci, sciHtml, num, hertz, escapeHtml as h } from "../format.js";
 
 // ITU-T wander masks the core checks (sigmatau --mask), by its names: the
 // wander a clock generates, then the limits of a network at an interface.
@@ -45,7 +45,7 @@ export function mount(el, ctx) {
               `<optgroup label="${g}">${masks.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</optgroup>`).join("")}</select>
         </span>
       </div>
-      <div class="card plot-card"><div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
+      <div class="card plot-card"><div class="readout" data-ref="readout" hidden></div><div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
     </div>
     <div class="card side-card" data-ref="table"></div>`;
   plotEl = root.querySelector("[data-ref=plot]");
@@ -119,6 +119,7 @@ export function refresh() {
 
   renderPins();
   renderTable(clocks, devs);
+  renderReadout(clocks, devs, hasResult && devs.length && clocks.length);
   if (Plotly && hasResult && devs.length && clocks.length) draw(clocks, devs);
 }
 
@@ -203,7 +204,7 @@ function traces(clocks, devs) {
       }
       out.push({
         x: r.tau, y: r.sigma, name, mode: several ? "lines" : "lines+markers",
-        line: { color, width: 2, dash }, marker: { color, size: 5 },
+        line: { color, width: LINE_W, dash }, marker: { color, size: 5 },
         error_y: ci && !state.band ? {
           type: "data", symmetric: false, color, thickness: 1, width: 0,
           array: r.ci_hi.map((v, i) => (v ?? NaN) - r.sigma[i]),
@@ -380,6 +381,44 @@ function compareTaus(clocks, devs) {
     if (!all.some((u) => sameTau(u, t))) all.push(t);
   }
   return all.sort((a, b) => a - b);
+}
+
+// The answer first: above the plot, the lowest σ of the table's estimator
+// and where it falls, σ at the shortest τ and the noise types from short to
+// long τ; with several clocks, the most stable clock at the compared τ.
+function renderReadout(clocks, devs, show) {
+  const box = root.querySelector("[data-ref=readout]");
+  const withResult = clocks.filter((c) => c.result);
+  const unit = state.axis === "sigma_x" ? '<span class="u">s</span>' : "";
+  const item = (k, v, cls = "mid", more = "") => `<div class="${more}"><div class="k">${k}</div><div class="${cls}">${v}</div></div>`;
+  let html = "";
+  if (show && multi()) {
+    const d = devs[0], t = state.compareTau;
+    const at = withResult.map((c) => {
+      const r = resultOf(c, d), i = r ? r.tau.findIndex((u) => sameTau(u, t)) : -1;
+      return [c, i >= 0 ? r.sigma[i] : null];
+    }).filter(([, v]) => v > 0).sort((a, b) => a[1] - b[1]);
+    if (at.length) {
+      const [[c, v], next] = at;
+      html = item(`Most stable at τ = ${num(t, 4)} s, ${label(d)}`, `${sciHtml(v)}${unit}`, "big") +
+        item("Clock", `<span class="who"><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>${h(c.name)}</span>`) +
+        (next ? item("Next clock", `${num(next[1] / v, 3)}× higher`, "mid", "more") : "");
+    }
+  } else if (show && withResult.length) {
+    const d = state.tableDev, r = resultOf(withResult[0], d);
+    const ok = (r?.tau ?? []).map((_, i) => i).filter((i) => r.sigma[i] > 0);
+    if (ok.length) {
+      const i = ok.reduce((a, b) => (r.sigma[b] < r.sigma[a] ? b : a));
+      const edge = i === ok[ok.length - 1] ? ", at the longest τ" : i === ok[0] ? ", at the shortest τ" : "";
+      const runs = noiseRuns(r).map((u) => noiseLabel(u.noise)).filter((n, k, a) => n !== a[k - 1]);
+      html = item(edge ? `Lowest ${label(d)}${edge}` : `${label(d)} floor`, `${sciHtml(r.sigma[i])}${unit}`, "big") +
+        (edge ? "" : item("at τ", `${num(r.tau[i], 4)}<span class="u">s</span>`)) +
+        (i === ok[0] ? "" : item(`at τ = ${num(r.tau[ok[0]], 4)} s`, `${sciHtml(r.sigma[ok[0]])}${unit}`, "mid", "more")) +
+        (runs.length ? item("Noise type, short to long τ", runs.map((n) => `<b>${n}</b>`).join(" → "), "chain", "more") : "");
+    }
+  }
+  box.innerHTML = html;
+  box.hidden = !html;
 }
 
 function renderTable(clocks, devs) {
