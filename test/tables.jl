@@ -28,4 +28,10 @@ using Tables
     @test sc.deviation_type == [fill(:adev, length(s[:adev].tau)); fill(:mdev, length(s[:mdev].tau))]
     @test (sc.tau, sc.neff) == ([s[:adev].tau; s[:mdev].tau], [s[:adev].neff; s[:mdev].neff])
     @test length(Tables.rows(stability(pd; devs=(), ci=false))) == 0
+
+    # A hat stacks its clocks, each row named.
+    h = ncornered_hat(ClockComparisons(randn(MersenneTwister(4), 256, 2), 1.0; names=["a", "b"]), [1, 2, 4])
+    hc = Tables.columntable(h)
+    @test Tables.schema(h).names[1] === :clock && hc.clock == repeat(["a", "b", "reference"]; inner=3)
+    @test (hc.dev, hc.edf) == (reduce(vcat, r.dev for r in h), reduce(vcat, r.edf for r in h))
 end

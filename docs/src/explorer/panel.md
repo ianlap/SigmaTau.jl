@@ -6,6 +6,14 @@ The Data, Stability, Spectrum, Dynamic, Holdover and Steering pages share
 it. The Synthesis, Ensemble and Live pages show their own settings in its
 place.
 
+The panel starts folded into the rail at the left edge, so the plot has
+the width of the window. **Settings** on the rail opens it. From 1280 px
+wide, **Settings** pins it beside the page and folds it away again, and the
+explorer remembers which. In a narrower window it opens over the page and
+closes with Esc or a click elsewhere, and the card of results beside the
+plot (the per-τ table, for one) opens the same way from **Results**. While
+the panel is closed, **Run** on the rail runs the analysis.
+
 With one clock, the Spectrum, Dynamic, Holdover and Steering pages put
 their settings in the panel too, in place of the estimators and options.
 With several clocks the panel keeps its content, and those four pages show
