@@ -1,6 +1,6 @@
 # Command-line transcripts for the docs pages. `sigmatau("analyze clock.dat")`
 # prints the command line and what the program answers, with the numbers cut
-# to four significant digits. `sigmatau_json` prints a JSON answer indented,
+# to four significant digits; with `tty = true`, what it shows at a terminal. `sigmatau_json` prints a JSON answer indented,
 # with long arrays cut short, whole or one member of it. The commands run in
 # process, in a scratch directory that holds the sample files.
 
@@ -39,9 +39,9 @@ write_columns("ocxo.txt", [1, 10, 100, 1e3, 1e4, 1e5], [-100, -130, -150, -160, 
 # A number with a decimal point that stands as a CSV field or a JSON value.
 const NUMBER = r"(?<=[,:\[\n])-?\d+\.\d+(?:e-?\d+)?(?=[,\]}\n])"
 
-function answer(line)
+function answer(line; tty = false)
     io = IOBuffer()
-    cd(() -> SigmaTauCLI.sigmatau(String.(split(line)); out = io, err = io), CLI_DIR)
+    cd(() -> SigmaTauCLI.sigmatau(String.(split(line)); out = io, err = io, tty), CLI_DIR)
     short(x) = string(parse(Float64, @sprintf("%.3e", parse(Float64, x))))
     return replace(String(take!(io)), NUMBER => short)
 end
@@ -54,8 +54,8 @@ function wrapped(line; width = 88)
     return line[1:i-1] * '\n' * wrapped(line[i+1:end]; width)
 end
 
-sigmatau(line) = print("\$ sigmatau ", line, '\n',
-                       join(wrapped.(split(answer(line), '\n')), '\n'))
+sigmatau(line; tty = false) = print("\$ sigmatau ", line, '\n',
+                                   join(wrapped.(split(answer(line; tty), '\n')), '\n'))
 
 # Indent a JSON text. An array of scalars stays on one line, cut to its first
 # `keep` elements, and an array of arrays or objects to its first element.

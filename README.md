@@ -127,7 +127,7 @@ starts in a few tens of milliseconds:
 
 ```bash
 sigmatau check clock.dat                                # samples, gaps, outliers, drift
-sigmatau analyze clock.dat --devs adev,mdev,tdev        # CSV on standard output
+sigmatau analyze clock.dat --devs adev,mdev,tdev        # a table; CSV in a pipe
 sigmatau analyze clock.dat --format json --out result.json
 sigmatau report clock.dat --out clock.html              # one HTML file
 ```
