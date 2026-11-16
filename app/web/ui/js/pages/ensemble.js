@@ -6,7 +6,7 @@
 // needs it and recomputed when the settings or the clocks change.
 import { state, update, isReference } from "../state.js";
 import { ensemble, synthArgs } from "../core.js";
-import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css } from "../plot.js";
+import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, LINE_W } from "../plot.js";
 import { byId } from "../estimators.js";
 import { sci, num, inWords as plain, escapeHtml as h } from "../format.js";
 
@@ -282,7 +282,7 @@ function refreshHat(r, { clocks, pairs }) {
     ...res.pairs.map((c, k) => ({ x: tau, y: col(c, "dev"), name: "Pairs, as measured", legendgroup: "pairs", showlegend: k === 0, mode: "lines",
       line: { color: css("--muted"), width: 1, dash: "dot" },
       hovertemplate: `<b>${h(r.pairs[k].map((i) => names[i - 1]).join(" − "))}</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}<extra></extra>` })),
-    ...res.clocks.map((c, i) => ({ x: tau, y: col(c, "dev"), name: names[i], mode: "lines+markers", line: { color: color(i), width: 2 }, marker: { color: color(i), size: 6 },
+    ...res.clocks.map((c, i) => ({ x: tau, y: col(c, "dev"), name: names[i], mode: "lines+markers", line: { color: color(i), width: LINE_W }, marker: { color: color(i), size: 6 },
       error_y: bar(c), text: c.points.map(span), hovertemplate: `<b>${h(names[i])}</b><br>τ = %{x:.4g} s<br>σ = %{y:.3e}%{text}<extra></extra>` })),
     // KLTS gives an upper limit where the clock is not resolved.
     ...res.clocks.map((c, i) => ({ x: tau, y: c.points.map((p) => (p.dev === null ? p.ci_upper : null)), name: `${names[i]}, upper limit`, showlegend: false, mode: "markers",

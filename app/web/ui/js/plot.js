@@ -35,6 +35,8 @@ export function inLightTheme(fn) {
 }
 
 export const seriesColor = (i) => css(`--s${(i % 8) + 1}`);
+// Width of a measured curve; models, guides and pins are drawn thinner.
+export const LINE_W = 2.5;
 export const DASHES = ["solid", "dash", "dot", "dashdot", "longdash", "longdashdot"];
 const DASH_SVG = ["", "5 3", "1.5 3", "5 3 1.5 3", "9 3", "9 3 1.5 3"];
 

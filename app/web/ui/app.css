@@ -13,6 +13,7 @@ h3 { font-size: 13px; font-weight: 600; margin: 0; }
 a { color: var(--accent); }
 a:hover { color: var(--accent-hover); }
 code, kbd, .mono { font-family: var(--font-mono); }
+.mono, .tbl, .kv, .model-grid, .readout { font-variant-numeric: tabular-nums; }
 kbd { font-size: 11px; font-weight: 500; opacity: 0.75; }
 .muted { color: var(--muted); }
 .small { font-size: 11.5px; }
@@ -47,25 +48,27 @@ select:disabled, input:disabled { opacity: 0.55; }
 input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); margin: 0; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 2px; gap: 2px; background: var(--bg-card); font-size: 12.5px; }
 .seg button { height: 28px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: var(--ink); font: inherit; white-space: nowrap; cursor: pointer; }
-.seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.seg button.on { background: var(--ink); color: var(--bg-card); font-weight: 600; }
 
 /* ── Top bar ── */
 /* It fits a window from 960 px up: the record chip gives way first, and the tabs close up as the window narrows. */
-.topbar { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0 20px; background: var(--bg-panel); border-bottom: 1px solid var(--line); }
+.topbar { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0 20px; background: var(--bar-bg); color: var(--bar-ink); }
 .brand { display: flex; align-items: baseline; gap: 8px; margin-right: 12px; }
-.brand-name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
-.brand-sub { font-size: 11px; color: var(--muted); }
+.brand-name { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
+.brand-sub { font-size: 11px; color: var(--bar-muted); }
 .tabs { display: flex; height: var(--header-h); align-items: stretch; }
-.tabs a { display: flex; align-items: center; padding: 3px clamp(7px, 1vw - 3px, 12px) 0; color: var(--muted); text-decoration: none; border-bottom: 3px solid transparent; }
-.tabs a:hover { color: var(--ink); }
-.tabs a.on { color: var(--accent); font-weight: 600; border-bottom-color: var(--accent); }
+.tabs a { display: flex; align-items: center; padding: 3px clamp(7px, 1vw - 3px, 12px) 0; color: var(--bar-muted); text-decoration: none; border-bottom: 3px solid transparent; }
+.tabs a:hover { color: #fff; }
+.tabs a.on { color: #fff; font-weight: 600; border-bottom-color: var(--tab-line); }
+.topbar .btn, .topbar .record-chip { background: var(--bar-raise); border-color: var(--bar-line); color: var(--bar-ink); }
+.topbar .btn:hover, .topbar .record-chip:hover { background: var(--bar-line); }
+.topbar .record-chip .facts { color: var(--bar-muted); }
 .record-chip {
   display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 14px; border: 1px solid var(--line);
   border-radius: 15px; background: transparent; font: inherit; font-size: 12px; color: var(--ink); cursor: pointer;
   max-width: 460px; min-width: 0; white-space: nowrap;
 }
 #record-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.record-chip .facts { color: var(--muted); }
 .dot { width: 8px; height: 8px; border-radius: 4px; flex: none; background: var(--line-strong); }
 .dot.good { background: var(--good); }
 .dot.warn { background: var(--warn); }
@@ -87,6 +90,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .side-scroll { flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow: auto; min-height: 0; }
 .side-head { display: flex; justify-content: space-between; align-items: baseline; }
 .side-head .note { font-size: 11px; color: var(--muted); }
+.side h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
 .rows { display: flex; flex-direction: column; gap: 8px; }
 .row {
   display: flex; align-items: center; justify-content: space-between; min-height: 38px; padding: 0 8px 0 14px;
@@ -130,11 +134,22 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .page { flex: 1; min-width: 0; min-height: 0; padding: 18px 20px; display: flex; gap: 18px; overflow: hidden; }
 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .page-data .col { overflow-y: auto; }   /* a small window scrolls the page; the plot keeps its height */
-.card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.card { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .toolbar .caption { font-size: 12px; color: var(--muted); min-width: 0; }
 .plot-card { flex: 1; min-height: 0; padding: 16px 18px 10px; display: flex; flex-direction: column; position: relative; }
 .plot { flex: 1; min-height: 0; width: 100%; }
+.readout { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 36px; padding: 2px 4px 12px; margin-bottom: 6px; border-bottom: 1px solid var(--line-soft); }
+.readout .k { font-size: 11.5px; font-weight: 500; color: var(--muted); margin-bottom: 5px; }
+.readout .big { font-size: 30px; font-weight: 600; letter-spacing: -0.025em; line-height: 1; }
+.readout .mid { font-size: 18px; font-weight: 500; line-height: 1.1; }
+.readout .who { display: inline-flex; align-items: center; gap: 8px; }
+.readout .chain { font-size: 13px; color: var(--ink-2); line-height: 1.1; }
+.readout .chain b { font-weight: 600; color: var(--ink); }
+.readout sup { font-size: 0.55em; }
+.readout .u { font-size: 13px; color: var(--muted); margin-left: 5px; }
+.plot-card { container-type: inline-size; }
+@container (max-width: 620px) { .readout .more { display: none; } .readout .big { font-size: 24px; } }
 .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; gap: 6px; }
 .empty p { margin: 0; max-width: 440px; color: var(--muted); }
 .empty .btn { margin-top: 10px; }
@@ -296,7 +311,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .toolbar[hidden] { display: none; }
 .pills { display: flex; gap: 8px; }
 .pill { height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--bg-card); font: inherit; font-size: 12px; cursor: pointer; color: var(--ink); }
-.pill.on { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; font-weight: 600; }
+.pill.on { background: var(--ink); border-color: var(--ink); color: var(--bg-card); font-weight: 600; }
 .pill:disabled { opacity: 0.5; cursor: default; }
 .btn-round.on { border-color: var(--accent); color: var(--accent); }
 a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
