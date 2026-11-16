@@ -50,4 +50,7 @@ using Random
     @test_throws ArgumentError add_component!(over, 2, 6:9)       # residual ≤ 0 there
     @test_throws ArgumentError noise_fit(tdev(p))
     @test_throws ArgumentError undo!(noise_fit(r))
+    # The builder starts empty, and a model made of nothing is refused.
+    @test_throws "no components yet" clock_model(noise_fit(r))
+    @test clock_model(add_component!(noise_fit(r), 0, 6:9)).q1 > 0
 end
