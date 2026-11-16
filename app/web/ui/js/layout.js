@@ -6,7 +6,6 @@ import { state } from "./state.js";
 
 const WIDE = matchMedia("(min-width: 1280px)");
 const KEY = "sigmatau-panel";
-const rail = document.getElementById("rail");
 const btnPanel = document.getElementById("rail-panel");
 const btnResults = document.getElementById("rail-results");
 const btnRun = document.getElementById("rail-run");
