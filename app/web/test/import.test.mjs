@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.window = {};
-const { sniff, guessRoles, clockStats, timeStats, parseFactor, scaleFields } = await import("../ui/js/import.js");
+const { sniff, guessRoles, clockStats, timeStats, parseFactor, scaleFields, densityOf } = await import("../ui/js/import.js");
 
 const seq = (n, f) => Array.from({ length: n }, (_, i) => f(i));
 const read = (name, lines) => { const s = sniff(name, lines.join("\n") + "\n"); return { s, g: guessRoles(s) }; };
@@ -12,6 +12,16 @@ test("a clock column that only drifts upward is not the time column", () => {
   const { s, g } = read("sats.csv", ["MJD,E08 phase (s),G08 phase (s)", ...seq(30, (i) => `${60904 + i / 2880},${1e-4 + i * 1e-9},${5e-4 + i * 2e-9}`)]);
   assert.equal(s.nCols, 3);
   assert.deepEqual([g.time, g.value, g.timeUnit], [1, 2, 86400]);
+});
+
+test("a table of phase noise is told by its column names, or by sparse offsets beside levels in dBc/Hz", () => {
+  const offsets = [1, 10, 100, 1e3, 1e4, 1e5];
+  assert.equal(read("pn.csv", ["Offset (Hz),L(f) (dBc/Hz)", ...offsets.map((f, i) => `${f},${-100 - 13 * i}`)]).s.kindHint, "spectrum");
+  assert.equal(read("pn.txt", offsets.map((f, i) => `${f} ${-100 - 13 * i}`)).s.density, "L");
+  assert.deepEqual(["f,S_phi (rad^2/Hz)", "f,Sx", "f,S_y (1/Hz)"].map((n) => densityOf(n.split(","), [offsets, offsets])), ["Sphi", "Sx", "Sy"]);
+  // A phase record in nanoseconds keeps its kind: its time column climbs in even steps.
+  const ns = read("ns.csv", seq(400, (i) => `${i + 1},${-50 - Math.sin(i)}`)).s;
+  assert.deepEqual([ns.kindHint === "spectrum", ns.density], [false, null]);
 });
 
 test("every column named for a reading is proposed as a clock, of the first one's kind", () => {

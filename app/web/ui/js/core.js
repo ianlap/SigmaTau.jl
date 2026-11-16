@@ -2,7 +2,8 @@
 // in a browser, or the desktop shell's commands (app/desktop) inside its
 // window. Both run the sigmatau binary (cli/) with the arguments built here
 // and hand back its JSON.
-import { state, referenceColFor } from "./state.js";
+import { state, referenceColFor, isTable } from "./state.js";
+import { label } from "./estimators.js";
 
 const tauri = window.__TAURI__?.core;
 let nextRun = 1;
@@ -153,6 +154,7 @@ const run = (body, signal) => post(body, signal).then(view, remedy);
 // Read a record and its check (samples, span, gaps, outliers, drift),
 // without running any estimator.
 export function load(clock, signal) {
+  if (isTable(clock)) return tableRun(clock, TABLE_DEVS, signal);
   return run(request(clock, "check", ["--series", 4000]), signal);
 }
 
@@ -176,12 +178,18 @@ const analyzeRequest = (clock) => request(clock, "analyze", [
   ...clock.components.flatMap((k) => ["--component", `${k.noise}:${k.from ?? ""}:${k.to ?? ""}`]),
 ]);
 
-export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
+// A table gives the deviations it supports among those selected, and none for the rest.
+const tableDevs = () => TABLE_DEVS.filter((d) => state.devs.includes(d));
+export function analyze(clock, signal) {
+  if (!isTable(clock)) return run(analyzeRequest(clock), signal);
+  return tableRun(clock, tableDevs().length ? tableDevs() : TABLE_DEVS, signal)
+    .then((out) => ({ ...out, results: out.results.filter((r) => state.devs.includes(r.dev)) }));
+}
 
 // The sigmatau command line that reproduces a clock's analysis (CSV out),
 // for reports.
 export function analyzeCommand(clock) {
-  const { args, file } = analyzeRequest(clock);
+  const { args, file } = isTable(clock) ? tableRequest(clock, tableDevs().length ? tableDevs() : TABLE_DEVS) : analyzeRequest(clock);
   const valued = new Set(["--format", "--component", "--mask"]);   // JSON-only options and their values
   const kept = args.filter((a, i) => a !== "--spectrum" && a !== "--fit" && !valued.has(a) && !valued.has(args[i - 1]));
   const q = (a) => (/^[\w.,:+\/=-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
@@ -336,16 +344,43 @@ function headingLines(text) {
   return Math.max(first, 0);
 }
 
-// The σ(τ) that a table of ℒ(f) gives over its band (ADEV, MDEV, TDEV, HDEV
-// and MHDEV), at a carrier frequency in Hz; the core's JSON as is.
-export async function phaseNoise(file, carrier, signal) {
-  const args = ["phasenoise", "--carrier", carrier, "--devs", "adev,mdev,tdev,hdev,mhdev",
-    "--header", headingLines(file.content), "--format", "json"];
-  const doc = await post({ args: args.map(String), file }, signal);
-  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
-  return doc;
+// ── Tables of phase noise ──
+// A clock of kind "spectrum" is a table of ℒ(f), S_φ, S_x or S_y against the
+// offset frequency. `sigmatau phasenoise` integrates it to the deviations it
+// supports; the page's Spectrum takes S_y and S_x of each point of the table.
+export const TABLE_DEVS = ["adev", "mdev", "hdev", "mhdev", "tdev"];
+
+function tableRequest(clock, devs) {
+  const args = ["phasenoise", "--value-col", clock.value_col, "--header", headingLines(clock.source.content), "--density", clock.density,
+    ...(clock.carrier ? ["--carrier", clock.carrier] : []), ...(clock.band ? ["--band", `${clock.band[0]}:${clock.band[1]}`] : []),
+    "--devs", devs.join(","), "--format", "json"];
+  return { args: args.map(String), file: { name: clock.source.name, content: clock.source.content } };
 }
 
+// S_x(f) in s²/Hz from the table, as spectrum_sigma reads it: S_φ = 2ℒ,
+// S_x = S_φ/(2πν₀)², S_y = (2πf)² S_x.
+function tableSx(f, v, density, carrier) {
+  const w0 = (2 * Math.PI * carrier) ** 2;
+  return v.map((x, i) => density === "L" ? 2 * 10 ** (x / 10) / w0 : density === "Sphi" ? x / w0
+    : density === "Sx" ? x : x / (2 * Math.PI * f[i]) ** 2);
+}
+
+function tableView(doc) {
+  if (doc.schema_version !== 1) throw new Error(`the analysis core speaks schema ${doc.schema_version}; this page needs 1`);
+  const t = doc.spectrum, sx = tableSx(t.f, t.value, t.quantity, t.carrier);
+  const record = { n: t.n, tau0: null, kind: "spectrum", source: doc.source, check: null,
+    table: { f: t.f, value: t.value, density: t.quantity, carrier: t.carrier, band: t.band } };
+  const inRange = (tau) => !(state.tauMin && tau < state.tauMin) && !(state.tauMax && tau > state.tauMax);
+  const results = doc.results.map((r) => {
+    const keep = r.tau.map(inRange), pick = (a) => a.filter((_, i) => keep[i]);
+    return { dev: r.deviation, label: label(r.deviation), axis: r.deviation === "tdev" ? "sigma_x" : "sigma_y", tau: pick(r.tau), sigma: pick(r.dev),
+      below: pick(r.below), above: pick(r.above), ci_lo: [], ci_hi: [], edf: [], noise: [], neff: [] };
+  });
+  const spectrum = { f: t.f, sx, sy: sx.map((x, i) => (2 * Math.PI * t.f[i]) ** 2 * x) };
+  return { record, results, spectrum, masks: [], doc };
+}
+
+const tableRun = (clock, devs, signal) => post(tableRequest(clock, devs), signal).then(tableView);
 // The σ(τ) that noise models predict (MDEV, ADEV and MHDEV per model), closed form.
 export async function modelPreview({ n, tau0, models }, signal) {
   const args = ["model", "--synth", n, "--tau0", tau0, ...models.flatMap((m) => ["--noise-model", m.join(":")]), "--format", "json"];

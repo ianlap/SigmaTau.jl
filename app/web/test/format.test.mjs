@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { inWords, startText } = await import("../ui/js/format.js");
+const { inWords, startText, hertz } = await import("../ui/js/format.js");
 
 test("the core's refusals are said without flags and function names", () => {
   assert.equal(inWords("--algorithm greenhall fits a model per clock and needs three or more clocks"), "Greenhall fits a model to each clock and needs three or more clocks.");
@@ -19,4 +19,8 @@ test("a start time is rounded to the microsecond and keeps no float noise", () =
   assert.equal(startText("2022-03-08T23:59:59.9999996Z"), "2022-03-09 00:00:00Z");
   assert.equal(startText("2022-03-08T23:00:01Z"), "2022-03-08 23:00:01Z");
   assert.equal(startText("2022-03-08T23:00:01.5"), "2022-03-08 23:00:01.5");
+});
+
+test("a frequency is said in its unit", () => {
+  assert.deepEqual([10e6, 1e5, 2.5e9, 1, 0.01, 0].map(hertz), ["10 MHz", "100 kHz", "2.5 GHz", "1 Hz", "0.01 Hz", "–"]);
 });

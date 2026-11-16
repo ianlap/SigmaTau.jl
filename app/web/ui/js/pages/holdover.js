@@ -6,7 +6,7 @@
 // model predicts or the filter claims, √6·TDEV (√20·HTDEV with drift) for reference, and the time
 // to a limit. Several clocks: one color per clock. Computed when this page
 // needs it; no Run is needed.
-import { state, update, visibleClocks, multi } from "../state.js";
+import { state, update, recordClocks, multi } from "../state.js";
 import { holdover as fetchHoldover, holdoverKey } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, css } from "../plot.js";
 import { sci, num, thousands, duration, modelText, inWords, escapeHtml as h } from "../format.js";
@@ -38,7 +38,7 @@ export function controls(inline = false) {
   if (inline) {
     return `<label class="tool-field">Train&nbsp;on ${train}</label>${by}${fit}<label class="tool-field">Limit ${limit} s</label><label class="tool-field">Trials ${level}</label>`;
   }
-  const c = visibleClocks()[0];
+  const c = recordClocks()[0];
   const n = c?.record?.n ?? 0;
   return `<h2>Holdover</h2>
     <div class="ctl-block"><label class="lbl">Training stretch</label>${train}
@@ -165,7 +165,7 @@ export function refresh() {
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
   const side = root.querySelector("[data-ref=side]");
-  const clocks = visibleClocks().filter((c) => c.record);
+  const clocks = recordClocks().filter((c) => c.record);
   if (!clocks.length) {
     side.hidden = true;
     return showEmpty(`<h2>No record yet</h2><p>Load or synthesize a record on the Data page.</p><button class="btn" data-act="load">Go to Data</button>`);

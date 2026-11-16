@@ -6,9 +6,10 @@ import { byId, label, gridName, noiseLabel, biasEntry, noiseChoice } from "./est
 import { loadPlotly, inLightTheme } from "./plot.js";
 import { analyzeCommand } from "./core.js";
 import { figure } from "./pages/stability.js";
-import { sci, num, thousands, duration, escapeHtml as h } from "./format.js";
+import { sci, num, thousands, duration, hertz, escapeHtml as h } from "./format.js";
 
 const AXIS_TITLE = { sigma_y: "Frequency stability σ<sub>y</sub>(τ)", sigma_x: "Time stability σ<sub>x</sub>(τ)" };
+const TABLE_TEXT = { L: "ℒ(f) (dBc/Hz)", Sphi: "S<sub>φ</sub>(f) (rad²/Hz)", Sx: "S<sub>x</sub>(f) (s²/Hz)", Sy: "S<sub>y</sub>(f) (1/Hz)" };
 const DRIFT_TEXT = { none: "kept", linear: "offset removed", quadratic: "linear drift removed" };
 
 async function sha256(text) {
@@ -42,7 +43,7 @@ async function figureSvg(clocks, axis) {
 function sourceText(c) {
   const s = c.source;
   if (s.type === "synth") return `synthetic, ${thousands(s.n)} samples, seed ${s.seed}`;
-  return `${h(s.name)}${c.format ? ` (${h(c.format)})` : ` (${c.kind}, column ${c.value_col})`}`;
+  return `${h(s.name)}${c.format ? ` (${h(c.format)})` : ` (${c.kind === "spectrum" ? "phase-noise table" : c.kind}, column ${c.value_col})`}`;
 }
 
 async function recordRows(clocks) {
@@ -52,9 +53,16 @@ async function recordRows(clocks) {
     const r = c.record, k = r.check;
     // The file's own bytes when it was opened here; a session keeps that hash.
     const hash = c.source.type === "file" ? c.source.sha256 || await sha256(c.source.content) : "";
+    const src = `<th>${h(c.name)}</th><td>${sourceText(c)}${hash ? `<br><code class="hash">SHA-256 ${hash}</code>` : ""}</td>`;
+    if (r.table) {
+      const t = r.table;
+      rows.push(`<tr>${src}<td>table of ${TABLE_TEXT[t.density]}</td><td class="n">${thousands(r.n)}</td>
+        <td colspan="5">offsets ${hertz(t.f[0])} to ${hertz(t.f.at(-1))}${t.carrier ? `, carrier ${hertz(t.carrier)}` : ""}</td><td>integrated from ${hertz(t.band[0])} to ${hertz(t.band[1])}</td></tr>`);
+      continue;
+    }
     const prep = [c.range ? `seconds ${num(c.range[0], 6)} to ${num(c.range[1], 6)}` : "", `drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, c.fillgaps ? "gaps filled" : "", c.remove_outliers ? "outliers removed" : "",
       ref && ref !== c && ref.group === c.group ? `minus ${h(ref.name)}` : ""].filter(Boolean).join(", ");
-    rows.push(`<tr><th>${h(c.name)}</th><td>${sourceText(c)}${hash ? `<br><code class="hash">SHA-256 ${hash}</code>` : ""}</td>
+    rows.push(`<tr>${src}
       <td>${h(r.kind)}</td><td class="n">${thousands(r.n)}</td><td class="n">${num(r.tau0, 6)} s</td><td class="n">${duration(r.n * r.tau0)}</td>
       <td class="n">${k.gaps ?? 0}</td><td class="n">${k.outliers ?? 0}</td><td class="n">${sci(k.drift_per_day, 3)}</td><td>${prep}</td></tr>`);
   }

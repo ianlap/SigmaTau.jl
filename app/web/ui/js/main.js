@@ -1,6 +1,6 @@
 // Entry point: routing, loading records, the Run action, the header chip,
 // status bar, export menu, drag and drop and keyboard shortcuts.
-import { state, update, subscribe, newClock, activeClock, multi, referenceClock, isReference } from "./state.js";
+import { state, update, subscribe, newClock, activeClock, multi, referenceClock, isReference, isTable } from "./state.js";
 import { health, load, analyze } from "./core.js";
 import { initPanel, renderPanel } from "./panel.js";
 import { openImport } from "./importer.js";
@@ -20,7 +20,7 @@ import { openHelpMenu } from "./helpmenu.js";
 import { buildReport } from "./report.js";
 import { sessionText, parseSession, applySession, isSession } from "./session.js";
 import { loadPlotly, css } from "./plot.js";
-import { thousands, num, duration, escapeHtml as h } from "./format.js";
+import { thousands, num, duration, hertz, escapeHtml as h } from "./format.js";
 
 const PAGES = { data, synthesis, stability, spectrum, dynamic: dynamicPage, holdover, steering, ensemble, live, help };
 const ORDER = ["data", "synthesis", "stability", "spectrum", "dynamic", "holdover", "steering", "ensemble", "live"];
@@ -120,11 +120,14 @@ async function importFile(file, clock, prev) {
         value_col: col, column_name: settings.names[k] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         sourceInfo: settings.sourceInfo,
         keep_zeros: settings.keep_zeros, fillgaps: fillNeeded(settings), remove_outliers: false, range: null, result: null,
+        density: settings.density ?? null, carrier: settings.carrier ?? null, band: null,
       });
       touched.push(c);
     });
     s.activeClock = touched[0].id;
     s.dataMode = "file";
+    // The Spectrum page draws ℒ(f) at the carrier of a table it is given, so the table reads as written.
+    if (settings.carrier) Object.assign(s.spec, { carrier: settings.carrier, carrierText: String(settings.carrier) });
   });
   go("data");
   if (settings.remembered) ctx.status("good", `Read ${file.name} with the settings remembered for files like this. Import settings… changes them.`);
@@ -178,6 +181,7 @@ async function reimport(c) {
         value_col: col, column_name: settings.names[i] ?? null, against: settings.against, header: settings.header, scaling: settings.scaling,
         sourceInfo: settings.sourceInfo, source: c.source,
         keep_zeros: settings.keep_zeros, fillgaps: k.fillgaps || fillNeeded(settings), result: null,
+        density: settings.density ?? null, carrier: settings.carrier ?? null, band: settings.kind === k.kind ? k.band : null,
       });
       touched.push(k);
     });
@@ -319,7 +323,7 @@ async function run() {
   const s = (performance.now() - t0) / 1000;
   const nd = state.devs.length, ok = clocks.length - failed;
   const r = clocks[0].range, n = r ? Math.floor((r[1] - r[0]) / clocks[0].record.tau0) + 1 : clocks[0].record.n;
-  const what = clocks.length > 1 ? `${ok === clocks.length ? "" : `${ok} of `}${clocks.length} clocks` : `${thousands(n)} samples`;
+  const what = clocks.length > 1 ? `${ok === clocks.length ? "" : `${ok} of `}${clocks.length} clocks` : `${thousands(n)} ${isTable(clocks[0]) ? "points" : "samples"}`;
   update((st) => {
     st.run.state = failed ? "error" : "idle";
     // Inputs changed while this ran: the results are already out of date.
@@ -338,13 +342,13 @@ function renderChip() {
   dot.className = `dot ${withRec.length ? (fresh ? "good" : "warn") : ""}`;
   if (!withRec.length) { text.innerHTML = "No record"; return; }
   if (withRec.length === 1 && !multi()) {
-    const c = withRec[0], r = c.record;
-    const facts = [`${thousands(r.n)} samples`, `τ<sub>0</sub> ${num(r.tau0, 4)} s`, duration(r.n * r.tau0),
+    const c = withRec[0], r = c.record, t = r.table;
+    const facts = t ? [`${thousands(r.n)} points`, `${hertz(t.f[0])} – ${hertz(t.f.at(-1))}`, t.carrier ? `carrier ${hertz(t.carrier)}` : "", fresh ? "analyzed" : "not analyzed yet"].filter(Boolean) : [`${thousands(r.n)} samples`, `τ<sub>0</sub> ${num(r.tau0, 4)} s`, duration(r.n * r.tau0),
       fresh ? DRIFT_FACT[c.drift] ?? "drift kept" : "not analyzed yet"];
     text.innerHTML = `${h(c.source.type === "file" ? c.source.name : "synthetic record")} <span class="facts">${facts.join(" · ")}</span>`;
     return;
   }
-  const n = withRec.reduce((a, c) => a + c.record.n, 0);
+  const n = withRec.reduce((a, c) => a + (isTable(c) ? 0 : c.record.n), 0);
   text.innerHTML = `${state.clocks.length} clocks <span class="facts">${thousands(n)} samples in all${fresh ? "" : " · not analyzed yet"}</span>`;
 }
 

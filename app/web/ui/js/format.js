@@ -11,6 +11,13 @@ export function num(x, digits = 4) {
   return Number(x.toPrecision(digits)).toString();
 }
 
+// A frequency in its unit: 10 MHz, 1 kHz, 0.01 Hz.
+export function hertz(hz) {
+  if (!(hz > 0)) return "–";
+  const [f, u] = [[1e9, "GHz"], [1e6, "MHz"], [1e3, "kHz"]].find(([f]) => hz >= f) ?? [1, "Hz"];
+  return `${num(hz / f, 4)} ${u}`;
+}
+
 export function thousands(n) {
   return n.toLocaleString("en-US").replace(/,/g, " ");
 }

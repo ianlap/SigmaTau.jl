@@ -3,7 +3,7 @@
 // clock side by side on a shared color scale, since maps cannot be overlaid.
 // Maps are computed by the core when this page needs them and recomputed when
 // the estimator, window or record changes; no Run is needed.
-import { state, update, visibleClocks, multi } from "../state.js";
+import { state, update, recordClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale } from "../plot.js";
 import { sci, num, thousands, escapeHtml as h } from "../format.js";
@@ -23,7 +23,7 @@ export function controls(inline = false) {
       `<option value="${f}" ${f === d.frac ? "selected" : ""}>1/${f} of record</option>`).join("")}</select></label>
       <span class="caption grow-right">Maps can't be overlaid, so each clock gets its own. Same color scale throughout.</span>`;
   }
-  const c = visibleClocks()[0];
+  const c = recordClocks()[0];
   const n = c?.record?.n ?? 0;
   const w = Math.max(16, Math.floor(n / d.frac));
   return `<h2>Dynamic deviation</h2>
@@ -166,7 +166,7 @@ export function refresh() {
   }
   const area = root.querySelector("[data-ref=area]");
   const cell = root.querySelector("[data-ref=cell]");
-  const clocks = visibleClocks().filter((c) => c.record);
+  const clocks = recordClocks().filter((c) => c.record);
 
   if (!clocks.length) {
     cell.hidden = true;

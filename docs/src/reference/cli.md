@@ -647,8 +647,8 @@ and `--band` sets a lower one. `tdev` is the modified Allan deviation
 times ``τ/\sqrt{3}``.
 
 With `--format json` the object has a member `spectrum`, with the
-`quantity`, the `carrier`, the number `n` of points read and the `band`
-of the integral, and an array `results` with one object for each
+`quantity`, the `carrier`, the number `n` of points read, the `band`
+of the integral and the table as read, `f` and `value`, and an array `results` with one object for each
 deviation, which holds `deviation` and the arrays `tau`, `dev`, `below`
 and `above`.
 
