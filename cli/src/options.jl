@@ -7,7 +7,7 @@ const COMMAND_HELP = [
     ("check",      "FILE", "read a record and summarize it (samples, span, gaps, outliers, drift and the statistics of its samples), with their histogram and autocorrelation on request"),
     ("spectrum",   "FILE", "Welch power spectral densities S_y(f) and S_x(f)"),
     ("dynamic",    "FILE", "dynamic ADEV or HDEV: σ(τ) in sliding windows"),
-    ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum"),
+    ("cross",      "FILE --with FILE2", "two channels measuring one device: cross Allan deviation and cross-spectrum (or both channels in FILE: --value-cols A,B)"),
     ("drift",      "FILE", "fit a frequency drift model: aging per day with its uncertainty"),
     ("holdover",   "FILE", "holdover test: the time error after a training stretch against holdover time, and the time to reach a limit"),
     ("steer",      "FILE", "steer the clock of a record to its reference in replay: σ(τ) free-running, steered and as the clock model predicts"),
@@ -101,11 +101,11 @@ const OPTS = [
     Opt("--component", "NOISE:A:B", String[], false, "build the --fit model by hand: fit NOISE (WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM or an α) on MHDEV between A and B seconds (either may be empty), after the components before it; repeat in order", ["analyze"]),
     Opt("--mask", "NAME", MASKS, false, "check MTIE and TDEV against an ITU-T wander mask, or all of them: G811, G8262_opt1, G8272_PRTC_A, G8272_PRTC_B, G823_SSU ..., all; JSON gains the limits and the checks, CSV a verdict on stderr", ["analyze"]),
     Opt("--nperseg", "N", String[], false, "Welch segment length (default: largest power of 2 ≤ N/4)", ["analyze", "spectrum", "cross"]),
-    Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE", ["cross"]),
+    Opt("--with", "FILE2", String[], true, "the second channel, read with the same options as FILE; or give both channels as --value-cols A,B of FILE", ["cross"]),
     Opt("--dev", "NAME", DYNAMIC_DEVS, false, "dadev (default) or dhdev", ["dynamic"]),
     Opt("--window", "N", String[], false, "window length in samples (default: largest power of 2 ≤ N/8)", ["dynamic"]),
     Opt("--step", "N", String[], false, "window step in samples (default window/2)", ["dynamic"]),
-    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks)", ["timescale", "hat"]),
+    Opt("--value-cols", "LIST", String[], false, "1-based value columns, one clock each, all read against the same reference (with --synth: a simulated ensemble, see --clocks); for cross, the two channels A,B of FILE", ["timescale", "hat", "cross"]),
     Opt("--pairs", "", String[], false, "the three --value-cols are the differences A−B, B−C and C−A, each measured on its own, not clocks read against one reference", ["hat"]),
     Opt("--no-reference", "", String[], false, "leave the reference out: the hat of the clocks' differences from one another alone (three or more clocks)", ["hat"]),
     Opt("--covariance", "", String[], false, "the Groslambert covariance of the difference records in place of the hat: ADEV, with the noise of each --pairs record's instrument kept out", ["hat"]),
@@ -599,8 +599,11 @@ function parse_args!(o::Options, args::Vector{String})
         1 <= o.clock <= max(o.clocks, nm, 1) || throw(usage_error("--clock must be between 1 and the number of clocks"))
         o.clocks == 0 && nm == 0 && o.clock != 1 && throw(usage_error("--clock needs --clocks"))
     end
-    o.command == "cross" && (isempty(o.with) || o.synth > 0) &&
-        throw(usage_error("cross: give FILE and the second channel with --with FILE2"))
+    if o.command == "cross"
+        (isempty(o.with) == isempty(o.value_cols) || o.synth > 0) &&
+            throw(usage_error("cross: give FILE and the second channel with --with FILE2, or both channels as --value-cols A,B"))
+        isempty(o.value_cols) || length(o.value_cols) == 2 || throw(usage_error("cross takes two --value-cols, one per channel"))
+    end
     0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
     o.method == "frequency_fit" || o.model == "linear" ||
         throw(usage_error("--method " * o.method * " estimates a linear drift and goes with --model linear"))
