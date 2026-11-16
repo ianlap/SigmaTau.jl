@@ -413,6 +413,17 @@ mktempdir() do dir
         @test offset(j) == offset(c)
         @test run_cli("cross", pf).code == 1
         @test run_cli("cross", pf, "--with", joinpath(dir, "missing.csv")).code == 2
+        # Both channels as two columns of one file.
+        both = joinpath(dir, "both.csv")
+        write(both, join(string.(0:255, ",", X, ",", X2), "\n"))
+        rows2 = csv_rows(run_cli("cross", both, "--column", "2,3", "--m", "1,2,4").out)
+        @test parse.(Float64, getindex.(rows2, 2)) ≈ lib.covar
+        @test occursin("\"value_cols\":[2,3]", run_cli("cross", both, "--column", "2,3", "--format", "json").out)
+        named = joinpath(dir, "named.csv")
+        write(named, "t,a,b\n" * join(string.(0:255, ",", X, ",", X2), "\n"))
+        @test run_cli("cross", named, "--column", "a,b", "--m", "1,2,4").out == run_cli("cross", both, "--column", "2,3", "--m", "1,2,4").out
+        @test run_cli("cross", both, "--column", "2,3,3").code == 1
+        @test run_cli("cross", both, "--column", "2,3", "--with", f2).code == 1
     end
 
     @testset "reference column" begin

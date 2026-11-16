@@ -53,7 +53,7 @@ def cli_command():
     return None
 
 
-COMMANDS = {"check", "analyze", "spectrum", "dynamic", "drift", "holdover", "steer", "timescale", "hat", "model", "phasenoise"}
+COMMANDS = {"check", "analyze", "spectrum", "dynamic", "cross", "drift", "holdover", "steer", "timescale", "hat", "model", "phasenoise"}
 
 
 def request_to_args(req, workdir):
@@ -66,6 +66,9 @@ def request_to_args(req, workdir):
         raise ValueError(f"unknown command {args[0]!r}")
     if any(a in ("--out", "-o") or a.startswith("--out=") for a in args):
         raise ValueError("--out is not allowed here")
+    # A second file is a path on this machine too: two channels come as two columns of the file.
+    if any(a == "--with" or a.startswith("--with=") for a in args):
+        raise ValueError("--with is not allowed here")
     f = req.get("file")
     if f is None:
         # The record is the uploaded file or a synthetic one, never a path on this

@@ -231,9 +231,10 @@ function set_columns!(o::Options)
         o.clock = k
         return
     end
-    several = o.command == "timescale" || o.command == "hat"
+    several = o.command == "timescale" || o.command == "hat" || o.command == "cross"
     length(o.columns) > 1 && !several &&
-        throw(usage_error("`" * o.command * "` reads one clock: give one --column (a list is for timescale and hat)"))
+        throw(usage_error("`" * o.command * "` reads one clock: give one --column (a list is for timescale, hat and cross)"))
+    o.command == "cross" && length(o.columns) > 2 && throw(usage_error("cross takes two --column, one per channel"))
     isempty(o.columns) && isempty(o.time_column) && isempty(o.reference_column) && return
     isfile(o.input) || return             # reading says so
     line, names = table_head(o)
@@ -257,6 +258,8 @@ function set_columns!(o::Options)
     several || (o.columns_set = true; o.header == 0 && (o.header = line); return)
     length(cols) >= 2 && allunique(cols) || throw(usage_error("--column needs two or more different columns"))
     o.value_cols = cols
+    # cross reads its two channels one at a time, each as a single --column.
+    o.command == "cross" && (o.columns_set = true; o.header == 0 && (o.header = line))
     return
 end
 
