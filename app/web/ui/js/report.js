@@ -6,7 +6,7 @@ import { byId, label, gridName, biasEntry, noiseChoice } from "./estimators.js";
 import { loadPlotly, inLightTheme } from "./plot.js";
 import { analyzeCommand } from "./core.js";
 import { figure } from "./pages/stability.js";
-import { sci, num, thousands, duration, escapeHtml as h } from "./format.js";
+import { sci, num, thousands, duration, share, escapeHtml as h } from "./format.js";
 
 const AXIS_TITLE = { sigma_y: "Frequency stability σ<sub>y</sub>(τ)", sigma_x: "Time stability σ<sub>x</sub>(τ)" };
 const DRIFT_TEXT = { none: "kept", linear: "offset removed", quadratic: "linear drift removed" };
@@ -52,7 +52,7 @@ async function recordRows(clocks) {
     const r = c.record, k = r.check;
     // The file's own bytes when it was opened here; a session keeps that hash.
     const hash = c.source.type === "file" ? c.source.sha256 || await sha256(c.source.content) : "";
-    const prep = [c.range ? `seconds ${num(c.range[0], 6)} to ${num(c.range[1], 6)}` : "", `drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, c.fillgaps ? "gaps filled" : "", c.remove_outliers ? "outliers removed" : "",
+    const prep = [c.range ? `seconds ${num(c.range[0], 6)} to ${num(c.range[1], 6)}` : "", `drift ${DRIFT_TEXT[c.drift] ?? c.drift}`, k.filled ? `${thousands(k.filled)} samples filled (${share(k.filled, r.n)})` : "", c.remove_outliers ? "outliers removed" : "",
       ref && ref !== c && ref.group === c.group ? `minus ${h(ref.name)}` : ""].filter(Boolean).join(", ");
     rows.push(`<tr><th>${h(c.name)}</th><td>${sourceText(c)}${hash ? `<br><code class="hash">SHA-256 ${hash}</code>` : ""}</td>
       <td>${h(r.kind)}</td><td class="n">${thousands(r.n)}</td><td class="n">${num(r.tau0, 6)} s</td><td class="n">${duration(r.n * r.tau0)}</td>

@@ -64,7 +64,7 @@ def request_to_args(req, workdir):
         raise ValueError("args must be a non-empty list of strings")
     if args[0] not in COMMANDS:
         raise ValueError(f"unknown command {args[0]!r}")
-    if any(a == "--out" or a.startswith("--out=") for a in args):
+    if any(a in ("--out", "-o") or a.startswith("--out=") for a in args):
         raise ValueError("--out is not allowed here")
     f = req.get("file")
     if f is None:
@@ -144,7 +144,7 @@ class Live:
     def __init__(self, cmd, args):
         if not isinstance(args, list) or not args or args[0] != "live":
             raise ValueError("a live request starts with the live command")
-        if not all(isinstance(a, str) for a in args) or any(a == "--out" or a.startswith("--out=") for a in args):
+        if not all(isinstance(a, str) for a in args) or any(a in ("--out", "-o") or a.startswith("--out=") for a in args):
             raise ValueError("args must be strings, without --out")
         self.lines = []
         self.error = None

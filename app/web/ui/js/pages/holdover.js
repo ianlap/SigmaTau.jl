@@ -234,6 +234,19 @@ export function refresh() {
   }, CONFIG);
 }
 
+// The File menu's results: the table of each clock shown, in the core's columns,
+// with the reference and the predicted RMS of the plot.
+export function results() {
+  const ready = visibleClocks().filter((c) => c.record && c.holdover?.key === holdoverKey(c) && !c.holdover.error);
+  return {
+    what: "Holdover table", file: "holdover",
+    columns: ["clock", "train_s", "tau_s", "rms_s", "quantile_s", "worst_s", "mean_s", "trials", "limit_s", "time_to_limit_s", "claimed_s", "reference_s", "predicted_s"],
+    rows: ready.flatMap(({ name, holdover: d }) => d.tau.map((t, i) => [name, d.grow ? d.grow * t : d.train, t, d.rms[i], d.quantile[i], d.worst[i], d.mean[i], d.n[i],
+      d.limit, d.time_to_limit, d.claimed?.[i], d.reference[i], d.predicted?.sigma?.[i]])),
+    json: ready.map(({ name, holdover: { key, ...d } }) => ({ clock: name, holdover: d })),
+  };
+}
+
 export function plotElement() { return root?.querySelector("[data-ref=plot]") ?? null; }
 export function hint() {
   return multi() ? "Color = clock · solid = RMS · dashed = the chosen share of trials" : `Solid = RMS · dashed = the chosen share of trials · dotted = worst trial · gray = predicted from the noise model, or claimed by the filter · thin = ${reference(state.hold.drift)}`;
