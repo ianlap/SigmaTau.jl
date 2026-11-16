@@ -120,7 +120,7 @@ Run one `sigmatau` command and return its exit code (0 ok, 1 usage, 2 input,
 function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
     if isempty(args) || args[1] in ("help", "-h", "--help")
         if length(args) >= 2 && args[2] != "completion" && !(args[2] in COMMANDS)
-            print(err, "sigmatau: no help for \"", args[2], "\"; commands: ", join(COMMANDS, ", "), "\n")
+            print(err, "sigmatau: no help for \"", args[2], "\"; commands: ", join(COMMANDS, ", "), did_you_mean(args[2], subcommands()), "\n")
             return EXIT_USAGE
         end
         help_buf = IOBuffer()
@@ -136,7 +136,9 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr)::Int
         return run_completion(args, out, err)
     elseif !(cmd in COMMANDS)
         print(err, startswith(cmd, "-") ? "sigmatau: unknown option " : "sigmatau: unknown command ")
-        print(err, cmd); print(err, "\nRun 'sigmatau help' for usage.\n")
+        print(err, cmd)
+        startswith(cmd, "-") || print(err, did_you_mean(cmd, subcommands()))
+        print(err, "\nRun 'sigmatau help' for usage.\n")
         return EXIT_USAGE
     end
 

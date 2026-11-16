@@ -93,6 +93,7 @@ end
         @test run_cli("help", c).out == r.out
     end
     @test occursin("--devs", run_cli("analyze", "--help").out)
+    @test occursin("-o, --out PATH", run_cli("analyze", "--help").out) && occursin("-q, --quiet", run_cli("analyze", "--help").out)
     @test !occursin("--devs", run_cli("spectrum", "--help").out)
     @test occursin("--window", run_cli("dynamic", "--help").out)
     # A signature is set apart from its description, and σ keeps its case.
@@ -120,11 +121,22 @@ end
 @testset "unknown command or option" begin
     r = run_cli("frobnicate")
     @test r.code == 1
-    @test occursin("unknown command", r.err)
+    @test occursin("unknown command", r.err) && !occursin("did you mean", r.err)
+    r = run_cli("analize", "x")
+    @test r.code == 1 && occursin("unknown command analize; did you mean analyze?", r.err)
+    @test occursin("; did you mean completion?", run_cli("completon").err)
     @test run_cli("--bogus").code == 1
     r = run_cli("analyze", "--synth", "64", "--bogus")
     @test r.code == 1
-    @test occursin("unknown option --bogus", r.err)
+    @test occursin("unknown option --bogus", r.err) && !occursin("did you mean", r.err)
+    # Only the options of the command are offered; a short name is held to one edit.
+    r = run_cli("analyze", "--synth", "64", "--devz", "adev")
+    @test r.code == 1 && occursin("unknown option --devz; did you mean --devs?", r.err)
+    @test occursin("unknown option --ot; did you mean --out?", run_cli("analyze", "--synth", "64", "--ot", "x").err)
+    @test !occursin("did you mean", run_cli("analyze", "--synth", "64", "--oxx").err)
+    @test occursin("unknown option --windw\n", run_cli("check", "--synth", "64", "--windw", "9").err)
+    r = run_cli("help", "analize")
+    @test r.code == 1 && occursin("no help for \"analize\"; commands: ", r.err) && endswith(r.err, "; did you mean analyze?\n")
     r = run_cli("check", "--synth", "64", "--devs", "adev")
     @test r.code == 1
     @test occursin("does not apply", r.err)
@@ -1069,6 +1081,8 @@ mktempdir() do dir
         @test occursin("wrote", r.err)
         @test read(op, String) == run_cli("analyze", pf, "--devs", "adev").out
         @test isempty(run_cli("analyze", pf, "--devs", "adev", "--out", op, "--quiet").err)
+        @test isempty(run_cli("analyze", pf, "--devs", "adev", "-o", op, "-q").err)
+        @test read(op, String) == run_cli("analyze", pf, "--devs", "adev").out
     end
 
     @testset "phasenoise: σ(τ) from a table of ℒ(f)" begin
