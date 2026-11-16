@@ -648,6 +648,15 @@ Clock models, the Kalman filter and timescales.
   1, otherwise), and the JSON says which in `fitted`. Explorer: the Ensemble
   page has **Models** (As simulated or Fitted) for a Kalman scale on
   simulated clocks and offers **Flicker states** with fitted models only.
+- `ClockComparisons` and `ClockModel` show on one line inside a tuple or a
+  vector, where `cc, truth = simulate_ensemble(…)` printed the whole
+  readings matrix and a vector of models printed each raw constructor.
+- A result of more than 12 rows shows its first six and last five rows in
+  the REPL, where it showed the first 11 and hid the longest τ; a
+  `StabilitySuite` shows a table of its deviations by τ, where it showed
+  only the τ range of each estimator.
+- `identify_noise(record)` takes the octave grid, as `adev(record)` does,
+  where it needed the averaging factors.
 
 ### Removed
 
@@ -980,6 +989,12 @@ Clock models, the Kalman filter and timescales.
   says the phase covariance has grown without bound, where it threw a
   `SingularException` (long records of clocks with noiseless readings and
   little white FM; Greenhall 2003, §4).
+- `sigmatau timescale` and `hat` without `--value-cols` list the file's
+  columns by number instead of advising `--column`, and name each clock by
+  its column's name in a table with named columns.
+- `clock_model` of a `noise_fit` with no components raises an
+  `ArgumentError` that points to `add_component!` and `powerlaw_fit`, where
+  it returned a model with every level zero.
 
 ### Security
 

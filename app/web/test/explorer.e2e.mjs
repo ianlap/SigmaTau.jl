@@ -40,8 +40,8 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  // Web fonts, and the vendored Plotly that falls back to the CDN when ui/vendor is empty, may 404.
-  page.on("console", (m) => m.type() === "error" && !/fonts\.g|vendor\/plotly/.test(m.location().url) && errors.push(m.text()));
+  // The vendored Plotly, which falls back to the CDN when ui/vendor is empty, may 404.
+  page.on("console", (m) => m.type() === "error" && !/vendor\/plotly/.test(m.location().url) && errors.push(m.text()));
   const settled = () => page.waitForFunction(() => !/Reading|Running|Computing|Starting/.test(document.getElementById("status-text").textContent), null, SLOW);
   const plotted = (sel) => page.waitForFunction((s) => document.querySelector(s)?.data?.length > 0, sel, SLOW);
 
@@ -67,6 +67,12 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
       assert.deepEqual(shown[r.deviation].tau, r.points.map((p) => p.tau), r.deviation);
       assert.deepEqual(shown[r.deviation].dev, r.points.map((p) => p.dev), r.deviation);
     }
+    // The readout leads with the lowest plotted σ of the table's estimator (ADEV) and where it falls.
+    const { tau, dev } = shown.adev, i = dev.indexOf(Math.min(...dev.filter((v) => v > 0)));
+    const [m, e] = dev[i].toExponential(2).split("e");
+    const items = await page.locator("#page .readout > div").allInnerTexts();
+    assert.equal(items[0], `${i === dev.length - 1 ? "Lowest ADEV, at the longest τ" : i === 0 ? "Lowest ADEV, at the shortest τ" : "ADEV floor"}\n${m} × 10${Number(e).toString().replace("-", "−")}`);
+    if (i > 0 && i < dev.length - 1) assert.equal(items[1], `at τ\n${tau[i]}s`);
   });
 
   await t.test("Spectrum and Dynamic draw their plots", async () => {
