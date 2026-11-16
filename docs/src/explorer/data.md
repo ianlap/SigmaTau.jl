@@ -45,6 +45,11 @@ its clocks take the place of those loaded:
 | **Two quartz oscillators in orbit** | The ultra-stable oscillators of the GRACE-FO satellites against GPS time, every 30 s for 5.8 days |
 | **GNSS and station clocks** | One day of 21 clocks against a hydrogen maser: Galileo, GPS and GLONASS satellites, and masers, caesium, rubidium and crystal clocks on the ground (GFZ) |
 
+The dialog of **GNSS and station clocks** proposes six of its clocks, a
+satellite of each system (E08, G08, R05) and three station masers (HERS,
+PIE1, ZECK), which give the [Ensemble](ensemble.md) page a scale and a hat
+at once; the others are a click away.
+
 Their sources, licences and citations are in `app/web/ui/samples/README.md`.
 
 ## The import dialog

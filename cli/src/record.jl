@@ -206,6 +206,22 @@ end
 
 table_names(o::Options) = table_head(o)[2]
 
+# The clocks of a RINEX clock file in order of first appearance, the order in
+# which read_data numbers them; none for any other file.
+function rinex_names(o::Options)
+    (o.synth > 0 || !isfile(o.input)) && return String[]
+    fmt = o.input_format == "auto" ? SigmaTau._detect_format(o.input, o.delim) : Symbol(o.input_format)
+    fmt === :rinex_clk || return String[]
+    names = String[]; seen = Set{String}(); body = false
+    for line in eachline(o.input)
+        body || (body = occursin("END OF HEADER", line); continue)
+        startswith(line, "AS ") || startswith(line, "AR ") || continue
+        f = split(line; keepempty=false)
+        length(f) >= 10 && !(f[2] in seen) && (push!(seen, f[2]); push!(names, f[2]))
+    end
+    return names
+end
+
 # The columns of a table, numbered, to pick from.
 column_list(names::Vector{String}) = join((string(i, " ", n) for (i, n) in enumerate(names)), ", ")
 
@@ -241,6 +257,7 @@ function set_columns!(o::Options)
     # A table is read by its own reader, which takes each column's unit from
     # its name; --header asks for its rows as plain columns instead.
     table = !isempty(names) && !o.columns_set
+    several && isempty(names) && (names = rinex_names(o))     # the clocks of a RINEX clock file, by name
     table && !(isempty(o.time_column) && isempty(o.reference_column)) &&
         throw(usage_error((isempty(o.time_column) ? "--reference-column" : "--time-column") *
                           " applies to plain columns, and this file is a table read by the names of its columns;" *
@@ -268,6 +285,7 @@ function column_number(s::String, flag::String, names::Vector{String}, lowest::I
     k = tryparse(Int, s)
     if k === nothing
         i = findfirst(==(s), names)
+        i === nothing && (i = findfirst(n -> lowercase(n) == lowercase(s), names))
         i === nothing && throw(usage_error(flag * " " * s * ": no column of that name" *
             (isempty(names) ? " (this file has no column names)" : "; the columns are " * column_list(names))))
         k = i

@@ -317,23 +317,26 @@ end
 # ── cross ─────────────────────────────────────────────────────────────────
 
 # The second channel: FILE2 read like FILE, or the second --column of FILE.
+# Returns it with what its preparation filled and removed (in the order of
+# Options' filled, removed_offset and removed_drift).
 function second_channel(o::Options)
-    # The primary record's settings and drift fit stay as they were.
-    first, col, measured, offset, drift = o.input, o.value_col, o.measured, o.removed_offset, o.removed_drift
+    # The primary record's settings, drift fit and filled count stay as they were.
+    first, col, measured, offset, drift, filled = o.input, o.value_col, o.measured, o.removed_offset, o.removed_drift, o.filled
     isempty(o.with) ? (o.value_col = o.value_cols[2]) : (o.input = o.with)
     o.measured = falses(0)
     try
-        return load_record(o)
+        b = load_record(o)
+        return b, (o.filled, o.removed_offset, o.removed_drift)
     catch e
         e isa CLIError && rethrow()
         throw(CLIError(EXIT_INPUT, (isempty(o.with) ? "column " * string(o.value_col) : "--with " * o.with) * ": " * error_message(e)))
     finally
-        o.input, o.value_col, o.measured, o.removed_offset, o.removed_drift = first, col, measured, offset, drift
+        o.input, o.value_col, o.measured, o.removed_offset, o.removed_drift, o.filled = first, col, measured, offset, drift, filled
     end
 end
 
 function cmd_cross(io::IO, o::Options, a::PhaseData, t_start::UInt64)
-    b = second_channel(o)
+    b, prepared_b = second_channel(o)
     need_samples(a, 16, "a cross analysis")
     length(a.x) == length(b.x) && a.tau0 == b.tau0 ||
         throw(CLIError(EXIT_INPUT, "the two channels differ in length or τ₀"))
@@ -360,6 +363,10 @@ function cmd_cross(io::IO, o::Options, a::PhaseData, t_start::UInt64)
     json_head(io, o, o.input)
     isempty(o.with) ? (json_key(io, "value_cols"); json_array(io, o.value_cols)) : (json_key(io, "with"); json_string(io, o.with))
     json_key(io, "record"); json_record(io, o, a)
+    a_prepared = (o.filled, o.removed_offset, o.removed_drift)
+    o.filled, o.removed_offset, o.removed_drift = prepared_b
+    json_key(io, "record_b"); json_record(io, o, b)
+    o.filled, o.removed_offset, o.removed_drift = a_prepared
     json_key(io, "cross_adev"); print(io, '{')
     json_key(io, "tau", true); json_array(io, r.tau)
     json_key(io, "covar"); json_array(io, r.covar)
@@ -781,9 +788,11 @@ function synth_ensemble(o::Options)
     return cc
 end
 
-# The clocks' names: those of the table's columns, else "column 2", "column 3", …
+# The clocks' names: those of the table's columns or of a RINEX clock file's
+# clocks, else "column 2", "column 3", …
 function clock_names(o::Options)
     names = table_names(o)
+    isempty(names) && (names = rinex_names(o))
     named = String[c <= length(names) ? names[c] : "column " * string(c) for c in o.value_cols]
     return allunique(named) ? named : String["column " * string(c) for c in o.value_cols]
 end
