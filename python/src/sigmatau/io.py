@@ -219,7 +219,7 @@ def detrend(
 @_map_errors
 def fillgaps(data: PhaseData | FrequencyData, *, form: str = "auto") -> PhaseData | FrequencyData:
     """Copy of the record ``data`` with its missing samples (``nan``) filled by the
-    imputation algorithm of Howe, Champagne and Schlossberger (2021).
+    reflection method of Howe and Schlossberger (2022).
 
     ``form`` is the series that is filled: ``"phase"``, ``"frequency"``, or
     ``"auto"`` to choose it from the noise of the record. The measured samples

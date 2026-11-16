@@ -1,4 +1,4 @@
-@testset "fillgaps (Howe, Champagne and Schlossberger)" begin
+@testset "fillgaps (Howe and Schlossberger)" begin
     N, gap = 4096, 1401:2600                      # a 30 % gap
     holed(v) = (w = copy(v); w[gap] .= NaN; w)
     # Over 300 seeds the ratios bounded below run from 0.95 to 1.05 and the

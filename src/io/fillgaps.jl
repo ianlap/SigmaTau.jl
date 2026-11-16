@@ -1,8 +1,9 @@
-# Gap filling by reflection: the imputation algorithm of Howe, Champagne and
-# Schlossberger (2021), "Time-series Imputation Algorithm", Sec. II-D, with
-# the low-pass filter of Howe and Schlossberger (2022) as the authors' script
-# has it (Champagne, Howe and Schlossberger (2021), fillgaps.py). The
-# procedure, in the paper's numbering:
+# Gap filling by reflection: the method of Howe and Schlossberger (2022),
+# "Characterizing Frequency Stability Measurements Having Multiple Data
+# Gaps", Sec. III and Appendix. The paper states it in prose. Its numbered
+# form is that of the authors' preprint (Howe, Champagne and Schlossberger
+# (2021), "Time-series Imputation Algorithm", Sec. II-D), which adds step 1
+# and the passing over of step 5:
 #
 #   1. A gap of one sample takes the mean of its neighbors.
 #   2. The gap after the longest run of samples is filled first,
@@ -13,10 +14,16 @@
 #      and inverted in sign; those after it where the run before is shorter
 #      than n; and half from each side where both are. Where neither run
 #      holds half, the gap is passed over and returned to after step 4, when
-#      a fill beside it may serve. A straight line is added so that the
-#      low-pass-filtered fill meets the filtered data at both ends.
+#      a fill beside it may serve. A straight line is added to the fill, by
+#      the paper's Appendix: the difference of its ends is set to that of
+#      the low-pass-filtered data beside the gap, so that the filtered fill
+#      meets the filtered data at both ends.
 #
-# The paper leaves two things open, which `_fillgaps` sets from the record
+# The filter is the paper's Eq. (3). Its constant is that of the authors'
+# script (Champagne, Howe and Schlossberger (2021), fillgaps.py), because
+# the f and T of the equation can be read in more than one way.
+#
+# The papers leave two things open, which `_fillgaps` sets from the record
 # (see `fillgaps`): the series that is filled, phase or frequency, and the
 # span the filter averages over. The trend of the series, a frequency offset
 # and drift, is taken out first and put back after: the filter pads a block
@@ -31,8 +38,8 @@
 # of 4j + 1 samples. And it filters whole runs for the levels beside a gap,
 # where a window serves here.
 
-# The low-pass filter of Howe and Schlossberger (2022), Eq. (3), as the
-# script has it. `x` is padded with its mirror image on both sides, its
+# The low-pass filter of Howe and Schlossberger (2022), Eq. (3), with the
+# script's constant. `x` is padded with its mirror image on both sides, its
 # spectrum is multiplied by exp(−span·|k|/L) over the L bins of the padded
 # block, and the middle third is returned. It averages over about `span`
 # samples; the script's constant is 16.
@@ -291,22 +298,23 @@ end
 """
     fillgaps(data; form=:auto) → PhaseData or FrequencyData
 
-Copy of a record with its missing samples (`NaN`) filled by the imputation
-algorithm of
-[Howe et al. (2021), Sec. II-D](@cite howe-2021-imputation-algorithm), with
-the low-pass filter of
-[Howe and Schlossberger (2022), Eq. (3)](@cite howe-2022-gap-imputation) as
-the authors' script has it
-([Champagne et al. (2021)](@cite champagne-2021-gap-filling-script)). The
-measured samples, the sample interval, the source and the start time are
-returned as they came, and a record without missing samples is returned as
-a copy. With `fillgaps=true`, [`read_data`](@ref), [`read_phase`](@ref) and
-[`read_frequency`](@ref) fill a record as they read it.
+Copy of a record with its missing samples (`NaN`) filled by reflection, the
+method of
+[Howe and Schlossberger (2022), Sec. III](@cite howe-2022-gap-imputation).
+The measured samples, the sample interval, the source and the start time
+are returned as they came, and a record without missing samples is returned
+as a copy. With `fillgaps=true`, [`read_data`](@ref), [`read_phase`](@ref)
+and [`read_frequency`](@ref) fill a record as they read it.
 
 A gap of ``n`` samples takes the ``n`` samples before it, reversed in time
-and inverted in sign, and a straight line is added so that the low-pass
-filtered fill meets the filtered data at both ends. The gaps are taken in
-the order of the paper's procedure:
+and inverted in sign. A straight line is added so that the low-pass
+filtered fill meets the filtered data at both ends (the paper's Appendix;
+its Eq. (3) is the filter, with the constant of the authors' script,
+[Champagne et al. (2021)](@cite champagne-2021-gap-filling-script)). The
+gaps are taken in the paper's order, in the five steps of the authors'
+preprint
+([Howe et al. (2021), Sec. II-D](@cite howe-2021-imputation-algorithm)),
+which adds the first step and the passing over of the fifth:
 
 1. A gap of one sample takes the mean of its neighbors.
 2. The gap after the longest run of data is filled first,
@@ -326,8 +334,8 @@ The reflected samples carry the noise of the record only where the series
 that is filled lies between white noise and a random walk. In a smoother
 series, such as the phase of flicker or random-walk FM, the joins stand out
 of the noise. In a rougher one, such as the frequency of white or flicker
-PM, the error of the level at a join adds up across the gap. The paper
-prescribes neither the series nor the length of the filter, and this
+PM, the error of the level at a join adds up across the gap. The papers
+prescribe neither the series nor the length of the filter, and this
 package sets both from the record:
 
 - **Series.** `form=:auto` reads the two-sample deviation of the frequency
