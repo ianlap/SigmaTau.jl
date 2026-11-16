@@ -6,6 +6,7 @@ import { state } from "./state.js";
 
 const WIDE = matchMedia("(min-width: 1280px)");
 const KEY = "sigmatau-panel";
+const rail = document.getElementById("rail");
 const btnPanel = document.getElementById("rail-panel");
 const btnResults = document.getElementById("rail-results");
 const btnRun = document.getElementById("rail-run");
@@ -53,7 +54,7 @@ function apply() {
   b.classList.toggle("panel-over", !wide && panelOpen);
   b.classList.toggle("results-over", !wide && resultsOpen);
   btnPanel.setAttribute("aria-expanded", String(shown));
-  btnPanel.title = wide ? (folded ? "Pin the panel beside the page" : "Fold the panel away") : "Clocks, estimators and options";
+  btnPanel.title = wide ? (folded ? "Pin the panel beside the page" : "Fold the panel away") : "Clocks and settings";
   btnResults.setAttribute("aria-expanded", String(resultsOpen));
   renderRail();
   window.dispatchEvent(new Event("resize"));   // the plots take the new width
@@ -68,4 +69,7 @@ export function renderRail() {
   btnRun.querySelector(".stale-dot").hidden = running || !(state.run.stale && state.clocks.some((c) => c.record));
   btnResults.hidden = WIDE.matches || !document.querySelector(".page > .side-card:not([hidden]):not(.synth-clocks)");
   if (btnResults.hidden && resultsOpen) { resultsOpen = false; document.body.classList.remove("results-over"); }
+  // A page with no panel, Run or results card on screen has no rail either.
+  const empty = [btnPanel, btnResults, btnRun].every((b) => b.hidden || getComputedStyle(b).display === "none");
+  if (rail.hidden !== empty) { rail.hidden = empty; requestAnimationFrame(() => window.dispatchEvent(new Event("resize"))); }
 }

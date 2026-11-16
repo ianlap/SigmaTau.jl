@@ -186,8 +186,9 @@ or more are needed.
 | **Groslambert covariance** | The average product of the second differences of two records that share a clock ([`groslambert`](@ref); [Vernotte et al. (2016)](@cite vernotte-2016-gcov)). Noise that one record of a pair has alone, such as that of its counter, stays out of the result. For three clocks read against one reference it equals the hat on ADEV, and it differs for **Pairs** |
 | **Groslambert, KLTS interval** | The covariance with the interval of [Lantz et al. (2019)](@cite lantz-2019-klts) in place of the ``χ^2`` interval. It is offered for three clocks, and needs a file without missing samples |
 
-The grid of averaging times and the confidence level are those of the
-[side panel](panel.md#Options) on the Stability page. Where phase columns
+**τ grid** and **Confidence**, under the method, are the grid of averaging
+times and the confidence level of the [Stability](panel.md#Options) page,
+and a change in either holds there too. Where phase columns
 have missing samples, the hat and the covariance leave out the terms that
 touch them.
 
@@ -216,9 +217,9 @@ Simulated clocks are not offered here.
 | Setting | Effect |
 |:--------|:-------|
 | **Channel A**, **Channel B** | The two columns, by default the first two clocks of the file |
+| **τ grid** | The grid of averaging times of the [Stability](panel.md#Options) page; a change holds there too |
 
-The grid of averaging times is that of the
-[side panel](panel.md#Options) on the Stability page. The two channels are
+The two channels are
 read as the [Data](data.md#Preparing-the-record) page reads them, and need
 every sample: where either has **Fill gaps by reflection** on, the gaps of
 both are filled.

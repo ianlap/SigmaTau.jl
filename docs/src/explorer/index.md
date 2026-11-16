@@ -49,8 +49,8 @@ open.
 | **File** menu | The [exports](export.md): the plot, the results, a report, and saving and opening a session |
 | Theme button | Switches between the colors of the system, a light theme and a dark theme. The choice is remembered |
 | **?** | The [help](#The-help): a search through this manual and its sections on the page in view |
-| Rail | Along the left edge: **Settings** opens the side panel, **Results** the card of results beside the plot in a window narrower than 1280 px, and **Run** runs the analysis while the panel is closed |
-| [Side panel](panel.md) | The clocks, the estimators and the options of the analysis, with the **Run analysis** button. On Synthesis, Ensemble and Live it holds the settings of that page. It starts folded into the rail, so the plot has the width |
+| Rail | Along the left edge: **Settings** opens the side panel, **Results** the card of results beside the plot in a window narrower than 1280 px, and **Run**, on the Stability and Spectrum pages, runs the analysis while the panel is closed |
+| [Side panel](panel.md) | What the page uses of the clocks, the estimators, the options and the **Run analysis** button. On Synthesis, Ensemble and Live it holds the settings of that page. It starts folded into the rail, so the plot has the width |
 | Status bar | Whether the results on screen belong to the inputs on screen, and whether gap filling made more of a record than it was tested for |
 
 ## When results are computed
