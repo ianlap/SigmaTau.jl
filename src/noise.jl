@@ -12,8 +12,8 @@ const B1_MIN_POINTS = 6   # fewest averaged points the averaged-length B1 test i
     identify_noise(data, m_values; kwargs...) → Vector{Symbol}
     identify_noise(data; kwargs...) → Vector{Symbol}
 
-Dominant power-law noise type of a record at each averaging factor: `:WHPM`,
-`:FLPM`, `:WHFM`, `:FLFM` or `:RWFM`, and with `dmax=3` also `:FWFM`
+Dominant power-law noise type of a record at each averaging factor: `:WPM`,
+`:FPM`, `:WFM`, `:FFM` or `:RWFM`, and with `dmax=3` also `:FWFM`
 (flicker-walk FM, ``α = -3``) and `:RRFM` (random-run FM, ``α = -4``). The
 estimators use it for the noise type that sets their EDF and bias
 correction.
@@ -54,7 +54,7 @@ The function always returns a label. An estimate outside the labeled range
 counts as the nearest end of it, an averaging factor whose estimate fails
 takes the label of the nearest one in ``\\log m`` that succeeded, and a
 record with no usable estimate, such as a constant one, is reported as
-`:WHFM`.
+`:WFM`.
 
 ## Fewer than 30 averaged points
 
@@ -261,7 +261,7 @@ identify_noise(data::FrequencyData, m_values::AbstractVector{<:Integer}; kwargs.
 # −1/3, (128 ln 2 − 81 ln 3)/(27 ln 3 − 32 ln 2) and 13/33. All follow from the
 # generalized autocovariances of Greenhall and Riley (2003).
 _lag1_reading(r1, d) = 2 - 2 * (d + r1 / (1 + r1))
-const _LAG1_FLFM = _lag1_reading((9log(3) - 16log(2)) / (8log(2)), 2)
+const _LAG1_FFM = _lag1_reading((9log(3) - 16log(2)) / (8log(2)), 2)
 const _LAG1_RWFM = _lag1_reading(1 / 4, 2)
 const _LAG1_RWFM3 = _lag1_reading(-1 / 3, 3)
 const _LAG1_FWFM = _lag1_reading((128log(2) - 81log(3)) / (27log(3) - 32log(2)), 3)
@@ -277,25 +277,40 @@ function _lag1_label(alpha::Real, m::Int, amin::Int)
     m == 1 && return round(Int, clamp(alpha, amin, 2))
     amin <= -4 && alpha < (_LAG1_FWFM + _LAG1_RRFM) / 2 && return -4
     amin <= -3 && alpha < (_LAG1_RWFM3 + _LAG1_FWFM) / 2 && return -3
-    alpha < (_LAG1_FLFM + _LAG1_RWFM) / 2 && return -2
-    alpha < _LAG1_FLFM / 2 && return -1
+    alpha < (_LAG1_FFM + _LAG1_RWFM) / 2 && return -2
+    alpha < _LAG1_FFM / 2 && return -1
     return round(Int, clamp(alpha, 0.0, 2.0))
 end
 
-const _NOISE_SYMBOLS = (:RRFM, :FWFM, :RWFM, :FLFM, :WHFM, :FLPM, :WHPM)  # α = -4 … 2
+const _NOISE_SYMBOLS = (:RRFM, :FWFM, :RWFM, :FFM, :WFM, :FPM, :WPM)  # α = -4 … 2
+
+# Power-law exponent α of each noise-type name. Every name a user passes
+# reads through this table, so the older names WHPM, FLPM, WHFM and FLFM are
+# accepted and come out as WPM, FPM, WFM and FFM.
+const _NOISE_ALPHA = Dict(:WPM => 2, :FPM => 1, :WFM => 0, :FFM => -1,
+                          :RWFM => -2, :FWFM => -3, :RRFM => -4,
+                          :WHPM => 2, :FLPM => 1, :WHFM => 0, :FLFM => -1)
+_noise_alpha(α::Integer) = Int(α)
+_noise_alpha(s::Symbol) = haskey(_NOISE_ALPHA, s) ? _NOISE_ALPHA[s] :
+    throw(ArgumentError("unknown noise type :$s; use an integer α or one of " * join(reverse(_NOISE_SYMBOLS), ", ")))
+_noise_alpha(k) = throw(ArgumentError("a noise type is an integer α or a Symbol such as :WFM, got $(typeof(k))"))
+
+# The name of a noise type, given by α or by either name.
+_noise_symbol(α::Integer) = -4 <= α <= 2 ? _NOISE_SYMBOLS[α + 5] : :unknown
+_noise_symbol(s::Symbol) = _noise_symbol(_noise_alpha(s))
 
 # Map integer α to noise symbols. An averaging factor whose estimate failed
 # (too few points after differencing, a degenerate decimated series) takes
 # the type of the successful averaging factor closest to it in log(m), the
 # natural distance on octave or decade τ grids; a tie goes to the shorter m
 # because it rests on more data. With no successful estimate at all
-# (constant or very short record), fall back to :WHFM, the same α = 0
+# (constant or very short record), fall back to :WFM, the same α = 0
 # default `_alpha_from_noise` uses for EDF.
 function _fill_noise_symbols(alphas::Vector{Int}, ok::AbstractVector{Bool},
                              m_values::AbstractVector{<:Integer})
     n = length(alphas)
     noises = Vector{Symbol}(undef, n)
-    any(ok) || return fill!(noises, :WHFM)
+    any(ok) || return fill!(noises, :WFM)
     for k in 1:n
         j = k
         if !ok[k]
@@ -536,16 +551,6 @@ function _measure_sigma1(y::Vector{Float64}, tau0::Float64)
     return _adev_core(x, [1], tau0)[1]
 end
 
-# Power-law exponent α of a key: an integer α or a noise-type name. The keys
-# of `noise_gen` and of a model given as a Dict pass here, and the noise of
-# `add_component!`.
-const _NOISE_ALPHA = Dict(:WHPM => 2, :FLPM => 1, :WHFM => 0, :FLFM => -1,
-                          :RWFM => -2, :FWFM => -3, :RRFM => -4)
-_noise_alpha(α::Integer) = Int(α)
-_noise_alpha(s::Symbol) = haskey(_NOISE_ALPHA, s) ? _NOISE_ALPHA[s] :
-    throw(ArgumentError("unknown noise type :$s; use an integer α or one of " * join(reverse(_NOISE_SYMBOLS), ", ")))
-_noise_alpha(k) = throw(ArgumentError("a noise type is an integer α or a Symbol such as :WHFM, got $(typeof(k))"))
-
 # The components draw from one stream, so their order fixes the record: by
 # α, not in the order the Dict iterates, which differs between Julia versions.
 _by_alpha(d::AbstractDict) = sort!(collect(d); by=kv -> (_noise_alpha(kv[1]), string(kv[1])))
@@ -614,10 +619,10 @@ running sum for ``α = -2``. The components are independent.
 
 | ``α`` | Noise type      | Label   | Slope of ``S_x(f)`` |
 |------:|:----------------|:--------|:--------------------|
-|     2 | white PM        | `:WHPM` | flat                |
-|     1 | flicker PM      | `:FLPM` | ``f^{-1}``          |
-|     0 | white FM        | `:WHFM` | ``f^{-2}``          |
-|    −1 | flicker FM      | `:FLFM` | ``f^{-3}``          |
+|     2 | white PM        | `:WPM`  | flat                |
+|     1 | flicker PM      | `:FPM`  | ``f^{-1}``          |
+|     0 | white FM        | `:WFM`  | ``f^{-2}``          |
+|    −1 | flicker FM      | `:FFM`  | ``f^{-3}``          |
 |    −2 | random-walk FM  | `:RWFM` | ``f^{-4}``          |
 |    −3 | flicker-walk FM | `:FWFM` | ``f^{-5}``          |
 |    −4 | random-run FM   | `:RRFM` | ``f^{-6}``          |
@@ -625,7 +630,7 @@ running sum for ``α = -2``. The components are independent.
 # Keywords
 
 Give `sigma1` or `h`, not both. The keys are the integer ``α`` or the
-label, as in `Dict(:WHFM => 1e-12)`.
+label, as in `Dict(:WFM => 1e-12)`.
 
 - `sigma1`: the Allan deviation ``σ_y(τ_0)`` of each component, for when a
   specification quotes a deviation at one averaging time. Each component is
@@ -657,7 +662,7 @@ deviation of such a record and states the difference.
 ```jldoctest
 julia> using SigmaTau, Random
 
-julia> p = noise_gen(PhaseData, 4096, 1.0; sigma1=Dict(:WHFM => 1e-12),
+julia> p = noise_gen(PhaseData, 4096, 1.0; sigma1=Dict(:WFM => 1e-12),
                      rng=Xoshiro(1));
 
 julia> adev(p, [1]; ci=false).dev[1] ≈ 1e-12
@@ -799,16 +804,6 @@ end
 # Smallest averaging factor of the default grid (see `noise_id_nnls`).
 const NNLS_M_MIN = 4
 
-function _nnls_symbol(alpha::Int)
-    alpha == 2  && return :WHPM
-    alpha == 1  && return :FLPM
-    alpha == 0  && return :WHFM
-    alpha == -1 && return :FLFM
-    alpha == -2 && return :RWFM
-    alpha == -3 && return :FWFM       # flicker-walk FM
-    alpha == -4 && return :RRFM       # random-run FM
-    return :unknown
-end
 
 # The raw profile: `ci=false` skips the lag-1/B1 classifier and
 # `correct_bias=false` MHTOTDEV's bias divisor. Both depend on
@@ -826,7 +821,7 @@ end
 # The χ² weights of the α ≤ −3 rows use the random-walk FM EDF, the reddest
 # type MDEV's model covers. This sets the weights only; it does not enter the
 # fitted amplitudes.
-_nnls_edf_symbol(alpha::Int) = alpha <= -3 ? :RWFM : _nnls_symbol(alpha)
+_nnls_edf_symbol(alpha::Int) = alpha <= -3 ? :RWFM : _noise_symbol(alpha)
 
 # Weighted NNLS of v ≈ K·a. The power-law columns span many orders of
 # magnitude over a wide τ grid; equilibrating them to unit 2-norm keeps the
@@ -973,11 +968,11 @@ function noise_id_nnls(data::PhaseData, m_values::AbstractVector{<:Integer} = In
     a, rss = _nnls_weighted(K, v, w)
 
     contributions = K .* a'
-    dominant = [_nnls_symbol(αs[argmax(@view contributions[k, :])])
+    dominant = [_noise_symbol(αs[argmax(@view contributions[k, :])])
                 for k in eachindex(taus)]
 
     return (; deviation, tau = taus, var = v, fit = vec(sum(contributions; dims=2)),
-            alphas = αs, noise_types = _nnls_symbol.(αs), amplitudes = a,
+            alphas = αs, noise_types = _noise_symbol.(αs), amplitudes = a,
             contributions, dominant, residual = rss, weights = w)
 end
 

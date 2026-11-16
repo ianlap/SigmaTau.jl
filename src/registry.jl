@@ -12,8 +12,8 @@ const _ESTIMATORS = (
     (name=:mtotdev,  label="MTOTDEV",  family=:total, axis=:sigma_y, correct_bias=true,  description="Total modified Allan deviation"),
     (name=:htotdev,  label="HTOTDEV",  family=:total, axis=:sigma_y, correct_bias=true,  description="Total Hadamard deviation"),
     (name=:mhtotdev, label="MHTOTDEV", family=:total, axis=:sigma_y, correct_bias=true,  description="Total modified Hadamard deviation"),
-    (name=:theo1,    label="THEO1",    family=:theo,  axis=:sigma_y, correct_bias=true,  description="Thêo1, τ up to 3/4 of the record"),
-    (name=:theoh,    label="THEOH",    family=:theo,  axis=:sigma_y, correct_bias=false, description="ThêoH: ADEV at short τ joined to bias-corrected Thêo1"),
+    (name=:theo1,    label="Thêo1",    family=:theo,  axis=:sigma_y, correct_bias=true,  description="Thêo1, τ up to 3/4 of the record"),
+    (name=:theoh,    label="ThêoH",    family=:theo,  axis=:sigma_y, correct_bias=false, description="ThêoH: ADEV at short τ joined to bias-corrected Thêo1"),
     (name=:tdev,     label="TDEV",     family=:time,  axis=:sigma_x, correct_bias=false, description="Time deviation, σ_x in seconds"),
     (name=:htdev,    label="HTDEV",    family=:time,  axis=:sigma_x, correct_bias=false, description="Hadamard time deviation"),
     (name=:ttotdev,  label="TTOTDEV",  family=:time,  axis=:sigma_x, correct_bias=true,  description="Total time deviation"),
@@ -25,6 +25,15 @@ const _ESTIMATORS = (
 # deviations.jl defines each estimator on phase data and a `Vector{Int}` of
 # averaging factors.
 const _ESTIMATOR_NAMES = map(e -> e.name, _ESTIMATORS)
+
+# Display label of an estimator, such as "Thêo1", for plots; the name in
+# capitals for one the registry does not list.
+function _estimator_label(name::Symbol)
+    for e in _ESTIMATORS
+        e.name === name && return e.label
+    end
+    return uppercase(String(name))
+end
 
 for f in (_ESTIMATOR_NAMES..., :dadev, :dhdev)
     # Frequency data is integrated to phase. The estimators that skip gaps

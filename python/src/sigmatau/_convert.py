@@ -77,18 +77,21 @@ def to_jl_syms(ss: object) -> Any:
     return _to_syms(juliacall.convert(VecStr, [str(s) for s in ss]))
 
 
-_NOISE_ALPHA = {"WHPM": 2, "FLPM": 1, "WHFM": 0, "FLFM": -1, "RWFM": -2, "FWFM": -3, "RRFM": -4}
+_NOISE_ALPHA = {"WPM": 2, "FPM": 1, "WFM": 0, "FFM": -1, "RWFM": -2, "FWFM": -3, "RRFM": -4}
+# The older names, accepted on input.
+_OLD_NOISE_ALPHA = {"WHPM": 2, "FLPM": 1, "WHFM": 0, "FLFM": -1}
 
 
 def noise_alpha(key: object) -> int:
     """The exponent α that ``key`` stands for: the integer itself, or a noise type."""
     if not isinstance(key, str):
         return as_int(key, "a power-law exponent α")
-    if key not in _NOISE_ALPHA:
+    alpha = _NOISE_ALPHA.get(key, _OLD_NOISE_ALPHA.get(key))
+    if alpha is None:
         raise ValueError(
             f"unknown noise type {key!r}; use an integer α or one of {', '.join(_NOISE_ALPHA)}"
         )
-    return _NOISE_ALPHA[key]
+    return alpha
 
 
 def to_jl_dict_int_f64(d: Mapping) -> Any:
@@ -191,7 +194,7 @@ def np_int(v: Any) -> np.ndarray:
 
 
 def np_syms(v: Any) -> np.ndarray:
-    """``Vector{Symbol}`` → object array of plain strings (e.g. ``"WHFM"``)."""
+    """``Vector{Symbol}`` → object array of plain strings (e.g. ``"WFM"``)."""
     return np.array([str(s) for s in v], dtype=object)
 
 

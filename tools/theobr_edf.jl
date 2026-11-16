@@ -60,8 +60,8 @@ for N in (300, 1024), (k, α) in enumerate((0, -1, -2))
     # True Allan variance at τ = 0.75m: 1/(2τ) and (4π²/6)·τ·(1 + 1/(2τ²)) for
     # white and random-walk FM with h = 1; a level for flicker FM, taken from
     # AVAR at τ = N/32 … N/8 on the same records' generator.
-    flfm = α == -1 ? mean(mean(adev(noise_gen(PhaseData, N, 1.0; h=Dict(-1 => 1.0), rng=Xoshiro(77N + s)), [N ÷ 32, N ÷ 16, N ÷ 8]; ci=false).dev .^ 2) for s in 1:2000) : 0.0
-    truth(τ) = α == 0 ? 1 / 2τ : α == -1 ? flfm : (2π^2 / 3) * τ * (1 + 1 / (2τ^2))
+    ffm = α == -1 ? mean(mean(adev(noise_gen(PhaseData, N, 1.0; h=Dict(-1 => 1.0), rng=Xoshiro(77N + s)), [N ÷ 32, N ÷ 16, N ÷ 8]; ci=false).dev .^ 2) for s in 1:2000) : 0.0
+    truth(τ) = α == 0 ? 1 / 2τ : α == -1 ? ffm : (2π^2 / 3) * τ * (1 + 1 / (2τ^2))
     for (j, (name, _, howe)) in enumerate(LADDERS)
         @printf("  N = %-4d %-14s %-4s", N, NAMES[k], name)
         for (i, m) in enumerate(ms)

@@ -30,7 +30,7 @@ using LinearAlgebra
         h = Dict(2 => 1e-22, 0 => 1e-24, -2 => 1e-30, -4 => 1e-40)
         m = clock_model(h; tau0=0.1)
         @test (m.R, m.q1, m.q2, m.q3) == (1e-22 / (8π^2 * 0.1), 0.5e-24, 2π^2 * 1e-30, 8π^4 * 1e-40)
-        @test clock_model(Dict(:WHFM => 1e-24); tau0=1.0).q1 == 0.5e-24
+        @test clock_model(Dict(:WFM => 1e-24); tau0=1.0).q1 == 0.5e-24
         @test powerlaw_sigma(m, [0.1, 10.0]; deviation=:hdev) ≈ powerlaw_sigma(h, [0.1, 10.0]; deviation=:hdev, tau0=0.1)
         # A drift state without random-run FM adds no noise: the deviation is that of the model without it.
         d0 = ClockModel(; tau0=1.0, q1=1e-24, q2=1e-30)

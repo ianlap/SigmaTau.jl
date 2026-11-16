@@ -25,7 +25,7 @@ let N = 4096, t = 0:N-1, keep = setdiff(1:N, 1000:1009)
     p = noise_gen(PhaseData, N, 1.0; sigma1 = Dict(0 => 1e-12, -2 => 3e-14),
                   rng = Xoshiro(5))
     write_columns("clock.dat", t[keep], (p.x .+ 1e-11 .* t)[keep])
-    wfm(h, seed) = noise_gen(FrequencyData, N, 1.0; h = Dict(:WHFM => h),
+    wfm(h, seed) = noise_gen(FrequencyData, N, 1.0; h = Dict(:WFM => h),
                              rng = Xoshiro(seed)).y
     device = wfm(1e-24, 2)
     write_columns("a.dat", t, device .- wfm(1e-23, 3))

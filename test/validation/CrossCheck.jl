@@ -141,7 +141,7 @@ allandeviations_dev_rows() = _dev_rows(AD, "AllanDeviations.jl σ")
 
 # ── allantools EDF / CI / noise ID / spectra / dynamic ─────────────────────
 
-_alpha_sym(a) = a == 2 ? :WHPM : a == 1 ? :FLPM : a == 0 ? :WHFM : a == -1 ? :FLFM : :RWFM
+_alpha_sym(a) = a == 2 ? :WPM : a == 1 ? :FPM : a == 0 ? :WFM : a == -1 ? :FFM : :RWFM
 # Stable32's bias factor for its α: the published tables alone.
 s32_bias(α, var, ms, N) = bias_correction(_alpha_sym.(α), var, ms, N; published=true)
 
@@ -300,7 +300,7 @@ function stable32_rows()
         ms = [r.m for r in s]
         if f === :totdev_s32alpha
             # Stable32 identifies α = 0 or +1 out to m = 1000 here (N/m < 30 is the
-            # B1 fallback, where SigmaTau finds FLFM/RWFM at m ≳ 210 and applies
+            # B1 fallback, where SigmaTau finds FFM/RWFM at m ≳ 210 and applies
             # the TOTVAR bias). Apply the bias for Stable32's α so the rows
             # compare the estimator, not the noise ID.
             raw = totdev(p, ms; ci=false, correct_bias=false).dev

@@ -16,8 +16,8 @@ using SigmaTau
         # tell it from white PM; R(n) does, and leaves white PM alone.
         pm(alpha) = identify_noise(noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0),
                                              rng=Xoshiro(11)), [16, 64])
-        @test pm(1) == [:FLPM, :FLPM]
-        @test pm(2) == [:WHPM, :WHPM]
+        @test pm(1) == [:FPM, :FPM]
+        @test pm(2) == [:WPM, :WPM]
     end
 
     @testset "FM read as PM on few points" begin
@@ -25,7 +25,7 @@ using SigmaTau
         # R(n), from every sample, is near the 1/2 of white FM and far from PM.
         x = noise_gen(PhaseData, 2048, 1.0; h=Dict(0 => 1.0), rng=Xoshiro(23)).x
         @test SigmaTau._noise_id_lag1acf(x, 64)[1] ≈ 1.63 atol=0.01
-        @test identify_noise(x, [64]) == [:WHFM]
+        @test identify_noise(x, [64]) == [:WFM]
     end
 
     @testset "flicker FM at long τ" begin
@@ -34,13 +34,13 @@ using SigmaTau
         # flicker FM record reads −1.73 at m = 64.
         fm(alpha) = identify_noise(noise_gen(PhaseData, 4096, 1.0; h=Dict(alpha => 1.0),
                                              rng=Xoshiro(11)), [16, 64])
-        @test fm(-1) == [:FLFM, :FLFM]
+        @test fm(-1) == [:FFM, :FFM]
         @test fm(-2) == [:RWFM, :RWFM]
         @test SigmaTau._lag1_label(-1.73, 1, -2) == -2    # not decimated: nearest integer
         # The readings follow from the generalized autocovariances the EDF uses.
         r1(alpha) = (s = t -> SigmaTau._compute_sw(Float64(t), alpha + 2);
                      (s(3) - 4s(2) + 7s(1)) / (2s(2) - 8s(1)))
-        @test SigmaTau._LAG1_FLFM ≈ SigmaTau._lag1_reading(r1(-1), 2)
+        @test SigmaTau._LAG1_FFM ≈ SigmaTau._lag1_reading(r1(-1), 2)
         @test SigmaTau._LAG1_RWFM ≈ SigmaTau._lag1_reading(r1(-2), 2) ≈ -2.4
     end
 
@@ -81,7 +81,7 @@ using SigmaTau
         noises = identify_noise(x, m_grid; dmin=0, dmax=2)
         @test !any(==(:unknown), noises)
         # Sanity: every classification falls in the expected SP1065 alphabet.
-        @test all(n -> n in (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM), noises)
+        @test all(n -> n in (:WPM, :FPM, :WFM, :FFM, :RWFM), noises)
 
         # Same fixture rescaled by 1e6 (now in the µs band, std ~ 1e-3) —
         # classification must be invariant under positive linear rescaling.
@@ -93,7 +93,7 @@ using SigmaTau
 
     @testset "noise ID never returns :unknown" begin
         using Random
-        known = (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM)
+        known = (:WPM, :FPM, :WFM, :FFM, :RWFM)
 
         # Lag-1 estimates outside the labeled range clamp to the nearest end.
         # White PM scatters above α = 2.5 on some realizations, and
@@ -107,19 +107,19 @@ using SigmaTau
 
         # Averaging factors whose estimate fails take the successful one
         # nearest in log(m), including leading ones (previously :unknown),
-        # with the shorter m winning a tie. No success at all → :WHFM.
+        # with the shorter m winning a tie. No success at all → :WFM.
         fill_syms = SigmaTau._fill_noise_symbols
         @test fill_syms([0, 0, -2, 0, 2], Bool[0, 0, 1, 0, 1], [1, 2, 4, 8, 16]) ==
-              [:RWFM, :RWFM, :RWFM, :RWFM, :WHPM]
-        @test fill_syms([1, 0, 0], Bool[1, 0, 0], [1, 2, 4]) == [:FLPM, :FLPM, :FLPM]
-        @test fill_syms([0, 0], Bool[0, 0], [1, 2]) == [:WHFM, :WHFM]
+              [:RWFM, :RWFM, :RWFM, :RWFM, :WPM]
+        @test fill_syms([1, 0, 0], Bool[1, 0, 0], [1, 2, 4]) == [:FPM, :FPM, :FPM]
+        @test fill_syms([0, 0], Bool[0, 0], [1, 2]) == [:WFM, :WFM]
         # Non-uniform grid: m = 10 is far closer to 11 than to 1.
         @test fill_syms([2, 0, -1], Bool[1, 0, 1], [1, 10, 11]) ==
-              [:WHPM, :FLFM, :FLFM]
+              [:WPM, :FFM, :FFM]
 
         # Degenerate records: constant phase and a record too short for any
         # estimate at the long averaging factors.
-        @test identify_noise(fill(3.0, 256), [1, 2, 4]) == fill(:WHFM, 3)
+        @test identify_noise(fill(3.0, 256), [1, 2, 4]) == fill(:WFM, 3)
         short = cumsum(randn(rng, 40))
         @test all(in(known), identify_noise(short, [1, 2, 4, 8, 13]))
     end
@@ -158,11 +158,11 @@ using SigmaTau
     @testset "PM below 30 averaged points" begin
         # It needs PM at N ÷ 30 and R(n) on the PM side at the τ itself.
         pm = noise_gen(PhaseData, 1024, 1.0; h=Dict(2 => 1.0), rng=Xoshiro(23))
-        @test identify_noise(pm.x, [64, 128, 256]) == hdev(pm, [64, 128, 256]).noise_type == fill(:WHPM, 3)
+        @test identify_noise(pm.x, [64, 128, 256]) == hdev(pm, [64, 128, 256]).noise_type == fill(:WPM, 3)
         # White PM that random-walk FM overtakes at τ = 60 is not PM beyond it.
         mixed = noise_gen(PhaseData, 1024, 1.0; h=Dict(2 => 1.0, -2 => 2.7e-8), rng=Xoshiro(23))
-        @test isdisjoint(identify_noise(mixed.x, [128, 256]), (:WHPM, :FLPM))
-        @test isdisjoint(hdev(mixed, [128, 256]).noise_type, (:WHPM, :FLPM))
+        @test isdisjoint(identify_noise(mixed.x, [128, 256]), (:WPM, :FPM))
+        @test isdisjoint(hdev(mixed, [128, 256]).noise_type, (:WPM, :FPM))
     end
 
     @testset "B1(N, μ) closed-form parity vs allantools canonical" begin
@@ -192,10 +192,10 @@ using SigmaTau
     end
 
     @testset "R(n)(af, b) closed-form parity vs allantools canonical" begin
-        # Locks the R(n) = MVAR/AVAR closed-form used by the WPM/FLPM
+        # Locks the R(n) = MVAR/AVAR closed-form used by the WPM/FPM
         # disambiguation step in `_noise_id_b1rn`. b=0 is the
-        # WHFM-shape (also covers WPM via slope ratio); b=-1 is the
-        # FLFM-shape (also covers FLPM). All other b values fall
+        # WFM-shape (also covers WPM via slope ratio); b=-1 is the
+        # FFM-shape (also covers FPM). All other b values fall
         # through to the af⁰ = 1 branch.
         import SigmaTau as S
 
@@ -204,7 +204,7 @@ using SigmaTau
         @test all(S._rn_theory(af, 0) == 1 / af for af in afs)
 
         # b=-1 branch: explicit Howe/Greenhall formula for the
-        # FLFM/FLPM shape. avar = (1.038 + 3·log(2π·0.5·af)) / (4π²);
+        # FFM/FPM shape. avar = (1.038 + 3·log(2π·0.5·af)) / (4π²);
         # mvar = 3·log(256/27) / (8π²); R(n) = mvar/avar.
         avar(af) = (1.038 + 3 * log(2π * 0.5 * af)) / (4π^2)
         mvar = 3 * log(256 / 27) / (8π^2)

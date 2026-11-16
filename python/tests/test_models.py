@@ -66,7 +66,7 @@ def test_powerlaw_fit_record_and_roundtrip(jl):
     # The model's σ(τ) at the fitted τ is the fit itself.
     np.testing.assert_allclose(st.powerlaw_sigma(f, f.x), f.fit, rtol=1e-12)
     np.testing.assert_allclose(
-        st.powerlaw_sigma({"WHFM": 2e-24}, [1.0, 4.0], tau0=1.0),
+        st.powerlaw_sigma({"WFM": 2e-24}, [1.0, 4.0], tau0=1.0),
         st.powerlaw_sigma({0: 2e-24}, [1.0, 4.0], tau0=1.0),
     )
     with pytest.raises(ValueError):
@@ -119,7 +119,7 @@ def test_powerlaw_curves_of_a_model_and_a_noise_fit(jl):
     np.testing.assert_allclose(st.powerlaw_psd(white, f), 2e-24, rtol=1e-12)
     # A noise fit is read as its components, at the sample interval of its result.
     nf = st.noise_fit(st.adev(st.noise_gen(PhaseData, 4096, 1.0, h={0: 1e-24}, rng=3)))
-    h = nf.add_component("WHFM", slice(0, 6)).components[0][1]
+    h = nf.add_component("WFM", slice(0, 6)).components[0][1]
     np.testing.assert_allclose(
         st.powerlaw_sigma(nf, tau), st.powerlaw_sigma({0: h}, tau, tau0=1.0), rtol=1e-12
     )

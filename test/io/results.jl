@@ -21,7 +21,7 @@ roundtrips(a, b) =
         @test isempty(load(path).ci)
     end
 
-    @testset "v0.4 file without the neff column loads with neff = 0" begin
+    @testset "v0.4 file loads with neff = 0 and the noise names of now" begin
         path = joinpath(tmpdir, "legacy.tsv")
         write(path, """
             # SigmaTau StabilityResult v1
@@ -32,8 +32,8 @@ roundtrips(a, b) =
             2.0\t1.1e-9\tWHFM\t1.0e-9\t1.3e-9\t60.2
             """)
         r = load(path)
-        @test (r.deviation_type, r.tau, r.dev, r.ci[1], ci_upper(r), r.edf, r.neff) ==
-              (:adev, [1.0, 2.0], [1.5e-9, 1.1e-9], (lo=1.4e-9, hi=1.7e-9),
+        @test (r.deviation_type, r.tau, r.dev, r.noise_type, r.ci[1], ci_upper(r), r.edf, r.neff) ==
+              (:adev, [1.0, 2.0], [1.5e-9, 1.1e-9], [:WFM, :WFM], (lo=1.4e-9, hi=1.7e-9),
                [1.7e-9, 1.3e-9], [98.5, 60.2], [0, 0])
     end
 

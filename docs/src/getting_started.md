@@ -57,7 +57,7 @@ here white FM, and `ci` is the confidence interval that follows from it, at
 68.3 % by default. Both can be set in the call:
 
 ```@example start
-adev(f, [1, 10, 100]; confidence = 0.95, noise = :WHFM)
+adev(f, [1, 10, 100]; confidence = 0.95, noise = :WFM)
 ```
 
 [Noise identification](explanation/noise_identification.md) and

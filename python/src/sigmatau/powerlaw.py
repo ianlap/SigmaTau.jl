@@ -117,7 +117,7 @@ def powerlaw_sigma(
 
     ``h`` is a ``PowerLawFit``, a ``NoiseFit``, a ``ClockModel``, or a mapping
     of h_α keyed by the integer α or by the noise type, as in
-    ``{"WHFM": 2e-24}``. ``tau`` holds averaging times in seconds, each a whole
+    ``{"WFM": 2e-24}``. ``tau`` holds averaging times in seconds, each a whole
     multiple of ``tau0``; one τ as a number gives one deviation as a float.
     ``deviation`` is ``"adev"``, ``"mdev"``, ``"hdev"`` or ``"mhdev"``. A fit
     or a clock model carries its own ``tau0``; a mapping needs the keyword.

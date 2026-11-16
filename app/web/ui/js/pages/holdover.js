@@ -15,7 +15,7 @@ let root, ctx, Plotly;
 const inflight = new Map();     // clock id → key being fetched
 const FRACS = [8, 4, 2, 0];
 const LEVELS = [[0.683, "68.3 %"], [0.9, "90 %"], [0.95, "95 %"], [0.99, "99 %"]];
-const NOISE = { WHPM: "white PM", FLPM: "flicker PM", WHFM: "white FM", FLFM: "flicker FM", RWFM: "random-walk FM" };
+const NOISE = { WPM: "white PM", FPM: "flicker PM", WFM: "white FM", FFM: "flicker FM", RWFM: "random-walk FM" };
 const pct = (p) => `${num(100 * p, 3)} %`;
 // The stretch as the control names it: a share of the record, or (0) as many
 // holdover times as the fit has terms.

@@ -129,11 +129,11 @@ sigmatau analyze clock.dat --grid quarter-octave       # a finer grid
 sigmatau analyze clock.dat --m 1,2,5,10,20,50,100      # the averaging factors
 sigmatau analyze clock.dat --tau-min 10 --tau-max 1000 # part of the grid
 sigmatau analyze clock.dat --confidence 0.95           # 95 % intervals
-sigmatau analyze clock.dat --noise WHFM                # the noise type, stated
+sigmatau analyze clock.dat --noise WFM                 # the noise type, stated
 sigmatau analyze clock.dat --bias stable32             # Stable32's bias convention
 sigmatau analyze clock.dat --no-ci                     # deviations alone
 sigmatau analyze counter.csv --freq --tau0 100 --dead-time 3500 \
-         --devs adev --noise FLFM                      # 100 s readings, one an hour
+         --devs adev --noise FFM                       # 100 s readings, one an hour
 ```
 
 `--noise` and `--bias` are the keywords `noise` and `correct_bias` of the

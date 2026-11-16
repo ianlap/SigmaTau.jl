@@ -1,7 +1,8 @@
 module SigmaTauRecipesBaseExt
 
 using SigmaTau: StabilityResult, StabilitySuite, SpectralResult,
-                DynamicStabilityResult, ci_lower, ci_upper
+                DynamicStabilityResult, ci_lower, ci_upper,
+                _estimator_label
 using RecipesBase
 
 # Tick positions at integer powers of 10 spanning the positive finite values
@@ -32,8 +33,8 @@ _ordinate_values(r::StabilityResult) = Iterators.flatten((r.dev, ci_lower(r), ci
     xscale --> :log10
     yscale --> :log10
     xlabel --> "Averaging Time τ (s)"
-    ylabel --> uppercase(string(res.deviation_type))
-    label  --> uppercase(string(res.deviation_type))
+    ylabel --> _estimator_label(res.deviation_type)
+    label  --> _estimator_label(res.deviation_type)
     seriestype := :path
     markershape --> :circle
     markersize  --> 3
@@ -72,7 +73,7 @@ end
     minorgridalpha --> 0.05
     for r in suite.results
         @series begin
-            label --> uppercase(string(r.deviation_type))
+            label --> _estimator_label(r.deviation_type)
             r
         end
     end
@@ -91,7 +92,7 @@ end
     minorgridalpha --> 0.05
     for r in results
         @series begin
-            label --> uppercase(string(r.deviation_type))
+            label --> _estimator_label(r.deviation_type)
             r
         end
     end
@@ -104,7 +105,7 @@ end
 # `1e<k>` form. Non-positive and NaN cells (windows that cannot support the
 # averaging factor) map to NaN and terminate the curve.
 @recipe function f(res::DynamicStabilityResult)
-    title --> uppercase(string(res.deviation_type))
+    title --> _estimator_label(res.deviation_type)
     z = map(v -> (isfinite(v) && v > 0) ? log10(v) : NaN, res.dev)
     logτ = log10.(res.tau)
     kx = floor(Int, minimum(logτ)):ceil(Int, maximum(logτ))

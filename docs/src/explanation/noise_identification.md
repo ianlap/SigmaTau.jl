@@ -17,8 +17,8 @@ under each label in turn:
 ```@example noiseid
 using SigmaTau, Random
 
-p = noise_gen(PhaseData, 1024, 1.0; sigma1 = Dict(:WHFM => 1e-12), rng = Xoshiro(1))
-for n in (:WHPM, :FLPM, :WHFM, :FLFM, :RWFM)
+p = noise_gen(PhaseData, 1024, 1.0; sigma1 = Dict(:WFM => 1e-12), rng = Xoshiro(1))
+for n in (:WPM, :FPM, :WFM, :FFM, :RWFM)
     r = adev(p, [64]; noise = n)
     lo, hi = round.((ci_lower(r)[1], ci_upper(r)[1]) ./ r.dev[1]; digits = 2)
     println(rpad(n, 6), "EDF ", lpad(round(r.edf[1]; digits = 1), 5),
@@ -268,7 +268,7 @@ Three things a label is not:
   identify the noise separately and can differ at the same ``τ``.
 
 ```@example noiseid
-p = noise_gen(PhaseData, 16384, 1.0; sigma1 = Dict(:WHFM => 1e-12, :RWFM => 1e-14),
+p = noise_gen(PhaseData, 16384, 1.0; sigma1 = Dict(:WFM => 1e-12, :RWFM => 1e-14),
               rng = Xoshiro(1))
 r = adev(p)
 foreach((τ, n) -> println(lpad(Int(τ), 5), " s  ", n), r.tau, r.noise_type)
@@ -283,14 +283,14 @@ When the noise type is known, state it. Every estimator that reports an
 interval takes `noise`:
 
 ```@example noiseid
-r = adev(p, [64, 128, 256]; noise = :WHFM)
+r = adev(p, [64, 128, 256]; noise = :WFM)
 println(join(r.noise_type, " "))
 ```
 
 | `noise` | Label at each ``τ`` |
 |:---|:---|
 | `:auto` | identified from the record (the default) |
-| a label, such as `:WHFM` | that type everywhere |
+| a label, such as `:WFM` | that type everywhere |
 | a vector of labels | one per averaging factor |
 | a [`PowerLawFit`](@ref) | the strongest component of the fitted model at that ``τ`` |
 

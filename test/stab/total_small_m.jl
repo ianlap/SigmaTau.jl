@@ -13,13 +13,13 @@ using SigmaTau: _mtotdev_core, _mdev_core, _htotdev_core, _hdev_core, _mhtotdev_
     white = [Float64.((1:N) .== j) for j in 1:N]    # white PM
     walk = cumsum.(white)                           # white FM
     sq(core, x, m) = core(x, [m], 1.0)[1]^2
-    for (var, core, parent, noise, F) in ((:mtot, _mtotdev_core, _mdev_core, :WHPM, white),
-                                          (:htot, _htotdev_core, _hdev_core, :WHFM, walk),
-                                          (:mhtot, _mhtotdev_core, _mhdev_core, :WHPM, white)), m in (2, 3)
+    for (var, core, parent, noise, F) in ((:mtot, _mtotdev_core, _mdev_core, :WPM, white),
+                                          (:htot, _htotdev_core, _hdev_core, :WFM, walk),
+                                          (:mhtot, _mhtotdev_core, _mhdev_core, :WPM, white)), m in (2, 3)
         @test bias_correction([noise], var, [m], N)[1] ≈ sum(sq.(core, F, m)) / sum(sq.(parent, F, m)) rtol = 2e-4
     end
 
     s = sq.(_mhtotdev_core, white, 2)
     Q = [(sq(_mhtotdev_core, white[i] + white[j], 2) - s[i] - s[j]) / 2 for i in 1:N, j in 1:N]
-    @test calculate_edf(:mhtotdev, [1.0], [:WHPM], [2], [2.0], N, N - 1.0)[1] ≈ sum(s)^2 / sum(abs2, Q) rtol = 0.03
+    @test calculate_edf(:mhtotdev, [1.0], [:WPM], [2], [2.0], N, N - 1.0)[1] ≈ sum(s)^2 / sum(abs2, Q) rtol = 0.03
 end

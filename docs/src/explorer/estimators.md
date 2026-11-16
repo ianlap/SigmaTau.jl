@@ -24,8 +24,8 @@ The frequency estimators give ``σ_y(τ)``, without unit:
 | MTOTDEV | Modified total deviation, [`mtotdev`](@ref) | The total form of MDEV |
 | HTOTDEV | Hadamard total deviation, [`htotdev`](@ref) | The total form of HDEV |
 | MHTOTDEV | Modified Hadamard total deviation, [`mhtotdev`](@ref) | The total form of MHDEV |
-| THEO1 | Thêo1, [`theo1`](@ref) | An estimate of ADEV out to three quarters of the record |
-| THEOH | ThêoH, [`theoh`](@ref) | ADEV at short averaging times joined to Thêo1, with its bias removed, at long ones |
+| Thêo1 | [`theo1`](@ref) | An estimate of ADEV out to three quarters of the record |
+| ThêoH | [`theoh`](@ref) | ADEV at short averaging times joined to Thêo1, with its bias removed, at long ones |
 
 The time estimators give ``σ_x(τ)``, in seconds:
 
@@ -52,15 +52,15 @@ Clock noise is modeled as a sum of power laws,
 that dominates there. PM stands for phase modulation and FM for frequency
 modulation:
 
-| Label | In exports | Noise | ``α`` | ADEV | MDEV |
-|:------|:-----------|:------|------:|:-----|:-----|
-| WPM | `WHPM` | White PM | 2 | ``τ^{-1}`` | ``τ^{-3/2}`` |
-| FPM | `FLPM` | Flicker PM | 1 | ``τ^{-1}``, nearly | ``τ^{-1}`` |
-| WFM | `WHFM` | White FM | 0 | ``τ^{-1/2}`` | ``τ^{-1/2}`` |
-| FFM | `FLFM` | Flicker FM | −1 | ``τ^{0}`` | ``τ^{0}`` |
-| RWFM | `RWFM` | Random-walk FM | −2 | ``τ^{1/2}`` | ``τ^{1/2}`` |
-| FWFM | `FWFM` | Flicker-walk FM | −3 | none | none |
-| RRFM | `RRFM` | Random-run FM | −4 | none | none |
+| Label | Noise | ``α`` | ADEV | MDEV |
+|:------|:------|------:|:-----|:-----|
+| WPM | White PM | 2 | ``τ^{-1}`` | ``τ^{-3/2}`` |
+| FPM | Flicker PM | 1 | ``τ^{-1}``, nearly | ``τ^{-1}`` |
+| WFM | White FM | 0 | ``τ^{-1/2}`` | ``τ^{-1/2}`` |
+| FFM | Flicker FM | −1 | ``τ^{0}`` | ``τ^{0}`` |
+| RWFM | Random-walk FM | −2 | ``τ^{1/2}`` | ``τ^{1/2}`` |
+| FWFM | Flicker-walk FM | −3 | none | none |
+| RRFM | Random-run FM | −4 | none | none |
 
 The last two columns give the slope of the deviation on logarithmic axes.
 HDEV follows ADEV, MHDEV and PDEV follow MDEV, and the total and Thêo
