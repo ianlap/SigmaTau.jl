@@ -4,9 +4,9 @@
 // of the samples) or the autocorrelation of phase or frequency.
 import { state, update, activeClock, multi, markStale } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
-import { noiseTitle } from "../estimators.js";
+import { noiseTitle, NOISE_LONG } from "../estimators.js";
 import { loadPlotly, baseLayout, linAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
-import { thousands, duration, timeAxisUnit, sci, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
+import { thousands, duration, timeAxisUnit, sci, num, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
 
 const FILE_ICON = `<svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 2h10l6 6v16H3z"/><path d="M13 2v6h6"/></svg>`;
 // Fitted to the phase and removed before every analysis. On phase a line is a
@@ -77,6 +77,7 @@ export function mount(el, c) {
   relayoutBound = false;
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
+  root.addEventListener("focusout", (e) => { if (e.target.dataset.field === "dead_time") setTimeout(refresh); });
   // The drift view's toolbar takes height from the plot; follow its size.
   // offsetParent is null once the page has moved on (Plotly rejects a hidden plot).
   new ResizeObserver(() => { if (Plotly && plotEl.data && plotEl.offsetParent) Plotly.Plots.resize(plotEl); }).observe(plotEl);
@@ -158,6 +159,26 @@ function checkCard(c) {
     <div class="rule"></div>
     ${driftBlock(c, k)}
     ${fillBox(c)}
+    ${c.kind === "frequency" ? deadBlock(c) : ""}
+  </div>`;
+}
+
+// The noise types that the dead-time bias functions take.
+const DEAD_NOISES = ["WPM", "FPM", "WFM", "FFM", "RWFM"];
+
+// Frequency readings that each average over less than the interval between
+// them: the time unmeasured, and the noise type its correction assumes.
+function deadBlock(c) {
+  const T = c.record.tau0, t = c.dead_time, off = c.fillgaps;
+  const note = off ? "Dead time needs a record without gaps, so it goes without Fill gaps by reflection."
+    : t ? `Readings average ${num(T - t, 4)} s every ${num(T, 4)} s. Stability gives the ADEV alone, corrected for ${NOISE_LONG[c.dead_noise]} noise.`
+    : "Each reading averages over the whole interval between readings.";
+  return `<div class="dead-block">
+    <label class="opt" title="Seconds between the end of one reading and the start of the next. The ADEV of the readings is divided by the bias functions √(B2·B3) for the noise type below"><span>Dead time (s)</span>
+      <input type="number" step="any" data-field="dead_time" value="${t ?? ""}" placeholder="none" ${off ? "disabled" : ""}></label>
+    <label class="opt" title="The bias functions depend on the noise type, which cannot be identified on readings with dead time"><span>Noise type</span>
+      <select data-field="dead_noise" ${off ? "disabled" : ""}>${DEAD_NOISES.map((n) => `<option value="${n}" title="${noiseTitle(n)}" ${n === c.dead_noise ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+    <div class="muted small">${note}</div>
   </div>`;
 }
 
@@ -190,9 +211,11 @@ export function refresh() {
   root.querySelector("[data-ref=caption]").innerHTML = mode === "file"
     ? "Phase or frequency records: text columns, Stable32, TimeLab, counter logs, BIPM UTC − UTC(k) and RINEX clock files"
     : "A test record with known noise, for trying estimators";
-  const focus = document.activeElement?.dataset?.field === "name";
-  if (!focus) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
-  else root.querySelector(".check-card").outerHTML = checkCard(c);
+  // A field being typed in is not drawn again: the name's card, or the whole top while a
+  // dead time is typed (drawn as the field is left).
+  const focus = document.activeElement?.dataset?.field;
+  if (focus === "name") root.querySelector(".check-card").outerHTML = checkCard(c);
+  else if (focus !== "dead_time") root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
   const view = state.dataView;
   root.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const removed = c?.drift && c.drift !== "none" ? `, ${c.drift} drift removed` : "";
@@ -540,6 +563,16 @@ function onChange(e) {
   if (!c || !f) return;
   if (f === "name") { const v = e.target.value.trim() || c.name; update(() => { c.name = v; c.typedName = true; }); }
   else if (f === "fillgaps") ctx.setRecord(c, { fillgaps: e.target.checked });
+  else if (f === "dead_noise") update((s) => { c.dead_noise = e.target.value; markStale(s, "inputs"); });
+  else if (f === "dead_time") {
+    const v = e.target.value === "" ? 0 : Number(e.target.value), T = c.record?.tau0;
+    if (!(Number.isFinite(v) && v < T)) {
+      ctx.status("error", `The dead time must be below the interval between readings, ${num(T, 4)} s.`);
+      refresh();
+      return;
+    }
+    update((s) => { c.dead_time = v || null; markStale(s, "inputs"); });
+  }
 }
 
 export function hint() {

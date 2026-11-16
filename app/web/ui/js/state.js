@@ -101,6 +101,8 @@ export function newClock(fields = {}) {
     hist: null,              // last statistics and histogram, with their settings key
     acf: null,               // last statistics and autocorrelation, with their settings key
     components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
+    dead_time: null,         // seconds unmeasured between frequency readings, or null = none
+    dead_noise: "WFM",       // the noise type that the dead-time correction assumes
     error: null,
     ...fields,
   };
@@ -129,6 +131,9 @@ export function referenceColFor(c) {
 
 // Clocks that get analyzed and plotted: not hidden, not the reference.
 export const visibleClocks = () => state.clocks.filter((c) => c.visible && !isReference(c));
+// Seconds unmeasured between a clock's frequency readings, 0 where none
+// apply: the correction needs a record without gaps, so not a filled one.
+export const deadTime = (c) => (c.kind === "frequency" && !c.fillgaps && c.dead_time) || 0;
 export const multi = () => state.clocks.length > 1;
 export const activeClock = () =>
   state.clocks.find((c) => c.id === state.activeClock) ?? state.clocks[0] ?? null;

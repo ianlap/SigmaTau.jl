@@ -1,7 +1,7 @@
 // Stability page: σ(τ) plot and, on the right, the per-τ table (one clock) or
 // "Compare at τ" (several clocks, overlaid). Mounted once per visit;
 // refresh() redraws from state.
-import { state, update, visibleClocks, multi, markStale } from "../state.js";
+import { state, update, visibleClocks, multi, markStale, deadTime } from "../state.js";
 import { byId, label, gridName, CONFIDENCES, noiseTitle, noiseSlope, BIAS_CORRECTED, biasEntry } from "../estimators.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, DASHES, hexAlpha, css, LINE_W } from "../plot.js";
 import { sci, sciHtml, num, escapeHtml as h } from "../format.js";
@@ -83,6 +83,14 @@ export function mount(el, ctx) {
   });
 }
 
+// Clocks read with dead time give the ADEV alone, corrected for a stated noise type.
+function deadCaption() {
+  const dead = visibleClocks().filter((c) => deadTime(c));
+  if (!dead.length) return "";
+  if (!multi()) return ` · ADEV alone, corrected for ${num(deadTime(dead[0]), 3)} s of dead time (${dead[0].dead_noise})`;
+  return ` · ${dead.map((c) => c.name).join(", ")}: ADEV alone, corrected for dead time`;
+}
+
 const devsOnAxis = () => state.devs.filter((d) => byId[d].axis === state.axis);
 const resultOf = (clock, dev) => clock.result?.results.find((r) => r.dev === dev) ?? null;
 const sameTau = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b));
@@ -100,7 +108,7 @@ export function refresh() {
   const conf = state.ci ? `${(CONFIDENCES.find(([v]) => v === state.confidence) ?? [0, state.confidence])[1]} confidence · ` : "";
   const biased = state.devs.some((d) => BIAS_CORRECTED.has(d));
   const bias = biased ? ` · ${biasEntry(state.bias)[2]}` : "";
-  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}${state.noise === "auto" ? "" : ` · noise ${state.noise === "fit" ? "from the fit" : state.noise}`}`;
+  root.querySelector("[data-ref=caption]").textContent = `${conf}${gridName(state.grid).toLowerCase()} τ grid${bias}${state.noise === "auto" ? "" : ` · noise ${state.noise === "fit" ? "from the fit" : state.noise}`}${deadCaption()}`;
   const maskSel = root.querySelector("[data-ref=mask]");
   maskSel.value = state.mask;
   maskSel.hidden = state.axis !== "sigma_x";

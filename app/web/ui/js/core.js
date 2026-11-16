@@ -2,7 +2,7 @@
 // in a browser, or the desktop shell's commands (app/desktop) inside its
 // window. Both run the sigmatau binary (cli/) with the arguments built here
 // and hand back its JSON.
-import { state, referenceColFor } from "./state.js";
+import { state, referenceColFor, deadTime } from "./state.js";
 
 const tauri = window.__TAURI__?.core;
 let nextRun = 1;
@@ -68,14 +68,15 @@ export function synthArgs(src) {
 
 // Command-line flags that describe one clock's record. A file travels
 // separately (the shell saves it and passes its path as FILE).
-function recordArgs(clock) {
+function recordArgs(clock, tau0) {
   const synth = clock.source.type === "synth";
+  tau0 ??= synth ? clock.source.tau0 : clock.tau0;
   const a = synth ? synthArgs(clock.source) : [];
   // One clock of a simulated ensemble: the core simulates them all and hands back this one.
   if (synth && clock.source.clocks > 1) a.push("--column", clock.source.index);
   const opt = (flag, v) => { if (v !== null && v !== undefined && v !== "") a.push(flag, v); };
   // (a RINEX clock file has a grid per clock: the reader takes it from the epochs)
-  if (clock.format !== "rinex_clk") opt("--tau0", synth ? clock.source.tau0 : clock.tau0);
+  if (clock.format !== "rinex_clk") opt("--tau0", tau0);
   // An instrument file (TimeLab, Stable32 .phd/.frd, counter log) is read by
   // its layout, which fixes the record type, units and columns.
   if (clock.format) {
@@ -106,9 +107,10 @@ function recordColumns(clock, a, opt) {
 }
 
 // One run of the sigmatau binary: a command, its flags, and the record file.
-function request(clock, command, extra) {
+// `tau0` replaces the sample interval of the clock's settings.
+function request(clock, command, extra, tau0) {
   const file = clock.source.type === "synth" ? null : { name: clock.source.name, content: clock.source.content };
-  return { args: [command, ...recordArgs(clock), ...extra].map(String), file };
+  return { args: [command, ...recordArgs(clock, tau0), ...extra].map(String), file };
 }
 
 // The core answers in its versioned JSON (schema_version 1, see docs/src/reference/cli.md).
@@ -165,17 +167,32 @@ const tauArgs = () => [
   ...(state.tauMax ? ["--tau-max", state.tauMax] : []),
 ];
 
+const ciArgs = () => (state.ci ? ["--confidence", state.confidence] : ["--no-ci"]);
+
 // Run the selected estimators on one clock, with its spectrum.
-const analyzeRequest = (clock) => request(clock, "analyze", [
+const analyzeRequest = (clock) => deadTime(clock) ? deadTimeRequest(clock, deadTime(clock)) : request(clock, "analyze", [
   ...rangeArgs(clock), ...tauArgs(),
   "--devs", state.devs.join(","),
   "--grid", state.grid,
-  ...(state.ci ? ["--confidence", state.confidence] : ["--no-ci"]),
+  ...ciArgs(),
   "--bias", state.bias,
   "--noise", state.noise,
   "--spectrum", "--fit", "--mask", "all",
   ...clock.components.flatMap((k) => ["--component", `${k.noise}:${k.from ?? ""}:${k.to ?? ""}`]),
 ]);
+
+// Frequency readings with dead time: the ADEV alone, divided by the bias
+// functions √(B2·B3) for the noise type stated on the Data page, without a
+// spectrum. The core takes the averaging time of one reading as τ₀, so the
+// range, in seconds of the record as read, is scaled to it.
+function deadTimeRequest(clock, dead) {
+  const period = clock.record.tau0, avg = period - dead, k = avg / period;
+  return request(clock, "analyze", [
+    ...(clock.range ? ["--range", `${clock.range[0] * k}:${clock.range[1] * k}`] : []), ...tauArgs(),
+    "--devs", "adev", "--grid", state.grid, ...ciArgs(),
+    "--noise", clock.dead_noise, "--dead-time", dead,
+  ], avg);
+}
 
 export const analyze = (clock, signal) => run(analyzeRequest(clock), signal);
 
