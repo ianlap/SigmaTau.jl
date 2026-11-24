@@ -351,8 +351,10 @@ Clock models, the Kalman filter and timescales.
 - `quantity=:Sphi`, S_φ(f) in rad²/Hz, in `powerlaw_fit`, `powerlaw_psd` and
   `integrated_jitter`, and `"Sphi"` in Python.
 - Python: `ClockComparisons.from_records`, one phase record per clock.
-- Explorer: **Phase noise…** on the Stability page draws the σ(τ) that a
-  table of ℒ(f) gives, beside the deviations of the record.
+- Explorer: a table of phase noise (ℒ(f), S_φ(f), S_x(f) or S_y(f) against
+  the offset frequency) opens on the Data page as a clock, with its carrier
+  and the band of the integral; Stability draws its ADEV, MDEV, HDEV, MHDEV
+  and TDEV beside the records, and Spectrum draws its points.
 - `groslambert(...; weighted = true)` weighs each pair of the other clocks
   by the inverse of the product of its records' Allan variances (Python:
   `weighted=True`).
@@ -386,13 +388,26 @@ Clock models, the Kalman filter and timescales.
 - Explorer: the Ensemble page's Two channels view takes two columns of a
   file as two measurements of one device and draws the cross Allan deviation
   with its uncertainty over each channel's ADEV, and the cross-spectrum over
-  its floor.
+  its floor. It fills the gaps of both channels by reflection and says how
+  many samples of each it filled, with a warning past 30 %.
 - `sigmatau cross FILE --column A,B` reads the two channels from two columns
   of one file, in place of `--with FILE2`.
 - The explorer's Data page offers three real records to open: five national
   time scales from the BIPM's rapid UTC, the quartz oscillators of the two
   GRACE-FO satellites, and a GFZ day of GNSS satellite and station clocks,
   with their licences and citations in `app/web/ui/samples/README.md`.
+- Explorer: a frequency record's check on the Data page takes the dead time
+  between readings and the noise type of its correction; Stability then
+  gives that clock's ADEV alone, divided by the bias functions √(B2·B3) as
+  `analyze --dead-time` does.
+- `sigmatau phasenoise --format json` gives the table's offsets and values,
+  `f` and `value`, under `spectrum`.
+- The explorer's Ensemble page forms scales, hats and cross deviations from
+  a table with named columns and from clocks picked in a RINEX clock file.
+  The command line reads a RINEX clock list by name, in any case, with
+  `--column`.
+- `cross` JSON gives `record_b`, the second channel as prepared, beside
+  `record`; each reports its own `filled`.
 
 ### Changed
 
@@ -780,6 +795,12 @@ Clock models, the Kalman filter and timescales.
   analysis: Stability, Spectrum, Dynamic; clock model: Holdover, Steering;
   several clocks: Ensemble), and the keys 1 to 9 follow that order, so Live
   is now 3.
+- Explorer: Steering's plot choice and τ grid sit in the plot's heading, so
+  the page bars keep to one row from 960 px; the record chip shows from 1141
+  px; the manual lists Live beside Data and Synthesis.
+- On the Ensemble page, a loaded file that gives too few clocks is no longer
+  replaced by four simulated clocks: the page says how many clocks it gives.
+  The GFZ sample proposes six clocks in its import dialog.
 
 ### Removed
 
