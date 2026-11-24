@@ -31,7 +31,10 @@ The explorer reads the files that [`read_data`](@ref) reads:
   and time intervals become phase;
 - tables with named columns and ISO 8601 timestamps;
 - the BIPM files of UTC − UTC(k) and of rapid UTC, UTCr − UTC(k);
-- RINEX clock files (`.clk`), from which the clocks are chosen in a list.
+- RINEX clock files (`.clk`), from which the clocks are chosen in a list;
+- tables of phase noise, the offset frequency beside ``ℒ(f)``,
+  ``S_φ(f)``, ``S_x(f)`` or ``S_y(f)``, which open as a
+  [table of phase noise](#A-table-of-phase-noise).
 
 A file compressed with gzip (`.gz`) is unpacked as it is opened.
 
@@ -182,6 +185,28 @@ describe the filler as much as the clock.
 [`remove_outliers`](@ref) does. The missing samples of the record stay
 missing. **undo** brings the outliers back.
 
+## Dead time between readings
+
+A counter that measures for part of each interval and waits for the rest
+leaves dead time between its readings, and the Allan deviation of such
+readings is biased ([Dead time](../explanation/dead_time.md)). For a
+frequency record the check ends with two fields:
+
+| Field | Meaning |
+|:------|:--------|
+| **Dead time (s)** | The time between the end of one reading and the start of the next. Empty when each reading spans the whole interval |
+| **Noise type** | White PM to random-walk FM: the noise for which the correction is made. It cannot be identified on readings with dead time, so it is stated here |
+
+The interval between readings stays the ``τ_0`` of the record, from its
+time column or the import dialog. Each reading then averages over ``τ_0``
+less the dead time, and the line below the fields says so. The
+[Stability](stability.md) page gives the ADEV alone for such a clock,
+divided by the bias functions ``\sqrt{B_2 B_3}`` of the stated noise as
+[`adev`](@ref) does with `dead_time`, at ``τ = m`` times the averaging time
+of one reading, and the caption above the plot names the correction. The
+[Spectrum](spectrum.md) page has no spectrum for it. The correction needs
+every reading, so it is not applied while **Fill gaps by reflection** is on.
+
 !!! note "Records with gaps"
     A phase record with missing samples is analyzed as it is by the
     estimators that leave them out
@@ -309,3 +334,48 @@ two noises ``α`` falls between their values. It needs a record of
 The autocorrelation needs a record without missing samples: turn on
 **Fill gaps by reflection**.
 
+## A table of phase noise
+
+A file of the offset frequency in hertz and a spectral density, as a
+phase-noise analyzer exports it or a data sheet lists it, opens as a clock
+with deviations and a spectrum but no record in time. The import dialog
+proposes it when the column names say so (dBc, ``ℒ(f)``, ``S_φ``, ``S_x``,
+``S_y``), or when the first column climbs two decades or more in a few
+steps beside levels between −250 and −20 dBc/Hz; **Phase noise** at the top
+of the dialog chooses it by hand. The dialog asks what the column holds:
+
+| Choice | Quantity | Converted to ``S_x(f)`` by |
+|:-------|:---------|:---------------------------|
+| **ℒ(f) in dBc/Hz** | Single-sideband phase noise | ``S_φ = 2 × 10^{ℒ/10}``, then as ``S_φ`` |
+| **S_φ(f) in rad²/Hz** | Phase in radians | ``S_x = S_φ/(2πν_0)^2`` |
+| **S_x(f) in s²/Hz** | Phase as time | itself |
+| **S_y(f) in 1/Hz** | Fractional frequency | ``S_x = S_y/(2πf)^2`` |
+
+``ℒ(f)`` and ``S_φ(f)`` need the carrier frequency ``ν_0`` in hertz
+([IEEE Std 1139-2022, Eqs. (A.13) and (A.15)](@cite ieee1139-2022-definitions)).
+
+The Data page draws the table as written, against the offset frequency on
+a logarithmic axis. Its check card gives the number of points, the range
+of offsets and the quantity, with fields for the carrier and the band:
+
+| Field | Effect |
+|:------|:-------|
+| **Carrier (Hz)** | The carrier, for ``ℒ`` and ``S_φ``. The carrier of the [Spectrum](spectrum.md) page follows it, so the table reads back there as written |
+| **Band from**, **to (Hz)** | The offsets whose noise gives the deviations, inside the table. Left empty they are its ends. The plot shows the rest of the table in grey |
+
+A run gives the ADEV, MDEV, HDEV, MHDEV and TDEV of the table that are in
+the estimator list, as `sigmatau phasenoise` computes them with
+[`spectrum_sigma`](@ref): the deviations of the noise inside the band, from
+one over its highest offset to a tenth of one over its lowest. They have no
+confidence interval. Hovering over a row of the per-τ table on the
+[Stability](stability.md) page gives how much the spectrum would add to
+the variance, carried on below and above the band. On white and flicker PM
+the addition above has no limit: ADEV and HDEV then rise with the
+bandwidth of the measurement, and the values hold for a bandwidth equal to
+the top of the band. [Power-law noise](../explanation/noise.md#A-measured-spectrum)
+has the conversion.
+
+A table beside a record measured at one-second intervals puts the short
+and the long averaging times of one oscillator on one plot. The Dynamic,
+Holdover, Steering and Ensemble pages take records only and leave tables
+out. A saved session keeps the table with its carrier and band.

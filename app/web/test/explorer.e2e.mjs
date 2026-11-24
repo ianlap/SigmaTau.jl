@@ -221,24 +221,30 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.click("[data-axis=sigma_y]");
   });
 
-  await t.test("Stability: a phase-noise table is drawn as the command line converts it", async () => {
+  await t.test("Data: a phase-noise table opens as a clock, with its σ(τ) over a band and its spectrum", async () => {
     const table = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "ocxo.csv");
     writeFileSync(table, "Offset (Hz),L(f) (dBc/Hz)\n1,-100\n10,-130\n100,-150\n1000,-160\n1e4,-165\n1e5,-165\n");
-    await page.setInputFiles("#page [data-ref=pn-file]", table);
-    await page.waitForFunction(() => document.querySelectorAll("#page [data-unpin]").length === 2, null, SLOW);
-    assert.match(await page.locator("#page .chip").last().getAttribute("title"), /from 1 Hz to 100 kHz, carrier 10 MHz[^]*hold for 100 kHz/);
-    const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ℒ(f) 2 · MDEV"));
-    const doc = JSON.parse(execFileSync(CLI, ["phasenoise", table, "--header", "1", "--carrier", "10e6", "--devs", "mdev", "--format", "json"]));
+    await page.click("a[data-page=data]");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles(table);
+    assert.equal(await page.locator("#imp-density").inputValue(), "L");
+    await page.fill("#imp-carrier", "10e6");
+    await page.getByRole("button", { name: "Load table" }).click();
+    await page.locator("#page .check-card", { hasText: "Table check" }).waitFor(SLOW);
+    await page.fill("#page [data-field=band-hi]", "1e4");
+    await page.press("#page [data-field=band-hi]", "Tab");
+    await page.locator("#page .check-card", { hasText: "to 10 kHz" }).waitFor(SLOW);
+    await page.click("a[data-page=stability]");
+    await page.click(".run-btn");
+    await settled();
+    const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "MDEV"));
+    const doc = JSON.parse(execFileSync(CLI, ["phasenoise", table, "--header", "1", "--carrier", "10e6", "--band", "1:1e4", "--devs", "mdev", "--format", "json"]));
     assert.deepEqual([shown.x, shown.y], [doc.results[0].tau, doc.results[0].dev]);
-    assert.equal(await page.evaluate(() => document.querySelector("#page .js-plotly-plot").layout.xaxis.dtick), 2, "nine decades of τ, a label every other one");
-    await page.click("#page .chip:last-child [data-unpin]");
-    // A table of one decade gives one τ, drawn as a point.
-    writeFileSync(table, "1,-100\n10,-130\n");
-    await page.setInputFiles("#page [data-ref=pn-file]", table);
-    await page.waitForFunction(() => document.querySelectorAll("#page [data-unpin]").length === 2, null, SLOW);
-    const point = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ℒ(f) 3 · MDEV"));
-    assert.deepEqual([point.x.length, point.mode], [1, "markers"]);
-    await page.click("#page .chip:last-child [data-unpin]");
+    // The Spectrum page reads the table back as ℒ(f) at its carrier.
+    await page.click("a[data-page=spectrum]");
+    await plotted("#page [data-ref=bottom]");
+    const l = await page.evaluate(() => document.querySelector("#page [data-ref=bottom]").data[0].y);
+    assert.deepEqual(l.map((v) => Math.round(v * 1e6) / 1e6), [-100, -130, -150, -160, -165, -165]);
   });
 
   await t.test("A record with gaps runs without its spectrum", async () => {
@@ -346,6 +352,31 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await settled();
     await page.locator("#record-chip-text", { hasText: /498 samples · 60 % filled/ }).waitFor(SLOW);
     assert.match(await page.locator(".check-card").innerText(), /Filled\s+297 · 60 %/);
+  });
+
+  await t.test("Data: readings with dead time give the command line's corrected ADEV, without a spectrum", async () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "counter.csv");
+    writeFileSync(file, "t (s),y\n" + Array.from({ length: 600 }, (_, i) => `${10 * i},${(1e-11 * Math.sin(i * 0.9) + 3e-12 * Math.cos(i * 0.05)).toExponential(6)}`).join("\n") + "\n");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles(file);
+    await page.click("#import-dialog [data-kind=frequency]");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /counter\.csv.*τ0 10 s/ }).waitFor(SLOW);   // the new record, not the last one
+    await page.fill("input[data-field=dead_time]", "6");
+    await page.press("input[data-field=dead_time]", "Tab");
+    await page.selectOption("select[data-field=dead_noise]", "FFM");
+    await page.locator(".dead-block", { hasText: "Readings average 4 s every 10 s" }).waitFor(SLOW);
+    await page.click("a[data-page=stability]");
+    await page.click(".run-btn");
+    await settled();
+    assert.match(await page.locator("#page [data-ref=caption]").innerText(), /ADEV alone, corrected for 6 s of dead time \(FFM\)/);
+    const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ADEV"));
+    const doc = JSON.parse(execFileSync(CLI, ["analyze", file, "--freq", "--header", "1", "--tau0", "4", "--dead-time", "6", "--noise", "FFM", "--devs", "adev", "--format", "json"]));
+    assert.deepEqual([shown.x, shown.y], [doc.results[0].points.map((p) => p.tau), doc.results[0].points.map((p) => p.dev)]);
+    await page.click("a[data-page=spectrum]");
+    await page.locator("#page [data-ref=empty]", { hasText: "readings with dead time" }).waitFor(SLOW);
+    await page.click("a[data-page=data]");
   });
 
   await t.test("Ensemble: a Kalman scale with flicker states", async () => {

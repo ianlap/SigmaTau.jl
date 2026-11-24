@@ -6,7 +6,7 @@
 // model predicts or the filter claims, √6·TDEV (√20·HTDEV with drift) for reference, and the time
 // to a limit. Several clocks: one color per clock. Computed when this page
 // needs it; no Run is needed.
-import { state, update, visibleClocks, multi } from "../state.js";
+import { state, update, recordClocks, multi } from "../state.js";
 import { holdover as fetchHoldover, holdoverKey } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, CONFIG, seriesColor, css } from "../plot.js";
 import { sci, num, thousands, duration, modelText, inWords, escapeHtml as h } from "../format.js";
@@ -150,7 +150,7 @@ export function refresh() {
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
   const side = root.querySelector("[data-ref=side]");
-  const clocks = visibleClocks().filter((c) => c.record);
+  const clocks = recordClocks().filter((c) => c.record);
   if (!clocks.length) {
     side.hidden = true;
     return showEmpty(`<h2>No record yet</h2><p>Load or synthesize a record on the Data page.</p><button class="btn" data-act="load">Go to Data</button>`);
@@ -222,7 +222,7 @@ export function refresh() {
 // The File menu's results: the table of each clock shown, in the core's columns,
 // with the reference and the predicted RMS of the plot.
 export function results() {
-  const ready = visibleClocks().filter((c) => c.record && c.holdover?.key === holdoverKey(c) && !c.holdover.error);
+  const ready = recordClocks().filter((c) => c.record && c.holdover?.key === holdoverKey(c) && !c.holdover.error);
   return {
     what: "Holdover table", file: "holdover",
     columns: ["clock", "train_s", "tau_s", "rms_s", "quantile_s", "worst_s", "mean_s", "trials", "limit_s", "time_to_limit_s", "claimed_s", "reference_s", "predicted_s"],

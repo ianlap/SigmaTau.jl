@@ -3,7 +3,7 @@
 // clock side by side on a shared color scale, since maps cannot be overlaid.
 // Maps are computed by the core when this page needs them and recomputed when
 // the estimator, window or record changes; no Run is needed.
-import { state, update, visibleClocks, multi } from "../state.js";
+import { state, update, recordClocks, multi } from "../state.js";
 import { dynamic as fetchDynamic, dynamicKey } from "../core.js";
 import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, seriesColor, css, heatScale, LINE_W } from "../plot.js";
 import { sci, num, thousands, timeAxisUnit, escapeHtml as h } from "../format.js";
@@ -20,7 +20,7 @@ export function controls() {
   const est = `<div class="seg" role="group" aria-label="Estimator">${Object.entries(NAME).map(([k, v]) =>
     `<button type="button" data-ctl="dev" data-v="${k}" class="${d.dev === k ? "on" : ""}">${v}</button>`).join("")}</div>`;
   const view = `<div class="seg" role="group" aria-label="View"><button type="button" data-ctl="view" data-v="map" class="${d.view === "map" ? "on" : ""}">Map</button><button type="button" data-ctl="view" data-v="3d" class="${d.view === "3d" ? "on" : ""}">3D waterfall</button></div>`;
-  const n = visibleClocks()[0]?.record?.n ?? 0;
+  const n = recordClocks()[0]?.record?.n ?? 0;
   const note = multi() ? "Maps can't be overlaid, so each clock gets its own. Same color scale throughout."
     : n ? `${thousands(Math.max(16, Math.floor(n / d.frac)))} samples per window · ${2 * d.frac - 1} windows` : "";
   return `${est}${view}<label class="tool-field">Window <select data-ctl="frac">${FRACS.map((f) =>
@@ -171,7 +171,7 @@ export function refresh() {
   }
   const area = root.querySelector("[data-ref=area]");
   const cell = root.querySelector("[data-ref=cell]");
-  const clocks = visibleClocks().filter((c) => c.record);
+  const clocks = recordClocks().filter((c) => c.record);
 
   if (!clocks.length) {
     cell.hidden = true;
@@ -399,7 +399,7 @@ function renderCell(box, c, d) {
 // The File menu's results: each map shown, a row for each window and τ; the
 // JSON in the core's names.
 export function results() {
-  const maps = visibleClocks().filter((c) => c.record && c.dynamic?.key === dynamicKey(c) && !c.dynamic.error);
+  const maps = recordClocks().filter((c) => c.record && c.dynamic?.key === dynamicKey(c) && !c.dynamic.error);
   return {
     what: "Dynamic maps", file: "dynamic",
     columns: ["clock", "deviation", "t_s", "tau_s", "dev"],

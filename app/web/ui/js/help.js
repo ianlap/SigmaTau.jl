@@ -21,7 +21,7 @@ const plain = (html) => html.replace(/<\/(p|li|td|th|h\d|pre)>/g, " ").replace(/
 const fold = (s) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 // A Greek letter of the manual answers to its name: "tau grid" finds the τ grid.
 // A subscript follows its letter in the text: "sigma_y" and "σ_y" find σy.
-export const GREEK = { alpha: "α", chi: "χ", nu: "ν", omega: "ω", pi: "π", sigma: "σ", tau: "τ" };
+export const GREEK = { alpha: "α", chi: "χ", nu: "ν", omega: "ω", phi: "φ", pi: "π", sigma: "σ", tau: "τ" };
 
 let index = null;      // every section with its text, made at the first search
 

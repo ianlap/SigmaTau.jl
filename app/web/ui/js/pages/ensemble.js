@@ -6,7 +6,7 @@
 // are the value columns of one loaded file; without such a file the core
 // simulates four (not for two channels). Each is computed when this page
 // needs it and recomputed when the settings or the clocks change.
-import { state, update, isReference } from "../state.js";
+import { state, update, isReference, isTable } from "../state.js";
 import { ensemble, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, LINE_W } from "../plot.js";
 import { byId } from "../estimators.js";
@@ -77,7 +77,7 @@ const BY_COLUMN = new Set(["", "table", "rinex_clk"]);
 function fileClocks(all = false) {
   const groups = new Map();
   for (const c of state.clocks) {
-    if (c.source.type !== "file" || c.group === null || !BY_COLUMN.has(c.format ?? "") || !c.record || (!all && isReference(c))) continue;
+    if (c.source.type !== "file" || c.group === null || !BY_COLUMN.has(c.format ?? "") || isTable(c) || !c.record || (!all && isReference(c))) continue;
     groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
   }
   const file = [...groups.values()].find((g) => g.length >= 2);
@@ -155,9 +155,10 @@ function crossRequest() {
 }
 
 // A loaded file that gives a scale or a hat too few clocks: simulated clocks
-// do not stand in for them. The note that says so, or null.
+// do not stand in for them (a table of phase noise is no record of clocks,
+// and they do). The note that says so, or null.
 function fewNote(clocks) {
-  const file = clocks.length ? null : state.clocks.find((c) => c.source.type === "file" && c.record && !isReference(c));
+  const file = clocks.length ? null : state.clocks.find((c) => c.source.type === "file" && c.record && !isTable(c) && !isReference(c));
   if (!file) return null;
   const n = state.clocks.filter((c) => c.group === file.group && c.record).length;
   return `${h(file.source.name)} gives ${n === 1 ? "one clock" : `${n} clocks, one of them the reference`}, and a scale or a hat needs two or more${n === 1 ? "" : " besides it"}. ` +

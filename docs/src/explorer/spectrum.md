@@ -20,6 +20,10 @@ transforms are averaged. The segment is the largest power of two up to a
 quarter of the record. The frequencies run from the reciprocal of the
 segment's duration to ``1/(2τ_0)``.
 
+A [table of phase noise](data.md#A-table-of-phase-noise) is drawn from its
+own points, marked, with no Welch estimate: ``S_x(f)`` converted from the
+table and ``S_y(f) = (2πf)^2 S_x(f)``.
+
 | Plot | Quantity | Unit |
 |:-----|:---------|:-----|
 | Upper | ``S_y(f)``, fractional frequency | 1/Hz |
@@ -90,3 +94,6 @@ record has gaps** in place of the plots. Beside other clocks, a line above
 the plots names the clock that has none. Fill the gaps on the
 [Data](data.md#Preparing-the-record) page, or choose an analysis range
 without them.
+
+A clock read with [dead time](data.md#Dead-time-between-readings) has no spectrum either:
+the run gives its ADEV alone.

@@ -1208,7 +1208,8 @@ mktempdir() do dir
         r = run_cli(pn..., "--devs", "adev,tdev", "--tau", "0.01,1", "--format", "json")
         @test r.code == 0
         a, m = spectrum_sigma(f, L, tau; f_carrier=10e6), spectrum_sigma(f, L, tau; f_carrier=10e6, deviation=:mdev)
-        @test occursin("\"spectrum\":{\"quantity\":\"L\",\"carrier\":1.0e7,\"n\":6,\"band\":[1.0,100000.0]}", r.out)
+        @test occursin("\"spectrum\":{\"quantity\":\"L\",\"carrier\":1.0e7,\"n\":6,\"band\":[1.0,100000.0]," *
+                       "\"f\":[1.0,10.0,100.0,1000.0,10000.0,100000.0],\"value\":[-100.0,-130.0,-150.0,-160.0,-165.0,-165.0]}", r.out)
         @test occursin("\"deviation\":\"adev\",\"tau\":[0.01,1.0],\"dev\":[" * lead(a.dev), r.out)
         @test occursin("\"above\":[null,null]}", r.out)                      # white PM: ADEV rises with f_h
         @test occursin("\"deviation\":\"tdev\",\"tau\":[0.01,1.0],\"dev\":[" * lead(m.dev .* tau ./ sqrt(3)), r.out)
