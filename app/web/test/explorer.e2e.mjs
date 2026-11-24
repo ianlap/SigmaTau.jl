@@ -378,6 +378,31 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator(".check-card").innerText(), /Filled\s+297 · 60 %/);
   });
 
+  await t.test("Data: readings with dead time give the command line's corrected ADEV, without a spectrum", async () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "counter.csv");
+    writeFileSync(file, "t (s),y\n" + Array.from({ length: 600 }, (_, i) => `${10 * i},${(1e-11 * Math.sin(i * 0.9) + 3e-12 * Math.cos(i * 0.05)).toExponential(6)}`).join("\n") + "\n");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles(file);
+    await page.click("#import-dialog [data-kind=frequency]");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /counter\.csv.*τ0 10 s/ }).waitFor(SLOW);   // the new record, not the last one
+    await page.fill("input[data-field=dead_time]", "6");
+    await page.press("input[data-field=dead_time]", "Tab");
+    await page.selectOption("select[data-field=dead_noise]", "FFM");
+    await page.locator(".dead-block", { hasText: "Readings average 4 s every 10 s" }).waitFor(SLOW);
+    await page.click("a[data-page=stability]");
+    await page.click(".run-btn");
+    await settled();
+    assert.match(await page.locator("#page [data-ref=caption]").innerText(), /ADEV alone, corrected for 6 s of dead time \(FFM\)/);
+    const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ADEV"));
+    const doc = JSON.parse(execFileSync(CLI, ["analyze", file, "--freq", "--header", "1", "--tau0", "4", "--dead-time", "6", "--noise", "FFM", "--devs", "adev", "--format", "json"]));
+    assert.deepEqual([shown.x, shown.y], [doc.results[0].points.map((p) => p.tau), doc.results[0].points.map((p) => p.dev)]);
+    await page.click("a[data-page=spectrum]");
+    await page.locator("#page [data-ref=empty]", { hasText: "readings with dead time" }).waitFor(SLOW);
+    await page.click("a[data-page=data]");
+  });
+
   await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale, and its clocks are separated", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
     const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
