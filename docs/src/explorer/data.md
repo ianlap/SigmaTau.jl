@@ -180,6 +180,28 @@ describe the filler as much as the clock.
 [`remove_outliers`](@ref) does. The missing samples of the record stay
 missing. **undo** brings the outliers back.
 
+## Dead time between readings
+
+A counter that measures for part of each interval and waits for the rest
+leaves dead time between its readings, and the Allan deviation of such
+readings is biased ([Dead time](../explanation/dead_time.md)). For a
+frequency record the check ends with two fields:
+
+| Field | Meaning |
+|:------|:--------|
+| **Dead time (s)** | The time between the end of one reading and the start of the next. Empty when each reading spans the whole interval |
+| **Noise type** | White PM to random-walk FM: the noise for which the correction is made. It cannot be identified on readings with dead time, so it is stated here |
+
+The interval between readings stays the ``τ_0`` of the record, from its
+time column or the import dialog. Each reading then averages over ``τ_0``
+less the dead time, and the line below the fields says so. The
+[Stability](stability.md) page gives the ADEV alone for such a clock,
+divided by the bias functions ``\sqrt{B_2 B_3}`` of the stated noise as
+[`adev`](@ref) does with `dead_time`, at ``τ = m`` times the averaging time
+of one reading, and the caption above the plot names the correction. The
+[Spectrum](spectrum.md) page has no spectrum for it. The correction needs
+every reading, so it is not applied while **Fill gaps by reflection** is on.
+
 !!! note "Records with gaps"
     A phase record with missing samples is analyzed as it is by the
     estimators that leave them out

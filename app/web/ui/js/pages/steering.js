@@ -30,11 +30,8 @@ export function controls() {
   const every = `<select data-ctl="every" aria-label="Samples between steers">${EVERY.map((k) => `<option value="${k}" ${k === o.every ? "selected" : ""}>${k === 1 ? "sample" : `${k} samples`}</option>`).join("")}</select>`;
   const frac = `<select data-ctl="frac" aria-label="Share of the record the clock model is fitted to">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""}>1/${f}</option>`).join("")}</select>`;
   const drift = `<label class="check" title="The model carries a frequency drift, and the loop steers it out ahead"><input type="checkbox" data-ctl="drift" ${o.drift ? "checked" : ""}>Drift</label>`;
-  const view = `<div class="seg" role="group" aria-label="Plot">
-      <button type="button" data-ctl="view" data-v="sigma" class="${o.view === "sigma" ? "on" : ""}">σ(τ)</button>
-      <button type="button" data-ctl="view" data-v="record" class="${o.view === "record" ? "on" : ""}">Record</button></div>`;
   const gains = o.from === "time" ? `<label class="tool-field">T ${T} s</label>${integral}` : cost;
-  return `${from}${gains}<label class="tool-field">Steer&nbsp;every ${every}</label><label class="tool-field" title="${rec ? `${duration(Math.floor(rec.n / o.frac) * rec.tau0)} of the record; the results count from its end` : "The clock model is fitted to this first share of the record"}">Model&nbsp;from ${frac}</label>${drift}${gridField()}${view}`;
+  return `${from}${gains}<label class="tool-field">Steer&nbsp;every ${every}</label><label class="tool-field" title="${rec ? `${duration(Math.floor(rec.n / o.frac) * rec.tau0)} of the record; the results count from its end` : "The clock model is fitted to this first share of the record"}">Model&nbsp;from ${frac}</label>${drift}`;
 }
 
 export function onControl(e) {
@@ -65,7 +62,7 @@ export function mount(el, c) {
     <div class="col">
       <div class="toolbar hold-bar steer-bar" data-ref="toolbar"></div>
       <p class="spec-note muted small" data-ref="note"></p>
-      <div class="card plot-card"><div class="card-row"><h2 data-ref="title"></h2><span class="muted small" data-ref="sub"></span></div>
+      <div class="card plot-card"><div class="card-row steer-head"><div class="seg seg-sm" role="group" aria-label="Plot" data-ref="view"></div><h2 data-ref="title"></h2><span class="muted small" data-ref="sub"></span><span data-ref="grid"></span></div>
         <div class="plot" data-ref="plot"></div><div class="empty" data-ref="empty" hidden></div></div>
     </div>
     <div class="card side-card steer-card" data-ref="side" hidden></div>`;
@@ -203,6 +200,10 @@ export function refresh() {
     tb.innerHTML = controls();
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
+  root.querySelector("[data-ref=view]").innerHTML = [["sigma", "σ(τ)"], ["record", "Record"]].map(([v, l]) =>
+    `<button type="button" data-ctl="view" data-v="${v}" class="${state.steer.view === v ? "on" : ""}">${l}</button>`).join("");
+  const grid = root.querySelector("[data-ref=grid]");   // the τ grid of the σ(τ) plot
+  if (!grid.contains(document.activeElement)) grid.innerHTML = record ? "" : gridField();
   root.querySelector("[data-ref=title]").textContent = record ? "Steered phase" : "Stability, free-running and steered";
   const side = root.querySelector("[data-ref=side]");
   const clocks = recordClocks().filter((c) => c.record);

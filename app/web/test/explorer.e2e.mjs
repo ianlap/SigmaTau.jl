@@ -384,6 +384,31 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.match(await page.locator(".check-card").innerText(), /Filled\s+297 · 60 %/);
   });
 
+  await t.test("Data: readings with dead time give the command line's corrected ADEV, without a spectrum", async () => {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "counter.csv");
+    writeFileSync(file, "t (s),y\n" + Array.from({ length: 600 }, (_, i) => `${10 * i},${(1e-11 * Math.sin(i * 0.9) + 3e-12 * Math.cos(i * 0.05)).toExponential(6)}`).join("\n") + "\n");
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles(file);
+    await page.click("#import-dialog [data-kind=frequency]");
+    await page.getByRole("button", { name: "Load record" }).click();
+    await settled();
+    await page.locator("#record-chip-text", { hasText: /counter\.csv.*τ0 10 s/ }).waitFor(SLOW);   // the new record, not the last one
+    await page.fill("input[data-field=dead_time]", "6");
+    await page.press("input[data-field=dead_time]", "Tab");
+    await page.selectOption("select[data-field=dead_noise]", "FFM");
+    await page.locator(".dead-block", { hasText: "Readings average 4 s every 10 s" }).waitFor(SLOW);
+    await page.click("a[data-page=stability]");
+    await page.click(".run-btn");
+    await settled();
+    assert.match(await page.locator("#page [data-ref=caption]").innerText(), /ADEV alone, corrected for 6 s of dead time \(FFM\)/);
+    const shown = await page.evaluate(() => document.querySelector("#page .js-plotly-plot").data.find((d) => d.name === "ADEV"));
+    const doc = JSON.parse(execFileSync(CLI, ["analyze", file, "--freq", "--header", "1", "--tau0", "4", "--dead-time", "6", "--noise", "FFM", "--devs", "adev", "--format", "json"]));
+    assert.deepEqual([shown.x, shown.y], [doc.results[0].points.map((p) => p.tau), doc.results[0].points.map((p) => p.dev)]);
+    await page.click("a[data-page=spectrum]");
+    await page.locator("#page [data-ref=empty]", { hasText: "readings with dead time" }).waitFor(SLOW);
+    await page.click("a[data-page=data]");
+  });
+
   await t.test("Ensemble: a file with gaps forms a Kalman scale and an averaging scale, and its clocks are separated", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
     const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
@@ -412,19 +437,13 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
-  await t.test("Ensemble: two columns as two channels, with the command line's cross deviation once their gaps are filled", async () => {
+  await t.test("Ensemble: two columns as two channels, their gaps filled for the command line's cross deviation", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => i).filter((i) => i < 500 || i >= 520);
     const clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
     const file = path.join(mkdtempSync(path.join(tmpdir(), "sigmatau-")), "three.csv");   // the file of the step above
     writeFileSync(file, rows.map((i) => [i, clock(i, 1), clock(i, 2), clock(i, 3)].join(",")).join("\n"));
     const n = errors.length;
     await page.click("[data-ctl=view][data-v=cross]");
-    await page.locator("#page [data-ref=empty]", { hasText: "turn on Fill gaps by reflection on the Data page" }).waitFor(SLOW);
-    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
-    await page.click("a[data-page=data]");
-    await page.click("input[data-field=fillgaps]");
-    await settled();
-    await page.click("a[data-page=ensemble]");
     await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]")?.data?.some((d) => d.name === "Cross"), null, SLOW);
     const [shown, limit] = await page.evaluate(() => ["Cross", "Cross, upper limit"].map((n) => document.querySelector("#page [data-ref=adev]").data.find((d) => d.name === n).y));
     const doc = JSON.parse(execFileSync(CLI, ["cross", file, "--column", "2,3", "--fill-gaps", "--format", "json"])).cross_adev;
@@ -433,13 +452,10 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.deepEqual(shown, doc.dev.map((v, i) => (resolved[i] ? v : null)));
     assert.deepEqual(limit, doc.covar.map((v, i) => (resolved[i] || v + doc.uncertainty[i] <= 0 ? null : Math.sqrt(v + doc.uncertainty[i]))));
     assert.equal(await page.evaluate(() => document.querySelector("#page [data-ref=weights]").data.length), 4, "cross-spectrum, its floor and each channel");
-    const m = errors.length;
+    assert.match(await page.locator("#page .ens-note").first().innerText(), /filled by reflection.*: 20 samples of .* \(2 %\) and 20 samples of .* \(2 %\)\./);
     await page.click("[data-ctl=view][data-v=hat]");   // as the step above left it, refused again
     await page.locator("#page [data-ref=empty]", { hasText: "The KLTS interval needs a file without missing samples" }).waitFor(SLOW);
-    await page.click("a[data-page=data]");
-    await page.click("input[data-field=fillgaps]");
-    await settled();
-    assert.ok(errors.splice(m).every((e) => / 422 /.test(e)));
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
   await t.test("Data at 960 px: a long file name and the plot's header stay inside their cards", async () => {
@@ -619,6 +635,34 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.locator(".topbar .brand").click();      // a click elsewhere closes it
     await card.waitFor({ state: "hidden" });
     await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  await t.test("The keys 1 to 9 follow the tabs", async () => {
+    await page.click("a[data-page=stability]");
+    await page.keyboard.press("3");
+    await page.waitForFunction(() => location.hash === "#live");
+    await page.keyboard.press("4");
+    await page.waitForFunction(() => location.hash === "#stability");
+  });
+
+  await t.test("Ensemble: a table with dates holds clocks the page cannot read, and it says so in place of simulating", async () => {
+    await page.goto(base + "#data");
+    await page.reload();   // only the default record, no clocks of earlier steps
+    await settled();
+    const n = errors.length, asked = [];
+    const day = Date.UTC(2026, 9, 16), clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k))).toExponential(6);
+    const rows = Array.from({ length: 200 }, (_, i) => [new Date(day + 30000 * i).toISOString().slice(0, 19), clock(i, 1), clock(i, 2)].join(","));
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+    await chooser.setFiles({ name: "dated.csv", mimeType: "text/csv", buffer: Buffer.from(`time,a phase (s),b phase (s)\n${rows.join("\n")}\n`) });
+    await page.getByRole("button", { name: "Load 2 clocks" }).click();
+    await settled();
+    const ask = (r) => asked.push(r.postData() ?? "");
+    page.on("request", ask);
+    await page.click("a[data-page=ensemble]");
+    await page.locator("#page [data-ref=empty]", { hasText: "The clocks of dated.csv, a table read by column name" }).waitFor(SLOW);
+    page.off("request", ask);
+    assert.ok(!asked.some((b) => b.includes("--synth")), "no simulated ensemble");
+    assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 
   assert.deepEqual(errors, []);

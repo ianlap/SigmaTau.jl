@@ -5,7 +5,7 @@
 // phase noise is drawn as it is written, with the band its σ(τ) integrates.
 import { state, update, activeClock, multi, markStale, isTable } from "../state.js";
 import { drift as fetchDrift, driftKey, driftMethod, distribution, distKey, distOf } from "../core.js";
-import { noiseTitle } from "../estimators.js";
+import { noiseTitle, NOISE_LONG } from "../estimators.js";
 import { loadPlotly, baseLayout, linAxis, logAxis, CONFIG, css, seriesColor, timeUnit } from "../plot.js";
 import { thousands, duration, timeAxisUnit, sci, num, hertz, startText, share, FILL_TESTED, escapeHtml as h } from "../format.js";
 
@@ -78,7 +78,8 @@ export function mount(el, c) {
   relayoutBound = false;
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
-  // A table's carrier and band keep what is typed while the page redraws; leaving the field catches up.
+  // A field being typed in (a dead time, a table's carrier and band) keeps what is typed
+  // while the page redraws; leaving the field catches up.
   root.addEventListener("focusout", (e) => { if (TYPED.has(e.target.dataset?.field)) setTimeout(refresh); });
   // The drift view's toolbar takes height from the plot; follow its size.
   // offsetParent is null once the page has moved on (Plotly rejects a hidden plot).
@@ -162,6 +163,26 @@ function checkCard(c) {
     <div class="rule"></div>
     ${driftBlock(c, k)}
     ${fillBox(c)}
+    ${c.kind === "frequency" ? deadBlock(c) : ""}
+  </div>`;
+}
+
+// The noise types that the dead-time bias functions take.
+const DEAD_NOISES = ["WPM", "FPM", "WFM", "FFM", "RWFM"];
+
+// Frequency readings that each average over less than the interval between
+// them: the time unmeasured, and the noise type its correction assumes.
+function deadBlock(c) {
+  const T = c.record.tau0, t = c.dead_time, off = c.fillgaps;
+  const note = off ? "Dead time needs a record without gaps, so it goes without Fill gaps by reflection."
+    : t ? `Readings average ${num(T - t, 4)} s every ${num(T, 4)} s. Stability gives the ADEV alone, corrected for ${NOISE_LONG[c.dead_noise]} noise.`
+    : "Each reading averages over the whole interval between readings.";
+  return `<div class="dead-block">
+    <label class="opt" title="Seconds between the end of one reading and the start of the next. The ADEV of the readings is divided by the bias functions √(B2·B3) for the noise type below"><span>Dead time (s)</span>
+      <input type="number" step="any" data-field="dead_time" value="${t ?? ""}" placeholder="none" ${off ? "disabled" : ""}></label>
+    <label class="opt" title="The bias functions depend on the noise type, which cannot be identified on readings with dead time"><span>Noise type</span>
+      <select data-field="dead_noise" ${off ? "disabled" : ""}>${DEAD_NOISES.map((n) => `<option value="${n}" title="${noiseTitle(n)}" ${n === c.dead_noise ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+    <div class="muted small">${note}</div>
   </div>`;
 }
 
@@ -194,6 +215,8 @@ export function refresh() {
   root.querySelector("[data-ref=caption]").innerHTML = mode === "file"
     ? "Phase or frequency records: text columns, Stable32, TimeLab, counter logs, BIPM UTC − UTC(k) and RINEX clock files; tables of phase noise"
     : "A test record with known noise, for trying estimators";
+  // A field being typed in is not drawn again: the name's card, or the whole top while a
+  // dead time or a table's carrier or band is typed (drawn as the field is left).
   const field = document.activeElement?.dataset?.field;
   if (field === "name") root.querySelector(".check-card").outerHTML = checkCard(c);
   else if (!TYPED.has(field)) root.querySelector("[data-ref=top]").innerHTML = (mode === "file" ? fileCard(c) : synthCard(c)) + checkCard(c);
@@ -429,10 +452,8 @@ function drawAcf(c) {
   }, CONFIG);
 }
 
-// The analysis range: drag across the plot in "Select range" mode. The check
-// above and this plot keep the whole record; the runs use the range.
 // ── A table of phase noise ──
-const TYPED = new Set(["carrier", "band-lo", "band-hi"]);
+const TYPED = new Set(["dead_time", "carrier", "band-lo", "band-hi"]);
 const DENSITY_TEXT = { L: ["ℒ(f)", "dBc/Hz"], Sphi: ["S<sub>φ</sub>(f)", "rad²/Hz"], Sx: ["S<sub>x</sub>(f)", "s²/Hz"], Sy: ["S<sub>y</sub>(f)", "1/Hz"] };
 
 function tableCard(c) {
@@ -494,6 +515,8 @@ function refreshTable(c) {
   }, { ...CONFIG, showTips: false });
 }
 
+// The analysis range: drag across the plot in "Select range" mode. The check
+// above and this plot keep the whole record; the runs use the range.
 function rangeBar(c) {
   if (!c?.record) return "";
   const r = c.range;
@@ -611,6 +634,16 @@ function onChange(e) {
   if (!c || !f) return;
   if (f === "name") { const v = e.target.value.trim() || c.name; update(() => { c.name = v; c.typedName = true; }); }
   else if (f === "fillgaps") ctx.setRecord(c, { fillgaps: e.target.checked });
+  else if (f === "dead_noise") update((s) => { c.dead_noise = e.target.value; markStale(s, "inputs"); });
+  else if (f === "dead_time") {
+    const v = e.target.value === "" ? 0 : Number(e.target.value), T = c.record?.tau0;
+    if (!(Number.isFinite(v) && v < T)) {
+      ctx.status("error", `The dead time must be below the interval between readings, ${num(T, 4)} s.`);
+      refresh();
+      return;
+    }
+    update((s) => { c.dead_time = v || null; markStale(s, "inputs"); });
+  }
   else if (f === "carrier") setCarrier(c, Number(e.target.value));
   else if (f === "band-lo" || f === "band-hi") setBand(c);
 }

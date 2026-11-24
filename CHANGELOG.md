@@ -114,7 +114,7 @@ Clock models, the Kalman filter and timescales.
   flicker noises included; matches the closed forms of Delporte et al.
   (PTTI 2000) within 0.4 %.
 - `sigmatau holdover FILE` runs the holdover test from the command line:
-  `--train`, `--tau`, `--fit-drift`, `--no-anchor`, `--limit`,
+  `--train`, `--times`, `--fit-drift`, `--no-anchor`, `--limit`,
   `--confidence`; CSV with one row per holdover time, or JSON, where `--fit`
   adds the error predicted from the power-law fit with its budget by noise
   type.
@@ -232,9 +232,9 @@ Clock models, the Kalman filter and timescales.
   shows the core's error instead of waiting forever (#185).
 - Command line: `sigmatau analyze --component NOISE:A:B` builds the `--fit`
   model by hand, and the JSON `powerlaw` gains `mode`, `components`,
-  `residual` and `clock_model`. `sigmatau timescale FILE --value-cols 2,3,4`
-  forms a timescale (`--algorithm`, `--wmax`; `--synth N`
-  simulates four clocks).
+  `residual` and `clock_model`. `sigmatau timescale FILE --column 2,3,4`
+  forms a timescale (`--algorithm`, `--wmax`; `--synth N` simulates four
+  clocks).
 - Explorer: **Edit** in the noise model panel builds the model by hand, with
   the MHDEV it leaves drawn dashed, and is saved with the session. The new
   **Ensemble** page forms a timescale from the clocks of one loaded file, or
@@ -368,6 +368,31 @@ Clock models, the Kalman filter and timescales.
   ppb, ppm or Hz while `--scaling` is 1), as `sigmatau: warning:` lines on
   standard error and as `warnings` in the JSON; the explorer shows the same
   note in the import dialog and on the Data page.
+- `HatResult`: `ncornered_hat` and `groslambert` name each clock, from the
+  `ClockComparisons` or the new `names` keyword; the REPL shows a table with
+  a column per clock, a plot labels each curve with its clock, the Tables
+  export has a `clock` column, and `h["name"]` picks a clock. The Python
+  wrappers return a `HatResult` with `names` as well.
+- `sigmatau` suggests the nearest name for a misspelled command, option or
+  `help` topic, as in `unknown option --devz; did you mean --devs?`.
+- `sigmatau` takes `-o PATH` for `--out PATH` and `-q` for `--quiet`.
+- Plot recipes for `PowerLawFit` (the measured points, the fit and each
+  noise type), `HoldoverResult` and `HoldoverPrediction` (the time error
+  against holdover time, with the limit), `SteeringPrediction` (the Allan
+  deviation of the steered clock), and `SteeringResult`, `TimescaleResult`
+  and `KalmanResult` (panels over time: steered phase and correction; each
+  clock against the scale and the weights; phase and frequency with a one-σ
+  band).
+- Explorer: the Ensemble page's Two channels view takes two columns of a
+  file as two measurements of one device and draws the cross Allan deviation
+  with its uncertainty over each channel's ADEV, and the cross-spectrum over
+  its floor.
+- `sigmatau cross FILE --column A,B` reads the two channels from two columns
+  of one file, in place of `--with FILE2`.
+- The explorer's Data page offers three real records to open: five national
+  time scales from the BIPM's rapid UTC, the quartz oscillators of the two
+  GRACE-FO satellites, and a GFZ day of GNSS satellite and station clocks,
+  with their licences and citations in `app/web/ui/samples/README.md`.
 
 ### Changed
 
@@ -434,12 +459,12 @@ Clock models, the Kalman filter and timescales.
   which the model overstated by up to 54 %, takes the exact ratio. HTOTDEV
   on FM noise at τ = 2τ₀ to 15τ₀ now differs from Stable32, which keeps the
   published factor, by up to 3 % in σ.
-- `sigmatau analyze` and `report` take `--bias exact|published|stable32|none`,
-  the library's `correct_bias` conventions; `--no-bias-correction` remains
-  as `--bias none`. **Breaking:** the JSON field `analysis.bias_correction`
-  is now that word instead of `true`/`false`. The explorer's bias checkbox
-  is a menu of the same four; saved sessions still open, as Exact (was on)
-  or None (was off).
+- `sigmatau analyze` and `report` take
+  `--bias exact|published|stable32|none`, the library's `correct_bias`
+  conventions. **Breaking:** the JSON field `analysis.bias_correction` is
+  now that word instead of `true`/`false`. The explorer's bias checkbox is a
+  menu of the same four; saved sessions still open, as Exact (was on) or
+  None (was off).
 - The test suite runs the Aqua.jl package checks.
 - Noise identification: from m = 16 a white or flicker PM label stands only
   if R(n) = MVAR/AVAR agrees (nearer its flicker-PM value than the 1/2 of
@@ -581,8 +606,8 @@ Clock models, the Kalman filter and timescales.
 - `timescale`: `x`, `y` and `xhat` of a clock are `NaN` before its first
   reading in every scale, and a record whose first rows hold no reading
   forms every scale from the first row that has one.
-- `sigmatau timescale`: `--fillgaps` no longer hands a clock readings it did
-  not have; the filled samples are left out of the scale.
+- `sigmatau timescale`: `--fill-gaps` no longer hands a clock readings it
+  did not have; the filled samples are left out of the scale.
 - Explorer: the import dialog proposes every column named for a reading
   (`maser1 phase (s)`, `UTC-UTC(PTB) (ns)`) as a clock, of the first one's
   kind and stated unit, so a file of several clocks loads in one step
@@ -633,10 +658,10 @@ Clock models, the Kalman filter and timescales.
   column or `# tau0:` header has no sample interval; each names the reader
   that was called.
 - CLI errors name command-line options and not library keywords or functions
-  (`--tau0`, `--fillgaps`, `--column`); an output file that cannot be
+  (`--tau0`, `--fill-gaps`, `--column`); an output file that cannot be
   written is named with the reason; `timescale --synth` with one clock is a
   usage error (exit 1).
-- `sigmatau dynamic --window` below 4 (5 with `--dev dhdev`) is a usage
+- `sigmatau dynamic --window` below 4 (5 with `--devs hdev`) is a usage
   error (exit 1) that names the option; it was an analysis error (exit 3)
   saying the record was too short for adev or hdev.
 - Explorer: for simulated clocks the Ensemble plot draws each clock against
@@ -678,6 +703,83 @@ Clock models, the Kalman filter and timescales.
   significant digits, a block per deviation or clock, the values every row
   shares said once) and CSV, as before, in a pipe or with `--out`;
   `--format table` and `--format csv` choose either one.
+- Command-line options renamed, old names gone: `--column COL[,COL…]`
+  (number or name) replaces `--value-col`, `--value-cols` (also
+  `cross --value-cols A,B`) and `--column NAME`, and `--clock` with
+  `--synth`; `--time-column` and `--reference-column` replace `--time-col`
+  and `--reference-col`; `--drift-model` replaces `--model`, `--clock-model`
+  replaces `--noise-model`; `holdover --times` replaces `--tau`;
+  `--fill-gaps` replaces `--fillgaps`; `dynamic` takes `--devs adev|hdev` in
+  place of `--dev`; `--detrend` is removed in favour of `--remove-drift`
+  (and the JSON `detrend` member with it), `--no-bias-correction` in favour
+  of `--bias none`; an old name fails with an error that names the new one
+  (`holdover --tau` is refused as an option `holdover` does not take). A
+  table with column names is read in the units of its names whether
+  `--column` gives a number or a name; `--time-column` and
+  `--reference-column` on it need `--header`, which reads it as plain
+  columns.
+- Noise types are named WPM, FPM, WFM, FFM, RWFM, FWFM and RRFM everywhere:
+  library symbols (`r.noise_type`, `identify_noise`, fits,
+  `sample_statistics(...).noise`), the CLI's CSV `noise_type` column and
+  JSON `noise_type`/`noise_types`, help, completions, Python and the
+  explorer, which drops its mapping. Code that compares
+  `r.noise_type[i] == :WHFM` must change. The older names WHPM, FLPM, WHFM
+  and FLFM are still accepted wherever a noise type is given (`noise=`,
+  `Dict` keys, `add_component!`, the dead-time bias functions, saved result
+  files, `--noise`, `--component`, Python) and read as the new ones.
+- The estimator labels of `theo1` and `theoh` are Thêo1 and ThêoH (JSON
+  `label`, `estimators()`, plot legends, the explorer). The names you type
+  stay `theo1` and `theoh`. Plot legends now use the registry label, so TIE
+  rms also shows as "TIE rms".
+- `ncornered_hat` and `groslambert` return a `HatResult` in place of a
+  `Vector{StabilityResult}` (in Python, in place of a list); it indexes,
+  iterates and unpacks as before.
+- Gap filling says how much of a record it made. `sigmatau check` (a new
+  `filled` column after `gaps`, so every later CSV column moves one place
+  right), the JSON `record` (`filled`) and the report give the number of
+  samples that `--fill-gaps` put in; past 30 % of the record, more than the
+  filler was tested for, a line on stderr says so, and the refusal of a
+  frequency record with missing samples gives their share. Explorer: the
+  import dialog gives the share of the span that is missing, the record
+  check has a **Filled** line, the record chip gives the share filled, and
+  past 30 % the import dialog and the status bar say that the results
+  describe the filler as much as the clock.
+- `fillgaps` (with `fillgaps=true` in the readers, `--fill-gaps` and the
+  explorer's Fill gaps by reflection) takes the gaps in the order of the
+  procedure of Howe and Schlossberger (2022), Sec. III: the gap after the
+  longest run of data first, then each gap to the end of the record, then
+  the record reversed and the same again, so that gaps before the longest
+  run are filled from the data after them. The filled values of a record
+  with more than one gap change; a record with one gap is filled as before
+  and measured samples are untouched. Some records that raised "gap topology
+  cannot be filled" are now filled.
+- Explorer: a sharper look. An espresso top bar, near-white cards and plot
+  field, and ink for selections, with crimson kept for Run and each page's
+  main button. Inter and JetBrains Mono ship with the explorer, so the
+  desktop app shows them offline; fonts are no longer loaded from Google.
+  Above the Stability plot a readout gives the lowest value of the table's
+  estimator and its τ, the value at the shortest τ and the noise types; with
+  several clocks, the most stable clock at the compared τ.
+- Explorer: the results entries of the File menu follow the page in view and
+  name what they write (Stability results, Spectra, Dynamic maps, Holdover
+  table, Steering table, Time scale table or Hat results, as TSV or JSON in
+  `sigmatau-<table>`), where they always wrote the Stability results; on
+  Data, Synthesis, Live and Help they are greyed out. The report entry is
+  named **Stability report**, and its Reproduce line for a simulated record
+  no longer carries column options.
+- Explorer: the plot comes first. A rail holds Settings, Results and Run;
+  the settings panel starts folded and remembers being pinned, and below
+  1280 px the panel and a page's results open over the plot.
+- Explorer: the frame follows the page. Page settings stay in the bar above
+  the plot whatever the number of clocks; the side panel shows only what the
+  page uses (none on Help, nor with one clock on Data, Dynamic, Holdover and
+  Steering); Run appears on Stability and Spectrum only; Dynamic, Steering
+  and Ensemble's hat and Two channels views show the shared τ grid (and the
+  hat the confidence level).
+- Explorer: the tabs sit in four groups (the record: Data, Synthesis, Live;
+  analysis: Stability, Spectrum, Dynamic; clock model: Holdover, Steering;
+  several clocks: Ensemble), and the keys 1 to 9 follow that order, so Live
+  is now 3.
 
 ### Removed
 
@@ -781,7 +883,7 @@ Clock models, the Kalman filter and timescales.
 - A reading missing from a timestamped file is a `NaN` sample in its slot,
   which the gap-tolerant estimators skip. Without `fillgaps` the samples
   around it used to be joined end to end, shortening the record and moving
-  every τ after the gap. `sigmatau --freq` asks for `--fillgaps` on a
+  every τ after the gap. `sigmatau --freq` asks for `--fill-gaps` on a
   frequency record with missing samples instead of integrating `NaN` into
   the rest of the phase.
 - `read_data` reads a time column of MJD values in days whatever its name
@@ -807,12 +909,12 @@ Clock models, the Kalman filter and timescales.
   opened.
 - `remove_outliers` replaces only the outliers: samples already missing stay
   missing, where they were filled whenever the record held an outlier and
-  left when it held none. Fill them with `fillgaps` (`--fillgaps`) when that
-  is wanted.
+  left when it held none. Fill them with `fillgaps` (`--fill-gaps`) when
+  that is wanted.
 - A record without a time column can have its `NaN` readings filled
-  (`fillgaps=true`, `--fillgaps`, the explorer's Fill gaps), so a one-column
-  frequency file with missing readings can be analyzed; the explorer turns
-  Fill gaps on for such a file.
+  (`fillgaps=true`, `--fill-gaps`, the explorer's Fill gaps), so a
+  one-column frequency file with missing readings can be analyzed; the
+  explorer turns Fill gaps on for such a file.
 - Explorer: hover labels are readable in both themes; the Data page's phase
   plot breaks at a gap instead of dropping to zero and draws every outlier;
   τ min then τ max can be typed in one go; the run note counts the analysis
@@ -888,9 +990,9 @@ Clock models, the Kalman filter and timescales.
   the clocks against each other are still learned.
 - `read_phase` and `read_frequency` take the unit of a time column from its
   name in the line that `header` skips, as `read_data` does, so a column
-  named MJD is read in days at any step; `sigmatau timescale --value-cols`
-  reads a table with named columns without `--header`, and its read errors
-  name the CLI flags.
+  named MJD is read in days at any step; `sigmatau timescale --column` reads
+  a table with named columns without `--header`, and its read errors name
+  the CLI flags.
 - `sigmatau model` writes to `--out`, which it accepted and ignored, and
   refuses a FILE and the options of the record, which it never used; its
   errors are answered in JSON. `sigmatau help` sets the long command
@@ -972,7 +1074,7 @@ Clock models, the Kalman filter and timescales.
   scale's starting weights, and a model with a flicker level but no flicker
   states is no longer refused.
 - An unknown noise type is reported as "unknown noise type :XX; use an
-  integer α or one of WHPM, FLPM, WHFM, FLFM, RWFM, FWFM, RRFM" by
+  integer α or one of WPM, FPM, WFM, FFM, RWFM, FWFM, RRFM" by
   `add_component!`, `clock_model`, `powerlaw_sigma`, `powerlaw_psd` and
   `holdover`; the message began "noise_gen:" whoever called, and listed the
   types in no order.
@@ -997,9 +1099,9 @@ Clock models, the Kalman filter and timescales.
   is drawn as a point, where it drew nothing, and the τ axis labels every
   other decade or fewer once it spans more than six, where the labels
   collided in a narrow window.
-- `sigmatau --column NAME` on a file without column names (a plain column
-  file, TimeLab, Stable32, counter log or BIPM file) is a usage error (exit
-  1); it was ignored, and the default column was read.
+- `sigmatau --column` with a column name on a file without column names (a
+  plain column file, TimeLab, Stable32, counter log or BIPM file) is a usage
+  error (exit 1); it was ignored, and the default column was read.
 - Explorer: the Synthesis clock list scrolls inside its card, so every clock
   stays reachable in a small window; with several clocks the Dynamic toolbar
   offers the 3D waterfall, one surface per clock on the shared color scale;
@@ -1010,9 +1112,9 @@ Clock models, the Kalman filter and timescales.
   says the phase covariance has grown without bound, where it threw a
   `SingularException` (long records of clocks with noiseless readings and
   little white FM; Greenhall 2003, §4).
-- `sigmatau timescale` and `hat` without `--value-cols` list the file's
-  columns by number instead of advising `--column`, and name each clock by
-  its column's name in a table with named columns.
+- `sigmatau timescale` and `hat` without `--column` list the file's columns
+  by number to pick from, and name each clock by its column's name in a
+  table with named columns.
 - `clock_model` of a `noise_fit` with no components raises an
   `ArgumentError` that points to `add_component!` and `powerlaw_fit`, where
   it returned a model with every level zero.
@@ -1020,6 +1122,10 @@ Clock models, the Kalman filter and timescales.
   side panel with confidence bands on; the clock rows of the side panel hold
   no nested controls, the confidence menu has a label, the page has a
   heading and the F5 hint of the Run button reads at full contrast.
+- BIPM rapid UTC files (`# MJD  [UTCr-UTC(k)]/ns`, one row a day) are read
+  as `bipm_utc` by `read_data`, the CLI and the explorer. They were read as
+  plain columns, with the MJD taken as seconds and the nanoseconds as
+  seconds.
 
 ### Security
 

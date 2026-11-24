@@ -16,7 +16,7 @@ The clock offsets of the ultra-stable quartz oscillators (USOs) of the two GRACE
 
 - Source: GRACE-FO Level-1B, JPL release 04 ([doi:10.5067/GFL1B-ASJ04](https://doi.org/10.5067/GFL1B-ASJ04)), daily `CLK1B_2026-10-{16…21}_{C,D}_04.txt`, from GFZ's mirror <https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04/2026/>, downloaded 2026-11-16.
 - Licence: NASA's [Earth science data and information policy](https://www.earthdata.nasa.gov/data-and-information-policy) (no restriction on use; please cite). Citation: GRACE-FO (2019). GRACE-FO Level-1B Ascii Gravity Data, JPL release 4. PO.DAAC, CA, USA. doi:10.5067/GFL1B-ASJ04. GRACE-FO is a joint mission of NASA and the German Research Centre for Geosciences (GFZ).
-- Changes: `eps_time` of both satellites taken from rows with clean quality flags, every third epoch (30 s of the 10 s files), converted to nanoseconds; the receiver time, within milliseconds of GPS time, written as an ISO 8601 timestamp in the column `GPS time`.
+- Changes: `eps_time` of both satellites taken from rows with clean quality flags, every third epoch (30 s of the 10 s files), converted to nanoseconds; the receiver time, within milliseconds of GPS time, written as a Modified Julian Date in the column `MJD (GPS time)`, so that the file reads as plain columns everywhere, the Ensemble page included.
 
 ## `gfz-clocks-2026-10-01.clk.gz`: GNSS satellites and ground stations, one day
 

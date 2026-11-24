@@ -101,6 +101,8 @@ export function newClock(fields = {}) {
     hist: null,              // last statistics and histogram, with their settings key
     acf: null,               // last statistics and autocorrelation, with their settings key
     components: [],          // hand-built noise model: [{ noise, from, to }] in order; empty = automatic fit
+    dead_time: null,         // seconds unmeasured between frequency readings, or null = none
+    dead_noise: "WFM",       // the noise type that the dead-time correction assumes
     density: null,           // a table of phase noise (kind "spectrum"): what it holds, "L" | "Sphi" | "Sx" | "Sy",
     carrier: null,           // its carrier frequency in Hz (ℒ and S_φ),
     band: null,              // and the band of the integral, [f1, fh] in Hz, or null = the whole table
@@ -132,6 +134,9 @@ export function referenceColFor(c) {
 
 // Clocks that get analyzed and plotted: not hidden, not the reference.
 export const visibleClocks = () => state.clocks.filter((c) => c.visible && !isReference(c));
+// Seconds unmeasured between a clock's frequency readings, 0 where none
+// apply: the correction needs a record without gaps, so not a filled one.
+export const deadTime = (c) => (c.kind === "frequency" && !c.fillgaps && c.dead_time) || 0;
 // A table of phase noise, read as a clock: it has σ(τ) and a spectrum, and no record in time.
 export const isTable = (c) => c.kind === "spectrum";
 // Clocks the pages of records take (Dynamic, Holdover, Steering): visible ones that are not tables.
