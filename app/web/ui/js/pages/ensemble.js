@@ -6,7 +6,7 @@
 // are the value columns of one loaded file; without such a file the core
 // simulates four (not for two channels). Each is computed when this page
 // needs it and recomputed when the settings or the clocks change.
-import { state, update, isReference } from "../state.js";
+import { state, update, isReference, isTable } from "../state.js";
 import { ensemble, synthArgs } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, LINE_W } from "../plot.js";
 import { byId } from "../estimators.js";
@@ -73,7 +73,7 @@ export const ownsPanel = true;
 function fileClocks(all = false) {
   const groups = new Map();
   for (const c of state.clocks) {
-    if (c.source.type !== "file" || c.group === null || c.format || !c.record || (!all && isReference(c))) continue;
+    if (c.source.type !== "file" || c.group === null || c.format || isTable(c) || !c.record || (!all && isReference(c))) continue;
     groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
   }
   const file = [...groups.values()].find((g) => g.length >= 2);

@@ -48,6 +48,24 @@ const tableKind = (names) =>
   names.some((n) => /phase|time ?err|\btie\b|pps|time ?offset|time ?diff/i.test(n)) ? "phase"
     : names.some((n) => /freq|\bffe\b|osc|fractional|ratio/i.test(n)) ? "frequency" : null;
 
+// A table of phase noise: the offset frequency in the first column and a
+// spectral density in the second, by name (dBc, ℒ(f), S_φ, offset) or by
+// shape: offsets that rise over two decades or more, far sparser than a time
+// column's even steps, beside levels in dBc/Hz. Returns the density it holds,
+// as the core's --density names it, or null.
+export function densityOf(names, columns) {
+  const name = names.slice(1).join(" ");
+  if (/dbc/i.test(name) || /^\s*(l|ℒ)\s*\(f\)/i.test(name)) return "L";
+  if (/\bs_?(phi|φ)|rad.?2|rad²/i.test(name)) return "Sphi";
+  if (/\bs_?x\b|s.?2\s*\/\s*hz|s²\/hz/i.test(name)) return "Sx";
+  if (/\bs_?y\b|1\s*\/\s*hz/i.test(name)) return "Sy";
+  const [f, v] = columns;
+  const span = f?.length >= 2 && f[0] > 0 ? f[f.length - 1] / f[0] : 0;
+  const rising = span >= 100 && 2 * f.length < span && f.every((x, i) => i === 0 || x > f[i - 1]);
+  if (rising && v.every((x) => x <= -20 && x >= -250)) return "L";
+  return /offset|phase ?noise/i.test(names[0] ?? "") && rising ? "L" : null;
+}
+
 // NaN marks a missing sample; Julia's reader parses it as a Float64.
 const isNum = (x) => x !== "" && (Number.isFinite(Number(x)) || /^[+-]?nan$/i.test(x));
 
@@ -194,7 +212,9 @@ export function sniff(name, text) {
     tau0Hint: interval ? Number(interval[1]) : tauComment ? Number(tauComment[1]) : null,
     format: fmt?.format ?? null,      // passed to the core as --input-format
     formatLabel: fmt?.label ?? null,
-    kindHint: fmt?.format ? fmt.format === "table" ? tableKind(names) : fmt.kind ?? null : tableKind(names) ?? sizeKind(columns),
+    kindHint: fmt?.format ? fmt.format === "table" ? tableKind(names) : fmt.kind ?? null
+      : nCols >= 2 && densityOf(names, columns) ? "spectrum" : tableKind(names) ?? sizeKind(columns),
+    density: fmt?.format || nCols < 2 ? null : densityOf(names, columns),
     stable32: /stable32/i.test(lines.slice(0, start).join("\n")) || /\.dat$/i.test(name) && header > 0,
   };
 }

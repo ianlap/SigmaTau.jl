@@ -6,7 +6,7 @@
 // phase with the frequency correction in force. Several clocks: one color
 // per clock. The gains come from a time constant (pole placement) or from a
 // cost. Computed when this page needs it; no Run is needed.
-import { state, update, visibleClocks, multi } from "../state.js";
+import { state, update, recordClocks, multi } from "../state.js";
 import { steer as fetchSteer, steerKey, steerDefault } from "../core.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css, timeUnit, LINE_W } from "../plot.js";
 import { sci, num, duration, timeAxisUnit, modelText, inWords, escapeHtml as h } from "../format.js";
@@ -20,7 +20,7 @@ const WEIGHTS = ["phase²", "frequency²", "steer²"];
 
 // The settings, in the toolbar above the plot.
 export function controls() {
-  const o = state.steer, c = visibleClocks()[0], rec = c?.record;
+  const o = state.steer, c = recordClocks()[0], rec = c?.record;
   const from = `<div class="seg" role="group" aria-label="Gains from">
       <button type="button" data-ctl="from" data-v="time" class="${o.from === "time" ? "on" : ""}" title="A critically damped loop with this time constant: gains by pole placement">Time constant</button>
       <button type="button" data-ctl="from" data-v="cost" class="${o.from === "cost" ? "on" : ""}" title="The gains that minimize a weighted sum of phase², frequency² and steer² (LQG)">Cost</button></div>`;
@@ -206,7 +206,7 @@ export function refresh() {
   if (!grid.contains(document.activeElement)) grid.innerHTML = record ? "" : gridField();
   root.querySelector("[data-ref=title]").textContent = record ? "Steered phase" : "Stability, free-running and steered";
   const side = root.querySelector("[data-ref=side]");
-  const clocks = visibleClocks().filter((c) => c.record);
+  const clocks = recordClocks().filter((c) => c.record);
   if (!clocks.length) {
     side.hidden = true;
     return showEmpty(`<h2>No record yet</h2><p>Load or synthesize a record on the Data page.</p><button class="btn" data-act="load">Go to Data</button>`);
@@ -228,7 +228,7 @@ export function refresh() {
 
 // The File menu's results: the Allan deviations of each clock shown, in the core's columns.
 export function results() {
-  const ready = visibleClocks().filter((c) => c.record && c.steer?.key === steerKey(c) && !c.steer.error);
+  const ready = recordClocks().filter((c) => c.record && c.steer?.key === steerKey(c) && !c.steer.error);
   return {
     what: "Steering table", file: "steering",
     columns: ["clock", "tau_s", "free", "steered", "predicted"],

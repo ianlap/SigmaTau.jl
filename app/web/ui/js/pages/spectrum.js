@@ -2,21 +2,14 @@
 // overlaid, both plots on one frequency axis. The core returns S_y and S_x
 // with each run; the carrier, phase-noise view, averaging and slope guides
 // are display settings applied here without a run.
-import { state, update, visibleClocks, multi, deadTime } from "../state.js";
+import { state, update, visibleClocks, multi, isTable, deadTime } from "../state.js";
 import { loadPlotly, baseLayout, logAxis, linAxis, CONFIG, seriesColor, css } from "../plot.js";
-import { num, escapeHtml as h } from "../format.js";
+import { hertz, escapeHtml as h } from "../format.js";
 
 let root, ctx, Plotly, top, bottom, syncing = false;
 
 const SLOPES = { "-2": "random-walk FM", "-1": "flicker FM", "0": "white FM", "1": "flicker PM", "2": "white PM" };
 const SUP = { "-2": "⁻²", "-1": "⁻¹", "0": "⁰", "1": "¹", "2": "²" };
-
-export function carrierLabel(hz) {
-  if (!(hz > 0)) return "–";
-  const units = [[1e9, "GHz"], [1e6, "MHz"], [1e3, "kHz"], [1, "Hz"]];
-  const [f, u] = units.find(([f]) => hz >= f) ?? [1, "Hz"];
-  return `${num(hz / f, 4)} ${u}`;
-}
 
 // The settings, in the toolbar above the plots.
 export function controls() {
@@ -142,7 +135,7 @@ export function refresh() {
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
   const isL = state.spec.phase === "L";
-  root.querySelector("[data-ref=bottom-title]").innerHTML = isL ? `Phase noise ℒ(f) at ${carrierLabel(state.spec.carrier)}` : "Phase S<sub>x</sub>(f)";
+  root.querySelector("[data-ref=bottom-title]").innerHTML = isL ? `Phase noise ℒ(f) at ${hertz(state.spec.carrier)}` : "Phase S<sub>x</sub>(f)";
   root.querySelector("[data-ref=bottom-units]").textContent = isL ? "dBc/Hz" : "s²/Hz";
 
   // The core analyzes a record with gaps without its spectrum.
@@ -171,9 +164,9 @@ export function refresh() {
     const color = several ? seriesColor(c.slot) : css("--s1");
     const sy = shown(sp.f, sp.sy), sx = shown(sp.f, sp.sx);
     const name = several ? c.name : "S_y";
-    topTraces.push({ x: sy.f, y: sy.p, mode: "lines", name, line: { color, width: 2 },
+    topTraces.push({ x: sy.f, y: sy.p, mode: isTable(c) ? "lines+markers" : "lines", name, line: { color, width: 2 },
       hovertemplate: `${several ? `<b>${h(c.name)}</b><br>` : ""}f = %{x:.4g} Hz<br>S<sub>y</sub> = %{y:.3e} /Hz<extra></extra>` });
-    botTraces.push({ x: sx.f, y: isL ? toL(sx.p) : sx.p, mode: "lines", name,
+    botTraces.push({ x: sx.f, y: isL ? toL(sx.p) : sx.p, mode: isTable(c) ? "lines+markers" : "lines", name,   // a table's own points
       line: { color: several ? color : css("--s3"), width: 2 },
       hovertemplate: `${several ? `<b>${h(c.name)}</b><br>` : ""}f = %{x:.4g} Hz<br>${isL ? "ℒ = %{y:.1f} dBc/Hz" : "S<sub>x</sub> = %{y:.3e} s²/Hz"}<extra></extra>` });
     if (!several && i === 0 && state.spec.guides) notes = slopeGuides(logBin(sp.f, sp.sy).f, logBin(sp.f, sp.sy).p);
