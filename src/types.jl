@@ -421,7 +421,7 @@ end
 
 function Base.show(io::IO, r::SpectralResult)
     n = length(r.freq)
-    rng = n == 0 ? "" : ", f∈[$(r.freq[1]), $(r.freq[end])] Hz"
+    rng = n == 0 ? "" : ", f∈[$(_show4g(r.freq[1])), $(_show4g(r.freq[end]))] Hz"
     print(io, "SpectralResult(:", r.spectral_type, ", ", n, " bins", rng,
               ", ", r.units, ", nperseg=", r.nperseg, ")")
 end

@@ -66,6 +66,10 @@ function SimulatedSource(; white_pm::Real=0.0, white_fm::Real=1e-12, rw_fm::Real
                            Float64(tau0), rng, 0.0, 0.0)
 end
 
+Base.show(io::IO, s::SimulatedSource) =
+    print(io, "SimulatedSource(τ₀=", _show4g(s.tau0), " s, WPM=", _show4g(s.white_pm),
+          ", WFM=", _show4g(s.white_fm), ", RWFM=", _show4g(s.rw_fm), ")")
+
 _draw(::Nothing) = randn()
 _draw(rng) = randn(rng)
 
@@ -118,6 +122,10 @@ struct InstrumentSource{T<:IO}
     query::String
 end
 InstrumentSource(io::IO; query::AbstractString="") = InstrumentSource(io, String(query))
+
+Base.show(io::IO, s::InstrumentSource) =
+    print(io, "InstrumentSource(", nameof(typeof(s.io)),
+          isempty(s.query) ? "" : ", query=" * repr(s.query), ")")
 
 function read_reading(s::InstrumentSource)
     if !isempty(s.query)
@@ -182,6 +190,10 @@ function LiveStability(devs::AbstractVector{Symbol}, tau0::Real,
     accs = StreamingStability[StreamingStability(d, tau0, m_values) for d in devs]
     return LiveStability(accs, quantity, Float64(tau0), Float64(nominal), 0.0, 0)
 end
+
+Base.show(io::IO, l::LiveStability) =
+    print(io, "LiveStability([", join((":" * string(a.dev) for a in l.accs), ", "),
+          "], τ₀=", _show4g(l.tau0), " s, :", l.quantity, ", ", l.readings, " readings)")
 
 function Base.push!(live::LiveStability, reading::Real)
     r = Float64(reading)

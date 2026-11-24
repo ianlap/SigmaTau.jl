@@ -45,9 +45,10 @@ struct HoldoverResult
     time_to_limit::Float64
 end
 
-Base.show(io::IO, h::HoldoverResult) =
-    print(io, "HoldoverResult(", length(h.tau), " pts, τ∈[", _show4g(h.tau[1]), ", ",
-          _show4g(h.tau[end]), "] s, trained on ", _show_train(h), ")")
+function Base.show(io::IO, h::HoldoverResult)
+    rng = isempty(h.tau) ? "" : ", τ∈[" * _show4g(h.tau[1]) * ", " * _show4g(h.tau[end]) * "] s"
+    print(io, "HoldoverResult(", length(h.tau), " pts", rng, ", trained on ", _show_train(h), ")")
+end
 
 _show_train(h) = h.grow > 0 ? "$(h.grow) τ" : _show4g(h.train) * " s"
 
@@ -446,9 +447,10 @@ struct HoldoverPrediction
     time_to_limit::Float64
 end
 
-Base.show(io::IO, h::HoldoverPrediction) =
-    print(io, "HoldoverPrediction(", length(h.tau), " pts, τ∈[", _show4g(h.tau[1]), ", ",
-          _show4g(h.tau[end]), "] s, trained on ", _show_train(h), ")")
+function Base.show(io::IO, h::HoldoverPrediction)
+    rng = isempty(h.tau) ? "" : ", τ∈[" * _show4g(h.tau[1]) * ", " * _show4g(h.tau[end]) * "] s"
+    print(io, "HoldoverPrediction(", length(h.tau), " pts", rng, ", trained on ", _show_train(h), ")")
+end
 
 function Base.show(io::IO, ::MIME"text/plain", h::HoldoverPrediction)
     show(io, h)

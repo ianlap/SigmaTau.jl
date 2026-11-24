@@ -27,6 +27,9 @@ struct NoiseFit
     components::Vector{@NamedTuple{alpha::Int, h::Float64, range::UnitRange{Int}}}
 end
 
+Base.show(io::IO, f::NoiseFit) =
+    print(io, "NoiseFit(:", f.result.deviation_type, ", ", length(f.components), " components)")
+
 Base.show(io::IO, ::MIME"text/plain", f::NoiseFit) = begin
     print(io, "NoiseFit to ", f.result.deviation_type, " (", length(f.components), " components)")
     for c in f.components

@@ -32,6 +32,9 @@ struct PowerLawFit
     fit::Vector{Float64}
 end
 
+Base.show(io::IO, f::PowerLawFit) =
+    print(io, "PowerLawFit(:", f.source, ", ", length(f.x), " pts, ", length(f.alphas), " terms)")
+
 function Base.show(io::IO, ::MIME"text/plain", f::PowerLawFit)
     print(io, "PowerLawFit to ", f.source, " (", length(f.x), " points)")
     for (α, h) in zip(f.alphas, f.h)
