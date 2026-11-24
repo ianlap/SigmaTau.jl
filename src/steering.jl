@@ -303,6 +303,18 @@ end
 Base.show(io::IO, r::SteeringResult) =
     print(io, "SteeringResult(", length(r.steers), " samples, ", r.gains, ")")
 
+function Base.show(io::IO, ::MIME"text/plain", r::SteeringResult)
+    show(io, r)
+    isempty(r.phase) && return
+    function rms(v)
+        xs = filter(isfinite, v)
+        return isempty(xs) ? "NaN" : _show4g(sqrt(sum(abs2, xs) / length(xs)))
+    end
+    n_steers = count(!iszero, r.steers)
+    print(io, "\n  ", n_steers, " steers, phase ", rms(r.steered.x),
+          " s rms, steer ", rms(r.steers), " rms")
+end
+
 """
     steer(data::PhaseData, model::ClockModel, g::SteeringGains) → SteeringResult
 
@@ -412,6 +424,14 @@ end
 Base.show(io::IO, p::SteeringPrediction) =
     print(io, "SteeringPrediction(phase ", _show4g(p.phase), " s, frequency ", _show4g(p.frequency),
           ", steers ", _show4g(p.steers), " rms; ", p.gains, ")")
+
+function Base.show(io::IO, ::MIME"text/plain", p::SteeringPrediction)
+    show(io, p)
+    n = length(p.tau)
+    n == 0 && return
+    cells(i) = [_show4g(p.tau[i]), _show4g(p.adev[i])]
+    _print_table(io, ["tau", "adev"], n, _table_rows(n), cells)
+end
 
 # Σ = M Σ Mᵀ + W for a stable M, as the sum of Mᵏ W Mᵏᵀ: each pass doubles
 # the number of terms.

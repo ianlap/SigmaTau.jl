@@ -35,10 +35,16 @@ struct TimescaleResult
     xhat::Matrix{Float64}
 end
 
+function Base.show(io::IO, r::TimescaleResult)
+    n, k = size(r.x)
+    print(io, "TimescaleResult(:", r.algorithm, ", ", k, " clocks, ", n, " samples)")
+end
+
 function Base.show(io::IO, ::MIME"text/plain", r::TimescaleResult)
     n, k = size(r.x)
     print(io, uppercase(String(r.algorithm)), " timescale from ", k, " clocks, ", n, " samples")
-    @printf(io, "\n  final weights %s", join((@sprintf("%.3f", w) for w in r.weights[end, :]), ", "))
+    n == 0 || all(isnan, @view r.weights[end, :]) ||
+        @printf(io, "\n  final weights %s", join((@sprintf("%.3f", w) for w in @view r.weights[end, :]), ", "))
 end
 
 """

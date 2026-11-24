@@ -184,6 +184,17 @@ function Base.show(io::IO, r::CrossStabilityResult)
     print(io, "CrossStabilityResult(", length(r.tau), " τ, ", r.n, " samples per channel)")
 end
 
+function Base.show(io::IO, ::MIME"text/plain", r::CrossStabilityResult)
+    show(io, r)
+    n = length(r.tau)
+    n == 0 && return
+    header = ["tau", "dev", "covar", "uncertainty", "dev_a", "dev_b", "neff"]
+    cells(i) = [_show4g(r.tau[i]), _show4g(r.dev[i]), _show4g(r.covar[i]),
+                _show4g(r.uncertainty[i]), _show4g(r.dev_a[i]), _show4g(r.dev_b[i]),
+                string(r.neff[i])]
+    _print_table(io, header, n, _table_rows(n), cells)
+end
+
 """
     cross_adev(a, b, m_values=Octave) → CrossStabilityResult
 

@@ -31,6 +31,10 @@ struct KalmanResult
     Ppred::Array{Float64,3}
 end
 
+Base.show(io::IO, r::KalmanResult) =
+    print(io, "KalmanResult(", length(r.t), " samples, ", size(r.x, 2), " states",
+          r.smoothed ? ", smoothed" : "", ")")
+
 function Base.show(io::IO, ::MIME"text/plain", r::KalmanResult)
     print(io, r.smoothed ? "Smoothed " : "", "KalmanResult, ", length(r.t), " samples, ",
           size(r.x, 2), " states")
