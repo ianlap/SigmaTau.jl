@@ -154,42 +154,12 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => document.querySelector("#page [data-ref=plot]").data.some((d) => d.yaxis === "y2"));
   });
 
-  await t.test("Ensemble: a Kalman scale with flicker states", async () => {
+  await t.test("Ensemble: one clock of a file is too few, and no simulated clocks stand in for it", async () => {
     await page.click("a[data-page=ensemble]");
-    await page.selectOption("#side [data-ctl=alg]", "greenhall");
-    // Simulated clocks run on the models they were made from; flicker states belong to fitted ones.
-    await page.waitForFunction(() => /White FM[\s\S]*1\.0e-24/.test(document.querySelector("#page [data-ref=table]")?.innerText ?? ""), null, SLOW);
-    assert.equal(await page.locator("#side [data-ctl=flicker]").count(), 0);
-    await page.selectOption("#side [data-ctl=models]", "fitted");
-    await page.selectOption("#side [data-ctl=flicker]", "on");
-    await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
-    assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
-    assert.match(await page.locator("#page [data-ref=table]").innerText(), /White FM/);   // the fitted models
-    await plotted("#page [data-ref=adev]");
-    // The dotted lines of simulated clocks are the clocks as read, which the
-    // scale compares with; "Scale" gives each clock against the scale.
-    const ts = JSON.parse(execFileSync(CLI, ["timescale", "--synth", "16384", "--seed", "42", "--algorithm", "greenhall", "--pivot", "1", "--fitted-models", "--flicker", "--format", "json"])).timescale;
-    const dotted = () => page.evaluate(() => document.querySelector("#page [data-ref=adev]").data[1].y);
-    assert.deepEqual(await dotted(), ts.adev.readings[0]);
-    assert.match(await page.locator("#page .ens-note").innerText(), /the scale is 0\.\d+ of its most stable clock/);
-    await page.selectOption("#side [data-ctl=against]", "scale");
-    assert.deepEqual(await dotted(), ts.adev.clocks[0]);
-    const tsv = await exported("tsv");
-    assert.equal(tsv.label, "Time scale table as TSV");
-    assert.match(tsv.text, /^clock\tagainst\ttau_s\tadev\tweight\tweight_mean\terror_rms_s\ntime scale\treference\t/);
-  });
-
-  await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
+    const note = page.locator("#page [data-ref=empty]", { hasText: "stable32gen.DAT gives one clock, and a scale or a hat needs two or more" });
+    await note.waitFor(SLOW);
     await page.click("[data-ctl=view][data-v=hat]");
-    // The view switch spans the column of the controls around it, and no further.
-    await openPanel();
-    const [view, column] = await page.evaluate(() => [".ens-view", ".ens-view + .opt"].map((s) => document.querySelector(s).getBoundingClientRect()).map((r) => [r.left, r.right]));
-    assert.deepEqual(view.map(Math.round), column.map(Math.round));
-    await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]").data?.some((d) => d.name === "Pairs, as measured"), null, SLOW);
-    assert.equal(await page.locator("#page [data-ref=title]").innerText(), "ADEV of each clock");
-    const shown = await page.evaluate(() => document.querySelector("#page [data-ref=adev]").data.filter((d) => /^clock \d$/.test(d.name)).map((d) => d.y));
-    const { hat } = JSON.parse(execFileSync(CLI, ["hat", "--synth", "16384", "--seed", "42", "--format", "json"]));   // the page's own four clocks
-    assert.deepEqual(shown, hat.results[0].clocks.map((c) => c.points.map((p) => p.dev)));
+    await note.waitFor(SLOW);
     await page.click("[data-ctl=view][data-v=scale]");
   });
 
@@ -406,6 +376,48 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     assert.deepEqual([shown.x, shown.y], [doc.results[0].points.map((p) => p.tau), doc.results[0].points.map((p) => p.dev)]);
     await page.click("a[data-page=spectrum]");
     await page.locator("#page [data-ref=empty]", { hasText: "readings with dead time" }).waitFor(SLOW);
+    await page.click("a[data-page=data]");
+  });
+
+  await t.test("Ensemble: a Kalman scale with flicker states", async () => {
+    await page.goto(base + "#ensemble");
+    await page.reload();   // only the default record: with no file, the page simulates four clocks
+    await settled();
+    await page.selectOption("#side [data-ctl=alg]", "greenhall");
+    // Simulated clocks run on the models they were made from; flicker states belong to fitted ones.
+    await page.waitForFunction(() => /White FM[\s\S]*1\.0e-24/.test(document.querySelector("#page [data-ref=table]")?.innerText ?? ""), null, SLOW);
+    assert.equal(await page.locator("#side [data-ctl=flicker]").count(), 0);
+    await page.selectOption("#side [data-ctl=models]", "fitted");
+    await page.selectOption("#side [data-ctl=flicker]", "on");
+    await page.waitForFunction(() => /Greenhall.*flicker states/.test(document.querySelector("#page [data-ref=sub]")?.textContent ?? ""), null, SLOW);
+    assert.match(await page.locator("#page .ens-note").innerText(), /[Ff]licker/);
+    assert.match(await page.locator("#page [data-ref=table]").innerText(), /White FM/);   // the fitted models
+    await plotted("#page [data-ref=adev]");
+    // The dotted lines of simulated clocks are the clocks as read, which the
+    // scale compares with; "Scale" gives each clock against the scale.
+    const ts = JSON.parse(execFileSync(CLI, ["timescale", "--synth", "16384", "--seed", "42", "--algorithm", "greenhall", "--pivot", "1", "--fitted-models", "--flicker", "--format", "json"])).timescale;
+    const dotted = () => page.evaluate(() => document.querySelector("#page [data-ref=adev]").data[1].y);
+    assert.deepEqual(await dotted(), ts.adev.readings[0]);
+    assert.match(await page.locator("#page .ens-note").innerText(), /the scale is 0\.\d+ of its most stable clock/);
+    await page.selectOption("#side [data-ctl=against]", "scale");
+    assert.deepEqual(await dotted(), ts.adev.clocks[0]);
+    const tsv = await exported("tsv");
+    assert.equal(tsv.label, "Time scale table as TSV");
+    assert.match(tsv.text, /^clock\tagainst\ttau_s\tadev\tweight\tweight_mean\terror_rms_s\ntime scale\treference\t/);
+  });
+
+  await t.test("Ensemble: the hat's σ of each clock equal the command line's", async () => {
+    await page.click("[data-ctl=view][data-v=hat]");
+    // The view switch spans the column of the controls around it, and no further.
+    await openPanel();
+    const [view, column] = await page.evaluate(() => [".ens-view", ".ens-view + .opt"].map((s) => document.querySelector(s).getBoundingClientRect()).map((r) => [r.left, r.right]));
+    assert.deepEqual(view.map(Math.round), column.map(Math.round));
+    await page.waitForFunction(() => document.querySelector("#page [data-ref=adev]").data?.some((d) => d.name === "Pairs, as measured"), null, SLOW);
+    assert.equal(await page.locator("#page [data-ref=title]").innerText(), "ADEV of each clock");
+    const shown = await page.evaluate(() => document.querySelector("#page [data-ref=adev]").data.filter((d) => /^clock \d$/.test(d.name)).map((d) => d.y));
+    const { hat } = JSON.parse(execFileSync(CLI, ["hat", "--synth", "16384", "--seed", "42", "--format", "json"]));   // the page's own four clocks
+    assert.deepEqual(shown, hat.results[0].clocks.map((c) => c.points.map((p) => p.dev)));
+    await page.click("[data-ctl=view][data-v=scale]");
     await page.click("a[data-page=data]");
   });
 
@@ -645,23 +657,37 @@ test("explorer pages, against the command line", { skip: !CLI && "set SIGMATAU_C
     await page.waitForFunction(() => location.hash === "#stability");
   });
 
-  await t.test("Ensemble: a table with dates holds clocks the page cannot read, and it says so in place of simulating", async () => {
+  await t.test("Ensemble: the clocks of a table with dates and of a RINEX clock file, read by name as the command line reads them", async () => {
     await page.goto(base + "#data");
     await page.reload();   // only the default record, no clocks of earlier steps
     await settled();
-    const n = errors.length, asked = [];
-    const day = Date.UTC(2026, 9, 16), clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k))).toExponential(6);
+    const n = errors.length;
+    const open = async (name, buffer, picks) => {
+      const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
+      await chooser.setFiles({ name, mimeType: "text/plain", buffer });
+      for (const k of picks) await page.locator("dialog[open]").getByText(k, { exact: true }).click();
+      await page.getByRole("button", { name: /^Load \d clocks/ }).click();
+      await settled();
+    };
+    const day = Date.UTC(2026, 9, 16), clock = (i, k) => (1e-9 * Math.sin(i * (0.7 + 0.2 * k)) + 1e-12 * k * i).toExponential(6);
     const rows = Array.from({ length: 200 }, (_, i) => [new Date(day + 30000 * i).toISOString().slice(0, 19), clock(i, 1), clock(i, 2)].join(","));
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("button[data-act=open]")]);
-    await chooser.setFiles({ name: "dated.csv", mimeType: "text/csv", buffer: Buffer.from(`time,a phase (s),b phase (s)\n${rows.join("\n")}\n`) });
-    await page.getByRole("button", { name: "Load 2 clocks" }).click();
-    await settled();
-    const ask = (r) => asked.push(r.postData() ?? "");
-    page.on("request", ask);
+    await open("dated.csv", Buffer.from(`time,a phase (s),b phase (s)\n${rows.join("\n")}\n`), []);
     await page.click("a[data-page=ensemble]");
-    await page.locator("#page [data-ref=empty]", { hasText: "The clocks of dated.csv, a table read by column name" }).waitFor(SLOW);
-    page.off("request", ask);
-    assert.ok(!asked.some((b) => b.includes("--synth")), "no simulated ensemble");
+    await openPanel();
+    await page.click("[data-ctl=view][data-v=scale]");
+    await page.locator("#page [data-ref=sub]", { hasText: "200 samples · τ₀ = 30 s" }).waitFor(SLOW);
+    // A RINEX clock file: the hat of the two clocks picked in the dialog (a click picks, a second adds), by name.
+    const rinex = path.join(ROOT, "test/fixtures/formats/rinex_clk_synth.clk");
+    await page.click("a[data-page=data]");
+    await open("synth.clk", readFileSync(rinex), [/^abcd00xxx$/i, "E02"]);
+    const asked = page.waitForRequest((r) => (r.postData() ?? "").includes('"hat"'));
+    await page.click("a[data-page=ensemble]");
+    await page.click("[data-ctl=view][data-v=hat]");
+    const { args } = JSON.parse((await asked).postData());
+    assert.deepEqual(args.slice(0, 5), ["hat", "--input-format", "rinex_clk", "--column", "ABCD00XXX,E02"]);
+    const { hat } = JSON.parse(execFileSync(CLI, [args[0], rinex, ...args.slice(1)]));
+    const want = JSON.stringify(hat.results[0].clocks.slice(0, 2).map((c) => c.points.map((p) => p.dev)));
+    await page.waitForFunction((w) => JSON.stringify(document.querySelector("#page [data-ref=adev]").data?.filter((d) => ["ABCD00XXX", "E02"].includes(d.name)).map((d) => d.y)) === w, want, SLOW);
     assert.ok(errors.splice(n).every((e) => / 422 /.test(e)));
   });
 

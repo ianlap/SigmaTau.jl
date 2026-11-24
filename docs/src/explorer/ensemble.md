@@ -16,17 +16,20 @@ share ([Two channels](ensemble.md#Two-channels-of-one-device)).
 
 The page takes its clocks from the first of these that it finds:
 
-1. the clock columns of one loaded file of plain columns, two or more,
-   read at the same instants against the same reference, beside a time in
-   seconds or as an MJD;
+1. the clocks of one loaded file, two or more, read at the same instants
+   against the same reference: the clock columns of plain columns or of a
+   table with named columns, or the clocks picked from a RINEX clock file;
 2. clocks simulated together on the [Data](data.md#Simulated-records) or
    [Synthesis](synthesis.md) page;
-3. four simulated clocks of its own, of 16384 samples at 1 s.
+3. four simulated clocks of its own, of 16384 samples at 1 s, when no file
+   is loaded.
 
-A note in the side panel says which clocks are in use. A table read by
-column name with dates in its time column, a RINEX clock file or an
-instrument file holds clocks that the page cannot read: with such a file
-loaded, and no clocks simulated, the page says so and forms nothing. A clock chosen as
+A loaded file that gives fewer clocks, one clock alone or two of which one
+is the reference, is not replaced by simulated clocks: the page says how
+many clocks the file gives and waits for more, picked with **Import
+settings…** on the Data page or from another file.
+
+A note in the side panel says which clocks are in use. A clock chosen as
 the **Reference** in the list of clocks is left out of the scale, and so is
 a clock removed with ×. A hidden clock stays in. The hat keeps the clock
 chosen as the **Reference**: it works on the difference of every pair of

@@ -21,17 +21,20 @@ function remember(s, st) {
   } catch { /* storage off: nothing to remember */ }
 }
 
-// `prev`: settings of the clocks being re-imported (Import settings…); it
-// always shows the dialog. Otherwise settings remembered for files like this
-// one load the file without asking.
 // The spectral densities a table of phase noise may hold, as the core's --density names them.
 export const DENSITIES = [["L", "ℒ(f) in dBc/Hz"], ["Sphi", "S_φ(f) in rad²/Hz"], ["Sx", "S_x(f) in s²/Hz"], ["Sy", "S_y(f) in 1/Hz"]];
 
-export function openImport(file, prev = null) {
+// `prev`: settings of the clocks being re-imported (Import settings…); it
+// always shows the dialog. `pick`: the names of the clocks to propose (an
+// example file), which also shows it. Otherwise settings remembered for files
+// like this one load the file without asking.
+export function openImport(file, prev = null, pick = null) {
   const dlg = document.getElementById("import-dialog");
   const s = sniff(file.name, file.text);
   const guess = guessRoles(s);
-  const mem = prev ? null : remembered(s);
+  const mem = prev || pick ? null : remembered(s);
+  const named = pick?.map((n) => s.names.findIndex((m) => m?.toLowerCase() === n.toLowerCase()) + 1).filter((c) => c > 0) ?? [];
+  if (named.length) guess.values = named;
   const p = prev ?? mem;
   const kind0 = s.kindHint ?? p?.kind ?? "phase";
   const st = {
@@ -54,7 +57,7 @@ export function openImport(file, prev = null) {
   if (!st.values.length) st.time = 0, st.values = [guess.value];
   const fromMemory = !!mem;
   // In a clock list the first clock is only a default: the first click picks instead of adding.
-  let picked = !!p;
+  let picked = !!p || named.length > 0;
 
   // `ts` and `tau0` of the first clock; `per`, each clock's stats (their own grids in a RINEX file).
   const derived = () => {

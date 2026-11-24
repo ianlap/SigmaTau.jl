@@ -96,8 +96,8 @@ let nextGroup = 1;
 // Load a file through the import dialog. The first value column goes into
 // `clock` (or a new clock); each further value column becomes its own clock,
 // all in one group so a reference clock can be chosen among them.
-async function importFile(file, clock, prev) {
-  const settings = await openImport(file, prev);
+async function importFile(file, clock, prev, pick = null) {
+  const settings = await openImport(file, prev, pick);
   if (!settings) return;
   const group = prev?.group ?? nextGroup++;
   const touched = [];
@@ -156,10 +156,10 @@ async function openInto(clock) {
 
 // One of the real records in ui/samples, through the import dialog like a picked file.
 // Its clocks take the place of those loaded.
-async function openSample(name) {
+async function openSample(name, pick = null) {
   const r = await fetch(`samples/${name}`).catch(() => null);
   if (!r?.ok) { ctx.status("error", `The example ${name} could not be read.`); return; }
-  const touched = await importFile(await readFile(new File([await r.blob()], name)), state.clocks[0] ?? null);
+  const touched = await importFile(await readFile(new File([await r.blob()], name)), state.clocks[0] ?? null, null, pick);
   if (!touched) return;
   const keep = new Set(touched.map((c) => c.id));
   update((s) => {

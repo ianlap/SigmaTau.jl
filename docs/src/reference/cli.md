@@ -52,7 +52,7 @@ takes the options of this section.
 | `--input-format FMT` | layout of the file: `columns`, `stable32`, `timelab`, `counter`, `table`, `bipm_utc` or `rinex_clk`. By default `auto`, which detects it as [`read_data`](@ref) does |
 | `--phase`, `--freq` | the samples are phase in seconds, or fractional frequency. A file of columns is phase unless `--freq` is given. The other layouts tell which they hold, and either flag overrides them |
 | `--tau0 SECONDS` | sample interval. By default the one in the header of the file, else the step of the time column |
-| `--column COL` | the column of the clock: its number, counted from 1, or its name in a table whose first line names the columns. By default 2, and in a table the column that [`read_data`](@ref) picks from the names. In a RINEX clock file, the clock's name; by default the first clock. A name in a file without names is refused. `timescale` and `hat` take a list of two or more, `2,3,4` |
+| `--column COL` | the column of the clock: its number, counted from 1, or its name in a table whose first line names the columns. By default 2, and in a table the column that [`read_data`](@ref) picks from the names. In a RINEX clock file, the clock's name, in any case; by default the first clock. A name in a file without names is refused. `timescale` and `hat` take a list of two or more, `2,3,4`, and `cross` a list of two; in a RINEX clock file a list of clock names, `G08,E12,PIE1`, or of their numbers in order of first appearance |
 | `--time-column COL` | column of the time, by number or name. By default 1. `--time-column 0` reads a file that has no time column |
 | `--reference-column COL` | column to subtract from the clock's, by number or name, for clocks measured against one reference in one file |
 | `--header N` | number of lines to skip after the leading `#` lines, such as a line of column names |
@@ -497,7 +497,8 @@ tau,covar,dev,uncertainty,dev_a,dev_b,neff
 ```
 
 The JSON output holds `with`, the name of the second file (or
-`value_cols`, the two columns), the same result
+`value_cols`, the two columns), `record` and `record_b`, the two channels
+as prepared (each with the samples `--fill-gaps` put in it), the same result
 as `cross_adev`, and the result of [`cross_psd_y`](@ref):
 
 ```@example cliref
@@ -508,7 +509,7 @@ sigmatau_json("cross a.dat --with b.dat --freq --format json"; only = "cross_spe
 
 | Option | Meaning |
 |:---|:---|
-| `--column LIST` | columns of the clocks, two or more, each read against the same reference, by number or name: `2,3,4`. In a table with named columns each is read with the unit in its name and is named by its column name in the output. Without the option, the error lists the columns by number |
+| `--column LIST` | columns of the clocks, two or more, each read against the same reference, by number or name: `2,3,4`. In a table with named columns each is read with the unit in its name and is named by its column name in the output. In a RINEX clock file, the clocks by name, each against the file's reference clock and named by its name in the output. Without the option, the error lists the columns by number |
 | `--algorithm ALG` | `at1` (the default), `at2`, `ewfa`, `greenhall`, `jones_tryon` or `stein`, the algorithms of [`timescale`](@ref) |
 | `--wmax W` | with `at1`, `at2` or `stein`, the largest weight that one clock may take, from 1 over the number of clocks to 1. By default 1, which sets no limit |
 | `--steps MODE` | with `at2`, detect frequency steps of the clocks: `best` or `real` |

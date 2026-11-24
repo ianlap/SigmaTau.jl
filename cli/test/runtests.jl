@@ -388,6 +388,14 @@ mktempdir() do dir
         r = run_cli("check", fx("rinex_clk_synth.clk"), "--column", "E02", "--format", "json")
         @test r.code == 0 && occursin("\"quantity\":\"phase\"", r.out) && occursin("\"tau0\":30.0", r.out)
         @test run_cli("check", fx("rinex_clk_synth.clk"), "--column", "G99").code == 2
+        # Several of its clocks, by name in any case or by number in order of first appearance.
+        rx = fx("rinex_clk_synth.clk")
+        t = run_cli("timescale", rx, "--column", "g01,ABCD00XXX,E02")
+        @test t.code == 0 && t.out == run_cli("timescale", rx, "--column", "1,2,3").out
+        @test getindex.(csv_rows(t.out), 1) == ["G01", "ABCD00XXX", "E02"]
+        @test getindex.(csv_rows(run_cli("hat", rx, "--column", "ABCD00XXX,E02", "--m", "1,2").out), 1) == repeat(["ABCD00XXX", "E02", "reference"]; inner=2)
+        @test run_cli("cross", rx, "--column", "ABCD00XXX,E02", "--m", "1,2").code == 0
+        @test run_cli("timescale", rx, "--column", "G01,G99").code == 1
         @test occursin("not to a timelab file", run_cli("check", tim, "--column", "alpha").err)
         @test run_cli("analyze", tim, "--reference-column", "2").code == 1
         semi = joinpath(dir, "semi.txt")
@@ -424,6 +432,12 @@ mktempdir() do dir
         rows2 = csv_rows(run_cli("cross", both, "--column", "2,3", "--m", "1,2,4").out)
         @test parse.(Float64, getindex.(rows2, 2)) ≈ lib.covar
         @test occursin("\"value_cols\":[2,3]", run_cli("cross", both, "--column", "2,3", "--format", "json").out)
+        # With --fill-gaps each channel's record says what was filled in it.
+        holes = joinpath(dir, "holes.csv")
+        write(holes, join((string(i - 1, ",", i in 40:42 ? "NaN" : X[i], ",", i == 90 ? "NaN" : X2[i]) for i in 1:256), "\n"))
+        h = run_cli("cross", holes, "--column", "2,3", "--fill-gaps", "--format", "json").out
+        filled(key) = parse(Int, match(Regex("\"" * key * "\":\\{[^}]*\"filled\":(\\d+)"), h)[1])
+        @test (filled("record"), filled("record_b")) == (3, 1)
         named = joinpath(dir, "named.csv")
         write(named, "t,a,b\n" * join(string.(0:255, ",", X, ",", X2), "\n"))
         @test run_cli("cross", named, "--column", "a,b", "--m", "1,2,4").out == run_cli("cross", both, "--column", "2,3", "--m", "1,2,4").out
