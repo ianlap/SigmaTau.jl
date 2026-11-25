@@ -311,3 +311,57 @@ def test_clock_models_and_implicit_mean_match_julia(jl):
     np.testing.assert_allclose(iem.x, np.array(jl.implicit_mean(jr, truth).x), rtol=1e-12)
     with pytest.raises(ValueError):
         st.implicit_mean(st.timescale(cc), truth)
+
+
+def test_compact_reprs_and_validations():
+    from sigmatau import HoldoverPrediction, HoldoverResult, MaskCheck, SteeringGains, io, types
+
+    assert {"sample_statistics", "sample_histogram", "acf"} <= set(io.__all__)
+    assert "start_time" in types.__all__
+
+    m = st.ClockModel(1.0, R=1e-22, q1=1e-24)
+    p, _ = st.simulate_clock(m, 64, rng=1)
+    k = st.kalman_filter(p, m)
+    h = st.holdover(p, m, train=10.0, tau=[1.0, 2.0])
+    hp = st.holdover(m, train=10.0, tau=[1.0, 2.0])
+    g = st.steering_gains(10.0, 1.0)
+    sr = st.steer(p, m, g)
+    sp = st.steer(m, g)
+    cc = st.ClockComparisons(np.zeros((32, 3)), 1.0, reference="UTC")
+    mc = MaskCheck("G811", np.array([1.0, 2.0]), np.array([1e-9, 1e-9]), True, 2.5)
+    empty_hr = HoldoverResult(
+        np.array([]), np.array([]), np.array([]), np.array([]), np.array([]),
+        np.array([]), np.array([]), 10.0, 0, False, True, 0.95, np.nan, np.nan,
+    )
+    empty_hp = HoldoverPrediction(
+        np.array([]), np.array([]), np.array([]), np.array([]), np.empty((0, 0)),
+        10.0, 0, False, True, 0.95, np.nan, np.nan,
+    )
+    for obj, prefix in (
+        (m, "ClockModel("),
+        (k, "KalmanResult("),
+        (h, "HoldoverResult("),
+        (hp, "HoldoverPrediction("),
+        (g, "SteeringGains("),
+        (sr, "SteeringResult("),
+        (sp, "SteeringPrediction("),
+        (cc, "ClockComparisons("),
+        (mc, "MaskCheck("),
+        (empty_hr, "HoldoverResult(0 pts"),
+        (empty_hp, "HoldoverPrediction(0 pts"),
+    ):
+        text = repr(obj)
+        assert text.startswith(prefix) and "\n" not in text and "array(" not in text
+
+    with pytest.raises(ValueError, match="interval must be positive"):
+        SteeringGains(0.1, 0.2, 0.0, 0.0)
+
+    r = st.adev(p)
+    nf_empty = st.noise_fit(r)
+    with pytest.raises(ValueError, match="must not be empty"):
+        nf_empty.add_component("WPM", [])
+    with pytest.raises(IndexError):
+        nf_empty.add_component("WPM", [99, 100])
+    nf_neg = st.noise_fit(r).add_component("WPM", [0, -1])
+    nf_slice = st.noise_fit(r).add_component("WPM", slice(0, None))
+    np.testing.assert_allclose(nf_neg.residual(), nf_slice.residual())

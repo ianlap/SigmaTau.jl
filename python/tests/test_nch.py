@@ -47,3 +47,21 @@ def test_clock_names(pairwise):
     assert hat["b"] is hat[1]
     with pytest.raises(KeyError):
         hat["d"]
+
+
+def test_clock_comparisons_form(jl):
+    rng = np.random.default_rng(11)
+    x = np.column_stack([s * rng.standard_normal(512) for s in (1.0, 2.0, 0.5)])
+    cc = st.ClockComparisons(x, 1.0, names=("C1", "C2", "C3"), reference="REF")
+    hat = st.ncornered_hat(cc, [1, 2, 4], deviation="mdev")
+    direct = jl.seval(
+        "(c, ms) -> ncornered_hat(c, ms; deviation=:mdev)"
+    )(cc._jl(), st._convert.to_jl_ints([1, 2, 4]))
+    assert hat.names == ("C1", "C2", "C3", "REF")
+    for a, b in zip(hat, [st._convert.result_from_jl(r) for r in direct], strict=True):
+        np.testing.assert_array_equal(a.dev, b.dev)
+    assert st.ncornered_hat(cc, reference=False).names == ("C1", "C2", "C3")
+    with pytest.raises(TypeError):
+        st.ncornered_hat(cc, names=["X", "Y", "Z"])
+    with pytest.raises(TypeError):
+        st.ncornered_hat(cc, [1, 2], m=[1, 2])

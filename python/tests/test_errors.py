@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import sigmatau as st
-from sigmatau import PhaseData
+from sigmatau import Octave, PhaseData, _convert, _julia
 
 
 def test_invalid_averaging_factor(small_phase):
@@ -76,3 +76,30 @@ def test_a_tau_without_a_deviation_has_no_edf_or_noise_type(small_phase):
     r = st.mtotdev(small_phase, [1, 1000])
     assert np.isnan(r.dev[1]) and np.isnan(r.edf[1]) and r.noise_type[1] == ""
     assert np.isfinite(r.edf[0]) and r.noise_type[0] != ""
+
+
+def test_bool_rejected_by_as_int_and_tau_values(small_phase):
+    with pytest.raises(TypeError, match="must be an integer"):
+        _convert.as_int(True, "m")
+    with pytest.raises(TypeError, match="must be an integer"):
+        _convert.as_int(np.bool_(False), "m")
+    with pytest.raises(TypeError, match="must be an integer"):
+        st.adev(small_phase, [True])
+    with pytest.raises(TypeError, match="must be an integer"):
+        st.tau_values(Octave, True, "adev")
+    with pytest.raises(TypeError, match="TauMode"):
+        st.tau_values("Octave", 64, "adev")
+    with pytest.raises(TypeError):
+        st.adev(small_phase, noise=123)
+
+
+def test_map_errors_extra_julia_exceptions(jl):
+    run = _julia._map_errors(jl.seval)
+    with pytest.raises(ValueError, match="bad shape"):
+        run('throw(DimensionMismatch("bad shape"))')
+    with pytest.raises(ValueError, match="boom"):
+        run('error("boom")')
+    with pytest.raises(IndexError):
+        run("throw(BoundsError([1, 2], 5))")
+    with pytest.raises(TypeError):
+        run("throw(InexactError(:Int, Int, 1.5))")

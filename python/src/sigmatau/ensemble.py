@@ -132,6 +132,20 @@ class ClockModel:
             _band(self.pm_band),
         )
 
+    def __repr__(self) -> str:
+        parts = [f"tau0={self.tau0}"]
+        for name in ("R", "q1", "q2", "q3", "flicker_fm", "flicker_pm"):
+            v = getattr(self, name)
+            if v > 0:
+                parts.append(f"{name}={v}")
+        if self.drift and self.q3 == 0:
+            parts.append("drift=True")
+        if self.flicker_fm > 0:
+            parts.append(f"fm_band={self.fm_band}")
+        if self.flicker_pm > 0:
+            parts.append(f"pm_band={self.pm_band}")
+        return f"ClockModel({', '.join(parts)})"
+
 
 def _model_from_jl(m: Any) -> ClockModel:
     return ClockModel(
@@ -254,12 +268,23 @@ class NoiseFit:
         sequence whose first and last entries are the first and last index,
         both included. Points where the residual is not positive are skipped.
         """
+        n = len(self._jl.result.tau)
         if isinstance(tau_index, slice):
-            n = len(self._jl.result.tau)
+            if tau_index.step not in (None, 1):
+                raise ValueError("add_component: tau_index slice step must be 1")
             lo, hi, _ = tau_index.indices(n)
+            if lo >= hi:
+                raise ValueError("add_component: tau_index must not be empty")
             first, last = lo, hi - 1
         else:
-            first, last = as_int(tau_index[0], "tau_index"), as_int(tau_index[-1], "tau_index")
+            if len(tau_index) == 0:
+                raise ValueError("add_component: tau_index must not be empty")
+            lo = as_int(tau_index[0], "tau_index")
+            hi = as_int(tau_index[-1], "tau_index")
+            first = lo + n if lo < 0 else lo
+            last = hi + n if hi < 0 else hi
+            if first > last:
+                raise ValueError("add_component: tau_index must not be empty")
         _add(self._jl, noise_alpha(noise), first + 1, last + 1)
         return self
 
@@ -269,6 +294,7 @@ class NoiseFit:
         jl.seval("SigmaTau.undo!")(self._jl)
         return self
 
+    @_map_errors
     def residual(self) -> np.ndarray:
         """The measured σ²(τ) less the variance of every component so far. It can go
         negative where the model overshoots."""
@@ -335,6 +361,11 @@ class KalmanResult:
     smoothed: bool
     _jl: Any = field(repr=False, compare=False)
 
+    def __repr__(self) -> str:
+        n, k = self.x.shape
+        sm = ", smoothed" if self.smoothed else ""
+        return f"KalmanResult({n} samples, {k} states{sm})"
+
 
 def _kalman_from_jl(r: Any) -> KalmanResult:
     return KalmanResult(
@@ -394,6 +425,14 @@ def holdover_error(kf: KalmanResult, tau: Sequence[float]) -> np.ndarray:
     return np_f64(jl.holdover_error(kf._jl, to_jl_f64(tau)))
 
 
+def _holdover_repr(h: HoldoverResult | HoldoverPrediction) -> str:
+    cls = type(h).__name__
+    train = f"{h.grow} τ" if h.grow > 0 else f"{h.train:.4g} s"
+    if h.tau.size == 0:
+        return f"{cls}(0 pts, trained on {train})"
+    return f"{cls}({h.tau.size} pts, τ∈[{h.tau[0]:.4g}, {h.tau[-1]:.4g}] s, trained on {train})"
+
+
 @dataclass(frozen=True)
 class HoldoverResult:
     """Result of :func:`holdover` on a record: the statistics of the time error at
@@ -424,6 +463,9 @@ class HoldoverResult:
     limit: float
     time_to_limit: float
 
+    def __repr__(self) -> str:
+        return _holdover_repr(self)
+
 
 @dataclass(frozen=True)
 class HoldoverPrediction:
@@ -446,6 +488,9 @@ class HoldoverPrediction:
     confidence: float
     limit: float
     time_to_limit: float
+
+    def __repr__(self) -> str:
+        return _holdover_repr(self)
 
 
 @_map_errors
@@ -667,6 +712,17 @@ class SteeringGains:
     integral: float
     interval: float
 
+    def __post_init__(self):
+        if not (np.isfinite(self.interval) and self.interval > 0):
+            raise ValueError(f"SteeringGains: interval must be positive, got {self.interval}")
+
+    def __repr__(self) -> str:
+        ig = "" if self.integral == 0 else f", integral={self.integral:.4g} /s"
+        return (
+            f"SteeringGains(phase={self.phase:.4g} /s, frequency={self.frequency:.4g}"
+            f"{ig}, every {self.interval:.4g} s)"
+        )
+
     def _jl(self) -> Any:
         return jl.SteeringGains(
             float(self.phase), float(self.frequency), float(self.integral), float(self.interval)
@@ -751,6 +807,9 @@ class SteeringResult:
     phase: np.ndarray
     frequency: np.ndarray
 
+    def __repr__(self) -> str:
+        return f"SteeringResult({len(self.steers)} samples, {self.gains!r})"
+
 
 @dataclass(frozen=True)
 class SteeringPrediction:
@@ -765,6 +824,12 @@ class SteeringPrediction:
     steers: float
     tau: np.ndarray
     adev: np.ndarray
+
+    def __repr__(self) -> str:
+        return (
+            f"SteeringPrediction(phase {self.phase:.4g} s, frequency {self.frequency:.4g}, "
+            f"steers {self.steers:.4g} rms; {self.gains!r})"
+        )
 
 
 @_map_errors
@@ -893,6 +958,11 @@ class ClockComparisons:
                 self.x[:, i] - self.x[:, j], self.tau0, source=f"{self.names[i]} − {self.names[j]}"
             )
         return PhaseData(self.x[:, ij], self.tau0, source=self.names[ij])
+
+    def __repr__(self) -> str:
+        n, k = self.x.shape
+        ref = f", against {self.reference!r}" if self.reference else ""
+        return f"ClockComparisons({k} clocks × {n} samples, tau0={self.tau0} s{ref})"
 
 
 def _comparisons_from_jl(c: Any) -> ClockComparisons:

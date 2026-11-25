@@ -10,7 +10,6 @@ because SigmaTau's kernels dispatch on concrete ``Vector`` types (a raw
 from __future__ import annotations
 
 import math
-import operator
 from collections.abc import Mapping
 from typing import Any
 
@@ -26,6 +25,7 @@ from ._julia import (
     VecStr,
     _make_result,
     _to_syms,
+    as_int,
     jl,
 )
 from .grids import _JL_TAUMODE, TauMode
@@ -57,15 +57,6 @@ def to_jl_char(c: str) -> Any:
     if not isinstance(c, str) or len(c) != 1:
         raise ValueError(f"expected one character, got {c!r}")
     return juliacall.convert(Char, c)
-
-
-def as_int(value: object, name: str) -> int:
-    """``value`` as an ``int``. A float is refused, whole or not, as Julia and
-    NumPy refuse one where they count: ``int()`` would drop its fraction."""
-    try:
-        return operator.index(value)
-    except TypeError:
-        raise TypeError(f"{name} must be an integer, got {value!r}") from None
 
 
 def to_jl_ints(ms: object, name: str = "each value") -> Any:
