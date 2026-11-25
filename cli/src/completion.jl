@@ -4,12 +4,14 @@
 # FILE and the options that take a path keep the shell's own file completion.
 
 cmd_options(cmd::String) = String[op.long for op in OPTS if cmd in op.cmds]
+cmd_all_options(cmd::String) = String[n for op in OPTS if cmd in op.cmds for n in (op.long, op.short) if !isempty(n)]
 subcommands() = String[c for (c, _, _) in COMMAND_HELP]
 
 # Values offered after an option; --devs takes a comma list of them.
 completion_values(op::Opt) = op.long == "--devs" ? estimator_names() : op.choices
 valued_options() = [op for op in OPTS if !isempty(completion_values(op))]
-free_options() = String[n for op in OPTS if !isempty(op.metavar) && isempty(completion_values(op)) for n in (op.long, op.short) if !isempty(n)]
+path_options() = String[n for op in OPTS if op.path for n in (op.long, op.short) if !isempty(n)]
+scalar_options() = String[n for op in OPTS if !op.path && !isempty(op.metavar) && isempty(completion_values(op)) for n in (op.long, op.short) if !isempty(n)]
 
 spaced(v::Vector{String}) = join(v, " ")
 
@@ -31,7 +33,7 @@ function bash_script()
             print(io, "        ", op.long, ") COMPREPLY=( \$(compgen -W \"", spaced(op.choices), "\" -- \"\$cur\") ); return ;;\n")
         end
     end
-    print(io, "        ", join(free_options(), "|"), ") COMPREPLY=(); return ;;\n")
+    print(io, "        ", join([path_options(); scalar_options()], "|"), ") COMPREPLY=(); return ;;\n")
     print(io, """
         esac
         if [[ \$COMP_CWORD -eq 1 ]]; then
@@ -43,7 +45,7 @@ function bash_script()
             help) [[ \$COMP_CWORD -eq 2 ]] && COMPREPLY=( \$(compgen -W "$(spaced(subcommands()))" -- "\$cur") ); return ;;
     """)
     for c in COMMANDS
-        print(io, "        ", c, ") opts=\"", spaced(cmd_options(c)), "\" ;;\n")
+        print(io, "        ", c, ") opts=\"", spaced(cmd_all_options(c)), "\" ;;\n")
     end
     print(io, """
         esac
@@ -81,15 +83,26 @@ function zsh_script()
         sep = op.long == "--devs" ? "-s , " : ""
         print(io, "            ", op.long, ") _values ", sep, "'", op.metavar, "' ", spaced(completion_values(op)), " ;;\n")
     end
-    print(io, "            ", join(free_options(), "|"), ") _files ;;\n")
+    print(io, "            ", join(path_options(), "|"), ") _files ;;\n")
+    print(io, "            ", join(scalar_options(), "|"), ") ;;\n")
     print(io, """
                 *)
-                  if [[ \$PREFIX == -* ]]; then
+                  if [[ \$PREFIX == --* ]]; then
                     local -a opts
                     case \$words[1] in
     """)
     for c in COMMANDS
         print(io, "                  ", c, ") opts=(", spaced(cmd_options(c)), ") ;;\n")
+    end
+    print(io, """
+                    esac
+                    compadd -a opts
+                  elif [[ \$PREFIX == -* ]]; then
+                    local -a opts
+                    case \$words[1] in
+    """)
+    for c in COMMANDS
+        print(io, "                  ", c, ") opts=(", spaced(cmd_all_options(c)), ") ;;\n")
     end
     print(io, """
                     esac
@@ -141,8 +154,8 @@ ps_table(pairs) = join(("        '" * k * "' = '" * v * "'" for (k, v) in pairs)
 
 function powershell_script()
     values = [(op.long, spaced(completion_values(op))) for op in valued_options()]
-    opts = [(c, spaced(cmd_options(c))) for c in COMMANDS]
-    free = join(("'" * f * "'" for f in free_options()), ", ")
+    opts = [(c, spaced(cmd_all_options(c))) for c in COMMANDS]
+    scalar = join(("'" * f * "'" for f in scalar_options()), ", ")
     return """
     # sigmatau PowerShell completion.
     # Install (add to \$PROFILE):  sigmatau completion powershell | Out-String | Invoke-Expression
@@ -165,7 +178,7 @@ function powershell_script()
             }
         }
         if (\$values.ContainsKey(\$prev)) { return _res \$values[\$prev] }
-        if (\$prev -in @($free)) { return }
+        if (\$prev -in @($scalar)) { return }
         if (\$elements.Count -le 2 -and -not \$wordToComplete.StartsWith('-')) {
             if (\$elements.Count -le 1 -or \$elements[1] -eq \$wordToComplete) { return _res '$(spaced(subcommands()))' }
         }

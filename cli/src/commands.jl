@@ -31,8 +31,6 @@ function run_command(io::IO, err::IO, o::Options, data::PhaseData, t_start::UInt
     c == "drift"    && return cmd_drift(io, o, data, t_start)
     c == "holdover" && return cmd_holdover(io, o, data, t_start)
     c == "steer"    && return cmd_steer(io, o, data, t_start)
-    c == "timescale" && return cmd_timescale(io, o, data, t_start)
-    c == "hat"      && return cmd_hat(io, o, data, t_start)
     throw(usage_error("unknown command " * c))
 end
 
@@ -173,7 +171,6 @@ end
 
 function analysis_results(o::Options, data::PhaseData)
     need_samples(data, 8, "the analysis")
-    o.tau_min > o.tau_max && throw(usage_error("--tau-min is above --tau-max"))
     N = length(data.x)
     mode = tau_mode(o.grid)
     results = StabilityResult[]
@@ -802,18 +799,20 @@ end
 # Each --column column read like FILE, with the same options, less the
 # readings that --fill-gaps put in: a clock has no part in the scale there.
 function read_ensemble(o::Options)
-    col, offset, drift = o.value_col, o.removed_offset, o.removed_drift
+    col, offset, drift, meas = o.value_col, o.removed_offset, o.removed_drift, o.measured
     records = PhaseData{Float64}[]
     try
+        isfile(o.input) || close(open(o.input, "r"))
         for c in o.value_cols
             o.value_col = c
+            o.measured = falses(0)
             push!(records, load_record(o; unfilled=true))
         end
     catch e
         e isa CLIError && rethrow()
         throw(CLIError(EXIT_INPUT, error_message(e)))   # read after the input phase
     finally
-        o.value_col, o.removed_offset, o.removed_drift = col, offset, drift
+        o.value_col, o.removed_offset, o.removed_drift, o.measured = col, offset, drift, meas
     end
     allequal(length(r.x) for r in records) && allequal(r.tau0 for r in records) ||
         throw(CLIError(EXIT_INPUT, "the clock columns differ in length or τ₀"))
@@ -838,8 +837,7 @@ function run_timescale(cc::ClockComparisons, o::Options, kalman::Bool)
     return timescale(cc; algorithm=alg, models, pivot=o.pivot, wmax=o.wmax), models
 end
 
-function cmd_timescale(io::IO, o::Options, ::PhaseData, t_start::UInt64)
-    cc = o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
+function cmd_timescale(io::IO, o::Options, cc::ClockComparisons, t_start::UInt64)
     N, k = size(cc.x)
     N >= 16 || throw(CLIError(EXIT_ANALYSIS, "a timescale needs at least 16 samples"))
     kalman = o.algorithm in ("greenhall", "jones_tryon", "stein")
@@ -936,8 +934,7 @@ const CSV_HAT = "clock,deviation,tau,dev,ci_lower,ci_upper,edf,neff"
 # differences, and the reference as one more clock unless --no-reference says
 # otherwise; simulated clocks have a perfect reference, which is no clock.
 # With --pairs the three columns are A−B, B−C and C−A as measured.
-function hat_records(o::Options)
-    cc = o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
+function hat_records(cc::ClockComparisons, o::Options)
     k = size(cc.x, 2)
     if o.pairs
         o.synth > 0 && throw(usage_error("--pairs goes with a FILE"))
@@ -956,13 +953,9 @@ end
 hat_record(records::Matrix{PhaseData{Float64}}, i::Int, j::Int) =
     isassigned(records, i, j) ? records[i, j] : records[j, i]
 
-function cmd_hat(io::IO, o::Options, ::PhaseData, t_start::UInt64)
+function cmd_hat(io::IO, o::Options, cc::ClockComparisons, t_start::UInt64)
     covariance = o.covariance || o.klts
-    for d in o.devs
-        String(d) in HAT_DEVS || throw(usage_error("hat separates " * join(HAT_DEVS, ", ") * "; got " * String(d)))
-        covariance && d !== :adev && throw(usage_error((o.klts ? "--klts" : "--covariance") * " gives ADEV; leave --devs out"))
-    end
-    records, names = hat_records(o)
+    records, names = hat_records(cc, o)
     k = length(names)
     o.klts && k != 3 && throw(usage_error("--klts is for three clocks; these are " * string(k)))
     N, τ₀ = length(records[1, 2].x), records[1, 2].tau0
