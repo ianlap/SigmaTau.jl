@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, RunEvent, State};
 use tauri_plugin_dialog::DialogExt;
 
 const TIMEOUT: Duration = Duration::from_secs(600);
@@ -31,7 +31,7 @@ const CORE_EXE: &str = if cfg!(windows) { "sigmatau.exe" } else { "sigmatau" };
 
 #[derive(Default)]
 struct Runs {
-    cancelled: Mutex<HashSet<u64>>,
+    canceled: Mutex<HashSet<u64>>,
 }
 
 static WORK_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -53,6 +53,7 @@ fn stop_live(slot: &LiveSlot) {
     if let Some(mut live) = slot.0.lock().unwrap().take() {
         let _ = live.child.kill();
         let _ = live.child.wait();
+        let _ = live.reader.join();
     }
 }
 
@@ -115,15 +116,58 @@ fn request_to_args(req: &Map<String, Value>, workdir: &Path) -> Result<Vec<Strin
     if args.iter().any(|a| a == "--with" || a.starts_with("--with=")) {
         return Err("--with is not allowed here".into());
     }
-    if let Some(file) = req.get("file").and_then(Value::as_object) {
-        let name = file.get("name").and_then(Value::as_str).unwrap_or("record.txt");
-        let name = Path::new(name).file_name().and_then(|s| s.to_str()).unwrap_or("record.txt");
-        let path = workdir.join(name);
-        let content = file.get("content").and_then(Value::as_str).unwrap_or("");
-        std::fs::write(&path, content).map_err(|e| format!("could not write the record: {e}"))?;
-        args.insert(1, path.to_string_lossy().into_owned());
+    match req.get("file") {
+        None | Some(Value::Null) => {
+            let valid_n = args.get(2).is_some_and(|n| {
+                !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && n.parse::<u64>().is_ok_and(|v| v > 0)
+            });
+            if args.get(1).map(String::as_str) != Some("--synth")
+                || !valid_n
+                || args.get(3..).is_some_and(|rest| rest.iter().any(|a| a.starts_with("--synth")))
+            {
+                return Err("a request without a file must start with --synth N".into());
+            }
+        }
+        Some(Value::Object(file)) => {
+            let raw_name = match file.get("name").and_then(Value::as_str) {
+                Some(s) if !s.is_empty() => s,
+                _ => "record.txt",
+            };
+            if matches!(Path::new(raw_name).components().next_back(), Some(std::path::Component::ParentDir)) {
+                return Err("bad file name".into());
+            }
+            let name = Path::new(raw_name).file_name().and_then(|s| s.to_str()).unwrap_or("record.txt");
+            let path = workdir.join(name);
+            let content = file.get("content").and_then(Value::as_str).unwrap_or("");
+            std::fs::write(&path, content).map_err(|e| format!("could not write the record: {e}"))?;
+            args.insert(1, path.to_string_lossy().into_owned());
+        }
+        Some(_) => return Err("file must be {name, content} or null".into()),
     }
     Ok(args)
+}
+
+fn core_error(stderr: &[u8], status_msg: String) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let lines: Vec<&str> = text.trim().lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        if line.starts_with("ERROR:") {
+            let mut msg = Vec::new();
+            for &l in &lines[i..] {
+                if l.starts_with("Stacktrace:") || (!msg.is_empty() && l.starts_with("ERROR:")) {
+                    break;
+                }
+                msg.push(l);
+            }
+            return msg.join(" ").trim().chars().take(600).collect();
+        }
+    }
+    lines
+        .iter()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| (*l).to_owned())
+        .unwrap_or(status_msg)
 }
 
 /// Run the core, polling so a cancel or the timeout can stop it.
@@ -152,10 +196,10 @@ fn run_core(core: &Path, args: &[String], id: u64, runs: &Runs) -> Result<Value,
         if let Some(st) = child.try_wait().map_err(|e| e.to_string())? {
             break st;
         }
-        if runs.cancelled.lock().unwrap().remove(&id) {
+        if runs.canceled.lock().unwrap().remove(&id) {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("cancelled".into());
+            return Err("canceled".into());
         }
         if started.elapsed() > TIMEOUT {
             let _ = child.kill();
@@ -171,13 +215,7 @@ fn run_core(core: &Path, args: &[String], id: u64, runs: &Runs) -> Result<Value,
     if text.starts_with('{') {
         return serde_json::from_str(text).map_err(|e| format!("the core's output is not JSON: {e}"));
     }
-    let err = String::from_utf8_lossy(&stderr);
-    Err(err
-        .lines()
-        .rev()
-        .find(|l| !l.trim().is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("core exited with {status}")))
+    Err(core_error(&stderr, format!("core exited with {status}")))
 }
 
 #[tauri::command]
@@ -200,6 +238,7 @@ async fn analyze(app: AppHandle, id: u64, req: Value) -> Result<Value, String> {
         let started = Instant::now();
         let result = request_to_args(&req, &work).and_then(|args| {
             let out = run_core(&core, &args, id, &runs);
+            runs.canceled.lock().unwrap().remove(&id);
             if std::env::var_os("SIGMATAU_DESKTOP_LOG").is_some() {
                 let what = match &out { Ok(_) => "ok".to_owned(), Err(e) => format!("error: {e}") };
                 eprintln!("analyze #{id} {:?}: {what} in {} ms", args, started.elapsed().as_millis());
@@ -215,7 +254,7 @@ async fn analyze(app: AppHandle, id: u64, req: Value) -> Result<Value, String> {
 
 #[tauri::command]
 fn cancel(id: u64, runs: State<'_, Runs>) {
-    runs.cancelled.lock().unwrap().insert(id);
+    runs.canceled.lock().unwrap().insert(id);
 }
 
 #[tauri::command]
@@ -293,11 +332,10 @@ fn live_poll(id: u64, since: usize, slot: State<'_, LiveSlot>) -> Result<Value, 
     let lines: Vec<String> = live.lines.lock().unwrap().get(since..).unwrap_or_default().to_vec();
     let mut error = Value::Null;
     if !running {
-        if let Ok(Some(st)) = live.child.try_wait() {
+        if let Ok(st) = live.child.wait() {
             if !st.success() {
                 let text = live.stderr.lock().unwrap();
-                error = json!(text.lines().rev().find(|l| !l.trim().is_empty()).map(str::to_owned)
-                    .unwrap_or_else(|| format!("core exited with {st}")));
+                error = json!(core_error(text.as_bytes(), format!("core exited with {st}")));
             }
         }
     }
@@ -321,6 +359,65 @@ fn main() {
                 eprintln!("page {:?} at {} ms", payload.event(), launched.elapsed().as_millis());
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running the SigmaTau explorer");
+        .build(tauri::generate_context!())
+        .expect("error while building the SigmaTau explorer")
+        .run(|app, event| {
+            if matches!(event, RunEvent::Exit) {
+                stop_live(&app.state::<LiveSlot>());
+            }
+        });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("sigmatau-test-{label}-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn request_to_args_validates_files_and_synth() {
+        let dir = temp_dir("req");
+        let ok = serde_json::from_value::<Map<String, Value>>(
+            json!({"args": ["analyze", "--synth", "64", "--devs", "adev"], "file": null}),
+        )
+        .unwrap();
+        assert_eq!(request_to_args(&ok, &dir).unwrap(), vec!["analyze", "--synth", "64", "--devs", "adev"]);
+
+        let upload = serde_json::from_value::<Map<String, Value>>(
+            json!({"args": ["check"], "file": {"name": "../../a.txt", "content": "0 1\n"}}),
+        )
+        .unwrap();
+        let out = request_to_args(&upload, &dir).unwrap();
+        assert_eq!(out[0], "check");
+        assert_eq!(Path::new(&out[1]).parent().unwrap(), dir.as_path());
+        assert_eq!(Path::new(&out[1]).file_name().unwrap(), "a.txt");
+
+        for bad in [
+            json!({"args": ["check", "/etc/passwd"], "file": null}),
+            json!({"args": ["check", "--synth", "0"], "file": null}),
+            json!({"args": ["check", "--synth", "64", "--synth=0"], "file": null}),
+            json!({"args": ["check"], "file": false}),
+            json!({"args": ["check"], "file": {"name": "..", "content": "1\n"}}),
+            json!({"args": ["analyze", "--out", "x"], "file": {"name": "a.txt", "content": "1\n"}}),
+            json!({"args": ["cross", "--with", "b.txt"], "file": {"name": "a.txt", "content": "1\n"}}),
+        ] {
+            let m = bad.as_object().unwrap();
+            assert!(request_to_args(m, &dir).is_err(), "expected error for {bad}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn core_error_prefers_cause_over_trailer() {
+        let err = b"ERROR: LoadError: bad\nmore detail\nStacktrace:\n [1] f\n\nERROR: failed to precompile\n";
+        assert_eq!(core_error(err, "fallback".into()), "ERROR: LoadError: bad more detail");
+        assert_eq!(core_error(b"first\nlast\n", "fallback".into()), "last");
+        assert_eq!(core_error(b"", "core exited with 2".into()), "core exited with 2");
+    }
 }

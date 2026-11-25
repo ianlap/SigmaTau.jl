@@ -268,6 +268,16 @@ class ServeTests(unittest.TestCase):
         self.assertEqual(status, 400)
         status, doc = self.post({"args": ["analyze", "--out", "x"]})
         self.assertEqual(status, 400)
+        status, doc = self.post(raw=b"")
+        self.assertEqual(status, 400)
+        req = urllib.request.Request(
+            self.base + "/api/analyze",
+            data=b"{}",
+            headers={"Content-Type": "application/json", "Content-Length": "abc"},
+        )
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req, timeout=60)
+        self.assertEqual(e.exception.code, 400)
         status, doc = self.post({"args": ["analyze"]}, path="/api/nothing")
         self.assertEqual(status, 404)
 
