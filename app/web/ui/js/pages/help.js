@@ -25,7 +25,7 @@ export function route(parts) {
       <footer>${turn(TOPICS[i - 1], (t) => `← ${t}`)}
         <a href="${topic.web}" target="_blank" rel="noopener">This page in the documentation</a>
         ${turn(TOPICS[i + 1], (t) => `${t} →`)}</footer>`;
-    root.querySelector(".help-nav").innerHTML = TOPICS.map((t) => `<a href="${address(t)}" class="${t === topic ? "on" : ""}">${t.nav}</a>${
+    root.querySelector(".help-nav").innerHTML = TOPICS.map((t) => `<a href="${address(t)}" class="${t === topic ? "on" : ""}"${t === topic ? ' aria-current="page"' : ""}>${t.nav}</a>${
       t === topic ? t.sections.slice(1).map((s) => `<a href="${h(address(t, s))}" class="sub l${s.level}">${s.title}</a>`).join("") : ""}`).join("");
   }
   const el = at.section.id && [...root.querySelectorAll("section")].find((s) => s.dataset.id === at.section.id);

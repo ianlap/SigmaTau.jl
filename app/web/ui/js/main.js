@@ -394,7 +394,12 @@ function renderStatus() {
 }
 
 function render() {
-  document.querySelectorAll(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.page === state.page));
+  document.querySelectorAll(".tabs a").forEach((a) => {
+    const on = a.dataset.page === state.page;
+    a.classList.toggle("on", on);
+    if (on) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
   document.getElementById("help-btn").classList.toggle("on", state.page === "help");
   // The frame follows the page: Run where it feeds the page (Stability and Spectrum), the estimators and
   // options on Stability, the page's own settings where it owns the panel; a page's other settings sit
@@ -421,10 +426,35 @@ window.addEventListener("themechange", render);
 // ── File menu: exports, report, session ──
 const exportBtn = document.getElementById("export-btn");
 const exportMenu = document.getElementById("export-menu");
+const menuItems = () => [...exportMenu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+function closeExportMenu({ restoreFocus = false } = {}) {
+  if (exportMenu.hidden) return;
+  exportMenu.hidden = true;
+  exportBtn.setAttribute("aria-expanded", "false");
+  if (restoreFocus) exportBtn.focus();
+}
+function openExportMenu() {
+  nameResults();
+  exportMenu.hidden = false;
+  exportBtn.setAttribute("aria-expanded", "true");
+  menuItems()[0]?.focus();
+}
 exportBtn.addEventListener("click", () => {
-  exportMenu.hidden = !exportMenu.hidden;
-  exportBtn.setAttribute("aria-expanded", String(!exportMenu.hidden));
-  if (!exportMenu.hidden) nameResults();
+  if (!exportMenu.hidden) closeExportMenu();
+  else openExportMenu();
+});
+exportBtn.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" && exportMenu.hidden) { e.preventDefault(); openExportMenu(); }
+});
+exportMenu.addEventListener("keydown", (e) => {
+  const items = menuItems();
+  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeExportMenu({ restoreFocus: true }); return; }
+  if (!items.length) return;
+  const i = items.indexOf(document.activeElement);
+  if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+  else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+  else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
 });
 
 // The results entries say what they write: the table of the page in view.
@@ -449,7 +479,7 @@ document.addEventListener("click", (e) => {
 exportMenu.addEventListener("click", async (e) => {
   const kind = e.target.closest("[data-export]")?.dataset.export;
   if (!kind) return;
-  exportMenu.hidden = true;
+  closeExportMenu();
   if (kind === "save-session") {
     if (!state.clocks.length) return ctx.status("warn", "There is nothing to save yet.");
     return saveFile("sigmatau-session.json", new Blob([sessionText()], { type: "application/json" }));

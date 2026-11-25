@@ -20,7 +20,7 @@ export function openPicker() {
   dlg.innerHTML = `
     <div class="picker-head">
       <div class="side-head"><h2>Add estimators</h2><span class="note">The choice applies when the dialog closes</span></div>
-      <input type="text" id="picker-q" placeholder="Search, e.g. total, time, theo" autocomplete="off">
+      <input type="text" id="picker-q" placeholder="Search, e.g. total, time, theo" aria-label="Filter deviations" autocomplete="off">
     </div>
     <div class="picker-body" id="picker-body">${body()}</div>
     <div class="picker-foot"><span class="muted small" id="picker-count"></span><button class="btn btn-primary" type="button" id="picker-done">Done</button></div>`;

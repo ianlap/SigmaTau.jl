@@ -32,7 +32,7 @@ export function controls() {
     <label class="opt"><span>τ<sub>0</sub> (s)</span><input type="text" data-ctl="tau0" value="${S.tau0}" inputmode="decimal"></label>
     <label class="opt"><span>Seed</span><input type="text" data-ctl="seed" value="${S.seed}" inputmode="numeric"></label>
     <div class="ctl-block"><label class="lbl">Preview</label><div class="seg" role="group" aria-label="Deviation">${DEVS.map(([id, label]) =>
-      `<button type="button" data-ctl="dev" data-v="${id}" class="${S.dev === id ? "on" : ""}">${label}</button>`).join("")}</div></div>
+      `<button type="button" data-ctl="dev" data-v="${id}" class="${S.dev === id ? "on" : ""}" aria-pressed="${S.dev === id}">${label}</button>`).join("")}</div></div>
     <div class="rule"></div>
     <button class="btn btn-primary run-btn" type="button" data-ctl="generate">Generate ${S.clocks.length > 1 ? `${S.clocks.length} clocks` : "the clock"}</button>
     <p class="muted small">The curves are what the models predict, not a simulation. Generate simulates the clocks on the Data page${S.clocks.length > 1 ? " and forms their time scale on the Ensemble page" : ""}.</p>`;

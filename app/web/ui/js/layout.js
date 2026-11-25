@@ -66,6 +66,7 @@ export function renderRail() {
   btnRun.classList.toggle("running", running);
   btnRun.disabled = !running && !(state.clocks.length && state.devs.length);
   btnRun.title = running ? "Stop the analysis (F5 or Esc)" : "Run the analysis (F5)";
+  btnRun.setAttribute("aria-label", running ? "Stop analysis" : "Run analysis");
   btnRun.querySelector(".stale-dot").hidden = running || !(state.run.stale && state.clocks.some((c) => c.record));
   btnResults.hidden = WIDE.matches || !document.querySelector(".page > .side-card:not([hidden]):not(.synth-clocks)");
   if (btnResults.hidden && resultsOpen) { resultsOpen = false; document.body.classList.remove("results-over"); }
