@@ -152,7 +152,15 @@ class Live:
         self.lines = []
         self.error = None
         self.lock = threading.Lock()
-        self.proc = subprocess.Popen(cmd + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        env = dict(os.environ)
+        env.setdefault("JULIA_NUM_THREADS", "auto")
+        self.proc = subprocess.Popen(
+            cmd + args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
@@ -184,12 +192,15 @@ class Live:
 LOOPBACK = ("127.0.0.1", "::1", "localhost")
 LIVE = {}            # id -> Live; one measurement at a time
 LIVE_IDS = iter(range(1, 1 << 62))
+LIVE_LOCK = threading.Lock()
 
 
 def stop_live():
-    for live in LIVE.values():
+    with LIVE_LOCK:
+        lives = list(LIVE.values())
+        LIVE.clear()
+    for live in lives:
         live.stop()
-    LIVE.clear()
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -215,11 +226,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def send_json(self, status, payload):
         body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_GET(self):
         url = urlparse(self.path)
@@ -231,8 +245,10 @@ class Handler(SimpleHTTPRequestHandler):
         if url.path == "/api/live/poll":
             q = parse_qs(url.query)
             try:
-                live = LIVE[int(q["id"][0])]
+                live_id = int(q["id"][0])
                 since = int(q.get("since", ["0"])[0])
+                with LIVE_LOCK:
+                    live = LIVE[live_id]
             except (KeyError, ValueError):
                 return self.send_json(404, {"error": "no such live measurement"})
             return self.send_json(200, live.poll(since))
@@ -243,9 +259,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(404, {"error": "unknown endpoint"})
         if self.foreign():
             return self.send_json(403, {"error": "only the explorer page on this computer may call the API"})
-        length = int(self.headers.get("Content-Length") or 0)
-        if length <= 0 or length > MAX_BODY:
-            return self.send_json(413, {"error": "request body missing or too large"})
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self.send_json(400, {"error": "invalid Content-Length"})
+        if length <= 0:
+            return self.send_json(400, {"error": "request body missing"})
+        if length > MAX_BODY:
+            return self.send_json(413, {"error": "request body too large"})
         try:
             req = json.loads(self.rfile.read(length))
         except json.JSONDecodeError as e:
@@ -269,8 +290,9 @@ class Handler(SimpleHTTPRequestHandler):
                 live = Live(cmd, args)
             except (ValueError, TypeError) as e:
                 return self.send_json(400, {"error": str(e)})
-            live_id = next(LIVE_IDS)
-            LIVE[live_id] = live
+            with LIVE_LOCK:
+                live_id = next(LIVE_IDS)
+                LIVE[live_id] = live
             return self.send_json(200, {"id": live_id})
         with tempfile.TemporaryDirectory(prefix="sigmatau-web-") as work:
             try:
