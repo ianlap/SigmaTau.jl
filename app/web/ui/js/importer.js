@@ -201,7 +201,7 @@ export function openImport(file, prev = null, pick = null) {
         : "";
       const tauLine = ts && ts.tau0 > 0
         ? `<div class="tau-line"><span class="mono">${taus.join(" and ")} s</span><span class="ok">✓ ${taus.length > 1 ? "each clock from its own epochs" : `from the time column${per.every((p) => p.ts?.even) ? ", evenly spaced" : ", grid step"}`}</span></div>`
-        : `<div class="tau-line"><input type="number" id="imp-tau0" min="0" step="any" value="${h(st.tau0In)}"> <span class="muted small">s${s.tau0Hint ? " · from the file header" : " · no time column"}</span></div>`;
+        : `<div class="tau-line"><input type="number" id="imp-tau0" min="0" step="any" value="${h(st.tau0In)}" aria-label="Sample interval in seconds"> <span class="muted small">s${s.tau0Hint ? " · from the file header" : " · no time column"}</span></div>`;
 
       dlg.innerHTML = `
         <div class="imp-head">${FILE_ICON}
@@ -212,7 +212,7 @@ export function openImport(file, prev = null, pick = null) {
           <div class="imp-main">
             ${s.clocks ? `<input type="search" id="imp-find" class="wide-input" placeholder="Find a clock, e.g. G08 or ALGO" aria-label="Find a clock">
             <div class="preview"><table class="clock-list"><tbody>${s.clocks.map((info, i) =>
-              `<tr class="names" data-find="${h(s.names[i + 1].toLowerCase())}"><td class="${cls(i + 2)}"${tint(i + 2, 0.2)} data-col="${i + 2}" title="${picked ? "Click to add or drop this clock" : "Click to pick this clock"}">${h(s.names[i + 1])}</td><td class="muted">${h(info)}</td></tr>`).join("")}</tbody></table></div>`
+              `<tr class="names" data-find="${h(s.names[i + 1].toLowerCase())}"><td class="${cls(i + 2)}"${tint(i + 2, 0.2)} data-col="${i + 2}" tabindex="0" role="checkbox" aria-checked="${role(i + 2) === "value"}" title="${picked ? "Click to add or drop this clock" : "Click to pick this clock"}">${h(s.names[i + 1])}</td><td class="muted">${h(info)}</td></tr>`).join("")}</tbody></table></div>`
             : `            <div class="roles" style="grid-template-columns: repeat(${Math.max(1, s.nCols)}, minmax(0, 1fr))">${pills}</div>
             <div class="preview"><table>
               <colgroup><col style="width:44px">${"<col>".repeat(Math.max(1, s.nCols))}</colgroup>
@@ -226,7 +226,7 @@ export function openImport(file, prev = null, pick = null) {
           </div>
           <div class="imp-side">
             ${s.format === "table" ? `<div><label class="lbl">Record type</label>
-              <div class="seg" role="group"><button type="button" data-kind="phase" class="${st.kind === "phase" ? "on" : ""}">Phase (time error)</button><button type="button" data-kind="frequency" class="${st.kind === "frequency" ? "on" : ""}">Fractional frequency</button></div>
+              <div class="seg" role="group"><button type="button" data-kind="phase" class="${st.kind === "phase" ? "on" : ""}" aria-pressed="${st.kind === "phase"}">Phase (time error)</button><button type="button" data-kind="frequency" class="${st.kind === "frequency" ? "on" : ""}" aria-pressed="${st.kind === "frequency"}">Fractional frequency</button></div>
               <div class="muted small" style="margin-top:6px">Units come from the column name, such as (ns) or ppb.</div></div>`
             : s.format ? `<div><label class="lbl">Record type</label>
               <div class="muted small">${h(s.formatLabel)}: read as ${st.kind === "phase" ? "phase in seconds" : "fractional frequency"}${s.format === "counter" && st.kind === "frequency" ? " against the nominal frequency (the mean reading to 4 significant figures)" : ""}.</div></div>`
@@ -256,7 +256,7 @@ export function openImport(file, prev = null, pick = null) {
 
     // The record types of a file of plain columns; two or more columns may hold a table of phase noise.
     const kindSeg = () => `<div class="seg kind-seg" role="group">${[["phase", "Phase (time error)"], ["frequency", "Fractional frequency"], ...(s.nCols >= 2 ? [["spectrum", "Phase noise"]] : [])]
-      .map(([k, l]) => `<button type="button" data-kind="${k}" class="${st.kind === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
+      .map(([k, l]) => `<button type="button" data-kind="${k}" class="${st.kind === k ? "on" : ""}" aria-pressed="${st.kind === k}">${l}</button>`).join("")}</div>`;
 
     // A table of phase noise: offsets in column 1, the spectrum in the column picked.
     const renderTable = () => {
@@ -308,24 +308,32 @@ export function openImport(file, prev = null, pick = null) {
         </div>`;
     };
 
+    const toggleCol = (c, restoreFocus = false) => {
+      if (s.clocks && !picked) st.values = [c];
+      else if (st.values.includes(c)) { if (st.values.length > 1) st.values = st.values.filter((v) => v !== c); }
+      else { st.values.push(c); st.values.sort((a, b) => a - b); if (st.time === c) st.time = 0; }
+      picked = true;
+      render();
+      if (restoreFocus) dlg.querySelector(`tr.names td[data-col="${c}"]`)?.focus();
+    };
     dlg.onclick = (e) => {
       const kind = e.target.closest("[data-kind]")?.dataset.kind;
       if (kind) { st.kind = kind; render(); return; }
       const col = e.target.closest("tr.names td[data-col]")?.dataset.col;
-      if (col) {
-        const c = Number(col);
-        if (s.clocks && !picked) st.values = [c];
-        else if (st.values.includes(c)) { if (st.values.length > 1) st.values = st.values.filter((v) => v !== c); }
-        else { st.values.push(c); st.values.sort((a, b) => a - b); if (st.time === c) st.time = 0; }
-        picked = true;
-        render(); return;
-      }
+      if (col) { toggleCol(Number(col)); return; }
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (act === "cancel") finish(null);
       if (act === "load") {
         remember(s, st);
         finish(settings());
       }
+    };
+    dlg.onkeydown = (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const col = e.target.closest("tr.names td[data-col]")?.dataset.col;
+      if (!col) return;
+      e.preventDefault();
+      toggleCol(Number(col), true);
     };
     dlg.onchange = (e) => {
       const t = e.target;

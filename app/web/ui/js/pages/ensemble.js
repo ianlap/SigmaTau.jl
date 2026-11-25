@@ -179,7 +179,7 @@ function request() {
 }
 
 const views = () => `<div class="seg ens-view" role="group" aria-label="Analysis">${[["scale", "Time scale"], ["hat", "N-cornered hat"], ["cross", "Two channels"]].map(([id, label]) =>
-  `<button type="button" data-ctl="view" data-v="${id}" class="${state.ens.view === id ? "on" : ""}">${label}</button>`).join("")}</div>`;
+  `<button type="button" data-ctl="view" data-v="${id}" class="${state.ens.view === id ? "on" : ""}" aria-pressed="${state.ens.view === id}">${label}</button>`).join("")}</div>`;
 
 function hatControls() {
   const H = state.ens.hat, { clocks, file, pairs, corners, method } = hatRequest();

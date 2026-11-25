@@ -204,7 +204,7 @@ function driftBlock(c, k) {
   return `<div class="drift-block">
     <div class="opt"><span title="Fitted to the phase by least squares and removed before every analysis">Drift removal</span>
       <div class="seg seg-sm" role="group" aria-label="Drift removal">${DRIFTS.map(([v, l, tip]) =>
-        `<button type="button" data-drift="${v}" class="${v === mode ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</div></div>
+        `<button type="button" data-drift="${v}" class="${v === mode ? "on" : ""}" aria-pressed="${v === mode}" title="${tip}">${l}</button>`).join("")}</div></div>
     <div class="muted small drift-note">${mode === "none" ? "Frequency offset and drift stay in the record." : removed.length ? `Removed ${removed.join(" · ")}` : "Fitting…"}</div>
   </div>`;
 }
@@ -213,7 +213,11 @@ export function refresh() {
   if (!root) return;
   const c = activeClock();
   const mode = state.dataMode;
-  root.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  root.querySelectorAll("[data-mode]").forEach((b) => {
+    const on = b.dataset.mode === mode;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
   root.querySelector("[data-ref=caption]").innerHTML = mode === "file"
     ? "Phase or frequency records: text columns, Stable32, TimeLab, counter logs, BIPM UTC − UTC(k) and RINEX clock files; tables of phase noise"
     : "A test record with known noise, for trying estimators";
@@ -226,7 +230,11 @@ export function refresh() {
   root.querySelector("[data-ref=view]").hidden = table;
   if (table) return refreshTable(c);
   const view = state.dataView;
-  root.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+  root.querySelectorAll("[data-view]").forEach((b) => {
+    const on = b.dataset.view === view;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
   const removed = c?.drift && c.drift !== "none" ? `, ${c.drift} drift removed` : "";
   const of = c ? (distOf(c) === "frequency" ? "frequency y" : "phase x") : "";
   const title = view === "drift" ? `Frequency y(t)${removed}`
@@ -291,7 +299,7 @@ function driftBar(c) {
         <span class="muted">· rms residual ${sci(f.rms, 3)}</span></span>`
     : `<span class="muted">Fitting…</span>`;
   return `<div class="seg seg-sm" role="group" aria-label="Drift model">${MODELS.map(([v, l, tip]) =>
-      `<button type="button" data-model="${v}" class="${v === state.driftModel ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</div>
+      `<button type="button" data-model="${v}" class="${v === state.driftModel ? "on" : ""}" aria-pressed="${v === state.driftModel}" title="${tip}">${l}</button>`).join("")}</div>
     <label class="tool-field" title="${linear ? "How the linear drift is estimated" : "The estimators apply to the linear model"}">Estimator <select data-ref="method" ${linear ? "" : "disabled"}>${METHODS.map(([v, l, tip]) =>
       `<option value="${v}" title="${tip}" ${v === method ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <label class="check"><input type="checkbox" data-ref="resid" ${state.driftResid ? "checked" : ""}>Residuals</label>
@@ -378,7 +386,7 @@ function distReadings(got, what) {
 function distBar(c, what) {
   const of = distOf(c), d = state.dist;
   const seg = `<div class="seg seg-sm" role="group" aria-label="Samples">${[["phase", "Phase"], ["frequency", "Frequency"]].map(([v, l]) =>
-    `<button type="button" data-of="${v}" class="${v === of ? "on" : ""}">${l}</button>`).join("")}</div>`;
+    `<button type="button" data-of="${v}" class="${v === of ? "on" : ""}" aria-pressed="${v === of}">${l}</button>`).join("")}</div>`;
   const field = (k, label, tip, extra) => `<label class="opt" title="${tip}"><span>${label}</span>
     <input type="number" class="num-sm" data-dist="${k}" min="1" step="1" ${extra} value="${d[k] ?? ""}"></label>`;
   const controls = what === "hist"
@@ -524,7 +532,7 @@ function rangeBar(c) {
   const r = c.range;
   return `${r ? `<span class="small">Analyzing <span class="mono">${duration(r[0])} – ${duration(r[1])}</span> · <button class="link-btn" data-act="clear-range">whole record</button></span>` : ""}
     <span class="seg seg-sm" role="group" aria-label="Drag on the plot to">${[["zoom", "Zoom", "Drag to zoom"], ["range", "Select range", "Drag across the plot to analyze only that part of the record"]].map(([v, l, tip]) =>
-      `<button type="button" data-drag="${v}" class="${state.dataDrag === v ? "on" : ""}" title="${tip}">${l}</button>`).join("")}</span>`;
+      `<button type="button" data-drag="${v}" class="${state.dataDrag === v ? "on" : ""}" aria-pressed="${state.dataDrag === v}" title="${tip}">${l}</button>`).join("")}</span>`;
 }
 
 function setRange(c, r) {

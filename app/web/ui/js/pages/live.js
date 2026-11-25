@@ -26,7 +26,7 @@ export function controls() {
   const busy = run.running;
   const dis = busy ? "disabled" : "";
   const seg = (k, items, v) => `<div class="seg" role="group">${items.map(([id, label]) =>
-    `<button type="button" data-ctl="${k}" data-v="${id}" class="${v === id ? "on" : ""}" ${dis}>${label}</button>`).join("")}</div>`;
+    `<button type="button" data-ctl="${k}" data-v="${id}" class="${v === id ? "on" : ""}" aria-pressed="${v === id}" ${dis}>${label}</button>`).join("")}</div>`;
   const field = (k, label, v, hint = "") => `<label class="opt live-field"><span>${label}</span><input type="text" data-ctl="${k}" value="${h(v)}" ${dis} spellcheck="false" ${hint ? `placeholder="${h(hint)}"` : ""}></label>`;
   const where = L.source === "tcp" ? `${field("address", "Address", L.address, "host:port")}${field("query", "Query", L.query, "none")}
       <p class="muted small">An LXI instrument's SCPI socket, usually port 5025. The query is sent before every reading.</p>`

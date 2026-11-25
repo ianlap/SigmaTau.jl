@@ -26,8 +26,8 @@ function clockRows() {
     return `<div class="row clock-row ${c.id === state.activeClock ? "active" : ""} ${c.visible ? "" : "hidden-clock"}" data-clock="${c.id}">
       <button class="row-main" type="button" aria-current="${c.id === state.activeClock}"><span class="clock-dot" style="background:${seriesColor(c.slot)}"></span>
         <span class="clock-text"><b>${h(c.name)}</b><span>${h(sub)}</span></span></button>
-      <span class="row-btns">${ref ? `<span class="ref-tag" title="Reference clock">ref</span>` : `<button class="eye" type="button" data-eye="${c.id}" title="${c.visible ? "Hide" : "Show"} ${h(c.name)} on the plots" aria-pressed="${c.visible}">${c.visible ? "◉" : "○"}</button>`}
-        <button class="row-x" type="button" data-remove-clock="${c.id}" title="Remove ${h(c.name)}${c.source.type === "synth" && c.source.clocks > 1 ? " (the other simulated clocks are simulated again)" : ""}">×</button></span>
+      <span class="row-btns">${ref ? `<span class="ref-tag" title="Reference clock">ref</span>` : `<button class="eye" type="button" data-eye="${c.id}" aria-label="${c.visible ? "Hide" : "Show"} ${h(c.name)}" title="${c.visible ? "Hide" : "Show"} ${h(c.name)} on the plots" aria-pressed="${c.visible}">${c.visible ? "◉" : "○"}</button>`}
+        <button class="row-x" type="button" data-remove-clock="${c.id}" aria-label="Remove ${h(c.name)}" title="Remove ${h(c.name)}${c.source.type === "synth" && c.source.clocks > 1 ? " (the other simulated clocks are simulated again)" : ""}">×</button></span>
     </div>`;
   }).join("");
 }
@@ -55,7 +55,7 @@ function estimatorRows(several) {
     const e = byId[id];
     const mark = several ? strokeSvg(i, "var(--ink)", 26) : `<span class="swatch" style="background:${seriesColor(i)}"></span>`;
     return `<div class="row"><span class="row-main">${mark}<span class="row-name">${e.label}</span>${several ? "" : `<span class="row-family">${e.family}</span>`}</span>
-      <button class="row-x" type="button" data-remove="${id}" title="Remove ${e.label}">×</button></div>`;
+      <button class="row-x" type="button" data-remove="${id}" aria-label="Remove ${e.label}" title="Remove ${e.label}">×</button></div>`;
   }).join("");
 }
 
@@ -81,7 +81,12 @@ export function renderPanel({ controls = null, analysis = false, run: runs = fal
   const nDev = state.devs.length;
   const run = state.run;
   // The panel is drawn again on every change: the field being edited keeps the focus.
-  const focused = side.contains(document.activeElement) ? document.activeElement.dataset.opt : null;
+  const active = side.contains(document.activeElement) ? document.activeElement : null;
+  const focusSel = active?.dataset?.opt ? `[data-opt="${CSS.escape(active.dataset.opt)}"]`
+    : active?.dataset?.ctl ? `[data-ctl="${CSS.escape(active.dataset.ctl)}"]${active.dataset.v !== undefined ? `[data-v="${CSS.escape(active.dataset.v)}"]` : ""}`
+    : null;
+  const selStart = active && "selectionStart" in active ? active.selectionStart : null;
+  const selEnd = active && "selectionEnd" in active ? active.selectionEnd : null;
   const stale = run.stale && state.clocks.some((c) => c.record);
   const running = run.state === "running";
   if (!several && !controls && !analysis) { side.innerHTML = ""; return false; }
@@ -117,7 +122,13 @@ export function renderPanel({ controls = null, analysis = false, run: runs = fal
     </div>` : ""}`;
   const ns = side.querySelector(".side-scroll");
   if (ns) ns.scrollTop = top;
-  if (focused) side.querySelector(`[data-opt="${focused}"]`)?.focus();
+  const restore = focusSel ? side.querySelector(focusSel) : null;
+  if (restore) {
+    restore.focus();
+    if (selStart !== null && "setSelectionRange" in restore) {
+      try { restore.setSelectionRange(selStart, selEnd ?? selStart); } catch { /* type omits selection */ }
+    }
+  }
   return true;
 }
 

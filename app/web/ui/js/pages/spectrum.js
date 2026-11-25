@@ -16,8 +16,8 @@ export function controls() {
   const sp = state.spec;
   const carrier = `<input type="text" data-ctl="carrier" value="${h(sp.carrierText)}" inputmode="decimal" aria-label="Carrier frequency in Hz" class="carrier">`;
   const phase = `<div class="seg" role="group" aria-label="Phase noise shown as">
-      <button type="button" data-ctl="phase" data-v="L" class="${sp.phase === "L" ? "on" : ""}">ℒ(f) dBc/Hz</button>
-      <button type="button" data-ctl="phase" data-v="Sx" class="${sp.phase === "Sx" ? "on" : ""}">S<sub>x</sub>(f)</button></div>`;
+      <button type="button" data-ctl="phase" data-v="L" class="${sp.phase === "L" ? "on" : ""}" aria-pressed="${sp.phase === "L"}">ℒ(f) dBc/Hz</button>
+      <button type="button" data-ctl="phase" data-v="Sx" class="${sp.phase === "Sx" ? "on" : ""}" aria-pressed="${sp.phase === "Sx"}">S<sub>x</sub>(f)</button></div>`;
   const avg = `<select data-ctl="avg" aria-label="Averaging"><option value="log" ${sp.avg === "log" ? "selected" : ""}>Log-binned</option><option value="raw" ${sp.avg === "raw" ? "selected" : ""}>Welch, every bin</option></select>`;
   const guides = `<label class="check" title="Power-law slope guides on both plots (one clock)"><input type="checkbox" data-ctl="guides" ${sp.guides ? "checked" : ""}>Slope guides</label>`;
   return `<label class="tool-field">Carrier for ℒ(f) ${carrier} Hz</label>${phase}${avg}${multi() ? "" : guides}`;

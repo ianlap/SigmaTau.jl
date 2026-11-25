@@ -27,11 +27,11 @@ export function controls() {
   const o = state.hold;
   const train = `<select data-ctl="frac" aria-label="Training stretch, as a share of the record or of the holdover time">${FRACS.map((f) => `<option value="${f}" ${f === o.frac ? "selected" : ""} ${!f && o.kalman ? "disabled" : ""}>${stretch(f, o.drift)}</option>`).join("")}</select>`;
   const by = `<div class="seg" role="group" aria-label="Predicted by">
-      <button type="button" data-ctl="kalman" data-v="0" class="${o.kalman ? "" : "on"}" title="A least-squares line or parabola through the training stretch">Fit</button>
-      <button type="button" data-ctl="kalman" data-v="1" class="${o.kalman ? "on" : ""}" title="A Kalman filter that has read the record up to each start; its clock model is fitted to the first training stretch alone">Kalman</button></div>`;
+      <button type="button" data-ctl="kalman" data-v="0" class="${o.kalman ? "" : "on"}" aria-pressed="${!o.kalman}" title="A least-squares line or parabola through the training stretch">Fit</button>
+      <button type="button" data-ctl="kalman" data-v="1" class="${o.kalman ? "on" : ""}" aria-pressed="${Boolean(o.kalman)}" title="A Kalman filter that has read the record up to each start; its clock model is fitted to the first training stretch alone">Kalman</button></div>`;
   const fit = `<div class="seg" role="group" aria-label="Learned from the stretch">
-      <button type="button" data-ctl="drift" data-v="0" class="${o.drift ? "" : "on"}">Frequency</button>
-      <button type="button" data-ctl="drift" data-v="1" class="${o.drift ? "on" : ""}" title="Frequency and drift">+ drift</button></div>`;
+      <button type="button" data-ctl="drift" data-v="0" class="${o.drift ? "" : "on"}" aria-pressed="${!o.drift}">Frequency</button>
+      <button type="button" data-ctl="drift" data-v="1" class="${o.drift ? "on" : ""}" aria-pressed="${Boolean(o.drift)}" title="Frequency and drift">+ drift</button></div>`;
   const limit = `<input type="text" data-ctl="limit" value="${h(o.limitText)}" placeholder="none" inputmode="decimal" aria-label="Time error limit in seconds" class="carrier">`;
   const level = `<select data-ctl="confidence" aria-label="Share of trials">${LEVELS.map(([v, l]) => `<option value="${v}" ${v === o.confidence ? "selected" : ""}>${l}</option>`).join("")}</select>`;
   const anchor = `<label class="check" title="${o.kalman ? "The filter starts from its own estimate" : "Each prediction starts from the last reading of its stretch"}"><input type="checkbox" data-ctl="anchor" ${o.anchor && !o.kalman ? "checked" : ""} ${o.kalman ? "disabled" : ""}>From last reading</label>`;

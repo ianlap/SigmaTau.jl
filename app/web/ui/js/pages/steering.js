@@ -22,8 +22,8 @@ const WEIGHTS = ["phase²", "frequency²", "steer²"];
 export function controls() {
   const o = state.steer, c = recordClocks()[0], rec = c?.record;
   const from = `<div class="seg" role="group" aria-label="Gains from">
-      <button type="button" data-ctl="from" data-v="time" class="${o.from === "time" ? "on" : ""}" title="A critically damped loop with this time constant: gains by pole placement">Time constant</button>
-      <button type="button" data-ctl="from" data-v="cost" class="${o.from === "cost" ? "on" : ""}" title="The gains that minimize a weighted sum of phase², frequency² and steer² (LQG)">Cost</button></div>`;
+      <button type="button" data-ctl="from" data-v="time" class="${o.from === "time" ? "on" : ""}" aria-pressed="${o.from === "time"}" title="A critically damped loop with this time constant: gains by pole placement">Time constant</button>
+      <button type="button" data-ctl="from" data-v="cost" class="${o.from === "cost" ? "on" : ""}" aria-pressed="${o.from === "cost"}" title="The gains that minimize a weighted sum of phase², frequency² and steer² (LQG)">Cost</button></div>`;
   const T = `<input type="text" data-ctl="T" value="${h(o.TText)}" placeholder="${rec ? num(steerDefault(c), 4) : "auto"}" inputmode="decimal" aria-label="Loop time constant in seconds" class="carrier">`;
   const integral = `<label class="check" title="A third gain, on the running sum of the phase: it removes the phase offset a frequency drift leaves, at the cost of more noise"><input type="checkbox" data-ctl="integral" ${o.integral ? "checked" : ""}>Integral</label>`;
   const cost = WEIGHTS.map((w, i) => `<label class="tool-field"><span>${w}</span><input type="text" data-ctl="cost" data-i="${i}" value="${h(o.cost[i])}" inputmode="decimal" aria-label="Weight on ${w}" class="carrier steer-w"></label>`).join("");
@@ -200,8 +200,11 @@ export function refresh() {
     tb.innerHTML = controls();
     if (at) tb.querySelector(`[data-ctl=${at.ctl}][data-v="${at.v}"]`)?.focus();
   }
-  root.querySelector("[data-ref=view]").innerHTML = [["sigma", "σ(τ)"], ["record", "Record"]].map(([v, l]) =>
-    `<button type="button" data-ctl="view" data-v="${v}" class="${state.steer.view === v ? "on" : ""}">${l}</button>`).join("");
+  const viewBox = root.querySelector("[data-ref=view]");
+  const activeView = viewBox.contains(document.activeElement) ? document.activeElement.dataset.v : null;
+  viewBox.innerHTML = [["sigma", "σ(τ)"], ["record", "Record"]].map(([v, l]) =>
+    `<button type="button" data-ctl="view" data-v="${v}" class="${state.steer.view === v ? "on" : ""}" aria-pressed="${state.steer.view === v}">${l}</button>`).join("");
+  if (activeView) viewBox.querySelector(`[data-v="${CSS.escape(activeView)}"]`)?.focus();
   const grid = root.querySelector("[data-ref=grid]");   // the τ grid of the σ(τ) plot
   if (!grid.contains(document.activeElement)) grid.innerHTML = record ? "" : gridField();
   root.querySelector("[data-ref=title]").textContent = record ? "Steered phase" : "Stability, free-running and steered";

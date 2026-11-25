@@ -18,8 +18,8 @@ const NAME = { dadev: "DADEV", dhdev: "DHDEV" };
 export function controls() {
   const d = state.dyn;
   const est = `<div class="seg" role="group" aria-label="Estimator">${Object.entries(NAME).map(([k, v]) =>
-    `<button type="button" data-ctl="dev" data-v="${k}" class="${d.dev === k ? "on" : ""}">${v}</button>`).join("")}</div>`;
-  const view = `<div class="seg" role="group" aria-label="View"><button type="button" data-ctl="view" data-v="map" class="${d.view === "map" ? "on" : ""}">Map</button><button type="button" data-ctl="view" data-v="3d" class="${d.view === "3d" ? "on" : ""}">3D waterfall</button></div>`;
+    `<button type="button" data-ctl="dev" data-v="${k}" class="${d.dev === k ? "on" : ""}" aria-pressed="${d.dev === k}">${v}</button>`).join("")}</div>`;
+  const view = `<div class="seg" role="group" aria-label="View"><button type="button" data-ctl="view" data-v="map" class="${d.view === "map" ? "on" : ""}" aria-pressed="${d.view === "map"}">Map</button><button type="button" data-ctl="view" data-v="3d" class="${d.view === "3d" ? "on" : ""}" aria-pressed="${d.view === "3d"}">3D waterfall</button></div>`;
   const n = recordClocks()[0]?.record?.n ?? 0;
   const note = multi() ? "Maps can't be overlaid, so each clock gets its own. Same color scale throughout."
     : n ? `${thousands(Math.max(16, Math.floor(n / d.frac)))} samples per window · ${2 * d.frac - 1} windows` : "";

@@ -33,7 +33,7 @@ export function mount(el, ctx) {
     <div class="col">
       <div class="toolbar">
         <div class="seg" role="group" aria-label="Quantity" data-ref="axis">${Object.entries(AXES).map(([k, v]) =>
-          `<button type="button" data-axis="${k}">${v}</button>`).join("")}</div>
+          `<button type="button" data-axis="${k}" aria-pressed="${k === state.axis}">${v}</button>`).join("")}</div>
         <span class="caption" data-ref="caption"></span>
         <span class="pin-list" data-ref="pins"></span>
         <span class="toggles">
@@ -95,7 +95,11 @@ function showEmpty(html) {
 
 export function refresh() {
   if (!root) return;
-  root.querySelectorAll("[data-axis]").forEach((b) => b.classList.toggle("on", b.dataset.axis === state.axis));
+  root.querySelectorAll("[data-axis]").forEach((b) => {
+    const on = b.dataset.axis === state.axis;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
   const conf = state.ci ? `${(CONFIDENCES.find(([v]) => v === state.confidence) ?? [0, state.confidence])[1]} confidence · ` : "";
   const biased = state.devs.some((d) => BIAS_CORRECTED.has(d));
   const bias = biased ? ` · ${biasEntry(state.bias)[2]}` : "";
