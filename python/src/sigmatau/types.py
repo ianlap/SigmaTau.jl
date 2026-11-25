@@ -407,6 +407,7 @@ class CrossStabilityResult:
 __all__ = [
     "PhaseData",
     "FrequencyData",
+    "start_time",
     "StabilityResult",
     "StabilitySuite",
     "SpectralResult",

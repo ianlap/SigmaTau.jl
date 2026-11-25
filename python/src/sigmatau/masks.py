@@ -38,6 +38,12 @@ class MaskCheck(NamedTuple):
     passed: bool
     margin: float
 
+    def __repr__(self) -> str:
+        status = "PASS" if self.passed else "FAIL"
+        return (
+            f"MaskCheck({self.mask}, {len(self.tau)} pts, {status}, margin={self.margin:.3g})"
+        )
+
 
 @_map_errors
 def telecom_mask(mask: str, stat: str, tau: float | Sequence[float]) -> float | np.ndarray:

@@ -21,6 +21,7 @@ from ._convert import (
 )
 from ._julia import VecStr, _map_errors, jl
 from .deviations import DEFAULT_CONFIDENCE, _bias, _noise
+from .ensemble import ClockComparisons
 from .grids import Octave, TauMode
 from .types import (
     FrequencyData,
@@ -103,16 +104,39 @@ def stability(
     )
 
 
+def _cc_taus(rest, m, names, fn: str):
+    """Parse ``(cc)`` / ``(cc, taus)`` / ``(cc, m=...)`` arguments."""
+    if names is not None:
+        raise TypeError(f"{fn}: names comes from ClockComparisons")
+    if len(rest) > 1:
+        raise TypeError(f"{fn}: pass ClockComparisons with at most one τ grid")
+    if rest:
+        if m is not None:
+            raise TypeError(f"{fn}: pass m positionally or as m=, not both")
+        return rest[0]
+    return Octave if m is None else m
+
+
 @_map_errors
 def ncornered_hat(
-    *results: StabilityResult | Sequence[Sequence[StabilityResult | None]],
+    *results: (
+        StabilityResult
+        | Sequence[Sequence[StabilityResult | None]]
+        | ClockComparisons
+        | TauMode
+        | Sequence[int]
+    ),
+    m: TauMode | Sequence[int] | None = None,
+    deviation: str = "adev",
+    reference: bool = True,
+    confidence: float = DEFAULT_CONFIDENCE,
     names: Sequence[str] | None = None,
 ) -> HatResult:
     """Deviation of each of N ≥ 3 clocks from the deviations measured between every
     pair of them: the three-cornered hat of Gray and Allan (1974) and its
     extension to N clocks (SP1065 §10.14).
 
-    Two call forms for ``*results``:
+    Call forms:
 
     - ``ncornered_hat(r_ab, r_bc, r_ca)``: for three clocks, the results for
       A−B, B−C and C−A. The clocks are returned in the order A, B, C.
@@ -120,14 +144,18 @@ def ncornered_hat(
       is the result of an estimator on the difference record of clocks i and j,
       counted from 0, with ``None`` elsewhere. One entry per pair is enough, in
       either triangle.
+    - ``ncornered_hat(cc, m=Octave, *, deviation="adev", reference=True, confidence=...)``:
+      from a :class:`ClockComparisons` ensemble, taking difference records on
+      the common grid ``m`` with estimator ``deviation``.
 
     The sign of each difference does not matter. All results must come from
     one estimator on one τ grid, and the estimator must be one whose variance
     adds for independent clocks, such as ``adev``, ``mdev`` or ``hdev``.
 
     ``names`` gives one name per clock: ``"A"``, ``"B"``, ``"C"`` for three
-    results and ``"clock 1"``, ``"clock 2"``, … for a matrix by default. The
-    result is a ``HatResult``, one ``StabilityResult`` per clock with its name.
+    results and ``"clock 1"``, ``"clock 2"``, … for a matrix by default. For
+    ``ClockComparisons`` the names come from ``cc``. The result is a
+    ``HatResult``, one ``StabilityResult`` per clock with its name.
 
     The estimate can be negative for a clock much more stable than the others,
     for clocks that are correlated and where few terms are averaged; ``dev``
@@ -135,6 +163,28 @@ def ncornered_hat(
     an EDF (Vernotte and Lantz 2019, Appendix B). The interval is too narrow
     for a clock that is no longer resolved under the others.
     """
+    if results and isinstance(results[0], ClockComparisons):
+        taus = _cc_taus(results[1:], m, names, "ncornered_hat")
+        return hat_from_jl(
+            jl.ncornered_hat(
+                results[0]._jl(),
+                resolve_m(taus),
+                deviation=jl.Symbol(str(deviation)),
+                reference=bool(reference),
+                confidence=float(confidence),
+            )
+        )
+
+    if (
+        m is not None
+        or deviation != "adev"
+        or not reference
+        or confidence != DEFAULT_CONFIDENCE
+    ):
+        raise TypeError(
+            "ncornered_hat: m, deviation, reference and confidence apply only to ClockComparisons"
+        )
+
     kwargs = _names(names)
     if len(results) == 3:
         return hat_from_jl(jl.ncornered_hat(*(result_to_jl(r) for r in results), **kwargs))
@@ -144,18 +194,26 @@ def ncornered_hat(
         return hat_from_jl(jl.ncornered_hat(jl_matrix, **kwargs))
 
     raise TypeError(
-        "ncornered_hat: pass three pairwise results (r_ab, r_bc, r_ca) "
-        "or one square matrix of results"
+        "ncornered_hat: pass three pairwise results (r_ab, r_bc, r_ca), "
+        "one square matrix of results, or a ClockComparisons"
     )
 
 
 @_map_errors
 def groslambert(
-    *records: PhaseData | FrequencyData | Sequence[Sequence[PhaseData | FrequencyData | None]],
-    m: TauMode | Sequence[int] = Octave,
+    *records: (
+        PhaseData
+        | FrequencyData
+        | Sequence[Sequence[PhaseData | FrequencyData | None]]
+        | ClockComparisons
+        | TauMode
+        | Sequence[int]
+    ),
+    m: TauMode | Sequence[int] | None = None,
     confidence: float = DEFAULT_CONFIDENCE,
     interval: str = "chi2",
     weighted: bool = False,
+    reference: bool = True,
     names: Sequence[str] | None = None,
 ) -> HatResult:
     """Allan deviation of each of N ≥ 3 clocks from the difference records between
@@ -163,15 +221,17 @@ def groslambert(
     that share the clock (Vernotte, Calosso and Rubiola 2016, after Groslambert
     et al. 1981).
 
-    Two call forms for ``*records``, which are ``PhaseData`` or
-    ``FrequencyData`` records with one sample interval and length and no gaps:
+    Call forms for ``*records``:
 
-    - ``groslambert(x_ab, x_bc, x_ca)``: for three clocks, the records A−B, B−C
-      and C−A. The clocks are returned in the order A, B, C.
+    - ``groslambert(x_ab, x_bc, x_ca)``: for three clocks, ``PhaseData`` or
+      ``FrequencyData`` records for A−B, B−C and C−A with one sample interval
+      and length. The clocks are returned in the order A, B, C.
     - ``groslambert(matrix)``: a square list of lists whose entry ``[i][j]`` is
       the record x_i − x_j, counted from 0, with ``None`` elsewhere. One entry
       per pair is enough, in either triangle: the entry across the diagonal
       stands in, with its sign reversed.
+    - ``groslambert(cc, m=Octave, *, reference=True, ...)``: from a
+      :class:`ClockComparisons` ensemble.
 
     Noise that each record carries on its own, such as that of the counter
     that measured it, biases the hat of :func:`ncornered_hat` and averages out
@@ -194,6 +254,23 @@ def groslambert(
     clocks counts by the inverse of the product of its two records' Allan
     variances, so that a quiet clock is read against the other quiet clocks.
     """
+    if records and isinstance(records[0], ClockComparisons):
+        taus = _cc_taus(records[1:], m, names, "groslambert")
+        return hat_from_jl(
+            jl.groslambert(
+                records[0]._jl(),
+                resolve_m(taus),
+                confidence=float(confidence),
+                interval=jl.Symbol(interval),
+                weighted=bool(weighted),
+                reference=bool(reference),
+            )
+        )
+
+    if not reference:
+        raise TypeError("groslambert: reference applies only to ClockComparisons")
+
+    taus = Octave if m is None else m
     kwargs = {
         "confidence": float(confidence),
         "interval": jl.Symbol(interval),
@@ -201,16 +278,16 @@ def groslambert(
         **_names(names),
     }
     if len(records) == 3:
-        separated = jl.groslambert(*(to_jl_data(r) for r in records), resolve_m(m), **kwargs)
+        separated = jl.groslambert(*(to_jl_data(r) for r in records), resolve_m(taus), **kwargs)
         return hat_from_jl(separated)
 
     if len(records) == 1:
         jl_matrix = _fill_matrix(_new_data_matrix, to_jl_data, records[0], "groslambert")
-        return hat_from_jl(jl.groslambert(jl_matrix, resolve_m(m), **kwargs))
+        return hat_from_jl(jl.groslambert(jl_matrix, resolve_m(taus), **kwargs))
 
     raise TypeError(
-        "groslambert: pass three difference records (x_ab, x_bc, x_ca) "
-        "or one square matrix of records"
+        "groslambert: pass three difference records (x_ab, x_bc, x_ca), "
+        "one square matrix of records, or a ClockComparisons"
     )
 
 

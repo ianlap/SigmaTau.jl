@@ -8,9 +8,12 @@ Python↔Julia boundary. Every other module imports ``jl`` from here.
 from __future__ import annotations
 
 import functools
+import operator
 import os
 import sys
 import warnings
+
+import numpy as np
 
 # juliacall reads its configuration from the environment at import time. Signal
 # handling must be Julia's, or Ctrl-C during a long call can crash the process,
@@ -63,16 +66,26 @@ _make_result = jl.seval("""
 
 # Classify a Julia exception for _map_errors: (python-error-kind, message).
 _err_info = jl.seval("""
-    e -> e isa ArgumentError ? ("value", e.msg) :
-         e isa DomainError   ? ("value", sprint(showerror, e)) :
-         e isa KeyError      ? ("key",   sprint(showerror, e)) :
-         e isa MethodError   ? ("type",  sprint(showerror, e)) :
-         e isa SystemError   ? ("os",    sprint(showerror, e)) :
-         e isa Base.IOError  ? ("os",    sprint(showerror, e)) :
-                               ("other", "")
+    e -> e isa ArgumentError      ? ("value", e.msg) :
+         e isa DimensionMismatch  ? ("value", e.msg) :
+         e isa ErrorException     ? ("value", e.msg) :
+         e isa DomainError        ? ("value", sprint(showerror, e)) :
+         e isa BoundsError        ? ("index", sprint(showerror, e)) :
+         e isa KeyError           ? ("key",   sprint(showerror, e)) :
+         e isa InexactError       ? ("type",  sprint(showerror, e)) :
+         e isa MethodError        ? ("type",  sprint(showerror, e)) :
+         e isa SystemError        ? ("os",    sprint(showerror, e)) :
+         e isa Base.IOError       ? ("os",    sprint(showerror, e)) :
+                                    ("other", "")
 """)
 
-_PY_ERR = {"value": ValueError, "key": KeyError, "type": TypeError, "os": OSError}
+_PY_ERR = {
+    "value": ValueError,
+    "index": IndexError,
+    "key": KeyError,
+    "type": TypeError,
+    "os": OSError,
+}
 
 
 def _map_errors(fn):
@@ -95,6 +108,17 @@ def _map_errors(fn):
             raise err from None
 
     return wrapper
+
+
+def as_int(value: object, name: str) -> int:
+    """``value`` as an ``int``. Booleans and floats (whole or fractional) are
+    refused, as Julia and NumPy refuse them where they count."""
+    if isinstance(value, (bool, np.bool_)):
+        raise TypeError(f"{name} must be an integer, got {value!r}")
+    try:
+        return operator.index(value)
+    except TypeError:
+        raise TypeError(f"{name} must be an integer, got {value!r}") from None
 
 
 def julia_version() -> str:

@@ -192,3 +192,13 @@ def test_groslambert_forms(jl):
     assert np.all(k[1].ci_lower <= k[1].dev) and np.all(k[1].dev <= k[1].ci_upper)
     with pytest.raises(TypeError):
         st.groslambert(d[0], d[1])
+
+    cc = st.ClockComparisons(np.column_stack(x), 1.0, names=("C1", "C2", "C3"), reference="REF")
+    gc = st.groslambert(cc, [1, 2, 4])
+    direct_cc = jl.groslambert(cc._jl(), _convert.to_jl_ints([1, 2, 4]))
+    assert gc.names == ("C1", "C2", "C3", "REF")
+    for a, b in zip(gc, [_convert.result_from_jl(r) for r in direct_cc], strict=True):
+        np.testing.assert_array_equal(a.dev, b.dev)
+    assert st.groslambert(cc, reference=False).names == ("C1", "C2", "C3")
+    with pytest.raises(TypeError):
+        st.groslambert(cc, names=["X", "Y", "Z"])

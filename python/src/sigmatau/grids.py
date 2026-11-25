@@ -7,10 +7,9 @@ grid, so it is the one the estimators use.
 
 from __future__ import annotations
 
-import operator
 from enum import Enum
 
-from ._julia import _map_errors, jl
+from ._julia import _map_errors, as_int, jl
 
 
 class TauMode(Enum):
@@ -53,7 +52,9 @@ def tau_values(mode: TauMode, n: int, kernel: str) -> list[int]:
     For ``"theo1"``, which takes even factors only, odd entries are rounded up
     to the next even value. A ``"theoh"`` grid is in units of τ = m·τ₀.
     """
-    ms = jl.tau_values(_JL_TAUMODE[mode], operator.index(n), jl.Symbol(str(kernel)))
+    if not isinstance(mode, TauMode):
+        raise TypeError(f"mode must be a TauMode, got {mode!r}")
+    ms = jl.tau_values(_JL_TAUMODE[mode], as_int(n, "n"), jl.Symbol(str(kernel)))
     return [int(m) for m in ms]
 
 

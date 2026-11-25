@@ -84,6 +84,14 @@ def _bias(correct_bias: bool | str):
 @_map_errors
 def _run(jlfn, data, m, **kwargs) -> StabilityResult:
     """Convert the arguments, call the Julia estimator and convert its result."""
+    if "noise" in kwargs:
+        kwargs["noise"] = _noise(kwargs["noise"])
+    if "correct_bias" in kwargs:
+        kwargs["correct_bias"] = _bias(kwargs["correct_bias"])
+    if "confidence" in kwargs:
+        kwargs["confidence"] = float(kwargs["confidence"])
+    if "dead_time" in kwargs:
+        kwargs["dead_time"] = float(kwargs["dead_time"])
     return result_from_jl(jlfn(to_jl_data(data), resolve_m(m), **kwargs))
 
 
@@ -116,9 +124,9 @@ def adev(
         m,
         ci=ci,
         overlapping=overlapping,
-        noise=_noise(noise),
-        confidence=float(confidence),
-        dead_time=float(dead_time),
+        noise=noise,
+        confidence=confidence,
+        dead_time=dead_time,
     )
 
 
@@ -132,7 +140,7 @@ def mdev(
     confidence: float = DEFAULT_CONFIDENCE,
 ) -> StabilityResult:
     """Modified Allan deviation Mod σ_y(τ) (IEEE Std 1139-2022, Eq. (A.27); SP1065 §5.2.5)."""
-    return _run(jl.mdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
+    return _run(jl.mdev, data, m, ci=ci, noise=noise, confidence=confidence)
 
 
 @_estimator
@@ -146,7 +154,7 @@ def tdev(
 ) -> StabilityResult:
     """Time deviation σ_x(τ) = (τ/√3)·Mod σ_y(τ), in seconds (IEEE Std 1139-2022,
     Eq. (A.29); SP1065 §5.2.6)."""
-    return _run(jl.tdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
+    return _run(jl.tdev, data, m, ci=ci, noise=noise, confidence=confidence)
 
 
 @_estimator
@@ -174,8 +182,8 @@ def hdev(
         ci=ci,
         remove_drift=remove_drift,
         overlapping=overlapping,
-        noise=_noise(noise),
-        confidence=float(confidence),
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -196,8 +204,8 @@ def mhdev(
         m,
         ci=ci,
         remove_drift=remove_drift,
-        noise=_noise(noise),
-        confidence=float(confidence),
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -223,8 +231,8 @@ def htdev(
         m,
         ci=ci,
         remove_drift=remove_drift,
-        noise=_noise(noise),
-        confidence=float(confidence),
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -239,7 +247,7 @@ def pdev(
 ) -> StabilityResult:
     """Parabolic deviation (Vernotte, Lenczner, Bourgeois and Rubiola 2016). At m = 1
     it is the Allan deviation by definition. The record must have no gaps."""
-    return _run(jl.pdev, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
+    return _run(jl.pdev, data, m, ci=ci, noise=noise, confidence=confidence)
 
 
 @_estimator
@@ -257,7 +265,7 @@ def theoh(
     The crossover is that of SP1065; Howe (2006) places it at a tenth. The
     record must have no gaps.
     """
-    return _run(jl.theoh, data, m, ci=ci, noise=_noise(noise), confidence=float(confidence))
+    return _run(jl.theoh, data, m, ci=ci, noise=noise, confidence=confidence)
 
 
 def mtie(
@@ -274,7 +282,7 @@ def mtie(
     MTIE is a peak statistic and has no χ² interval. ``ci`` and ``confidence``
     are accepted, so that every estimator can be called alike, and ignored.
     """
-    return _run(jl.mtie, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.mtie, data, m, ci=ci, confidence=confidence)
 
 
 def tierms(
@@ -291,7 +299,7 @@ def tierms(
     The error includes any frequency offset in the record. Like ``mtie`` it has
     no χ² interval, and ``ci`` and ``confidence`` are accepted and ignored.
     """
-    return _run(jl.tierms, data, m, ci=ci, confidence=float(confidence))
+    return _run(jl.tierms, data, m, ci=ci, confidence=confidence)
 
 
 @_estimator
@@ -313,9 +321,9 @@ def totdev(
         data,
         m,
         ci=ci,
-        correct_bias=_bias(correct_bias),
-        noise=_noise(noise),
-        confidence=float(confidence),
+        correct_bias=correct_bias,
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -336,9 +344,9 @@ def mtotdev(
         data,
         m,
         ci=ci,
-        correct_bias=_bias(correct_bias),
-        noise=_noise(noise),
-        confidence=float(confidence),
+        correct_bias=correct_bias,
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -359,9 +367,9 @@ def ttotdev(
         data,
         m,
         ci=ci,
-        correct_bias=_bias(correct_bias),
-        noise=_noise(noise),
-        confidence=float(confidence),
+        correct_bias=correct_bias,
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -383,10 +391,10 @@ def htotdev(
         data,
         m,
         ci=ci,
-        correct_bias=_bias(correct_bias),
+        correct_bias=correct_bias,
         remove_drift=remove_drift,
-        noise=_noise(noise),
-        confidence=float(confidence),
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -413,9 +421,9 @@ def theo1(
         data,
         m,
         ci=ci,
-        correct_bias=_bias(correct_bias),
-        noise=_noise(noise),
-        confidence=float(confidence),
+        correct_bias=correct_bias,
+        noise=noise,
+        confidence=confidence,
     )
 
 
@@ -441,10 +449,10 @@ def mhtotdev(
         data,
         m,
         ci=ci,
-        correct_bias=_bias(correct_bias),
+        correct_bias=correct_bias,
         remove_drift=remove_drift,
-        noise=_noise(noise),
-        confidence=float(confidence),
+        noise=noise,
+        confidence=confidence,
     )
 
 
