@@ -6,11 +6,6 @@ using Random
 using SigmaTau
 
 @testset "Noise identification" begin
-    # Mock data equivalent to NIST SP1065 sample
-    x = collect(1.0:100.0) .^ 2  # simple quadratic
-    m_values = [1, 2, 4]
-    tau0 = 1.0
-
     @testset "flicker PM at long τ" begin
         # Decimated flicker-PM phase has too little lag-1 correlation left to
         # tell it from white PM; R(n) does, and leaves white PM alone.

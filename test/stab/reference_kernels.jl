@@ -5,29 +5,7 @@
 
 module ReferenceKernels
 
-# ── detrend_linear! ──
-
-function detrend_linear!(x::AbstractVector{T}) where T<:Real
-    n = length(x)
-    n < 2 && return x
-    x_bar = (n + 1) / 2.0
-    sum_num = 0.0
-    sum_y   = 0.0
-    for i in 1:n
-        val = Float64(x[i])
-        sum_num += (i - x_bar) * val
-        sum_y   += val
-    end
-    ss_xx = n * (Float64(n)^2 - 1) / 12.0
-    slope = sum_num / ss_xx
-    y_bar = sum_y / n
-    for i in 1:n
-        x[i] -= T(y_bar + slope * (i - x_bar))
-    end
-    return x
-end
-
-# ── ADEV / MDEV (allan.jl) ────────────────────────────────────────────────────
+# ── ADEV / MDEV ───────────────────────────────────────────────────────────────
 
 function adev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     N = length(x); L = N - 2m
@@ -44,7 +22,7 @@ function mdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real, x_cs::AbstractV
     return sum(abs2, d) / (Ne * 2.0 * Float64(m)^4 * tau0^2)
 end
 
-# ── HDEV / MHDEV (hadamard.jl) ────────────────────────────────────────────────
+# ── HDEV / MHDEV ──────────────────────────────────────────────────────────────
 
 function hdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     N = length(x); L = N - 3m
@@ -61,29 +39,6 @@ function mhdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real, x_cs::Abstract
         6 .* @view(x_cs[1+2m:Ne+2m]) .- 4 .* @view(x_cs[1+m:Ne+m]) .+
         @view(x_cs[1:Ne])
     return sum(abs2, d) / (Ne * 6.0 * Float64(m)^4 * tau0^2)
-end
-
-# ── TOTDEV (total.jl) ─────────────────────────────────────────────────────────
-
-function totdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
-    N = length(x)
-    xd = copy(x); detrend_linear!(xd)
-
-    x_star = Vector{Float64}(undef, 3N - 4)
-    for i in 1:N-2; x_star[i]         = 2xd[1] - xd[i+1]; end
-    for i in 1:N;   x_star[N-2+i]     = xd[i];             end
-    for i in 1:N-2; x_star[2N-2+i]    = 2xd[N] - xd[N-i];  end
-
-    off = N - 2
-    D = 0.0; count = 0
-    for i in 1:N
-        lo = off + i; hi = off + i + 2m
-        hi > length(x_star) && continue
-        d2 = x_star[hi] - 2x_star[off + i + m] + x_star[lo]
-        D += d2^2; count += 1
-    end
-    count == 0 && return NaN
-    return D / (2 * (N - 2) * (m * tau0)^2)
 end
 
 # Canonical TOTDEV (Howe 1995 / SP1065 eqn 25): no detrend, mean-flip endpoint
@@ -104,7 +59,7 @@ function totdev_var_howe(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     return D / (2 * (N - 2) * (m * tau0)^2)
 end
 
-# ── MTOTDEV (total.jl) ────────────────────────────────────────────────────────
+# ── MTOTDEV ───────────────────────────────────────────────────────────────────
 
 function mtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     N = length(x); nsubs = N - 3m + 1
@@ -156,7 +111,7 @@ function mtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     return outer_sum / (2 * (m * tau0)^2 * nsubs)
 end
 
-# ── HTOTDEV (total.jl) ────────────────────────────────────────────────────────
+# ── HTOTDEV ───────────────────────────────────────────────────────────────────
 
 function htotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     N = length(x)
@@ -217,55 +172,6 @@ function htotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
     end
 
     return dev_sum / (6 * n_iter)
-end
-
-# ── MHTOTDEV (total.jl) ───────────────────────────────────────────────────────
-
-function mhtotdev_var(x::AbstractVector{<:Real}, m::Int, tau0::Real)
-    m >= 1 || throw(ArgumentError("averaging factor m must be >= 1"))
-    N = length(x); nsubs = N - 4m + 1
-    nsubs < 1 && return NaN
-
-    Lp = 4m; ext_len = 3Lp; L3 = ext_len - 3m
-    pd     = Vector{Float64}(undef, Lp)
-    ext    = Vector{Float64}(undef, ext_len)
-    d3_vec = Vector{Float64}(undef, L3)
-    S      = Vector{Float64}(undef, L3 + 1)
-
-    total_sum = 0.0
-    for n in 1:nsubs
-        copyto!(pd, 1, x, n, Lp)
-        detrend_linear!(pd)
-
-        for j in 1:Lp
-            ext[j]        = pd[Lp - j + 1]
-            ext[Lp + j]   = pd[j]
-            ext[2Lp + j]  = pd[Lp - j + 1]
-        end
-
-        for j in 1:L3
-            d3_vec[j] = ext[j] - 3ext[j+m] + 3ext[j+2m] - ext[j+3m]
-        end
-
-        S[1] = 0.0
-        for j in 1:L3
-            S[j+1] = S[j] + d3_vec[j]
-        end
-
-        n_avg = L3 + 1 - m
-        block_var = 0.0
-        if n_avg > 0
-            for j in 1:n_avg
-                a = S[j+m] - S[j]
-                block_var += a^2
-            end
-            block_var /= (n_avg * 6.0 * Float64(m)^2)
-        end
-
-        total_sum += block_var
-    end
-
-    return total_sum / (nsubs * (m * tau0)^2)
 end
 
 # Canonical MHTOTDEV: per-window least-squares quadratic removal, then the

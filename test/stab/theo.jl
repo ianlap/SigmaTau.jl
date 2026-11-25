@@ -198,7 +198,8 @@ using SigmaTau: _theo1_core, _theobr_ratio, _theoh_theo_m, _theoh_is_adev,
                    (rr^1.5 / (rr^1.5 + 5.2))
         @test _theo1_edf(0, 64, 1024) ≈ expected
         # Theo1's selling point: more EDF than ADEV at the same effective τ.
-        @test _theo1_edf(0, 64, 1024) > 0
+        @test calculate_edf(:theo1, [1.0], [:WFM], [64], [48.0], 1024, 1023.0)[1] >
+              calculate_edf(:adev, [1.0], [:WFM], [48], [48.0], 1024, 1023.0)[1]
     end
 
     @testset "EDF of the corrected estimate" begin
