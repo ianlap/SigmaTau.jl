@@ -54,10 +54,13 @@ include("completion.jl")
 const LIBRARY_PREFIXES = ("read: " => "", "read_data: " => "", "read_phase: " => "", "read_frequency: " => "",
                           "detect_format: " => "", "powerlaw_fit: " => "noise fit: ", "tau_values: " => "",
                           "simulate_ensemble: " => "", "InstrumentSource: " => "", "acf: " => "",
-                          "drift_fit: " => "drift fit: ")
+                          "drift_fit: " => "drift fit: ", "add_component!: " => "", "spectrum_sigma: " => "",
+                          "holdover: " => "", "steer: " => "", "timescale: " => "", "cross_adev: " => "",
+                          "groslambert: " => "", "spectral: " => "")
 const CLI_WORDS = ("pass column= one of" => "pass --column with one of", "column=" => "column ",
                    "pass tau0" => "pass --tau0", "fill them with fillgaps first" => "fill them with --fill-gaps",
-                   "pass fewer `alphas` or a longer record" => "use a longer record", "method :" => "--method ")
+                   "pass fewer `alphas` or a longer record" => "use a longer record", "method :" => "--method ",
+                   "of tau0 =" => "of --tau0", "train =" => "--train ")
 function cli_wording(m::String)
     for (p, w) in LIBRARY_PREFIXES
         startswith(m, p) && (m = w * m[length(p)+1:end]; break)
@@ -82,6 +85,7 @@ end
         m = err.msg
         return m isa String ? cli_wording(m) : "invalid argument"
     end
+    err isa SystemError && return system_message(err)
     err isa DomainError && return "domain error in the analysis"
     err isa BoundsError && return "index out of range in the analysis"
     return "failed (" * string(nameof(typeof(err))) * ")"
@@ -142,7 +146,7 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr, tty::Boo
         print(err, startswith(cmd, "-") ? "sigmatau: unknown option " : "sigmatau: unknown command ")
         print(err, cmd)
         startswith(cmd, "-") || print(err, did_you_mean(cmd, subcommands()))
-        print(err, "\nRun 'sigmatau help' for usage.\n")
+        print(err, " (see `sigmatau help`)\n")
         return EXIT_USAGE
     end
 
@@ -184,6 +188,18 @@ function sigmatau(args::Vector{String}; out::IO=stdout, err::IO=stderr, tty::Boo
     if cmd == "model" || cmd == "phasenoise"
         try
             cmd == "model" ? run_model(buf, o) : run_phasenoise(buf, o, t_start)
+        catch e
+            return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
+        end
+    elseif cmd == "timescale" || cmd == "hat"
+        cc = try
+            require_value_cols(o)
+            o.synth > 0 ? synth_ensemble(o) : read_ensemble(o)
+        catch e
+            return report_error(out, err, o, e isa CLIError ? e.code : EXIT_INPUT, error_message(e))
+        end
+        try
+            cmd == "timescale" ? cmd_timescale(buf, o, cc, t_start) : cmd_hat(buf, o, cc, t_start)
         catch e
             return report_error(out, err, o, e isa CLIError ? e.code : EXIT_ANALYSIS, error_message(e))
         end

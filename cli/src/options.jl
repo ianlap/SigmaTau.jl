@@ -474,9 +474,9 @@ function set_option!(o::Options, name::String, v::String)
     elseif name == "--component";      parse_component!(o, v)
     elseif name == "--tau-min";        o.tau_min = parse_float(v, name)
     elseif name == "--tau-max";        o.tau_max = parse_float(v, name)
-    elseif name == "--nperseg";        o.nperseg = parse_int(v, name)
-    elseif name == "--window";         o.window = parse_int(v, name)
-    elseif name == "--step";           o.step = parse_int(v, name)
+    elseif name == "--nperseg";        o.nperseg = parse_int(v, name); o.nperseg >= 2 || throw(usage_error("--nperseg must be 2 or more"))
+    elseif name == "--window";         o.window = parse_int(v, name); o.window >= 1 || throw(usage_error("--window must be 1 or more"))
+    elseif name == "--step";           o.step = parse_int(v, name); o.step >= 1 || throw(usage_error("--step must be 1 or more"))
     elseif name == "--drift-model";    o.model = check_choice(v, name, DRIFT_MODELS)
     elseif name == "--quantity";       o.quantity = check_choice(v, name, QUANTITIES)
     elseif name == "--bins";           o.bins = parse_int(v, name); o.bins >= 1 || throw(usage_error("--bins must be 1 or more"))
@@ -605,7 +605,8 @@ function parse_args!(o::Options, args::Vector{String})
     end
     o.command == "cross" && (isempty(o.with) == isempty(o.value_cols) || o.synth > 0) &&
         throw(usage_error("cross: give FILE and the second channel with --with FILE2, or both channels as --column A,B"))
-    0 < o.confidence < 1 || throw(usage_error("--confidence must be between 0 and 1"))
+    0 < o.confidence < 1 || throw(usage_error("--confidence must be strictly between 0 and 1"))
+    o.tau_min > o.tau_max && throw(usage_error("--tau-min is above --tau-max"))
     o.method == "frequency_fit" || o.model == "linear" ||
         throw(usage_error("--method " * o.method * " estimates a linear drift and goes with --drift-model linear"))
     (isnan(o.train) || o.train > 0) && (isnan(o.limit) || o.limit > 0) ||
@@ -629,8 +630,12 @@ function parse_args!(o::Options, args::Vector{String})
         o.flicker && o.synth > 0 && !o.fitted &&
             throw(usage_error("--flicker fits flicker states: with --synth, add --fitted-models"))
     end
-    o.nperseg >= 0 || throw(usage_error("--nperseg must be positive"))
-    o.window >= 0 && o.step >= 0 || throw(usage_error("--window and --step must be positive"))
+    if o.command == "hat"
+        for d in o.devs
+            String(d) in HAT_DEVS || throw(usage_error("hat separates " * join(HAT_DEVS, ", ") * "; got " * String(d)))
+            (o.covariance || o.klts) && d !== :adev && throw(usage_error((o.klts ? "--klts" : "--covariance") * " gives ADEV; leave --devs out"))
+        end
+    end
     o.series >= 0 || throw(usage_error("--series must be 0 or more"))
     o.header >= 0 || throw(usage_error("--header must be 0 or more"))
     isnan(o.tau0) || o.tau0 > 0 || throw(usage_error("--tau0 must be positive"))

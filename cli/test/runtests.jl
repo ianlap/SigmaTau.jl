@@ -178,6 +178,13 @@ end
     for sh in intersect(shells, ["bash", "fish"])
         @test shell_completions(sh, [["sigmatau", "analyze", "--devs", "adev,mht"]]) == [Set(["adev,mhtotdev"])]
     end
+    for sh in shells
+        @test shell_completions(sh, [["sigmatau", "analyze", "-"]]) == [Set(SigmaTauCLI.cmd_all_options("analyze"))]
+    end
+    if "zsh" in shells
+        @test shell_completions("zsh", [["sigmatau", "analyze", "--out", ""],
+                                        ["sigmatau", "analyze", "--synth", ""]]) == [Set(["FILES"]), Set(String[])]
+    end
     r = run_cli("completion", "tcsh")
     @test r.code == 1
     @test occursin("tcsh", r.err)
@@ -536,6 +543,22 @@ mktempdir() do dir
         @test run_cli("timescale", tf).code == 1                       # no --column
         @test run_cli("timescale", tf, "--column", "2,2").code == 1
         @test run_cli("timescale", tf, "--column", "2,9").code == 2
+        miss = run_cli("timescale", joinpath(dir, "missing.csv"), "--column", "2,3")
+        @test miss.code == 2 && occursin("No such file", miss.err)
+        # Filling gaps on column 2 must not leak o.measured into column 3's drift fit.
+        df2 = joinpath(dir, "colgaps.csv")
+        open(df2, "w") do io
+            for k in 1:64
+                v2 = (k == 20 || k == 40) ? "NaN" : string(cc.x[k, 1])
+                v3 = string(cc.x[k, 2] + 1e-10 * (k - 1) + (k in (20, 40) ? 1e-8 : 0.0))
+                println(io, k - 1, ",", v2, ",", v3)
+            end
+        end
+        let a = csv_rows(run_cli("timescale", df2, "--column", "2,3", "--fill-gaps", "--remove-drift", "linear").out),
+            b = csv_rows(run_cli("timescale", df2, "--column", "3,2", "--fill-gaps", "--remove-drift", "linear").out)
+            @test parse.(Float64, a[1][2:4]) ≈ parse.(Float64, b[2][2:4]) rtol = 1e-12
+            @test parse.(Float64, a[2][2:4]) ≈ parse.(Float64, b[1][2:4]) rtol = 1e-12
+        end
         # A table with a line of names is read clock by clock, in the units
         # and on the MJD axis its names give; --header reads the same axis.
         nf = joinpath(dir, "named.csv")
@@ -681,6 +704,16 @@ mktempdir() do dir
         @test parse.(Float64, getindex.(rows, 3)) == ref.tau && parse.(Float64, getindex.(rows, 4)) ≈ ref.rms
         @test parse(Float64, rows[1][10]) ≈ ref.time_to_limit
         @test isempty(csv_rows(run_cli("holdover", hf).out)[1][9])                 # no limit: blank
+        ht_unreached = let o = IOBuffer()
+            SigmaTauCLI.sigmatau(["holdover", hf, "--train", "512", "--limit", "1"]; out=o, err=IOBuffer(), tty=true)
+            String(take!(o))
+        end
+        @test occursin(r"limit\s+1\n"m, ht_unreached) && occursin(r"time_to_limit\s+not reached\n"m, ht_unreached)
+        ht_nolim = let o = IOBuffer()
+            SigmaTauCLI.sigmatau(["holdover", hf, "--train", "512"]; out=o, err=IOBuffer(), tty=true)
+            String(take!(o))
+        end
+        @test !occursin("limit", ht_nolim)
         r = run_cli("holdover", hf, "--train", "512", "--fit-drift", "--no-anchor", "--limit", "1", "--fit", "--format", "json")
         @test r.code == 0 && occursin("\"drift\":true,\"anchor\":false,\"confidence\":0.95", r.out)
         @test occursin("\"limit\":1.0,\"time_to_limit\":null,\"predicted\":{\"alphas\":[2,1,0,-1,-2]", r.out)
@@ -1055,6 +1088,11 @@ mktempdir() do dir
         @test run_cli("analyze", pf, "--tau0", "Inf").code == 1
         @test run_cli("analyze", pf, "--tau0", "-1").code == 1
         @test run_cli("analyze", pf, "--scaling", "NaN").code == 1
+        @test run_cli("spectrum", pf, "--nperseg", "0").code == 1
+        @test run_cli("spectrum", pf, "--nperseg", "1").code == 1
+        @test run_cli("dynamic", pf, "--window", "0").code == 1
+        @test run_cli("dynamic", pf, "--step", "0").code == 1
+        @test run_cli("hat", "--synth", "32", "--devs", "totdev").code == 1
     end
 
     @testset "errors in JSON when asked for JSON" begin

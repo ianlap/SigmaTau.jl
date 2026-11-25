@@ -228,7 +228,9 @@ column_list(names::Vector{String}) = join((string(i, " ", n) for (i, n) in enume
 # timescale and hat read one clock per --column. Without them, a table's
 # columns are listed by number, to pick from.
 function require_value_cols(o::Options)
-    (o.command == "timescale" || o.command == "hat") && o.synth <= 0 && isempty(o.value_cols) && isfile(o.input) || return
+    (o.command == "timescale" || o.command == "hat") && o.synth <= 0 && isempty(o.value_cols) || return
+    o.input == "-" && throw(usage_error(o.command * " needs --column with two or more columns from a FILE, or --synth"))
+    isfile(o.input) || return
     names = table_names(o)
     throw(usage_error(o.command * " needs --column with two or more columns, or --synth" *
                       (isempty(names) ? "" : "; the columns of this file are " * column_list(names))))

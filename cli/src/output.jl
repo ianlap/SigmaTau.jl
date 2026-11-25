@@ -483,6 +483,9 @@ function block_column(rows::Vector{Vector{String}}, blank::Vector{Bool}, fixed::
     return 0
 end
 
+unreached_limit(head::Vector{String}, rows::Vector{Vector{String}}, j::Int) =
+    j > 1 && head[j] == "time_to_limit" && head[j - 1] == "limit" && rows[1][j - 1] != "-"
+
 function write_table(io::IO, csv::String)
     lines = filter!(!isempty, split(csv, '\n'))
     isempty(lines) && return nothing
@@ -493,12 +496,13 @@ function write_table(io::IO, csv::String)
     if length(rows) == 1
         w = maximum(textwidth, head) + 2
         for j in eachindex(head)
-            rows[1][j] == "-" && continue
-            aligned(io, head[j], w, false); print(io, rows[1][j]); print(io, '\n')
+            unreached = unreached_limit(head, rows, j)
+            rows[1][j] == "-" && !unreached && continue
+            aligned(io, head[j], w, false); print(io, unreached ? "not reached" : rows[1][j]); print(io, '\n')
         end
         return nothing
     end
-    blank = [all(r -> r[j] == "-", rows) for j in eachindex(head)]
+    blank = [all(r -> r[j] == "-", rows) && !unreached_limit(head, rows, j) for j in eachindex(head)]
     fixed = [!blank[j] && all(r -> r[j] == rows[1][j], rows) for j in eachindex(head)]
     numeric = [all(r -> r[j] == "-" || isnumeric_cell(r[j]), rows) for j in eachindex(head)]
     g = block_column(rows, blank, fixed, numeric)
@@ -506,7 +510,8 @@ function write_table(io::IO, csv::String)
         w = maximum(textwidth(head[j]) for j in eachindex(head) if fixed[j]) + 2
         for j in eachindex(head)
             fixed[j] || continue
-            aligned(io, head[j], w, false); print(io, rows[1][j]); print(io, '\n')
+            val = unreached_limit(head, rows, j) ? "not reached" : rows[1][j]
+            aligned(io, head[j], w, false); print(io, val); print(io, '\n')
         end
     end
     cols = [j for j in eachindex(head) if !blank[j] && !fixed[j] && j != g]
