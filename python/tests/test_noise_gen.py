@@ -24,7 +24,7 @@ def test_different_seeds_differ():
 def test_target_sigma_is_hit():
     rec = st.noise_gen(PhaseData, 512, 1.0, sigma1={0: 1e-12}, rng=7)
     dev = st.adev(rec, [1], ci=False).dev[0]
-    assert dev == pytest.approx(1e-12, rel=0.3)
+    assert dev == pytest.approx(1e-12, rel=1e-10)
 
 
 def test_sigma1_and_h_both_rejected():

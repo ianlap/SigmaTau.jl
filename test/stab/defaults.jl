@@ -6,11 +6,6 @@ using Random
 using SigmaTau
 
 @testset "Default grids and conversions" begin
-    # Mock data equivalent to NIST SP1065 sample
-    x = collect(1.0:100.0) .^ 2  # simple quadratic
-    m_values = [1, 2, 4]
-    tau0 = 1.0
-
     @testset "Zero-arg convenience: default octave m-grid per deviation" begin
         # Octave grid shape: 1, 2, 4, ..., 2^floor(log2(m_max)).
         # m_max per kernel matches each `_*_core`'s L-check.

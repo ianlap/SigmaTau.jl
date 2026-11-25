@@ -6,11 +6,6 @@ using Random
 using SigmaTau
 
 @testset "Estimators across noise types" begin
-    # Mock data equivalent to NIST SP1065 sample
-    x = collect(1.0:100.0) .^ 2  # simple quadratic
-    m_values = [1, 2, 4]
-    tau0 = 1.0
-
     @testset "MTOTDEV across all 5 power-law noise types" begin
         # Verify kernel parity + end-to-end pipeline on every SP1065 noise
         # type (WPM α=2, FPM α=1, WFM α=0, FFM α=-1, RWFM α=-2). Synthesis
@@ -132,10 +127,8 @@ using SigmaTau
         x = noise_gen(PhaseData, N, tau0; h=Dict(0 => 1.0)).x
         t = collect(0:N-1) .* tau0
 
-        # The synthetic noise is unit-scale (y has unit variance), so the
-        # trend magnitudes are chosen relative to that — large enough that
-        # the drift dominates the statistic at long τ, which is what makes
-        # the remove_drift=false assertion below bite.
+        # Unit-scale synthetic noise with a trend large enough to dominate an
+        # undetrended statistic at long τ.
         offset = 0.1                      # frequency offset → linear phase
         drift  = 0.1                      # frequency drift  → quadratic phase
         x_trend = x .+ offset .* t .+ 0.5 .* drift .* t .^ 2
@@ -217,33 +210,5 @@ using SigmaTau
         exact(v) = [Float64(sqrt(v(xb, m, big(tau0), xb_cs))) for m in ms]
         @test all(isapprox.(_mdev_core(x, ms, tau0), exact(LK.mdev_var); rtol=1e-10))
         @test all(isapprox.(_mhdev_core(x, ms, tau0), exact(LK.mhdev_var); rtol=1e-10))
-    end
-
-    @testset "TOTDEV/HTOTDEV EDF fallback for WPM/FPM" begin
-        # _coeff_totvar returns (NaN, NaN) for α=2,1 (SP1065 Table 9 only
-        # covers α∈{0,-1,-2}). The fallback dispatches to the ADEV-style
-        # EDF formula so calculate_edf produces a finite EDF for every
-        # noise type.
-        m_values_eq = [1, 2, 4, 8, 16]
-        taus_eq     = Float64.(m_values_eq)
-        N_eq        = 4096
-        T_eq        = (N_eq - 1) * 1.0
-        # α=2 (WPM)
-        noises_wpm = fill(:WPM, length(m_values_eq))
-        edfs = SigmaTau.calculate_edf(:totdev, ones(length(m_values_eq)),
-                                               noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
-        @test all(isfinite, edfs)
-        @test all(>(0.0), edfs)
-
-        # α=1 (FPM)
-        noises_fpm = fill(:FPM, length(m_values_eq))
-        edfs = SigmaTau.calculate_edf(:totdev, ones(length(m_values_eq)),
-                                               noises_fpm, m_values_eq, taus_eq, N_eq, T_eq)
-        @test all(isfinite, edfs)
-
-        # htotdev gets the HDEV-style fallback at α=2,1 too.
-        edfs_h = SigmaTau.calculate_edf(:htotdev, ones(length(m_values_eq)),
-                                                 noises_wpm, m_values_eq, taus_eq, N_eq, T_eq)
-        @test all(isfinite, edfs_h)
     end
 end

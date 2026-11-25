@@ -125,9 +125,7 @@ using Dates
             @test length(pd.x) == 32
             @test pd.tau0 ≈ 1.0
 
-            # A non-leading '#' line is NOT treated as a comment header:
-            # the Stable32 .DAT convention ("# Header End" inside a plain-text
-            # header) still needs the explicit header kwarg.
+            # Explicit header=10 also reads the Stable32 .DAT fixture cleanly.
             datpath = joinpath(pkgdir(SigmaTau), "test", "fixtures",
                                "validation", "stable32gen.DAT")
             pd_dat = read_phase(datpath; header=10, time_col=0, value_col=1,

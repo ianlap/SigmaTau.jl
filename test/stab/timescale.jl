@@ -96,7 +96,7 @@ using Statistics
         @test re.y[4020, 2] - re.y[3990, 2] ≈ 5e-11 rtol=0.45
         @test maximum(abs, diff(timescale_phase(re).x)) < 20 * maximum(abs, diff(timescale_phase(off).x))
         @test adev(timescale_phase(re), [1000]; ci=false).dev[1] < adev(timescale_phase(off), [1000]; ci=false).dev[1]
-        @test timescale(stepped; algorithm=:at2, steps=true).x == on.x
+        @test timescale(stepped; algorithm=:at2, steps=:best).x == on.x
         @test_throws ArgumentError timescale(stepped; algorithm=:at2, steps=:fast)
         # Eq 20 reads the same however the units are chosen: a scaled phase
         # (all variances ∝ c²) and a scaled τ₀ (frequencies ∝ 1/a) change nothing.
